@@ -1028,3 +1028,17 @@
   - Register the profile screen as the highest-priority native back handler so Android hardware back closes only the profile route.
 - Data contract: None. No database or API changes.
 - Testing notes: Verify center swipes do not dismiss a route profile, iOS edge-swipe returns directly to the room, and Android hardware back leaves the room open behind the profile.
+
+## 2026-08-21 - Keep every right-side surface above its parent page
+
+- Surface: Notifications and conversation rooms from the conversation list; the conversation menu, public profiles, feedback, participants, and conversation management from a room; and profile edit, profile share, followers/following, profile settings, and settings subpages from My Page.
+- Issue: Some screens were route pages and others were parent-owned state overlays. Route navigation unmounted the conversation room or My Page, while state-owned screens used separate animation and native-back implementations. On iOS, a center swipe could dismiss a profile and continue into the underlying history. On Android, hardware back could close the room before the profile transition finished. The same structure also made nested settings surfaces behave differently from the top-level screens.
+- User impact: Returning from a profile or notification could show a loading or refresh state, leave the conversation room, or land on the conversation list. Similar right-side screens could also disagree about edge-swipe ownership, native back priority, and whether the parent page stayed mounted.
+- Resolution:
+  - Add a shared `SlideSurface` primitive for right-side surfaces. It owns the entrance/exit motion, left-edge-only drag dismissal, native back registration, and native edge-swipe suppression.
+  - Add a shared same-document history stack so opening a surface preserves the current route and parent React tree. Closing a nested surface consumes only its own history entry, allowing notifications to open a profile and return to notifications, or a follow list to open a profile and return to the list.
+  - Keep the conversation room mounted while it is hidden behind the conversation list, and render notifications and conversation profiles as sibling surfaces instead of route replacements for internal entry points.
+  - Convert My Page's profile edit, settings, follow list, public profile, and profile share entry points to parent-preserving surfaces. Convert settings subpages to history-backed nested surfaces.
+  - Apply the shared surface behavior to the conversation hamburger menu while preserving its existing nested menu history. QR-based profile sharing remains the explicit route exception because it coordinates native scanner and QR-save actions.
+- Data contract: None. No Prisma migration or API namespace change is required.
+- Testing notes: TypeScript, targeted ESLint, the shared slide-surface history tests, and the unit test suite pass. Live integration tests require the configured local server. Device verification remains pending for iOS edge-swipe, iOS center-swipe rejection, Android hardware back, and nested surface return paths.

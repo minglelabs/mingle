@@ -4,6 +4,9 @@ import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import NotificationPanel from "@/components/notification-panel";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
@@ -22,7 +25,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -125,7 +128,11 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
-import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX, buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import {
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+} from "@/lib/slide-surface-history";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
@@ -139,6 +146,9 @@ const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
+const CONVERSATION_SURFACE_SCOPE = "conversation";
+const CONVERSATION_NOTIFICATIONS_SURFACE_ID = "notifications";
+const CONVERSATION_PROFILE_SURFACE_ID = "profile";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
@@ -146,10 +156,6 @@ const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
-const CONVERSATION_OVERLAY_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
@@ -167,10 +173,6 @@ type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
-type ConversationOverlayTransitionState = {
-  enterMode: ConversationOverlayEnterMode;
-  exitMode: ConversationOverlayExitMode;
-};
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
 };
@@ -215,31 +217,6 @@ declare global {
     };
   }
 }
-
-const conversationOverlayVariants: Variants = {
-  initial: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.enterMode === "animate"
-      ? { x: "100%" }
-      : { x: "0%" }
-  ),
-  active: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "0%",
-    transition: transitionState.enterMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  retained: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "100%",
-    transition: transitionState.exitMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  exit: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.exitMode === "animate"
-      ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
-      : { x: "0%", transition: { duration: 0 } }
-  ),
-};
 
 interface ConversationItem {
   id: string;
@@ -860,50 +837,6 @@ function replaceConversationOverlayUrl(
     notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
-  }
-}
-
-function ensureConversationHistoryEntryForProfile(conversationId: string): void {
-  if (typeof window === "undefined") return;
-
-  const normalizedConversationId = conversationId.trim();
-  if (!normalizedConversationId) return;
-
-  try {
-    const currentConversationId = readConversationIdFromLocation();
-    const nextUrl = buildConversationOverlayUrl(normalizedConversationId);
-    if (!nextUrl) return;
-
-    if (currentConversationId === normalizedConversationId) {
-      if (readConversationHistoryRouteFromState(window.history.state) === normalizedConversationId) {
-        return;
-      }
-
-      window.history.replaceState(
-        buildConversationHistoryState(normalizedConversationId, window.history.state),
-        "",
-        nextUrl,
-      );
-      notifyLocationSearchSync();
-      return;
-    }
-
-    // A room restored from native STT can be visible while the list URL is
-    // still the current history entry. Add the room entry before opening a
-    // profile route so iOS back/edge-swipe returns to the room instead of
-    // leaving the conversations tab entirely.
-    window.history.pushState(
-      buildConversationHistoryState(normalizedConversationId, window.history.state),
-      "",
-      nextUrl,
-    );
-    postConversationHistoryDebug("ensure-conversation-history-before-profile", {
-      conversationId: normalizedConversationId,
-      previousConversationId: currentConversationId,
-    });
-    notifyLocationSearchSync();
-  } catch {
-    // Keep profile navigation available when history is restricted.
   }
 }
 
@@ -1720,6 +1653,11 @@ export default function ConversationList({
   );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
+  const [conversationSurfaceHistory, setConversationSurfaceHistory] = useState(() => (
+    typeof window === "undefined"
+      ? []
+      : readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE)
+  ));
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
@@ -1847,6 +1785,13 @@ export default function ConversationList({
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const notificationSurfaceOpen = conversationSurfaceHistory.some(
+    (entry) => entry.id === CONVERSATION_NOTIFICATIONS_SURFACE_ID,
+  );
+  const conversationProfileSurface = [...conversationSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+  const conversationProfileId = conversationProfileSurface?.value ?? null;
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2887,6 +2832,58 @@ export default function ConversationList({
     }).sort(compareConversationRecency));
   }, [clearConversationInterimPreview]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncConversationSurfaceHistory = () => {
+      setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+    };
+
+    window.addEventListener("popstate", syncConversationSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncConversationSurfaceHistory);
+  }, []);
+
+  const openConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: CONVERSATION_SURFACE_SCOPE,
+      ...entry,
+    });
+    setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+  }, []);
+
+  const closeConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const currentEntries = readSlideSurfaceHistoryForScope(
+        CONVERSATION_SURFACE_SCOPE,
+        window.history.state,
+      );
+      const currentEntry = currentEntries[currentEntries.length - 1];
+      if (
+        currentEntry?.id === entry.id
+        && (entry.value === undefined || currentEntry.value === entry.value)
+      ) {
+        window.history.back();
+        return;
+      }
+    }
+
+    setConversationSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
@@ -2896,27 +2893,16 @@ export default function ConversationList({
     if (!normalizedUserId) return;
 
     postNativeBannerZone("hidden");
-    const activeConversationId = activeConversationRef.current?.id.trim() || "";
-    if (activeConversationId) {
-      ensureConversationHistoryEntryForProfile(activeConversationId);
-    }
-    const searchParams = typeof window === "undefined"
-      ? new URLSearchParams()
-      : new URLSearchParams(window.location.search);
-    router.push(buildNativeAwareTabPath(
-      `/${locale}/users/${encodeURIComponent(normalizedUserId)}`,
-      searchParams,
-      { preserveConversation: Boolean(activeConversationId) },
-    ));
-  }, [locale, router]);
+    openConversationSurface({
+      id: CONVERSATION_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openConversationSurface]);
 
   const openNotifications = useCallback(() => {
     postNativeBannerZone("hidden");
-    const searchParams = typeof window === "undefined"
-      ? new URLSearchParams()
-      : new URLSearchParams(window.location.search);
-    router.push(buildNativeAwareTabPath(`/${locale}/notifications`, searchParams));
-  }, [locale, router]);
+    openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+  }, [openConversationSurface]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -4677,17 +4663,17 @@ export default function ConversationList({
                 const isVisible = activeConversation?.id === conversation.id;
 
                 return (
-                  <motion.div
+                  <SlideSurface
                     key={conversation.id}
-                    custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                    variants={conversationOverlayVariants}
-                    initial="initial"
-                    animate={isVisible ? "active" : "retained"}
-                    exit="exit"
+                    open={isVisible}
+                    onClose={() => void handleCloseActiveConversation()}
+                    ariaLabel={conversation.title}
+                    role="main"
+                    nativeBackPriority={4}
                     className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
                       isVisible ? "" : "pointer-events-none"
                     }`}
-                    aria-hidden={!isVisible}
+                    style={{ touchAction: "pan-y" }}
                   >
                     <Suspense
                       fallback={(
@@ -4756,10 +4742,32 @@ export default function ConversationList({
                         }}
                       />
                     </Suspense>
-                  </motion.div>
+                  </SlideSurface>
                 );
               })}
             </AnimatePresence>
+            <NotificationPanel
+              open={notificationSurfaceOpen}
+              enabled={sessionStatus === "authenticated"}
+              locale={locale}
+              dictionary={dictionary}
+              onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
+              onOpenProfile={openConversationProfile}
+              onUnreadCountChange={setUnreadNotificationCount}
+            />
+            <PublicUserProfileScreen
+              dictionary={dictionary}
+              locale={locale}
+              userId={conversationProfileId ?? ""}
+              open={Boolean(conversationProfileId)}
+              onClose={() => {
+                if (!conversationProfileId) return;
+                closeConversationSurface({
+                  id: CONVERSATION_PROFILE_SURFACE_ID,
+                  value: conversationProfileId,
+                });
+              }}
+            />
           </>,
           document.body,
         )

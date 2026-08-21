@@ -128,14 +128,12 @@ export default function NativeProfileLinkOverlay() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  if (!profileOverlay) return null;
-
   return (
     <PublicUserProfileScreen
-      key={`${profileOverlay.userId}:${profileOverlay.requestId}`}
       dictionary={dictionary}
       locale={locale}
-      userId={profileOverlay.userId}
+      userId={profileOverlay?.userId ?? ""}
+      open={Boolean(profileOverlay)}
       onClose={closeProfile}
     />
   );

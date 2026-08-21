@@ -3,13 +3,13 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
-import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
+import SlideSurface from "@/components/slide-surface";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NotificationPanelProps = {
+  open: boolean;
   enabled: boolean;
   locale: AppLocale;
   dictionary: AppDictionary;
@@ -47,13 +47,6 @@ type NotificationCopy = {
   loadError: string;
   followError: string;
 };
-
-const PANEL_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const NOTIFICATION_SWIPE_THRESHOLD_PX = 72;
-const NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
 function getNotificationCopy(dictionary: AppDictionary, locale: AppLocale): NotificationCopy {
   const copy = getConversationDictionary(locale, dictionary);
@@ -153,6 +146,7 @@ function NotificationAvatar({
 }
 
 export default function NotificationPanel({
+  open,
   enabled,
   locale,
   dictionary,
@@ -161,10 +155,6 @@ export default function NotificationPanel({
   onOpenProfile,
   onUnreadCountChange,
 }: NotificationPanelProps) {
-  const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
   const copy = useMemo(() => getNotificationCopy(dictionary, locale), [dictionary, locale]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -173,31 +163,7 @@ export default function NotificationPanel({
   const [loadError, setLoadError] = useState(false);
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
   const [followErrorId, setFollowErrorId] = useState<string | null>(null);
-  const [viewportWidth, setViewportWidth] = useState(1);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    isLeavingRef.current = false;
-    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-    const animationFrameId = window.requestAnimationFrame(() => {
-      if (!isMountedRef.current) return;
-      void motionControls.start({ x: 0, transition: PANEL_TRANSITION });
-    });
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      window.removeEventListener("resize", syncViewportWidth);
-    };
-  }, [motionControls]);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
     const normalizedCount = Math.max(0, Math.floor(nextCount));
@@ -218,7 +184,7 @@ export default function NotificationPanel({
   }, [updateUnreadCount]);
 
   const loadNotifications = useCallback(async (): Promise<{ unreadCount: number } | null> => {
-    if (!enabled) return null;
+    if (!enabled || !open) return null;
 
     abortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -253,15 +219,17 @@ export default function NotificationPanel({
     } finally {
       if (!controller.signal.aborted) setIsLoading(false);
     }
-  }, [enabled, updateUnreadCount]);
+  }, [enabled, open, updateUnreadCount]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !open) {
       abortControllerRef.current?.abort();
-      setNotifications([]);
-      setHasLoaded(false);
-      setLoadError(false);
-      updateUnreadCount(0);
+      if (!enabled) {
+        setNotifications([]);
+        setHasLoaded(false);
+        setLoadError(false);
+        updateUnreadCount(0);
+      }
       return;
     }
 
@@ -274,35 +242,16 @@ export default function NotificationPanel({
       isCurrent = false;
       abortControllerRef.current?.abort();
     };
-  }, [enabled, loadNotifications, markAllNotificationsAsRead, updateUnreadCount]);
+  }, [enabled, loadNotifications, markAllNotificationsAsRead, open, updateUnreadCount]);
 
   useEffect(() => {
+    if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
-
-  const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    if (
-      info.offset.x >= NOTIFICATION_SWIPE_THRESHOLD_PX
-      || info.velocity.x >= NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND
-    ) {
-      isLeavingRef.current = true;
-      await motionControls.start({ x: "100%", transition: PANEL_TRANSITION });
-      if (isMountedRef.current) onClose();
-      return;
-    }
-    await motionControls.start({ x: 0, transition: PANEL_TRANSITION });
-  }, [motionControls, onClose]);
+  }, [onClose, open]);
 
   const markAsRead = useCallback((notification: NotificationRecord) => {
     if (notification.isRead) return;
@@ -415,24 +364,12 @@ export default function NotificationPanel({
   };
 
   return (
-    <motion.main
-      initial={{ x: "100%" }}
-      animate={motionControls}
-      transition={PANEL_TRANSITION}
-      drag="x"
-      dragControls={dragControls}
-      dragDirectionLock
-      dragListener={false}
-      dragConstraints={{ left: 0, right: viewportWidth }}
-      dragElastic={0.08}
-      dragMomentum={false}
-      onPointerDown={handlePanelPointerDown}
-      onDragEnd={handleDragEnd}
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
       style={{ touchAction: "pan-y" }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={copy.title}
     >
             <header
               className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4"
@@ -498,6 +435,6 @@ export default function NotificationPanel({
                 </div>
               )}
             </div>
-    </motion.main>
+    </SlideSurface>
   );
 }

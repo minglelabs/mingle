@@ -13,12 +13,6 @@ type NotificationScreenProps = {
   locale: AppLocale;
 };
 
-type NativeBridgeWindow = Window & {
-  ReactNativeWebView?: {
-    postMessage?: (message: string) => void;
-  };
-};
-
 export default function NotificationScreen({ dictionary, locale }: NotificationScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,24 +44,11 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
 
   useEffect(() => {
     postNativeBannerZone("hidden");
-
-    try {
-      const bridgeWindow = window as NativeBridgeWindow;
-      bridgeWindow.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: "native_navigation_state",
-        payload: {
-          canGoBack: window.history.length > 1,
-          url: window.location.href,
-          suppressEdgeSwipe: false,
-        },
-      }));
-    } catch {
-      // Keep browser navigation available when the native bridge is unavailable.
-    }
   }, []);
 
   return (
     <NotificationPanel
+      open
       enabled={sessionStatus === "authenticated"}
       locale={locale}
       dictionary={dictionary}
