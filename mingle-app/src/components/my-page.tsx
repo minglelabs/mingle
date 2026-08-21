@@ -751,7 +751,7 @@ function ProfileSettingsPanel({
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header
@@ -1036,7 +1036,7 @@ function ProfileSettingsPanel({
         onClose={closeManagementPage}
         ariaLabel={managementPageTitle}
         nativeBackPriority={30}
-        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
         style={{ touchAction: "pan-y" }}
       >
           <header
@@ -1336,7 +1336,7 @@ function ProfileEditPanel({
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header

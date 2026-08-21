@@ -1055,3 +1055,16 @@
   - Expose a topmost-overlay close request through the room refs and let the conversation surface delegate to it before closing. This keeps language selection, dialogs, and nested menu pages ahead of the room/list history transition even when a native or pointer path bypasses the child surface.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify the room is undimmed when the hamburger menu is closed; edge-swipe and Android back return one level through hamburger pages; language-selector edge-swipe closes only the selector; and repeated A/B room navigation does not reopen a stale room.
+
+## 2026-08-21 - Give the topmost surface exclusive gesture ownership
+
+- Surface: Conversation hamburger child pages, the room language selector, conversation-list search, and full-screen My Page surfaces.
+- Issue: Hamburger child pages shared the parent menu's motion root, so an iOS edge gesture could move the child and the hamburger together before history settled. The language selector's portal-level event capture blocked the room gesture but did not provide a selector gesture of its own. Search used a custom horizontal touch detector that dismissed from the center of the screen. Full-screen My Page surfaces also applied a panel shadow across the viewport, producing a dark strip at the edge.
+- User impact: Returning from feedback, conversation management, participants, or display-language could briefly close and re-enter the hamburger menu; room language selection could not be dismissed with an iOS edge swipe; a center swipe could unexpectedly close search; and My Page could appear darkened along the right edge.
+- Resolution:
+  - Keep the hamburger root surface stationary and render its child pages inside a separate topmost `SlideSurface`. The child surface consumes one menu history step while the root remains mounted underneath.
+  - Convert the portaled room language selector into a `SlideSurface` with its own edge-only drag and native-back priority. Keep portal event isolation at the surface boundary without suppressing the selector's own gesture.
+  - Convert conversation search from a generic touch-distance detector to `SlideSurface`, preserving its existing history marker and instant/animated transition modes. The shared edge guard now ignores center swipes, while Android hardware back still closes only search.
+  - Remove `shadow-2xl` from full-viewport My Page surfaces so a full-screen surface does not paint a false edge gradient. Shadows remain appropriate for constrained inner cards.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify iOS edge-swipe from each hamburger child returns exactly one level, the room language selector closes without dismissing the room, center swipes do not close search, Android back closes only search or the topmost child surface, and My Page has no right-edge dark strip.

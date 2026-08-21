@@ -1340,7 +1340,6 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
 }, ref) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const touchStartXRef = useRef<number | null>(null);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
     readStoredRecentSearches,
@@ -1447,122 +1446,113 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   const hasQuery = normalizeSearchTerm(query).length > 0;
 
   return (
-    <div
-      className="absolute inset-0 z-40 flex flex-col bg-white transition-transform duration-300 ease-in-out"
-      style={{
-        transform: open ? "translateX(0)" : "translateX(100%)",
-        pointerEvents: open ? "auto" : "none",
-        transitionDuration: transitionMode === "animate" ? undefined : "0ms",
-      }}
-      aria-hidden={!open}
-      onTouchStart={(event) => {
-        touchStartXRef.current = event.touches[0]?.clientX ?? null;
-      }}
-      onTouchEnd={(event) => {
-        const startX = touchStartXRef.current;
-        const endX = event.changedTouches[0]?.clientX ?? startX ?? 0;
-        touchStartXRef.current = null;
-
-        if (startX !== null && endX - startX > 60) {
-          dismissSearch();
-        }
-      }}
+    <SlideSurface
+      open={open}
+      onClose={dismissSearch}
+      ariaLabel={copy.searchButtonLabel}
+      nativeBackPriority={20}
+      transitionMode={transitionMode}
+      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
-        <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
-          <Search size={16} className="shrink-0 text-gray-400" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
-            enterKeyHint="search"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={dismissSearch}
-          className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+      <div className="flex h-full min-h-0 flex-col">
+        <form
+          onSubmit={handleSubmit}
+          className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          }}
         >
-          {copy.cancelAction}
-        </button>
-      </form>
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+            <Search size={16} className="shrink-0 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={copy.searchPlaceholder}
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={dismissSearch}
+            className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+          >
+            {copy.cancelAction}
+          </button>
+        </form>
 
-      <div className="flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        {hasQuery ? (
-          filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-[14px]">{copy.noSearchResults}</p>
-            </div>
-          ) : (
-            <div className="pt-2">
-              {filtered.map((item, index) => (
-                <div key={item.id}>
-                  <ConversationRow
-                    item={item}
-                    disabled={actionDisabled}
-                    onSelect={handleResultSelect}
-                  />
-                  {index < filtered.length - 1 && (
-                    <div className="mx-4 h-px bg-gray-100" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <section className="px-4 pb-4 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
-                {copy.recentSearchesTitle}
-              </h2>
-              {recentSearches.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleClearRecentSearches}
-                  className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
-                >
-                  {copy.clearRecentSearchesAction}
-                </button>
-              ) : null}
-            </div>
-            {recentSearches.length === 0 ? (
-              <p className="px-1 py-3 text-[14px] text-gray-400">
-                {copy.noRecentSearches}
-              </p>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          {hasQuery ? (
+            filtered.length === 0 ? (
+              <div className="flex flex-col items-center py-16 text-gray-400">
+                <p className="text-[14px]">{copy.noSearchResults}</p>
+              </div>
             ) : (
-              <div className="space-y-1">
-                {recentSearches.map((recentSearch) => (
-                  <button
-                    key={recentSearch}
-                    type="button"
-                    onClick={() => handleRecentSearchSelect(recentSearch)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <Search size={16} className="text-gray-400" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
-                      {recentSearch}
-                    </span>
-                  </button>
+              <div className="pt-2">
+                {filtered.map((item, index) => (
+                  <div key={item.id}>
+                    <ConversationRow
+                      item={item}
+                      disabled={actionDisabled}
+                      onSelect={handleResultSelect}
+                    />
+                    {index < filtered.length - 1 && (
+                      <div className="mx-4 h-px bg-gray-100" />
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </section>
-        )}
+            )
+          ) : (
+            <section className="px-4 pb-4 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
+                  {copy.recentSearchesTitle}
+                </h2>
+                {recentSearches.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearRecentSearches}
+                    className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
+                  >
+                    {copy.clearRecentSearchesAction}
+                  </button>
+                ) : null}
+              </div>
+              {recentSearches.length === 0 ? (
+                <p className="px-1 py-3 text-[14px] text-gray-400">
+                  {copy.noRecentSearches}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {recentSearches.map((recentSearch) => (
+                    <button
+                      key={recentSearch}
+                      type="button"
+                      onClick={() => handleRecentSearchSelect(recentSearch)}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <Search size={16} className="text-gray-400" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
+                        {recentSearch}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
 });
 

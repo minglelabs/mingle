@@ -28,6 +28,7 @@ import {
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import LanguageFlag from "@/components/language-flag";
+import SlideSurface from "@/components/slide-surface";
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
@@ -347,32 +348,29 @@ export default function LanguageSelector({
   // The active room itself is portaled above the conversation list, so this
   // selector must sit above that body-level room overlay as well.
   const overlay = (
-    <div
-      className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      style={{ zIndex: 140 }}
-      // Portal events still bubble through the React tree. Keep selector
-      // gestures from reaching the room's edge-swipe surface underneath.
-      onPointerDownCapture={(event) => {
-        event.stopPropagation();
-        dismissSearchFocus(event.target);
-      }}
-      onTouchStartCapture={(event) => {
-        event.stopPropagation();
-        dismissSearchFocus(event.target);
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          requestClose();
-        }
-      }}
+    <SlideSurface
+      open={isOpen}
+      onClose={requestClose}
+      ariaLabel={copy.languageSelectorTitle}
+      nativeBackPriority={40}
+      className="fixed inset-0 z-[140] flex min-h-0 w-full flex-col bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
       <div
-        className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
-        onClick={(event) => event.stopPropagation()}
+        className="flex h-full w-full justify-center"
+        onPointerDown={(event) => dismissSearchFocus(event.target)}
+        onTouchStart={(event) => dismissSearchFocus(event.target)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            requestClose();
+          }
+        }}
       >
+        <div
+          className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
+          onClick={(event) => event.stopPropagation()}
+        >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
             aria-hidden="true"
@@ -546,8 +544,9 @@ export default function LanguageSelector({
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
   return createPortal(overlay, document.body);
 }

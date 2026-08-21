@@ -5412,15 +5412,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div data-qa="live-demo-menu-panel" className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'root' ? { x: '0%', opacity: 1 } : { x: '-8%', opacity: 0 }}
+                      animate={{ x: '0%', opacity: 1 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
                       aria-hidden={menuScreen !== 'root'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
                         pointerEvents: menuScreen === 'root' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'root'
-                          ? (menuScreenDirection === 'back' ? 2 : 3)
-                          : 1,
+                        zIndex: 1,
                       }}
                     >
                       <LivePhoneDemoPanelHeader
@@ -5904,6 +5902,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       )}
                     </motion.section>
 
+                    <SlideSurface
+                      open={menuOpen && menuScreen !== 'root'}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={menuLabel}
+                      nativeBackPriority={20}
+                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
+                      style={{
+                        boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),
+                        touchAction: 'pan-y',
+                      }}
+                      stopPropagation
+                    >
+                      <div className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
                       animate={menuScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
@@ -6325,6 +6337,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </div>
                     </motion.section>
+                      </div>
+                    </SlideSurface>
           </div>
         </SlideSurface>
 

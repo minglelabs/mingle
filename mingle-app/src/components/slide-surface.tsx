@@ -31,6 +31,7 @@ type SlideSurfaceProps = {
   role?: "dialog" | "main";
   zIndex?: number;
   nativeBackPriority?: number;
+  transitionMode?: "animate" | "instant";
   canClose?: boolean;
   onTouchStart?: (event: ReactTouchEvent<HTMLElement>) => void;
   onTouchEnd?: (event: ReactTouchEvent<HTMLElement>) => void;
@@ -91,6 +92,7 @@ export default function SlideSurface({
   role = "dialog",
   zIndex,
   nativeBackPriority = 20,
+  transitionMode = "animate",
   canClose = true,
   onTouchStart,
   onTouchEnd,
@@ -118,20 +120,24 @@ export default function SlideSurface({
   }, []);
 
   useEffect(() => {
+    const transition = transitionMode === "instant"
+      ? { duration: 0 }
+      : SURFACE_TRANSITION;
+
     if (!open) {
       isLeavingRef.current = false;
-      void motionControls.start({ x: "100%", transition: SURFACE_TRANSITION });
+      void motionControls.start({ x: "100%", transition });
       return;
     }
 
     isLeavingRef.current = false;
     const frameId = window.requestAnimationFrame(() => {
       if (!isMountedRef.current) return;
-      void motionControls.start({ x: 0, transition: SURFACE_TRANSITION });
+      void motionControls.start({ x: 0, transition });
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [motionControls, open]);
+  }, [motionControls, open, transitionMode]);
 
   useEffect(() => {
     if (!open) return;
