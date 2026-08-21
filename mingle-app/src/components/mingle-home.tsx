@@ -86,6 +86,7 @@ export type MingleHomeRef = {
   stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
+  requestCloseTopmostOverlay: () => boolean;
 };
 
 // Conversation rooms require an authenticated account so the existing Apple,
@@ -1150,6 +1151,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       livePhoneDemoRef.current?.prepareForDeletion();
     },
     isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+    requestCloseTopmostOverlay: () => livePhoneDemoRef.current?.requestCloseTopmostOverlay() ?? false,
   }), []);
 
   const handleSignOut = useCallback(() => {

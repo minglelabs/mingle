@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from "@/components/conversation-list.logic";
+
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -157,6 +159,15 @@ describe("language-selector.logic", () => {
     const clearedState = clearLanguageSelectorHistoryState(state);
     expect(isLanguageSelectorHistoryOpen(clearedState)).toBe(false);
     expect(clearedState.keep).toBe(1);
+  });
+
+  it("preserves the active conversation route in a nested selector history entry", () => {
+    const state = buildLanguageSelectorHistoryState({
+      [CONVERSATION_HISTORY_ROUTE_STATE_KEY]: "conversation-a",
+    });
+
+    expect(state[CONVERSATION_HISTORY_ROUTE_STATE_KEY]).toBe("conversation-a");
+    expect(isLanguageSelectorHistoryOpen(state)).toBe(true);
   });
 
   it("sanitizes deselected language history", () => {

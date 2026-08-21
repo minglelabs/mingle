@@ -1009,6 +1009,7 @@ export interface LivePhoneDemoRef {
   stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => Promise<void>
   prepareForDeletion: () => void
   isSttSessionRunning: () => boolean
+  requestCloseTopmostOverlay: () => boolean
 }
 
 export type LatestUtterancePayload = {
@@ -2463,8 +2464,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
+    // The menu depth is the source of truth for nested menu history. Consume
+    // exactly one entry before allowing the room surface to close.
+    if (menuHistoryDepthRef.current > 0) {
+      requestMenuBackStep()
+      return false
+    }
+
+    // Recover gracefully if a stale render says the menu is open while its
+    // history depth has already been reset.
+    if (menuOpen) {
+      closeMenuPanel()
+      return false
+    }
+
     return true
-  }, [closeLanguageSelector, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, renameConversationDialogOpen, textSizeMenuOpen, translationModelMenuOpen])
+  }, [closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+
+  const requestCloseTopmostOverlay = useCallback(() => (
+    !handleMenuSurfaceRequestClose()
+  ), [handleMenuSurfaceRequestClose])
 
   const openLanguageSelector = useCallback((options?: {
     syncHistory?: 'push' | 'none'
@@ -4215,7 +4234,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     },
     prepareForDeletion,
     isSttSessionRunning: () => isSttSessionRunning,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion])
+    requestCloseTopmostOverlay,
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])

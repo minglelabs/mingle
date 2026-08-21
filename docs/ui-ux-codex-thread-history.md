@@ -1042,3 +1042,16 @@
   - Apply the shared surface behavior to the conversation hamburger menu while preserving its existing nested menu history. QR-based profile sharing remains the explicit route exception because it coordinates native scanner and QR-save actions.
 - Data contract: None. No Prisma migration or API namespace change is required.
 - Testing notes: TypeScript, targeted ESLint, the shared slide-surface history tests, and the unit test suite pass. Live integration tests require the configured local server. Device verification remains pending for iOS edge-swipe, iOS center-swipe rejection, Android hardware back, and nested surface return paths.
+
+## 2026-08-21 - Keep nested room surfaces on the correct back stack
+
+- Surface: Conversation-room backdrop, hamburger-menu child pages, and the room language selector.
+- Issue: The shared `SlideSurface` kept a semi-transparent hamburger backdrop painted while closed, which darkened the conversation room. A back gesture from a hamburger child page was also allowed to dismiss the parent menu surface because the close dispatcher did not consume the current menu history depth first. The language selector is rendered through a React portal, so its pointer gesture could bubble through the React tree to the room surface and dismiss the room instead of the selector.
+- User impact: The room appeared dimmed, nested menu pages returned directly to the room, the next menu opening could require a second tap, and language-selector edge gestures could leave the room/list history out of sync and cause rooms to reopen unexpectedly.
+- Resolution:
+  - Hide the shared backdrop visually whenever its surface is closed while preserving the mounted parent tree and exit animation.
+  - Treat the hamburger history depth as the source of truth and consume one menu entry before allowing the parent room surface to close. Keep a stale-state fallback that closes a visibly open menu without traversing an additional history entry.
+  - Stop pointer and touch capture at the portaled language-selector root so room edge-swipe handling cannot receive selector gestures.
+  - Expose a topmost-overlay close request through the room refs and let the conversation surface delegate to it before closing. This keeps language selection, dialogs, and nested menu pages ahead of the room/list history transition even when a native or pointer path bypasses the child surface.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the room is undimmed when the hamburger menu is closed; edge-swipe and Android back return one level through hamburger pages; language-selector edge-swipe closes only the selector; and repeated A/B room navigation does not reopen a stale room.

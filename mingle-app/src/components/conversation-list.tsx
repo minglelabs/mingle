@@ -2303,6 +2303,14 @@ export default function ConversationList({
     }
   }, []);
 
+  const handleConversationSurfaceRequestClose = useCallback((conversationId: string) => {
+    const roomRef = conversationRoomRefs.current.get(conversationId);
+    if (roomRef?.requestCloseTopmostOverlay()) {
+      return false;
+    }
+    return true;
+  }, []);
+
   const applyRunningConversationState = useCallback((
     conversationId: string,
     isRunning: boolean,
@@ -4667,6 +4675,7 @@ export default function ConversationList({
                     key={conversation.id}
                     open={isVisible}
                     onClose={() => void handleCloseActiveConversation()}
+                    onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
                     ariaLabel={conversation.title}
                     role="main"
                     nativeBackPriority={4}

@@ -181,11 +181,23 @@ export default function SlideSurface({
       dragConstraints={{ left: 0, right: viewportWidth }}
       dragElastic={0.08}
       dragMomentum={false}
-      onPointerDown={handlePointerDown}
+      onPointerDown={(event) => {
+        if (stopPropagation) event.stopPropagation();
+        handlePointerDown(event);
+      }}
       onDragEnd={handleDragEnd}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={onTouchCancel}
+      onTouchStart={(event) => {
+        if (stopPropagation) event.stopPropagation();
+        onTouchStart?.(event);
+      }}
+      onTouchEnd={(event) => {
+        if (stopPropagation) event.stopPropagation();
+        onTouchEnd?.(event);
+      }}
+      onTouchCancel={(event) => {
+        if (stopPropagation) event.stopPropagation();
+        onTouchCancel?.(event);
+      }}
       onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
       className={className}
       style={{ ...style, ...(zIndex === undefined ? {} : { zIndex }) }}
@@ -206,8 +218,12 @@ export default function SlideSurface({
     <div
       className={backdropClassName}
       onClick={onBackdropClick ? () => onBackdropClick() : undefined}
-      style={{ pointerEvents: open ? "auto" : "none" }}
+      style={{
+        pointerEvents: open ? "auto" : "none",
+        opacity: open ? 1 : 0,
+      }}
       aria-hidden={!open}
+      data-slide-surface-backdrop="true"
     >
       {surface}
     </div>

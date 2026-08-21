@@ -353,6 +353,16 @@ export default function LanguageSelector({
       aria-modal="true"
       aria-labelledby={titleId}
       style={{ zIndex: 140 }}
+      // Portal events still bubble through the React tree. Keep selector
+      // gestures from reaching the room's edge-swipe surface underneath.
+      onPointerDownCapture={(event) => {
+        event.stopPropagation();
+        dismissSearchFocus(event.target);
+      }}
+      onTouchStartCapture={(event) => {
+        event.stopPropagation();
+        dismissSearchFocus(event.target);
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           requestClose();
@@ -362,12 +372,6 @@ export default function LanguageSelector({
       <div
         className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
         onClick={(event) => event.stopPropagation()}
-        onPointerDownCapture={(event) => {
-          dismissSearchFocus(event.target);
-        }}
-        onTouchStartCapture={(event) => {
-          dismissSearchFocus(event.target);
-        }}
       >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
