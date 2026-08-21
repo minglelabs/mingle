@@ -1116,3 +1116,12 @@
   - Keep deleted conversations excluded when locating an existing direct-message room.
 - Data contract: Uses the remote `selected_languages` membership column and `pending_invitee_user_ids` channel column without changing their schema or migration order.
 - Testing notes: Verify attributed rows for owner-only, other-only, and shared selections; an invitee with no picks can add a language; selector edge-swipe closes only the selector; pending rooms preserve per-member active state; and deleted direct-message rooms are not reused.
+
+## 2026-08-21 - Keep profile-share URL rendering hydration-safe
+
+- Surface: The profile-share surface opened from My Page and public profile details.
+- Issue: `profile-share-screen.tsx` read `window.location.origin` while computing `profileUrl` during render. The server therefore rendered no profile URL `<span>`, while the browser added that conditional span during its first render, producing a Next.js hydration mismatch.
+- User impact: The profile-share screen could show the Next.js hydration error overlay in the devbox WebView before the share UI stabilized.
+- Resolution: Resolve the browser origin in a client-only effect and keep `profileUrl` empty during the server render and the matching initial client render. Generate the URL, QR code, and link text only after the client origin has been committed.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the profile-share surface opens without a hydration overlay, then renders the profile URL and QR code after mount; verify direct route and parent-preserving overlay entry points.

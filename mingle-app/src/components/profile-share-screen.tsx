@@ -13,7 +13,7 @@ import * as QRCode from "qrcode";
 import { useSession } from "next-auth/react";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import SlideSurface from "@/components/slide-surface";
 
@@ -71,6 +71,10 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
+const subscribeToProfileOrigin = () => () => {};
+const getClientProfileOrigin = () => window.location.origin;
+const getServerProfileOrigin = () => "";
+
 export default function ProfileShareScreen({
   dictionary,
   locale,
@@ -98,10 +102,15 @@ export default function ProfileShareScreen({
   const name = profileName
     || (requestedUserId ? fallbackUserName : session?.user?.name?.trim() || dictionary.titles.my);
   const profileHandle = formatHandle(rawHandle);
+  const profileOrigin = useSyncExternalStore(
+    subscribeToProfileOrigin,
+    getClientProfileOrigin,
+    getServerProfileOrigin,
+  );
   const profileUrl = useMemo(() => {
-    if (typeof window === "undefined" || !profileUserId) return "";
-    return buildProfileLinkUrl(window.location.origin, profileUserId) ?? "";
-  }, [profileUserId]);
+    if (!profileOrigin || !profileUserId) return "";
+    return buildProfileLinkUrl(profileOrigin, profileUserId) ?? "";
+  }, [profileOrigin, profileUserId]);
   const qrDataUrl = qrData?.profileUrl === profileUrl ? qrData.dataUrl : null;
   const copy = {
     copyLink: dictionary.profile.profileShareCopyLinkLabel ?? "Copy link",
