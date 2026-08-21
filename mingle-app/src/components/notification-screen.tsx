@@ -55,7 +55,11 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
       const bridgeWindow = window as NativeBridgeWindow;
       bridgeWindow.ReactNativeWebView?.postMessage(JSON.stringify({
         type: "native_navigation_state",
-        payload: { canGoBack: window.history.length > 1, url: window.location.href },
+        payload: {
+          canGoBack: window.history.length > 1,
+          url: window.location.href,
+          suppressEdgeSwipe: false,
+        },
       }));
     } catch {
       // Keep browser navigation available when the native bridge is unavailable.

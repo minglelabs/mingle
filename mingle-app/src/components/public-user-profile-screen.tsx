@@ -181,6 +181,7 @@ export default function PublicUserProfileScreen({
   const normalizedUserId = userId.trim();
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
+  const suppressNativeEdgeSwipe = typeof onClose === "function";
 
   useEffect(() => {
     if (sessionStatus === "loading") return;
@@ -237,13 +238,10 @@ export default function PublicUserProfileScreen({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // This screen overlays the active room without changing the URL, so it
-    // must tell native to disable its own edge-swipe-back gesture for as
-    // long as it's mounted. Otherwise a tap near the left edge (where a
-    // shared-room peer's chat-bubble avatar sits, which is what opens this
-    // screen) can be captured by WKWebView's edge-pan recognizer instead of
-    // the tap handler, popping the room's back-forward list and silently
-    // dismissing this screen right after it opens.
+    // The native profile-link surface overlays the active room without
+    // changing the URL, so it must disable native edge-swipe while mounted.
+    // Route-backed profile pages leave the gesture enabled so WebView history
+    // handles the back navigation normally.
     const postNavigationState = (suppressEdgeSwipe: boolean) => {
       try {
         window.ReactNativeWebView?.postMessage(JSON.stringify({
@@ -254,9 +252,9 @@ export default function PublicUserProfileScreen({
         // Keep browser navigation available when the native bridge is unavailable.
       }
     };
-    postNavigationState(true);
+    postNavigationState(suppressNativeEdgeSwipe);
     return () => postNavigationState(false);
-  }, []);
+  }, [suppressNativeEdgeSwipe]);
 
   const navigateBack = useCallback(() => {
     if (onClose) {
