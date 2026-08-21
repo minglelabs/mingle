@@ -1023,8 +1023,8 @@
 - Surface: The route-backed public profile opened from a conversation avatar on iOS and Android.
 - Issue: The profile motion root accepted a horizontal drag from any screen position, so a normal center swipe could dismiss the profile and let the same gesture continue into the underlying conversation history. Android hardware back also had no profile-specific native handler and could fall through to the browser history path.
 - Resolution:
-  - Keep the custom drag-to-dismiss behavior only for state-owned overlays that suppress native edge-swipe.
-  - Let route-backed profiles use the platform iOS edge gesture and header back action instead of accepting horizontal drags across the whole screen.
+  - Restrict the profile's controlled drag-to-dismiss behavior to pointer starts inside the 32px left edge zone.
+  - Disable competing WebView history gestures while the profile owns the controlled edge swipe, so the same gesture cannot reload or traverse the underlying room.
   - Register the profile screen as the highest-priority native back handler so Android hardware back closes only the profile route.
 - Data contract: None. No database or API changes.
 - Testing notes: Verify center swipes do not dismiss a route profile, iOS edge-swipe returns directly to the room, and Android hardware back leaves the room open behind the profile.

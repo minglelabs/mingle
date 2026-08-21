@@ -13,6 +13,7 @@ import {
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
+import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   AlertTriangle,
   Check,
@@ -23,10 +24,18 @@ import {
   UserX,
   X,
 } from "lucide-react";
-import { motion, useAnimationControls, type PanInfo } from "framer-motion";
+import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
@@ -162,6 +171,7 @@ export default function PublicUserProfileScreen({
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const motionControls = useAnimationControls();
+  const dragControls = useDragControls();
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
   const [viewportWidth, setViewportWidth] = useState(1);
@@ -182,7 +192,10 @@ export default function PublicUserProfileScreen({
   const normalizedUserId = userId.trim();
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
-  const suppressNativeEdgeSwipe = typeof onClose === "function";
+  // This component owns its controlled edge swipe for both route pages and
+  // state overlays. Letting WKWebView handle the same gesture can reload or
+  // traverse the underlying room before the profile route finishes closing.
+  const suppressNativeEdgeSwipe = true;
 
   useEffect(() => {
     if (sessionStatus === "loading") return;
@@ -239,10 +252,8 @@ export default function PublicUserProfileScreen({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // The native profile-link surface overlays the active room without
-    // changing the URL, so it must disable native edge-swipe while mounted.
-    // Route-backed profile pages leave the gesture enabled so WebView history
-    // handles the back navigation normally.
+    // Profile surfaces own a controlled edge swipe so an iOS gesture cannot
+    // race WebView history and traverse the room underneath the profile.
     const postNavigationState = (suppressEdgeSwipe: boolean) => {
       try {
         window.ReactNativeWebView?.postMessage(JSON.stringify({
@@ -291,6 +302,12 @@ export default function PublicUserProfileScreen({
     void handleBack();
     return true;
   }, 20), [handleBack]);
+
+  const handleProfilePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    dragControls.start(event);
+  }, [dragControls]);
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
@@ -411,11 +428,15 @@ export default function PublicUserProfileScreen({
     <motion.main
       initial={{ x: "100%" }}
       animate={motionControls}
-      drag={suppressNativeEdgeSwipe ? "x" : false}
-      dragConstraints={suppressNativeEdgeSwipe ? { left: 0, right: viewportWidth } : undefined}
+      drag="x"
+      dragControls={dragControls}
+      dragDirectionLock
+      dragListener={false}
+      dragConstraints={{ left: 0, right: viewportWidth }}
       dragElastic={0.08}
       dragMomentum={false}
-      onDragEnd={suppressNativeEdgeSwipe ? handleDragEnd : undefined}
+      onPointerDown={handleProfilePointerDown}
+      onDragEnd={handleDragEnd}
       className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
