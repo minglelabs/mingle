@@ -5401,6 +5401,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeBackPriority={9}
           onRequestClose={handleMenuSurfaceRequestClose}
           backdropClassName={`${LIVE_DEMO_MENU_OVERLAY_CLASSNAME} flex h-full w-full justify-end sm:justify-center`}
+          backdropFadeWithSurface={false}
           className={resolveLiveDemoMenuPanelClassName(navSurfaceClassName)}
           style={{
             boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),

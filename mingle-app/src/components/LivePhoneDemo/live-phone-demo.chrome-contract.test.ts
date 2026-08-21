@@ -32,7 +32,7 @@ describe("live-phone-demo chrome contracts", () => {
 
   it("opens the drawer inside a full-screen overlay and restores the container border on the panel", () => {
     expect(LIVE_DEMO_MENU_OVERLAY_CLASSNAME).toBe(
-      "absolute inset-0 z-50 overflow-hidden bg-black/42",
+      "absolute inset-0 z-50 overflow-hidden bg-transparent",
     );
     expect(LIVE_DEMO_MENU_PANEL_BASE_CLASSNAME).toContain(
       "sm:border-x sm:border-gray-200",

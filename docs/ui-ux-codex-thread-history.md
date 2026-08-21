@@ -1068,3 +1068,15 @@
   - Remove `shadow-2xl` from full-viewport My Page surfaces so a full-screen surface does not paint a false edge gradient. Shadows remain appropriate for constrained inner cards.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify iOS edge-swipe from each hamburger child returns exactly one level, the room language selector closes without dismissing the room, center swipes do not close search, Android back closes only search or the topmost child surface, and My Page has no right-edge dark strip.
+
+## 2026-08-21 - Keep the conversation hamburger transition visible without dimming the room
+
+- Surface: The hamburger menu opened from a conversation room.
+- Issue: The menu was the only right-side surface wrapped in a backdrop container. That container changed to `opacity: 0` as soon as history closed the menu, hiding the panel before its exit transform could finish. Its black backdrop also darkened the room even though the hamburger is a navigation surface rather than a modal confirmation dialog.
+- User impact: Opening or closing the hamburger could flash instead of sliding smoothly, and the conversation room appeared unnecessarily dimmed behind it.
+- Resolution:
+  - Keep the transparent layout wrapper mounted while the menu's `SlideSurface` performs its entrance or exit transform.
+  - Disable the wrapper's fade-out behavior for this surface so history-driven close transitions remain visible.
+  - Remove the black backdrop color while retaining outside-panel click handling for menu dismissal.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the hamburger enters and exits with one continuous horizontal motion, the room remains at normal brightness, and tapping outside the menu still closes it.

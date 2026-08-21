@@ -27,6 +27,7 @@ type SlideSurfaceProps = {
   children: ReactNode;
   className?: string;
   backdropClassName?: string;
+  backdropFadeWithSurface?: boolean;
   style?: CSSProperties;
   role?: "dialog" | "main";
   zIndex?: number;
@@ -88,6 +89,7 @@ export default function SlideSurface({
   children,
   className = "fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950 shadow-2xl",
   backdropClassName,
+  backdropFadeWithSurface = true,
   style,
   role = "dialog",
   zIndex,
@@ -226,7 +228,7 @@ export default function SlideSurface({
       onClick={onBackdropClick ? () => onBackdropClick() : undefined}
       style={{
         pointerEvents: open ? "auto" : "none",
-        opacity: open ? 1 : 0,
+        opacity: backdropFadeWithSurface && !open ? 0 : 1,
       }}
       aria-hidden={!open}
       data-slide-surface-backdrop="true"
