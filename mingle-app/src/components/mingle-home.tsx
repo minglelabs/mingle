@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronLeft, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -33,10 +33,7 @@ import {
   readPendingBirthDate,
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
-import {
-  deriveDefaultSttLanguagesForLocale,
-  sanitizeSttLanguageSelection,
-} from "@/lib/stt-languages";
+import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -88,6 +85,7 @@ export type MingleHomeRef = {
   stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
+  requestCloseTopmostOverlay: () => boolean;
 };
 
 // Conversation rooms require an authenticated account so the existing Apple,
@@ -1152,6 +1150,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       livePhoneDemoRef.current?.prepareForDeletion();
     },
     isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+    requestCloseTopmostOverlay: () => livePhoneDemoRef.current?.requestCloseTopmostOverlay() ?? false,
   }), []);
 
   const handleSignOut = useCallback(() => {

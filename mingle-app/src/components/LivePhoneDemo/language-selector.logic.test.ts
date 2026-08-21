@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from "@/components/conversation-list.logic";
+
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -13,8 +15,10 @@ import {
   partitionLanguageSelectorItemsByPriority,
   registerDeselectedLanguageCode,
   resolveDefaultLanguageSelectorSortMode,
+  resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorShowsSortToggle,
   sanitizeRecentLanguageCodes,
+  shouldDisableLanguageSelectorOption,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorItem,
@@ -157,6 +161,35 @@ describe("language-selector.logic", () => {
     const clearedState = clearLanguageSelectorHistoryState(state);
     expect(isLanguageSelectorHistoryOpen(clearedState)).toBe(false);
     expect(clearedState.keep).toBe(1);
+  });
+
+  it("preserves the active conversation route in a nested selector history entry", () => {
+    const state = buildLanguageSelectorHistoryState({
+      [CONVERSATION_HISTORY_ROUTE_STATE_KEY]: "conversation-a",
+    });
+
+    expect(state[CONVERSATION_HISTORY_ROUTE_STATE_KEY]).toBe("conversation-a");
+    expect(isLanguageSelectorHistoryOpen(state)).toBe(true);
+  });
+
+  it("preserves an explicitly empty viewer selection instead of replacing it with the room union", () => {
+    expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], [])).toEqual([]);
+    expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], undefined)).toEqual(["en", "ko"]);
+  });
+
+  it("applies language limits to the viewer's own picks rather than the room union", () => {
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: false,
+      ownSelectedCount: 0,
+    })).toBe(false);
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: true,
+      ownSelectedCount: 1,
+    })).toBe(true);
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: false,
+      ownSelectedCount: 5,
+    })).toBe(true);
   });
 
   it("sanitizes deselected language history", () => {

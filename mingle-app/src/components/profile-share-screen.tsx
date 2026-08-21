@@ -12,17 +12,20 @@ import {
 import * as QRCode from "qrcode";
 import { useSession } from "next-auth/react";
 import { formatHandle } from "@/lib/handles";
-import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link";
-import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useAnimationControls } from "framer-motion";
+import SlideSurface from "@/components/slide-surface";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
   initialHandle?: string;
   initialUserId?: string;
+  open?: boolean;
+  onClose?: () => void;
+  nativeBackPriority?: number;
+  zIndex?: number;
 };
 
 type NativeBridgeWindow = Window & {
@@ -42,11 +45,6 @@ type NativeQrSaveEventDetail = {
   message?: string;
 };
 
-const PROFILE_SHARE_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const PROFILE_SHARE_SWIPE_THRESHOLD_PX = 72;
 const PROFILE_SHARE_BACKGROUND = "linear-gradient(135deg, #1295e8 0%, #3569ed 52%, #7338f2 100%)";
 
 async function copyTextToClipboard(value: string): Promise<void> {
@@ -73,38 +71,46 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
+const subscribeToProfileOrigin = () => () => {};
+const getClientProfileOrigin = () => window.location.origin;
+const getServerProfileOrigin = () => "";
+
 export default function ProfileShareScreen({
   dictionary,
   locale,
   initialHandle = "",
   initialUserId = "",
+  open = true,
+  onClose,
+  nativeBackPriority = 50,
+  zIndex = 100,
 }: ProfileShareScreenProps) {
   const router = useRouter();
   const { data: session } = useSession();
-  const motionControls = useAnimationControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [viewportWidth, setViewportWidth] = useState(0);
   const [profileName, setProfileName] = useState("");
   const [rawHandle, setRawHandle] = useState(initialHandle.trim());
   const [profileRecordId, setProfileRecordId] = useState("");
   const [qrData, setQrData] = useState<{ profileUrl: string; dataUrl: string } | null>(null);
   const statusTimeoutRef = useRef<number | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const isLeavingRef = useRef(false);
-  const isMountedRef = useRef(false);
 
   const sessionUserId = session?.user?.id ?? "";
   const requestedUserId = initialUserId.trim();
-  const profileUserId = profileRecordId || sessionUserId;
+  const profileUserId = requestedUserId || profileRecordId || sessionUserId;
   const fallbackUserName = dictionary.connect.userFallbackLabel
     ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user");
   const name = profileName
     || (requestedUserId ? fallbackUserName : session?.user?.name?.trim() || dictionary.titles.my);
   const profileHandle = formatHandle(rawHandle);
+  const profileOrigin = useSyncExternalStore(
+    subscribeToProfileOrigin,
+    getClientProfileOrigin,
+    getServerProfileOrigin,
+  );
   const profileUrl = useMemo(() => {
-    if (typeof window === "undefined" || !profileUserId) return "";
-    return buildProfileLinkUrl(window.location.origin, profileUserId) ?? "";
-  }, [profileUserId]);
+    if (!profileOrigin || !profileUserId) return "";
+    return buildProfileLinkUrl(profileOrigin, profileUserId) ?? "";
+  }, [profileOrigin, profileUserId]);
   const qrDataUrl = qrData?.profileUrl === profileUrl ? qrData.dataUrl : null;
   const copy = {
     copyLink: dictionary.profile.profileShareCopyLinkLabel ?? "Copy link",
@@ -128,9 +134,6 @@ export default function ProfileShareScreen({
     if (!requestedUserId && !sessionUserId) return;
 
     let cancelled = false;
-    setProfileRecordId(requestedUserId);
-    setProfileName("");
-    setRawHandle(initialHandle.trim());
     const endpoint = requestedUserId
       ? buildClientApiPath(`/users/${encodeURIComponent(requestedUserId)}`)
       : buildClientApiPath("/profile");
@@ -192,54 +195,16 @@ export default function ProfileShareScreen({
   }, []);
 
   const navigateBack = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push(`/${locale}/mypage`);
-  }, [locale, router]);
-
-  const handleBack = useCallback(async () => {
-    if (isLeavingRef.current || !isMountedRef.current) return;
-    isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
-    if (isMountedRef.current) navigateBack();
-  }, [motionControls, navigateBack]);
-
-  const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
-    const touch = event.touches[0];
-    if (!touch) {
-      touchStartRef.current = null;
-      return;
-    }
-
-    const localClientX = touch.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) {
-      touchStartRef.current = null;
-      return;
-    }
-
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, []);
-
-  const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start || isLeavingRef.current || !isMountedRef.current) return;
-
-    const touch = event.changedTouches[0];
-    if (!touch) return;
-
-    const deltaX = touch.clientX - start.x;
-    const deltaY = Math.abs(touch.clientY - start.y);
-    const closeThreshold = Math.max(
-      PROFILE_SHARE_SWIPE_THRESHOLD_PX,
-      viewportWidth * 0.2,
-    );
-    if (deltaX >= closeThreshold && deltaX > deltaY * 1.2) {
-      void handleBack();
-    }
-  }, [handleBack, viewportWidth]);
+  }, [locale, onClose, router]);
 
   const handleCopyLink = useCallback(async () => {
     if (!profileUrl) {
@@ -374,40 +339,8 @@ export default function ProfileShareScreen({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    isMountedRef.current = true;
-    const syncViewportWidth = () => {
-      setViewportWidth(Math.max(1, window.innerWidth));
-    };
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-
     void router.prefetch(`/${locale}/mypage`);
-    void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
-
-    return () => {
-      isMountedRef.current = false;
-      window.removeEventListener("resize", syncViewportWidth);
-    };
-  }, [locale, motionControls, router]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const bridgeWindow = window as NativeBridgeWindow;
-    if (typeof bridgeWindow.ReactNativeWebView?.postMessage !== "function") return;
-
-    try {
-      bridgeWindow.ReactNativeWebView.postMessage(JSON.stringify({
-        type: "native_navigation_state",
-        payload: {
-          canGoBack: window.history.length > 1,
-          url: window.location.href,
-        },
-      }));
-    } catch {
-      // Leave native navigation unchanged when bridge serialization fails.
-    }
-  }, []);
+  }, [locale, router]);
 
   useEffect(() => () => {
     if (statusTimeoutRef.current) {
@@ -416,21 +349,15 @@ export default function ProfileShareScreen({
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-[100] overflow-hidden"
-      style={{ background: PROFILE_SHARE_BACKGROUND }}
+    <SlideSurface
+      open={open}
+      onClose={navigateBack}
+      ariaLabel={dictionary.profile.shareProfile}
+      nativeBackPriority={nativeBackPriority}
+      zIndex={zIndex}
+      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
+      style={{ background: PROFILE_SHARE_BACKGROUND, touchAction: "pan-y" }}
     >
-      <motion.main
-        initial={{ x: "100%" }}
-        animate={motionControls}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={() => {
-          touchStartRef.current = null;
-        }}
-        className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
-        style={{ touchAction: "pan-y" }}
-      >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4 text-white"
         style={{
@@ -440,7 +367,7 @@ export default function ProfileShareScreen({
       >
         <button
           type="button"
-          onClick={() => void handleBack()}
+          onClick={navigateBack}
           className="flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/15"
           aria-label={dictionary.profile.profileShareBackLabel ?? "Back"}
         >
@@ -514,7 +441,6 @@ export default function ProfileShareScreen({
           {statusMessage}
         </div>
       ) : null}
-      </motion.main>
-    </div>
+    </SlideSurface>
   );
 }

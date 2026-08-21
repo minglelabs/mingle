@@ -5,7 +5,7 @@ export const LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME =
   "inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors";
 
 export const LIVE_DEMO_MENU_OVERLAY_CLASSNAME =
-  "absolute inset-0 z-50 overflow-hidden bg-black/42";
+  "absolute inset-0 z-50 overflow-hidden bg-transparent";
 export const LIVE_DEMO_MENU_PANEL_BASE_CLASSNAME =
   "relative flex h-full w-full flex-col overflow-hidden will-change-transform sm:max-w-[400px] sm:border-x sm:border-gray-200";
 export const LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME =
@@ -31,12 +31,4 @@ export function resolveLiveDemoMenuPanelClassName(
   ]
     .filter(Boolean)
     .join(" ");
-}
-
-export function resolveLiveDemoMenuPanelShadow(
-  isCenteredMenuLayout: boolean,
-): string {
-  return isCenteredMenuLayout
-    ? "0 22px 64px rgba(15, 23, 42, 0.24)"
-    : "-18px 0 40px rgba(15, 23, 42, 0.22)";
 }

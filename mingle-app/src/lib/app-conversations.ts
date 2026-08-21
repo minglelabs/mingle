@@ -20,7 +20,8 @@ export type ConversationChannelSummary = {
   title: string;
   status: AppConversationChannelStatus;
   sessionKey: string;
-  // True once the room has 2+ real members. Solo (0-1 member) rooms use the
+  // True once the room effectively contains 2+ accounts, including an
+  // invitee waiting for first-message materialization. Solo rooms use the
   // generated per-speaker-turn diarization avatar system instead of real
   // account identity, so the client needs this to decide which avatar
   // system a bubble belongs to.
@@ -275,7 +276,7 @@ function resolveViewerFacingTitle(
   return names.join(", ");
 }
 
-// Once a room has 2+ real members, one shared "display language" can't
+// Once a room has 2+ real or pending members, one shared "display language" can't
 // represent everyone's own reading preference — each member reads translated
 // bubbles in their own language, sourced from their own membership row.
 // Solo rooms (0-1 members) keep using the channel-wide value untouched.
@@ -371,7 +372,7 @@ function resolveViewerOwnSelectedLanguages(
 }
 
 // "One active room per account" is a per-person invariant, so once a room
-// has 2+ real members, the channel-wide status/pausedAt can't represent it —
+// has 2+ real or pending members, the channel-wide status/pausedAt can't represent it —
 // Alice pausing her other rooms shouldn't pause the shared room for Bob, and
 // vice versa. Solo rooms (0-1 members) keep using the channel-wide fields.
 function resolveViewerFacingStatus(
@@ -910,26 +911,30 @@ export async function findOrCreateDirectConversation(args: {
 
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
-      ...buildVisibleConversationWhere(),
       members: { some: { userId: args.userId } },
-      OR: [
+      AND: [
+        buildVisibleConversationWhere(),
         {
-          AND: [
-            { members: { some: { userId: targetUserId } } },
-            // Exactly these two — a channel where either has picked up extra
-            // members (a future group chat) is not "the" 1:1 room anymore.
-            { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
-          ],
-        },
-        // The target hasn't received a first message yet (no membership row
-        // — see pendingInviteeUserIds), so it wouldn't match the branch
-        // above. Reuse this same pending room on a repeat tap instead of
-        // spawning a new one each time.
-        {
-          AND: [
-            { ownerUserId: args.userId },
-            { pendingInviteeUserIds: { has: targetUserId } },
-            { members: { none: { userId: { not: args.userId } } } },
+          OR: [
+            {
+              AND: [
+                { members: { some: { userId: targetUserId } } },
+                // Exactly these two — a channel where either has picked up extra
+                // members (a future group chat) is not "the" 1:1 room anymore.
+                { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
+              ],
+            },
+            // The target hasn't received a first message yet (no membership row
+            // — see pendingInviteeUserIds), so it wouldn't match the branch
+            // above. Reuse this same pending room on a repeat tap instead of
+            // spawning a new one each time.
+            {
+              AND: [
+                { ownerUserId: args.userId },
+                { pendingInviteeUserIds: { has: targetUserId } },
+                { members: { none: { userId: { not: args.userId } } } },
+              ],
+            },
           ],
         },
       ],
@@ -1019,7 +1024,7 @@ export async function updateConversationChannelStatus(args: {
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true },
+    select: { id: true, pendingInviteeUserIds: true },
   });
 
   if (!existing) {
@@ -1027,7 +1032,10 @@ export async function updateConversationChannelStatus(args: {
   }
 
   const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
-  const isTargetMultiMember = (membersByChannelId.get(args.conversationId)?.length ?? 0) >= 2;
+  const isTargetMultiMember = resolveEffectiveMemberCount(
+    membersByChannelId.get(args.conversationId),
+    existing.pendingInviteeUserIds,
+  ) >= 2;
   const pausedAt = args.status === APP_CONVERSATION_STATUS_PAUSED ? new Date() : null;
 
   const record = await prisma.$transaction(async (tx) => {
@@ -1046,14 +1054,23 @@ export async function updateConversationChannelStatus(args: {
         select: {
           channelId: true,
           status: true,
-          channel: { select: { status: true, _count: { select: { members: true } } } },
+          channel: {
+            select: {
+              status: true,
+              pendingInviteeUserIds: true,
+              _count: { select: { members: true } },
+            },
+          },
         },
       });
 
       const soloChannelIdsToPause: string[] = [];
       const memberRowChannelIdsToPause: string[] = [];
       for (const membership of otherMemberships) {
-        const isMultiMember = membership.channel._count.members >= 2;
+        const isMultiMember = (
+          membership.channel._count.members
+          + (membership.channel.pendingInviteeUserIds?.length ?? 0)
+        ) >= 2;
         const effectiveStatus = isMultiMember ? membership.status : membership.channel.status;
         if (effectiveStatus !== APP_CONVERSATION_STATUS_ACTIVE) continue;
         (isMultiMember ? memberRowChannelIdsToPause : soloChannelIdsToPause).push(membership.channelId);
@@ -1247,21 +1264,29 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
     return null;
   }
 
+  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
+  const members = membersByChannelId.get(args.conversationId);
+  const isMultiMember = resolveEffectiveMemberCount(
+    members,
+    existing.pendingInviteeUserIds,
+  ) >= 2;
+
   if (normalizedDefaultDisplayLanguage) {
-    const normalizedRoomLanguages = sanitizeSttLanguageSelection(
-      existing.selectedLanguages,
-      existing.selectedLanguages,
-    );
-    if (!normalizedRoomLanguages.includes(normalizedDefaultDisplayLanguage)) {
+    const availableLanguages = isMultiMember
+      ? resolveRoomLanguageUnion(
+          existing.selectedLanguages,
+          members,
+          existing.pendingInviteeUserIds,
+          args.userId,
+        ).languages
+      : sanitizeSttLanguageSelection(
+          existing.selectedLanguages,
+          existing.selectedLanguages,
+        );
+    if (!availableLanguages.includes(normalizedDefaultDisplayLanguage)) {
       throw new Error("invalid_default_display_language");
     }
   }
-
-  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
-  const isMultiMember = resolveEffectiveMemberCount(
-    membersByChannelId.get(args.conversationId),
-    existing.pendingInviteeUserIds,
-  ) >= 2;
 
   // Once there's more than one real or pending member, each person reads translations in
   // their own language — a single channel-wide value can't represent that, so

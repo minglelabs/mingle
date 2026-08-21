@@ -17,11 +17,13 @@ import {
   buildLanguageSelectorFeaturedItems,
   filterLanguageSelectorItems,
   registerDeselectedLanguageCode,
+  resolveLanguageSelectorOwnSelectedLanguages,
   sanitizeRecentLanguageCodes,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
   resolveLanguageSelectorSectionCopy,
   resolveLanguageSelectorShowsSortToggle,
+  shouldDisableLanguageSelectorOption,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
@@ -31,6 +33,7 @@ import LanguageFlag from "@/components/language-flag";
 import LanguageRowAvatarStack, {
   type LanguageRowAttributionMember,
 } from "@/components/LivePhoneDemo/language-row-avatar-stack";
+import SlideSurface from "@/components/slide-surface";
 import { buildClientApiPath } from "@/lib/api-contract";
 
 const MAX_LANGS = 5;
@@ -111,7 +114,9 @@ export default function LanguageSelector({
   const pendingRecentChipVisibilityCodeRef = useRef<string | null>(null);
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
+  const ownSelectedLanguagesRef = useRef<string[]>(
+    resolveLanguageSelectorOwnSelectedLanguages(selectedLanguages, viewerSelectedLanguages),
+  );
   const [attributionMembersById, setAttributionMembersById] = useState<
     Map<string, LanguageRowAttributionMember>
   >(new Map());
@@ -152,7 +157,13 @@ export default function LanguageSelector({
     [localeInfo.locale],
   );
   const activeSelectedLanguages = selectedLanguages;
-  const activeOwnSelectedLanguages = viewerSelectedLanguages ?? selectedLanguages;
+  const activeOwnSelectedLanguages = useMemo(
+    () => resolveLanguageSelectorOwnSelectedLanguages(
+      selectedLanguages,
+      viewerSelectedLanguages,
+    ),
+    [selectedLanguages, viewerSelectedLanguages],
+  );
   const recentLanguageCodes = recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
     const itemMap = new Map<string, (typeof languageItems)[number]>(
@@ -203,12 +214,9 @@ export default function LanguageSelector({
       strip.scrollLeft += chipRect.right - (stripRect.right - edgePadding);
     }
   }, []);
-  const atMax = activeSelectedLanguages.length >= MAX_LANGS;
-  const atMin = activeSelectedLanguages.length <= MIN_LANGS;
-
   useEffect(() => {
-    selectedLanguagesRef.current = selectedLanguages;
-  }, [selectedLanguages]);
+    ownSelectedLanguagesRef.current = activeOwnSelectedLanguages;
+  }, [activeOwnSelectedLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -326,26 +334,29 @@ export default function LanguageSelector({
 
   const handleToggleRequest = useCallback((code: string) => {
     pendingRecentChipVisibilityCodeRef.current = code;
-    const currentSelectedLanguages = selectedLanguagesRef.current;
-    const isSelected = currentSelectedLanguages.includes(code);
-    const isDisabled =
-      disabled
-      || (!isSelected && currentSelectedLanguages.length >= MAX_LANGS)
-      || (isSelected && currentSelectedLanguages.length <= MIN_LANGS);
+    const currentOwnSelectedLanguages = ownSelectedLanguagesRef.current;
+    const isOwnSelected = currentOwnSelectedLanguages.includes(code);
+    const isDisabled = shouldDisableLanguageSelectorOption({
+      disabled,
+      isOwnSelected,
+      ownSelectedCount: currentOwnSelectedLanguages.length,
+      minLanguages: MIN_LANGS,
+      maxLanguages: MAX_LANGS,
+    });
     if (isDisabled) return;
 
-    const nextSelectedLanguages = isSelected
-      ? currentSelectedLanguages.filter((languageCode) => languageCode !== code)
-      : [...currentSelectedLanguages, code];
-    selectedLanguagesRef.current = nextSelectedLanguages;
+    const nextOwnSelectedLanguages = isOwnSelected
+      ? currentOwnSelectedLanguages.filter((languageCode) => languageCode !== code)
+      : [...currentOwnSelectedLanguages, code];
+    ownSelectedLanguagesRef.current = nextOwnSelectedLanguages;
 
-    if (isSelected) {
+    if (isOwnSelected) {
       setRecentTranslationLanguageCodes((currentCodes) =>
         registerDeselectedLanguageCode(code, currentCodes),
       );
     } else {
       setRecentTranslationLanguageCodes((currentCodes) =>
-        syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
+        syncDeselectedLanguageCodes(nextOwnSelectedLanguages, currentCodes),
       );
     }
 
@@ -366,10 +377,13 @@ export default function LanguageSelector({
     // another member picked it gets a distinct sky-blue state instead, never
     // amber — see the `viewerSelectedLanguages` prop doc.
     const isOthersOnlySelected = isSelected && !isOwnSelected;
-    const isDisabled =
-      disabled
-      || (!isSelected && atMax)
-      || (isSelected && atMin);
+    const isDisabled = shouldDisableLanguageSelectorOption({
+      disabled,
+      isOwnSelected,
+      ownSelectedCount: activeOwnSelectedLanguages.length,
+      minLanguages: MIN_LANGS,
+      maxLanguages: MAX_LANGS,
+    });
 
     return (
       <button
@@ -451,28 +465,29 @@ export default function LanguageSelector({
   // The active room itself is portaled above the conversation list, so this
   // selector must sit above that body-level room overlay as well.
   const overlay = (
-    <div
-      className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      style={{ zIndex: 140 }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          requestClose();
-        }
-      }}
+    <SlideSurface
+      open={isOpen}
+      onClose={requestClose}
+      ariaLabel={copy.languageSelectorTitle}
+      nativeBackPriority={40}
+      className="fixed inset-0 z-[140] flex min-h-0 w-full flex-col bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
       <div
-        className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDownCapture={(event) => {
-          dismissSearchFocus(event.target);
-        }}
-        onTouchStartCapture={(event) => {
-          dismissSearchFocus(event.target);
+        className="flex h-full w-full justify-center"
+        onPointerDown={(event) => dismissSearchFocus(event.target)}
+        onTouchStart={(event) => dismissSearchFocus(event.target)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            requestClose();
+          }
         }}
       >
+        <div
+          className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
+          onClick={(event) => event.stopPropagation()}
+        >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
             aria-hidden="true"
@@ -494,7 +509,7 @@ export default function LanguageSelector({
               {copy.languageSelectorTitle}
             </p>
             <div className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-end text-[0.92rem] font-semibold tracking-[-0.01em] text-slate-500">
-              {activeSelectedLanguages.length}/{MAX_LANGS}
+              {activeOwnSelectedLanguages.length}/{MAX_LANGS}
             </div>
           </div>
 
@@ -509,10 +524,13 @@ export default function LanguageSelector({
                     const isSelected = activeSelectedLanguages.includes(lang.code);
                     const isOwnSelected = activeOwnSelectedLanguages.includes(lang.code);
                     const isOthersOnlySelected = isSelected && !isOwnSelected;
-                    const isDisabled =
-                      disabled
-                      || (!isSelected && atMax)
-                      || (isSelected && atMin);
+                    const isDisabled = shouldDisableLanguageSelectorOption({
+                      disabled,
+                      isOwnSelected,
+                      ownSelectedCount: activeOwnSelectedLanguages.length,
+                      minLanguages: MIN_LANGS,
+                      maxLanguages: MAX_LANGS,
+                    });
 
                     return (
                       <button
@@ -523,7 +541,7 @@ export default function LanguageSelector({
                         type="button"
                         onClick={() => handleToggleRequest(lang.code)}
                         disabled={isDisabled}
-                        aria-pressed={isSelected}
+                        aria-pressed={isOwnSelected}
                         aria-label={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         title={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition ${
@@ -650,8 +668,9 @@ export default function LanguageSelector({
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
   return createPortal(overlay, document.body);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import BottomTabBar from "@/components/bottom-tab-bar";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import {
   clearConnectSearchCache,
   isConnectSearchResult,
@@ -13,8 +14,11 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import {
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+} from "@/lib/slide-surface-history";
 import { Loader2, Search, UserRound, X } from "lucide-react";
-import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -26,6 +30,8 @@ type ConnectPageProps = {
 type UserSearchResult = ConnectSearchResult;
 
 const CONNECT_SEARCH_HISTORY_STATE_KEY = "__MINGLE_CONNECT_SEARCH_STATE__";
+const CONNECT_SURFACE_SCOPE = "connect";
+const CONNECT_PROFILE_SURFACE_ID = "profile";
 
 type ConnectSearchHistorySnapshot = {
   query: string;
@@ -117,6 +123,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const [searchErrorQuery, setSearchErrorQuery] = useState("");
   const [followInFlightIds, setFollowInFlightIds] = useState<Set<string>>(new Set());
   const [followError, setFollowError] = useState(false);
+  const [connectSurfaceHistory, setConnectSurfaceHistory] = useState(() => (
+    typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE)
+  ));
   const copy = resolveSearchCopy(dictionary);
   const normalizedQuery = query.trim();
   const visibleResults = resultsQuery === normalizedQuery ? results : [];
@@ -124,6 +133,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     && searchingQuery === normalizedQuery
     && visibleResults.length === 0;
   const isSearchErrorVisible = searchError && searchErrorQuery === normalizedQuery;
+  const connectProfileSurface = [...connectSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONNECT_PROFILE_SURFACE_ID);
 
   const focusSearchInput = useCallback(() => {
     inputRef.current?.focus({ preventScroll: true });
@@ -179,6 +191,48 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       });
     }
   }, [followInFlightIds]);
+
+  useEffect(() => {
+    const syncConnectSurfaceHistory = () => {
+      setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
+    };
+
+    window.addEventListener("popstate", syncConnectSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncConnectSurfaceHistory);
+  }, []);
+
+  const openConnectProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    pushSlideSurfaceHistory({
+      scope: CONNECT_SURFACE_SCOPE,
+      id: CONNECT_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+    setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
+  }, []);
+
+  const closeConnectProfile = useCallback((userId: string) => {
+    const currentEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
+    const currentEntry = currentEntries[currentEntries.length - 1];
+    if (
+      currentEntry?.id === CONNECT_PROFILE_SURFACE_ID
+      && currentEntry.value === userId
+    ) {
+      window.history.back();
+      return;
+    }
+
+    setConnectSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((entry) => (
+        entry.id === CONNECT_PROFILE_SURFACE_ID && entry.value === userId
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_entry, index) => index !== actualIndex);
+    });
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -309,7 +363,8 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   }, [normalizedQuery]);
 
   return (
-    <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+    <>
+      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <header
         className="shrink-0 px-4 pb-3"
         style={{
@@ -374,12 +429,12 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <ul className="border-t border-gray-100">
             {visibleResults.map((user) => {
               const name = user.name?.trim() || copy.userFallback;
-              const profileHref = `/${locale}/users/${encodeURIComponent(user.handle || user.id)}`;
               return (
                 <li key={user.id} className="border-b border-gray-100 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <Link
-                      href={profileHref}
+                    <button
+                      type="button"
+                      onClick={() => openConnectProfile(user.id)}
                       className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                       aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
                     >
@@ -406,7 +461,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                         <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
                         {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
                       </div>
-                    </Link>
+                    </button>
                     <button
                       type="button"
                       onClick={() => void handleToggleFollow(user)}
@@ -428,7 +483,18 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         ) : null}
       </div>
 
-      <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
-    </main>
+        <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
+      </main>
+      <PublicUserProfileScreen
+        dictionary={dictionary}
+        locale={locale}
+        userId={connectProfileSurface?.value ?? ""}
+        open={Boolean(connectProfileSurface?.value)}
+        onClose={() => {
+          if (!connectProfileSurface?.value) return;
+          closeConnectProfile(connectProfileSurface.value);
+        }}
+      />
+    </>
   );
 }

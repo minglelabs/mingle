@@ -5,6 +5,9 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import ProfileShareScreen from "@/components/profile-share-screen";
+import FollowListScreen from "@/components/follow-list-screen";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
@@ -26,7 +29,13 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
-import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
+import SlideSurface from "@/components/slide-surface";
+import {
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
+} from "@/lib/slide-surface-history";
 import {
   buildProfileImageTransform,
   DEFAULT_PROFILE_IMAGE_CROP,
@@ -44,11 +53,12 @@ import {
   type SttLanguageCode,
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
-import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import { motion } from "framer-motion";
 import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -83,12 +93,14 @@ type ProfileDraft = {
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
 
-const PROFILE_EDIT_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const PROFILE_EDIT_SWIPE_THRESHOLD_PX = 92;
-const PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND = 650;
+const MY_PAGE_SURFACE_SCOPE = "mypage";
+const MY_PAGE_SETTINGS_SCOPE = "mypage-settings";
+const MY_PAGE_PROFILE_EDIT_SURFACE_ID = "profile-edit";
+const MY_PAGE_PROFILE_SETTINGS_SURFACE_ID = "profile-settings";
+const MY_PAGE_PROFILE_SHARE_SURFACE_ID = "profile-share";
+const MY_PAGE_FOLLOW_LIST_SURFACE_ID = "follow-list";
+const MY_PAGE_PUBLIC_PROFILE_SURFACE_ID = "public-profile";
+const MY_PAGE_MANAGEMENT_SURFACE_ID = "management";
 
 type BlockedUserRecord = {
   id: string;
@@ -124,6 +136,17 @@ type ReportRecord = {
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
+type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback";
+
+function isProfileManagementPage(value: string | undefined): value is ProfileManagementPage {
+  return value === "blocked"
+    || value === "reports"
+    || value === "language"
+    || value === "primaryLanguages"
+    || value === "defaultLanguages"
+    || value === "usage"
+    || value === "feedback";
+}
 
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown;
@@ -205,11 +228,6 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; 
 function getNationalityOption(value: string | null | undefined) {
   const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
   return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
-}
-
-function appendPathSearchParam(path: string, key: string, value: string): string {
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
 function ProfileAvatar({
@@ -307,7 +325,12 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback" | null>(null);
+  const [managementPage, setManagementPage] = useState<ProfileManagementPage | null>(() => {
+    if (typeof window === "undefined") return null;
+    const entry = [...readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE)].reverse()
+      .find((candidate) => candidate.id === MY_PAGE_MANAGEMENT_SURFACE_ID);
+    return isProfileManagementPage(entry?.value) ? entry.value : null;
+  });
   const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
@@ -318,19 +341,11 @@ function ProfileSettingsPanel({
   const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
-  const [viewportWidth, setViewportWidth] = useState(1);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
-  const managementMotionControls = useAnimationControls();
-  const managementDragControls = useDragControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
-  const isManagementLeavingRef = useRef(false);
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -432,13 +447,6 @@ function ProfileSettingsPanel({
               : copy.appLanguageTitle;
 
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const syncNativeRuntime = () => {
@@ -470,16 +478,21 @@ function ProfileSettingsPanel({
   }, []);
 
   useEffect(() => {
-    if (!open || !isMountedRef.current) return;
-    isLeavingRef.current = false;
-    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [motionControls, open]);
+    if (typeof window === "undefined") return;
 
-  useEffect(() => {
-    if (!open || !managementPage || !isMountedRef.current) return;
-    isManagementLeavingRef.current = false;
-    void managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [managementMotionControls, managementPage, open]);
+    const syncManagementHistory = () => {
+      if (!open) {
+        setManagementPage(null);
+        return;
+      }
+      const entry = [...readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE)].reverse()
+        .find((candidate) => candidate.id === MY_PAGE_MANAGEMENT_SURFACE_ID);
+      setManagementPage(isProfileManagementPage(entry?.value) ? entry.value : null);
+    };
+
+    window.addEventListener("popstate", syncManagementHistory);
+    return () => window.removeEventListener("popstate", syncManagementHistory);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -569,14 +582,6 @@ function ProfileSettingsPanel({
       cancelled = true;
     };
   }, [open, sessionStatus]);
-
-  useEffect(() => {
-    if (!open || typeof window === "undefined") return;
-    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-    return () => window.removeEventListener("resize", syncViewportWidth);
-  }, [open]);
 
   const handleUnblock = useCallback(async (userId: string) => {
     if (unblockingId) return;
@@ -670,39 +675,32 @@ function ProfileSettingsPanel({
     window.location.href = updateUrl;
   }, [nativeAppUpdate?.updateUrl, onClose]);
 
-  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
+  const openManagementPage = useCallback((page: ProfileManagementPage) => {
+    pushSlideSurfaceHistory({
+      scope: MY_PAGE_SETTINGS_SCOPE,
+      id: MY_PAGE_MANAGEMENT_SURFACE_ID,
+      value: page,
+    });
+    setManagementPage(page);
+  }, []);
 
-  const handleManagementPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    managementDragControls.start(event);
-  }, [managementDragControls]);
-
-  const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
-      isLeavingRef.current = true;
-      await motionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
-      if (isMountedRef.current) onClose();
-      return;
+  const closeManagementPage = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const entries = readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE, window.history.state);
+      const topEntry = entries[entries.length - 1];
+      if (topEntry?.id === MY_PAGE_MANAGEMENT_SURFACE_ID) {
+        window.history.back();
+        return;
+      }
     }
-    await motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [motionControls, onClose]);
+    setManagementPage(null);
+  }, []);
 
-  const handleManagementDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isManagementLeavingRef.current) return;
-    if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
-      isManagementLeavingRef.current = true;
-      await managementMotionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
-      if (isMountedRef.current) setManagementPage(null);
-      return;
-    }
-    await managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [managementMotionControls]);
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!open || !managementPage) return false;
+    closeManagementPage();
+    return true;
+  }, 30), [closeManagementPage, managementPage, open]);
 
   const handleDeactivate = useCallback(async () => {
     if (isDeactivating) return;
@@ -748,30 +746,14 @@ function ProfileSettingsPanel({
     }
   }, [copy.withdrawAccountFailed, isWithdrawing, signOutCallbackUrl]);
 
-  return (
-    <AnimatePresence>
-      {open ? (
-        <motion.section
-          key="profile-settings-panel"
-          initial={{ x: "100%" }}
-          animate={motionControls}
-          exit={{ x: "100%" }}
-          transition={PROFILE_EDIT_TRANSITION}
-          drag="x"
-          dragControls={dragControls}
-          dragDirectionLock
-          dragListener={false}
-          dragConstraints={{ left: 0, right: viewportWidth }}
-          dragElastic={0.08}
-          dragMomentum={false}
-          onPointerDown={handlePanelPointerDown}
-          onDragEnd={handleDragEnd}
-          className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
-          style={{ touchAction: "pan-y" }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={copy.title}
-        >
+  return (<>
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
           <header
             className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
             style={{
@@ -795,7 +777,7 @@ function ProfileSettingsPanel({
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
-                onClick={() => setManagementPage("blocked")}
+                onClick={() => openManagementPage("blocked")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <UserRoundX size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -804,7 +786,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("reports")}
+                onClick={() => openManagementPage("reports")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <Siren size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -813,7 +795,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("feedback")}
+                onClick={() => openManagementPage("feedback")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <MessageCircle size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -822,7 +804,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("usage")}
+                onClick={() => openManagementPage("usage")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <BarChart3 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -831,7 +813,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("primaryLanguages")}
+                onClick={() => openManagementPage("primaryLanguages")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -840,7 +822,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("defaultLanguages")}
+                onClick={() => openManagementPage("defaultLanguages")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -849,7 +831,7 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setManagementPage("language")}
+                onClick={() => openManagementPage("language")}
                 className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
@@ -891,9 +873,9 @@ function ProfileSettingsPanel({
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
             <X size={18} aria-hidden="true" />
           </button>
-        </motion.section>
-      ) : null}
-      {isAccountActionModalOpen ? (
+    </SlideSurface>
+
+      {open && isAccountActionModalOpen ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -941,7 +923,7 @@ function ProfileSettingsPanel({
           </motion.div>
         </motion.div>
       ) : null}
-      {isWithdrawConfirmModalOpen ? (
+      {open && isWithdrawConfirmModalOpen ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -995,7 +977,7 @@ function ProfileSettingsPanel({
           </motion.div>
         </motion.div>
       ) : null}
-      {isDeactivateModalOpen ? (
+      {open && isDeactivateModalOpen ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1049,28 +1031,14 @@ function ProfileSettingsPanel({
           </motion.div>
         </motion.div>
       ) : null}
-      {open && managementPage ? (
-        <motion.section
-          key={`profile-management-${managementPage}`}
-          initial={{ x: "100%" }}
-          animate={managementMotionControls}
-          exit={{ x: "100%" }}
-          transition={PROFILE_EDIT_TRANSITION}
-          drag="x"
-          dragControls={managementDragControls}
-          dragDirectionLock
-          dragListener={false}
-          dragConstraints={{ left: 0, right: viewportWidth }}
-          dragElastic={0.08}
-          dragMomentum={false}
-          onPointerDown={handleManagementPanelPointerDown}
-          onDragEnd={handleManagementDragEnd}
-          className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
-          style={{ touchAction: "pan-y" }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={managementPageTitle}
-        >
+      <SlideSurface
+        open={open && managementPage !== null}
+        onClose={closeManagementPage}
+        ariaLabel={managementPageTitle}
+        nativeBackPriority={30}
+        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
           <header
             className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
             style={{
@@ -1080,7 +1048,7 @@ function ProfileSettingsPanel({
           >
             <button
               type="button"
-              onClick={() => setManagementPage(null)}
+              onClick={closeManagementPage}
               className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
               aria-label={copy.close}
             >
@@ -1245,15 +1213,14 @@ function ProfileSettingsPanel({
           </div>
           <button
             type="button"
-            onClick={() => setManagementPage(null)}
+            onClick={closeManagementPage}
             className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100"
             aria-label={copy.close}
           >
             <X size={18} aria-hidden="true" />
           </button>
-        </motion.section>
-      ) : null}
-    </AnimatePresence>
+      </SlideSurface>
+    </>
   );
 }
 
@@ -1282,10 +1249,6 @@ function ProfileEditPanel({
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
 }) {
-  const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
   const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
   const [bio, setBio] = useState(initialBio);
@@ -1341,25 +1304,6 @@ function ProfileEditPanel({
     setSaveError(null);
   }, [initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!open || !isMountedRef.current) return;
-    isLeavingRef.current = false;
-    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [motionControls, open]);
-
-  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
-
   const handleSave = useCallback(async () => {
     if (isSaving) return;
 
@@ -1387,49 +1331,14 @@ function ProfileEditPanel({
     }
   }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
 
-  const handleBack = useCallback(async () => {
-    if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
-    isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
-    if (isMountedRef.current) onClose();
-  }, [isSaving, motionControls, onClose]);
-
-  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
-    if (
-      info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX
-      || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND
-    ) {
-      void handleBack();
-      return;
-    }
-    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
-  }, [handleBack, isSaving, motionControls]);
-
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.section
-          key="profile-edit-panel"
-          initial={{ x: "100%" }}
-          animate={motionControls}
-          exit={{ x: "100%" }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-          drag="x"
-          dragControls={dragControls}
-          dragDirectionLock
-          dragListener={false}
-          dragConstraints={{ left: 0, right: 480 }}
-          dragElastic={0.08}
-          dragMomentum={false}
-          onPointerDown={handlePanelPointerDown}
-          onDragEnd={handleDragEnd}
-          className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
-          style={{ touchAction: "pan-y" }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={copy.title}
-        >
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
           <header
             className="grid shrink-0 grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 px-4"
             style={{
@@ -1542,9 +1451,7 @@ function ProfileEditPanel({
               ) : null}
             </div>
           </div>
-        </motion.section>
-      ) : null}
-    </AnimatePresence>
+    </SlideSurface>
   );
 }
 
@@ -1566,9 +1473,30 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     followersCount: 0,
     followingCount: 0,
   }));
-  const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [myPageSurfaceHistory, setMyPageSurfaceHistory] = useState(() => (
+    typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
+  ));
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+
+  const showProfileEdit = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_EDIT_SURFACE_ID,
+  );
+  const showProfileSettings = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_SETTINGS_SURFACE_ID,
+  );
+  const showProfileShare = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_SHARE_SURFACE_ID,
+  );
+  const showFollowList = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_FOLLOW_LIST_SURFACE_ID,
+  );
+  const followListSurface = [...myPageSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === MY_PAGE_FOLLOW_LIST_SURFACE_ID);
+  const followListTab = followListSurface?.value === "following" ? "following" : "followers";
+  const publicProfileSurface = [...myPageSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
@@ -1589,21 +1517,70 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       ?? getNationalityOption(nationality)?.label
       ?? nationality
     : null;
-  const profileSharePath = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
-  const profileShareHref = profile.handle
-    ? appendPathSearchParam(profileSharePath, "profileHandle", profile.handle)
-    : profileSharePath;
-  const followListPath = buildNativeAwareTabPath(`/${locale}/mypage/follows`, searchParams);
-  const followersHref = appendPathSearchParam(followListPath, "tab", "followers");
-  const followingHref = appendPathSearchParam(followListPath, "tab", "following");
   const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}`, searchParams, {
     skipConversationRestore: true,
     tabRoot: true,
   });
 
   useEffect(() => {
-    void router.prefetch(profileShareHref);
-  }, [profileShareHref, router]);
+    if (typeof window === "undefined") return;
+
+    const syncMyPageSurfaceHistory = () => {
+      setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
+    };
+
+    window.addEventListener("popstate", syncMyPageSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncMyPageSurfaceHistory);
+  }, []);
+
+  const openMyPageSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: MY_PAGE_SURFACE_SCOPE,
+      ...entry,
+    });
+    setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
+  }, []);
+
+  const closeMyPageSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const allEntries = readSlideSurfaceHistory(window.history.state);
+      const entryIndex = [...allEntries].reverse().findIndex((candidate) => (
+        candidate.scope === MY_PAGE_SURFACE_SCOPE
+        && candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex >= 0) {
+        const actualIndex = allEntries.length - 1 - entryIndex;
+        window.history.go(-(allEntries.length - actualIndex));
+        return;
+      }
+    }
+
+    setMyPageSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
+  const handleOpenPublicProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+    openMyPageSurface({
+      id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openMyPageSurface]);
 
   useEffect(() => {
     if (!sessionUserId) return;
@@ -1773,7 +1750,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }, [signOutCallbackUrl]);
 
   const handleChangeAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
-    setShowProfileSettings(false);
+    if (typeof window !== "undefined") {
+      replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+        entry.scope !== MY_PAGE_SURFACE_SCOPE && entry.scope !== MY_PAGE_SETTINGS_SCOPE
+      )));
+    }
+    setMyPageSurfaceHistory([]);
     router.replace(buildNativeAwareTabPath(`/${nextLocale}/mypage`, searchParams, { tabRoot: true }));
   }, [router, searchParams]);
 
@@ -1792,14 +1774,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialName={name}
         initialHandle={profile.handle ?? ""}
         initialPrimaryLanguages={primaryLanguages}
-        onClose={() => setShowProfileEdit(false)}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
         onSave={handleSaveProfile}
         open={showProfileEdit}
       />
       <ProfileSettingsPanel
         dictionary={dictionary}
         locale={locale}
-        onClose={() => setShowProfileSettings(false)}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
         onChangeAppLanguage={handleChangeAppLanguage}
         initialPrimaryLanguages={primaryLanguages}
         onSavePrimaryLanguages={handleSavePrimaryLanguages}
@@ -1810,6 +1792,36 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         defaultFeedbackEmail={session?.user?.email ?? ""}
         open={showProfileSettings}
         sessionStatus={sessionStatus}
+      />
+      <ProfileShareScreen
+        dictionary={dictionary}
+        locale={locale}
+        initialHandle={profile.handle ?? ""}
+        open={showProfileShare}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID })}
+      />
+      <FollowListScreen
+        key={`follow-list-${followListTab}`}
+        dictionary={dictionary}
+        locale={locale}
+        initialQuery=""
+        initialTab={followListTab}
+        open={showFollowList}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID })}
+        onOpenProfile={handleOpenPublicProfile}
+      />
+      <PublicUserProfileScreen
+        dictionary={dictionary}
+        locale={locale}
+        userId={publicProfileSurface?.value ?? ""}
+        open={Boolean(publicProfileSurface?.value)}
+        onClose={() => {
+          if (!publicProfileSurface?.value) return;
+          closeMyPageSurface({
+            id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+            value: publicProfileSurface.value,
+          });
+        }}
       />
       <ProfileImagePreview
         open={showProfileImagePreview}
@@ -1839,7 +1851,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         </h1>
         <button
           type="button"
-          onClick={() => setShowProfileSettings(true)}
+          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
           className="flex h-10 w-10 items-center justify-center rounded-full transition"
           aria-label={dictionary.profile.menuLabel}
         >
@@ -1866,7 +1878,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <div className="min-w-0 flex-1 grid grid-cols-2 gap-1 text-center">
               <button
                 type="button"
-                onClick={() => router.push(followersHref)}
+                onClick={() => openMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID, value: "followers" })}
                 className="rounded-xl px-2 py-1 transition active:bg-gray-50"
                 aria-label={`${profile.followersCount} ${dictionary.profile.followersLabel}`}
               >
@@ -1875,7 +1887,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               </button>
               <button
                 type="button"
-                onClick={() => router.push(followingHref)}
+                onClick={() => openMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID, value: "following" })}
                 className="rounded-xl px-2 py-1 transition active:bg-gray-50"
                 aria-label={`${profile.followingCount} ${dictionary.profile.followingLabel}`}
               >
@@ -1894,14 +1906,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              onClick={() => setShowProfileEdit(true)}
+              onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
               className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
             >
               {dictionary.profile.editProfile}
             </button>
             <button
               type="button"
-              onClick={() => router.push(profileShareHref)}
+              onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID })}
               className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
             >
               {dictionary.profile.shareProfile}

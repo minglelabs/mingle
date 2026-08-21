@@ -2,10 +2,10 @@
 
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { formatHandle } from "@/lib/handles";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
+import { formatHandle } from "@/lib/handles";
+import SlideSurface from "@/components/slide-surface";
 import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
-import { motion, useAnimationControls } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
@@ -17,6 +17,9 @@ type FollowListScreenProps = {
   locale: AppLocale;
   initialQuery: string;
   initialTab: FollowListTab;
+  open?: boolean;
+  onClose?: () => void;
+  onOpenProfile?: (userId: string) => void;
 };
 
 type FollowListUser = {
@@ -27,12 +30,6 @@ type FollowListUser = {
   isFollowing: boolean;
   isFollowedBy: boolean;
 };
-
-const FOLLOW_LIST_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const FOLLOW_LIST_SWIPE_THRESHOLD_PX = 72;
 
 function replaceFollowListSearchParams(updates: Record<string, string | null>): void {
   if (typeof window === "undefined") return;
@@ -54,15 +51,15 @@ export default function FollowListScreen({
   locale,
   initialQuery,
   initialTab,
+  open = true,
+  onClose,
+  onOpenProfile,
 }: FollowListScreenProps) {
   const router = useRouter();
-  const motionControls = useAnimationControls();
   const inputRef = useRef<HTMLInputElement | null>(null);
   // isEdge: true → 엣지 스와이프(뒤로가기), false → 탭 전환 스와이프
   const touchStartRef = useRef<{ x: number; y: number; isEdge: boolean } | null>(null);
   const requestSequenceRef = useRef(0);
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
   const [activeTab, setActiveTab] = useState<FollowListTab>(initialTab);
   const [query, setQuery] = useState(initialQuery);
   const [users, setUsers] = useState<FollowListUser[]>([]);
@@ -92,19 +89,16 @@ export default function FollowListScreen({
   const normalizedQuery = query.trim();
 
   const navigateBack = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push(`/${locale}/mypage`);
-  }, [locale, router]);
-
-  const handleBack = useCallback(async () => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: FOLLOW_LIST_TRANSITION });
-    if (isMountedRef.current) navigateBack();
-  }, [motionControls, navigateBack]);
+  }, [locale, onClose, router]);
 
   const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
@@ -121,7 +115,7 @@ export default function FollowListScreen({
   const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const start = touchStartRef.current;
     touchStartRef.current = null;
-    if (!start || !isMountedRef.current || isLeavingRef.current) return;
+    if (!start) return;
 
     const touch = event.changedTouches[0];
     if (!touch) return;
@@ -133,11 +127,8 @@ export default function FollowListScreen({
     if (deltaY > Math.abs(deltaX) * 0.8) return;
 
     if (start.isEdge) {
-      // 왼쪽 엣지 스와이프 → 전체 페이지 닫기
-      const closeThreshold = Math.max(FOLLOW_LIST_SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
-      if (deltaX >= closeThreshold && deltaX > deltaY * 1.2) {
-        void handleBack();
-      }
+      // SlideSurface owns the shared edge dismissal gesture.
+      return;
     } else {
       // 일반 수평 스와이프 → 탭 전환
       const tabSwipeThreshold = Math.max(40, viewportWidth * 0.12);
@@ -157,7 +148,7 @@ export default function FollowListScreen({
         }
       }
     }
-  }, [handleBack, viewportWidth, activeTab]);
+  }, [activeTab, viewportWidth]);
 
   const handleTabChange = useCallback((nextTab: FollowListTab) => {
     setActiveTab(nextTab);
@@ -203,20 +194,18 @@ export default function FollowListScreen({
   }, [pendingFollowIds]);
 
   useEffect(() => {
-    isMountedRef.current = true;
     const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
     syncViewportWidth();
     window.addEventListener("resize", syncViewportWidth);
     void router.prefetch(`/${locale}/mypage`);
-    void motionControls.start({ x: 0, transition: FOLLOW_LIST_TRANSITION });
 
     return () => {
-      isMountedRef.current = false;
       window.removeEventListener("resize", syncViewportWidth);
     };
-  }, [locale, motionControls, router]);
+  }, [locale, router]);
 
   useEffect(() => {
+    if (!open) return;
     const requestSequence = ++requestSequenceRef.current;
 
     const timeoutId = window.setTimeout(() => {
@@ -228,50 +217,37 @@ export default function FollowListScreen({
           return response.json() as Promise<{ users?: FollowListUser[] }>;
         })
         .then((payload) => {
-          if (!isMountedRef.current || requestSequenceRef.current !== requestSequence) return;
+          if (requestSequenceRef.current !== requestSequence) return;
           setUsers(Array.isArray(payload.users) ? payload.users : []);
         })
         .catch(() => {
-          if (!isMountedRef.current || requestSequenceRef.current !== requestSequence) return;
+          if (requestSequenceRef.current !== requestSequence) return;
           setUsers([]);
           setLoadError(true);
         })
         .finally(() => {
-          if (isMountedRef.current && requestSequenceRef.current === requestSequence) {
+          if (requestSequenceRef.current === requestSequence) {
             setIsLoading(false);
           }
         });
     }, 220);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeTab, normalizedQuery]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: "native_navigation_state",
-        payload: { canGoBack: window.history.length > 1, url: window.location.href },
-      }));
-    } catch {
-      // Keep browser navigation available when the native bridge is unavailable.
-    }
-  }, []);
+  }, [activeTab, normalizedQuery, open]);
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-white">
-      <motion.main
-        initial={{ x: "100%" }}
-        animate={motionControls}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={() => {
-          touchStartRef.current = null;
-        }}
-        className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
-        style={{ touchAction: "pan-y" }}
-      >
+    <SlideSurface
+      open={open}
+      onClose={navigateBack}
+      ariaLabel={activeLabel}
+      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => {
+        touchStartRef.current = null;
+      }}
+    >
         <header
           className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
           style={{
@@ -281,7 +257,7 @@ export default function FollowListScreen({
         >
           <button
             type="button"
-            onClick={() => void handleBack()}
+            onClick={navigateBack}
             className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
             aria-label={labels.back}
           >
@@ -360,7 +336,7 @@ export default function FollowListScreen({
             <ul className="border-t border-gray-100">
               {users.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
-                const profileHref = `/${locale}/users/${encodeURIComponent(user.handle || user.id)}`;
+                const profileHref = `/${locale}/users/${encodeURIComponent(user.id)}`;
                 const isMutual = activeTab === "followers"
                   ? user.isFollowing
                   : user.isFollowedBy;
@@ -370,6 +346,11 @@ export default function FollowListScreen({
                     <div className="flex min-w-0 items-center gap-3">
                       <Link
                         href={profileHref}
+                        onClick={(event) => {
+                          if (!onOpenProfile) return;
+                          event.preventDefault();
+                          onOpenProfile(user.id);
+                        }}
                         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                         aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
                       >
@@ -413,7 +394,6 @@ export default function FollowListScreen({
             </ul>
           )}
         </div>
-      </motion.main>
-    </div>
+    </SlideSurface>
   );
 }

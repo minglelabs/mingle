@@ -4,6 +4,9 @@ import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import NotificationPanel from "@/components/notification-panel";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
@@ -22,7 +25,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -51,6 +54,7 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import { resolveLanguageSelectorOwnSelectedLanguages } from "@/components/LivePhoneDemo/language-selector.logic";
 import {
   formatBirthDate,
 } from "@/lib/birth-date";
@@ -125,7 +129,11 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
-import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX, buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import {
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+} from "@/lib/slide-surface-history";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
@@ -139,6 +147,9 @@ const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
+const CONVERSATION_SURFACE_SCOPE = "conversation";
+const CONVERSATION_NOTIFICATIONS_SURFACE_ID = "notifications";
+const CONVERSATION_PROFILE_SURFACE_ID = "profile";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
@@ -146,10 +157,6 @@ const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
-const CONVERSATION_OVERLAY_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
@@ -167,10 +174,6 @@ type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
-type ConversationOverlayTransitionState = {
-  enterMode: ConversationOverlayEnterMode;
-  exitMode: ConversationOverlayExitMode;
-};
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
 };
@@ -215,31 +218,6 @@ declare global {
     };
   }
 }
-
-const conversationOverlayVariants: Variants = {
-  initial: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.enterMode === "animate"
-      ? { x: "100%" }
-      : { x: "0%" }
-  ),
-  active: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "0%",
-    transition: transitionState.enterMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  retained: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "100%",
-    transition: transitionState.exitMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  exit: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.exitMode === "animate"
-      ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
-      : { x: "0%", transition: { duration: 0 } }
-  ),
-};
 
 interface ConversationItem {
   id: string;
@@ -863,50 +841,6 @@ function replaceConversationOverlayUrl(
   }
 }
 
-function ensureConversationHistoryEntryForProfile(conversationId: string): void {
-  if (typeof window === "undefined") return;
-
-  const normalizedConversationId = conversationId.trim();
-  if (!normalizedConversationId) return;
-
-  try {
-    const currentConversationId = readConversationIdFromLocation();
-    const nextUrl = buildConversationOverlayUrl(normalizedConversationId);
-    if (!nextUrl) return;
-
-    if (currentConversationId === normalizedConversationId) {
-      if (readConversationHistoryRouteFromState(window.history.state) === normalizedConversationId) {
-        return;
-      }
-
-      window.history.replaceState(
-        buildConversationHistoryState(normalizedConversationId, window.history.state),
-        "",
-        nextUrl,
-      );
-      notifyLocationSearchSync();
-      return;
-    }
-
-    // A room restored from native STT can be visible while the list URL is
-    // still the current history entry. Add the room entry before opening a
-    // profile route so iOS back/edge-swipe returns to the room instead of
-    // leaving the conversations tab entirely.
-    window.history.pushState(
-      buildConversationHistoryState(normalizedConversationId, window.history.state),
-      "",
-      nextUrl,
-    );
-    postConversationHistoryDebug("ensure-conversation-history-before-profile", {
-      conversationId: normalizedConversationId,
-      previousConversationId: currentConversationId,
-    });
-    notifyLocationSearchSync();
-  } catch {
-    // Keep profile navigation available when history is restricted.
-  }
-}
-
 function pushSearchOverlayHistoryState(): void {
   if (typeof window === "undefined") return;
 
@@ -1407,7 +1341,6 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
 }, ref) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const touchStartXRef = useRef<number | null>(null);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
     readStoredRecentSearches,
@@ -1514,122 +1447,113 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   const hasQuery = normalizeSearchTerm(query).length > 0;
 
   return (
-    <div
-      className="absolute inset-0 z-40 flex flex-col bg-white transition-transform duration-300 ease-in-out"
-      style={{
-        transform: open ? "translateX(0)" : "translateX(100%)",
-        pointerEvents: open ? "auto" : "none",
-        transitionDuration: transitionMode === "animate" ? undefined : "0ms",
-      }}
-      aria-hidden={!open}
-      onTouchStart={(event) => {
-        touchStartXRef.current = event.touches[0]?.clientX ?? null;
-      }}
-      onTouchEnd={(event) => {
-        const startX = touchStartXRef.current;
-        const endX = event.changedTouches[0]?.clientX ?? startX ?? 0;
-        touchStartXRef.current = null;
-
-        if (startX !== null && endX - startX > 60) {
-          dismissSearch();
-        }
-      }}
+    <SlideSurface
+      open={open}
+      onClose={dismissSearch}
+      ariaLabel={copy.searchButtonLabel}
+      nativeBackPriority={20}
+      transitionMode={transitionMode}
+      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
-        <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
-          <Search size={16} className="shrink-0 text-gray-400" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
-            enterKeyHint="search"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={dismissSearch}
-          className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+      <div className="flex h-full min-h-0 flex-col">
+        <form
+          onSubmit={handleSubmit}
+          className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          }}
         >
-          {copy.cancelAction}
-        </button>
-      </form>
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+            <Search size={16} className="shrink-0 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={copy.searchPlaceholder}
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={dismissSearch}
+            className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+          >
+            {copy.cancelAction}
+          </button>
+        </form>
 
-      <div className="flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        {hasQuery ? (
-          filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-[14px]">{copy.noSearchResults}</p>
-            </div>
-          ) : (
-            <div className="pt-2">
-              {filtered.map((item, index) => (
-                <div key={item.id}>
-                  <ConversationRow
-                    item={item}
-                    disabled={actionDisabled}
-                    onSelect={handleResultSelect}
-                  />
-                  {index < filtered.length - 1 && (
-                    <div className="mx-4 h-px bg-gray-100" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <section className="px-4 pb-4 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
-                {copy.recentSearchesTitle}
-              </h2>
-              {recentSearches.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleClearRecentSearches}
-                  className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
-                >
-                  {copy.clearRecentSearchesAction}
-                </button>
-              ) : null}
-            </div>
-            {recentSearches.length === 0 ? (
-              <p className="px-1 py-3 text-[14px] text-gray-400">
-                {copy.noRecentSearches}
-              </p>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          {hasQuery ? (
+            filtered.length === 0 ? (
+              <div className="flex flex-col items-center py-16 text-gray-400">
+                <p className="text-[14px]">{copy.noSearchResults}</p>
+              </div>
             ) : (
-              <div className="space-y-1">
-                {recentSearches.map((recentSearch) => (
-                  <button
-                    key={recentSearch}
-                    type="button"
-                    onClick={() => handleRecentSearchSelect(recentSearch)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <Search size={16} className="text-gray-400" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
-                      {recentSearch}
-                    </span>
-                  </button>
+              <div className="pt-2">
+                {filtered.map((item, index) => (
+                  <div key={item.id}>
+                    <ConversationRow
+                      item={item}
+                      disabled={actionDisabled}
+                      onSelect={handleResultSelect}
+                    />
+                    {index < filtered.length - 1 && (
+                      <div className="mx-4 h-px bg-gray-100" />
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </section>
-        )}
+            )
+          ) : (
+            <section className="px-4 pb-4 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
+                  {copy.recentSearchesTitle}
+                </h2>
+                {recentSearches.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearRecentSearches}
+                    className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
+                  >
+                    {copy.clearRecentSearchesAction}
+                  </button>
+                ) : null}
+              </div>
+              {recentSearches.length === 0 ? (
+                <p className="px-1 py-3 text-[14px] text-gray-400">
+                  {copy.noRecentSearches}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {recentSearches.map((recentSearch) => (
+                    <button
+                      key={recentSearch}
+                      type="button"
+                      onClick={() => handleRecentSearchSelect(recentSearch)}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <Search size={16} className="text-gray-400" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
+                        {recentSearch}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
 });
 
@@ -1720,6 +1644,11 @@ export default function ConversationList({
   );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
+  const [conversationSurfaceHistory, setConversationSurfaceHistory] = useState(() => (
+    typeof window === "undefined"
+      ? []
+      : readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE)
+  ));
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
@@ -1847,6 +1776,13 @@ export default function ConversationList({
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const notificationSurfaceOpen = conversationSurfaceHistory.some(
+    (entry) => entry.id === CONVERSATION_NOTIFICATIONS_SURFACE_ID,
+  );
+  const conversationProfileSurface = [...conversationSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+  const conversationProfileId = conversationProfileSurface?.value ?? null;
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2358,6 +2294,14 @@ export default function ConversationList({
     }
   }, []);
 
+  const handleConversationSurfaceRequestClose = useCallback((conversationId: string) => {
+    const roomRef = conversationRoomRefs.current.get(conversationId);
+    if (roomRef?.requestCloseTopmostOverlay()) {
+      return false;
+    }
+    return true;
+  }, []);
+
   const applyRunningConversationState = useCallback((
     conversationId: string,
     isRunning: boolean,
@@ -2553,9 +2497,9 @@ export default function ConversationList({
       previousConversation.selectedLanguages,
       defaultSelectedLanguages,
     );
-    const previousViewerSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.viewerSelectedLanguages ?? previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
+    const previousViewerSelectedLanguages = resolveLanguageSelectorOwnSelectedLanguages(
+      previousSelectedLanguages,
+      previousConversation.viewerSelectedLanguages,
     );
     const previousTranslationLanguagesLinked =
       previousConversation.translationLanguagesLinked !== false;
@@ -2901,6 +2845,58 @@ export default function ConversationList({
     }).sort(compareConversationRecency));
   }, [clearConversationInterimPreview]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncConversationSurfaceHistory = () => {
+      setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+    };
+
+    window.addEventListener("popstate", syncConversationSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncConversationSurfaceHistory);
+  }, []);
+
+  const openConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: CONVERSATION_SURFACE_SCOPE,
+      ...entry,
+    });
+    setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+  }, []);
+
+  const closeConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const currentEntries = readSlideSurfaceHistoryForScope(
+        CONVERSATION_SURFACE_SCOPE,
+        window.history.state,
+      );
+      const currentEntry = currentEntries[currentEntries.length - 1];
+      if (
+        currentEntry?.id === entry.id
+        && (entry.value === undefined || currentEntry.value === entry.value)
+      ) {
+        window.history.back();
+        return;
+      }
+    }
+
+    setConversationSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
@@ -2910,27 +2906,16 @@ export default function ConversationList({
     if (!normalizedUserId) return;
 
     postNativeBannerZone("hidden");
-    const activeConversationId = activeConversationRef.current?.id.trim() || "";
-    if (activeConversationId) {
-      ensureConversationHistoryEntryForProfile(activeConversationId);
-    }
-    const searchParams = typeof window === "undefined"
-      ? new URLSearchParams()
-      : new URLSearchParams(window.location.search);
-    router.push(buildNativeAwareTabPath(
-      `/${locale}/users/${encodeURIComponent(normalizedUserId)}`,
-      searchParams,
-      { preserveConversation: Boolean(activeConversationId) },
-    ));
-  }, [locale, router]);
+    openConversationSurface({
+      id: CONVERSATION_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openConversationSurface]);
 
   const openNotifications = useCallback(() => {
     postNativeBannerZone("hidden");
-    const searchParams = typeof window === "undefined"
-      ? new URLSearchParams()
-      : new URLSearchParams(window.location.search);
-    router.push(buildNativeAwareTabPath(`/${locale}/notifications`, searchParams));
-  }, [locale, router]);
+    openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+  }, [openConversationSurface]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -4691,17 +4676,18 @@ export default function ConversationList({
                 const isVisible = activeConversation?.id === conversation.id;
 
                 return (
-                  <motion.div
+                  <SlideSurface
                     key={conversation.id}
-                    custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                    variants={conversationOverlayVariants}
-                    initial="initial"
-                    animate={isVisible ? "active" : "retained"}
-                    exit="exit"
+                    open={isVisible}
+                    onClose={() => void handleCloseActiveConversation()}
+                    onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
+                    ariaLabel={conversation.title}
+                    role="main"
+                    nativeBackPriority={4}
                     className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
                       isVisible ? "" : "pointer-events-none"
                     }`}
-                    aria-hidden={!isVisible}
+                    style={{ touchAction: "pan-y" }}
                   >
                     <Suspense
                       fallback={(
@@ -4772,10 +4758,32 @@ export default function ConversationList({
                         }}
                       />
                     </Suspense>
-                  </motion.div>
+                  </SlideSurface>
                 );
               })}
             </AnimatePresence>
+            <NotificationPanel
+              open={notificationSurfaceOpen}
+              enabled={sessionStatus === "authenticated"}
+              locale={locale}
+              dictionary={dictionary}
+              onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
+              onOpenProfile={openConversationProfile}
+              onUnreadCountChange={setUnreadNotificationCount}
+            />
+            <PublicUserProfileScreen
+              dictionary={dictionary}
+              locale={locale}
+              userId={conversationProfileId ?? ""}
+              open={Boolean(conversationProfileId)}
+              onClose={() => {
+                if (!conversationProfileId) return;
+                closeConversationSurface({
+                  id: CONVERSATION_PROFILE_SURFACE_ID,
+                  value: conversationProfileId,
+                });
+              }}
+            />
           </>,
           document.body,
         )

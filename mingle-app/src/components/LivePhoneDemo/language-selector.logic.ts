@@ -5,6 +5,7 @@ import {
   type LegalDocumentLocale,
 } from "@/i18n/config";
 import {
+  MAX_STT_LANGUAGE_SELECTION,
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   type SttLanguageCode,
@@ -111,6 +112,33 @@ function sanitizeLanguageCodes(
   }
 
   return deduped;
+}
+
+export function resolveLanguageSelectorOwnSelectedLanguages(
+  roomSelectedLanguages: readonly string[],
+  viewerSelectedLanguages?: readonly string[],
+  limit = MAX_STT_LANGUAGE_SELECTION,
+): SttLanguageCode[] {
+  return sanitizeLanguageCodes(
+    viewerSelectedLanguages ?? roomSelectedLanguages,
+    limit,
+  );
+}
+
+export function shouldDisableLanguageSelectorOption(args: {
+  disabled?: boolean;
+  isOwnSelected: boolean;
+  ownSelectedCount: number;
+  minLanguages?: number;
+  maxLanguages?: number;
+}): boolean {
+  if (args.disabled) return true;
+
+  const minLanguages = args.minLanguages ?? 1;
+  const maxLanguages = args.maxLanguages ?? MAX_STT_LANGUAGE_SELECTION;
+  return args.isOwnSelected
+    ? args.ownSelectedCount <= minLanguages
+    : args.ownSelectedCount >= maxLanguages;
 }
 
 export function resolveLanguageSelectorLocale(

@@ -3,17 +3,17 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileShareScreen from "@/components/profile-share-screen";
+import SlideSurface from "@/components/slide-surface";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
-import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   AlertTriangle,
   Check,
@@ -24,23 +24,21 @@ import {
   UserX,
   X,
 } from "lucide-react";
-import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
   userId: string;
+  open?: boolean;
   onClose?: () => void;
 };
 
@@ -63,12 +61,17 @@ type PublicUserProfile = {
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
 
-const PROFILE_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const SWIPE_THRESHOLD_PX = 72;
-const SWIPE_VELOCITY_PX_PER_SECOND = 650;
+const PROFILE_SHARE_HISTORY_STATE_KEY = "__MINGLE_PUBLIC_PROFILE_SHARE_SURFACE__";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasProfileShareHistoryEntry(userId: string): boolean {
+  if (typeof window === "undefined" || !userId || !isRecord(window.history.state)) return false;
+  const entry = window.history.state[PROFILE_SHARE_HISTORY_STATE_KEY];
+  return isRecord(entry) && entry.userId === userId;
+}
 
 function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   const isKorean = locale === "ko";
@@ -166,15 +169,11 @@ export default function PublicUserProfileScreen({
   dictionary,
   locale,
   userId,
+  open = true,
   onClose,
 }: PublicUserProfileScreenProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
-  const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
-  const [viewportWidth, setViewportWidth] = useState(1);
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -188,17 +187,14 @@ export default function PublicUserProfileScreen({
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const [showProfileShare, setShowProfileShare] = useState(false);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
   const normalizedUserId = userId.trim();
+  const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
-  // This component owns its controlled edge swipe for both route pages and
-  // state overlays. Letting WKWebView handle the same gesture can reload or
-  // traverse the underlying room before the profile route finishes closing.
-  const suppressNativeEdgeSwipe = true;
-
   useEffect(() => {
-    if (sessionStatus === "loading") return;
+    if (!open || sessionStatus === "loading") return;
 
     let cancelled = false;
     setIsLoading(true);
@@ -230,45 +226,37 @@ export default function PublicUserProfileScreen({
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, normalizedUserId, sessionStatus]);
+  }, [isOwnProfile, normalizedUserId, open, sessionStatus]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    isMountedRef.current = true;
-    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-    const animationFrameId = window.requestAnimationFrame(() => {
-      if (!isMountedRef.current) return;
-      void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
-    });
+    if (!open) {
+      setShowProfileShare(false);
+      return;
+    }
 
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      isMountedRef.current = false;
-      window.removeEventListener("resize", syncViewportWidth);
-    };
-  }, [motionControls]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // Profile surfaces own a controlled edge swipe so an iOS gesture cannot
-    // race WebView history and traverse the room underneath the profile.
-    const postNavigationState = (suppressEdgeSwipe: boolean) => {
-      try {
-        window.ReactNativeWebView?.postMessage(JSON.stringify({
-          type: "native_navigation_state",
-          payload: { canGoBack: window.history.length > 1, url: window.location.href, suppressEdgeSwipe },
-        }));
-      } catch {
-        // Keep browser navigation available when the native bridge is unavailable.
+    const handlePopState = () => {
+      if (!hasProfileShareHistoryEntry(profileShareHistoryId)) {
+        setShowProfileShare(false);
       }
     };
-    postNavigationState(suppressNativeEdgeSwipe);
-    return () => postNavigationState(false);
-  }, [suppressNativeEdgeSwipe]);
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [open, profileShareHistoryId]);
+
+  const closeProfileShare = useCallback(() => {
+    if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      window.history.back();
+      return;
+    }
+    setShowProfileShare(false);
+  }, [profileShareHistoryId]);
 
   const navigateBack = useCallback(() => {
+    if (showProfileShare) {
+      closeProfileShare();
+      return;
+    }
     if (onClose) {
       onClose();
       return;
@@ -278,36 +266,7 @@ export default function PublicUserProfileScreen({
       return;
     }
     router.push(`/${locale}/connect`);
-  }, [locale, onClose, router]);
-
-  const handleBack = useCallback(async () => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: PROFILE_TRANSITION });
-    if (isMountedRef.current) navigateBack();
-  }, [motionControls, navigateBack]);
-
-  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    const threshold = Math.max(SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
-    if (info.offset.x >= threshold || info.velocity.x >= SWIPE_VELOCITY_PX_PER_SECOND) {
-      void handleBack();
-      return;
-    }
-    void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
-  }, [handleBack, motionControls, viewportWidth]);
-
-  useEffect(() => registerNativeBackHandler(() => {
-    if (!isMountedRef.current || isLeavingRef.current) return true;
-    void handleBack();
-    return true;
-  }, 20), [handleBack]);
-
-  const handleProfilePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
+  }, [closeProfileShare, locale, onClose, router, showProfileShare]);
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
@@ -419,27 +378,30 @@ export default function PublicUserProfileScreen({
     : null;
   const handleOpenProfileShare = useCallback(() => {
     if (!profile) return;
-    const searchParams = new URLSearchParams(window.location.search);
-    searchParams.set("profileUserId", profile.id);
-    router.push(`/${locale}/mypage/share?${searchParams.toString()}`);
-  }, [locale, profile, router]);
+    if (typeof window !== "undefined" && !hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      const currentState = isRecord(window.history.state) ? window.history.state : {};
+      window.history.pushState(
+        {
+          ...currentState,
+          [PROFILE_SHARE_HISTORY_STATE_KEY]: { userId: profileShareHistoryId },
+        },
+        "",
+        window.location.href,
+      );
+    }
+    setShowProfileShare(true);
+  }, [profile, profileShareHistoryId]);
 
   return (
-    <motion.main
-      initial={{ x: "100%" }}
-      animate={motionControls}
-      drag="x"
-      dragControls={dragControls}
-      dragDirectionLock
-      dragListener={false}
-      dragConstraints={{ left: 0, right: viewportWidth }}
-      dragElastic={0.08}
-      dragMomentum={false}
-      onPointerDown={handleProfilePointerDown}
-      onDragEnd={handleDragEnd}
-      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
-      style={{ touchAction: "pan-y" }}
-    >
+    <>
+      <SlideSurface
+        open={open}
+        onClose={navigateBack}
+        ariaLabel={name}
+        nativeBackPriority={40}
+        className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4"
         style={{
@@ -449,7 +411,7 @@ export default function PublicUserProfileScreen({
       >
         <button
           type="button"
-          onClick={() => void handleBack()}
+          onClick={navigateBack}
           className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
           aria-label={copy.back}
         >
@@ -658,6 +620,17 @@ export default function PublicUserProfileScreen({
           </section>
         </div>
       ) : null}
-    </motion.main>
+      </SlideSurface>
+      <ProfileShareScreen
+        dictionary={dictionary}
+        locale={locale}
+        initialHandle={profile?.handle ?? ""}
+        initialUserId={profile?.id ?? ""}
+        open={open && showProfileShare && Boolean(profile)}
+        onClose={closeProfileShare}
+        nativeBackPriority={60}
+        zIndex={130}
+      />
+    </>
   );
 }
