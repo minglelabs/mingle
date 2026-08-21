@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  consumeTopSlideSurfaceHistoryEntry,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
@@ -11,12 +12,18 @@ type FakeHistory = {
   state: unknown;
   pushState: (state: unknown, title: string) => void;
   replaceState: (state: unknown, title: string) => void;
+  back: () => void;
 };
 
 describe("slide surface history", () => {
   let history: FakeHistory;
+  let emitPopState: () => void;
 
   beforeEach(() => {
+    const popstateListeners = new Set<() => void>();
+    emitPopState = () => {
+      popstateListeners.forEach((listener) => listener());
+    };
     history = {
       state: { unrelated: "preserved" },
       pushState(state) {
@@ -25,8 +32,33 @@ describe("slide surface history", () => {
       replaceState(state) {
         history.state = state;
       },
+      back() {
+        history.state = {
+          unrelated: "preserved",
+          [SLIDE_SURFACE_HISTORY_KEY]: [
+            { scope: "conversation", id: "participants" },
+          ],
+        };
+        emitPopState();
+      },
     };
-    vi.stubGlobal("window", { history });
+    vi.stubGlobal("window", {
+      history,
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "popstate") popstateListeners.add(listener as unknown as () => void);
+      },
+      removeEventListener(type: string, listener: EventListener) {
+        if (type === "popstate") popstateListeners.delete(listener as unknown as () => void);
+      },
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        return setTimeout(() => callback(Date.now()), 0) as unknown as number;
+      },
+      cancelAnimationFrame(timerId: number) {
+        clearTimeout(timerId as unknown as ReturnType<typeof setTimeout>);
+      },
+      setTimeout,
+      clearTimeout,
+    });
   });
 
   afterEach(() => {
@@ -71,5 +103,25 @@ describe("slide surface history", () => {
       unrelated: "preserved",
       [SLIDE_SURFACE_HISTORY_KEY]: [{ scope: "mypage", id: "profile-share" }],
     });
+  });
+
+  it("consumes only the top surface entry and waits for popstate settle", async () => {
+    history.state = {
+      unrelated: "preserved",
+      [SLIDE_SURFACE_HISTORY_KEY]: [
+        { scope: "conversation", id: "participants" },
+        { scope: "conversation", id: "profile", value: "user-1" },
+      ],
+    };
+
+    await expect(consumeTopSlideSurfaceHistoryEntry({
+      scope: "conversation",
+      id: "profile",
+      value: "user-1",
+    })).resolves.toBe(true);
+
+    expect(readSlideSurfaceHistory(history.state)).toEqual([
+      { scope: "conversation", id: "participants" },
+    ]);
   });
 });

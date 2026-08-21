@@ -1,5 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-08-21 - Consume the profile surface before starting a direct conversation
+
+- Surface: Public profile details opened from a conversation room, conversation participants or notifications, Connect search, My Page follow lists, or the native profile-link overlay; the message action inside those profiles; and the text composer after a programmatic room transition.
+- Issue: The profile message action called `router.push` directly while the profile and its parent menu/follow/search surface were represented by separate same-document history entries. The new conversation route was therefore pushed on top of an unconsumed profile entry. On iOS, edge-swipe back could restore the profile and participants surface in the wrong order, and a delayed history replay could reopen a stale profile. When text mode had been persisted, the newly mounted room also focused its composer and opened the keyboard without a user tap.
+- User impact: The expected `room B -> participants -> hamburger -> room A` back sequence was replaced by duplicate profile/participant screens. The same direct-message action from Connect or My Page could lose its parent surface. Android/WebView users could also see the keyboard appear during room restoration.
+- Resolution:
+  - Return the complete direct-conversation summary from `PublicUserProfileScreen` to a parent callback for internal surfaces. Standalone/deep-link profile routes keep their direct route navigation fallback.
+  - Consume only the top profile surface with a history back and wait for the popstate plus two animation frames before pushing the next conversation. Preserve the participant/menu or follow/search entries underneath it.
+  - Keep a short pending-navigation guard that filters a stale profile replay while iOS history settles.
+  - Reuse the currently active conversation without pushing a duplicate route when the direct-conversation API returns the room that is already open.
+  - Make composer focus explicit-user-action-only. Restored input mode and programmatic room transitions can keep the text composer visible without focusing its textarea or opening the keyboard.
+- Data contract: None. No Prisma migration, API namespace, or native bridge change is required.
+- Testing notes: Verify `room B -> participants -> hamburger -> room A` with iOS edge-swipe, repeat the flow from Connect and My Page, verify an already-open direct room does not get a duplicate route, and verify restored text mode does not open the keyboard until the composer toggle is tapped.
+
 ## 2026-08-21 - Give the room default-display-language page its own surface
 
 - Surface: Conversation room hamburger menu, conversation management, and default display language.

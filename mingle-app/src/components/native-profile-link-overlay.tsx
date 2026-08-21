@@ -1,6 +1,7 @@
 "use client";
 
 import { DEFAULT_LOCALE, getDictionary, resolveSupportedLocaleTag, type AppLocale } from "@/i18n";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import {
@@ -9,7 +10,8 @@ import {
   parseNativeProfileLinkOverlayRequest,
   type NativeProfileLinkOverlayRequest,
 } from "@/lib/native-profile-link-overlay";
-import { usePathname } from "next/navigation";
+import { consumeCurrentHistoryEntry } from "@/lib/slide-surface-history";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const NATIVE_PROFILE_HISTORY_STATE_KEY = "__MINGLE_NATIVE_PROFILE_OVERLAY__";
@@ -48,13 +50,17 @@ function restoreNativeBannerZone(): void {
 
 export default function NativeProfileLinkOverlay() {
   const pathname = usePathname() || "";
+  const router = useRouter();
   const locale = resolveLocale(pathname);
   const dictionary = useMemo(() => getDictionary(locale), [locale]);
   const [profileOverlay, setProfileOverlay] = useState<ProfileOverlayState | null>(null);
   const profileOverlayRef = useRef<ProfileOverlayState | null>(null);
   const requestIdRef = useRef(0);
+  const pendingDirectConversationNavigationRef = useRef(false);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
 
   const openProfile = useCallback((rawRequest: unknown) => {
+    if (pendingDirectConversationNavigationRef.current) return;
     const request = parseNativeProfileLinkOverlayRequest(rawRequest);
     if (!request || typeof window === "undefined") return;
 
@@ -94,6 +100,33 @@ export default function NativeProfileLinkOverlay() {
     restoreNativeBannerZone();
   }, []);
 
+  const startDirectConversationFromNativeProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    pendingDirectConversationNavigationRef.current = true;
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      if (hasNativeProfileHistoryEntry()) {
+        const consumed = await consumeCurrentHistoryEntry(hasNativeProfileHistoryEntry);
+        if (!consumed && hasNativeProfileHistoryEntry()) {
+          throw new Error("profile_surface_close_failed");
+        }
+      }
+      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+    } finally {
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        pendingDirectConversationNavigationRef.current = false;
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, 600);
+    }
+  }, [locale, router]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -118,10 +151,12 @@ export default function NativeProfileLinkOverlay() {
     if (typeof window === "undefined") return;
 
     const handlePopState = () => {
-      if (!profileOverlayRef.current || hasNativeProfileHistoryEntry()) return;
-      profileOverlayRef.current = null;
-      setProfileOverlay(null);
-      restoreNativeBannerZone();
+      if (!profileOverlayRef.current) return;
+      if (pendingDirectConversationNavigationRef.current || !hasNativeProfileHistoryEntry()) {
+        profileOverlayRef.current = null;
+        setProfileOverlay(null);
+        restoreNativeBannerZone();
+      }
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -134,6 +169,7 @@ export default function NativeProfileLinkOverlay() {
       locale={locale}
       userId={profileOverlay?.userId ?? ""}
       open={Boolean(profileOverlay)}
+      onStartDirectConversation={startDirectConversationFromNativeProfile}
       onClose={closeProfile}
     />
   );

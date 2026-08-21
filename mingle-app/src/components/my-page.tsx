@@ -1,6 +1,7 @@
 "use client";
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
@@ -31,6 +32,7 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
 import SlideSurface from "@/components/slide-surface";
 import {
+  consumeTopSlideSurfaceHistoryEntry,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
@@ -58,7 +60,7 @@ import { motion } from "framer-motion";
 import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -1477,6 +1479,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
   ));
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const pendingDirectConversationNavigationRef = useRef(false);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
 
   const showProfileEdit = myPageSurfaceHistory.some(
     (entry) => entry.id === MY_PAGE_PROFILE_EDIT_SURFACE_ID,
@@ -1526,7 +1530,15 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     if (typeof window === "undefined") return;
 
     const syncMyPageSurfaceHistory = () => {
-      setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
+      const nextHistory = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+      if (pendingDirectConversationNavigationRef.current) {
+        const filteredHistory = nextHistory.filter((entry) => entry.id !== MY_PAGE_PUBLIC_PROFILE_SURFACE_ID);
+        if (filteredHistory.length !== nextHistory.length) {
+          setMyPageSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setMyPageSurfaceHistory(nextHistory);
     };
 
     window.addEventListener("popstate", syncMyPageSurfaceHistory);
@@ -1581,6 +1593,44 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       value: normalizedUserId,
     });
   }, [openMyPageSurface]);
+
+  const startDirectConversationFromMyPageProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    pendingDirectConversationNavigationRef.current = true;
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      const surfaceEntries = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+      const profileEntry = surfaceEntries[surfaceEntries.length - 1];
+      if (profileEntry?.id === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID) {
+        const consumed = await consumeTopSlideSurfaceHistoryEntry({
+          scope: MY_PAGE_SURFACE_SCOPE,
+          id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+          value: profileEntry.value,
+        });
+        const currentEntries = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
+          === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID;
+        if (!consumed && profileStillOpen) {
+          throw new Error("profile_surface_close_failed");
+        }
+      }
+
+      setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
+      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+    } finally {
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        pendingDirectConversationNavigationRef.current = false;
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, 600);
+    }
+  }, [locale, router]);
 
   useEffect(() => {
     if (!sessionUserId) return;
@@ -1815,6 +1865,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         locale={locale}
         userId={publicProfileSurface?.value ?? ""}
         open={Boolean(publicProfileSurface?.value)}
+        onStartDirectConversation={startDirectConversationFromMyPageProfile}
         onClose={() => {
           if (!publicProfileSurface?.value) return;
           closeMyPageSurface({

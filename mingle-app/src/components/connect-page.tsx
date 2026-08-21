@@ -2,6 +2,7 @@
 
 import BottomTabBar from "@/components/bottom-tab-bar";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
   clearConnectSearchCache,
   isConnectSearchResult,
@@ -15,11 +16,13 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import {
+  consumeTopSlideSurfaceHistoryEntry,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
 } from "@/lib/slide-surface-history";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ConnectPageProps = {
@@ -103,11 +106,14 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const isMountedRef = useRef(false);
   const initialHistorySnapshotRef = useRef<ConnectSearchHistorySnapshot | null>(null);
   const hydratedCacheIdentityRef = useRef("");
+  const pendingDirectConversationNavigationRef = useRef(false);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
@@ -194,7 +200,15 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
 
   useEffect(() => {
     const syncConnectSurfaceHistory = () => {
-      setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
+      const nextHistory = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
+      if (pendingDirectConversationNavigationRef.current) {
+        const filteredHistory = nextHistory.filter((entry) => entry.id !== CONNECT_PROFILE_SURFACE_ID);
+        if (filteredHistory.length !== nextHistory.length) {
+          setConnectSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setConnectSurfaceHistory(nextHistory);
     };
 
     window.addEventListener("popstate", syncConnectSurfaceHistory);
@@ -233,6 +247,44 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       return current.filter((_entry, index) => index !== actualIndex);
     });
   }, []);
+
+  const startDirectConversationFromConnectProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    pendingDirectConversationNavigationRef.current = true;
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      const surfaceEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
+      const profileEntry = surfaceEntries[surfaceEntries.length - 1];
+      if (profileEntry?.id === CONNECT_PROFILE_SURFACE_ID) {
+        const consumed = await consumeTopSlideSurfaceHistoryEntry({
+          scope: CONNECT_SURFACE_SCOPE,
+          id: CONNECT_PROFILE_SURFACE_ID,
+          value: profileEntry.value,
+        });
+        const currentEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
+        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
+          === CONNECT_PROFILE_SURFACE_ID;
+        if (!consumed && profileStillOpen) {
+          throw new Error("profile_surface_close_failed");
+        }
+      }
+
+      setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
+      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+    } finally {
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        pendingDirectConversationNavigationRef.current = false;
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, 600);
+    }
+  }, [locale, router]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -490,6 +542,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         locale={locale}
         userId={connectProfileSurface?.value ?? ""}
         open={Boolean(connectProfileSurface?.value)}
+        onStartDirectConversation={startDirectConversationFromConnectProfile}
         onClose={() => {
           if (!connectProfileSurface?.value) return;
           closeConnectProfile(connectProfileSurface.value);

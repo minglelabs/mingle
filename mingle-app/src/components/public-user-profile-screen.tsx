@@ -1,6 +1,7 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
@@ -40,6 +41,9 @@ type PublicUserProfileScreenProps = {
   userId: string;
   open?: boolean;
   onClose?: () => void;
+  onStartDirectConversation?: (
+    conversation: ConversationChannelSummary,
+  ) => void | Promise<void>;
 };
 
 type PublicUserProfile = {
@@ -171,6 +175,7 @@ export default function PublicUserProfileScreen({
   userId,
   open = true,
   onClose,
+  onStartDirectConversation,
 }: PublicUserProfileScreenProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
@@ -326,16 +331,20 @@ export default function PublicUserProfileScreen({
         body: JSON.stringify({ targetUserId: profile.id, locale }),
       });
       if (!response.ok) throw new Error("direct_conversation_failed");
-      const data = await response.json() as { conversation?: { id?: string } };
-      const conversationId = data.conversation?.id;
-      if (!conversationId) throw new Error("direct_conversation_failed");
-      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversationId)}`);
+      const data = await response.json() as { conversation?: ConversationChannelSummary };
+      const conversation = data.conversation;
+      if (!conversation?.id) throw new Error("direct_conversation_failed");
+      if (onStartDirectConversation) {
+        await onStartDirectConversation(conversation);
+      } else {
+        router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      }
     } catch {
       setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
-  }, [isMessagePending, isOwnProfile, locale, profile, router]);
+  }, [isMessagePending, isOwnProfile, locale, onStartDirectConversation, profile, router]);
 
   const handleReportSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

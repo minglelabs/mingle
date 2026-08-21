@@ -65,3 +65,103 @@ export function replaceSlideSurfaceHistory(entries: SlideSurfaceHistoryEntry[]):
     "",
   );
 }
+
+/**
+ * Consume the current browser history entry and resolve only after the
+ * resulting popstate has had time to settle in React. This is used when a
+ * surface action starts another route: the parent surface must be removed
+ * before the route entry is pushed, otherwise separate history owners can
+ * replay stale state on iOS.
+ */
+export function consumeCurrentHistoryEntry(
+  isEntryPresent: () => boolean,
+): Promise<boolean> {
+  if (typeof window === "undefined" || !isEntryPresent()) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId: number | null = null;
+    let settleFrameId: number | null = null;
+    let settleFrameCount = 0;
+
+    const scheduleFrame = (callback: () => void) => {
+      if (typeof window.requestAnimationFrame === "function") {
+        return window.requestAnimationFrame(callback);
+      }
+      return window.setTimeout(callback, 0);
+    };
+
+    const finish = (consumed: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("popstate", handlePopState);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (settleFrameId !== null) {
+        if (typeof window.cancelAnimationFrame === "function") {
+          window.cancelAnimationFrame(settleFrameId);
+        } else {
+          window.clearTimeout(settleFrameId);
+        }
+      }
+      resolve(consumed);
+    };
+
+    const checkSettled = () => {
+      settleFrameId = null;
+      if (settled) return;
+      if (isEntryPresent()) {
+        settleFrameCount = 0;
+        return;
+      }
+      settleFrameCount += 1;
+      if (settleFrameCount >= 2) {
+        finish(true);
+        return;
+      }
+      settleFrameId = scheduleFrame(checkSettled);
+    };
+
+    const scheduleSettledCheck = () => {
+      if (settled || settleFrameId !== null) return;
+      settleFrameCount = 0;
+      settleFrameId = scheduleFrame(checkSettled);
+    };
+
+    function handlePopState() {
+      scheduleSettledCheck();
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    timeoutId = window.setTimeout(() => {
+      finish(!isEntryPresent());
+    }, 2000);
+
+    try {
+      window.history.back();
+      scheduleSettledCheck();
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+export function consumeTopSlideSurfaceHistoryEntry(
+  entry: SlideSurfaceHistoryEntry,
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+
+  const currentEntries = readSlideSurfaceHistory(window.history.state);
+  const currentEntry = currentEntries[currentEntries.length - 1];
+  const matchesEntry = (candidate: SlideSurfaceHistoryEntry | undefined) => (
+    candidate?.scope === entry.scope
+    && candidate.id === entry.id
+    && (entry.value === undefined || candidate.value === entry.value)
+  );
+
+  if (!matchesEntry(currentEntry)) return Promise.resolve(false);
+
+  return consumeCurrentHistoryEntry(() => {
+    const nextEntries = readSlideSurfaceHistory(window.history.state);
+    return matchesEntry(nextEntries[nextEntries.length - 1]);
+  });
+}

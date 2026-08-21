@@ -1647,6 +1647,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const composerDraftRef = useRef('')
+  // Restored text mode must not steal focus during a programmatic room
+  // transition. Only an explicit user toggle may request the keyboard.
+  const composerFocusRequestedRef = useRef(false)
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
   const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
@@ -1813,6 +1816,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
+      composerFocusRequestedRef.current = false
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
         persistedInputMode: next.inputMode,
@@ -2053,11 +2057,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
-    if (!isComposerOpen) return
+    if (!isComposerOpen) {
+      composerFocusRequestedRef.current = false
+      return
+    }
+    if (!composerFocusRequestedRef.current) return
 
     const timerId = window.setTimeout(() => {
       const textarea = composerTextareaRef.current
       if (!textarea) return
+      composerFocusRequestedRef.current = false
       if (textarea.value !== composerDraftRef.current) {
         textarea.value = composerDraftRef.current
       }
@@ -2206,6 +2215,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
+          composerFocusRequestedRef.current = false
           setIsComposerOpen(hydratedPreferences.inputMode === 'text')
         }
         accountPreferencesLastSyncedStateKeyRef.current =
@@ -4283,6 +4293,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
       const next = !previous
+      composerFocusRequestedRef.current = next
       persistedInputModeRef.current = next ? 'text' : 'voice'
       try {
         localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
@@ -5287,6 +5298,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setComposerHasDraft(false)
         persistComposerDraft('', composerDraftStorageKey)
         persistedInputModeRef.current = 'voice'
+        composerFocusRequestedRef.current = false
         setIsComposerOpen(false)
         setAdBannerPosition('bottom')
         setSessionAdBannerPositionOverride('bottom')
@@ -5330,6 +5342,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       },
       setComposerOpen: (nextOpen: boolean) => {
         persistedInputModeRef.current = nextOpen ? 'text' : 'voice'
+        composerFocusRequestedRef.current = false
         setIsComposerOpen(nextOpen)
         if (!nextOpen) {
           composerTextareaRef.current?.blur()

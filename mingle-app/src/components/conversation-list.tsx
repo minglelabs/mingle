@@ -131,6 +131,7 @@ import {
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
 import {
+  consumeTopSlideSurfaceHistoryEntry,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
 } from "@/lib/slide-surface-history";
@@ -180,6 +181,10 @@ type ConversationHistoryPopStateTarget = {
 };
 type ConversationHistoryPopStateTransition = ConversationHistoryPopStateTarget & {
   direction: ConversationHistoryNavigationDirection;
+};
+type PendingDirectConversationNavigation = {
+  token: number;
+  profileUserId: string;
 };
 
 type ConversationListWindow = Window & {
@@ -1818,6 +1823,12 @@ export default function ConversationList({
   // Keep route-sync from rewriting that still-current room entry into a list
   // entry before the browser finishes the history navigation.
   const pendingConversationHistoryBackRef = useRef(false);
+  // Direct-message navigation starts on a profile surface but must preserve
+  // the participant/menu history underneath it. Keep this guard alive through
+  // the iOS history-settle window so a delayed replay cannot reopen the profile.
+  const pendingDirectConversationNavigationRef = useRef<PendingDirectConversationNavigation | null>(null);
+  const directConversationNavigationTokenRef = useRef(0);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -2850,7 +2861,19 @@ export default function ConversationList({
     if (typeof window === "undefined") return;
 
     const syncConversationSurfaceHistory = () => {
-      setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+      const nextHistory = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      const pendingNavigation = pendingDirectConversationNavigationRef.current;
+      if (pendingNavigation) {
+        const filteredHistory = nextHistory.filter((entry) => (
+          entry.id !== CONVERSATION_PROFILE_SURFACE_ID
+          || entry.value !== pendingNavigation.profileUserId
+        ));
+        if (filteredHistory.length !== nextHistory.length) {
+          setConversationSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setConversationSurfaceHistory(nextHistory);
     };
 
     window.addEventListener("popstate", syncConversationSurfaceHistory);
@@ -2903,6 +2926,7 @@ export default function ConversationList({
   }, [openSearchOverlay]);
 
   const openConversationProfile = useCallback((userId: string) => {
+    if (pendingDirectConversationNavigationRef.current) return;
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
@@ -3721,6 +3745,70 @@ export default function ConversationList({
 
     return conversation;
   }, [closeSearchOverlay]);
+
+  const startDirectConversationFromProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    const surfaceEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+    const profileEntry = surfaceEntries[surfaceEntries.length - 1];
+    const profileUserId = profileEntry?.id === CONVERSATION_PROFILE_SURFACE_ID
+      ? profileEntry.value ?? conversationProfileId ?? ""
+      : conversationProfileId ?? "";
+    const token = directConversationNavigationTokenRef.current + 1;
+    directConversationNavigationTokenRef.current = token;
+    pendingDirectConversationNavigationRef.current = {
+      token,
+      profileUserId,
+    };
+
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      if (profileEntry?.id === CONVERSATION_PROFILE_SURFACE_ID) {
+        const consumed = await consumeTopSlideSurfaceHistoryEntry({
+          scope: CONVERSATION_SURFACE_SCOPE,
+          id: CONVERSATION_PROFILE_SURFACE_ID,
+          value: profileEntry.value,
+        });
+        const currentEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
+          === CONVERSATION_PROFILE_SURFACE_ID;
+        if (!consumed && profileStillOpen) {
+          throw new Error("profile_surface_close_failed");
+        }
+      }
+
+      // The popstate listener has now restored the participant/menu entry.
+      // Refresh the React snapshot before pushing the next conversation so the
+      // profile cannot remain visible during the route transition.
+      setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+      setConversations((current) => upsertConversation(current, conversation));
+
+      const currentConversationId = activeConversationRef.current?.id
+        ?? readConversationIdFromLocation();
+      if (currentConversationId !== conversation.id) {
+        await openConversationSummary(conversation, {
+          enterMode: "instant",
+          syncHistory: "push",
+        });
+      }
+    } finally {
+      if (directConversationNavigationReleaseTimerRef.current !== null) {
+        window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      }
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        if (pendingDirectConversationNavigationRef.current?.token === token) {
+          pendingDirectConversationNavigationRef.current = null;
+        }
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, 600);
+    }
+  }, [conversationProfileId, openConversationSummary]);
 
 
   const handleCreateConversation = useCallback(async () => {
@@ -4845,6 +4933,7 @@ export default function ConversationList({
               locale={locale}
               userId={conversationProfileId ?? ""}
               open={Boolean(conversationProfileId)}
+              onStartDirectConversation={startDirectConversationFromProfile}
               onClose={() => {
                 if (!conversationProfileId) return;
                 closeConversationSurface({
