@@ -996,3 +996,13 @@
   - Keep a Mingle icon fallback when the linked profile preview is unavailable, so the install action remains usable.
 - Data contract: No schema or API changes. The existing profile data is read server-side for the public shared-link preview.
 - Testing notes: Verify a shared link shows the correct profile photo, name, and handle, the button uses the Mingle icon and key color, and a missing preview still leaves the app-opening action available.
+
+## 2026-08-21 - Profile detail must open from both room participant avatars
+
+- Surface: Conversation room chat-bubble avatars and the conversation participants page.
+- Issue: The shared-room chat bubble intentionally renders the viewer's own avatar as a non-button, while only another member's avatar can call the profile overlay. The guard was added when the public profile route rejected self IDs, but the profile surface now supports the signed-in user through `/profile`. This leaves the current interaction inconsistent: the same participant profile card can open from the participants page, but the viewer's chat avatar cannot open the detail panel.
+- User impact: Tapping a profile photo in a conversation appears to do nothing for the current user, and any bubble without a hydrated `speakerUserId` also remains non-interactive. This is especially confusing in rooms that have real member identities but still show locally cached or pre-hydration bubbles.
+- Evidence: The current shared-room hydration response includes `isMultiMember: true` and `speakerUserId` for both senders. The existing chat-bubble test explicitly asserts that the viewer's own avatar must not render a button, so this is an encoded UI rule rather than a missing database member.
+- Resolution direction: Reuse the existing `onOpenProfile` callback for both own and other identified member avatars. The profile screen already selects `/profile` for the signed-in user and `/users/{id}` for another member; retain the solo-room behavior for bubbles without a real account ID.
+- Data contract: None. The existing member IDs and profile endpoints are sufficient.
+- Status: Investigated in-thread on 2026-08-21. Code change and physical-device verification are pending.
