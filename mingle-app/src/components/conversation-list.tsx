@@ -131,10 +131,13 @@ import {
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
 import {
-  consumeTopSlideSurfaceHistoryEntry,
+  consumeSlideSurfaceHistoryForScope,
   pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
+import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
@@ -2921,6 +2924,15 @@ export default function ConversationList({
     });
   }, []);
 
+  const clearConversationSurfaceHistory = useCallback(() => {
+    if (typeof window !== "undefined") {
+      replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+        entry.scope !== CONVERSATION_SURFACE_SCOPE
+      )));
+    }
+    setConversationSurfaceHistory([]);
+  }, []);
+
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
@@ -3752,10 +3764,15 @@ export default function ConversationList({
     if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
 
     const surfaceEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
-    const profileEntry = surfaceEntries[surfaceEntries.length - 1];
-    const profileUserId = profileEntry?.id === CONVERSATION_PROFILE_SURFACE_ID
+    const profileEntry = [...surfaceEntries]
+      .reverse()
+      .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+    const profileUserId = profileEntry
       ? profileEntry.value ?? conversationProfileId ?? ""
       : conversationProfileId ?? "";
+    const currentConversation = activeConversationRef.current;
+    const currentConversationId = currentConversation?.id ?? readConversationIdFromLocation();
+    const isCurrentConversation = currentConversationId === conversation.id;
     const token = directConversationNavigationTokenRef.current + 1;
     directConversationNavigationTokenRef.current = token;
     pendingDirectConversationNavigationRef.current = {
@@ -3769,34 +3786,48 @@ export default function ConversationList({
     }
 
     try {
-      if (profileEntry?.id === CONVERSATION_PROFILE_SURFACE_ID) {
-        const consumed = await consumeTopSlideSurfaceHistoryEntry({
-          scope: CONVERSATION_SURFACE_SCOPE,
-          id: CONVERSATION_PROFILE_SURFACE_ID,
-          value: profileEntry.value,
-        });
-        const currentEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
-        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
-          === CONVERSATION_PROFILE_SURFACE_ID;
-        if (!consumed && profileStillOpen) {
-          throw new Error("profile_surface_close_failed");
-        }
+      // Consume the profile and every conversation-owned parent surface. This
+      // removes notification/profile entries before the menu depth is reset.
+      await consumeSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      clearConversationSurfaceHistory();
+
+      const currentRoomRef = currentConversationId
+        ? conversationRoomRefs.current.get(currentConversationId)
+        : null;
+      await currentRoomRef?.resetNavigationOverlays();
+
+      if (isCurrentConversation) {
+        // Continuing the room that is already visible does not need a route
+        // entry. Close only the profile/menu surfaces and reveal that room.
+        setConversations((current) => upsertConversation(current, conversation));
+        return;
       }
 
-      // The popstate listener has now restored the participant/menu entry.
-      // Refresh the React snapshot before pushing the next conversation so the
-      // profile cannot remain visible during the route transition.
-      setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+      if (currentRoomRef?.isSttSessionRunning()) {
+        await currentRoomRef.stopRecording({ deferRunningStateChange: true });
+      }
+
+      if (currentConversation) {
+        // The current room entry is now the canonical list entry. The next
+        // openConversationSummary call will push exactly one room entry above
+        // it, producing [conversation list] -> [conversation room].
+        closeConversationOverlay(currentConversation, {
+          animateExit: false,
+          replaceUrl: true,
+        });
+      } else if (currentConversationId) {
+        activeConversationRef.current = null;
+        replaceConversationOverlayUrl(null, "direct-conversation-stack-reset");
+        setActiveConversation((current) => (
+          current?.id === currentConversationId ? null : current
+        ));
+      }
+
       setConversations((current) => upsertConversation(current, conversation));
-
-      const currentConversationId = activeConversationRef.current?.id
-        ?? readConversationIdFromLocation();
-      if (currentConversationId !== conversation.id) {
-        await openConversationSummary(conversation, {
-          enterMode: "instant",
-          syncHistory: "push",
-        });
-      }
+      await openConversationSummary(conversation, {
+        enterMode: "instant",
+        syncHistory: "push",
+      });
     } finally {
       if (directConversationNavigationReleaseTimerRef.current !== null) {
         window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
@@ -3806,9 +3837,9 @@ export default function ConversationList({
           pendingDirectConversationNavigationRef.current = null;
         }
         directConversationNavigationReleaseTimerRef.current = null;
-      }, 600);
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
     }
-  }, [conversationProfileId, openConversationSummary]);
+  }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
   const handleCreateConversation = useCallback(async () => {

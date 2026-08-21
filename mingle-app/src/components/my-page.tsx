@@ -32,12 +32,16 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
 import SlideSurface from "@/components/slide-surface";
 import {
-  consumeTopSlideSurfaceHistoryEntry,
+  consumeSlideSurfaceHistoryForScope,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
+import {
+  DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
+  replaceWithConversationListThenPush,
+} from "@/lib/direct-conversation-navigation";
 import {
   buildProfileImageTransform,
   DEFAULT_PROFILE_IMAGE_CROP,
@@ -1606,31 +1610,27 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
 
     try {
-      const surfaceEntries = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
-      const profileEntry = surfaceEntries[surfaceEntries.length - 1];
-      if (profileEntry?.id === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID) {
-        const consumed = await consumeTopSlideSurfaceHistoryEntry({
-          scope: MY_PAGE_SURFACE_SCOPE,
-          id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
-          value: profileEntry.value,
-        });
-        const currentEntries = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
-        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
-          === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID;
-        if (!consumed && profileStillOpen) {
-          throw new Error("profile_surface_close_failed");
-        }
+      await consumeSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+      if (typeof window !== "undefined") {
+        replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+          entry.scope !== MY_PAGE_SURFACE_SCOPE
+        )));
       }
+      setMyPageSurfaceHistory([]);
 
-      setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
-      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      const conversationListHref = buildNativeAwareTabPath(
+        `/${locale}/conversations`,
+        searchParams,
+        { skipConversationRestore: true, tabRoot: true },
+      );
+      await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
     } finally {
       directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
         pendingDirectConversationNavigationRef.current = false;
         directConversationNavigationReleaseTimerRef.current = null;
-      }, 600);
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
     }
-  }, [locale, router]);
+  }, [locale, router, searchParams]);
 
   useEffect(() => {
     if (!sessionUserId) return;

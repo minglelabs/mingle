@@ -1010,6 +1010,7 @@ export interface LivePhoneDemoRef {
   prepareForDeletion: () => void
   isSttSessionRunning: () => boolean
   requestCloseTopmostOverlay: () => boolean
+  resetNavigationOverlays: () => Promise<void>
 }
 
 export type LatestUtterancePayload = {
@@ -2518,6 +2519,77 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       )
     }
   }, [applyLanguageSelectorOpen])
+
+  const resetNavigationOverlays = useCallback(async () => {
+    closeLanguageSelector({ syncHistory: 'replace' })
+    setRenameConversationDialogOpen(false)
+    setRenameConversationValue(conversationTitle ?? '')
+
+    const currentDepth = menuHistoryDepthRef.current
+    if (typeof window === 'undefined' || currentDepth <= 0) {
+      menuHistoryTargetDepthRef.current = null
+      applyMenuNavigationDepth(0, { screenTransitionMode: 'instant' })
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let timeoutId: number | null = null
+      let frameId: number | null = null
+
+      const scheduleFrame = (callback: () => void) => (
+        typeof window.requestAnimationFrame === 'function'
+          ? window.requestAnimationFrame(callback)
+          : window.setTimeout(callback, 0)
+      )
+
+      const cancelFrame = (id: number) => {
+        if (typeof window.cancelAnimationFrame === 'function') {
+          window.cancelAnimationFrame(id)
+        } else {
+          window.clearTimeout(id)
+        }
+      }
+
+      const finish = () => {
+        if (settled) return
+        settled = true
+        if (timeoutId !== null) window.clearTimeout(timeoutId)
+        if (frameId !== null) cancelFrame(frameId)
+        resolve()
+      }
+
+      const checkSettled = () => {
+        frameId = null
+        if (settled) return
+        if (menuHistoryDepthRef.current <= 0) {
+          finish()
+          return
+        }
+        frameId = scheduleFrame(checkSettled)
+      }
+
+      timeoutId = window.setTimeout(() => {
+        // History navigation should normally settle through the menu popstate
+        // handler. Keep the transition from hanging forever if a restricted
+        // WebView drops the event, while still leaving the browser target at
+        // the requested depth.
+        menuHistoryTargetDepthRef.current = null
+        const currentState = window.history.state
+        if (currentState && typeof currentState === 'object' && !Array.isArray(currentState)) {
+          const nextState = { ...(currentState as Record<string, unknown>) }
+          delete nextState[MENU_HISTORY_STATE_KEY]
+          delete nextState[MENU_HISTORY_SCREEN_STATE_KEY]
+          window.history.replaceState(nextState, '', window.location.href)
+        }
+        applyMenuNavigationDepth(0, { screenTransitionMode: 'instant' })
+        finish()
+      }, 2000)
+
+      requestCloseMenuPanel()
+      checkSettled()
+    })
+  }, [applyMenuNavigationDepth, closeLanguageSelector, conversationTitle, requestCloseMenuPanel])
 
   const handleMenuSurfaceRequestClose = useCallback(() => {
     if (langSelectorOpen) {
@@ -4360,7 +4432,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     prepareForDeletion,
     isSttSessionRunning: () => isSttSessionRunning,
     requestCloseTopmostOverlay,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay])
+    resetNavigationOverlays,
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])

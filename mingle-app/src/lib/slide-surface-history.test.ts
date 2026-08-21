@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  consumeSlideSurfaceHistoryForScope,
   consumeTopSlideSurfaceHistoryEntry,
   pushSlideSurfaceHistory,
   readSlideSurfaceHistory,
@@ -123,5 +124,27 @@ describe("slide surface history", () => {
     expect(readSlideSurfaceHistory(history.state)).toEqual([
       { scope: "conversation", id: "participants" },
     ]);
+  });
+
+  it("consumes every surface owned by a parent scope", async () => {
+    history.state = {
+      unrelated: "preserved",
+      [SLIDE_SURFACE_HISTORY_KEY]: [
+        { scope: "conversation", id: "participants" },
+        { scope: "conversation", id: "profile", value: "user-1" },
+      ],
+    };
+    history.back = () => {
+      const entries = readSlideSurfaceHistory(history.state);
+      history.state = {
+        unrelated: "preserved",
+        [SLIDE_SURFACE_HISTORY_KEY]: entries.slice(0, -1),
+      };
+      emitPopState();
+    };
+
+    await expect(consumeSlideSurfaceHistoryForScope("conversation")).resolves.toBe(true);
+
+    expect(readSlideSurfaceHistory(history.state)).toEqual([]);
   });
 });

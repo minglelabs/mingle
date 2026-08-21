@@ -165,3 +165,24 @@ export function consumeTopSlideSurfaceHistoryEntry(
     return matchesEntry(nextEntries[nextEntries.length - 1]);
   });
 }
+
+/**
+ * Consume every currently stacked surface owned by one parent screen. A
+ * profile can be opened above a participant list or another surface, so
+ * consuming only the profile entry would leave an old parent in the history
+ * stack when the action starts a conversation.
+ */
+export async function consumeSlideSurfaceHistoryForScope(scope: string): Promise<boolean> {
+  const maxEntries = 32;
+
+  for (let index = 0; index < maxEntries; index += 1) {
+    const entries = readSlideSurfaceHistoryForScope(scope);
+    const topEntry = entries[entries.length - 1];
+    if (!topEntry) return true;
+
+    const consumed = await consumeTopSlideSurfaceHistoryEntry(topEntry);
+    if (!consumed) return false;
+  }
+
+  return readSlideSurfaceHistoryForScope(scope).length === 0;
+}

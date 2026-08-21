@@ -1,6 +1,6 @@
 "use client";
 
-import BottomTabBar from "@/components/bottom-tab-bar";
+import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
@@ -16,13 +16,19 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import {
-  consumeTopSlideSurfaceHistoryEntry,
+  consumeSlideSurfaceHistoryForScope,
   pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
   readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
+import {
+  DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
+  replaceWithConversationListThenPush,
+} from "@/lib/direct-conversation-navigation";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ConnectPageProps = {
@@ -107,6 +113,7 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const isMountedRef = useRef(false);
@@ -260,31 +267,27 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     }
 
     try {
-      const surfaceEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
-      const profileEntry = surfaceEntries[surfaceEntries.length - 1];
-      if (profileEntry?.id === CONNECT_PROFILE_SURFACE_ID) {
-        const consumed = await consumeTopSlideSurfaceHistoryEntry({
-          scope: CONNECT_SURFACE_SCOPE,
-          id: CONNECT_PROFILE_SURFACE_ID,
-          value: profileEntry.value,
-        });
-        const currentEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
-        const profileStillOpen = currentEntries[currentEntries.length - 1]?.id
-          === CONNECT_PROFILE_SURFACE_ID;
-        if (!consumed && profileStillOpen) {
-          throw new Error("profile_surface_close_failed");
-        }
+      await consumeSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
+      if (typeof window !== "undefined") {
+        replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+          entry.scope !== CONNECT_SURFACE_SCOPE
+        )));
       }
+      setConnectSurfaceHistory([]);
 
-      setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
-      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      const conversationListHref = buildNativeAwareTabPath(
+        `/${locale}/conversations`,
+        searchParams,
+        { skipConversationRestore: true, tabRoot: true },
+      );
+      await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
     } finally {
       directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
         pendingDirectConversationNavigationRef.current = false;
         directConversationNavigationReleaseTimerRef.current = null;
-      }, 600);
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
     }
-  }, [locale, router]);
+  }, [locale, router, searchParams]);
 
   useEffect(() => {
     isMountedRef.current = true;

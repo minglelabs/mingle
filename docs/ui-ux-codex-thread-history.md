@@ -1164,3 +1164,17 @@
   - Keep the latest-message lookup as one sessionKey IN query with DISTINCT sessionKey, avoiding an N+1 query per candidate room.
 - Data contract: Adds the direct endpoint's optional force request field and reused response field. No schema change or Prisma migration is required; the existing app_messages sessionKey/createdAt indexes support the recency lookup.
 - Testing notes: Targeted conversation and direct-route tests pass, including latest-message selection and forced 1:1 creation. TypeScript and targeted ESLint pass. Verify both modal choices from a profile with multiple existing 1:1 rooms on iOS and Android.
+
+## 2026-08-22 - Reset the conversation stack when starting a message from a profile
+
+- Surface: The Message action from public profiles opened through Connect search, conversation avatars, participant lists, notifications, and My Page follow lists.
+- Issue: Starting a direct conversation used a route push on top of profile, participant, hamburger-menu, and existing-room history entries. Returning from the new room could therefore replay those old surfaces in the wrong order, especially after an iOS edge-swipe. A composer focus could also be restored while the room was being replaced.
+- User impact: The room could require several unexpected back gestures to reach the list, and a profile or participant surface could reappear after it had already been dismissed. The original active room could also remain recording while the user was moved to another room.
+- Resolution:
+  - Consume every profile-owned surface entry and reset the conversation menu depth to zero before handling the Message action.
+  - If the selected room is the currently visible room, keep the room route and close only the profile/menu surfaces.
+  - Otherwise replace the current room entry with the conversation-list entry, then push exactly one target-room entry, establishing the canonical `[conversation list] -> [conversation room]` stack.
+  - Apply the same list-reset navigation to Connect and My Page profile starts, including native tab-root and conversation-restore guards.
+  - Stop an active source-room STT session before leaving it and keep the delayed iOS navigation guard alive through route settling.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: TypeScript, targeted ESLint, and history/navigation unit tests pass. Verify room-avatar and participant-profile flows for same-room continuation and different/new-room navigation, plus Connect and My Page profile starts, iOS edge-swipe back, Android back, and composer keyboard behavior on rebuilt apps.
