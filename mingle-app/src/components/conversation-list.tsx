@@ -4712,6 +4712,7 @@ export default function ConversationList({
                           handleConversationDeleted(conversation.id);
                         }}
                         conversationTitle={conversation.title}
+                        isBlockedCounterpart={conversation.isBlockedCounterpart}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}
                         preferredDisplayLanguages={preferredDisplayLanguages}

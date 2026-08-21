@@ -11,6 +11,7 @@ const {
   mockMaybeGenerateConversationTitleForSession,
   mockNotifyConversationMessage,
   mockMaterializePendingConversationInvitees,
+  mockIsMessageSenderBlockedInConversation,
   mockGetServerSession,
   mockResolveSessionAwareUserId,
 } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const {
   mockMaybeGenerateConversationTitleForSession: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
   mockMaterializePendingConversationInvitees: vi.fn(),
+  mockIsMessageSenderBlockedInConversation: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockResolveSessionAwareUserId: vi.fn(),
 }));
@@ -74,6 +76,7 @@ vi.mock("@/server/conversation-realtime", () => ({
 
 vi.mock("@/lib/app-conversations", () => ({
   materializePendingConversationInvitees: mockMaterializePendingConversationInvitees,
+  isMessageSenderBlockedInConversation: mockIsMessageSenderBlockedInConversation,
 }));
 
 import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-event-handler";
@@ -93,6 +96,7 @@ describe("handleLogClientEventV1", () => {
     mockCreateTrackedEventLog.mockResolvedValue(undefined);
     mockMaybeGenerateConversationTitleForSession.mockResolvedValue(undefined);
     mockMaterializePendingConversationInvitees.mockResolvedValue(undefined);
+    mockIsMessageSenderBlockedInConversation.mockResolvedValue(false);
   });
 
   it("persists translation model and infrastructure provider for finalized turns", async () => {
@@ -201,6 +205,32 @@ describe("handleLogClientEventV1", () => {
     expect(json).toEqual({ ok: true });
     expect(mockAppMessageUpsert).toHaveBeenCalled();
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123");
+  });
+
+  it("does not persist or notify a finalized turn when the sender is blocked in this room", async () => {
+    mockIsMessageSenderBlockedInConversation.mockResolvedValue(true);
+
+    const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "client_message_blocked",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: {},
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageContentUpsert).not.toHaveBeenCalled();
+    expect(mockMaterializePendingConversationInvitees).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
   });
 
   it("ignores stale finalized turns after the conversation was cleared", async () => {

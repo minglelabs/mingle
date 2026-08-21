@@ -101,6 +101,7 @@ import {
   findOrCreateDirectConversation,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
+  isMessageSenderBlockedInConversation,
   listConversationChannelsForExternalUserId,
   listConversationMembersForUser,
   listConversationChannelsForUser,
@@ -1096,6 +1097,51 @@ describe("app-conversations", () => {
     expect(state?.conversation.isMultiMember).toBe(true);
   });
 
+  it("flags a 2-person room as blocked and hides the counterpart's photo, but keeps speakerUserId for bubble alignment", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-blocked",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-blocked",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        id: "msg-1",
+        clientMessageId: "u-1",
+        sourceLanguage: "en",
+        createdAt: new Date("2026-04-12T09:00:00.000Z"),
+        userId: "user-2",
+        contents: [{ contentType: "SOURCE", language: "en", text: "hi" }],
+      },
+    ]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-blocked", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice", image: null } },
+      { channelId: "conv-blocked", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob", image: "https://cdn/bob.jpg" } },
+    ]);
+    // Blocked in either direction should hide the room the same way — here
+    // the OTHER member blocked the viewer, not the other way around.
+    mockUserBlockFindMany.mockResolvedValue([{ blockerId: "user-2", blockedId: "user-1" }]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-blocked",
+      userId: "user-1",
+    });
+
+    expect(state?.conversation.isBlockedCounterpart).toBe(true);
+    expect(state?.utterances[0]?.speakerUserId).toBe("user-2");
+    expect(state?.utterances[0]?.speakerImage).toBeNull();
+  });
+
   it("nulls out speakerUserId/speakerImage for a solo room, even when the message has a real userId", async () => {
     mockFindConversationFirst.mockResolvedValue({
       id: "conv-solo",
@@ -1471,8 +1517,8 @@ describe("app-conversations", () => {
       });
 
       expect(members).toEqual([
-        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko", "en"] },
-        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2, selectedLanguages: ["ja"] },
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko", "en"], blocked: false },
+        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2, selectedLanguages: ["ja"], blocked: false },
       ]);
       expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
@@ -1492,6 +1538,41 @@ describe("app-conversations", () => {
 
       expect(members).toBeNull();
       expect(mockChannelMemberFindMany).not.toHaveBeenCalled();
+    });
+
+    it("hides the blocked counterpart's photo but keeps their name/handle, flagged via `blocked`", async () => {
+      mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        {
+          channelId: "conv-a",
+          userId: "user-1",
+          displayLanguage: null,
+          selectedLanguages: ["ko"],
+          status: "active",
+          pausedAt: null,
+          user: { name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null },
+        },
+        {
+          channelId: "conv-a",
+          userId: "user-2",
+          displayLanguage: null,
+          selectedLanguages: ["ja"],
+          status: "active",
+          pausedAt: null,
+          user: { name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: null, imageCropX: null, imageCropY: null },
+        },
+      ]);
+      mockUserBlockFindMany.mockResolvedValue([{ blockerId: "user-1", blockedId: "user-2" }]);
+
+      const members = await listConversationMembersForUser({
+        conversationId: "conv-a",
+        userId: "user-1",
+      });
+
+      expect(members).toEqual([
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko"], blocked: false },
+        { userId: "user-2", name: "Bob", handle: "bob", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ja"], blocked: true },
+      ]);
     });
   });
 
@@ -1716,6 +1797,67 @@ describe("app-conversations", () => {
         where: { id: "conv-dm" },
         data: { pendingInviteeUserIds: [] },
       });
+    });
+  });
+
+  describe("isMessageSenderBlockedInConversation", () => {
+    it("returns true when either side has blocked the other in a 2-person room", async () => {
+      mockFindConversationUnique.mockResolvedValue({ id: "conv-dm" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
+      ]);
+      mockUserBlockFindFirst.mockResolvedValue({ blockerId: "user-2" });
+
+      const blocked = await isMessageSenderBlockedInConversation({
+        sessionKey: "session-dm",
+        userId: "user-1",
+      });
+
+      expect(blocked).toBe(true);
+    });
+
+    it("returns false for an un-blocked 2-person room", async () => {
+      mockFindConversationUnique.mockResolvedValue({ id: "conv-dm" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
+      ]);
+
+      const blocked = await isMessageSenderBlockedInConversation({
+        sessionKey: "session-dm",
+        userId: "user-1",
+      });
+
+      expect(blocked).toBe(false);
+    });
+
+    it("returns false for a group room, even with a block against one member", async () => {
+      mockFindConversationUnique.mockResolvedValue({ id: "conv-group" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-group", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-group", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
+        { channelId: "conv-group", userId: "user-3", selectedLanguages: [], user: { name: "Carol", handle: "carol" } },
+      ]);
+      mockUserBlockFindFirst.mockResolvedValue({ blockerId: "user-1" });
+
+      const blocked = await isMessageSenderBlockedInConversation({
+        sessionKey: "session-group",
+        userId: "user-1",
+      });
+
+      expect(blocked).toBe(false);
+    });
+
+    it("returns false when the sessionKey doesn't resolve to a channel", async () => {
+      mockFindConversationUnique.mockResolvedValue(null);
+
+      const blocked = await isMessageSenderBlockedInConversation({
+        sessionKey: "session-unknown",
+        userId: "user-1",
+      });
+
+      expect(blocked).toBe(false);
     });
   });
 });
