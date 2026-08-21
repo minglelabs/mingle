@@ -1151,3 +1151,16 @@
 - Resolution: Resolve the browser origin in a client-only effect and keep `profileUrl` empty during the server render and the matching initial client render. Generate the URL, QR code, and link text only after the client origin has been committed.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify the profile-share surface opens without a hydration overlay, then renders the profile URL and QR code after mount; verify direct route and parent-preserving overlay entry points.
+
+## 2026-08-22 - Ask before reusing an existing direct-message room
+
+- Surface: The Message action on public profile details and the existing-room choice used when starting a conversation.
+- Issue: Multiple 1:1 rooms could exist for the same two users, but direct-room lookup used an unspecified first row. The group reuse path also used channel.updatedAt rather than the timestamp of the latest persisted message.
+- User impact: Message this person could open an arbitrary older room, and the direct flow did not let the user choose between continuing the latest room and creating a separate room.
+- Resolution:
+  - Select the reuse candidate by the latest visible app_messages.created_at for both exact-member group rooms and exact 1:1 rooms. Rooms without messages fall back to createdAt for deterministic pending-room behavior.
+  - Show the existing-conversation choice surface for 1:1 profiles as well as group starts, using the same shared modal component and translations.
+  - Continue opens the latest existing room; Create new sends force=true and creates a fresh room without consulting existing-room candidates.
+  - Keep the latest-message lookup as one sessionKey IN query with DISTINCT sessionKey, avoiding an N+1 query per candidate room.
+- Data contract: Adds the direct endpoint's optional force request field and reused response field. No schema change or Prisma migration is required; the existing app_messages sessionKey/createdAt indexes support the recency lookup.
+- Testing notes: Targeted conversation and direct-route tests pass, including latest-message selection and forced 1:1 creation. TypeScript and targeted ESLint pass. Verify both modal choices from a profile with multiple existing 1:1 rooms on iOS and Android.

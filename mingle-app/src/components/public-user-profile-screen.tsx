@@ -2,9 +2,11 @@
 
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileShareScreen from "@/components/profile-share-screen";
@@ -193,7 +195,9 @@ export default function PublicUserProfileScreen({
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const [showProfileShare, setShowProfileShare] = useState(false);
+  const [existingConversation, setExistingConversation] = useState<ConversationChannelSummary | null>(null);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
+  const conversationCopy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
   const normalizedUserId = userId.trim();
   const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -236,6 +240,7 @@ export default function PublicUserProfileScreen({
   useEffect(() => {
     if (!open) {
       setShowProfileShare(false);
+      setExistingConversation(null);
       return;
     }
 
@@ -248,6 +253,11 @@ export default function PublicUserProfileScreen({
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [open, profileShareHistoryId]);
+
+  useEffect(() => {
+    setExistingConversation(null);
+    setMessageError(false);
+  }, [normalizedUserId]);
 
   const closeProfileShare = useCallback(() => {
     if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
@@ -320,31 +330,77 @@ export default function PublicUserProfileScreen({
     }
   }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
 
+  const requestDirectConversation = useCallback(async (force: boolean) => {
+    if (!profile) throw new Error("direct_conversation_failed");
+    const response = await fetch(buildClientApiPath("/conversations/direct"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: profile.id, locale, force }),
+    });
+    if (!response.ok) throw new Error("direct_conversation_failed");
+    const data = await response.json() as {
+      conversation?: ConversationChannelSummary;
+      reused?: boolean;
+    };
+    const conversation = data.conversation;
+    if (!conversation?.id) throw new Error("direct_conversation_failed");
+    return { conversation, reused: data.reused === true };
+  }, [locale, profile]);
+
+  const openDirectConversation = useCallback(async (conversation: ConversationChannelSummary) => {
+    if (onStartDirectConversation) {
+      await onStartDirectConversation(conversation);
+      return;
+    }
+    router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+  }, [locale, onStartDirectConversation, router]);
+
   const handleMessage = useCallback(async () => {
     if (isOwnProfile || !profile || isMessagePending || profile.isBlocked) return;
     setIsMessagePending(true);
     setMessageError(false);
     try {
-      const response = await fetch(buildClientApiPath("/conversations/direct"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: profile.id, locale }),
-      });
-      if (!response.ok) throw new Error("direct_conversation_failed");
-      const data = await response.json() as { conversation?: ConversationChannelSummary };
-      const conversation = data.conversation;
-      if (!conversation?.id) throw new Error("direct_conversation_failed");
-      if (onStartDirectConversation) {
-        await onStartDirectConversation(conversation);
-      } else {
-        router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      const { conversation, reused } = await requestDirectConversation(false);
+      if (reused) {
+        setExistingConversation(conversation);
+        return;
       }
+      await openDirectConversation(conversation);
     } catch {
       setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
-  }, [isMessagePending, isOwnProfile, locale, onStartDirectConversation, profile, router]);
+  }, [isMessagePending, isOwnProfile, openDirectConversation, profile, requestDirectConversation]);
+
+  const handleContinueExistingConversation = useCallback(async () => {
+    if (!existingConversation || isMessagePending) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      await openDirectConversation(existingConversation);
+      setExistingConversation(null);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [existingConversation, isMessagePending, openDirectConversation]);
+
+  const handleCreateNewDirectConversation = useCallback(async () => {
+    if (isMessagePending) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      const { conversation } = await requestDirectConversation(true);
+      await openDirectConversation(conversation);
+      setExistingConversation(null);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [isMessagePending, openDirectConversation, requestDirectConversation]);
 
   const handleReportSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -628,6 +684,18 @@ export default function PublicUserProfileScreen({
             </form>
           </section>
         </div>
+      ) : null}
+      {existingConversation ? (
+        <ExistingConversationChoiceDialog
+          title={conversationCopy.inviteFriendsExistingConversationTitle}
+          message={conversationCopy.inviteFriendsExistingConversationMessage}
+          createNewLabel={conversationCopy.inviteFriendsCreateNewAction}
+          continueLabel={conversationCopy.inviteFriendsContinuePreviousAction}
+          isPending={isMessagePending}
+          onCreateNew={handleCreateNewDirectConversation}
+          onContinue={handleContinueExistingConversation}
+          onDismiss={() => setExistingConversation(null)}
+        />
       ) : null}
       </SlideSurface>
       <ProfileShareScreen

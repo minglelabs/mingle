@@ -48,15 +48,18 @@ describe("/api/conversations/direct route", () => {
 
   it("finds or creates a 1:1 room with the target user", async () => {
     mockFindOrCreateDirectConversation.mockResolvedValue({
-      id: "conv-dm",
-      sequenceNumber: 1,
-      title: "Bob",
-      status: "paused",
-      sessionKey: "session-dm",
-      selectedLanguages: ["en"],
-      createdAt: "2026-04-02T00:00:00.000Z",
-      updatedAt: "2026-04-02T00:00:00.000Z",
-      pausedAt: null,
+      conversation: {
+        id: "conv-dm",
+        sequenceNumber: 1,
+        title: "Bob",
+        status: "paused",
+        sessionKey: "session-dm",
+        selectedLanguages: ["en"],
+        createdAt: "2026-04-02T00:00:00.000Z",
+        updatedAt: "2026-04-02T00:00:00.000Z",
+        pausedAt: null,
+      },
+      reused: true,
     });
 
     const response = await POST(new NextRequest("https://example.com/api/conversations/direct", {
@@ -69,11 +72,49 @@ describe("/api/conversations/direct route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       conversation: expect.objectContaining({ id: "conv-dm", title: "Bob" }),
+      reused: true,
     });
     expect(mockFindOrCreateDirectConversation).toHaveBeenCalledWith({
       userId: "user-1",
       targetUserId: "user-2",
       locale: "ko",
+      force: false,
+    });
+  });
+
+  it("creates a fresh 1:1 room when force is requested", async () => {
+    mockFindOrCreateDirectConversation.mockResolvedValue({
+      conversation: {
+        id: "conv-new-dm",
+        sequenceNumber: 2,
+        title: "Bob",
+        status: "paused",
+        sessionKey: "session-new-dm",
+        selectedLanguages: ["en"],
+        createdAt: "2026-04-02T00:00:00.000Z",
+        updatedAt: "2026-04-02T00:00:00.000Z",
+        pausedAt: null,
+      },
+      reused: false,
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations/direct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: "user-2", locale: "ko", force: true }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json).toEqual({
+      conversation: expect.objectContaining({ id: "conv-new-dm" }),
+      reused: false,
+    });
+    expect(mockFindOrCreateDirectConversation).toHaveBeenCalledWith({
+      userId: "user-1",
+      targetUserId: "user-2",
+      locale: "ko",
+      force: true,
     });
   });
 

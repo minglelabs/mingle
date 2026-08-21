@@ -150,10 +150,10 @@ export async function postConversationResponse(request: NextRequest) {
     : resolvedUser.identity;
 
   // Group-start flow only (inviteeUserIds.length > 0) — plain "start alone"
-  // always creates fresh, and a 1:1 "message this person" already reuses
-  // silently via findOrCreateDirectConversation. Here the client gets a
-  // choice instead: `force` lets the "create new anyway" button skip this
-  // check and always create a duplicate on purpose.
+  // always creates fresh. A 1:1 "message this person" gets the same
+  // reused/create choice through the direct endpoint below. Here `force`
+  // lets the "create new anyway" button skip this check and always create a
+  // duplicate on purpose.
   if (inviteeUserIds.length > 0 && !force) {
     const existing = await findExistingConversationWithExactMembers({
       userId: resolvedUser.userId,
@@ -199,7 +199,7 @@ export async function postDirectConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { targetUserId?: unknown; locale?: unknown } | null = null;
+  let body: { targetUserId?: unknown; locale?: unknown; force?: unknown } | null = null;
   try {
     body = await request.json();
   } catch {
@@ -214,6 +214,7 @@ export async function postDirectConversationResponse(request: NextRequest) {
   const locale = typeof body?.locale === "string" && isSupportedLocale(body.locale.trim())
     ? body.locale.trim()
     : "en";
+  const force = body?.force === true;
 
   const trackingHints = resolvedUser.tracking
     ? {
@@ -222,12 +223,13 @@ export async function postDirectConversationResponse(request: NextRequest) {
       }
     : resolvedUser.identity;
 
-  let conversation;
+  let conversationResult;
   try {
-    conversation = await findOrCreateDirectConversation({
+    conversationResult = await findOrCreateDirectConversation({
       userId: resolvedUser.userId,
       targetUserId,
       locale,
+      force,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "target_user_not_found") {
@@ -242,7 +244,10 @@ export async function postDirectConversationResponse(request: NextRequest) {
     console.error("[conversations/direct] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
-  const response = NextResponse.json({ conversation }, { status: 200 });
+  const response = NextResponse.json({
+    conversation: conversationResult.conversation,
+    reused: conversationResult.reused,
+  }, { status: conversationResult.reused ? 200 : 201 });
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }

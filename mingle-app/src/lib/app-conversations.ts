@@ -650,6 +650,63 @@ async function listLatestMessageSummaryBySessionKey(
   return summaryBySessionKey;
 }
 
+async function listLatestMessageCreatedAtBySessionKey(
+  sessionKeys: string[],
+): Promise<Map<string, Date>> {
+  const uniqueSessionKeys = [...new Set(sessionKeys.filter((sessionKey) => sessionKey.trim()))];
+  if (uniqueSessionKeys.length === 0) {
+    return new Map();
+  }
+
+  const latestMessages = await prisma.appMessage.findMany({
+    where: {
+      sessionKey: {
+        in: uniqueSessionKeys,
+      },
+      ...buildVisibleMessageWhere(),
+    },
+    orderBy: [
+      { sessionKey: "asc" },
+      { createdAt: "desc" },
+    ],
+    distinct: ["sessionKey"],
+    select: {
+      sessionKey: true,
+      createdAt: true,
+    },
+  });
+
+  const latestCreatedAtBySessionKey = new Map<string, Date>();
+  for (const message of latestMessages) {
+    if (message.sessionKey) {
+      latestCreatedAtBySessionKey.set(message.sessionKey, message.createdAt);
+    }
+  }
+  return latestCreatedAtBySessionKey;
+}
+
+async function selectMostRecentlyMessagedConversation(
+  records: ConversationChannelRecord[],
+): Promise<ConversationChannelRecord | null> {
+  if (records.length === 0) return null;
+
+  // app_messages.created_at is the source of truth for room recency. A room
+  // with no messages yet falls back to its creation time so pending invite
+  // rooms still resolve deterministically.
+  const latestCreatedAtBySessionKey = await listLatestMessageCreatedAtBySessionKey(
+    records.map((record) => record.sessionKey),
+  );
+  return [...records].sort((left, right) => {
+    const leftLatestAt = latestCreatedAtBySessionKey.get(left.sessionKey)?.getTime() ?? left.createdAt.getTime();
+    const rightLatestAt = latestCreatedAtBySessionKey.get(right.sessionKey)?.getTime() ?? right.createdAt.getTime();
+    if (leftLatestAt !== rightLatestAt) return rightLatestAt - leftLatestAt;
+
+    const createdAtDifference = right.createdAt.getTime() - left.createdAt.getTime();
+    if (createdAtDifference !== 0) return createdAtDifference;
+    return right.id.localeCompare(left.id);
+  })[0] ?? null;
+}
+
 async function listVisibleMessageCountsBySessionKey(
   sessionKeys: string[],
 ): Promise<Map<string, number>> {
@@ -957,7 +1014,8 @@ export async function findOrCreateDirectConversation(args: {
   userId: string;
   targetUserId: string;
   locale?: string;
-}): Promise<ConversationChannelSummary> {
+  force?: boolean;
+}): Promise<{ conversation: ConversationChannelSummary; reused: boolean }> {
   const targetUserId = args.targetUserId.trim();
   if (!targetUserId || targetUserId === args.userId) {
     throw new Error("invalid_target_user");
@@ -973,47 +1031,56 @@ export async function findOrCreateDirectConversation(args: {
 
   await assertNoBlockAmong(args.userId, [targetUserId]);
 
-  const existing = await prisma.appConversationChannel.findFirst({
-    where: {
-      members: { some: { userId: args.userId } },
-      AND: [
-        buildVisibleConversationWhere(),
-        {
-          OR: [
-            {
-              AND: [
-                { members: { some: { userId: targetUserId } } },
-                // Exactly these two — a channel where either has picked up extra
-                // members (a future group chat) is not "the" 1:1 room anymore.
-                { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
-              ],
-            },
-            // The target hasn't received a first message yet (no membership row
-            // — see pendingInviteeUserIds), so it wouldn't match the branch
-            // above. Reuse this same pending room on a repeat tap instead of
-            // spawning a new one each time.
-            {
-              AND: [
-                { ownerUserId: args.userId },
-                { pendingInviteeUserIds: { has: targetUserId } },
-                { members: { none: { userId: { not: args.userId } } } },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    select: conversationChannelSelect,
-  });
+  if (!args.force) {
+    const existingCandidates = await prisma.appConversationChannel.findMany({
+      where: {
+        members: { some: { userId: args.userId } },
+        AND: [
+          buildVisibleConversationWhere(),
+          {
+            OR: [
+              {
+                AND: [
+                  { members: { some: { userId: targetUserId } } },
+                  // Exactly these two — a channel where either has picked up extra
+                  // members (a future group chat) is not "the" 1:1 room anymore.
+                  { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
+                ],
+              },
+              // The target hasn't received a first message yet (no membership row
+              // — see pendingInviteeUserIds), so it wouldn't match the branch
+              // above. Reuse this same pending room on a repeat tap instead of
+              // spawning a new one each time.
+              {
+                AND: [
+                  { ownerUserId: args.userId },
+                  { pendingInviteeUserIds: { has: targetUserId } },
+                  { members: { none: { userId: { not: args.userId } } } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      select: conversationChannelSelect,
+    });
+    const existing = await selectMostRecentlyMessagedConversation(existingCandidates);
 
-  if (existing) {
-    return serializeConversationChannelWithPreview(existing, args.userId);
+    if (existing) {
+      return {
+        conversation: await serializeConversationChannelWithPreview(existing, args.userId),
+        reused: true,
+      };
+    }
   }
 
-  return createConversationChannelForUser(args.userId, {
-    locale: args.locale,
-    inviteeUserIds: [targetUserId],
-  });
+  return {
+    conversation: await createConversationChannelForUser(args.userId, {
+      locale: args.locale,
+      inviteeUserIds: [targetUserId],
+    }),
+    reused: false,
+  };
 }
 
 // Generalizes findOrCreateDirectConversation's exact-membership match to any
@@ -1030,11 +1097,10 @@ export async function findExistingConversationWithExactMembers(args: {
   const allUserIds = [args.userId, ...otherUserIds];
 
   // Duplicates of the exact same member set can exist (rooms created before
-  // this check existed, or via the "create new anyway" force path) — order
-  // by most-recently-touched so "continue in previous room" deterministically
-  // lands on the room that was actually used last, not whichever row the DB
-  // happens to return first.
-  const materializedMatch = await prisma.appConversationChannel.findFirst({
+  // this check existed, or via the "create new anyway" force path). Resolve
+  // them by the latest persisted app message, not channel.updatedAt, so
+  // "continue in previous room" lands on the room that was actually used last.
+  const materializedCandidates = await prisma.appConversationChannel.findMany({
     where: {
       ...buildVisibleConversationWhere(),
       members: { some: { userId: args.userId } },
@@ -1043,9 +1109,9 @@ export async function findExistingConversationWithExactMembers(args: {
         { members: { none: { userId: { notIn: allUserIds } } } },
       ],
     },
-    orderBy: { updatedAt: "desc" },
     select: conversationChannelSelect,
   });
+  const materializedMatch = await selectMostRecentlyMessagedConversation(materializedCandidates);
   if (materializedMatch) {
     return serializeConversationChannelWithPreview(materializedMatch, args.userId);
   }
@@ -1063,13 +1129,12 @@ export async function findExistingConversationWithExactMembers(args: {
       members: { none: { userId: { not: args.userId } } },
       pendingInviteeUserIds: { hasEvery: otherUserIds },
     },
-    orderBy: { updatedAt: "desc" },
     select: conversationChannelSelect,
-    take: 20,
   });
-  const pendingMatch = pendingCandidates.find(
+  const exactPendingCandidates = pendingCandidates.filter(
     (candidate) => candidate.pendingInviteeUserIds.length === otherUserIds.length,
   );
+  const pendingMatch = await selectMostRecentlyMessagedConversation(exactPendingCandidates);
 
   return pendingMatch ? serializeConversationChannelWithPreview(pendingMatch, args.userId) : null;
 }

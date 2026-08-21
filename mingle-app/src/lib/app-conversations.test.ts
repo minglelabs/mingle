@@ -117,6 +117,7 @@ import {
 describe("app-conversations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppMessageFindMany.mockResolvedValue([]);
     mockAppMessageGroupBy.mockResolvedValue([]);
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
     mockChannelMemberFindMany.mockResolvedValue([]);
@@ -1581,7 +1582,7 @@ describe("app-conversations", () => {
   describe("findOrCreateDirectConversation", () => {
     it("reuses an existing 1:1 room instead of creating a duplicate", async () => {
       mockUserFindUnique.mockResolvedValue({ id: "user-2" });
-      mockFindConversationFirst.mockResolvedValue({
+      mockFindConversationMany.mockResolvedValue([{
         id: "conv-existing",
         sequenceNumber: 1,
         title: "Conversation (1)",
@@ -1594,15 +1595,16 @@ describe("app-conversations", () => {
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T08:00:00.000Z"),
         pausedAt: new Date("2026-04-12T08:00:00.000Z"),
-      });
+      }]);
 
       const conversation = await findOrCreateDirectConversation({
         userId: "user-1",
         targetUserId: "user-2",
       });
 
-      expect(conversation.id).toBe("conv-existing");
-      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+      expect(conversation.conversation.id).toBe("conv-existing");
+      expect(conversation.reused).toBe(true);
+      expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
         where: {
           members: { some: { userId: "user-1" } },
           AND: [
@@ -1635,11 +1637,95 @@ describe("app-conversations", () => {
       expect(mockCreateConversation).not.toHaveBeenCalled();
     });
 
+    it("selects the 1:1 room with the latest app message", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationMany.mockResolvedValue([
+        {
+          id: "conv-older",
+          sequenceNumber: 1,
+          title: "Conversation (1)",
+          status: "paused",
+          sessionKey: "session-older",
+          selectedLanguages: ["en"],
+          speechLanguages: ["en"],
+          translationLanguagesLinked: true,
+          pendingInviteeUserIds: [],
+          createdAt: new Date("2026-04-12T08:00:00.000Z"),
+          updatedAt: new Date("2026-06-12T08:00:00.000Z"),
+          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        },
+        {
+          id: "conv-newer",
+          sequenceNumber: 2,
+          title: "Conversation (2)",
+          status: "paused",
+          sessionKey: "session-newer",
+          selectedLanguages: ["en"],
+          speechLanguages: ["en"],
+          translationLanguagesLinked: true,
+          pendingInviteeUserIds: [],
+          createdAt: new Date("2026-05-12T08:00:00.000Z"),
+          updatedAt: new Date("2026-05-12T08:00:00.000Z"),
+          pausedAt: new Date("2026-05-12T08:00:00.000Z"),
+        },
+      ]);
+      mockAppMessageFindMany.mockResolvedValueOnce([
+        { sessionKey: "session-older", createdAt: new Date("2026-06-01T08:00:00.000Z") },
+        { sessionKey: "session-newer", createdAt: new Date("2026-07-01T08:00:00.000Z") },
+      ]);
+
+      const result = await findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+      });
+
+      expect(result.reused).toBe(true);
+      expect(result.conversation.id).toBe("conv-newer");
+      expect(mockAppMessageFindMany).toHaveBeenCalledWith(expect.objectContaining({
+        orderBy: [
+          { sessionKey: "asc" },
+          { createdAt: "desc" },
+        ],
+        distinct: ["sessionKey"],
+        select: { sessionKey: true, createdAt: true },
+      }));
+    });
+
+    it("forces a new 1:1 room without checking existing rooms", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationFirst.mockResolvedValueOnce(null);
+      mockCreateConversation.mockResolvedValue({
+        id: "conv-forced-dm",
+        sequenceNumber: 2,
+        title: "en:2",
+        status: "paused",
+        sessionKey: "session-forced-dm",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        createdAt: new Date("2026-07-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-07-12T08:00:00.000Z"),
+        pausedAt: new Date("2026-07-12T08:00:00.000Z"),
+      });
+
+      const result = await findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+        force: true,
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        reused: false,
+        conversation: expect.objectContaining({ id: "conv-forced-dm" }),
+      }));
+      expect(mockFindConversationMany).not.toHaveBeenCalled();
+    });
+
     it("creates a new 1:1 room when none exists yet", async () => {
       mockUserFindUnique.mockResolvedValue({ id: "user-2" });
-      mockFindConversationFirst
-        .mockResolvedValueOnce(null) // no existing 1:1 room
-        .mockResolvedValueOnce(null); // sequenceNumber lookup inside createConversationChannelForUser
+      mockFindConversationMany.mockResolvedValueOnce([]); // no existing 1:1 room
+      mockFindConversationFirst.mockResolvedValueOnce(null); // sequenceNumber lookup inside createConversationChannelForUser
       mockCreateConversation.mockResolvedValue({
         id: "conv-new-dm",
         sequenceNumber: 1,
@@ -1656,8 +1742,9 @@ describe("app-conversations", () => {
       });
       mockAppMessageFindMany.mockResolvedValue([]);
 
-      await findOrCreateDirectConversation({ userId: "user-1", targetUserId: "user-2" });
+      const result = await findOrCreateDirectConversation({ userId: "user-1", targetUserId: "user-2" });
 
+      expect(result.reused).toBe(false);
       expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ pendingInviteeUserIds: ["user-2"] }),
       }));
@@ -1726,7 +1813,7 @@ describe("app-conversations", () => {
     });
 
     it("finds a room whose real members exactly match the requested set", async () => {
-      mockFindConversationFirst.mockResolvedValue({
+      mockFindConversationMany.mockResolvedValue([{
         id: "conv-group",
         sequenceNumber: 1,
         title: "Alice, Bob",
@@ -1739,7 +1826,7 @@ describe("app-conversations", () => {
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T08:00:00.000Z"),
         pausedAt: new Date("2026-04-12T08:00:00.000Z"),
-      });
+      }]);
 
       const result = await findExistingConversationWithExactMembers({
         userId: "user-1",
@@ -1747,7 +1834,7 @@ describe("app-conversations", () => {
       });
 
       expect(result?.id).toBe("conv-group");
-      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
           members: { some: { userId: "user-1" } },
           AND: [
@@ -1756,16 +1843,12 @@ describe("app-conversations", () => {
             { members: { none: { userId: { notIn: ["user-1", "user-2", "user-3"] } } } },
           ],
         }),
-        orderBy: { updatedAt: "desc" },
       }));
-      expect(mockFindConversationMany).not.toHaveBeenCalled();
+      expect(mockFindConversationFirst).not.toHaveBeenCalled();
     });
 
-    it("orders by most-recently-updated so a duplicate room from before this check existed resolves deterministically", async () => {
-      // findFirst with orderBy is mocked to just return whatever's queued —
-      // this test locks in that the query itself asks the DB to sort, since
-      // the mock can't verify the DB actually applied it.
-      mockFindConversationFirst.mockResolvedValue({
+    it("selects the group room with the latest app message", async () => {
+      mockFindConversationMany.mockResolvedValue([{
         id: "conv-most-recent",
         sequenceNumber: 3,
         title: "Alice, Bob",
@@ -1778,7 +1861,24 @@ describe("app-conversations", () => {
         createdAt: new Date("2026-06-01T08:00:00.000Z"),
         updatedAt: new Date("2026-06-01T08:00:00.000Z"),
         pausedAt: new Date("2026-06-01T08:00:00.000Z"),
-      });
+      }, {
+        id: "conv-updated-newer",
+        sequenceNumber: 4,
+        title: "Alice, Bob",
+        status: "paused",
+        sessionKey: "session-updated-newer",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        createdAt: new Date("2026-05-01T08:00:00.000Z"),
+        updatedAt: new Date("2026-07-01T08:00:00.000Z"),
+        pausedAt: new Date("2026-05-01T08:00:00.000Z"),
+      }]);
+      mockAppMessageFindMany.mockResolvedValueOnce([
+        { sessionKey: "session-most-recent", createdAt: new Date("2026-06-01T08:00:00.000Z") },
+        { sessionKey: "session-updated-newer", createdAt: new Date("2026-05-01T08:00:00.000Z") },
+      ]);
 
       const result = await findExistingConversationWithExactMembers({
         userId: "user-1",
@@ -1786,14 +1886,13 @@ describe("app-conversations", () => {
       });
 
       expect(result?.id).toBe("conv-most-recent");
-      expect(mockFindConversationFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { updatedAt: "desc" } }),
-      );
+      expect(mockFindConversationFirst).not.toHaveBeenCalled();
     });
 
     it("falls back to a still-pending invite match when nobody's sent a first message yet", async () => {
-      mockFindConversationFirst.mockResolvedValue(null);
-      mockFindConversationMany.mockResolvedValue([
+      mockFindConversationMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
         {
           id: "conv-pending",
           sequenceNumber: 1,
@@ -1822,18 +1921,18 @@ describe("app-conversations", () => {
           members: { none: { userId: { not: "user-1" } } },
           pendingInviteeUserIds: { hasEvery: ["user-2", "user-3"] },
         }),
-        orderBy: { updatedAt: "desc" },
       }));
     });
 
     it("ignores a pending-invite candidate whose set is a superset of what's requested", async () => {
-      mockFindConversationFirst.mockResolvedValue(null);
-      mockFindConversationMany.mockResolvedValue([
+      mockFindConversationMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
         {
           id: "conv-pending-superset",
           pendingInviteeUserIds: ["user-2", "user-3", "user-4"],
         },
-      ]);
+        ]);
 
       const result = await findExistingConversationWithExactMembers({
         userId: "user-1",
@@ -1844,8 +1943,9 @@ describe("app-conversations", () => {
     });
 
     it("returns null when neither a materialized nor a pending match exists", async () => {
-      mockFindConversationFirst.mockResolvedValue(null);
-      mockFindConversationMany.mockResolvedValue([]);
+      mockFindConversationMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
       const result = await findExistingConversationWithExactMembers({
         userId: "user-1",
