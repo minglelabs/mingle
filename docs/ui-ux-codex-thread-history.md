@@ -1089,3 +1089,16 @@
 - Resolution: Remove the panel shadow from the current outer and nested menu surfaces and from the legacy menu renderer. Make the legacy wrapper transparent as well, so both renderers keep the menu's panel border and slide transition without painting a shadow or dimming layer over the room.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify the room has uniform brightness before opening the menu, remains uniform while the menu is open, and keeps a smooth menu transition.
+
+## 2026-08-21 - Keep public profiles and profile sharing above their parent surface
+
+- Surface: Public profile details opened from conversation avatars, conversation participants, notifications, follow lists, and Connect search; the profile image preview; and profile sharing from a public profile.
+- Issue: Connect search still navigated to a standalone profile route, the public profile share action navigated to the My Page share route, and the image preview did not register as the topmost Android back target. These paths could unmount the parent page or let Android back close the profile/page instead of only the visible child.
+- User impact: Returning from a profile could lose the search or conversation context, profile sharing could replace the profile instead of layering above it, and pressing Android back while viewing a profile photo could close the entire profile or exit the app.
+- Resolution:
+  - Open Connect search profiles through a scope-owned history-backed `SlideSurface`, preserving the search page and its result snapshot underneath.
+  - Make profile sharing a nested history-backed `SlideSurface` above every public profile entry point, so iOS edge-swipe and Android back close only the share surface and reveal the profile again.
+  - Register the full-screen profile image preview as the highest-priority native back handler and stop its pointer/touch events from reaching the underlying profile surface.
+  - Keep the standalone profile route available for direct/deep-link entry, while internal profile entry points remain parent-preserving overlays.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify profile entry from each listed surface, profile-share open/close and iOS edge-swipe, Connect search restoration, and Android back from both public-profile and My Page photo previews.

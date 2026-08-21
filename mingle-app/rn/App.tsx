@@ -667,6 +667,7 @@ type NativeNavigationStateCommand = {
   payload?: {
     canGoBack?: boolean;
     canGoForward?: boolean;
+    canHandleNativeBack?: boolean;
     url?: string;
     // Full-screen overlays (e.g. the profile screen) that render on top of a
     // conversation room without changing the URL need to temporarily disable
@@ -1754,6 +1755,7 @@ function AppInner(): React.JSX.Element {
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
+  const [canWebViewHandleNativeBack, setCanWebViewHandleNativeBack] = useState(false);
   const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
@@ -1866,7 +1868,7 @@ function AppInner(): React.JSX.Element {
       if (versionGate.status === 'force_update') {
         return false;
       }
-      if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
+      if (!canWebViewGoBack && !canWebViewHandleNativeBack && !isNativeMenuOverlayOpen) {
         return false;
       }
       webViewRef.current?.injectJavaScript(`
@@ -1893,7 +1895,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
+  }, [canWebViewGoBack, canWebViewHandleNativeBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -2804,6 +2806,9 @@ function AppInner(): React.JSX.Element {
       }
       if (typeof parsed.payload?.canGoForward === 'boolean') {
         setCanWebViewGoForward(parsed.payload.canGoForward);
+      }
+      if (typeof parsed.payload?.canHandleNativeBack === 'boolean') {
+        setCanWebViewHandleNativeBack(parsed.payload.canHandleNativeBack);
       }
       if (typeof parsed.payload?.suppressEdgeSwipe === 'boolean') {
         setIsEdgeSwipeSuppressedByWeb(parsed.payload.suppressEdgeSwipe);

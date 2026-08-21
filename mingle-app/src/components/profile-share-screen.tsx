@@ -24,6 +24,8 @@ type ProfileShareScreenProps = {
   initialUserId?: string;
   open?: boolean;
   onClose?: () => void;
+  nativeBackPriority?: number;
+  zIndex?: number;
 };
 
 type NativeBridgeWindow = Window & {
@@ -76,6 +78,8 @@ export default function ProfileShareScreen({
   initialUserId = "",
   open = true,
   onClose,
+  nativeBackPriority = 50,
+  zIndex = 100,
 }: ProfileShareScreenProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -340,6 +344,8 @@ export default function ProfileShareScreen({
       open={open}
       onClose={navigateBack}
       ariaLabel={dictionary.profile.shareProfile}
+      nativeBackPriority={nativeBackPriority}
+      zIndex={zIndex}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
       style={{ background: PROFILE_SHARE_BACKGROUND, touchAction: "pan-y" }}
     >

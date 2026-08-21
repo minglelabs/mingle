@@ -6,6 +6,7 @@ import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import {
   STT_LANGUAGE_OPTIONS,
@@ -59,6 +60,18 @@ type PublicUserProfile = {
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
+
+const PROFILE_SHARE_HISTORY_STATE_KEY = "__MINGLE_PUBLIC_PROFILE_SHARE_SURFACE__";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasProfileShareHistoryEntry(userId: string): boolean {
+  if (typeof window === "undefined" || !userId || !isRecord(window.history.state)) return false;
+  const entry = window.history.state[PROFILE_SHARE_HISTORY_STATE_KEY];
+  return isRecord(entry) && entry.userId === userId;
+}
 
 function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   const isKorean = locale === "ko";
@@ -174,8 +187,10 @@ export default function PublicUserProfileScreen({
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const [showProfileShare, setShowProfileShare] = useState(false);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
   const normalizedUserId = userId.trim();
+  const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
   useEffect(() => {
@@ -213,7 +228,35 @@ export default function PublicUserProfileScreen({
     };
   }, [isOwnProfile, normalizedUserId, open, sessionStatus]);
 
+  useEffect(() => {
+    if (!open) {
+      setShowProfileShare(false);
+      return;
+    }
+
+    const handlePopState = () => {
+      if (!hasProfileShareHistoryEntry(profileShareHistoryId)) {
+        setShowProfileShare(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [open, profileShareHistoryId]);
+
+  const closeProfileShare = useCallback(() => {
+    if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      window.history.back();
+      return;
+    }
+    setShowProfileShare(false);
+  }, [profileShareHistoryId]);
+
   const navigateBack = useCallback(() => {
+    if (showProfileShare) {
+      closeProfileShare();
+      return;
+    }
     if (onClose) {
       onClose();
       return;
@@ -223,7 +266,7 @@ export default function PublicUserProfileScreen({
       return;
     }
     router.push(`/${locale}/connect`);
-  }, [locale, onClose, router]);
+  }, [closeProfileShare, locale, onClose, router, showProfileShare]);
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
@@ -335,20 +378,30 @@ export default function PublicUserProfileScreen({
     : null;
   const handleOpenProfileShare = useCallback(() => {
     if (!profile) return;
-    const searchParams = new URLSearchParams(window.location.search);
-    searchParams.set("profileUserId", profile.id);
-    router.push(`/${locale}/mypage/share?${searchParams.toString()}`);
-  }, [locale, profile, router]);
+    if (typeof window !== "undefined" && !hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      const currentState = isRecord(window.history.state) ? window.history.state : {};
+      window.history.pushState(
+        {
+          ...currentState,
+          [PROFILE_SHARE_HISTORY_STATE_KEY]: { userId: profileShareHistoryId },
+        },
+        "",
+        window.location.href,
+      );
+    }
+    setShowProfileShare(true);
+  }, [profile, profileShareHistoryId]);
 
   return (
-    <SlideSurface
-      open={open}
-      onClose={navigateBack}
-      ariaLabel={name}
-      nativeBackPriority={40}
-      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
-      style={{ touchAction: "pan-y" }}
-    >
+    <>
+      <SlideSurface
+        open={open}
+        onClose={navigateBack}
+        ariaLabel={name}
+        nativeBackPriority={40}
+        className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4"
         style={{
@@ -567,6 +620,17 @@ export default function PublicUserProfileScreen({
           </section>
         </div>
       ) : null}
-    </SlideSurface>
+      </SlideSurface>
+      <ProfileShareScreen
+        dictionary={dictionary}
+        locale={locale}
+        initialHandle={profile?.handle ?? ""}
+        initialUserId={profile?.id ?? ""}
+        open={open && showProfileShare && Boolean(profile)}
+        onClose={closeProfileShare}
+        nativeBackPriority={60}
+        zIndex={130}
+      />
+    </>
   );
 }
