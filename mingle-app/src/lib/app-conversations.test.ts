@@ -1756,8 +1756,39 @@ describe("app-conversations", () => {
             { members: { none: { userId: { notIn: ["user-1", "user-2", "user-3"] } } } },
           ],
         }),
+        orderBy: { updatedAt: "desc" },
       }));
       expect(mockFindConversationMany).not.toHaveBeenCalled();
+    });
+
+    it("orders by most-recently-updated so a duplicate room from before this check existed resolves deterministically", async () => {
+      // findFirst with orderBy is mocked to just return whatever's queued —
+      // this test locks in that the query itself asks the DB to sort, since
+      // the mock can't verify the DB actually applied it.
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-most-recent",
+        sequenceNumber: 3,
+        title: "Alice, Bob",
+        status: "paused",
+        sessionKey: "session-most-recent",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        createdAt: new Date("2026-06-01T08:00:00.000Z"),
+        updatedAt: new Date("2026-06-01T08:00:00.000Z"),
+        pausedAt: new Date("2026-06-01T08:00:00.000Z"),
+      });
+
+      const result = await findExistingConversationWithExactMembers({
+        userId: "user-1",
+        otherUserIds: ["user-2", "user-3"],
+      });
+
+      expect(result?.id).toBe("conv-most-recent");
+      expect(mockFindConversationFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { updatedAt: "desc" } }),
+      );
     });
 
     it("falls back to a still-pending invite match when nobody's sent a first message yet", async () => {
@@ -1791,6 +1822,7 @@ describe("app-conversations", () => {
           members: { none: { userId: { not: "user-1" } } },
           pendingInviteeUserIds: { hasEvery: ["user-2", "user-3"] },
         }),
+        orderBy: { updatedAt: "desc" },
       }));
     });
 

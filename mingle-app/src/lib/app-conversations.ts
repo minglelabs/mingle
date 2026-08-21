@@ -1029,6 +1029,11 @@ export async function findExistingConversationWithExactMembers(args: {
   if (otherUserIds.length === 0) return null;
   const allUserIds = [args.userId, ...otherUserIds];
 
+  // Duplicates of the exact same member set can exist (rooms created before
+  // this check existed, or via the "create new anyway" force path) — order
+  // by most-recently-touched so "continue in previous room" deterministically
+  // lands on the room that was actually used last, not whichever row the DB
+  // happens to return first.
   const materializedMatch = await prisma.appConversationChannel.findFirst({
     where: {
       ...buildVisibleConversationWhere(),
@@ -1038,6 +1043,7 @@ export async function findExistingConversationWithExactMembers(args: {
         { members: { none: { userId: { notIn: allUserIds } } } },
       ],
     },
+    orderBy: { updatedAt: "desc" },
     select: conversationChannelSelect,
   });
   if (materializedMatch) {
@@ -1057,6 +1063,7 @@ export async function findExistingConversationWithExactMembers(args: {
       members: { none: { userId: { not: args.userId } } },
       pendingInviteeUserIds: { hasEvery: otherUserIds },
     },
+    orderBy: { updatedAt: "desc" },
     select: conversationChannelSelect,
     take: 20,
   });
