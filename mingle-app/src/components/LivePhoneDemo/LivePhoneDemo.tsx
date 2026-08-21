@@ -1498,6 +1498,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
   const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
+  // Display-language is a third-level surface over conversation management.
+  // Keep management mounted underneath it so closing the top surface consumes
+  // only its own history entry and never reopens the room menu from scratch.
+  const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen === 'display-language'
+    ? 'conversation-management'
+    : menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
@@ -6005,13 +6011,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <div className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'feedback'}
+                      aria-hidden={menuContentScreen !== 'feedback'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'feedback' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'feedback'
+                        pointerEvents: menuContentScreen === 'feedback' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'feedback'
                           ? 3
                           : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
@@ -6269,13 +6275,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'conversation-management'}
+                      aria-hidden={menuContentScreen !== 'conversation-management'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'conversation-management' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'conversation-management'
+                        pointerEvents: menuContentScreen === 'conversation-management' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'conversation-management'
                           ? 3
                           : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
@@ -6342,13 +6348,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'participants'}
+                      aria-hidden={menuContentScreen !== 'participants'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'participants' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'participants' ? 4 : 1,
+                        pointerEvents: menuContentScreen === 'participants' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'participants' ? 4 : 1,
                       }}
                     >
                       <ConversationParticipantsPanel
@@ -6366,16 +6372,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       />
                     </motion.section>
 
-                    <motion.section
-                      initial={false}
-                      animate={menuScreen === 'display-language' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
-                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'display-language'}
-                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
-                      style={{
-                        pointerEvents: menuScreen === 'display-language' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'display-language' ? 4 : 1,
-                      }}
+                    <SlideSurface
+                      open={menuOpen && menuScreen === 'display-language'}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={defaultDisplayLanguageCopy.pageTitle}
+                      nativeBackPriority={30}
+                      className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
                     >
                       <LivePhoneDemoPanelHeader
                         title={defaultDisplayLanguageCopy.pageTitle}
@@ -6423,7 +6428,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           })}
                         </div>
                       </div>
-                    </motion.section>
+                    </SlideSurface>
                       </div>
                     </SlideSurface>
           </div>

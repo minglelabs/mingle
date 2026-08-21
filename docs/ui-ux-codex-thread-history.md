@@ -1,5 +1,17 @@
 # UI/UX Codex Thread History
 
+## 2026-08-21 - Give the room default-display-language page its own surface
+
+- Surface: Conversation room hamburger menu, conversation management, and default display language.
+- Issue: The default display language page was still rendered as a motion section inside the management child surface. At the third history depth, its edge gesture and native back path therefore shared ownership with the management/menu stack instead of closing only the top page.
+- User impact: An iOS edge-swipe from the default display language page could close or replay more than one room-menu level, leaving the hamburger menu transition visibly out of sync.
+- Resolution:
+  - Keep the conversation-management page mounted beneath the default-display-language page while the third-level history entry is active.
+  - Render default display language as its own nested `SlideSurface` with a higher native-back priority and the same edge-only gesture ownership as other full-screen surfaces.
+  - Let the shared menu depth remain the history source of truth so one swipe/back action consumes exactly one entry.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify management → default display language → iOS edge-swipe returns to management only, Android back returns to management only, and a second back/swipe closes the hamburger menu without closing the room.
+
 ## 2026-08-17 - Open the Current User's Profile From Participants
 
 - Surface: Conversation room hamburger menu, participants page, and profile detail panel.
