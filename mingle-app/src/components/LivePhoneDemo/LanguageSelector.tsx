@@ -225,7 +225,15 @@ export default function LanguageSelector({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !hasAttribution || !conversationId) {
+    // Deliberately NOT gated on `hasAttribution`: that prop can still be
+    // catching up from a stale conversation-list cache/fetch on first open
+    // (e.g. a room created seconds ago via "message this person"), and
+    // `hasAttribution` flipping true later doesn't retroactively backfill a
+    // fetch this effect already decided to skip. Fetching unconditionally
+    // whenever the screen is open just means solo rooms do one harmless
+    // extra request for a member list nothing ends up rendering (hasAttribution
+    // still gates the actual avatar stack in renderLanguageOption).
+    if (!isOpen || !conversationId) {
       return;
     }
 
@@ -256,7 +264,7 @@ export default function LanguageSelector({
     return () => {
       cancelled = true;
     };
-  }, [conversationId, hasAttribution, isOpen]);
+  }, [conversationId, isOpen]);
 
   useEffect(() => {
     setSortMode(defaultSortMode);

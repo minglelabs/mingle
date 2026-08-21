@@ -285,6 +285,16 @@ model AppConversationChannel {
   translationLanguagesLinked Boolean   @default(true) @map("translation_languages_linked")
   defaultDisplayLanguage     String?   @map("default_display_language")
   pausedAt                   DateTime? @map("paused_at")
+  // Invitees from "message this person" / room creation who do NOT yet have
+  // an AppConversationChannelMember row. Nothing about the room is visible to
+  // them (buildVisibleMembershipWhere is membership-only) or persisted about
+  // their participation until the inviter actually sends a first message —
+  // materializePendingConversationInvitees turns these into real membership
+  // rows at that point and clears this list. Kept on the channel rather than
+  // as membership rows with a "pending" status because the requirement is
+  // literally zero DB footprint for the invitee before a message is sent, not
+  // just zero visibility.
+  pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
