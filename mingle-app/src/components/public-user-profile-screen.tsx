@@ -223,9 +223,13 @@ export default function PublicUserProfileScreen({
     const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
     syncViewportWidth();
     window.addEventListener("resize", syncViewportWidth);
-    void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
+    const animationFrameId = window.requestAnimationFrame(() => {
+      if (!isMountedRef.current) return;
+      void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
+    });
 
     return () => {
+      window.cancelAnimationFrame(animationFrameId);
       isMountedRef.current = false;
       window.removeEventListener("resize", syncViewportWidth);
     };

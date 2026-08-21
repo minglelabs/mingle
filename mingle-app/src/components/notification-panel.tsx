@@ -191,8 +191,14 @@ export default function NotificationPanel({
     const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
     syncViewportWidth();
     window.addEventListener("resize", syncViewportWidth);
-    void motionControls.start({ x: 0, transition: PANEL_TRANSITION });
-    return () => window.removeEventListener("resize", syncViewportWidth);
+    const animationFrameId = window.requestAnimationFrame(() => {
+      if (!isMountedRef.current) return;
+      void motionControls.start({ x: 0, transition: PANEL_TRANSITION });
+    });
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      window.removeEventListener("resize", syncViewportWidth);
+    };
   }, [motionControls, open]);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
