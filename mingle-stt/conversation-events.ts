@@ -98,6 +98,12 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
  * secret, bearer-style — this is service-to-service, not a per-user token,
  * since mingle-app has already done the membership check by the time it
  * calls this.
+ *
+ * Accepts a single `sessionKey` (the room itself) and/or a `keys` array —
+ * mingle-app fans a single message out to the room's own topic plus a
+ * `list:<userId>` topic per member, so every member's conversation LIST
+ * screen (not just an already-open room) picks up the new message without a
+ * manual refresh. One HTTP call covers all of them instead of one per topic.
  */
 export async function handleConversationEventsPublish(
     request: IncomingMessage,
@@ -122,17 +128,22 @@ export async function handleConversationEventsPublish(
         return;
     }
 
-    const sessionKey = typeof (body as Record<string, unknown>)?.sessionKey === 'string'
-        ? ((body as Record<string, unknown>).sessionKey as string).trim()
-        : '';
+    const record = body as Record<string, unknown>;
+    const sessionKey = typeof record?.sessionKey === 'string' ? record.sessionKey.trim() : '';
+    const extraKeys = Array.isArray(record?.keys)
+        ? record.keys.filter((key): key is string => typeof key === 'string' && key.trim() !== '').map((key) => key.trim())
+        : [];
+    const keys = [...new Set(sessionKey ? [sessionKey, ...extraKeys] : extraKeys)];
 
-    if (!sessionKey) {
+    if (keys.length === 0) {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ error: 'invalid_payload' }));
         return;
     }
 
-    bus.publish(sessionKey);
+    for (const key of keys) {
+        bus.publish(key);
+    }
     response.writeHead(204);
     response.end();
 }

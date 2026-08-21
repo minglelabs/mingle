@@ -29,6 +29,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
 import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
@@ -3401,6 +3402,73 @@ export default function ConversationList({
     refreshConversationLocalStats,
     sessionStatus,
   ]);
+
+  // Live sync for the LIST screen itself: a new message landing in ANY room
+  // this user belongs to should update its preview/ordering here without a
+  // manual refresh, not just inside an already-open room — mirrors
+  // use-realtime-stt.ts's per-room version of the same pattern, just scoped
+  // to this user's own list:<userId> topic on mingle-stt's event bus
+  // instead of one room's sessionKey. A long-interval poll is the fallback
+  // for whenever the socket is down or push is unconfigured.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const openSocket = async () => {
+      if (cancelled) return;
+      try {
+        const response = await fetch(buildConversationApiPath("/list-realtime-token"), {
+          cache: "no-store",
+          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        });
+        if (!response.ok || cancelled) return;
+        const payload = await response.json() as { token?: string | null };
+        const token = payload.token;
+        const wsBase = getConversationEventsWsUrl();
+        if (!token || !wsBase || cancelled) return;
+
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+        socket.onmessage = () => {
+          void refreshConversationList();
+        };
+        socket.onclose = () => {
+          if (cancelled) return;
+          clearReconnectTimer();
+          reconnectTimer = window.setTimeout(openSocket, 5_000);
+        };
+      } catch {
+        // Realtime push failed to set up — the poll fallback below still runs.
+      }
+    };
+
+    void openSocket();
+
+    const pollIntervalMs = 20_000;
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshConversationList();
+    }, pollIntervalMs);
+
+    return () => {
+      cancelled = true;
+      clearReconnectTimer();
+      window.clearInterval(pollTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  }, [refreshConversationList]);
 
   useEffect(() => {
     if (

@@ -179,7 +179,7 @@ test('handleConversationEventsPublish publishes to subscribers on a valid reques
     assert.equal(socket.sent.length, 1);
 });
 
-test('handleConversationEventsPublish rejects a payload without a sessionKey', async () => {
+test('handleConversationEventsPublish rejects a payload without a sessionKey or keys', async () => {
     const bus = new ConversationEventBus();
     const request = new FakeRequest(JSON.stringify({}), { authorization: `Bearer ${SECRET}` });
     const response = new FakeResponse();
@@ -194,4 +194,58 @@ test('handleConversationEventsPublish rejects a payload without a sessionKey', a
     await promise;
 
     assert.equal(response.statusCode, 400);
+});
+
+test('handleConversationEventsPublish fans a single call out to sessionKey plus every extra key', async () => {
+    const bus = new ConversationEventBus();
+    const roomSocket = new FakeSocket();
+    const listSocketA = new FakeSocket();
+    const listSocketB = new FakeSocket();
+    bus.subscribe('sess_a', roomSocket as unknown as import('ws').WebSocket);
+    bus.subscribe('list:user-a', listSocketA as unknown as import('ws').WebSocket);
+    bus.subscribe('list:user-b', listSocketB as unknown as import('ws').WebSocket);
+
+    const request = new FakeRequest(
+        JSON.stringify({ sessionKey: 'sess_a', keys: ['list:user-a', 'list:user-b'] }),
+        { authorization: `Bearer ${SECRET}` },
+    );
+    const response = new FakeResponse();
+
+    const promise = handleConversationEventsPublish(
+        request as unknown as import('http').IncomingMessage,
+        response as unknown as import('http').ServerResponse,
+        SECRET,
+        bus,
+    );
+    request.emitBody();
+    await promise;
+
+    assert.equal(response.statusCode, 204);
+    assert.equal(roomSocket.sent.length, 1);
+    assert.equal(listSocketA.sent.length, 1);
+    assert.equal(listSocketB.sent.length, 1);
+});
+
+test('handleConversationEventsPublish accepts keys with no sessionKey', async () => {
+    const bus = new ConversationEventBus();
+    const listSocket = new FakeSocket();
+    bus.subscribe('list:user-a', listSocket as unknown as import('ws').WebSocket);
+
+    const request = new FakeRequest(
+        JSON.stringify({ keys: ['list:user-a'] }),
+        { authorization: `Bearer ${SECRET}` },
+    );
+    const response = new FakeResponse();
+
+    const promise = handleConversationEventsPublish(
+        request as unknown as import('http').IncomingMessage,
+        response as unknown as import('http').ServerResponse,
+        SECRET,
+        bus,
+    );
+    request.emitBody();
+    await promise;
+
+    assert.equal(response.statusCode, 204);
+    assert.equal(listSocket.sent.length, 1);
 });

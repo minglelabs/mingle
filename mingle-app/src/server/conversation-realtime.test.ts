@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mintConversationRealtimeToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import {
+  buildConversationListEventKey,
+  mintConversationListRealtimeToken,
+  mintConversationRealtimeToken,
+  notifyConversationMessage,
+} from "@/server/conversation-realtime";
 import { verifyRealtimeToken } from "@/lib/realtime-token";
 
 describe("conversation-realtime", () => {
@@ -55,7 +60,23 @@ describe("conversation-realtime", () => {
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({ authorization: "Bearer shared-secret" }),
-          body: JSON.stringify({ sessionKey: "sess_a" }),
+          body: JSON.stringify({ sessionKey: "sess_a", keys: [] }),
+        }),
+      );
+    });
+
+    it("also fans out a list:<userId> key per member, so their list screen updates without a refresh", () => {
+      vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
+      vi.stubEnv("NEXT_PUBLIC_WS_URL", "wss://mingle-1-1-4-production.up.railway.app/stt");
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+      global.fetch = fetchSpy as unknown as typeof fetch;
+
+      notifyConversationMessage("sess_a", ["user-1", "user-2", "user-1"]);
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://mingle-1-1-4-production.up.railway.app/conversation-events/publish",
+        expect.objectContaining({
+          body: JSON.stringify({ sessionKey: "sess_a", keys: ["list:user-1", "list:user-2"] }),
         }),
       );
     });
@@ -69,7 +90,7 @@ describe("conversation-realtime", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    it("does nothing for a blank sessionKey", () => {
+    it("does nothing for a blank sessionKey and no members", () => {
       vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
       vi.stubEnv("NEXT_PUBLIC_WS_URL", "wss://host/stt");
       const fetchSpy = vi.fn();
@@ -78,6 +99,28 @@ describe("conversation-realtime", () => {
       notifyConversationMessage("   ");
 
       expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("buildConversationListEventKey", () => {
+    it("scopes a user id to the list-events topic", () => {
+      expect(buildConversationListEventKey("user-1")).toBe("list:user-1");
+    });
+  });
+
+  describe("mintConversationListRealtimeToken", () => {
+    it("returns null when realtime push is unconfigured (no shared secret)", () => {
+      vi.stubEnv("MINGLE_REALTIME_SECRET", "");
+      expect(mintConversationListRealtimeToken("user-1")).toBeNull();
+    });
+
+    it("mints a token scoped to this user's list topic", () => {
+      vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
+      const token = mintConversationListRealtimeToken("user-1");
+      expect(token).not.toBeNull();
+      const payload = verifyRealtimeToken(token as string, "shared-secret");
+      expect(payload?.sessionKey).toBe("list:user-1");
+      expect(payload?.userId).toBe("user-1");
     });
   });
 });

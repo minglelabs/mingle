@@ -35,15 +35,49 @@ export function mintConversationRealtimeToken(args: {
 }
 
 /**
- * Tells mingle-stt a message landed, so it can push to anyone watching this
- * room. Best-effort and fire-and-forget on purpose: realtime push is a
- * latency optimization over the client's own poll fallback, never something
- * a message send should fail on.
+ * The conversation-events bus key is just an opaque subscribe/publish
+ * string as far as mingle-stt is concerned (it never parses `sessionKey`,
+ * only checks the token's signature) — so a per-user "list" topic can reuse
+ * the exact same bus/token plumbing as a per-room one, just keyed
+ * differently. Exported so the publish side (notifyConversationMessage)
+ * builds the identical key.
  */
-export function notifyConversationMessage(sessionKey: string): void {
+export function buildConversationListEventKey(userId: string): string {
+  return `list:${userId}`;
+}
+
+/**
+ * Lets the conversation LIST screen (not a specific open room) subscribe to
+ * "something changed in one of my rooms" pushes, so a new message shows up
+ * there without the user having to open the room or refresh the page.
+ */
+export function mintConversationListRealtimeToken(userId: string): string | null {
+  const secret = readRealtimeSecret();
+  if (!secret) return null;
+  return mintRealtimeToken({
+    sessionKey: buildConversationListEventKey(userId),
+    userId,
+    secret,
+  });
+}
+
+/**
+ * Tells mingle-stt a message landed, so it can push to anyone watching this
+ * room AND to every member's conversation-list screen (`memberUserIds`) —
+ * without the list fan-out, a member who has the room closed only finds out
+ * about a new message on their next poll/mount instead of immediately.
+ * Best-effort and fire-and-forget on purpose: realtime push is a latency
+ * optimization over the client's own poll fallback, never something a
+ * message send should fail on.
+ */
+export function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = []): void {
   const secret = readRealtimeSecret();
   const publishUrl = resolveConversationEventsPublishUrl();
-  if (!secret || !publishUrl || !sessionKey.trim()) return;
+  const normalizedSessionKey = sessionKey.trim();
+  const listKeys = [...new Set(
+    memberUserIds.map((id) => id.trim()).filter(Boolean).map(buildConversationListEventKey),
+  )];
+  if (!secret || !publishUrl || (!normalizedSessionKey && listKeys.length === 0)) return;
 
   fetch(publishUrl, {
     method: "POST",
@@ -51,7 +85,7 @@ export function notifyConversationMessage(sessionKey: string): void {
       "content-type": "application/json",
       authorization: `Bearer ${secret}`,
     },
-    body: JSON.stringify({ sessionKey }),
+    body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys }),
   }).catch(() => {
     // A dropped notification just means that one client relies on its poll
     // fallback for this message instead of getting it pushed.

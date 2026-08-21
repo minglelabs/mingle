@@ -1077,6 +1077,19 @@ export async function materializePendingConversationInvitees(sessionKey: string)
   ]);
 }
 
+// Who to fan a realtime "a message landed" push out to for the conversation
+// LIST (as opposed to the single open room) — every real member, so their
+// list screen updates without a manual refresh even while the room itself
+// is closed. Called right after materializePendingConversationInvitees so a
+// freshly-materialized invitee is already included.
+export async function listChannelMemberUserIdsBySessionKey(sessionKey: string): Promise<string[]> {
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey },
+    select: { members: { select: { userId: true } } },
+  });
+  return channel?.members.map((member) => member.userId) ?? [];
+}
+
 // Defense in depth behind the client's own composer/mic gating (see
 // isBlockedCounterpart) — even a stale client that still posts a
 // stt_turn_finalized event for a now-blocked room must not have it persist.

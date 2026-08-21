@@ -3,4 +3,5 @@ export {
   getConversationChannelsForIosV1_1_0 as getConversationChannelsForIosV1_1_3,
   postCreateConversationForIosV1_1_0 as postCreateConversationForIosV1_1_3,
   postDirectConversationForIosV1_1_0 as postDirectConversationForIosV1_1_3,
+  getConversationListRealtimeTokenForIosV1_1_0 as getConversationListRealtimeTokenForIosV1_1_3,
 } from "@/server/api/controllers/ios/v1.1.0/conversations-controller";

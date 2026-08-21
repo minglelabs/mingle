@@ -23,7 +23,11 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
-import { isMessageSenderBlockedInConversation, materializePendingConversationInvitees } from '@/lib/app-conversations'
+import {
+  isMessageSenderBlockedInConversation,
+  listChannelMemberUserIdsBySessionKey,
+  materializePendingConversationInvitees,
+} from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -277,11 +281,13 @@ export async function handleLogClientEventV1(request: NextRequest) {
           console.error('Materializing pending conversation invitees failed:', error)
         }
 
-        // Lets any other member's already-open room pick this up without
-        // waiting on their own poll cycle. Fire-and-forget: this is a
-        // latency optimization, never something a message send should fail
-        // on, and a no-op wherever realtime push isn't configured.
-        notifyConversationMessage(tracking.sessionKey)
+        // Lets any other member's already-open room — and their
+        // conversation LIST screen, even with the room closed — pick this
+        // up without waiting on their own poll cycle. Fire-and-forget: this
+        // is a latency optimization, never something a message send should
+        // fail on, and a no-op wherever realtime push isn't configured.
+        const memberUserIds = await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
+        notifyConversationMessage(tracking.sessionKey, memberUserIds)
       }
     }
 

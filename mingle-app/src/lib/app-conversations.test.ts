@@ -102,6 +102,7 @@ import {
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
   isMessageSenderBlockedInConversation,
+  listChannelMemberUserIdsBySessionKey,
   listConversationChannelsForExternalUserId,
   listConversationMembersForUser,
   listConversationChannelsForUser,
@@ -1797,6 +1798,30 @@ describe("app-conversations", () => {
         where: { id: "conv-dm" },
         data: { pendingInviteeUserIds: [] },
       });
+    });
+  });
+
+  describe("listChannelMemberUserIdsBySessionKey", () => {
+    it("returns every real member's userId for the channel behind sessionKey", async () => {
+      mockFindConversationUnique.mockResolvedValue({
+        members: [{ userId: "user-1" }, { userId: "user-2" }],
+      });
+
+      const memberUserIds = await listChannelMemberUserIdsBySessionKey("session-dm");
+
+      expect(mockFindConversationUnique).toHaveBeenCalledWith({
+        where: { sessionKey: "session-dm" },
+        select: { members: { select: { userId: true } } },
+      });
+      expect(memberUserIds).toEqual(["user-1", "user-2"]);
+    });
+
+    it("returns an empty array when the sessionKey doesn't resolve to a channel", async () => {
+      mockFindConversationUnique.mockResolvedValue(null);
+
+      const memberUserIds = await listChannelMemberUserIdsBySessionKey("session-unknown");
+
+      expect(memberUserIds).toEqual([]);
     });
   });
 
