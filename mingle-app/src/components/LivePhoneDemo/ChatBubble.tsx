@@ -102,8 +102,9 @@ interface ChatBubbleProps {
   viewerUserId?: string | null
   /**
    * Opens the given real account's profile. Called when the viewer taps
-   * another member's avatar in a shared room — never for the viewer's own
-   * avatar, since the profile route rejects viewing your own id there.
+   * an identified member's avatar in a shared room. The profile surface
+   * resolves the viewer's own id through `/profile` and another member's id
+   * through `/users/{id}`, so both directions use the same callback.
    */
   onOpenProfile?: (userId: string) => void
 }
@@ -413,7 +414,7 @@ function ChatBubble({
   // — the server only sets it once the room has 2+ real members, so this
   // doubles as "is this a shared-room bubble" without a separate prop.
   const isSharedRoomMember = Boolean(utterance.speakerUserId)
-  const canOpenSpeakerProfile = isSharedRoomMember && !isOwnMessage && typeof onOpenProfile === 'function'
+  const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
     utterance.originalLang,
     [

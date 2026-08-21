@@ -384,7 +384,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('/avatars/animals/')
   })
 
-  it('makes another member\'s avatar an onOpenProfile button, but never the viewer\'s own avatar', () => {
+  it('makes both identified member avatars onOpenProfile buttons', () => {
     const otherHtml = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -418,7 +418,7 @@ describe('ChatBubble', () => {
     )
     const avatarColumnStart = ownHtml.indexOf('data-speaker-avatar-column')
     const avatarColumnHtml = ownHtml.slice(avatarColumnStart, avatarColumnStart + 400)
-    expect(avatarColumnHtml).not.toContain('<button')
+    expect(avatarColumnHtml).toContain('<button')
   })
 
   it('does not render visible tts icon buttons', () => {
