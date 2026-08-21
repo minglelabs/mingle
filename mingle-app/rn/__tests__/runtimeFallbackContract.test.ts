@@ -1,16 +1,7 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 declare const __dirname: string;
-
-type FileSystemModule = {
-  readFileSync: (filePath: string, encoding: 'utf8') => string;
-};
-
-type PathModule = {
-  join: (...paths: string[]) => string;
-  resolve: (...paths: string[]) => string;
-};
-
-const fs = require('fs') as FileSystemModule;
-const path = require('path') as PathModule;
 
 const rnRoot = path.resolve(__dirname, '..');
 
@@ -52,5 +43,52 @@ describe('runtime fallback contract', () => {
         '          }',
       ].join('\n'),
     );
+  });
+
+  it('does not activate the legacy host after the initial Mingle page settles', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+
+    expect(appSource).toContain(
+      'if (!initialLoadSettledRef.current && activateWebFallback()) return;',
+    );
+    expect(appSource).toContain(
+      '&& !initialLoadSettledRef.current\n      && !isPageReadyRef.current',
+    );
+    expect(appSource).toContain(
+      'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
+    );
+  });
+
+  it('keeps Android panel back handling separate from iOS WebView history state', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const myPageSource = readWorkspaceFile('../src/components/my-page.tsx');
+    const conversationListSource = readWorkspaceFile('../src/components/conversation-list.tsx');
+    const publicProfileSource = readWorkspaceFile('../src/components/public-user-profile-screen.tsx');
+    const profileImagePreviewSource = readWorkspaceFile('../src/components/profile-image-preview.tsx');
+    const followListSource = readWorkspaceFile('../src/components/follow-list-screen.tsx');
+    const profileShareSource = readWorkspaceFile('../src/components/profile-share-screen.tsx');
+    const livePhoneSource = readWorkspaceFile('../src/components/LivePhoneDemo/LivePhoneDemo.tsx');
+    const languageOnboardingSource = readWorkspaceFile('../src/components/LivePhoneDemo/LanguageOnboardingModal.tsx');
+    const mingleHomeSource = readWorkspaceFile('../src/components/mingle-home.tsx');
+
+    expect(appSource).toContain('canHandleAndroidBack?: boolean;');
+    expect(appSource).toContain(
+      '!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen',
+    );
+    expect(myPageSource).toContain('registerNativeBackHandler');
+    expect(myPageSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(conversationListSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(conversationListSource).toContain('if (rowActionMenu) {');
+    expect(publicProfileSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(publicProfileSource).toContain('open={showProfileImagePreview}');
+    expect(profileImagePreviewSource).toContain('registerNativeBackHandler');
+    expect(profileImagePreviewSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(followListSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(profileShareSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(livePhoneSource).toContain('if (deleteAccountDialogOpen) {');
+    expect(livePhoneSource).toContain('if (isComposerOpen) {');
+    expect(languageOnboardingSource).toContain('handleStepBack();');
+    expect(mingleHomeSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(mingleHomeSource).toContain('if (authPanelStep === "terms") {');
   });
 });

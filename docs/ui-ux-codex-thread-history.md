@@ -1178,3 +1178,47 @@
   - Stop an active source-room STT session before leaving it and keep the delayed iOS navigation guard alive through route settling.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: TypeScript, targeted ESLint, and history/navigation unit tests pass. Verify room-avatar and participant-profile flows for same-room continuation and different/new-room navigation, plus Connect and My Page profile starts, iOS edge-swipe back, Android back, and composer keyboard behavior on rebuilt apps.
+## 2026-08-20 - Add permission-aware profile locations
+
+- Surface: The location row below the handle on the authenticated My Page and public user profiles.
+- Issue: Profiles had no city-level location context, and a previously saved location could remain visible after the user disabled location access in the device settings.
+- User impact: Users could not share a useful, approximate location or open it on a map, and a stale profile location could be shown after permission was revoked.
+- Resolution:
+  - Show a localized location row below the handle. The authenticated user sees an add/update action; other profiles show the city and country or a localized empty state.
+  - Open a localized OpenStreetMap view from the row, with reverse-geocoded city and country labels requested in the active UI language.
+  - Keep the location permission request deferred until the user taps the add/update action. Page entry and page visibility changes perform a silent permission check only.
+  - Clear the saved location locally and through the profile API whenever native or browser permission is not granted. Store only rounded city-level coordinates and labels, never a precise address.
+  - Add native Location When In Use permission declarations and bridges for both iOS and Android; the existing iOS and Android back behavior closes the map modal first.
+- Data contract: Add nullable city-level location fields and permission verification timestamps to `app_users`; the existing v2.0.0 profile endpoints expose the nested location object.
+- Testing notes: Verify add/update requests the system permission only after the button tap, denied permission removes the row after returning from Settings, each primary UI language localizes the row and map labels, and Android back closes the map before exiting the screen.
+
+## 2026-08-20 - Present profile locations as a full-screen side panel
+
+- Surface: The profile location map opened from My Page or another user's profile.
+- Issue: The map opened as a compact bottom-sheet-style dialog, which made the map and supporting text feel cramped and inconsistent with the app's existing menu pages.
+- User impact: Users had less map context and the title, location label, permission description, and actions were difficult to read.
+- Resolution:
+  - Replace the compact dialog with a full-screen panel that slides in from the right using the same transition direction as the profile and settings menus.
+  - Use a menu-style top-left back button and preserve the native back handler so Android back closes the map panel before the underlying profile or app.
+  - Increase the map panel typography and action target sizes, and allocate more vertical space to the map.
+  - Narrow the OpenStreetMap embed bounds to keep city labels readable at the larger panel size.
+- Data contract: None.
+- Testing notes: Verify the panel enters from the right on iOS and Android, the top-left back button and Android back close only the panel, the map labels are readable, and the enlarged controls remain localized in all supported UI languages.
+
+## 2026-08-20 - Preserve viewer-language profile location labels after remount
+
+- Surface: The localized city and country label on another user's profile.
+- Issue: The first visit could briefly show the profile owner's stored language before the viewer-language reverse-geocoding response arrived. On later visits, a cached reverse-geocoding result could be overwritten by a zero-delay fallback reset, leaving the label in the stored language.
+- User impact: An English viewer could see a Korean location label again after leaving and reopening the same profile.
+- Resolution: Keep the current profile data as the render fallback and remove the delayed fallback reset. The viewer-language result now wins consistently for both network and cached responses.
+- Data contract: None. The server still stores the profile's fallback city and country; the client resolves display labels with the viewer's locale.
+- Testing notes: Verify the first render can transition from the stored label to the viewer-language label, reopening the profile preserves the viewer-language label, and a failed reverse-geocoding request still falls back safely.
+
+## 2026-08-20 - Localize profile map labels with Google Maps Embed
+
+- Surface: The full-screen map opened from a profile's city and country label.
+- Issue: The profile label was localized for the viewer, but the embedded OpenStreetMap standard layer could continue rendering local-language map labels because its standard raster tiles are not selected per viewer locale.
+- User impact: An English viewer could see `Seoul, South Korea` above a map that still displayed Korean place labels.
+- Resolution: Replace the standard OpenStreetMap iframe with Google Maps Embed and pass the viewer's primary locale through the `language` parameter. Keep the existing coordinates and full-screen panel interaction unchanged.
+- Data contract: None. Profile coordinates and localized reverse-geocoded labels remain unchanged.
+- Testing notes: Verify English, Korean, and the remaining primary UI locales render the Google map with the requested language when `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY` is configured. Verify the panel shows the existing map-unavailable fallback when the key is absent.

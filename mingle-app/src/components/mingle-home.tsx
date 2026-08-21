@@ -28,6 +28,10 @@ import {
   type AuthPanelStep,
 } from "@/components/mingle-home.auth-contract";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 import {
   readPendingBirthDate,
@@ -1127,6 +1131,45 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   ]);
 
   useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      legalSheetKind
+      || isEmailSheetOpen
+      || authPanelStep === "terms"
+    );
+    if (!props.authOnly && !canHandleAndroidBack) return;
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [authPanelStep, isEmailSheetOpen, legalSheetKind, props.authOnly]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (legalSheetKind) {
+      handleCloseLegalSheet();
+      return true;
+    }
+    if (isEmailSheetOpen) {
+      handleCloseEmailSheet();
+      return true;
+    }
+    if (authPanelStep === "terms") {
+      handleBackToProviderSelect();
+      return true;
+    }
+    if (isSigningIn || isEmailSubmitting) return true;
+    return false;
+  }, 30), [
+    authPanelStep,
+    handleBackToProviderSelect,
+    handleCloseEmailSheet,
+    handleCloseLegalSheet,
+    isEmailSheetOpen,
+    isEmailSubmitting,
+    isSigningIn,
+    legalSheetKind,
+  ]);
+
+  useEffect(() => {
     return () => {
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
@@ -1502,7 +1545,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                   className="flex w-[300%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   style={{ transform: `translateX(-${(emailSheetSlideIndex * 100) / 3}%)` }}
                 >
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthLoginTitle}
@@ -1600,7 +1643,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </form>
                   </div>
 
-                  <div className="max-h-[88vh] w-1/3 shrink-0 overflow-y-auto px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[1.85rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthSignupTitle}
@@ -1719,7 +1762,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative flex items-start justify-between gap-3">
                       <button
                         type="button"

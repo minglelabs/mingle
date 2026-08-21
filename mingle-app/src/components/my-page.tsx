@@ -12,8 +12,10 @@ import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileLocation from "@/components/profile-location";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
+import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
@@ -59,8 +61,26 @@ import {
   type SttLanguageCode,
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import { motion } from "framer-motion";
+import {
+  formatBirthDate,
+  isOldEnoughForSignup,
+  parseBirthDate,
+  type BirthDateParts,
+} from "@/lib/birth-date";
+import { resolveSignupCopy } from "@/i18n/signup-copy";
+import { checkProfileLocationPermission } from "@/components/profile-location";
+import {
+  normalizeProfileLocation,
+  type ProfileLocationRecord,
+} from "@/lib/profile-location";
+import {
+  type NativeLocationPermission,
+} from "@/lib/native-location";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -83,6 +103,8 @@ type ProfileRecord = {
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
+  location: ProfileLocationRecord | null;
+  birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
 };
@@ -95,7 +117,25 @@ type ProfileDraft = {
   bio: string;
   nationality: SttLanguageCode | null;
   primaryLanguages: SttLanguageCode[];
+  birthDate: BirthDateParts | null;
 };
+
+const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
+  year: 2000,
+  month: 1,
+  day: 1,
+};
+
+function parseProfileBirthDate(value: unknown): BirthDateParts | null {
+  const parsed = parseBirthDate(value);
+  return parsed
+    ? {
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        day: parsed.getUTCDate(),
+      }
+    : null;
+}
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
 
@@ -703,10 +743,32 @@ function ProfileSettingsPanel({
   }, []);
 
   useEffect(() => registerNativeBackHandler(() => {
-    if (!open || !managementPage) return false;
+    if (!open) return false;
+    if (isWithdrawConfirmModalOpen) {
+      if (!isWithdrawing) setIsWithdrawConfirmModalOpen(false);
+      return true;
+    }
+    if (isDeactivateModalOpen) {
+      if (!isDeactivating) setIsDeactivateModalOpen(false);
+      return true;
+    }
+    if (isAccountActionModalOpen) {
+      setIsAccountActionModalOpen(false);
+      return true;
+    }
+    if (!managementPage) return false;
     closeManagementPage();
     return true;
-  }, 30), [closeManagementPage, managementPage, open]);
+  }, 30), [
+    closeManagementPage,
+    isAccountActionModalOpen,
+    isDeactivateModalOpen,
+    isDeactivating,
+    isWithdrawConfirmModalOpen,
+    isWithdrawing,
+    managementPage,
+    open,
+  ]);
 
   const handleDeactivate = useCallback(async () => {
     if (isDeactivating) return;
@@ -1239,6 +1301,7 @@ function ProfileEditPanel({
   initialName,
   initialHandle,
   initialPrimaryLanguages,
+  initialBirthDate,
   onClose,
   onSave,
   open,
@@ -1251,6 +1314,7 @@ function ProfileEditPanel({
   initialName: string;
   initialHandle: string;
   initialPrimaryLanguages: readonly string[];
+  initialBirthDate?: BirthDateParts | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -1261,6 +1325,8 @@ function ProfileEditPanel({
   const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
+  const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+  const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
@@ -1278,12 +1344,18 @@ function ProfileEditPanel({
     primaryLanguagesLabel: dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
       ?? "Primary languages",
+    primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
+      ?? (locale === "ko"
+        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        : "Choose up to five primary languages in the order they should appear on your profile."),
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
     saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
     handleTaken: dictionary.profile.handleTakenMessage ?? (locale === "ko" ? "이미 사용 중인 아이디입니다." : "That handle is already taken."),
     handleInvalid: dictionary.profile.handleInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
+  const signupCopy = useMemo(() => resolveSignupCopy(locale), [locale]);
+  const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
   const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
   const initialImageCropScale = initialImageCrop?.scale;
   const initialImageCropX = initialImageCrop?.x;
@@ -1303,12 +1375,14 @@ function ProfileEditPanel({
     setHandle(initialHandle);
     setBio(initialBio);
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
+    setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+    setHasBirthDate(Boolean(initialBirthDate));
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
     setSaveError(null);
-  }, [initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+  }, [initialBirthDate, initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   const handleSave = useCallback(async () => {
     if (isSaving) return;
@@ -1324,6 +1398,7 @@ function ProfileEditPanel({
         bio: bio.trim(),
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
+        birthDate: hasBirthDate ? birthDate : null,
       });
       if (saved === "saved") {
         onClose();
@@ -1335,7 +1410,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, hasBirthDate, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
 
   return (
     <SlideSurface
@@ -1365,7 +1440,7 @@ function ProfileEditPanel({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={isSaving}
+              disabled={isSaving || !isEligibleAge}
               className="min-w-[52px] text-[15px] font-semibold text-blue-600 transition active:opacity-60 disabled:opacity-50"
             >
               {isSaving ? "…" : copy.saveAction}
@@ -1429,7 +1504,34 @@ function ProfileEditPanel({
               </label>
 
               <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">
+                  {signupCopy.birthDateTitle}
+                </legend>
+                <SignupBirthDatePicker
+                  value={birthDate}
+                  onChange={(nextBirthDate) => {
+                    setBirthDate(nextBirthDate);
+                    setHasBirthDate(true);
+                  }}
+                  yearLabel={signupCopy.yearLabel}
+                  monthLabel={signupCopy.monthLabel}
+                  dayLabel={signupCopy.dayLabel}
+                />
+                <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
+                  {signupCopy.birthDateDescription}
+                </p>
+                {!isEligibleAge ? (
+                  <p className="mt-2 text-[12px] font-medium text-rose-600" role="alert">
+                    {signupCopy.birthDateUnderage}
+                  </p>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.primaryLanguagesLabel}</legend>
+                <p className="mb-3 text-[12px] leading-relaxed text-gray-500">
+                  {copy.primaryLanguagesDescription}
+                </p>
                 <LanguagePreferencePicker
                   selectedLanguages={primaryLanguages}
                   onToggleLanguage={(code) => {
@@ -1476,6 +1578,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     nationality: null,
     primaryLanguages: [],
     defaultConversationLanguages: [],
+    location: null,
+    birthDate: null,
     followersCount: 0,
     followingCount: 0,
   }));
@@ -1505,6 +1609,16 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const publicProfileSurface = [...myPageSurfaceHistory]
     .reverse()
     .find((entry) => entry.id === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID);
+  const [isLocationMapOpen, setIsLocationMapOpen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<NativeLocationPermission | "checking">(
+    () => "checking",
+  );
+  const locationPermissionRef = useRef<NativeLocationPermission | "checking">(locationPermission);
+  const locationPermissionSyncVersionRef = useRef(0);
+
+  useEffect(() => {
+    locationPermissionRef.current = locationPermission;
+  }, [locationPermission]);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
@@ -1589,6 +1703,74 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     });
   }, []);
 
+  useEffect(() => registerNativeBackHandler(() => {
+    if (showProfileImagePreview) {
+      setShowProfileImagePreview(false);
+      return true;
+    }
+    if (isLocationMapOpen) {
+      setIsLocationMapOpen(false);
+      return true;
+    }
+    if (showProfileEdit) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID });
+      return true;
+    }
+    if (showProfileSettings) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID });
+      return true;
+    }
+    if (showProfileShare) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID });
+      return true;
+    }
+    if (showFollowList) {
+      closeMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID });
+      return true;
+    }
+    if (publicProfileSurface?.value) {
+      closeMyPageSurface({
+        id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+        value: publicProfileSurface.value,
+      });
+      return true;
+    }
+    return false;
+  }, 10), [
+    closeMyPageSurface,
+    isLocationMapOpen,
+    publicProfileSurface?.value,
+    showFollowList,
+    showProfileEdit,
+    showProfileImagePreview,
+    showProfileSettings,
+    showProfileShare,
+  ]);
+
+  useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      isLocationMapOpen
+      || showProfileImagePreview
+      || showProfileEdit
+      || showProfileSettings
+      || showProfileShare
+      || showFollowList
+      || publicProfileSurface?.value
+    );
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [
+    isLocationMapOpen,
+    publicProfileSurface?.value,
+    showFollowList,
+    showProfileEdit,
+    showProfileImagePreview,
+    showProfileSettings,
+    showProfileShare,
+  ]);
+
   const handleOpenPublicProfile = useCallback((userId: string) => {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
@@ -1654,6 +1836,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
+          location: locationPermissionRef.current !== "granted"
+            ? null
+            : normalizeProfileLocation(data.location),
+          birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
         });
@@ -1666,6 +1852,93 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       cancelled = true;
     };
   }, [sessionUserId]);
+
+  const syncLocationPermission = useCallback(async () => {
+    if (!sessionUserId) return;
+    const syncVersion = ++locationPermissionSyncVersionRef.current;
+    const nextPermission = await checkProfileLocationPermission();
+    if (syncVersion !== locationPermissionSyncVersionRef.current) return;
+    locationPermissionRef.current = nextPermission;
+    setLocationPermission(nextPermission);
+    if (nextPermission === "granted") {
+      try {
+        await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locationPermissionStatus: "granted" }),
+        });
+      } catch {
+        // The native permission remains authoritative for the current screen.
+      }
+      return;
+    }
+    setProfile((current) => ({ ...current, location: null }));
+    const cleanupStatus = nextPermission === "unknown" ? "unavailable" : nextPermission;
+    try {
+      await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationPermissionStatus: cleanupStatus }),
+      });
+    } catch {
+      // The local profile is cleared immediately even if the cleanup request is retried later.
+    }
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    const initialSyncTimer = window.setTimeout(() => {
+      void syncLocationPermission();
+    }, 0);
+
+    const handlePageVisible = () => {
+      if (document.visibilityState === "hidden") return;
+      void syncLocationPermission();
+    };
+    window.addEventListener("pageshow", handlePageVisible);
+    document.addEventListener("visibilitychange", handlePageVisible);
+    return () => {
+      window.clearTimeout(initialSyncTimer);
+      window.removeEventListener("pageshow", handlePageVisible);
+      document.removeEventListener("visibilitychange", handlePageVisible);
+    };
+  }, [sessionUserId, syncLocationPermission]);
+
+  const handleSaveLocation = useCallback(async (nextLocation: ProfileLocationRecord) => {
+    locationPermissionSyncVersionRef.current += 1;
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: nextLocation,
+        locationPermissionStatus: "granted",
+      }),
+    });
+    if (!response.ok) throw new Error("location_save_failed");
+    const data = await response.json() as { location?: unknown };
+    const savedLocation = normalizeProfileLocation(data.location) ?? nextLocation;
+    locationPermissionRef.current = "granted";
+    setLocationPermission("granted");
+    setProfile((current) => ({ ...current, location: savedLocation }));
+  }, []);
+
+  const handleClearLocation = useCallback(async () => {
+    locationPermissionSyncVersionRef.current += 1;
+    locationPermissionRef.current = "denied";
+    setLocationPermission("denied");
+    setProfile((current) => ({ ...current, location: null }));
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationPermissionStatus: "denied" }),
+    });
+    if (!response.ok) throw new Error("location_clear_failed");
+  }, []);
+
+  const handleLocationMapOpenChange = useCallback((open: boolean) => {
+    if (open) locationPermissionSyncVersionRef.current += 1;
+    setIsLocationMapOpen(open);
+  }, []);
 
   const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
     try {
@@ -1701,6 +1974,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           bio: draft.bio,
           nationality: draft.nationality,
           primaryLanguages: draft.primaryLanguages,
+          birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -1720,6 +1994,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         ...current,
         handle: typeof saved.handle === "string" ? saved.handle : current.handle,
         bio: typeof saved.bio === "string" ? saved.bio : current.bio,
+        birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         primaryLanguages: sanitizeSttLanguageSelection(
           saved.primaryLanguages,
@@ -1824,6 +2099,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialName={name}
         initialHandle={profile.handle ?? ""}
         initialPrimaryLanguages={primaryLanguages}
+        initialBirthDate={profile.birthDate}
         onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
         onSave={handleSaveProfile}
         open={showProfileEdit}
@@ -1951,6 +2227,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           <div className="mt-4 pl-2">
             <p className="text-[15px] font-semibold text-slate-950">{name}</p>
             {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <ProfileLocation
+              profileLocation={locationPermission === "granted" ? profile.location : null}
+              locale={locale}
+              isOwnProfile
+              onSaveLocation={handleSaveLocation}
+              onClearLocation={handleClearLocation}
+              onMapOpenChange={handleLocationMapOpenChange}
+            />
             {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
           </div>
 

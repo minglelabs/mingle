@@ -9,6 +9,10 @@ import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 
 export type FollowListTab = "followers" | "following";
 
@@ -99,6 +103,22 @@ export default function FollowListScreen({
     }
     router.push(`/${locale}/mypage`);
   }, [locale, onClose, router]);
+
+  const handleBack = useCallback(() => {
+    navigateBack();
+  }, [navigateBack]);
+
+  useEffect(() => {
+    postNativeAndroidBackCapability(true);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    void handleBack();
+    return true;
+  }, 20), [handleBack]);
 
   const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const touch = event.touches[0];

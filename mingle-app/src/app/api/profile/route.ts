@@ -12,6 +12,7 @@ import {
   isOldEnoughForSignup,
   parseBirthDate,
 } from "@/lib/birth-date";
+import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
@@ -27,11 +28,28 @@ export const runtime = "nodejs";
 
 const MAX_NAME_LENGTH = 40;
 const MAX_BIO_LENGTH = 160;
+const MAX_LOCATION_LABEL_LENGTH = 120;
+const LOCATION_PERMISSION_STATUSES = [
+  "granted",
+  "denied",
+  "blocked",
+  "not_determined",
+  "unavailable",
+] as const;
+type LocationPermissionStatus = (typeof LOCATION_PERMISSION_STATUSES)[number];
 
-function profileResponse(profile: UserProfile): NextResponse {
+type PrivateProfileResponse = UserProfile & {
+  birthDate?: string | null;
+};
+
+function profileResponse(profile: PrivateProfileResponse): NextResponse {
   return NextResponse.json(profile, {
     headers: { "Cache-Control": "private, no-store" },
   });
+}
+
+function serializePrivateBirthDate(value: Date | null | undefined): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
 }
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
@@ -95,6 +113,83 @@ function normalizeCropValue(
   return { value, valid: true };
 }
 
+function normalizeLocationText(value: unknown): { value: string | null; valid: boolean } {
+  if (value === null || value === undefined) return { value: null, valid: true };
+  if (typeof value !== "string") return { value: null, valid: false };
+  const normalized = value.trim();
+  if (normalized.length > MAX_LOCATION_LABEL_LENGTH) return { value: null, valid: false };
+  return { value: normalized || null, valid: true };
+}
+
+function normalizeLocationCode(value: unknown): { value: string | null; valid: boolean } {
+  if (value === null || value === undefined) return { value: null, valid: true };
+  if (typeof value !== "string") return { value: null, valid: false };
+  const normalized = value.trim().toLowerCase();
+  if (normalized && !/^[a-z]{2,3}$/.test(normalized)) {
+    return { value: null, valid: false };
+  }
+  return { value: normalized || null, valid: true };
+}
+
+function normalizeLocation(value: unknown): {
+  value: {
+    locationLatitude: number;
+    locationLongitude: number;
+    locationCity: string | null;
+    locationCountry: string | null;
+    locationCountryCode: string | null;
+  } | null;
+  valid: boolean;
+} {
+  if (value === null) return { value: null, valid: true };
+  if (!isRecord(value)) return { value: null, valid: false };
+
+  const latitude = value.latitude;
+  const longitude = value.longitude;
+  if (
+    typeof latitude !== "number"
+    || !Number.isFinite(latitude)
+    || latitude < -90
+    || latitude > 90
+    || typeof longitude !== "number"
+    || !Number.isFinite(longitude)
+    || longitude < -180
+    || longitude > 180
+  ) {
+    return { value: null, valid: false };
+  }
+
+  const city = normalizeLocationText(value.city);
+  const country = normalizeLocationText(value.country);
+  const countryCode = normalizeLocationCode(value.countryCode);
+  if (!city.valid || !country.valid || !countryCode.valid) {
+    return { value: null, valid: false };
+  }
+
+  return {
+    value: {
+      // Keep only city-level precision. The profile never needs a precise home address.
+      locationLatitude: Math.round(latitude * 100) / 100,
+      locationLongitude: Math.round(longitude * 100) / 100,
+      locationCity: city.value,
+      locationCountry: country.value,
+      locationCountryCode: countryCode.value,
+    },
+    valid: true,
+  };
+}
+
+function normalizeLocationPermissionStatus(value: unknown): {
+  value: LocationPermissionStatus | null;
+  valid: boolean;
+} {
+  if (value === undefined) return { value: null, valid: true };
+  if (typeof value !== "string") return { value: null, valid: false };
+  return LOCATION_PERMISSION_STATUSES.includes(value as LocationPermissionStatus)
+    ? { value: value as LocationPermissionStatus, valid: true }
+    : { value: null, valid: false };
+}
+
 export async function GET() {
   const session = await getServerSession(getAuthOptions());
   const userId = getSessionUserId(session);
@@ -107,7 +202,14 @@ export async function GET() {
     return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
   }
 
-  return profileResponse(profile);
+  const privateFields = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { birthDate: true },
+  });
+  return profileResponse({
+    ...profile,
+    birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+  });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -135,10 +237,64 @@ export async function PATCH(request: NextRequest) {
     primaryLanguages?: string[];
     defaultConversationLanguages?: string[];
     birthDate?: Date | null;
+    discoverySource?: DiscoverySource | null;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
+    locationLatitude?: number | null;
+    locationLongitude?: number | null;
+    locationCity?: string | null;
+    locationCountry?: string | null;
+    locationCountryCode?: string | null;
+    locationUpdatedAt?: Date | null;
+    locationPermissionVerifiedAt?: Date | null;
   } = {};
+
+  const hasLocation = Object.prototype.hasOwnProperty.call(body, "location");
+  const hasLocationPermissionStatus = Object.prototype.hasOwnProperty.call(body, "locationPermissionStatus");
+  const locationPermissionStatus = normalizeLocationPermissionStatus(body.locationPermissionStatus);
+  if (!locationPermissionStatus.valid) {
+    return NextResponse.json({ error: "invalid_location_permission_status" }, { status: 400 });
+  }
+
+  if (hasLocation) {
+    const location = normalizeLocation(body.location);
+    if (!location.valid) {
+      return NextResponse.json({ error: "invalid_location" }, { status: 400 });
+    }
+    if (location.value) {
+      Object.assign(data, location.value, {
+        locationUpdatedAt: new Date(),
+        locationPermissionVerifiedAt: new Date(),
+      });
+    } else {
+      Object.assign(data, {
+        locationLatitude: null,
+        locationLongitude: null,
+        locationCity: null,
+        locationCountry: null,
+        locationCountryCode: null,
+        locationUpdatedAt: null,
+        locationPermissionVerifiedAt: null,
+      });
+    }
+  }
+
+  if (hasLocationPermissionStatus) {
+    if (locationPermissionStatus.value === "granted") {
+      data.locationPermissionVerifiedAt = new Date();
+    } else {
+      Object.assign(data, {
+        locationLatitude: null,
+        locationLongitude: null,
+        locationCity: null,
+        locationCountry: null,
+        locationCountryCode: null,
+        locationUpdatedAt: null,
+        locationPermissionVerifiedAt: null,
+      });
+    }
+  }
 
   if (Object.prototype.hasOwnProperty.call(body, "handle")) {
     const handle = normalizeHandle(body.handle);
@@ -215,6 +371,16 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, "discoverySource")) {
+    if (body.discoverySource === null) {
+      data.discoverySource = null;
+    } else if (!isDiscoverySource(body.discoverySource)) {
+      return NextResponse.json({ error: "invalid_discovery_source" }, { status: 400 });
+    } else {
+      data.discoverySource = body.discoverySource;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {
     const imageCropScale = normalizeCropValue(
       body.imageCropScale,
@@ -253,7 +419,14 @@ export async function PATCH(request: NextRequest) {
       data,
       select: userProfileSelect,
     });
-    return profileResponse(serializeUserProfile(updated));
+    const privateFields = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { birthDate: true },
+    });
+    return profileResponse({
+      ...serializeUserProfile(updated),
+      birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+    });
   } catch (error) {
     if (
       typeof error === "object"

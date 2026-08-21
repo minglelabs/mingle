@@ -1,7 +1,10 @@
 "use client";
 
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import LanguageFlag from "@/components/language-flag";
 import { X, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -19,26 +22,6 @@ type ProfileImagePreviewProps = {
 };
 
 const PREVIEW_MAX_SIZE = 420;
-
-type NativeBridgeWindow = Window & {
-  ReactNativeWebView?: {
-    postMessage?: (message: string) => void;
-  };
-};
-
-function postNativeBackAvailability(canHandleNativeBack: boolean): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const bridgeWindow = window as NativeBridgeWindow;
-    bridgeWindow.ReactNativeWebView?.postMessage(JSON.stringify({
-      type: "native_navigation_state",
-      payload: { canHandleNativeBack },
-    }));
-  } catch {
-    // Browser and WebView navigation remain available if the bridge is unavailable.
-  }
-}
 
 export default function ProfileImagePreview({
   open,
@@ -79,8 +62,8 @@ export default function ProfileImagePreview({
   useEffect(() => {
     if (!open) return;
 
-    postNativeBackAvailability(true);
-    return () => postNativeBackAvailability(false);
+    postNativeAndroidBackCapability(true);
+    return () => postNativeAndroidBackCapability(false);
   }, [open]);
 
   useEffect(() => {

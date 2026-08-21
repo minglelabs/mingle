@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   buildLanguageSelectorItems,
   filterLanguageSelectorItems,
@@ -18,6 +18,12 @@ import {
   isOldEnoughForSignup,
   type BirthDateParts,
 } from "@/lib/birth-date";
+import {
+  resolveDiscoverySourceCopy,
+  shuffleDiscoverySourceCodes,
+  type DiscoverySource,
+} from "@/lib/discovery-source";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -28,6 +34,7 @@ const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
 export type LanguageOnboardingConfirmPayload = {
   language: string;
   birthDate: BirthDateParts;
+  discoverySource: DiscoverySource;
 };
 
 interface LanguageOnboardingModalProps {
@@ -39,7 +46,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "birth-date";
+type OnboardingStep = "language" | "birth-date" | "discovery-source";
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
 // state initializers below always pick up the latest defaults with no reset effect.
@@ -56,6 +63,8 @@ export default function LanguageOnboardingModal({
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState(initialLanguage);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
+  const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
 
   // The modal's own copy previews in whichever language is tentatively tapped
@@ -63,6 +72,13 @@ export default function LanguageOnboardingModal({
   // the choice before the user commits to it.
   const copy = useMemo(() => resolveLanguageOnboardingCopy(language), [language]);
   const signupCopy = useMemo(() => resolveSignupCopy(language), [language]);
+  const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
+  const discoveryOptions = useMemo(() => {
+    const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
+    return discoveryOptionCodes
+      .map((code) => optionsByCode.get(code))
+      .filter((option): option is (typeof discoveryCopy.options)[number] => Boolean(option));
+  }, [discoveryCopy, discoveryOptionCodes]);
   const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
 
   useEffect(() => {
@@ -90,6 +106,10 @@ export default function LanguageOnboardingModal({
     };
   }, [dismissible, isConfirming, onClose]);
 
+  useEffect(() => {
+    setDiscoveryOptionCodes(shuffleDiscoverySourceCodes());
+  }, []);
+
   // The list stays in the app's current ui locale regardless of which output
   // language is tentatively selected -- unlike the old "my language" step, this
   // selection doesn't represent a language the user necessarily reads, so
@@ -107,22 +127,34 @@ export default function LanguageOnboardingModal({
     [filteredItems],
   );
 
+  const handleStepBack = useCallback(() => {
+    if (isConfirming) return;
+    setStep((currentStep) => currentStep === "discovery-source" ? "birth-date" : "language");
+  }, [isConfirming]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (isConfirming) return true;
+    if (step === "language") return true;
+    handleStepBack();
+    return true;
+  }, 30), [handleStepBack, isConfirming, step]);
+
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
     setStep("birth-date");
   };
 
-  const handleBirthDateStepBack = () => {
-    if (isConfirming) return;
-    setStep("language");
+  const handleBirthDateStepNext = () => {
+    if (!isEligibleAge) return;
+    setStep("discovery-source");
   };
 
   const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge) return;
+    if (isConfirming || !isEligibleAge || !discoverySource) return;
     setIsConfirming(true);
     try {
-      await onConfirm({ language, birthDate });
+      await onConfirm({ language, birthDate, discoverySource });
     } finally {
       setIsConfirming(false);
     }
@@ -194,10 +226,10 @@ export default function LanguageOnboardingModal({
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div aria-hidden="true" style={{ height: "env(safe-area-inset-top, 0px)" }} />
           <div className="flex h-12 items-center justify-between px-2">
-            {step === "birth-date" ? (
+            {step !== "language" ? (
               <button
                 type="button"
-                onClick={handleBirthDateStepBack}
+                onClick={handleStepBack}
                 disabled={isConfirming}
                 className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={signupCopy.backAction}
@@ -251,7 +283,7 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
-          ) : (
+          ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
                 {signupCopy.birthDateStep}
@@ -264,6 +296,21 @@ export default function LanguageOnboardingModal({
               </h2>
               <p className="text-[0.85rem] leading-relaxed text-slate-500">
                 {signupCopy.birthDateDescription}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {discoveryCopy.step}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {discoveryCopy.title}
+              </h2>
+              <p className="text-[0.85rem] leading-relaxed text-slate-500">
+                {discoveryCopy.description}
               </p>
             </div>
           )}
@@ -306,7 +353,7 @@ export default function LanguageOnboardingModal({
               </div>
             )}
           </div>
-        ) : (
+        ) : step === "birth-date" ? (
           <div
             className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
@@ -331,6 +378,44 @@ export default function LanguageOnboardingModal({
               </div>
             </div>
           </div>
+        ) : (
+          <div
+            className="flex flex-1 flex-col overflow-y-auto px-5 py-5"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
+              {discoveryOptions.map((option) => {
+                const isSelected = discoverySource === option.code;
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    disabled={isConfirming}
+                    onClick={() => setDiscoverySource(option.code)}
+                    aria-pressed={isSelected}
+                    className={`flex min-h-[62px] w-full items-center gap-3 rounded-[1.35rem] border px-4 text-left transition hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] ${
+                      isSelected
+                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+                        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                        isSelected
+                          ? "border-amber-500 bg-amber-500 text-white"
+                          : "border-slate-300 bg-white text-transparent"
+                      }`}
+                    >
+                      <Check size={16} strokeWidth={3.2} />
+                    </span>
+                    <span className="min-w-0 flex-1 text-[0.98rem] font-semibold leading-snug text-slate-900">
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         <footer
@@ -349,11 +434,20 @@ export default function LanguageOnboardingModal({
                 {signupCopy.continueAction}
               </button>
             </>
+          ) : step === "birth-date" ? (
+            <button
+              type="button"
+              onClick={handleBirthDateStepNext}
+              disabled={isConfirming || !isEligibleAge}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
           ) : (
             <button
               type="button"
               onClick={handleFinalConfirm}
-              disabled={isConfirming || !isEligibleAge}
+              disabled={isConfirming || !discoverySource}
               aria-busy={isConfirming}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >

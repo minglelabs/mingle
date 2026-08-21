@@ -75,6 +75,7 @@ describe("/api/users/[userId] route", () => {
       bio: "Hello",
       nationality: "ko",
       primaryLanguages: ["ko"],
+      location: null,
       followersCount: 4,
       followingCount: 2,
       isFollowing: true,

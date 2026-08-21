@@ -77,6 +77,10 @@ import {
   shouldFallbackHttpStatus,
 } from './src/fallbackTargets';
 import {
+  extractAndroidIntentBrowserFallbackUrl,
+  shouldOpenNativeExternalUrl,
+} from './src/externalNavigation';
+import {
   buildConversationRestoreWebUrl,
   classifyConversationWebUrl,
   readNativeConversationRestorePayload,
@@ -148,6 +152,11 @@ type NativePushRegistrationInfo = {
 type NativePushNotificationModule = {
   registerForPushNotifications?: () => Promise<NativePushRegistrationInfo>;
   getRegistrationInfo?: () => Promise<NativePushRegistrationInfo>;
+};
+type NativeLocationModule = {
+  checkLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
+  requestLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
+  getCurrentLocation?: () => Promise<{ latitude?: unknown; longitude?: unknown; accuracy?: unknown }>;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -378,6 +387,17 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
   return `${normalizedDescription} (현재 앱 URL이 ${currentWebUrl} 입니다. 실기기에서는 127.0.0.1/localhost에 접속할 수 없습니다. scripts/devbox profile --profile device 후 --device-app-env prod 또는 dev로 설치해 주세요.)`;
 }
 
+function openNativeExternalUrl(rawUrl: string): void {
+  void Linking.openURL(rawUrl).catch(() => {
+    const fallbackUrl = extractAndroidIntentBrowserFallbackUrl(rawUrl);
+    if (!fallbackUrl || fallbackUrl === rawUrl) return;
+
+    void Linking.openURL(fallbackUrl).catch(() => {
+      // Ignore external app/browser failures so the Mingle WebView remains intact.
+    });
+  });
+}
+
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
 const NATIVE_CONVERSATION_RESTORE_STORAGE = (NativeModules.NativeRuntimeConfigModule || {}) as NativeConversationRestoreStorageModule;
@@ -486,6 +506,8 @@ const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
 const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
+const NATIVE_LOCATION_EVENT = 'mingle:native-location';
+const NATIVE_LOCATION_QUEUE_LIMIT = 8;
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
 const NATIVE_PUSH_TOKEN_EVENT = 'mingle:native-push-token';
 const NATIVE_PUSH_REGISTRATION_QUEUE_LIMIT = 4;
@@ -640,6 +662,13 @@ type NativeOpenAppSettingsCommand = {
   };
 };
 
+type NativeLocationCommand = {
+  type: 'native_location_check' | 'native_location_request';
+  payload?: {
+    requestId?: string;
+  };
+};
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -668,6 +697,7 @@ type NativeNavigationStateCommand = {
     canGoBack?: boolean;
     canGoForward?: boolean;
     canHandleNativeBack?: boolean;
+    canHandleAndroidBack?: boolean;
     url?: string;
     // Full-screen overlays (e.g. the profile screen) that render on top of a
     // conversation room without changing the URL need to temporarily disable
@@ -755,6 +785,7 @@ type WebViewCommand =
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeOpenAppSettingsCommand
+  | NativeLocationCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -778,6 +809,23 @@ type NativeSttEvent =
   | { type: 'permission'; permission: string; platform?: string }
   | { type: 'capabilities'; openAppSettings: boolean }
   | { type: 'close'; reason: string };
+
+type NativeLocationPermission = 'granted' | 'denied' | 'blocked' | 'not_determined' | 'unavailable' | 'unknown';
+type NativeLocationEvent =
+  | { type: 'permission'; permission: NativeLocationPermission; requestId?: string; platform?: string }
+  | { type: 'location'; latitude: number; longitude: number; accuracy?: number | null; requestId?: string }
+  | { type: 'error'; code: string; requestId?: string };
+
+function normalizeNativeLocationPermission(value: unknown): NativeLocationPermission {
+  return value === 'granted'
+    || value === 'denied'
+    || value === 'blocked'
+    || value === 'not_determined'
+    || value === 'unavailable'
+    || value === 'unknown'
+    ? value
+    : 'unknown';
+}
 
 type NativeUiEvent = {
   type: 'scroll_to_top';
@@ -1211,6 +1259,7 @@ function AppInner(): React.JSX.Element {
   const nativeSttMessageSequenceRef = useRef(0);
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
+  const pendingNativeLocationEventsRef = useRef<NativeLocationEvent[]>([]);
   const pendingNativePushRegistrationsRef = useRef<NativePushRegistrationInfo[]>([]);
   const pendingProfileLinkUserIdRef = useRef<string | null>(null);
   const lastHandledProfileLinkRef = useRef('');
@@ -1532,6 +1581,10 @@ function AppInner(): React.JSX.Element {
       recordProfileLinkTrace('webview_profile_link_intercepted');
       return false;
     }
+    if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
+      openNativeExternalUrl(rawUrl);
+      return false;
+    }
     return true;
   }, [handleIncomingProfileLinkOnce]);
   const flushPendingProfileLinkToWeb = useCallback(() => {
@@ -1755,7 +1808,7 @@ function AppInner(): React.JSX.Element {
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
-  const [canWebViewHandleNativeBack, setCanWebViewHandleNativeBack] = useState(false);
+  const [canWebViewHandleAndroidBack, setCanWebViewHandleAndroidBack] = useState(false);
   const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
@@ -1868,7 +1921,7 @@ function AppInner(): React.JSX.Element {
       if (versionGate.status === 'force_update') {
         return false;
       }
-      if (!canWebViewGoBack && !canWebViewHandleNativeBack && !isNativeMenuOverlayOpen) {
+      if (!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen) {
         return false;
       }
       webViewRef.current?.injectJavaScript(`
@@ -1895,7 +1948,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, canWebViewHandleNativeBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
+  }, [canWebViewGoBack, canWebViewHandleAndroidBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -2127,6 +2180,93 @@ function AppInner(): React.JSX.Element {
     setQrScannerRequest(null);
     emitQrScannerToWeb({ type: 'cancel' });
   }, [emitQrScannerToWeb]);
+
+  const emitLocationToWeb = useCallback((payload: NativeLocationEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativeLocationEventsRef.current.push(payload);
+      if (pendingNativeLocationEventsRef.current.length > NATIVE_LOCATION_QUEUE_LIMIT) {
+        pendingNativeLocationEventsRef.current.splice(
+          0,
+          pendingNativeLocationEventsRef.current.length - NATIVE_LOCATION_QUEUE_LIMIT,
+        );
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_LOCATION_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingNativeLocationEventsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingEvents = pendingNativeLocationEventsRef.current.splice(0);
+    pendingEvents.forEach((event) => emitLocationToWeb(event));
+  }, [emitLocationToWeb]);
+
+  const getNativeLocationModule = useCallback(() => (
+    (NativeModules as { NativeRuntimeConfigModule?: NativeLocationModule }).NativeRuntimeConfigModule
+  ), []);
+
+  const handleNativeLocationCheck = useCallback(async (requestId?: string) => {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.checkLocationPermission) {
+      emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
+      return;
+    }
+
+    try {
+      const result = await nativeLocationModule.checkLocationPermission();
+      emitLocationToWeb({
+        type: 'permission',
+        permission: normalizeNativeLocationPermission(result?.permission),
+        platform: typeof result?.platform === 'string' ? result.platform : Platform.OS,
+        ...(requestId ? { requestId } : {}),
+      });
+    } catch {
+      emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
+    }
+  }, [emitLocationToWeb, getNativeLocationModule]);
+
+  const handleNativeLocationRequest = useCallback(async (requestId?: string) => {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.requestLocationPermission || !nativeLocationModule.getCurrentLocation) {
+      emitLocationToWeb({ type: 'error', code: 'location_unavailable', ...(requestId ? { requestId } : {}) });
+      return;
+    }
+
+    try {
+      const permissionResult = await nativeLocationModule.requestLocationPermission();
+      const permission = normalizeNativeLocationPermission(permissionResult?.permission);
+      emitLocationToWeb({
+        type: 'permission',
+        permission,
+        platform: typeof permissionResult?.platform === 'string' ? permissionResult.platform : Platform.OS,
+        ...(requestId ? { requestId } : {}),
+      });
+      if (permission !== 'granted') return;
+
+      const location = await nativeLocationModule.getCurrentLocation();
+      const latitude = typeof location?.latitude === 'number' ? location.latitude : NaN;
+      const longitude = typeof location?.longitude === 'number' ? location.longitude : NaN;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        emitLocationToWeb({ type: 'error', code: 'location_invalid', ...(requestId ? { requestId } : {}) });
+        return;
+      }
+      const accuracy = typeof location?.accuracy === 'number' && Number.isFinite(location.accuracy)
+        ? location.accuracy
+        : null;
+      emitLocationToWeb({
+        type: 'location',
+        latitude,
+        longitude,
+        accuracy,
+        ...(requestId ? { requestId } : {}),
+      });
+    } catch {
+      emitLocationToWeb({ type: 'error', code: 'location_failed', ...(requestId ? { requestId } : {}) });
+    }
+  }, [emitLocationToWeb, getNativeLocationModule]);
 
   const emitQrSaveToWeb = useCallback((payload: NativeQrSaveEvent) => {
     if (!isPageReadyRef.current || !webViewRef.current) return;
@@ -2793,6 +2933,16 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_location_check') {
+      void handleNativeLocationCheck(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_location_request') {
+      void handleNativeLocationRequest(parsed.payload?.requestId);
+      return;
+    }
+
     if (parsed.type === 'native_push_register') {
       void requestNativePushRegistration();
       return;
@@ -2808,10 +2958,12 @@ function AppInner(): React.JSX.Element {
         setCanWebViewGoForward(parsed.payload.canGoForward);
       }
       if (typeof parsed.payload?.canHandleNativeBack === 'boolean') {
-        setCanWebViewHandleNativeBack(parsed.payload.canHandleNativeBack);
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleNativeBack);
       }
       if (typeof parsed.payload?.suppressEdgeSwipe === 'boolean') {
         setIsEdgeSwipeSuppressedByWeb(parsed.payload.suppressEdgeSwipe);
+      } else if (typeof parsed.payload?.canHandleAndroidBack === 'boolean') {
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleAndroidBack);
       }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
@@ -3018,6 +3170,8 @@ function AppInner(): React.JSX.Element {
     emitTtsToWeb,
     handleDebugWebViewRemount,
     handleNativeAuthStart,
+    handleNativeLocationCheck,
+    handleNativeLocationRequest,
     handleNativeQrSave,
     handleNativeStart,
     handleNativeStop,
@@ -3152,6 +3306,7 @@ function AppInner(): React.JSX.Element {
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingNativeSttMessagesToWeb();
     flushPendingQrScannerEventsToWeb();
+    flushPendingNativeLocationEventsToWeb();
     flushPendingNativePushRegistrationsToWeb();
     flushPendingProfileLinkToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
@@ -3216,10 +3371,10 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
-    if (activateWebFallback()) return;
+    if (!initialLoadSettledRef.current && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -3232,6 +3387,7 @@ function AppInner(): React.JSX.Element {
   const handleHttpError = useCallback((event: WebViewHttpStatusEvent) => {
     if (
       shouldFallbackHttpStatus(event.nativeEvent.statusCode)
+      && !initialLoadSettledRef.current
       && !isPageReadyRef.current
       && activateWebFallback()
     ) {

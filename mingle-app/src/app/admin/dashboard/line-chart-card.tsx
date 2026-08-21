@@ -21,35 +21,15 @@ const VIEW_HEIGHT = CHART_HEIGHT + 30;
 type HoverPosition = { day: string; value: number | null; x: number; y: number };
 
 /**
- * Reads the exact spot on the drawn line under a fractional index `t` (e.g. 2.35 =
- * 35% of the way from point 2 to point 3), instead of snapping to whichever data
- * point is nearest. That's what makes the dot/number glide continuously with the
- * cursor rather than stepping day-to-day.
+ * 커서에서 가장 가까운 데이터 포인트(날짜 노드)를 반환한다.
+ * 보간(interpolate) 없이 실제 날짜의 값만 표시하기 위해 snapping 방식으로 변경.
  */
-function interpolateAt(points: readonly ChartPoint[], t: number): HoverPosition | null {
-  const lowIndex = Math.floor(t);
-  const highIndex = Math.min(points.length - 1, Math.ceil(t));
-  const lowPoint = points[lowIndex];
-  const highPoint = points[highIndex];
-  if (!lowPoint || !highPoint) return null;
-  const frac = t - lowIndex;
-  const nearestDay = frac < 0.5 ? lowPoint.day : highPoint.day;
-
-  if (lowPoint.value === null && highPoint.value === null) {
-    return { day: nearestDay, value: null, x: lowPoint.x + (highPoint.x - lowPoint.x) * frac, y: CHART_HEIGHT };
-  }
-  // One side of the cursor sits in a data gap -- don't fabricate a number by
-  // interpolating across it, just show the side that actually has data.
-  if (lowPoint.value === null || highPoint.value === null) {
-    const defined = lowPoint.value !== null ? lowPoint : highPoint;
-    return { day: defined.day, value: defined.value, x: defined.x, y: defined.y };
-  }
-  return {
-    day: nearestDay,
-    value: lowPoint.value + (highPoint.value - lowPoint.value) * frac,
-    x: lowPoint.x + (highPoint.x - lowPoint.x) * frac,
-    y: lowPoint.y + (highPoint.y - lowPoint.y) * frac,
-  };
+function snapToNearest(points: readonly ChartPoint[], t: number): HoverPosition | null {
+  if (points.length === 0) return null;
+  const index = Math.round(Math.min(points.length - 1, Math.max(0, t)));
+  const point = points[index];
+  if (!point) return null;
+  return { day: point.day, value: point.value, x: point.x, y: point.y };
 }
 
 type SeriesProps = {
@@ -82,10 +62,8 @@ export function LineChartCard(props: {
   const xAxisTicks = resolveXAxisTicks(dayKeys, CHART_WIDTH, 6);
   const bandWidth = points.length > 1 ? CHART_WIDTH / (points.length - 1) : CHART_WIDTH;
 
-  // Native SVG <title> tooltips require a pixel-precise, held hover on a 5px dot and
-  // show only after the browser's own delay -- from the outside that reads as "hover
-  // does nothing". This tracks the raw pointer position as a fractional index instead
-  // (not rounded), so the marker and value glide continuously with the cursor.
+  // 커서 X를 포인트 배열의 fractional index로 변환하고 반올림(snap)하여
+  // 가장 가까운 날짜 노드에만 마커가 붙도록 한다.
   const handlePointerMove = useCallback((event: PointerEvent<SVGRectElement>) => {
     const svg = event.currentTarget.ownerSVGElement;
     if (!svg) return;
@@ -100,9 +78,9 @@ export function LineChartCard(props: {
     setHoverT(null);
   }, []);
 
-  const hovered = useMemo(() => (hoverT === null ? null : interpolateAt(points, hoverT)), [hoverT, points]);
+  const hovered = useMemo(() => (hoverT === null ? null : snapToNearest(points, hoverT)), [hoverT, points]);
   const hoveredSecondary = useMemo(
-    () => (hoverT === null || !secondary ? null : interpolateAt(secondary.points, hoverT)),
+    () => (hoverT === null || !secondary ? null : snapToNearest(secondary.points, hoverT)),
     [hoverT, secondary],
   );
 
@@ -153,17 +131,19 @@ export function LineChartCard(props: {
           {areaPath ? <path d={areaPath} fill={color} opacity={0.1} /> : null}
           {linePath ? <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" /> : null}
 
+          {/* 호버 시 해당 날짜에 수직 가이드라인 표시 */}
           {hovered ? (
             <line x1={hovered.x} x2={hovered.x} y1={0} y2={CHART_HEIGHT} stroke="#c9c7c0" strokeWidth={1} pointerEvents="none" />
           ) : null}
 
+          {/* 각 날짜별 데이터 포인트 */}
           {points.map((point) => (
             point.value === null ? null : (
               <circle key={point.day} cx={point.x} cy={point.y} r={2.5} fill={color} stroke="#ffffff" strokeWidth={2} pointerEvents="none" />
             )
           ))}
 
-          {/* floating marker that glides to the exact point on the line under the cursor */}
+          {/* 호버된 날짜 노드에만 강조 마커 표시 (스냅된 실제 포인트) */}
           {hovered && hovered.value !== null ? (
             <circle cx={hovered.x} cy={hovered.y} r={4} fill={color} stroke="#ffffff" strokeWidth={2} pointerEvents="none" />
           ) : null}
@@ -196,6 +176,7 @@ export function LineChartCard(props: {
           />
         </svg>
 
+        {/* 툴팁: 스냅된 날짜 노드의 실제 값만 표시 */}
         {hovered ? (
           <div
             className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium text-white shadow-lg"

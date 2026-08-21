@@ -71,6 +71,8 @@ describe("/api/profile route", () => {
       nationality: "ko",
       primaryLanguages: ["ko"],
       defaultConversationLanguages: [],
+      location: null,
+      birthDate: null,
       followersCount: 2,
       followingCount: 3,
     });
@@ -90,6 +92,11 @@ describe("/api/profile route", () => {
         nationality: true,
         primaryLanguages: true,
         defaultConversationLanguages: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationCity: true,
+        locationCountry: true,
+        locationCountryCode: true,
         _count: {
           select: {
             followerRelations: {
@@ -157,6 +164,11 @@ describe("/api/profile route", () => {
         nationality: true,
         primaryLanguages: true,
         defaultConversationLanguages: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationCity: true,
+        locationCountry: true,
+        locationCountryCode: true,
         _count: {
           select: {
             followerRelations: {
@@ -316,5 +328,100 @@ describe("/api/profile route", () => {
     }));
     expect(underageResponse.status).toBe(400);
     expect(await underageResponse.json()).toEqual({ error: "minimum_age_required" });
+  });
+
+  it("rounds and saves a city-level location after permission is granted", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: "mingle.user",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
+      locationLatitude: 37.57,
+      locationLongitude: 126.98,
+      locationCity: "서울",
+      locationCountry: "대한민국",
+      locationCountryCode: "kr",
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: {
+          latitude: 37.566826,
+          longitude: 126.978656,
+          city: " 서울 ",
+          country: " 대한민국 ",
+          countryCode: "KR",
+        },
+        locationPermissionStatus: "granted",
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({
+      location: {
+        latitude: 37.57,
+        longitude: 126.98,
+        city: "서울",
+        country: "대한민국",
+        countryCode: "kr",
+      },
+    }));
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        locationLatitude: 37.57,
+        locationLongitude: 126.98,
+        locationCity: "서울",
+        locationCountry: "대한민국",
+        locationCountryCode: "kr",
+        locationUpdatedAt: expect.any(Date),
+        locationPermissionVerifiedAt: expect.any(Date),
+      }),
+    }));
+  });
+
+  it("clears a stored location when the permission is no longer granted", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: "mingle.user",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
+      locationLatitude: null,
+      locationLongitude: null,
+      locationCity: null,
+      locationCountry: null,
+      locationCountryCode: null,
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationPermissionStatus: "blocked" }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({ location: null }));
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        locationLatitude: null,
+        locationLongitude: null,
+        locationCity: null,
+        locationCountry: null,
+        locationCountryCode: null,
+        locationUpdatedAt: null,
+        locationPermissionVerifiedAt: null,
+      },
+    }));
   });
 });

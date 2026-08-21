@@ -16,6 +16,7 @@ import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link"
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import SlideSurface from "@/components/slide-surface";
+import { postNativeAndroidBackCapability } from "@/lib/native-back-handler";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
@@ -205,6 +206,14 @@ export default function ProfileShareScreen({
     }
     router.push(`/${locale}/mypage`);
   }, [locale, onClose, router]);
+
+  useEffect(() => {
+    if (!open) return;
+    postNativeAndroidBackCapability(true);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [open]);
 
   const handleCopyLink = useCallback(async () => {
     if (!profileUrl) {

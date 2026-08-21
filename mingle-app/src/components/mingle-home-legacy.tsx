@@ -1277,7 +1277,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                   className="flex w-[300%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   style={{ transform: `translateX(-${(emailSheetSlideIndex * 100) / 3}%)` }}
                 >
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthLoginTitle}
@@ -1375,7 +1375,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthSignupTitle}
@@ -1494,7 +1494,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative flex items-start justify-between gap-3">
                       <button
                         type="button"
