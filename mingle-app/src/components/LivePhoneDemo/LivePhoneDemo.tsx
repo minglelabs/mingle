@@ -6313,6 +6313,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         retryLabel={participantsCopy.retryLabel}
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
+                        conversationId={conversationId}
                       />
                     </motion.section>
 

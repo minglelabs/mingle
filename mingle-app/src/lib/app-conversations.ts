@@ -151,6 +151,9 @@ type ChannelMemberProfile = {
   name: string | null;
   handle: string | null;
   image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
   displayLanguage: string | null;
   status: string;
   pausedAt: Date | null;
@@ -165,13 +168,23 @@ async function listChannelMembersByChannelId(
 
   const rows = await prisma.appConversationChannelMember.findMany({
     where: { channelId: { in: channelIds } },
+    orderBy: { joinedAt: "asc" },
     select: {
       channelId: true,
       userId: true,
       displayLanguage: true,
       status: true,
       pausedAt: true,
-      user: { select: { name: true, handle: true, image: true } },
+      user: {
+        select: {
+          name: true,
+          handle: true,
+          image: true,
+          imageCropScale: true,
+          imageCropX: true,
+          imageCropY: true,
+        },
+      },
     },
   });
 
@@ -183,6 +196,9 @@ async function listChannelMembersByChannelId(
       name: row.user.name,
       handle: row.user.handle,
       image: row.user.image,
+      imageCropScale: row.user.imageCropScale,
+      imageCropX: row.user.imageCropX,
+      imageCropY: row.user.imageCropY,
       displayLanguage: row.displayLanguage,
       status: row.status,
       pausedAt: row.pausedAt,
@@ -1045,6 +1061,51 @@ export async function getConversationSessionKeyForMember(args: {
     select: { sessionKey: true },
   });
   return record?.sessionKey ?? null;
+}
+
+export type ConversationMemberSummary = {
+  userId: string;
+  name: string | null;
+  handle: string | null;
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
+};
+
+// Membership-gated: returns null (not an empty list) when the caller isn't a
+// member of the channel, so the controller can 404 the same way the other
+// per-conversation reads do instead of leaking who's in a room the caller
+// can't see.
+export async function listConversationMembersForUser(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationMemberSummary[] | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true },
+  });
+
+  if (!conversationRecord) {
+    return null;
+  }
+
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+  const members = membersByChannelId.get(conversationRecord.id) ?? [];
+
+  return members.map((member) => ({
+    userId: member.userId,
+    name: member.name,
+    handle: member.handle,
+    image: member.image,
+    imageCropScale: member.imageCropScale,
+    imageCropX: member.imageCropX,
+    imageCropY: member.imageCropY,
+  }));
 }
 
 export async function getConversationHydrationStateForUser(args: {

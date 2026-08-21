@@ -8,6 +8,7 @@ import {
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
+  listConversationMembersForUser,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -320,6 +321,32 @@ export async function getConversationRealtimeTokenResponse(
   // Realtime push is unconfigured in this environment — not an error the
   // caller needs to see, since the client falls back to polling.
   return NextResponse.json({ token });
+}
+
+export async function getConversationMembersResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const members = await listConversationMembersForUser({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!members) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ members });
 }
 
 export async function deleteConversationResponse(

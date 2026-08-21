@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 export { runtime } from "@/server/api/controllers/shared/conversation-controller";
 import {
   deleteConversationResponse,
+  getConversationMembersResponse,
   getConversationRealtimeTokenResponse,
   getConversationResponse,
   patchConversationResponse,
@@ -12,6 +13,15 @@ export { deleteConversationResponse as deleteConversationForAndroidV1_1_0 };
 export { getConversationResponse as getConversationForAndroidV1_1_0 };
 export { patchConversationResponse as patchConversationForAndroidV1_1_0 };
 export { getConversationRealtimeTokenResponse as getConversationRealtimeTokenForAndroidV1_1_0 };
+export { getConversationMembersResponse as getConversationMembersForAndroidV1_1_0 };
+
+export async function getConversationMembersRouteForAndroidV1_1_0(
+  request: NextRequest,
+  context: { params: Promise<{ conversationId: string }> },
+) {
+  const { conversationId } = await context.params;
+  return getConversationMembersResponse(request, conversationId);
+}
 
 export async function getConversationRealtimeTokenRouteForAndroidV1_1_0(
   request: NextRequest,

@@ -92,6 +92,7 @@ import {
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
   listConversationChannelsForExternalUserId,
+  listConversationMembersForUser,
   listConversationChannelsForUser,
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelStatus,
@@ -1039,6 +1040,58 @@ describe("app-conversations", () => {
       });
 
       expect(sessionKey).toBeNull();
+    });
+  });
+
+  describe("listConversationMembersForUser", () => {
+    it("returns every member's profile for a real member", async () => {
+      mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        {
+          channelId: "conv-a",
+          userId: "user-1",
+          displayLanguage: null,
+          status: "active",
+          pausedAt: null,
+          user: { name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null },
+        },
+        {
+          channelId: "conv-a",
+          userId: "user-2",
+          displayLanguage: null,
+          status: "active",
+          pausedAt: null,
+          user: { name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2 },
+        },
+      ]);
+
+      const members = await listConversationMembersForUser({
+        conversationId: "conv-a",
+        userId: "user-1",
+      });
+
+      expect(members).toEqual([
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null },
+        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2 },
+      ]);
+      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          id: "conv-a",
+          members: { some: { userId: "user-1" } },
+        }),
+      }));
+    });
+
+    it("returns null for a non-member", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+
+      const members = await listConversationMembersForUser({
+        conversationId: "conv-a",
+        userId: "stranger",
+      });
+
+      expect(members).toBeNull();
+      expect(mockChannelMemberFindMany).not.toHaveBeenCalled();
     });
   });
 

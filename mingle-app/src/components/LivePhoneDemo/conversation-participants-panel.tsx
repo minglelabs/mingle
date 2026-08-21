@@ -22,6 +22,9 @@ type ConversationParticipantsPanelProps = {
   retryLabel: string;
   onOpenProfile?: (userId: string) => void;
   onBack: () => void;
+  // Solo (0-1 member) rooms have no membership list worth fetching — the
+  // panel just shows the signed-in user, same as before this prop existed.
+  conversationId?: string | null;
 };
 
 type ParticipantProfile = {
@@ -72,6 +75,32 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
   };
 }
 
+function parseConversationMemberProfile(value: unknown): ParticipantProfile | null {
+  if (!isRecord(value) || typeof value.userId !== "string" || !value.userId.trim()) return null;
+
+  return {
+    id: value.userId.trim(),
+    name: nullableString(value.name),
+    image: nullableString(value.image),
+    imageCropScale: finiteNumberOrNull(value.imageCropScale),
+    imageCropX: finiteNumberOrNull(value.imageCropX),
+    imageCropY: finiteNumberOrNull(value.imageCropY),
+    handle: nullableString(value.handle),
+    // The members endpoint doesn't return another member's STT language
+    // selection (that's account-private data this room's membership row
+    // doesn't carry) — other members' rows render without language flags.
+    nationality: null,
+    primaryLanguages: [],
+  };
+}
+
+function parseConversationMemberList(value: unknown): ParticipantProfile[] {
+  if (!isRecord(value) || !Array.isArray(value.members)) return [];
+  return value.members
+    .map(parseConversationMemberProfile)
+    .filter((member): member is ParticipantProfile => member !== null);
+}
+
 function buildSessionFallbackProfile(
   sessionUser: { id?: unknown; name?: unknown; image?: unknown } | null | undefined,
 ): ParticipantProfile | null {
@@ -90,6 +119,75 @@ function buildSessionFallbackProfile(
   };
 }
 
+function ParticipantRow({
+  member,
+  fallbackName,
+  badgeLabel,
+  onOpenProfile,
+}: {
+  member: ParticipantProfile;
+  fallbackName: string;
+  badgeLabel?: string;
+  onOpenProfile?: (userId: string) => void;
+}) {
+  const displayName = member.name?.trim() || fallbackName;
+  const displayLanguages = sanitizeSttLanguageSelection(
+    member.primaryLanguages,
+    member.nationality ? [member.nationality] : [],
+  );
+  const displayHandle = formatHandle(member.handle);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenProfile?.(member.id)}
+      disabled={!onOpenProfile}
+      className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
+          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+            {member.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.image}
+                alt={displayName}
+                width={56}
+                height={56}
+                className="h-full w-full object-cover"
+                style={{
+                  transform: buildProfileImageTransform(56, {
+                    scale: member.imageCropScale,
+                    x: member.imageCropX,
+                    y: member.imageCropY,
+                  }),
+                }}
+              />
+            ) : (
+              <UserRound size={28} className="text-gray-400" aria-hidden="true" />
+            )}
+          </div>
+          {displayLanguages.length > 0 ? (
+            <ProfileLanguageFlagStack languages={displayLanguages} size={56} />
+          ) : null}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
+            {badgeLabel ? (
+              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
+                {badgeLabel}
+              </span>
+            ) : null}
+          </div>
+          {displayHandle ? <p className="mt-0.5 truncate text-[0.82rem] text-gray-500">{displayHandle}</p> : null}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function ConversationParticipantsPanel({
   active,
   uiLocale,
@@ -101,6 +199,7 @@ export default function ConversationParticipantsPanel({
   retryLabel,
   onOpenProfile,
   onBack,
+  conversationId,
 }: ConversationParticipantsPanelProps) {
   const { data: session } = useSession();
   const fallbackProfile = useMemo(
@@ -109,6 +208,9 @@ export default function ConversationParticipantsPanel({
   );
   const [profile, setProfile] = useState<ParticipantProfile | null>(fallbackProfile);
   const [loadState, setLoadState] = useState<ProfileLoadState>("idle");
+  const [otherMembers, setOtherMembers] = useState<ParticipantProfile[]>([]);
+  const [membersLoadState, setMembersLoadState] = useState<ProfileLoadState>("idle");
+  const normalizedConversationId = conversationId?.trim() || "";
 
   const loadProfile = useCallback(async () => {
     setLoadState("loading");
@@ -125,17 +227,40 @@ export default function ConversationParticipantsPanel({
     }
   }, [fallbackProfile]);
 
+  const loadMembers = useCallback(async () => {
+    if (!normalizedConversationId) {
+      setOtherMembers([]);
+      setMembersLoadState("ready");
+      return;
+    }
+    setMembersLoadState("loading");
+    try {
+      const response = await fetch(
+        buildClientApiPath(`/conversations/${normalizedConversationId}/members`),
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("participant_members_load_failed");
+      const members = parseConversationMemberList(await response.json());
+      const selfId = profile?.id || fallbackProfile?.id || "";
+      setOtherMembers(members.filter((member) => member.id !== selfId));
+      setMembersLoadState("ready");
+    } catch {
+      setOtherMembers([]);
+      setMembersLoadState("error");
+    }
+  }, [normalizedConversationId, profile?.id, fallbackProfile?.id]);
+
   useEffect(() => {
     if (!active) return;
     void loadProfile();
   }, [active, loadProfile]);
 
-  const displayName = profile?.name?.trim() || (uiLocale.trim().toLowerCase().startsWith("ko") ? "밍글 사용자" : "Mingle user");
-  const displayLanguages = sanitizeSttLanguageSelection(
-    profile?.primaryLanguages,
-    profile?.nationality ? [profile.nationality] : [],
-  );
-  const displayHandle = formatHandle(profile?.handle);
+  useEffect(() => {
+    if (!active) return;
+    void loadMembers();
+  }, [active, loadMembers]);
+
+  const fallbackName = uiLocale.trim().toLowerCase().startsWith("ko") ? "밍글 사용자" : "Mingle user";
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">
@@ -166,50 +291,45 @@ export default function ConversationParticipantsPanel({
           </div>
         ) : null}
 
-        {profile ? (
-          <button
-            type="button"
-            onClick={() => onOpenProfile?.(profile.id)}
-            disabled={!onOpenProfile}
-            className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
-                <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-                  {profile.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={profile.image}
-                      alt={displayName}
-                      width={56}
-                      height={56}
-                      className="h-full w-full object-cover"
-                      style={{
-                        transform: buildProfileImageTransform(56, {
-                          scale: profile.imageCropScale,
-                          x: profile.imageCropX,
-                          y: profile.imageCropY,
-                        }),
-                      }}
-                    />
-                  ) : (
-                    <UserRound size={28} className="text-gray-400" aria-hidden="true" />
-                  )}
-                </div>
-                <ProfileLanguageFlagStack languages={displayLanguages} size={56} />
-              </div>
+        <div className="flex flex-col gap-2.5">
+          {profile ? (
+            <ParticipantRow
+              member={profile}
+              fallbackName={fallbackName}
+              badgeLabel={selfLabel}
+              onOpenProfile={onOpenProfile}
+            />
+          ) : null}
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
-                  <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
-                    {selfLabel}
-                  </span>
-                </div>
-                {displayHandle ? <p className="mt-0.5 truncate text-[0.82rem] text-gray-500">{displayHandle}</p> : null}
-              </div>
-            </div>
-          </button>
+          {otherMembers.map((member) => (
+            <ParticipantRow
+              key={member.id}
+              member={member}
+              fallbackName={fallbackName}
+              onOpenProfile={onOpenProfile}
+            />
+          ))}
+        </div>
+
+        {membersLoadState === "loading" ? (
+          <div className="flex items-center justify-center gap-2 py-6 text-[0.94rem] text-gray-500" role="status">
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            <span>{loadingLabel}</span>
+          </div>
+        ) : null}
+
+        {membersLoadState === "error" ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-[0.94rem] text-gray-500">{errorLabel}</p>
+            <button
+              type="button"
+              onClick={() => void loadMembers()}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-[0.86rem] font-semibold text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              <span>{retryLabel}</span>
+            </button>
+          </div>
         ) : null}
 
         {loadState === "error" ? (

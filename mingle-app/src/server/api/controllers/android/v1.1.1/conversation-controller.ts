@@ -8,4 +8,6 @@ export {
   patchConversationRouteForAndroidV1_1_0 as patchConversationRouteForAndroidV1_1_1,
   getConversationRealtimeTokenForAndroidV1_1_0 as getConversationRealtimeTokenForAndroidV1_1_1,
   getConversationRealtimeTokenRouteForAndroidV1_1_0 as getConversationRealtimeTokenRouteForAndroidV1_1_1,
+  getConversationMembersForAndroidV1_1_0 as getConversationMembersForAndroidV1_1_1,
+  getConversationMembersRouteForAndroidV1_1_0 as getConversationMembersRouteForAndroidV1_1_1,
 } from "@/server/api/controllers/android/v1.1.0/conversation-controller";
