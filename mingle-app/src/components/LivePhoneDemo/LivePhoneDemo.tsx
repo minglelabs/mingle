@@ -17,6 +17,7 @@ import {
   buildLanguageSelectorButtonCodes,
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
+  resolveLanguageSelectorOwnSelectedLanguages,
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
@@ -1066,6 +1067,12 @@ interface LivePhoneDemoProps {
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
+  // The caller's OWN picks, distinct from initialSelectedLanguages (the room
+  // union) once a room has 2+ members. Solo rooms: identical to the above.
+  initialOwnSelectedLanguages?: string[]
+  // language code -> ids of the members who picked it, for the language
+  // picker's per-row avatar attribution. Empty/undefined for solo rooms.
+  selectedLanguagesAttribution?: Record<string, string[]>
   initialSpeechLanguages?: string[]
   initialTranslationLanguagesLinked?: boolean
   initialDefaultDisplayLanguage?: string | null
@@ -1370,6 +1377,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
+  initialOwnSelectedLanguages,
+  selectedLanguagesAttribution: initialSelectedLanguagesAttribution,
   initialSpeechLanguages,
   initialTranslationLanguagesLinked,
   initialDefaultDisplayLanguage,
@@ -1399,6 +1408,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => sanitizeSttLanguageSelection(initialSpeechLanguages, conversationSelectedLanguages),
     [conversationSelectedLanguages, initialSpeechLanguages],
   )
+  // Falls back to the union only when the server hasn't sent an own-list
+  // (e.g. an older solo-room response). An explicit empty list remains empty
+  // for a newly materialized invitee who has not picked a language yet.
+  const conversationOwnSelectedLanguages = useMemo(
+    () => resolveLanguageSelectorOwnSelectedLanguages(
+      conversationSelectedLanguages,
+      initialOwnSelectedLanguages,
+    ),
+    [conversationSelectedLanguages, initialOwnSelectedLanguages],
+  )
   const conversationTranslationLanguagesLinked = initialTranslationLanguagesLinked !== false
   const normalizedPreferredDisplayLanguages = useMemo(
     () => sanitizeSttLanguageSelection(
@@ -1421,6 +1440,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId ? conversationSelectedLanguages : fallbackLanguages,
   )
+  // The caller's own picks — see initialOwnSelectedLanguages above. Drives
+  // the language picker's add/remove decision and what gets PATCHed; the
+  // union (selectedLanguages) drives what's shown as checked and what's sent
+  // as translation targets.
+  const [ownSelectedLanguages, setOwnSelectedLanguages] = useState<string[]>(
+    conversationId ? conversationOwnSelectedLanguages : fallbackLanguages,
+  )
+  const ownSelectedLanguagesRef = useRef<string[]>(ownSelectedLanguages)
+  const [selectedLanguagesAttribution, setSelectedLanguagesAttribution] = useState<Record<string, string[]>>(
+    initialSelectedLanguagesAttribution ?? {},
+  )
+  const selectedLanguagesAttributionRef = useRef(selectedLanguagesAttribution)
   const [speechLanguages, setSpeechLanguages] = useState<string[]>(
     conversationId ? conversationSpeechLanguages : fallbackLanguages,
   )
@@ -1751,6 +1782,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       if (!conversationId) {
         setSelectedLanguages(next.selectedLanguages)
+        setOwnSelectedLanguages(next.selectedLanguages)
         setSpeechLanguages(next.speechLanguages)
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
@@ -1792,6 +1824,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         return [...nextSelectedLanguages]
       })
+      const nextOwnSelectedLanguages = conversationOwnSelectedLanguages
+      setOwnSelectedLanguages((current) => {
+        if (areLanguageSelectionsEqual(current, nextOwnSelectedLanguages)) {
+          return current
+        }
+
+        return [...nextOwnSelectedLanguages]
+      })
       setSpeechLanguages((current) => {
         if (areLanguageSelectionsEqual(current, conversationSpeechLanguages)) {
           return current
@@ -1808,13 +1848,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     conversationId,
     conversationSelectedLanguages,
+    conversationOwnSelectedLanguages,
     conversationSpeechLanguages,
     conversationTranslationLanguagesLinked,
   ])
 
   useEffect(() => {
+    setSelectedLanguagesAttribution(initialSelectedLanguagesAttribution ?? {})
+  }, [initialSelectedLanguagesAttribution])
+
+  useEffect(() => {
     selectedLanguagesRef.current = selectedLanguages
   }, [selectedLanguages])
+
+  useEffect(() => {
+    ownSelectedLanguagesRef.current = ownSelectedLanguages
+  }, [ownSelectedLanguages])
+
+  useEffect(() => {
+    selectedLanguagesAttributionRef.current = selectedLanguagesAttribution
+  }, [selectedLanguagesAttribution])
 
   useEffect(() => {
     speechLanguagesRef.current = speechLanguages
@@ -1824,8 +1877,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!selectedLanguagesChangePendingRef.current) return
 
     selectedLanguagesChangePendingRef.current = false
-    onSelectedLanguagesChange?.(selectedLanguages)
-  }, [onSelectedLanguagesChange, selectedLanguages])
+    onSelectedLanguagesChange?.(ownSelectedLanguages)
+  }, [onSelectedLanguagesChange, ownSelectedLanguages])
 
   useEffect(() => {
     if (!speechLanguagesChangePendingRef.current) return
@@ -4082,14 +4135,52 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleSelectedLanguage = useCallback((code: string) => {
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
-    const currentLanguages = selectedLanguagesRef.current
-    const nextLanguages = currentLanguages.includes(normalizedCode)
-      ? currentLanguages.filter(c => c !== normalizedCode)
-      : [...currentLanguages, normalizedCode]
-    selectedLanguagesRef.current = nextLanguages
+    // Add/remove decisions read the caller's OWN picks, not the room union —
+    // tapping a language that's only checked because another member picked
+    // it should add the caller as a co-picker, never remove it from the room.
+    const currentOwnLanguages = ownSelectedLanguagesRef.current
+    const isOwnSelected = currentOwnLanguages.includes(normalizedCode)
+    const nextOwnLanguages = isOwnSelected
+      ? currentOwnLanguages.filter(c => c !== normalizedCode)
+      : [...currentOwnLanguages, normalizedCode]
+    ownSelectedLanguagesRef.current = nextOwnLanguages
     selectedLanguagesChangePendingRef.current = true
-    setSelectedLanguages(nextLanguages)
-  }, [])
+    setOwnSelectedLanguages(nextOwnLanguages)
+
+    // Optimistically keep the displayed union (what's checked, and what
+    // drives translation targets) in sync with the caller's own edit: adding
+    // always adds to the union; removing only drops from the union if no
+    // OTHER member still holds it — solo rooms have no other member, so this
+    // reduces to the old "remove == remove" behavior exactly.
+    const currentUnion = selectedLanguagesRef.current
+    const otherHolders = (selectedLanguagesAttributionRef.current[normalizedCode] ?? [])
+      .filter((memberId) => memberId !== viewerUserId)
+    const nextUnion = !isOwnSelected
+      ? (currentUnion.includes(normalizedCode) ? currentUnion : [...currentUnion, normalizedCode])
+      : (otherHolders.length > 0
+          ? currentUnion
+          : currentUnion.filter(c => c !== normalizedCode))
+    selectedLanguagesRef.current = nextUnion
+    setSelectedLanguages(nextUnion)
+
+    // The per-language "who picked this" avatar badge reads this attribution
+    // map — without updating it here too, the viewer's own avatar wouldn't
+    // appear next to a language they just picked until the next full
+    // hydration from the server.
+    if (viewerUserId) {
+      const currentAttribution = selectedLanguagesAttributionRef.current
+      const nextAttribution = { ...currentAttribution }
+      if (!isOwnSelected) {
+        nextAttribution[normalizedCode] = [...otherHolders, viewerUserId]
+      } else if (otherHolders.length > 0) {
+        nextAttribution[normalizedCode] = otherHolders
+      } else {
+        delete nextAttribution[normalizedCode]
+      }
+      selectedLanguagesAttributionRef.current = nextAttribution
+      setSelectedLanguagesAttribution(nextAttribution)
+    }
+  }, [viewerUserId])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
@@ -5369,6 +5460,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}
+                  conversationId={conversationId}
+                  selectedLanguagesAttribution={selectedLanguagesAttribution}
+                  viewerSelectedLanguages={ownSelectedLanguages}
                 />
               ) : null}
             </div>

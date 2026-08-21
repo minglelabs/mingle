@@ -54,6 +54,7 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import { resolveLanguageSelectorOwnSelectedLanguages } from "@/components/LivePhoneDemo/language-selector.logic";
 import {
   formatBirthDate,
 } from "@/lib/birth-date";
@@ -2496,6 +2497,10 @@ export default function ConversationList({
       previousConversation.selectedLanguages,
       defaultSelectedLanguages,
     );
+    const previousViewerSelectedLanguages = resolveLanguageSelectorOwnSelectedLanguages(
+      previousSelectedLanguages,
+      previousConversation.viewerSelectedLanguages,
+    );
     const previousTranslationLanguagesLinked =
       previousConversation.translationLanguagesLinked !== false;
 
@@ -2506,7 +2511,16 @@ export default function ConversationList({
       conversation.id === conversationId
         ? {
             ...conversation,
-            selectedLanguages: [...normalizedSelectedLanguages],
+            // For a multi-member room this is the caller's own next pick,
+            // not the room union — leave the displayed union (selectedLanguages)
+            // untouched here and let the server's response (below) supply the
+            // recomputed union, so it doesn't briefly collapse to just "my"
+            // languages while the PATCH is in flight. Solo rooms have no such
+            // distinction, so updating both together is a no-op behavior change.
+            selectedLanguages: conversation.isMultiMember
+              ? conversation.selectedLanguages
+              : [...normalizedSelectedLanguages],
+            viewerSelectedLanguages: [...normalizedSelectedLanguages],
             translationLanguagesLinked: false,
           }
         : conversation
@@ -2541,6 +2555,7 @@ export default function ConversationList({
             ? {
                 ...conversation,
                 selectedLanguages: [...previousSelectedLanguages],
+                viewerSelectedLanguages: [...previousViewerSelectedLanguages],
                 translationLanguagesLinked: previousTranslationLanguagesLinked,
               }
             : conversation
@@ -4703,6 +4718,8 @@ export default function ConversationList({
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
                         initialSelectedLanguages={conversation.selectedLanguages}
+                        initialOwnSelectedLanguages={conversation.viewerSelectedLanguages}
+                        selectedLanguagesAttribution={conversation.selectedLanguagesAttribution}
                         initialSpeechLanguages={conversation.speechLanguages}
                         initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
                         initialDefaultDisplayLanguage={conversation.defaultDisplayLanguage ?? null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronLeft, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -33,10 +33,7 @@ import {
   readPendingBirthDate,
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
-import {
-  deriveDefaultSttLanguagesForLocale,
-  sanitizeSttLanguageSelection,
-} from "@/lib/stt-languages";
+import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -53,6 +50,8 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
+  initialOwnSelectedLanguages?: string[];
+  selectedLanguagesAttribution?: Record<string, string[]>;
   initialSpeechLanguages?: string[];
   initialTranslationLanguagesLinked?: boolean;
   initialDefaultDisplayLanguage?: string | null;
@@ -1849,6 +1848,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
+          selectedLanguagesAttribution={props.selectedLanguagesAttribution}
           initialSpeechLanguages={props.initialSpeechLanguages}
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
           initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}

@@ -15,8 +15,11 @@ const {
   mockChannelMemberUpdate,
   mockChannelMemberUpdateMany,
   mockFindConversationUniqueOrThrow,
+  mockFindConversationUnique,
   mockUserFindUnique,
+  mockUserFindMany,
   mockUserBlockFindFirst,
+  mockUserBlockFindMany,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
@@ -32,8 +35,11 @@ const {
   mockChannelMemberUpdate: vi.fn(),
   mockChannelMemberUpdateMany: vi.fn(),
   mockFindConversationUniqueOrThrow: vi.fn(),
+  mockFindConversationUnique: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockUserFindMany: vi.fn(),
   mockUserBlockFindFirst: vi.fn(),
+  mockUserBlockFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => {
@@ -41,6 +47,7 @@ vi.mock("@/lib/prisma", () => {
     appConversationChannel: {
       findMany: mockFindConversationMany,
       findFirst: mockFindConversationFirst,
+      findUnique: mockFindConversationUnique,
       findUniqueOrThrow: mockFindConversationUniqueOrThrow,
       update: mockUpdateConversation,
       updateMany: mockUpdateManyConversation,
@@ -54,9 +61,11 @@ vi.mock("@/lib/prisma", () => {
     },
     user: {
       findUnique: mockUserFindUnique,
+      findMany: mockUserFindMany,
     },
     userBlock: {
       findFirst: mockUserBlockFindFirst,
+      findMany: mockUserBlockFindMany,
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
@@ -78,6 +87,7 @@ vi.mock("@/lib/prisma", () => {
 
 vi.mock("@/lib/stt-languages", () => ({
   sanitizeSttLanguageSelection: (value: unknown) => Array.isArray(value) ? value : [],
+  deriveDefaultSttLanguagesForLocale: (locale: string) => [locale || "en"],
 }));
 
 vi.mock("@/i18n/conversations", () => ({
@@ -94,7 +104,9 @@ import {
   listConversationChannelsForExternalUserId,
   listConversationMembersForUser,
   listConversationChannelsForUser,
+  materializePendingConversationInvitees,
   updateConversationChannelDefaultDisplayLanguage,
+  updateConversationChannelSelectedLanguages,
   updateConversationChannelStatus,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
@@ -108,7 +120,9 @@ describe("app-conversations", () => {
     mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
     mockChannelMemberUpdateMany.mockResolvedValue({ count: 0 });
     mockUserFindUnique.mockResolvedValue(null);
+    mockUserFindMany.mockResolvedValue([]);
     mockUserBlockFindFirst.mockResolvedValue(null);
+    mockUserBlockFindMany.mockResolvedValue([]);
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -165,6 +179,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -173,8 +188,8 @@ describe("app-conversations", () => {
     mockAppMessageCount.mockResolvedValue(0);
     mockAppMessageFindMany.mockResolvedValue([]);
     mockChannelMemberFindMany.mockResolvedValue([
-      { channelId: "conv-dm", userId: "user-1", user: { name: "Alice", handle: "alice" } },
-      { channelId: "conv-dm", userId: "user-2", user: { name: "Bob", handle: "bob" } },
+      { channelId: "conv-dm", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
     ]);
 
     const state = await getConversationHydrationStateForUser({
@@ -183,6 +198,57 @@ describe("app-conversations", () => {
     });
 
     expect(state?.conversation.title).toBe("Bob");
+  });
+
+  it("treats a room with a pending (not-yet-materialized) invitee as multi-member, before they ever send a message", async () => {
+    // Regression: a fresh "message this person" room has only the owner as a
+    // real member until the invitee's first-message materialization (see
+    // pendingInviteeUserIds). Without effective-member-count awareness, the
+    // title, isMultiMember flag, and language union/attribution would all
+    // incorrectly behave like a solo room for that whole window, flipping to
+    // correct only once the invitee is materialized or the viewer reopens
+    // the room — reported as a live bug (bubble alignment + title flicker).
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-pending-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "session-pending-dm",
+      selectedLanguages: ["ko", "en"],
+      speechLanguages: ["ko", "en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: ["user-2"],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([]);
+    // Only the owner has a real membership row — the invitee is still pending.
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-pending-dm", userId: "user-1", selectedLanguages: ["ko", "en"], user: { name: "Alice", handle: "alice" } },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { id: "user-2", name: "Bob", handle: "bob" },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-pending-dm",
+      userId: "user-1",
+    });
+
+    expect(mockUserFindMany).toHaveBeenCalledWith({
+      where: { id: { in: ["user-2"] } },
+      select: { id: true, name: true, handle: true },
+    });
+    expect(state?.conversation.title).toBe("Bob");
+    expect(state?.conversation.isMultiMember).toBe(true);
+    expect(state?.conversation.selectedLanguages).toEqual(["ko", "en"]);
+    expect(state?.conversation.selectedLanguagesAttribution).toEqual({
+      ko: ["user-1"],
+      en: ["user-1"],
+    });
   });
 
   it("resolves a 3+ person room's title to a comma-joined list of every other member's name", async () => {
@@ -195,6 +261,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -203,9 +270,9 @@ describe("app-conversations", () => {
     mockAppMessageCount.mockResolvedValue(0);
     mockAppMessageFindMany.mockResolvedValue([]);
     mockChannelMemberFindMany.mockResolvedValue([
-      { channelId: "conv-group", userId: "user-1", user: { name: "Alice", handle: "alice" } },
-      { channelId: "conv-group", userId: "user-2", user: { name: "Bob", handle: "bob" } },
-      { channelId: "conv-group", userId: "user-3", user: { name: "Carol", handle: "carol" } },
+      { channelId: "conv-group", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-group", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
+      { channelId: "conv-group", userId: "user-3", selectedLanguages: [], user: { name: "Carol", handle: "carol" } },
     ]);
 
     const state = await getConversationHydrationStateForUser({
@@ -234,6 +301,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -272,6 +340,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -285,6 +354,53 @@ describe("app-conversations", () => {
 
     expect(mockChannelMemberUpdateMany).toHaveBeenCalledWith({
       where: { userId: "user-1", channelId: { in: ["conv-shared"] } },
+      data: expect.objectContaining({ status: "paused" }),
+    });
+    expect(mockUpdateManyConversation).not.toHaveBeenCalled();
+  });
+
+  it("treats another room with a pending invitee as shared when enforcing one active room", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-a",
+      pendingInviteeUserIds: [],
+    });
+    mockChannelMemberFindMany
+      .mockResolvedValueOnce([{ channelId: "conv-a", userId: "user-1", user: {} }])
+      .mockResolvedValueOnce([
+        {
+          channelId: "conv-pending",
+          status: "active",
+          channel: {
+            status: "active",
+            pendingInviteeUserIds: ["user-2"],
+            _count: { members: 1 },
+          },
+        },
+      ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-a",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await updateConversationChannelStatus({
+      conversationId: "conv-a",
+      userId: "user-1",
+      status: "active",
+    });
+
+    expect(mockChannelMemberUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", channelId: { in: ["conv-pending"] } },
       data: expect.objectContaining({ status: "paused" }),
     });
     expect(mockUpdateManyConversation).not.toHaveBeenCalled();
@@ -305,6 +421,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -323,11 +440,54 @@ describe("app-conversations", () => {
     expect(mockUpdateConversation).not.toHaveBeenCalled();
   });
 
+  it("treats a room with pending invitees as shared when updating the owner's status", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-pending",
+      pendingInviteeUserIds: ["user-2"],
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      {
+        channelId: "conv-pending",
+        userId: "user-1",
+        status: "active",
+        selectedLanguages: ["en"],
+        user: {},
+      },
+    ]);
+    mockFindConversationUniqueOrThrow.mockResolvedValue({
+      id: "conv-pending",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-pending",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: ["user-2"],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await updateConversationChannelStatus({
+      conversationId: "conv-pending",
+      userId: "user-1",
+      status: "paused",
+    });
+
+    expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "conv-pending", userId: "user-1" } },
+      data: expect.objectContaining({ status: "paused" }),
+    });
+    expect(mockUpdateConversation).not.toHaveBeenCalled();
+  });
+
   it("writes a multi-member room's display language to the caller's own membership row", async () => {
     mockFindConversationFirst.mockResolvedValue({ id: "conv-dm", selectedLanguages: ["en", "ko"] });
     mockChannelMemberFindMany.mockResolvedValue([
-      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, user: { name: "Alice", handle: "alice" } },
-      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, user: { name: "Bob", handle: "bob" } },
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, selectedLanguages: ["en", "ko"], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
     ]);
     mockFindConversationUniqueOrThrow.mockResolvedValue({
       id: "conv-dm",
@@ -338,6 +498,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en", "ko"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       defaultDisplayLanguage: null,
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -357,6 +518,57 @@ describe("app-conversations", () => {
     expect(mockUpdateConversation).not.toHaveBeenCalled();
   });
 
+  it("accepts a shared-room display language supplied by another member's selection", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-dm",
+      selectedLanguages: ["en"],
+      pendingInviteeUserIds: [],
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      {
+        channelId: "conv-dm",
+        userId: "user-1",
+        displayLanguage: null,
+        selectedLanguages: ["en"],
+        user: { name: "Alice", handle: "alice" },
+      },
+      {
+        channelId: "conv-dm",
+        userId: "user-2",
+        displayLanguage: null,
+        selectedLanguages: ["ko"],
+        user: { name: "Bob", handle: "bob" },
+      },
+    ]);
+    mockFindConversationUniqueOrThrow.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await updateConversationChannelDefaultDisplayLanguage({
+      conversationId: "conv-dm",
+      userId: "user-1",
+      defaultDisplayLanguage: "ko",
+    });
+
+    expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "conv-dm", userId: "user-1" } },
+      data: { displayLanguage: "ko" },
+    });
+  });
+
   it("keeps writing the channel-wide display language for solo (1-member) rooms", async () => {
     mockFindConversationFirst.mockResolvedValue({ id: "conv-solo", selectedLanguages: ["en", "ko"] });
     mockChannelMemberFindMany.mockResolvedValue([
@@ -371,6 +583,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en", "ko"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       defaultDisplayLanguage: "ko",
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -389,6 +602,184 @@ describe("app-conversations", () => {
     expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
   });
 
+  it("writes a multi-member room's selected languages to the caller's own membership row, showing the union with attribution to other viewers", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-dm" });
+    mockChannelMemberFindMany
+      // 1st call inside updateConversationChannelSelectedLanguages: decide multi-member.
+      .mockResolvedValueOnce([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: ["en"], user: {} },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: ["ja"], user: {} },
+      ])
+      // 2nd call inside serializeConversationChannelWithPreview: resolve the union for the response.
+      .mockResolvedValueOnce([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: ["ko", "en"], user: {} },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: ["ja"], user: {} },
+      ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    const result = await updateConversationChannelSelectedLanguages({
+      conversationId: "conv-dm",
+      userId: "user-1",
+      selectedLanguages: ["ko", "en"],
+    });
+
+    expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "conv-dm", userId: "user-1" } },
+      data: { selectedLanguages: ["ko", "en"] },
+    });
+    expect(mockUpdateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: { translationLanguagesLinked: false },
+    }));
+    // Own list is ["ko", "en"], the other member still holds "ja" — a member
+    // deselecting a language elsewhere shouldn't remove it from the room's
+    // shared picker while another member still wants it.
+    expect(result?.selectedLanguages).toEqual(["ko", "en", "ja"]);
+    expect(result?.selectedLanguagesAttribution).toEqual({
+      ko: ["user-1"],
+      en: ["user-1"],
+      ja: ["user-2"],
+    });
+    // The caller's own list stays their own picks, not the union — this is
+    // what the picker's add/remove decision and the next PATCH must read.
+    expect(result?.viewerSelectedLanguages).toEqual(["ko", "en"]);
+  });
+
+  it("does not leak the stale channel-wide value into the union via a member who has never picked their own languages", async () => {
+    // Regression: the channel-wide field ("ja") predates this member ever
+    // opening the language screen. If the union fell back to it for a member
+    // whose own selectedLanguages is still empty, "ja" would be permanently
+    // stuck — no one could ever remove it, since it would keep appearing
+    // "picked" by a member who never actually chose it.
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-dm" });
+    mockChannelMemberFindMany
+      .mockResolvedValueOnce([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: ["en"], user: {} },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: {} },
+      ])
+      .mockResolvedValueOnce([
+        { channelId: "conv-dm", userId: "user-1", selectedLanguages: ["ko", "en"], user: {} },
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: {} },
+      ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["ja"],
+      speechLanguages: ["ja"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    const result = await updateConversationChannelSelectedLanguages({
+      conversationId: "conv-dm",
+      userId: "user-1",
+      selectedLanguages: ["ko", "en"],
+    });
+
+    expect(result?.selectedLanguages).toEqual(["ko", "en"]);
+    expect(result?.selectedLanguagesAttribution).toEqual({
+      ko: ["user-1"],
+      en: ["user-1"],
+    });
+  });
+
+  it("orders the union around each viewer's own picks first, not one shared room-wide order for everyone", async () => {
+    // A Korean speaker (KO+EN) and a Japanese speaker (JA+EN) in the same
+    // room: the Korean viewer should see "ko, en, ja" (their own picks
+    // first), the Japanese viewer "ja, en, ko" — not the same join-order
+    // sequence for both.
+    const sharedMembers = [
+      { channelId: "conv-dm", userId: "user-ko", selectedLanguages: ["ko", "en"], user: {} },
+      { channelId: "conv-dm", userId: "user-ja", selectedLanguages: ["ja", "en"], user: {} },
+    ];
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["ko", "en"],
+      speechLanguages: ["ko", "en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([]);
+    mockChannelMemberFindMany.mockResolvedValueOnce(sharedMembers);
+
+    const koState = await getConversationHydrationStateForUser({
+      conversationId: "conv-dm",
+      userId: "user-ko",
+    });
+    expect(koState?.conversation.selectedLanguages).toEqual(["ko", "en", "ja"]);
+
+    mockChannelMemberFindMany.mockResolvedValueOnce(sharedMembers);
+    const jaState = await getConversationHydrationStateForUser({
+      conversationId: "conv-dm",
+      userId: "user-ja",
+    });
+    expect(jaState?.conversation.selectedLanguages).toEqual(["ja", "en", "ko"]);
+  });
+
+  it("keeps writing the channel-wide selected languages for solo (1-member) rooms, with no attribution", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-solo" });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-solo", userId: "user-1", selectedLanguages: [], user: {} },
+    ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-solo",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-solo",
+      selectedLanguages: ["ko", "en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: false,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    const result = await updateConversationChannelSelectedLanguages({
+      conversationId: "conv-solo",
+      userId: "user-1",
+      selectedLanguages: ["ko", "en"],
+    });
+
+    expect(mockUpdateConversation).toHaveBeenCalledWith({
+      where: { id: "conv-solo" },
+      data: { selectedLanguages: ["ko", "en"], translationLanguagesLinked: false },
+      select: expect.anything(),
+    });
+    expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
+    expect(result?.selectedLanguages).toEqual(["ko", "en"]);
+    expect(result?.selectedLanguagesAttribution).toEqual({});
+    expect(result?.viewerSelectedLanguages).toEqual(["ko", "en"]);
+  });
+
   it("resolves the internal viewer id and per-viewer title on the external-identity list path", async () => {
     mockUserFindUnique.mockResolvedValue({ id: "user-1" });
     mockFindConversationMany.mockResolvedValue([
@@ -401,6 +792,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T08:00:00.000Z"),
         pausedAt: null,
@@ -408,8 +800,8 @@ describe("app-conversations", () => {
     ]);
     mockAppMessageFindMany.mockResolvedValue([]);
     mockChannelMemberFindMany.mockResolvedValue([
-      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, user: { name: "Alice", handle: "alice" } },
-      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, user: { name: "Bob", handle: "bob" } },
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, selectedLanguages: [], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
     ]);
 
     const conversations = await listConversationChannelsForExternalUserId("anon_local_storage_user");
@@ -451,6 +843,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en", "ko"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T09:00:00.000Z"),
         updatedAt: new Date("2026-04-12T12:00:00.000Z"),
         pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -484,6 +877,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en", "ko"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T09:00:00.000Z"),
         updatedAt: new Date("2026-04-12T12:00:00.000Z"),
         pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -497,6 +891,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en", "ko"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T10:00:00.000Z"),
         pausedAt: new Date("2026-04-12T10:00:00.000Z"),
@@ -567,6 +962,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en", "ko"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T12:00:00.000Z"),
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -668,6 +1064,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -685,8 +1082,8 @@ describe("app-conversations", () => {
       },
     ]);
     mockChannelMemberFindMany.mockResolvedValue([
-      { channelId: "conv-group", userId: "user-1", user: { name: "Alice", handle: "alice", image: null } },
-      { channelId: "conv-group", userId: "user-2", user: { name: "Bob", handle: "bob", image: "https://cdn/bob.jpg" } },
+      { channelId: "conv-group", userId: "user-1", selectedLanguages: [], user: { name: "Alice", handle: "alice", image: null } },
+      { channelId: "conv-group", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob", image: "https://cdn/bob.jpg" } },
     ]);
 
     const state = await getConversationHydrationStateForUser({
@@ -709,6 +1106,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: null,
@@ -749,6 +1147,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en", "ko"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T12:00:00.000Z"),
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -814,6 +1213,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en", "ko"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T12:00:00.000Z"),
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -856,6 +1256,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T12:00:00.000Z"),
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
@@ -882,6 +1283,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -909,12 +1311,16 @@ describe("app-conversations", () => {
         role: "owner",
         status: "paused",
         pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        selectedLanguages: ["ko"],
       }],
       skipDuplicates: true,
     });
   });
 
-  it("adds invitees as members alongside the creator when starting a room with other people", async () => {
+  it("records invitees as pending rather than real members when starting a room with other people", async () => {
+    // No membership row, no visibility, nothing persisted about the invitee
+    // until the owner's first message — see pendingInviteeUserIds' doc
+    // comment and materializePendingConversationInvitees.
     mockFindConversationFirst.mockResolvedValue(null);
     mockCreateConversation.mockResolvedValue({
       id: "conv-new",
@@ -925,6 +1331,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -936,6 +1343,9 @@ describe("app-conversations", () => {
       inviteeUserIds: ["user-2", "user-3", "user-1"],
     });
 
+    expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ pendingInviteeUserIds: ["user-2", "user-3"] }),
+    }));
     expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
       data: [
         {
@@ -944,20 +1354,7 @@ describe("app-conversations", () => {
           role: "owner",
           status: "paused",
           pausedAt: new Date("2026-04-12T08:00:00.000Z"),
-        },
-        {
-          channelId: "conv-new",
-          userId: "user-2",
-          role: "member",
-          status: "paused",
-          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
-        },
-        {
-          channelId: "conv-new",
-          userId: "user-3",
-          role: "member",
-          status: "paused",
-          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+          selectedLanguages: ["ko"],
         },
       ],
       skipDuplicates: true,
@@ -995,6 +1392,7 @@ describe("app-conversations", () => {
       selectedLanguages: ["en"],
       speechLanguages: ["en"],
       translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
       createdAt: new Date("2026-04-12T08:00:00.000Z"),
       updatedAt: new Date("2026-04-12T08:00:00.000Z"),
       pausedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -1051,6 +1449,7 @@ describe("app-conversations", () => {
           channelId: "conv-a",
           userId: "user-1",
           displayLanguage: null,
+          selectedLanguages: ["ko", "en"],
           status: "active",
           pausedAt: null,
           user: { name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null },
@@ -1059,6 +1458,7 @@ describe("app-conversations", () => {
           channelId: "conv-a",
           userId: "user-2",
           displayLanguage: null,
+          selectedLanguages: ["ja"],
           status: "active",
           pausedAt: null,
           user: { name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2 },
@@ -1071,8 +1471,8 @@ describe("app-conversations", () => {
       });
 
       expect(members).toEqual([
-        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null },
-        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2 },
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko", "en"] },
+        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2, selectedLanguages: ["ja"] },
       ]);
       expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
@@ -1107,6 +1507,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T08:00:00.000Z"),
         pausedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -1119,13 +1520,34 @@ describe("app-conversations", () => {
 
       expect(conversation.id).toBe("conv-existing");
       expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({
+        where: {
           members: { some: { userId: "user-1" } },
           AND: [
-            { members: { some: { userId: "user-2" } } },
-            { members: { none: { userId: { notIn: ["user-1", "user-2"] } } } },
+            {
+              OR: [
+                { isDeleted: false },
+                { isDeleted: null },
+              ],
+            },
+            {
+              OR: [
+                {
+                  AND: [
+                    { members: { some: { userId: "user-2" } } },
+                    { members: { none: { userId: { notIn: ["user-1", "user-2"] } } } },
+                  ],
+                },
+                {
+                  AND: [
+                    { ownerUserId: "user-1" },
+                    { pendingInviteeUserIds: { has: "user-2" } },
+                    { members: { none: { userId: { not: "user-1" } } } },
+                  ],
+                },
+              ],
+            },
           ],
-        }),
+        },
       }));
       expect(mockCreateConversation).not.toHaveBeenCalled();
     });
@@ -1144,6 +1566,7 @@ describe("app-conversations", () => {
         selectedLanguages: ["en"],
         speechLanguages: ["en"],
         translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
         createdAt: new Date("2026-04-12T08:00:00.000Z"),
         updatedAt: new Date("2026-04-12T08:00:00.000Z"),
         pausedAt: new Date("2026-04-12T08:00:00.000Z"),
@@ -1152,6 +1575,9 @@ describe("app-conversations", () => {
 
       await findOrCreateDirectConversation({ userId: "user-1", targetUserId: "user-2" });
 
+      expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ pendingInviteeUserIds: ["user-2"] }),
+      }));
       expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
         data: [
           {
@@ -1160,13 +1586,7 @@ describe("app-conversations", () => {
             role: "owner",
             status: "paused",
             pausedAt: new Date("2026-04-12T08:00:00.000Z"),
-          },
-          {
-            channelId: "conv-new-dm",
-            userId: "user-2",
-            role: "member",
-            status: "paused",
-            pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+            selectedLanguages: ["en"],
           },
         ],
         skipDuplicates: true,
@@ -1210,6 +1630,92 @@ describe("app-conversations", () => {
         targetUserId: "user-1",
       })).rejects.toThrow("invalid_target_user");
       expect(mockUserFindUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("materializePendingConversationInvitees", () => {
+    it("turns pending invitees into real members and clears the pending list on the first message", async () => {
+      mockFindConversationUnique.mockResolvedValue({
+        id: "conv-dm",
+        ownerUserId: "user-1",
+        status: "active",
+        pausedAt: null,
+        pendingInviteeUserIds: ["user-2", "user-3"],
+      });
+
+      await materializePendingConversationInvitees("session-dm");
+
+      expect(mockFindConversationUnique).toHaveBeenCalledWith({
+        where: { sessionKey: "session-dm" },
+        select: {
+          id: true,
+          ownerUserId: true,
+          status: true,
+          pausedAt: true,
+          pendingInviteeUserIds: true,
+        },
+      });
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [
+          { channelId: "conv-dm", userId: "user-2", role: "member", status: "active", pausedAt: null },
+          { channelId: "conv-dm", userId: "user-3", role: "member", status: "active", pausedAt: null },
+        ],
+        skipDuplicates: true,
+      });
+      expect(mockUpdateConversation).toHaveBeenCalledWith({
+        where: { id: "conv-dm" },
+        data: { pendingInviteeUserIds: [] },
+      });
+    });
+
+    it("does nothing for a room with no pending invitees", async () => {
+      mockFindConversationUnique.mockResolvedValue({
+        id: "conv-solo",
+        ownerUserId: "user-1",
+        status: "active",
+        pausedAt: null,
+        pendingInviteeUserIds: [],
+      });
+
+      await materializePendingConversationInvitees("session-solo");
+
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(mockUpdateConversation).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when the sessionKey doesn't resolve to a channel", async () => {
+      mockFindConversationUnique.mockResolvedValue(null);
+
+      await materializePendingConversationInvitees("session-unknown");
+
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(mockUpdateConversation).not.toHaveBeenCalled();
+    });
+
+    it("drops an invitee blocked in either direction instead of failing the whole materialization", async () => {
+      mockFindConversationUnique.mockResolvedValue({
+        id: "conv-dm",
+        ownerUserId: "user-1",
+        status: "active",
+        pausedAt: null,
+        pendingInviteeUserIds: ["user-2", "user-3"],
+      });
+      mockUserBlockFindMany.mockResolvedValue([{ blockerId: "user-3", blockedId: "user-1" }]);
+
+      await materializePendingConversationInvitees("session-dm");
+
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [
+          { channelId: "conv-dm", userId: "user-2", role: "member", status: "active", pausedAt: null },
+        ],
+        skipDuplicates: true,
+      });
+      // The pending list is still cleared — a dropped, blocked invitee isn't
+      // retried on the next message.
+      expect(mockUpdateConversation).toHaveBeenCalledWith({
+        where: { id: "conv-dm" },
+        data: { pendingInviteeUserIds: [] },
+      });
     });
   });
 });

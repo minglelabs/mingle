@@ -1102,3 +1102,17 @@
   - Keep the standalone profile route available for direct/deep-link entry, while internal profile entry points remain parent-preserving overlays.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify profile entry from each listed surface, profile-share open/close and iOS edge-swipe, Connect search restoration, and Android back from both public-profile and My Page photo previews.
+
+## 2026-08-21 - Preserve multi-member language state inside the shared slide surface
+
+- Surface: The conversation-room language selector after integrating room-wide language attribution and deferred invitee membership.
+- Issue: The remote language feature distinguishes the room union from the viewer's own picks, while the local navigation work replaces the selector root with `SlideSurface`. A raw merge could either drop the attributed language UI or restore the old non-gesture overlay. Review also found that an explicitly empty viewer selection was being replaced with the room union, and min/max disabling was calculated from the union instead of the viewer's picks.
+- User impact: A newly materialized invitee could appear to own every language selected by someone else, be unable to add an attributed language, or see the selector lose its one-level iOS/Android back behavior after integration.
+- Resolution:
+  - Keep the remote attribution, member-avatar, pending-invitee, and room-union data flow as the source of truth.
+  - Reapply only the local `SlideSurface` container and its topmost gesture/native-back ownership around the remote selector body.
+  - Preserve an explicitly empty viewer selection and apply add/remove limits to that viewer's own picks rather than the room union.
+  - Keep pending-invitee rooms on per-member status semantics and validate display-language choices against the effective member-language union.
+  - Keep deleted conversations excluded when locating an existing direct-message room.
+- Data contract: Uses the remote `selected_languages` membership column and `pending_invitee_user_ids` channel column without changing their schema or migration order.
+- Testing notes: Verify attributed rows for owner-only, other-only, and shared selections; an invitee with no picks can add a language; selector edge-swipe closes only the selector; pending rooms preserve per-member active state; and deleted direct-message rooms are not reused.

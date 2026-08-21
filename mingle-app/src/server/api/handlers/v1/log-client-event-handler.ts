@@ -23,6 +23,7 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { materializePendingConversationInvitees } from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -254,6 +255,17 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         } catch (error) {
           console.error('Conversation auto title generation failed:', error)
+        }
+
+        // An invitee gets no DB record and can't see the room at all until
+        // this, the owner's first real message — see
+        // pendingInviteeUserIds' doc comment. Must run before the
+        // notify below, so a freshly-materialized member's push actually
+        // reaches them.
+        try {
+          await materializePendingConversationInvitees(tracking.sessionKey)
+        } catch (error) {
+          console.error('Materializing pending conversation invitees failed:', error)
         }
 
         // Lets any other member's already-open room pick this up without
