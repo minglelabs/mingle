@@ -36,6 +36,7 @@ function buildConversation(): ConversationChannelSummary {
     status: "paused",
     sessionKey: "session-1",
     isMultiMember: false,
+    isBlockedCounterpart: false,
     messageCount: 431,
     selectedLanguages: ["ko", "en"],
     speechLanguages: ["ko", "en"],

@@ -1093,6 +1093,13 @@ interface LivePhoneDemoProps {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
   onOpenProfile?: (userId: string) => void
+  // True when this is a 2-real-member room and a block exists between the
+  // viewer and the other member (either direction) — see
+  // ConversationChannelSummary.isBlockedCounterpart. KakaoTalk-style: the
+  // room itself stays mounted/reachable, but the header title falls back to
+  // a generic placeholder, the composer/mic are replaced with a "blocked"
+  // message, and tapping the counterpart's avatar opens nothing.
+  isBlockedCounterpart?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1393,6 +1400,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSpeechLanguagesChange,
   onDefaultDisplayLanguageChange,
   onOpenProfile,
+  isBlockedCounterpart = false,
 }, ref) {
   // Only used to tell "my" bubbles from "theirs" in a room shared by more
   // than one real account — the solo room's own layout never depends on it.
@@ -1400,6 +1408,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const blockedComposerMessageLabel = uiLocale.trim().toLowerCase().startsWith('ko')
+    ? '차단된 사용자입니다'
+    : 'This user is blocked.'
+  // Blocking hides the counterpart's PHOTO and stops messaging — their name
+  // stays visible, and tapping my own avatar should keep opening my own
+  // profile.
+  const handleOpenProfileForBubble = useCallback((userId: string) => {
+    if (isBlockedCounterpart && userId !== viewerUserId) return
+    onOpenProfile?.(userId)
+  }, [isBlockedCounterpart, viewerUserId, onOpenProfile])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
     [fallbackLanguages, initialSelectedLanguages],
@@ -6481,7 +6499,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   speakingPlaybackKey={activeBubblePlaybackKey}
                   shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
                   viewerUserId={viewerUserId}
-                  onOpenProfile={onOpenProfile}
+                  onOpenProfile={handleOpenProfileForBubble}
                 />
               ))}
 
@@ -6841,6 +6859,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
+            {isBlockedCounterpart ? (
+              <div
+                data-qa="live-demo-blocked-bottom-bar"
+                className="flex items-center justify-center py-3 text-[0.92rem] font-medium text-gray-400"
+              >
+                {blockedComposerMessageLabel}
+              </div>
+            ) : (
             <AnimatePresence initial={false} mode="popLayout">
               {isComposerOpen ? (
                 <motion.div
@@ -7101,6 +7127,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+            )}
           </motion.div>
         </div>
       </div>

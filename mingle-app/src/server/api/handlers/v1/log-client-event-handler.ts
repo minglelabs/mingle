@@ -23,7 +23,7 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
-import { materializePendingConversationInvitees } from '@/lib/app-conversations'
+import { isMessageSenderBlockedInConversation, materializePendingConversationInvitees } from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -124,10 +124,19 @@ export async function handleLogClientEventV1(request: NextRequest) {
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
-      const shouldIgnoreDueToConversationClear = await shouldSkipFinalizedTurnPersistence({
-        clientMessageId,
-        sessionKey: tracking.sessionKey,
-      })
+      const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
+        shouldSkipFinalizedTurnPersistence({
+          clientMessageId,
+          sessionKey: tracking.sessionKey,
+        }),
+        // Defense in depth behind the client's own composer/mic gating — a
+        // block between the two members of this room means neither side's
+        // messages should persist any more, even from a stale client.
+        isMessageSenderBlockedInConversation({
+          sessionKey: tracking.sessionKey,
+          userId,
+        }),
+      ])
 
       const messageMetadata: Prisma.JsonObject = {
         clientMessageId,
@@ -151,7 +160,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear) {
+      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
         const message = await prisma.appMessage.upsert({
           where: {
             sessionKey_clientMessageId: {

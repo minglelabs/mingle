@@ -26,6 +26,13 @@ export type ConversationChannelSummary = {
   // account identity, so the client needs this to decide which avatar
   // system a bubble belongs to.
   isMultiMember: boolean;
+  // True when this is a 2-real-member room and a block exists between the
+  // viewer and the other member (either direction). The room stays in the
+  // list (never deleted), but the client should render the counterpart as a
+  // generic placeholder, refuse to open their profile, and hide the
+  // composer/mic in favor of a "blocked" message — see
+  // resolveBlockedCounterpartUserIdByChannelId.
+  isBlockedCounterpart: boolean;
   messageCount?: number;
   selectedLanguages?: string[];
   // language code -> ids of the members who picked it. Only populated for
@@ -253,6 +260,52 @@ async function listChannelMembersByChannelId(
   return membersByChannelId;
 }
 
+// A block between the viewer and their only other real member turns the
+// room into a dead end, KakaoTalk-style: the room stays in the list, but
+// the counterpart's identity is hidden and no further messages can flow in
+// either direction. Scoped to rooms with EXACTLY 2 real members — a block
+// against one member of a 3+ person room doesn't kill the whole room.
+// Directional doesn't matter here: a block from either side hides the
+// other, matching how materializePendingConversationInvitees already
+// treats a block in either direction as blocking.
+async function resolveBlockedCounterpartUserIdByChannelId(
+  viewerUserId: string,
+  membersByChannelId: Map<string, ChannelMemberProfile[]>,
+): Promise<Map<string, string>> {
+  const otherUserIdByChannelId = new Map<string, string>();
+  const candidateOtherUserIds = new Set<string>();
+  for (const [channelId, members] of membersByChannelId.entries()) {
+    if (members.length !== 2) continue;
+    const other = members.find((member) => member.userId !== viewerUserId);
+    if (!other) continue;
+    otherUserIdByChannelId.set(channelId, other.userId);
+    candidateOtherUserIds.add(other.userId);
+  }
+  if (candidateOtherUserIds.size === 0) return new Map();
+
+  const blocks = await prisma.userBlock.findMany({
+    where: {
+      OR: [...candidateOtherUserIds].flatMap((otherUserId) => [
+        { blockerId: viewerUserId, blockedId: otherUserId },
+        { blockerId: otherUserId, blockedId: viewerUserId },
+      ]),
+    },
+    select: { blockerId: true, blockedId: true },
+  });
+  if (blocks.length === 0) return new Map();
+  const blockedOtherUserIds = new Set(
+    blocks.map((block) => (block.blockerId === viewerUserId ? block.blockedId : block.blockerId)),
+  );
+
+  const result = new Map<string, string>();
+  for (const [channelId, otherUserId] of otherUserIdByChannelId.entries()) {
+    if (blockedOtherUserIds.has(otherUserId)) {
+      result.set(channelId, otherUserId);
+    }
+  }
+  return result;
+}
+
 // A shared room's title should read as "who else is in it," not a generic
 // auto-generated label — and that label is different depending on who's
 // looking, so it's computed at read time from membership, never stored.
@@ -461,6 +514,7 @@ function serializeConversationChannel(
   isMultiMember?: boolean,
   viewerFacingSelectedLanguages?: { languages: string[]; attribution: Record<string, string[]> },
   viewerOwnSelectedLanguages?: string[],
+  isBlockedCounterpart?: boolean,
 ): ConversationChannelSummary {
   const selectedLanguages = viewerFacingSelectedLanguages
     ? [...viewerFacingSelectedLanguages.languages]
@@ -477,6 +531,7 @@ function serializeConversationChannel(
     status: normalizeConversationChannelStatus(viewerFacingStatus ?? record.status),
     sessionKey: record.sessionKey,
     isMultiMember: isMultiMember === true,
+    isBlockedCounterpart: isBlockedCounterpart === true,
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
       : {}),
@@ -637,6 +692,9 @@ async function serializeConversationChannelWithPreview(
   const pendingInviteeProfiles = record.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
     .filter((profile): profile is { userId: string; name: string | null; handle: string | null } => Boolean(profile));
+  const blockedCounterpartByChannelId = viewerUserId
+    ? await resolveBlockedCounterpartUserIdByChannelId(viewerUserId, membersByChannelId)
+    : new Map<string, string>();
   return serializeConversationChannel(
     record,
     latestMessage?.preview,
@@ -652,6 +710,7 @@ async function serializeConversationChannelWithPreview(
     resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
     resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
     resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+    blockedCounterpartByChannelId.has(record.id),
   );
 }
 
@@ -686,6 +745,9 @@ async function listConversationChannelsForMember(
   const resolvePendingInviteeProfiles = (record: ConversationChannelRecord) => record.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
     .filter((profile): profile is { userId: string; name: string | null; handle: string | null } => Boolean(profile));
+  const blockedCounterpartByChannelId = viewerUserId
+    ? await resolveBlockedCounterpartUserIdByChannelId(viewerUserId, membersByChannelId)
+    : new Map<string, string>();
 
   if (options.includeMessageSummaries === false) {
     return records.map((record) => serializeConversationChannel(
@@ -703,6 +765,7 @@ async function listConversationChannelsForMember(
       resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
       resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
       resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+      blockedCounterpartByChannelId.has(record.id),
     ));
   }
 
@@ -730,6 +793,7 @@ async function listConversationChannelsForMember(
         resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
         resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
         resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+        blockedCounterpartByChannelId.has(record.id),
       );
     })
     .sort((left, right) => {
@@ -1011,6 +1075,39 @@ export async function materializePendingConversationInvitees(sessionKey: string)
       data: { pendingInviteeUserIds: [] },
     }),
   ]);
+}
+
+// Defense in depth behind the client's own composer/mic gating (see
+// isBlockedCounterpart) — even a stale client that still posts a
+// stt_turn_finalized event for a now-blocked room must not have it persist.
+// Only meaningful for a 2-real-member room; a block against one member of a
+// 3+ person room doesn't stop the whole room from messaging.
+export async function isMessageSenderBlockedInConversation(args: {
+  sessionKey: string;
+  userId: string;
+}): Promise<boolean> {
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey: args.sessionKey },
+    select: { id: true },
+  });
+  if (!channel) return false;
+
+  const membersByChannelId = await listChannelMembersByChannelId([channel.id]);
+  const members = membersByChannelId.get(channel.id) ?? [];
+  if (members.length !== 2) return false;
+  const other = members.find((member) => member.userId !== args.userId);
+  if (!other) return false;
+
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: args.userId, blockedId: other.userId },
+        { blockerId: other.userId, blockedId: args.userId },
+      ],
+    },
+    select: { blockerId: true },
+  });
+  return Boolean(block);
 }
 
 export async function updateConversationChannelStatus(args: {
@@ -1379,6 +1476,11 @@ export type ConversationMemberSummary = {
   // client derives the union + per-language attribution shown in the picker
   // from these per-member lists, avoiding a second endpoint for the same data.
   selectedLanguages: string[];
+  // True when a block exists between the caller and this member (either
+  // direction). name/handle/image are nulled out for a blocked member so
+  // the client never has real identity to accidentally render — it should
+  // substitute its own generic placeholder and refuse to open the profile.
+  blocked: boolean;
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -1404,17 +1506,29 @@ export async function listConversationMembersForUser(args: {
 
   const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
   const members = membersByChannelId.get(conversationRecord.id) ?? [];
+  const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
+    args.userId,
+    membersByChannelId,
+  );
+  const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
 
-  return members.map((member) => ({
-    userId: member.userId,
-    name: member.name,
-    handle: member.handle,
-    image: member.image,
-    imageCropScale: member.imageCropScale,
-    imageCropX: member.imageCropX,
-    imageCropY: member.imageCropY,
-    selectedLanguages: member.selectedLanguages,
-  }));
+  return members.map((member) => {
+    const blocked = member.userId === blockedCounterpartUserId;
+    return {
+      userId: member.userId,
+      // Name/handle stay real even when blocked — the point is hiding their
+      // profile PHOTO and preventing new contact, not making them
+      // unrecognizable. Only the photo falls back to a default.
+      name: member.name,
+      handle: member.handle,
+      image: blocked ? null : member.image,
+      imageCropScale: blocked ? null : member.imageCropScale,
+      imageCropX: blocked ? null : member.imageCropX,
+      imageCropY: blocked ? null : member.imageCropY,
+      selectedLanguages: member.selectedLanguages,
+      blocked,
+    };
+  });
 }
 
 export async function getConversationHydrationStateForUser(args: {
@@ -1526,6 +1640,11 @@ export async function getConversationHydrationStateForUser(args: {
   const isMultiMemberByRealMembers = (members?.length ?? 0) >= 2;
   const isMultiMember = resolveEffectiveMemberCount(members, conversationRecord.pendingInviteeUserIds) >= 2;
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
+  const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
+    args.userId,
+    membersByChannelId,
+  );
+  const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
 
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
@@ -1568,7 +1687,14 @@ export async function getConversationHydrationStateForUser(args: {
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
       speakerUserId: isMultiMemberByRealMembers ? message.userId : null,
-      speakerImage: isMultiMemberByRealMembers && message.userId ? (imageByUserId.get(message.userId) ?? null) : null,
+      // Also nulled for the blocked counterpart's own messages (past and
+      // future) — keeps speakerUserId intact so bubble left/right alignment
+      // stays correct, but ChatBubble's existing "shared-room member with no
+      // photo" fallback renders a neutral placeholder avatar instead of
+      // their real one.
+      speakerImage: isMultiMemberByRealMembers && message.userId && message.userId !== blockedCounterpartUserId
+        ? (imageByUserId.get(message.userId) ?? null)
+        : null,
     };
   }).filter((utterance) => utterance.originalText.length > 0);
 
@@ -1618,6 +1744,7 @@ export async function getConversationHydrationStateForUser(args: {
         args.userId,
         conversationRecord.pendingInviteeUserIds,
       ),
+      Boolean(blockedCounterpartUserId),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,

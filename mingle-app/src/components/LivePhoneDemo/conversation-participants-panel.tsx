@@ -37,6 +37,7 @@ type ParticipantProfile = {
   handle: string | null;
   nationality: string | null;
   primaryLanguages: string[];
+  blocked: boolean;
 };
 
 type ProfileLoadState = "idle" | "loading" | "ready" | "error";
@@ -72,6 +73,7 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
     handle: nullableString(value.handle),
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
+    blocked: false,
   };
 }
 
@@ -91,6 +93,7 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     // doesn't carry) — other members' rows render without language flags.
     nationality: null,
     primaryLanguages: [],
+    blocked: value.blocked === true,
   };
 }
 
@@ -116,6 +119,7 @@ function buildSessionFallbackProfile(
     handle: null,
     nationality: null,
     primaryLanguages: [],
+    blocked: false,
   };
 }
 
@@ -130,24 +134,28 @@ function ParticipantRow({
   badgeLabel?: string;
   onOpenProfile?: (userId: string) => void;
 }) {
+  // Blocking hides the photo and stops profile taps, but the name/handle
+  // stay real — the point is hiding what's new (their current photo,
+  // reachability), not making someone you already know unrecognizable.
   const displayName = member.name?.trim() || fallbackName;
   const displayLanguages = sanitizeSttLanguageSelection(
     member.primaryLanguages,
     member.nationality ? [member.nationality] : [],
   );
   const displayHandle = formatHandle(member.handle);
+  const resolvedOnOpenProfile = member.blocked ? undefined : onOpenProfile;
 
   return (
     <button
       type="button"
-      onClick={() => onOpenProfile?.(member.id)}
-      disabled={!onOpenProfile}
+      onClick={() => resolvedOnOpenProfile?.(member.id)}
+      disabled={!resolvedOnOpenProfile}
       className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
     >
       <div className="flex items-center gap-3">
         <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
           <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-            {member.image ? (
+            {member.image && !member.blocked ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={member.image}
