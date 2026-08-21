@@ -1080,3 +1080,12 @@
   - Remove the black backdrop color while retaining outside-panel click handling for menu dismissal.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify the hamburger enters and exits with one continuous horizontal motion, the room remains at normal brightness, and tapping outside the menu still closes it.
+
+## 2026-08-21 - Remove the conversation menu edge shadow
+
+- Surface: The conversation room and its hamburger menu, including the legacy conversation renderer.
+- Issue: The hamburger panel kept a directional `box-shadow` while its slide surface remained mounted off-screen for transition and history handling. The shadow extended leftward from the hidden panel and appeared as a black gradient along the room's right edge, even before the menu was opened.
+- User impact: The conversation room looked dimmed or visually covered at the right edge both before and during hamburger-menu use, despite the room itself not being modal.
+- Resolution: Remove the panel shadow from the current outer and nested menu surfaces and from the legacy menu renderer. Make the legacy wrapper transparent as well, so both renderers keep the menu's panel border and slide transition without painting a shadow or dimming layer over the room.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the room has uniform brightness before opening the menu, remains uniform while the menu is open, and keeps a smooth menu transition.

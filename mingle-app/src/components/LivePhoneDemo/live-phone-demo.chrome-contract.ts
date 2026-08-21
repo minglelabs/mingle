@@ -32,11 +32,3 @@ export function resolveLiveDemoMenuPanelClassName(
     .filter(Boolean)
     .join(" ");
 }
-
-export function resolveLiveDemoMenuPanelShadow(
-  isCenteredMenuLayout: boolean,
-): string {
-  return isCenteredMenuLayout
-    ? "0 22px 64px rgba(15, 23, 42, 0.24)"
-    : "-18px 0 40px rgba(15, 23, 42, 0.22)";
-}

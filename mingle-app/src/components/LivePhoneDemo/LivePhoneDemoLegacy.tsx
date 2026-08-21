@@ -3291,7 +3291,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
-  const isCenteredMenuLayout = viewportWidthPx >= 640
   const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
@@ -3457,7 +3456,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="absolute inset-0 z-50 overflow-hidden bg-black/42"
+              className="absolute inset-0 z-50 overflow-hidden bg-transparent"
               onClick={requestCloseMenuPanel}
             >
               <div className="flex h-full w-full justify-end sm:justify-center">
@@ -3473,11 +3472,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   onClick={(event) => event.stopPropagation()}
                   className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
-                  style={{
-                    boxShadow: isCenteredMenuLayout
-                      ? '0 22px 64px rgba(15, 23, 42, 0.24)'
-                      : '-18px 0 40px rgba(15, 23, 42, 0.22)',
-                  }}
                 >
                   <motion.div
                     initial={false}

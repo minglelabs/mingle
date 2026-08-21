@@ -134,7 +134,6 @@ import {
   LIVE_DEMO_MENU_OVERLAY_CLASSNAME,
   LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME,
   resolveLiveDemoMenuPanelClassName,
-  resolveLiveDemoMenuPanelShadow,
   resolveLiveDemoMenuTriggerClassName,
 } from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
@@ -4993,7 +4992,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
-  const isCenteredMenuLayout = viewportWidthPx >= 640
   const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
@@ -5403,10 +5401,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           backdropClassName={`${LIVE_DEMO_MENU_OVERLAY_CLASSNAME} flex h-full w-full justify-end sm:justify-center`}
           backdropFadeWithSurface={false}
           className={resolveLiveDemoMenuPanelClassName(navSurfaceClassName)}
-          style={{
-            boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),
-            touchAction: 'pan-y',
-          }}
+          style={{ touchAction: 'pan-y' }}
           onBackdropClick={requestCloseMenuPanel}
           stopPropagation
         >
@@ -5910,10 +5905,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       ariaLabel={menuLabel}
                       nativeBackPriority={20}
                       className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
-                      style={{
-                        boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),
-                        touchAction: 'pan-y',
-                      }}
+                      style={{ touchAction: 'pan-y' }}
                       stopPropagation
                     >
                       <div className="relative h-full overflow-hidden">
