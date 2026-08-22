@@ -30,6 +30,7 @@ MESSAGING_ENV_FILE="$ROOT_DIR/mingle-messaging/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
 RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
+ANDROID_LOCAL_PROPERTIES_FILE="$ROOT_DIR/mingle-app/rn/android/local.properties"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
 IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.0"
@@ -1312,6 +1313,32 @@ ensure_rn_workspace_dependencies() {
     pnpm --dir "$rn_dir" install --frozen-lockfile
   fi
   write_workspace_dependency_install_marker "$rn_dir"
+}
+
+resolve_android_sdk_path() {
+  local candidate="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [[ -n "$candidate" && -d "$candidate" ]]; then
+    (cd "$candidate" && pwd -P)
+    return 0
+  fi
+
+  candidate="$HOME/Library/Android/sdk"
+  [[ -d "$candidate" ]] || return 1
+  (cd "$candidate" && pwd -P)
+}
+
+ensure_android_sdk_config() {
+  local sdk_path=""
+  sdk_path="$(resolve_android_sdk_path || true)"
+  [[ -n "$sdk_path" ]] || die "Android SDK not found; set ANDROID_HOME or install it at $HOME/Library/Android/sdk"
+
+  export ANDROID_HOME="$sdk_path"
+  export ANDROID_SDK_ROOT="$sdk_path"
+  mkdir -p "$(dirname "$ANDROID_LOCAL_PROPERTIES_FILE")"
+  if [[ ! -f "$ANDROID_LOCAL_PROPERTIES_FILE" ]] || [[ "$(<"$ANDROID_LOCAL_PROPERTIES_FILE")" != "sdk.dir=$sdk_path" ]]; then
+    printf 'sdk.dir=%s\n' "$sdk_path" > "$ANDROID_LOCAL_PROPERTIES_FILE"
+    log "Android SDK configured automatically: $sdk_path"
+  fi
 }
 
 ensure_ios_pods_if_needed() {
@@ -3034,6 +3061,7 @@ run_android_mobile_install() {
 
   require_cmd adb
   ensure_rn_workspace_dependencies
+  ensure_android_sdk_config
 
   local gradle_task="installRelease"
   if [[ "$variant" == "debug" ]]; then
