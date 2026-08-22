@@ -39,7 +39,7 @@ function StatusBadge({ deleted }: { deleted: boolean | null }) {
   return deleted ? (
     <span className="rounded bg-[#fbe5e1] px-2 py-1 text-[10px] font-semibold text-[#9b3c2f]">삭제됨</span>
   ) : (
-    <span className="rounded bg-[#e3f3e9] px-2 py-1 text-[10px] font-semibold text-[#28734b]">정상</span>
+    <span className="rounded bg-[#e3f3e9] px-2 py-1 text-[10px] font-semibold text-[#28734b]">삭제되지 않음</span>
   );
 }
 
