@@ -194,7 +194,7 @@ Mingle 프로젝트의 백엔드와 모바일 로컬 검증은 일반적인 수�
 
 Vault CLI를 사용할 때 로컬 Vault 주소가 `http://127.0.0.1:8200`인지 확인해야 합니다. shell에 `https://127.0.0.1:8200`이 잡혀 있으면 잘못된 주소로 요청할 수 있습니다.
 
-현재 `scripts/devbox.sh`는 messaging 전용 Vault path를 직접 읽는 것이 아니라 app runtime env 또는 STT runtime env에서 `MINGLE_REALTIME_SECRET`을 찾아 messaging 프로세스에 전달합니다. 따라서 `secret/mingle-messaging/dev`에 값을 새로 넣는 것만으로는 현재 devbox에 자동 반영된다고 볼 수 없습니다.
+현재 `scripts/devbox.sh`는 `secret/mingle/dev` 하나의 runtime env를 web/STT/messaging에 공통으로 주입하고, `MINGLE_REALTIME_SECRET`도 그 레코드에서 읽습니다. 별도의 `secret/mingle-messaging/dev` 경로를 만들 필요가 없습니다.
 
 또한 `vault kv patch`는 기존 KV record가 있어야 합니다. path 자체가 없으면 404가 납니다. `vault kv put`은 record를 새로 만들 수 있지만 기존 key를 빠뜨리면 전체 record를 덮어쓸 수 있으므로, 운영/공유 secret path에서 무심코 사용하면 안 됩니다. 변경 후에는 devbox를 재시작해 secret을 다시 로드해야 합니다.
 

@@ -11,6 +11,64 @@
 - live 테스트(`pnpm test:live`) 포트 자동 주입 (`devbox test`는 기본 비활성)
 > `mingle-ios` 프로젝트는 제거되었습니다. 현재 iOS 자동화는 RN 앱 기준으로만 동작합니다.
 
+## 메인 루트 `.env.local`에 둘 값
+
+아래 값은 워크트리마다 달라지지 않는 공통값입니다. `/Users/nam/mingle/.env.local`에 한 번만 두고,
+`.devbox.env`에는 넣지 않습니다.
+
+```dotenv
+DEVBOX_CLOUDFLARE_TUNNEL_TOKEN=...
+DEVBOX_CLOUDFLARE_WEB_HOSTNAME=mingle-app-devbox.photo-for-passport.com
+DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
+DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
+DEVBOX_RN_FALLBACK_SITE_URL=https://mingle-app-xi.vercel.app
+DEVBOX_RN_FALLBACK_WS_URL=wss://mingle-stt.fly.dev
+DEVBOX_TUNNEL_PROVIDER=cloudflare
+DEVBOX_VAULT_PATH=secret/mingle/dev
+DEVBOX_VAULT_PROD_PATH=secret/mingle/prod
+DEVBOX_LOCAL_HOST=127.0.0.1
+DEVBOX_OPENCLAW_ROOT=/Users/nam/openclaw
+DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ
+RN_AD_BANNER_POSITION=bottom
+RN_AD_BANNER_HEIGHT_PX=50
+RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551
+RN_ADMOB_APP_ID_ANDROID=ca-app-pub-7057041881494735~1471126891
+RN_ADMOB_BANNER_UNIT_ID_IOS=ca-app-pub-7057041881494735/3768106846
+RN_ADMOB_BANNER_UNIT_ID_ANDROID=ca-app-pub-7057041881494735/6522262692
+RN_IOS_API_NAMESPACE=ios/v2.0.0
+RN_ANDROID_API_NAMESPACE=android/v2.0.0
+MINGLE_REALTIME_SECRET=...
+VAULT_ADDR=http://127.0.0.1:8200
+```
+
+고정 ngrok 도메인을 계속 사용할 때만 `DEVBOX_NGROK_WEB_DOMAIN`도 이 목록에 추가합니다.
+Cloudflare named tunnel만 사용한다면 추가하지 않습니다.
+
+`VAULT_NAMESPACE`는 사용하는 Vault가 namespace를 요구할 때만 추가합니다. `VAULT_TOKEN`은 파일에
+넣지 말고 `vault login`으로 로컬 Vault CLI 세션에 저장합니다. `MINGLE_REALTIME_SECRET`처럼
+세 서비스가 공유하는 secret도 루트 env로 옮길 수 있으며, bootstrap이 같은 Vault path에 업로드합니다.
+
+워크트리별 `DEVBOX_WORKTREE_NAME`, 포트, 현재 tunnel URL, `NEXT_PUBLIC_*`/`MINGLE_TEST_*` URL은
+각 워크트리의 `.devbox.env`에만 남깁니다. 앱/STT/messaging 전용 API key와 DB/auth secret은
+기존 서비스 env에 남겨도 bootstrap이 하나의 `secret/mingle/dev`에 합쳐 올립니다. 루트 env로
+옮기기로 한 값은 원본 서비스 env에서 삭제해 중복을 없애면 됩니다.
+
+## Vault 초기 설정
+
+개발용 세 서비스는 하나의 KV record를 사용합니다.
+
+```bash
+cd /Users/nam/.codex/worktrees/mingle/pr-206-device-test-rebased
+vault login
+scripts/devbox bootstrap --vault-path secret/mingle/dev
+scripts/devbox status
+```
+
+`bootstrap`은 루트 공통 env와 세 서비스 env의 비관리 키를 읽어 `secret/mingle/dev`에
+안전하게 patch합니다. record가 없으면 최초 1회만 `kv put`으로 만들고, 기존 record는 `kv patch`만
+사용합니다. 운영 모바일 URL을 사용하는 경우에는 `secret/mingle/prod`를 별도로 준비하고
+`DEVBOX_VAULT_PROD_PATH` 또는 기본 경로를 사용합니다.
+
 ## 빠른 시작
 
 ```bash
@@ -20,10 +78,9 @@ scripts/devbox init
 # 2) 메인 워크트리 루트 공통값과 서비스 env를 Vault에 반영 + 의존성 설치
 scripts/devbox bootstrap
 
-# 2-b) (선택) Vault 경로 저장
+# 2-b) (선택) 공통 Vault 경로 지정
 scripts/devbox bootstrap \
-  --vault-app-path secret/mingle-app/dev \
-  --vault-stt-path secret/mingle-stt/dev
+  --vault-path secret/mingle/dev
 
 # 2-c) `--vault-push`는 이전 호환성을 위해 남아 있지만 이제 생략해도 됩니다.
 
@@ -152,28 +209,26 @@ scripts/devbox bootstrap
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
     불일치/누락 시 `pod install` 자동 동기화
-  - `--vault-app-path`, `--vault-stt-path`로 Vault 경로를 초기값으로 저장 가능
+  - 공통 Vault 경로는 메인 루트 `.env.local`의 `DEVBOX_VAULT_PATH`로 관리
 
 - `scripts/devbox bootstrap`
   - `.env.local`은 수정하지 않고, 메인 워크트리 루트 `.env.local`의 공통값과
-    `mingle-app/.env.local`/`mingle-stt/.env.local`의 서비스값을 읽어 Vault에 업로드
+    `mingle-app`/`mingle-stt`/`mingle-messaging` env의 서비스값을 하나의 Vault path에 업로드
   - `mingle-app`, `mingle-stt`, `mingle-messaging` 의존성(`pnpm install`) 자동 설치
   - `mingle-app/rn` 의존성(`pnpm install`) 자동 설치
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
     불일치/누락 시 `pod install` 자동 동기화
   - `mingle-app/node_modules/.prisma/client` 생성물이 없으면 `db:generate` 자동 실행
-  - 옵션으로 Vault KV 경로를 저장
-    - `--vault-app-path <path>`
-    - `--vault-stt-path <path>`
-  - 전달한 Vault 경로를 저장하고 재적용
+  - `--vault-path <path>`로 이번 실행에서 사용할 공통 Vault 경로를 지정
   - `--vault-push`는 이전 호환성을 위한 no-op이며, bootstrap이 항상 메인 루트 공통값과
-    서비스 env의 비관리 키를 Vault 경로로 업로드
+    세 서비스 env의 비관리 키를 하나의 Vault 경로로 업로드
     - Vault 경로가 비어 있으면 안전하게 최초 1회 `kv put`으로 생성
     - Vault 경로가 이미 있으면 계속 `kv patch`만 사용하고 파괴적 fallback은 거부
 
 - `scripts/devbox vault-up [--seed]`
   - Homebrew `vault` 서비스를 시작
-  - `--seed`를 주면 메인 워크트리 루트 `.env.local` 공통값과 서비스 env의 비관리 키를 Vault로 즉시 반영
+  - `--seed`를 주면 메인 워크트리 루트 `.env.local` 공통값과 세 서비스 env의 비관리 키를
+    `secret/mingle/dev`에 즉시 반영
   - 재부팅 후 로컬 Vault가 내려갔을 때 복구용으로 사용
 
 - `scripts/devbox profile --profile local --host <LAN_IP>`
@@ -193,7 +248,7 @@ scripts/devbox bootstrap
 
 - `scripts/devbox up --profile device --device-app-env dev|prod`
   - 모바일 앱 빌드 URL을
-    `secret/mingle-app/dev` 또는 `secret/mingle-app/prod`에서 직접 읽어 주입
+    `secret/mingle/dev` 또는 `secret/mingle/prod`에서 직접 읽어 주입
     - 기준 키: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`
     - fallback(마이그레이션 호환): `MINGLE_API_BASE_URL`, `RN_WEB_APP_BASE_URL`, `MINGLE_WEB_APP_BASE_URL`, `MINGLE_WS_URL`, `RN_DEFAULT_WS_URL`, `MINGLE_DEFAULT_WS_URL`
     - 장애 fallback 키: `MINGLE_API_FALLBACK_SITE_URL`, `MINGLE_STT_FALLBACK_WS_URL`
@@ -246,7 +301,7 @@ scripts/devbox bootstrap
   - URL 조회 우선순위: `--device-app-env/--site-url` > 워크트리 `.devbox.env` > 메인 `.env.local`/Vault
   - 기본값: `Release`, `export-method=app-store`
   - Team ID 우선순위: `--team-id` > `DEVBOX_IOS_TEAM_ID`(메인 `.env.local`/Vault) > `mingle.xcodeproj`의 `DEVELOPMENT_TEAM`
-  - `--device-app-env prod`로 `secret/mingle-app/prod` URL/WS를 주입
+  - `--device-app-env prod`로 `secret/mingle/prod` URL/WS를 주입
   - `--site-url`, `--ws-url`로 런타임 URL 수동 오버라이드 가능
   - `--archive-path`, `--export-path`, `--export-options-plist` 커스텀 경로 지원
   - `--skip-export`는 archive까지만 생성, `--dry-run`은 명령만 출력
@@ -287,7 +342,8 @@ scripts/devbox bootstrap
 
 - `.devbox.env`
 - 메인 워크트리 루트 `.env.local` (공통값, devbox는 읽기/참조만 함)
-- 메인 워크트리의 `mingle-app/.env.local` / `mingle-stt/.env.local` (서비스값, devbox는 읽기/참조만 함)
+- 메인 워크트리의 `mingle-app/.env.local` / `mingle-stt/.env.local` /
+  `mingle-messaging/.env.local` (서비스값, devbox는 읽기/참조만 함)
 - `ngrok.mobile.local.yml`
 - `.devbox-logs/` (`--log-file` 사용 시 생성, gitignore)
 

@@ -4,7 +4,7 @@ set -euo pipefail
 # =============================================================================
 # IMPORTANT CONFIGURATION POLICY
 #
-# Vault is the source of truth for persistent devbox/app/STT configuration.
+# Vault is the source of truth for persistent devbox/app/STT/messaging configuration.
 # The local Vault is bootstrapped from the MAIN worktree's root
 # /Users/nam/mingle/.env.local plus its service env files, not from this
 # feature worktree's generated .env files. Keep persistent secrets and shared
@@ -26,6 +26,7 @@ DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
 ROOT_ENV_FILE="$ROOT_DIR/.env.local"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
+MESSAGING_ENV_FILE="$ROOT_DIR/mingle-messaging/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
 RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
@@ -150,8 +151,8 @@ is_persistent_devbox_key() {
     DEVBOX_RN_FALLBACK_SITE_URL|\
     DEVBOX_RN_FALLBACK_WS_URL|\
     DEVBOX_TUNNEL_PROVIDER|\
-    DEVBOX_VAULT_APP_PATH|\
-    DEVBOX_VAULT_STT_PATH|\
+    DEVBOX_VAULT_PATH|\
+    DEVBOX_VAULT_PROD_PATH|\
     DEVBOX_LOCAL_HOST|\
     DEVBOX_OPENCLAW_ROOT|\
     DEVBOX_IOS_TEAM_ID)
@@ -167,8 +168,8 @@ is_shared_app_setting_key() {
     DEVBOX_CLOUDFLARE_*|\
     DEVBOX_RN_FALLBACK_*|\
     DEVBOX_TUNNEL_PROVIDER|\
-    DEVBOX_VAULT_APP_PATH|\
-    DEVBOX_VAULT_STT_PATH|\
+    DEVBOX_VAULT_PATH|\
+    DEVBOX_VAULT_PROD_PATH|\
     DEVBOX_LOCAL_HOST|\
     DEVBOX_OPENCLAW_ROOT|\
     DEVBOX_IOS_TEAM_ID|\
@@ -220,8 +221,8 @@ DEVBOX_PUBLIC_WS_URL=""
 DEVBOX_PUBLIC_MESSAGING_WS_URL=""
 DEVBOX_TEST_API_BASE_URL=""
 DEVBOX_TEST_WS_URL=""
-DEVBOX_VAULT_APP_PATH=""
-DEVBOX_VAULT_STT_PATH=""
+DEVBOX_VAULT_PATH=""
+DEVBOX_VAULT_PROD_PATH=""
 DEVBOX_NGROK_API_PORT=""
 DEVBOX_TUNNEL_PROVIDER="${DEVBOX_TUNNEL_PROVIDER:-}"
 # NOTE:
@@ -308,9 +309,9 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/devbox [--log-file PATH|auto] <command> [options]
-  scripts/devbox init [--web-port N] [--stt-port N] [--messaging-port N] [--metro-port N] [--ngrok-api-port N] [--host HOST] [--vault-app-path PATH] [--vault-stt-path PATH] [--openclaw-root PATH]
-  scripts/devbox bootstrap [--vault-app-path PATH] [--vault-stt-path PATH] [--vault-push] [--openclaw-root PATH]
-  scripts/devbox vault-up [--seed] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox init [--web-port N] [--stt-port N] [--messaging-port N] [--metro-port N] [--ngrok-api-port N] [--host HOST] [--vault-path PATH] [--openclaw-root PATH]
+  scripts/devbox bootstrap [--vault-path PATH] [--vault-push] [--openclaw-root PATH]
+  scripts/devbox vault-up [--seed] [--vault-path PATH]
   scripts/devbox profile --profile local|device [--host HOST]
   scripts/devbox ngrok-config
   scripts/devbox gateway [--openclaw-root PATH] [--mode dev|run] [--]
@@ -318,7 +319,7 @@ Usage:
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
   scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--qa-bridge] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
   scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-scroll-fps] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
@@ -356,6 +357,10 @@ Environment:
                            Example: abcdef.ngrok-free.app
   DEVBOX_TUNNEL_PROVIDER   Device profile tunnel provider (ngrok|cloudflare).
                            Default: ngrok
+  DEVBOX_VAULT_PATH        Shared development Vault KV path for all services.
+                           Default: secret/mingle/dev
+  DEVBOX_VAULT_PROD_PATH   Optional production Vault KV path for --device-app-env prod.
+                           Default: secret/mingle/prod
   DEVBOX_CLOUDFLARE_TUNNEL_TOKEN  Optional: when set with hostnames below,
                            cloudflare provider uses named tunnel mode.
                            Store persistent values in the MAIN worktree root
@@ -587,6 +592,11 @@ is_managed_key_for_target() {
         [[ "$item" == "$key" ]] && return 0
       done
       ;;
+    mingle)
+      for item in "${APP_MANAGED_KEYS[@]}" "${STT_MANAGED_KEYS[@]}"; do
+        [[ "$item" == "$key" ]] && return 0
+      done
+      ;;
     *)
       return 1
       ;;
@@ -718,18 +728,22 @@ read_vault_cli_env_value_from_local_env_files() {
   local main_root_env_file=""
   local main_app_env_file=""
   local main_stt_env_file=""
+  local main_messaging_env_file=""
   local -a env_files=()
 
   main_root_env_file="$(main_worktree_env_file root || true)"
   main_app_env_file="$(main_worktree_env_file app || true)"
   main_stt_env_file="$(main_worktree_env_file stt || true)"
+  main_messaging_env_file="$(main_worktree_env_file messaging || true)"
   env_files=(
     "$main_root_env_file"
     "$main_app_env_file"
     "$main_stt_env_file"
+    "$main_messaging_env_file"
     "$ROOT_ENV_FILE"
     "$APP_ENV_FILE"
     "$STT_ENV_FILE"
+    "$MESSAGING_ENV_FILE"
   )
 
   for file in "${env_files[@]}"; do
@@ -822,42 +836,6 @@ read_env_value_from_vault() {
   [[ -n "$value" ]] && printf '%s' "$value"
 }
 
-can_read_vault_path() {
-  local path="$1"
-  [[ -n "$path" ]] || return 1
-  command -v vault >/dev/null 2>&1 || return 1
-  command -v jq >/dev/null 2>&1 || return 1
-  prepare_vault_cli_env
-  vault kv get -format=json "$path" >/dev/null 2>&1
-}
-
-auto_detect_default_vault_path() {
-  local target="$1"
-  local candidate=""
-  local -a candidates=()
-
-  case "$target" in
-    app)
-      candidates=("secret/mingle-app/dev" "secret/mingle-app/prod")
-      ;;
-    stt)
-      candidates=("secret/mingle-stt/dev" "secret/mingle-stt/prod")
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-
-  for candidate in "${candidates[@]}"; do
-    if can_read_vault_path "$candidate"; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
 try_read_env_value_from_vault_path() {
   local path="$1"
   local key="$2"
@@ -877,7 +855,7 @@ read_app_setting_value() {
   local key="$1"
   local value=""
   local path=""
-  local vault_app_path=""
+  local vault_path=""
   local seen_paths=""
   local -a candidate_paths=()
 
@@ -916,23 +894,14 @@ read_app_setting_value() {
     fi
   fi
 
-  vault_app_path="${DEVBOX_VAULT_APP_PATH:-}"
-  if [[ -z "$vault_app_path" ]]; then
-    vault_app_path="$(read_main_root_setting_value DEVBOX_VAULT_APP_PATH || true)"
-    vault_app_path="$(trim_whitespace "$vault_app_path")"
-  fi
-  if [[ -z "$vault_app_path" ]]; then
-    vault_app_path="$(read_main_app_setting_value DEVBOX_VAULT_APP_PATH || true)"
-    vault_app_path="$(trim_whitespace "$vault_app_path")"
-  fi
-  if [[ -z "$vault_app_path" && -f "$APP_ENV_FILE" ]]; then
-    vault_app_path="$(read_env_value_from_file DEVBOX_VAULT_APP_PATH "$APP_ENV_FILE" || true)"
-    vault_app_path="$(decode_dotenv_value "$vault_app_path")"
-    vault_app_path="$(trim_whitespace "$vault_app_path")"
+  vault_path="${DEVBOX_VAULT_PATH:-}"
+  if [[ -z "$vault_path" ]]; then
+    vault_path="$(read_main_root_setting_value DEVBOX_VAULT_PATH || true)"
+    vault_path="$(trim_whitespace "$vault_path")"
   fi
 
-  if [[ -n "$vault_app_path" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    value="$(read_env_value_from_vault "$vault_app_path" "$key" || true)"
+  if [[ -n "$vault_path" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    value="$(read_env_value_from_vault "$vault_path" "$key" || true)"
     if [[ -n "$value" ]]; then
       printf '%s' "$value"
       return 0
@@ -948,9 +917,9 @@ read_app_setting_value() {
     fi
   fi
 
-  candidate_paths+=("$vault_app_path")
-  candidate_paths+=("secret/mingle-app/dev")
-  candidate_paths+=("secret/mingle-app/prod")
+  candidate_paths+=("$vault_path")
+  candidate_paths+=("secret/mingle/dev")
+  candidate_paths+=("secret/mingle/prod")
 
   for path in "${candidate_paths[@]}"; do
     path="$(trim_whitespace "$path")"
@@ -1214,6 +1183,7 @@ main_worktree_env_file() {
     root) printf '%s/.env.local' "$main_root" ;;
     app) printf '%s/mingle-app/.env.local' "$main_root" ;;
     stt) printf '%s/mingle-stt/.env.local' "$main_root" ;;
+    messaging) printf '%s/mingle-messaging/.env.local' "$main_root" ;;
     *) return 1 ;;
   esac
 }
@@ -1576,40 +1546,44 @@ push_env_file_to_vault_path() {
   die "failed to inspect vault path for ${target}: $path"
 }
 
-push_env_to_vault_paths() {
-  local app_path="${1:-}"
-  local stt_path="${2:-}"
+push_env_to_vault_path() {
+  local path="${1:-}"
   local root_file=""
   local app_file=""
   local stt_file=""
+  local messaging_file=""
 
   root_file="$(main_worktree_env_file root || true)"
   app_file="$(main_worktree_env_file app || true)"
   stt_file="$(main_worktree_env_file stt || true)"
+  messaging_file="$(main_worktree_env_file messaging || true)"
   [[ -n "$app_file" && -f "$app_file" ]] || die "missing main mingle-app/.env.local for Vault bootstrap"
   [[ -n "$stt_file" && -f "$stt_file" ]] || die "missing main mingle-stt/.env.local for Vault bootstrap"
 
-  push_env_file_to_vault_path "app" "$app_path" "$app_file"
+  push_env_file_to_vault_path "mingle" "$path" "$app_file"
+  push_env_file_to_vault_path "mingle" "$path" "$stt_file"
+  if [[ -n "$messaging_file" && -f "$messaging_file" ]]; then
+    push_env_file_to_vault_path "mingle" "$path" "$messaging_file"
+  else
+    warn "main mingle-messaging/.env.local not found; skipping messaging service env upload"
+  fi
   if [[ -n "$root_file" && -f "$root_file" ]]; then
-    # Push the root env after the app env so shared values are the final
-    # source when a legacy service env still contains a duplicate key.
-    push_env_file_to_vault_path "app" "$app_path" "$root_file"
+    # Push the root env last so shared values are the final source when a
+    # legacy service env still contains a duplicate key.
+    push_env_file_to_vault_path "mingle" "$path" "$root_file"
   else
     warn "main root .env.local not found; skipping shared root env upload"
   fi
-  push_env_file_to_vault_path "stt" "$stt_path" "$stt_file"
 }
 
 cmd_vault_up() {
   local seed=0
-  local vault_app_override=""
-  local vault_stt_override=""
+  local vault_override=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --seed) seed=1; shift ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       *) die "unknown option for vault-up: $1" ;;
     esac
   done
@@ -1629,11 +1603,10 @@ cmd_vault_up() {
 
   if [[ "$seed" -eq 1 ]]; then
     require_devbox_env
-    resolve_vault_paths "$vault_app_override" "$vault_stt_override"
-    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --seed (set DEVBOX_VAULT_APP_PATH in the main root .env.local or pass --vault-app-path)"
-    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --seed (set DEVBOX_VAULT_STT_PATH in the main root .env.local or pass --vault-stt-path)"
+    resolve_vault_path "$vault_override"
+    [[ -n "$DEVBOX_VAULT_PATH" ]] || die "missing shared vault path for --seed (set DEVBOX_VAULT_PATH in the main root .env.local or pass --vault-path)"
     vault token lookup >/dev/null 2>&1 || die "vault is running but token lookup failed (run: vault login)"
-    push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
+    push_env_to_vault_path "$DEVBOX_VAULT_PATH"
   fi
 }
 
@@ -1675,10 +1648,8 @@ sync_env_from_vault_path() {
 }
 
 sync_env_from_vault_paths() {
-  local app_path="${1:-}"
-  local stt_path="${2:-}"
-  sync_env_from_vault_path "app" "$app_path" "$APP_ENV_FILE"
-  sync_env_from_vault_path "stt" "$stt_path" "$STT_ENV_FILE"
+  local path="${1:-}"
+  sync_env_from_vault_path "mingle" "$path" "$ROOT_ENV_FILE"
 }
 
 write_runtime_env_from_vault_path() {
@@ -1720,39 +1691,19 @@ write_runtime_env_from_vault_path() {
   log "loaded ${count} runtime keys from vault (${target})"
 }
 
-resolve_vault_paths() {
-  local app_override="${1:-}"
-  local stt_override="${2:-}"
-  local app_path="${DEVBOX_VAULT_APP_PATH:-}"
-  local stt_path="${DEVBOX_VAULT_STT_PATH:-}"
-  local detected_app_path=""
-  local detected_stt_path=""
+resolve_vault_path() {
+  local override="${1:-}"
+  local path="${DEVBOX_VAULT_PATH:-}"
 
-  if [[ -n "$app_override" ]]; then
-    app_path="$app_override"
-  fi
-  if [[ -n "$stt_override" ]]; then
-    stt_path="$stt_override"
+  if [[ -n "$override" ]]; then
+    path="$override"
   fi
 
-  if [[ -z "$app_path" ]]; then
-    detected_app_path="$(auto_detect_default_vault_path "app" || true)"
-    if [[ -n "$detected_app_path" ]]; then
-      app_path="$detected_app_path"
-      log "auto-detected vault app path: $app_path"
-    fi
+  if [[ -z "$path" ]]; then
+    path="secret/mingle/dev"
   fi
 
-  if [[ -z "$stt_path" ]]; then
-    detected_stt_path="$(auto_detect_default_vault_path "stt" || true)"
-    if [[ -n "$detected_stt_path" ]]; then
-      stt_path="$detected_stt_path"
-      log "auto-detected vault stt path: $stt_path"
-    fi
-  fi
-
-  DEVBOX_VAULT_APP_PATH="$app_path"
-  DEVBOX_VAULT_STT_PATH="$stt_path"
+  DEVBOX_VAULT_PATH="$path"
 }
 
 resolve_openclaw_root() {
@@ -1843,15 +1794,15 @@ require_devbox_env() {
   fi
   DEVBOX_ROOT_DIR="$ROOT_CANON"
 
-  if [[ -z "${DEVBOX_VAULT_APP_PATH:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_APP_PATH || true)")"
-    [[ -n "$value" ]] && DEVBOX_VAULT_APP_PATH="$value"
+  if [[ -z "${DEVBOX_VAULT_PATH:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_PATH || true)")"
+    [[ -n "$value" ]] && DEVBOX_VAULT_PATH="$value"
   fi
-  if [[ -z "${DEVBOX_VAULT_STT_PATH:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_STT_PATH || true)")"
-    [[ -n "$value" ]] && DEVBOX_VAULT_STT_PATH="$value"
+  resolve_vault_path "$DEVBOX_VAULT_PATH"
+  if [[ -z "${DEVBOX_VAULT_PROD_PATH:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_PROD_PATH || true)")"
+    [[ -n "$value" ]] && DEVBOX_VAULT_PROD_PATH="$value"
   fi
-  resolve_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
 
   if [[ -z "${DEVBOX_OPENCLAW_ROOT:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_OPENCLAW_ROOT || true)")"
@@ -3515,7 +3466,7 @@ sync_google_oauth_redirect_uris_for_site_change() {
   [[ -z "$client_id" ]] && client_id="$(read_app_setting_value AUTH_GOOGLE_ID || true)"
   client_id="$(trim_whitespace "$client_id")"
   if [[ -z "$client_id" ]]; then
-    warn "skipping google redirect sync: missing oauth client id (set AUTH_GOOGLE_ID in secret/mingle-app/dev|prod or DEVBOX_GOOGLE_OAUTH_CLIENT_ID)"
+    warn "skipping google redirect sync: missing oauth client id (set AUTH_GOOGLE_ID in secret/mingle/dev|prod or DEVBOX_GOOGLE_OAUTH_CLIENT_ID)"
     return 0
   fi
 
@@ -3647,6 +3598,7 @@ resolve_device_app_env_override() {
   local ws_url=""
   local fallback_site_url=""
   local fallback_ws_url=""
+  local prod_path=""
 
   case "$mode" in
     dev)
@@ -3659,7 +3611,12 @@ resolve_device_app_env_override() {
       [[ -n "$ws_url" ]] || die "missing runtime ws url for --device-app-env dev. Run with --profile device so tunnel URLs are resolved first."
       ;;
     prod)
-      path="secret/mingle-app/prod"
+      prod_path="${DEVBOX_VAULT_PROD_PATH:-}"
+      if [[ -z "$prod_path" ]]; then
+        prod_path="$(read_main_root_setting_value DEVBOX_VAULT_PROD_PATH || true)"
+        prod_path="$(trim_whitespace "$prod_path")"
+      fi
+      path="${prod_path:-secret/mingle/prod}"
       site_url="$(read_env_value_from_vault "$path" NEXT_PUBLIC_SITE_URL || true)"
       [[ -z "$site_url" ]] && site_url="$(read_env_value_from_vault "$path" MINGLE_API_BASE_URL || true)"
       [[ -z "$site_url" ]] && site_url="$(read_env_value_from_vault "$path" RN_WEB_APP_BASE_URL || true)"
@@ -3876,7 +3833,7 @@ wait_for_any_child_exit() {
 cmd_init() {
   require_cmd pnpm
   local web_port="" stt_port="" messaging_port="" metro_port="" ngrok_api_port="" host="127.0.0.1"
-  local vault_app_override="" vault_stt_override=""
+  local vault_override=""
   local openclaw_root_override=""
   local current_web_port="" current_stt_port="" current_messaging_port="" current_metro_port="" current_ngrok_api_port=""
 
@@ -3888,14 +3845,13 @@ cmd_init() {
       --metro-port) metro_port="${2:-}"; shift 2 ;;
       --ngrok-api-port) ngrok_api_port="${2:-}"; shift 2 ;;
       --host) host="${2:-}"; shift 2 ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       --openclaw-root) openclaw_root_override="${2:-}"; shift 2 ;;
       *) die "unknown option for init: $1" ;;
     esac
   done
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   if [[ -n "$openclaw_root_override" ]]; then
     DEVBOX_OPENCLAW_ROOT="$openclaw_root_override"
   fi
@@ -3956,14 +3912,12 @@ cmd_init() {
 
 cmd_bootstrap() {
   require_cmd pnpm
-  local vault_app_override=""
-  local vault_stt_override=""
+  local vault_override=""
   local openclaw_root_override=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       --vault-push) shift ;; # Backward-compatible no-op: bootstrap always pushes now.
       --openclaw-root) openclaw_root_override="${2:-}"; shift 2 ;;
       *) die "unknown option for bootstrap: $1" ;;
@@ -3972,7 +3926,7 @@ cmd_bootstrap() {
 
   require_devbox_env
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   if [[ -n "$openclaw_root_override" ]]; then
     DEVBOX_OPENCLAW_ROOT="$openclaw_root_override"
   fi
@@ -3980,14 +3934,13 @@ cmd_bootstrap() {
     DEVBOX_OPENCLAW_ROOT="$(resolve_openclaw_root)"
   fi
 
-  [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path (set DEVBOX_VAULT_APP_PATH in the main root .env.local or pass --vault-app-path)"
-  [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path (set DEVBOX_VAULT_STT_PATH in the main root .env.local or pass --vault-stt-path)"
+  [[ -n "$DEVBOX_VAULT_PATH" ]] || die "missing shared vault path (set DEVBOX_VAULT_PATH in the main root .env.local or pass --vault-path)"
   require_cmd vault
   require_cmd jq
   prepare_vault_cli_env
   vault token lookup >/dev/null 2>&1 || die "Vault is not authenticated (run: vault login)"
-  push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
-  log "bootstrap uploaded main root shared values and service env values to Vault"
+  push_env_to_vault_path "$DEVBOX_VAULT_PATH"
+  log "bootstrap uploaded main root shared values and service env values to one Vault path"
   ensure_workspace_dependencies
   ensure_rn_workspace_dependencies
   ensure_ios_pods_if_needed
@@ -5026,8 +4979,7 @@ cmd_mobile() {
 cmd_up() {
   require_devbox_env
   require_cmd pnpm
-  local vault_app_override=""
-  local vault_stt_override=""
+  local vault_override=""
 
   local profile="local"
   local host=""
@@ -5064,8 +5016,7 @@ cmd_up() {
       --android-variant) android_variant="${2:-}"; shift 2 ;;
       --tunnel-provider) tunnel_provider_override="${2:-}"; shift 2 ;;
       --device-app-env) device_app_env="${2:-}"; shift 2 ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       *) die "unknown option for up: $1" ;;
     esac
   done
@@ -5078,25 +5029,19 @@ cmd_up() {
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
-  local runtime_app_env_file=""
-  local runtime_stt_env_file=""
+  local runtime_env_file=""
   local runtime_nextauth_secret=""
   local runtime_realtime_secret=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_app_id_android=""
   local runtime_admob_banner_unit_id_ios=""
   local runtime_admob_banner_unit_id_android=""
-  runtime_app_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-runtime-env.XXXXXX")"
-  runtime_stt_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-stt-runtime-env.XXXXXX")"
-  write_runtime_env_from_vault_path "app" "$DEVBOX_VAULT_APP_PATH" "$runtime_app_env_file"
-  write_runtime_env_from_vault_path "stt" "$DEVBOX_VAULT_STT_PATH" "$runtime_stt_env_file"
-  runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_app_env_file")"
-  runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_app_env_file")"
-  if [[ -z "$runtime_realtime_secret" ]]; then
-    runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_stt_env_file")"
-  fi
+  runtime_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-runtime-env.XXXXXX")"
+  write_runtime_env_from_vault_path "mingle" "$DEVBOX_VAULT_PATH" "$runtime_env_file"
+  runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_env_file")"
+  runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_env_file")"
   if [[ -z "$runtime_realtime_secret" ]]; then
     runtime_realtime_secret="$(read_main_root_setting_value MINGLE_REALTIME_SECRET || true)"
   fi
@@ -5362,7 +5307,7 @@ $(ngrok_plan_capacity_hint)"
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
     log "device app env is prod; skipping mingle-app/mingle-stt/mingle-messaging/tunnel runtime startup"
-    rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
+    rm -f "$runtime_env_file"
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     return 0
   fi
@@ -5371,10 +5316,10 @@ $(ngrok_plan_capacity_hint)"
   (
     cd "$ROOT_DIR/mingle-stt"
     best_effort_raise_nofile_limit
-    if [[ -s "$runtime_stt_env_file" ]]; then
+    if [[ -s "$runtime_env_file" ]]; then
       set -a
       # shellcheck disable=SC1090
-      . "$runtime_stt_env_file"
+      . "$runtime_env_file"
       set +a
     fi
     PORT="$DEVBOX_STT_PORT" pnpm dev
@@ -5384,16 +5329,10 @@ $(ngrok_plan_capacity_hint)"
   (
     cd "$ROOT_DIR/mingle-messaging"
     best_effort_raise_nofile_limit
-    if [[ -s "$runtime_app_env_file" ]]; then
+    if [[ -s "$runtime_env_file" ]]; then
       set -a
       # shellcheck disable=SC1090
-      . "$runtime_app_env_file"
-      set +a
-    fi
-    if [[ -s "$runtime_stt_env_file" ]]; then
-      set -a
-      # shellcheck disable=SC1090
-      . "$runtime_stt_env_file"
+      . "$runtime_env_file"
       set +a
     fi
     MINGLE_REALTIME_SECRET="$runtime_realtime_secret" PORT="$DEVBOX_MESSAGING_PORT" pnpm dev
@@ -5403,10 +5342,10 @@ $(ngrok_plan_capacity_hint)"
   (
     cd "$ROOT_DIR/mingle-app"
     best_effort_raise_nofile_limit
-    if [[ -s "$runtime_app_env_file" ]]; then
+    if [[ -s "$runtime_env_file" ]]; then
       set -a
       # shellcheck disable=SC1090
-      . "$runtime_app_env_file"
+      . "$runtime_env_file"
       set +a
     fi
     normalize_prisma_database_env
@@ -5450,10 +5389,10 @@ $(ngrok_plan_capacity_hint)"
     log "starting Metro(port=$DEVBOX_METRO_PORT)"
     (
       cd "$ROOT_DIR/mingle-app"
-      if [[ -s "$runtime_app_env_file" ]]; then
+      if [[ -s "$runtime_env_file" ]]; then
         set -a
         # shellcheck disable=SC1090
-        . "$runtime_app_env_file"
+        . "$runtime_env_file"
         set +a
       fi
       normalize_prisma_database_env
@@ -5480,7 +5419,7 @@ $(ngrok_plan_capacity_hint)"
     pids+=("$!")
   fi
 
-  rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
+  rm -f "$runtime_env_file"
 
   if [[ "$started_tunnel_mode" == "ngrok-inline" ]]; then
     log "ngrok is running with this process group (Ctrl+C to stop all)"
@@ -5824,8 +5763,8 @@ Android Web : $DEVBOX_SITE_URL
 iOS App     : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_MESSAGING_WS_URL=$DEVBOX_RN_MESSAGING_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
 Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_MESSAGING_WS_URL=$DEVBOX_RN_MESSAGING_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$ANDROID_RN_REQUIRED_API_NAMESPACE
 Live Test   : MINGLE_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL | MINGLE_TEST_WS_URL=$DEVBOX_TEST_WS_URL
-Vault App   : ${DEVBOX_VAULT_APP_PATH:-"(unset)"}
-Vault STT   : ${DEVBOX_VAULT_STT_PATH:-"(unset)"}
+Vault       : ${DEVBOX_VAULT_PATH:-"(unset)"}
+Vault Prod  : ${DEVBOX_VAULT_PROD_PATH:-"secret/mingle/prod (default)"}
 OpenClaw    : root=${DEVBOX_OPENCLAW_ROOT:-$(resolve_openclaw_root)}
 iOS Team ID : ${DEVBOX_IOS_TEAM_ID:-"(auto: mingle.xcodeproj DEVELOPMENT_TEAM)"}
 

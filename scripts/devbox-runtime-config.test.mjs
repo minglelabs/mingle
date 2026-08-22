@@ -66,6 +66,16 @@ read_app_setting_value DEVBOX_CLOUDFLARE_WEB_HOSTNAME
   assert.equal(output, "main.example.test");
 });
 
+test("devbox uses one shared Vault path for all service runtime values", () => {
+  const output = runDevboxEval(`
+DEVBOX_VAULT_PATH=""
+resolve_vault_path
+printf '%s' "$DEVBOX_VAULT_PATH"
+`);
+
+  assert.equal(output, "secret/mingle/dev");
+});
+
 test("prod devbox fallback keeps production AdMob identifiers when overrides are absent", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-runtime-config-"));
   const emptyEnvPath = path.join(tempDir, "empty.env");
@@ -73,7 +83,7 @@ test("prod devbox fallback keeps production AdMob identifiers when overrides are
 
   const output = runDevboxEval(`
 APP_ENV_FILE="${emptyEnvPath}"
-DEVBOX_VAULT_APP_PATH=""
+DEVBOX_VAULT_PATH=""
 DEVBOX_ACTIVE_DEVICE_APP_ENV="prod"
 printf '%s\\n%s\\n%s\\n%s' \
   "$(resolve_devbox_admob_app_id_ios)" \
@@ -106,7 +116,7 @@ test("dev device app env always uses Google sample AdMob identifiers", () => {
 
   const output = runDevboxEval(`
 APP_ENV_FILE="${prodLikeEnvPath}"
-DEVBOX_VAULT_APP_PATH=""
+DEVBOX_VAULT_PATH=""
 DEVBOX_ACTIVE_DEVICE_APP_ENV="dev"
 printf '%s\\n%s\\n%s\\n%s' \
   "$(resolve_devbox_admob_app_id_ios)" \
@@ -131,7 +141,7 @@ test("iOS runtime xcconfig never writes an empty AdMob app id for prod installs"
 
   runDevboxEval(`
 APP_ENV_FILE="${emptyEnvPath}"
-DEVBOX_VAULT_APP_PATH=""
+DEVBOX_VAULT_PATH=""
 DEVBOX_ACTIVE_DEVICE_APP_ENV="prod"
 DEVBOX_SITE_URL="https://example.com"
 DEVBOX_RN_WS_URL="wss://example.com"
@@ -152,7 +162,7 @@ test("iOS runtime xcconfig escapes URL scheme separators without quoting values"
 
   runDevboxEval(`
 APP_ENV_FILE="${emptyEnvPath}"
-DEVBOX_VAULT_APP_PATH=""
+DEVBOX_VAULT_PATH=""
 DEVBOX_ACTIVE_DEVICE_APP_ENV="prod"
 DEVBOX_SITE_URL="https://example.com"
 DEVBOX_RN_WS_URL="wss://example.com/socket"

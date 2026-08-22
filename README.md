@@ -30,8 +30,8 @@ scripts/devbox init
 scripts/devbox bootstrap
 # Reboot recovery: start local Vault and seed the main root/service env values
 scripts/devbox vault-up --seed
-# Optional: override the Vault paths used by bootstrap
-# scripts/devbox bootstrap --vault-app-path secret/mingle-app/dev --vault-stt-path secret/mingle-stt/dev
+# Optional: override the shared Vault path used by bootstrap
+# scripts/devbox bootstrap --vault-path secret/mingle/dev
 scripts/devbox up --profile local
 scripts/devbox up --profile device
 scripts/devbox up --profile device --tunnel-provider cloudflare
@@ -60,18 +60,20 @@ scripts/devbox status
 - Railway single-service deployment guide: `docs/railway-single-service.md`
 - `scripts/devbox bootstrap` does not modify `.env.local`, but it uploads shared values
   from the MAIN worktree root `.env.local` and service-specific values from
-  `mingle-app/.env.local` / `mingle-stt/.env.local` to Vault before installing dependencies.
+  `mingle-app/.env.local` / `mingle-stt/.env.local` / `mingle-messaging/.env.local`
+  to the shared Vault record before installing dependencies.
   The `--vault-push` option is retained as a backward-compatible no-op.
 - `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely
-  seeds/patches the same MAIN root/service env values into the configured Vault paths.
-- When using Vault, you can save `--vault-app-path` and `--vault-stt-path` for later reuse.
+  seeds/patches the same MAIN root/service env values into `secret/mingle/dev`.
+- The three local services share one development Vault record: `secret/mingle/dev`.
+  Production mobile URL overrides remain separate in `secret/mingle/prod`.
 - If a target path does not exist yet, devbox creates it once with `kv put`.
   If the path already exists, devbox keeps using `kv patch` and refuses destructive overwrite fallback.
 - If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in the MAIN
   worktree root `.env.local` (or the service env files), devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
 - Devbox keeps only worktree-local runtime settings in `.devbox.env`; persistent shared settings
-  (Cloudflare token/hostnames, fallback URLs, AdMob IDs, Vault paths, Team ID, and machine-wide
+  (Cloudflare token/hostnames, fallback URLs, AdMob IDs, the shared Vault path, Team ID, and machine-wide
   paths) belong in the MAIN worktree root `.env.local` and Vault. Service `.env.local` files
   remain for service-specific values and are only legacy fallbacks for shared keys.
 - Frontend and app build entrypoints read the main root `.env.local` for shared values and `.devbox.env`
@@ -86,7 +88,7 @@ scripts/devbox status
   - If `DEVBOX_CLOUDFLARE_TUNNEL_TOKEN`, `DEVBOX_CLOUDFLARE_WEB_HOSTNAME`, `DEVBOX_CLOUDFLARE_STT_HOSTNAME`, and `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME` are present in the main root `.env.local` or Vault, it runs in **named tunnel (fixed host)** mode.
   - Without those settings, it falls back to the existing Quick Tunnel (`*.trycloudflare.com`) mode.
 - With `--profile device`, `--device-app-env dev|prod` reads mobile app build URLs from
-  `secret/mingle-app/dev` or `secret/mingle-app/prod` and injects them.
+  `secret/mingle/dev` or `secret/mingle/prod` and injects them.
   This supports the current RN mobile URL keys.
   `--device-app-env prod` skips ngrok and local server startup during `up`.
 - Each worktree uses a separate ngrok inspector port (`DEVBOX_NGROK_API_PORT`) to reduce collisions during concurrent runs.
