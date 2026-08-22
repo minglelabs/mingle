@@ -29,12 +29,12 @@ function buildTranslationPlaybackKey(utteranceId: string, lang: string): string 
 }
 
 /** 버블 텍스트 끝에 표시되는 음파 재생 중 표시 */
-function SpeakingIndicator() {
+function SpeakingIndicator({ label }: { label: string }) {
   return (
     <span
       className="ml-1.5 inline-flex items-end gap-[2px] align-middle"
       style={{ height: '13px' }}
-      aria-label="playing"
+      aria-label={label}
     >
       {[0, 0.15, 0.3].map((delay, i) => (
         <motion.span
@@ -334,11 +334,15 @@ function ChatLanguageBadge({
   lang,
   isOriginal = false,
   isSelected = false,
+  originalLanguageLabel,
+  translationLanguageLabel,
   onSelect,
 }: {
   lang: string
   isOriginal?: boolean
   isSelected?: boolean
+  originalLanguageLabel: string
+  translationLanguageLabel: string
   onSelect?: () => void
 }) {
   const languageLabel = isOriginal
@@ -351,7 +355,7 @@ function ChatLanguageBadge({
       data-chat-language-badge
       data-chat-language={lang}
       data-chat-language-role={isOriginal ? 'original' : 'translation'}
-      aria-label={`${isOriginal ? 'Original' : 'Translation'} language ${languageLabel}`}
+      aria-label={`${isOriginal ? originalLanguageLabel : translationLanguageLabel}: ${languageLabel}`}
       aria-pressed={isSelected}
       title={languageLabel}
       onPointerDown={(event) => event.stopPropagation()}
@@ -524,6 +528,8 @@ function ChatBubble({
                 lang={lang}
                 isOriginal={isOriginal}
                 isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                originalLanguageLabel={copyActionCopy.originalLanguageLabel}
+                translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                 onSelect={() => {
                   setDisplayLanguage(lang)
                 }}
@@ -543,7 +549,7 @@ function ChatBubble({
         ) : (
           <span data-current-bubble-text-value className="align-middle">
             {activeText}
-            {isActiveSpeaking && <SpeakingIndicator />}
+            {isActiveSpeaking && <SpeakingIndicator label={copyActionCopy.playingIndicatorLabel} />}
             {isOriginalLanguageSelected && isDraft && (
               <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
             )}

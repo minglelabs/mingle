@@ -119,16 +119,18 @@ export default function ProfileShareScreen({
     copyFailed: dictionary.profile.profileShareCopyFailedMessage ?? "Could not copy the profile link.",
     download: dictionary.profile.profileShareDownloadLabel ?? "Download",
     qrScan: dictionary.profile.profileShareQrScanLabel ?? "Scan QR code",
-    qrLoading: locale === "ko" ? "QR 코드를 만드는 중..." : "Creating your QR code...",
-    qrUnavailable: locale === "ko" ? "프로필 링크를 아직 준비하지 못했습니다." : "Your profile link is not ready yet.",
-    qrScannerUnavailable: locale === "ko"
-      ? "QR 스캔은 Mingle 앱에서 사용할 수 있습니다."
-      : "QR scanning is available in the Mingle app.",
-    qrInvalid: locale === "ko" ? "Mingle 프로필 QR이 아닙니다." : "This is not a Mingle profile QR code.",
-    qrScanFailed: locale === "ko" ? "QR 코드를 처리하지 못했습니다." : "Could not process this QR code.",
-    qrSaving: locale === "ko" ? "QR 코드를 저장하는 중..." : "Saving your QR code...",
-    qrDownloaded: locale === "ko" ? "QR 코드를 저장했습니다." : "QR code downloaded.",
-    qrDownloadFailed: locale === "ko" ? "QR 코드 저장에 실패했습니다." : "Could not download the QR code.",
+    qrLoading: dictionary.profile.profileShareQrLoadingLabel ?? "Creating your QR code...",
+    qrUnavailable: dictionary.profile.profileShareQrUnavailableMessage ?? "Your profile link is not ready yet.",
+    qrScannerUnavailable: dictionary.profile.profileShareQrScannerUnavailableMessage
+      ?? "QR scanning is not available on this device.",
+    qrInvalid: dictionary.profile.profileShareQrInvalidMessage ?? "This is not a Mingle profile QR code.",
+    qrScanFailed: dictionary.profile.profileShareQrScanFailedMessage ?? "Could not process this QR code.",
+    qrSaving: dictionary.profile.profileShareQrSavingLabel ?? "Saving your QR code...",
+    qrDownloaded: dictionary.profile.profileShareQrDownloadedMessage ?? "QR code downloaded.",
+    qrDownloadFailed: dictionary.profile.profileShareQrDownloadFailedMessage ?? "Could not download the QR code.",
+    qrInstruction: dictionary.profile.profileShareQrInstruction ?? "Place the profile QR code inside the frame.",
+    qrSettings: dictionary.profile.profileShareQrSettingsLabel ?? "Open settings",
+    back: dictionary.profile.profileShareBackLabel ?? "Back",
   };
 
   useEffect(() => {
@@ -240,12 +242,12 @@ export default function ProfileShareScreen({
       type: "native_qr_scanner_open",
       payload: {
         title: copy.qrScan,
-        instruction: locale === "ko" ? "프로필 QR 코드를 사각형 안에 맞춰주세요." : "Place the profile QR code inside the frame.",
-        cancelLabel: dictionary.profile.profileShareBackLabel ?? (locale === "ko" ? "뒤로가기" : "Back"),
-        settingsLabel: locale === "ko" ? "설정 열기" : "Open settings",
+        instruction: copy.qrInstruction,
+        cancelLabel: copy.back,
+        settingsLabel: copy.qrSettings,
       },
     }));
-  }, [copy.qrScan, copy.qrScannerUnavailable, dictionary.profile.profileShareBackLabel, locale, showStatus]);
+  }, [copy.back, copy.qrInstruction, copy.qrScan, copy.qrScannerUnavailable, copy.qrSettings, showStatus]);
 
   const handleDownloadQr = useCallback(() => {
     if (!qrDataUrl) {
@@ -378,7 +380,7 @@ export default function ProfileShareScreen({
           type="button"
           onClick={navigateBack}
           className="flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/15"
-          aria-label={dictionary.profile.profileShareBackLabel ?? "Back"}
+          aria-label={copy.back}
         >
           <ChevronLeft size={30} strokeWidth={2.2} aria-hidden="true" />
         </button>

@@ -9,6 +9,8 @@ import {
 } from "@/lib/stt-languages";
 import { ChevronLeft, Loader2, RotateCcw, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { DEFAULT_LOCALE, resolveSupportedLocaleTag } from "@/i18n/config";
+import { getPrimaryUiCopy } from "@/i18n/primary-ui-copy";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ConversationParticipantsPanelProps = {
@@ -268,7 +270,8 @@ export default function ConversationParticipantsPanel({
     void loadMembers();
   }, [active, loadMembers]);
 
-  const fallbackName = uiLocale.trim().toLowerCase().startsWith("ko") ? "밍글 사용자" : "Mingle user";
+  const fallbackLocale = resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE;
+  const fallbackName = getPrimaryUiCopy(fallbackLocale).connect.userFallbackLabel ?? "Mingle user";
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">

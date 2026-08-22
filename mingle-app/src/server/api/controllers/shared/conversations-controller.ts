@@ -20,6 +20,7 @@ import {
   sanitizeRequestIdentityValue,
 } from "@/lib/request-user-identity";
 import { isSupportedLocale } from "@/i18n/config";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -138,6 +139,17 @@ export async function postConversationResponse(request: NextRequest) {
   // 10 people total including the creator, matching the invite picker's cap.
   if (inviteeUserIds.length > MAX_CONVERSATION_MEMBERS - 1) {
     return NextResponse.json({ error: "too_many_invitees" }, { status: 400 });
+  }
+
+  if (inviteeUserIds.length > 0) {
+    const existingInvitees = await prisma.user.findMany({
+      where: { id: { in: inviteeUserIds } },
+      select: { id: true },
+    });
+    const existingInviteeIds = new Set(existingInvitees.map((user) => user.id));
+    if (inviteeUserIds.some((inviteeUserId) => !existingInviteeIds.has(inviteeUserId))) {
+      return NextResponse.json({ error: "invalid_invitee_user_ids" }, { status: 400 });
+    }
   }
 
   const force = body?.force === true;

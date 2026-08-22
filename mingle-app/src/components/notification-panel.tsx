@@ -1,7 +1,8 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { getConversationDictionary } from "@/i18n/conversations";
+import { resolveLegalDocumentLocale } from "@/i18n/config";
+import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import SlideSurface from "@/components/slide-surface";
@@ -33,41 +34,6 @@ type NotificationRecord = {
   isFollowing: boolean;
 };
 
-type NotificationCopy = {
-  buttonLabel: string;
-  title: string;
-  closeAction: string;
-  loadingLabel: string;
-  emptyLabel: string;
-  unreadSectionLabel: string;
-  readSectionLabel: string;
-  followMessage: string;
-  followBackAction: string;
-  followingAction: string;
-  loadError: string;
-  followError: string;
-};
-
-function getNotificationCopy(dictionary: AppDictionary, locale: AppLocale): NotificationCopy {
-  const copy = getConversationDictionary(locale, dictionary);
-  const isKorean = locale === "ko";
-
-  return {
-    buttonLabel: copy.notificationsButtonLabel ?? (isKorean ? "알림" : "Notifications"),
-    title: copy.notificationsTitle ?? (isKorean ? "알림" : "Notifications"),
-    closeAction: copy.notificationsCloseAction ?? (isKorean ? "알림 닫기" : "Close notifications"),
-    loadingLabel: copy.notificationsLoadingLabel ?? (isKorean ? "알림을 불러오는 중" : "Loading notifications"),
-    emptyLabel: copy.notificationsEmptyLabel ?? (isKorean ? "아직 알림이 없어요" : "No notifications yet"),
-    unreadSectionLabel: copy.notificationsUnreadSectionLabel ?? (isKorean ? "읽지 않음" : "Unread"),
-    readSectionLabel: copy.notificationsReadSectionLabel ?? (isKorean ? "읽음" : "Read"),
-    followMessage: copy.notificationsFollowMessage ?? (isKorean ? "님이 회원님을 팔로우했습니다." : "followed you."),
-    followBackAction: copy.notificationsFollowBackAction ?? (isKorean ? "맞팔로우" : "Follow back"),
-    followingAction: copy.notificationsFollowingAction ?? (isKorean ? "팔로잉" : "Following"),
-    loadError: copy.notificationsLoadError ?? (isKorean ? "알림을 불러오지 못했습니다." : "Could not load notifications."),
-    followError: copy.notificationsFollowError ?? (isKorean ? "팔로우하지 못했습니다." : "Could not follow this user."),
-  };
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -96,7 +62,11 @@ function parseNotification(value: unknown): NotificationRecord | null {
   };
 }
 
-function formatNotificationTime(isoTimestamp: string, locale: AppLocale): string {
+function formatNotificationTime(
+  isoTimestamp: string,
+  locale: AppLocale,
+  copy: Pick<NotificationCopy, "justNow" | "minutesAgo" | "hoursAgo">,
+): string {
   const timestamp = new Date(isoTimestamp);
   if (Number.isNaN(timestamp.getTime())) return "";
 
@@ -104,18 +74,12 @@ function formatNotificationTime(isoTimestamp: string, locale: AppLocale): string
   const elapsedMinutes = Math.floor(elapsedMs / 60_000);
   const elapsedHours = Math.floor(elapsedMs / 3_600_000);
 
-  if (locale === "ko") {
-    if (elapsedMinutes < 1) return "방금 전";
-    if (elapsedMinutes < 60) return `${elapsedMinutes}분 전`;
-    if (elapsedHours < 24) return `${elapsedHours}시간 전`;
-  } else {
-    if (elapsedMinutes < 1) return "Just now";
-    if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-    if (elapsedHours < 24) return `${elapsedHours}h ago`;
-  }
+  if (elapsedMinutes < 1) return copy.justNow;
+  if (elapsedMinutes < 60) return copy.minutesAgo.replace("{count}", String(elapsedMinutes));
+  if (elapsedHours < 24) return copy.hoursAgo.replace("{count}", String(elapsedHours));
 
   try {
-    return new Intl.DateTimeFormat(locale, {
+    return new Intl.DateTimeFormat(resolveLegalDocumentLocale(locale), {
       month: "numeric",
       day: "numeric",
       hour: "numeric",
@@ -155,7 +119,7 @@ export default function NotificationPanel({
   onOpenProfile,
   onUnreadCountChange,
 }: NotificationPanelProps) {
-  const copy = useMemo(() => getNotificationCopy(dictionary, locale), [dictionary, locale]);
+  const copy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -309,7 +273,7 @@ export default function NotificationPanel({
 
   const renderNotification = (notification: NotificationRecord) => {
     const actorName = notification.actor.name
-      || (notification.actor.handle ? formatHandle(notification.actor.handle) : (locale === "ko" ? "Mingle 사용자" : "Mingle user"));
+      || (notification.actor.handle ? formatHandle(notification.actor.handle) : (dictionary.connect.userFallbackLabel ?? "Mingle user"));
     const actorHandle = notification.actor.handle ? formatHandle(notification.actor.handle) : "";
     const isPending = pendingFollowIds.has(notification.id);
 
@@ -334,7 +298,7 @@ export default function NotificationPanel({
               <span className="mt-0.5 block truncate text-[12px] text-gray-500">
                 {actorHandle || "\u00A0"}
                 {actorHandle ? " · " : ""}
-                {formatNotificationTime(notification.createdAt, locale)}
+                {formatNotificationTime(notification.createdAt, locale, copy)}
               </span>
             </span>
           </button>
@@ -404,7 +368,7 @@ export default function NotificationPanel({
                     onClick={() => void loadNotifications()}
                     className="rounded-full bg-slate-900 px-4 py-2 text-[13px] font-semibold text-white"
                   >
-                    {locale === "ko" ? "다시 시도" : "Try again"}
+                    {copy.retryAction}
                   </button>
                 </div>
               ) : isLoading && !hasLoaded ? (

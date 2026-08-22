@@ -1409,9 +1409,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
-  const blockedComposerMessageLabel = uiLocale.trim().toLowerCase().startsWith('ko')
-    ? '차단된 사용자입니다'
-    : 'This user is blocked.'
+  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
+  const blockedComposerMessageLabel = composerCopy.blockedComposerMessage
   // Blocking hides the counterpart's PHOTO and stops messaging — their name
   // stays visible, and tapping my own avatar should keep opening my own
   // profile.
@@ -1485,31 +1484,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
-    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
     return {
-      menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel
-        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
-      pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle
-        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
+      menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel,
+      pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle,
     }
-  }, [roomManagementCopy, uiLocale])
+  }, [roomManagementCopy])
   const participantsCopy = useMemo(() => {
-    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
     return {
-      menuItemLabel: roomManagementCopy.participantsMenuItemLabel
-        || (isKorean ? '참여자' : 'Participants'),
-      pageTitle: roomManagementCopy.participantsPageTitle
-        || (isKorean ? '참여자' : 'Participants'),
-      selfLabel: roomManagementCopy.participantsSelfLabel
-        || (isKorean ? '나' : 'You'),
-      loadingLabel: roomManagementCopy.participantsLoadingLabel
-        || (isKorean ? '불러오는 중...' : 'Loading...'),
-      errorLabel: roomManagementCopy.participantsErrorLabel
-        || (isKorean ? '참여자 정보를 불러오지 못했습니다.' : 'Could not load participants.'),
-      retryLabel: roomManagementCopy.participantsRetryLabel
-        || (isKorean ? '다시 시도' : 'Try again'),
+      menuItemLabel: roomManagementCopy.participantsMenuItemLabel,
+      pageTitle: roomManagementCopy.participantsPageTitle,
+      selfLabel: roomManagementCopy.participantsSelfLabel,
+      loadingLabel: roomManagementCopy.participantsLoadingLabel,
+      errorLabel: roomManagementCopy.participantsErrorLabel,
+      retryLabel: roomManagementCopy.participantsRetryLabel,
     }
-  }, [roomManagementCopy, uiLocale])
+  }, [roomManagementCopy])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -1684,7 +1673,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setFloatingToastMessage('')
     }, 1500)
   }, [])
-  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,

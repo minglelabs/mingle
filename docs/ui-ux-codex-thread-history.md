@@ -1222,3 +1222,17 @@
 - Resolution: Replace the standard OpenStreetMap iframe with Google Maps Embed and pass the viewer's primary locale through the `language` parameter. Keep the existing coordinates and full-screen panel interaction unchanged.
 - Data contract: None. Profile coordinates and localized reverse-geocoded labels remain unchanged.
 - Testing notes: Verify English, Korean, and the remaining primary UI locales render the Google map with the requested language when `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY` is configured. Verify the panel shows the existing map-unavailable fallback when the key is absent.
+
+## 2026-08-22 - Complete multi-member privacy and primary-locale UI copy
+
+- Surface: Conversation list avatars, direct-message entry, pending group invites, the blocked composer state, and the multi-member/profile UI added in this branch.
+- Issue: A blocked counterpart was correctly marked in the conversation summary but the list's `otherMembers` payload still carried the original photo and crop values. Direct-message lookup also accepted any pending room containing the target, so a pending group such as `[B, C]` could be reused for an A-to-B message. Invite creation accepted unknown user ids, which left invalid pending rows that could fail first-message membership materialization. Several new controls and states were localized only for Korean/English, including the public-profile Message action, blocked composer copy, profile sharing, notifications, usage settings, and profile image cropping.
+- User impact: A blocked person's photo could remain visible, a private message could reach an unintended group member, an invalid invite could create a room that failed to materialize reliably, and users in the other primary UI languages could see mixed English/Korean copy in newly added flows.
+- Resolution:
+  - Null counterpart image and crop fields in every conversation summary and hydration path whenever the viewer has blocked the only other real member; retain the name and blocked-room marker so the room remains understandable without exposing the photo.
+  - Narrow pending direct-room reuse to a single pending target id, while keeping exact real-member filtering for materialized rooms.
+  - Validate every invitee against `User` before duplicate checks or persistence, and defensively drop unknown legacy pending ids before the membership foreign-key write.
+  - Use shared composer copy for both current and legacy renderers, including a localized blocked message and send-message label.
+  - Add complete copy tables for all 15 primary UI locales (ko, en, ja, zh-CN, zh-TW, fr, de, es, pt, it, ru, ar, hi, th, vi) across group invitations, profile messaging, QR sharing, notifications, profile image cropping, usage settings, and accessibility labels. New supplemental copy resolves to English for every other supported locale.
+- Data contract: No Prisma migration or API namespace change is required. Invite validation and legacy-row filtering use the existing `User` table and `pending_invitee_user_ids` field.
+- Testing notes: Conversation, route, i18n, composer, copy-action, profile-link, TypeScript, ESLint, and the full 128-file/1,115-test unit suite pass. Verify blocked avatars, A→B messaging from a pending `[B,C]` room, invalid invite rejection, and every newly added UI surface in the 15 primary locales plus an unsupported locale such as Polish.

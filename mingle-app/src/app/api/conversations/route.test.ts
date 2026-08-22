@@ -14,6 +14,7 @@ const {
   mockResolveTrackingSessionKey,
   mockSanitizeRequestIdentityValue,
   mockSanitizeSttLanguageSelection,
+  mockUserFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockListConversationChannelsForExternalUserId: vi.fn(),
@@ -27,6 +28,7 @@ const {
   mockResolveTrackingSessionKey: vi.fn(),
   mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
+  mockUserFindMany: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -35,6 +37,14 @@ vi.mock("next-auth", () => ({
 
 vi.mock("@/lib/auth-options", () => ({
   getAuthOptions: () => ({}),
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findMany: mockUserFindMany,
+    },
+  },
 }));
 
 vi.mock("@/lib/app-conversations", () => ({
@@ -93,6 +103,11 @@ describe("/api/conversations route", () => {
       sessionKey: "sess_local_storage_user",
     });
     mockFindExistingConversationWithExactMembers.mockResolvedValue(null);
+    mockUserFindMany.mockImplementation(
+      async (args: { where?: { id?: { in?: string[] } } }) => (
+        (args.where?.id?.in ?? []).map((id) => ({ id }))
+      ),
+    );
   });
 
   it("uses the native list fast path without resolving the guest user twice", async () => {
@@ -393,6 +408,25 @@ describe("/api/conversations route", () => {
       userId: "tracked_user_123",
       otherUserIds: ["user-a", "user-b"],
     });
+    expect(mockCreateConversationChannelForUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects invitees that do not exist before checking or storing a room", async () => {
+    mockUserFindMany.mockResolvedValue([{ id: "user-a" }]);
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ inviteeUserIds: ["user-a", "missing-user"] }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_invitee_user_ids" });
+    expect(mockFindExistingConversationWithExactMembers).not.toHaveBeenCalled();
     expect(mockCreateConversationChannelForUser).not.toHaveBeenCalled();
   });
 

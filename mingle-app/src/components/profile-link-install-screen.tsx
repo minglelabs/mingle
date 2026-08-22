@@ -66,7 +66,7 @@ export default function ProfileLinkInstallScreen({
     [],
   );
   const launchNonceRef = useRef(0);
-  const profileName = profile?.name?.trim() || (locale === "ko" ? "밍글 사용자" : "Mingle user");
+  const profileName = profile?.name?.trim() || copy.userFallback;
   const profileHandle = formatHandle(profile?.handle);
 
   const handleOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {

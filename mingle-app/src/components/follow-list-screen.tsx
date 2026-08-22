@@ -87,7 +87,10 @@ export default function FollowListScreen({
     follow: dictionary.connect.followAction ?? (locale === "ko" ? "팔로우" : "Follow"),
     followError: dictionary.connect.followError ?? (locale === "ko" ? "팔로우하지 못했습니다." : "Could not follow this user."),
     mutual: dictionary.profile.mutualFollowLabel ?? (locale === "ko" ? "맞팔" : "Mutual"),
-  }), [dictionary, locale]);
+    empty: activeTab === "followers"
+      ? (dictionary.profile.noFollowersLabel ?? "No followers yet.")
+      : (dictionary.profile.noFollowingLabel ?? "No following yet."),
+  }), [activeTab, dictionary, locale]);
 
   const activeLabel = labels[activeTab];
   const normalizedQuery = query.trim();
@@ -350,7 +353,7 @@ export default function FollowListScreen({
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500" role="alert">{labels.error}</p>
           ) : users.length === 0 ? (
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500">
-              {locale === "ko" ? `${activeLabel}가 없습니다.` : `No ${activeLabel.toLowerCase()} yet.`}
+              {labels.empty}
             </p>
           ) : (
             <ul className="border-t border-gray-100">

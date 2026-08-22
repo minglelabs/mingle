@@ -15,8 +15,10 @@ describe("profile link install copy", () => {
     expect(getProfileLinkInstallCopy("en").openInApp).toBe("Open in Mingle");
   });
 
-  it("defaults to English without a supported browser language", () => {
+  it("supports the 15 primary locales and falls back to English otherwise", () => {
     expect(resolveProfileLinkInstallLocale(undefined)).toBe("en");
-    expect(resolveProfileLinkInstallLocale("fr-FR, de;q=0.8")).toBe("en");
+    expect(resolveProfileLinkInstallLocale("fr-FR, de;q=0.8")).toBe("fr");
+    expect(resolveProfileLinkInstallLocale("pl-PL, en;q=0.8")).toBe("en");
+    expect(getProfileLinkInstallCopy("fr").openInApp).toBe("Ouvrir dans Mingle");
   });
 });

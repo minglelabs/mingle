@@ -4,6 +4,7 @@ import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import NotificationPanel from "@/components/notification-panel";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
@@ -249,6 +250,7 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
+  isBlockedCounterpart: boolean;
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -992,6 +994,7 @@ function mapConversationSummaryToItem(
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
+    isBlockedCounterpart: conversation.isBlockedCounterpart,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -1247,7 +1250,7 @@ function ConversationRoomAvatar({ item }: { item: ConversationItem }) {
     return (
       <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-          {member.image ? (
+          {member.image && !item.isBlockedCounterpart ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={member.image}
@@ -1294,7 +1297,7 @@ function ConversationRoomAvatar({ item }: { item: ConversationItem }) {
               zIndex: index + 1,
             }}
           >
-            {member.image ? (
+            {member.image && !item.isBlockedCounterpart ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={member.image}
@@ -1768,6 +1771,7 @@ export default function ConversationList({
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
   );
+  const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -4846,13 +4850,13 @@ export default function ConversationList({
             type="button"
             onClick={openNotifications}
             className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
-            aria-label={copy.notificationsButtonLabel ?? (locale === "ko" ? "알림" : "Notifications")}
+            aria-label={notificationCopy.buttonLabel}
           >
             <Bell size={22} strokeWidth={2} />
             {unreadNotificationCount > 0 ? (
               <span
                 className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white"
-                aria-label={`${unreadNotificationCount} ${locale === "ko" ? "개 읽지 않은 알림" : "unread notifications"}`}
+                aria-label={`${unreadNotificationCount} ${notificationCopy.unreadSectionLabel}`}
               >
                 {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
               </span>

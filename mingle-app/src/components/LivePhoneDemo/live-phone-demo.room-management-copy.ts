@@ -28,12 +28,12 @@ export type LivePhoneDemoRoomManagementCopy = {
   renameErrorToastLabel: string
   defaultDisplayLanguageMenuItemLabel: string
   defaultDisplayLanguagePageTitle: string
-  participantsMenuItemLabel?: string
-  participantsPageTitle?: string
-  participantsSelfLabel?: string
-  participantsLoadingLabel?: string
-  participantsErrorLabel?: string
-  participantsRetryLabel?: string
+  participantsMenuItemLabel: string
+  participantsPageTitle: string
+  participantsSelfLabel: string
+  participantsLoadingLabel: string
+  participantsErrorLabel: string
+  participantsRetryLabel: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {

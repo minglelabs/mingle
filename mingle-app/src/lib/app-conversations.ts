@@ -473,18 +473,22 @@ function resolveViewerFacingPausedAt(
 function resolveOtherMemberAvatars(
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
+  blockedCounterpartUserId: string | null | undefined = null,
 ): ConversationChannelOtherMember[] {
   if (!viewerUserId || !members) return [];
   return members
     .filter((member) => member.userId !== viewerUserId)
-    .map((member) => ({
-      userId: member.userId,
-      name: member.name,
-      image: member.image,
-      imageCropScale: member.imageCropScale,
-      imageCropX: member.imageCropX,
-      imageCropY: member.imageCropY,
-    }));
+    .map((member) => {
+      const isBlockedCounterpart = member.userId === blockedCounterpartUserId;
+      return {
+        userId: member.userId,
+        name: member.name,
+        image: isBlockedCounterpart ? null : member.image,
+        imageCropScale: isBlockedCounterpart ? null : member.imageCropScale,
+        imageCropX: isBlockedCounterpart ? null : member.imageCropX,
+        imageCropY: isBlockedCounterpart ? null : member.imageCropY,
+      };
+    });
 }
 
 // Shared by both the 1:1 "message this person" entry point and the
@@ -805,7 +809,11 @@ async function serializeConversationChannelWithPreview(
     resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
     resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     blockedCounterpartByChannelId.has(record.id),
-    resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
+    resolveOtherMemberAvatars(
+      membersByChannelId.get(record.id),
+      viewerUserId,
+      blockedCounterpartByChannelId.get(record.id),
+    ),
   );
 }
 
@@ -861,7 +869,11 @@ async function listConversationChannelsForMember(
       resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
       resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       blockedCounterpartByChannelId.has(record.id),
-      resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
+      resolveOtherMemberAvatars(
+        membersByChannelId.get(record.id),
+        viewerUserId,
+        blockedCounterpartByChannelId.get(record.id),
+      ),
     ));
   }
 
@@ -890,7 +902,11 @@ async function listConversationChannelsForMember(
         resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
         resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         blockedCounterpartByChannelId.has(record.id),
-        resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
+        resolveOtherMemberAvatars(
+          membersByChannelId.get(record.id),
+          viewerUserId,
+          blockedCounterpartByChannelId.get(record.id),
+        ),
       );
     })
     .sort((left, right) => {
@@ -1104,7 +1120,17 @@ export async function findOrCreateDirectConversation(args: {
       },
       select: conversationChannelSelect,
     });
-    const existing = await selectMostRecentlyMessagedConversation(existingCandidates);
+    // The pending branch above is intentionally broad enough for the database
+    // query to use an indexed array-membership predicate. Narrow it here so a
+    // pending group [B, C] can never be reused as A's direct room with B.
+    const exactDirectCandidates = existingCandidates.filter((candidate) => (
+      candidate.pendingInviteeUserIds.length === 0
+      || (
+        candidate.pendingInviteeUserIds.length === 1
+        && candidate.pendingInviteeUserIds[0] === targetUserId
+      )
+    ));
+    const existing = await selectMostRecentlyMessagedConversation(exactDirectCandidates);
 
     if (existing) {
       return {
@@ -1198,23 +1224,37 @@ export async function materializePendingConversationInvitees(sessionKey: string)
   });
   if (!channel || channel.pendingInviteeUserIds.length === 0) return;
 
+  // Older rows may contain ids that were accepted before invite validation
+  // existed. Filter those rows before the foreign-key write so a bad pending
+  // id cannot make the first message's membership materialization fail.
+  const existingInvitees = await prisma.user.findMany({
+    where: { id: { in: channel.pendingInviteeUserIds } },
+    select: { id: true },
+  });
+  const existingInviteeUserIds = new Set(existingInvitees.map((user) => user.id));
+  const validPendingInviteeUserIds = channel.pendingInviteeUserIds.filter(
+    (inviteeUserId) => existingInviteeUserIds.has(inviteeUserId),
+  );
+
   // Re-check blocks at send time too, in case one formed between the invite
   // and this first message — drop the blocked invitee rather than fail the
   // send outright.
-  const blocks = await prisma.userBlock.findMany({
-    where: {
-      OR: channel.pendingInviteeUserIds.flatMap((inviteeUserId) => [
-        { blockerId: channel.ownerUserId, blockedId: inviteeUserId },
-        { blockerId: inviteeUserId, blockedId: channel.ownerUserId },
-      ]),
-    },
-    select: { blockerId: true, blockedId: true },
-  });
+  const blocks = validPendingInviteeUserIds.length > 0
+    ? await prisma.userBlock.findMany({
+        where: {
+          OR: validPendingInviteeUserIds.flatMap((inviteeUserId) => [
+            { blockerId: channel.ownerUserId, blockedId: inviteeUserId },
+            { blockerId: inviteeUserId, blockedId: channel.ownerUserId },
+          ]),
+        },
+        select: { blockerId: true, blockedId: true },
+      })
+    : [];
   const blockedInviteeUserIds = new Set(
     blocks.flatMap((block) => [block.blockerId, block.blockedId])
       .filter((id) => id !== channel.ownerUserId),
   );
-  const inviteeUserIdsToMaterialize = channel.pendingInviteeUserIds.filter(
+  const inviteeUserIdsToMaterialize = validPendingInviteeUserIds.filter(
     (inviteeUserId) => !blockedInviteeUserIds.has(inviteeUserId),
   );
 
@@ -1925,7 +1965,11 @@ export async function getConversationHydrationStateForUser(args: {
         conversationRecord.pendingInviteeUserIds,
       ),
       Boolean(blockedCounterpartUserId),
-      resolveOtherMemberAvatars(membersByChannelId.get(conversationRecord.id), args.userId),
+      resolveOtherMemberAvatars(
+        membersByChannelId.get(conversationRecord.id),
+        args.userId,
+        blockedCounterpartUserId,
+      ),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,

@@ -69,6 +69,7 @@ import {
   type BirthDateParts,
 } from "@/lib/birth-date";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
+import { resolveProfileManagementCopy } from "@/i18n/profile-management-copy";
 import { checkProfileLocationPermission } from "@/components/profile-location";
 import {
   normalizeProfileLocation,
@@ -392,6 +393,7 @@ function ProfileSettingsPanel({
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -400,12 +402,10 @@ function ProfileSettingsPanel({
     appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageDescription: dictionary.profile.appLanguageDescription
       ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
-    defaultLanguages: locale === "ko" ? "대화 기본 언어" : "Default conversation languages",
-    defaultLanguagesTitle: locale === "ko" ? "대화 기본 언어" : "Default conversation languages",
-    defaultLanguagesDescription: locale === "ko"
-      ? "새 대화방을 만들 때 사용할 언어를 원하는 순서대로 선택하세요."
-      : "Choose the languages and order used when you create a new conversation.",
-    defaultLanguagesSaveError: locale === "ko" ? "기본 언어를 저장하지 못했습니다." : "Could not save the default languages.",
+    defaultLanguages: managementCopy.defaultLanguages,
+    defaultLanguagesTitle: managementCopy.defaultLanguages,
+    defaultLanguagesDescription: managementCopy.defaultLanguagesDescription,
+    defaultLanguagesSaveError: managementCopy.defaultLanguagesSaveError,
     primaryLanguages: dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
       ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
@@ -419,18 +419,7 @@ function ProfileSettingsPanel({
         : "Choose up to five primary languages in the order they should appear on your profile."),
     primaryLanguagesSaveError: dictionary.profile.primaryLanguagesSaveError
       ?? (locale === "ko" ? "주 사용 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
-    usage: {
-      title: locale === "ko" ? "사용량" : "Usage",
-      totalUsage: locale === "ko" ? "총 사용시간" : "Total time",
-      messages: locale === "ko" ? "메시지" : "Messages",
-      conversations: locale === "ko" ? "대화방" : "Conversations",
-      speechLanguages: locale === "ko" ? "음성 인식 언어별" : "By speech language",
-      translationLanguages: locale === "ko" ? "번역 언어별 메시지" : "Messages by translation language",
-      messageCountSuffix: locale === "ko" ? "개" : "messages",
-      noData: locale === "ko" ? "아직 사용량이 없습니다." : "No usage yet.",
-      loadError: locale === "ko" ? "사용량을 불러오지 못했습니다." : "Could not load your usage.",
-      unknownLanguage: locale === "ko" ? "알 수 없는 언어" : "Unknown language",
-    },
+    usage: managementCopy.usage,
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
     unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
@@ -1039,7 +1028,7 @@ function ProfileSettingsPanel({
                 disabled={isWithdrawing}
                 className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {locale === "ko" ? "취소" : "Cancel"}
+                {dictionary.profile.cancelAction ?? "Cancel"}
               </button>
             </div>
           </motion.div>

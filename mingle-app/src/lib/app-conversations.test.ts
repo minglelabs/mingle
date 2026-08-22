@@ -1579,6 +1579,72 @@ describe("app-conversations", () => {
     });
   });
 
+  it("hides a blocked counterpart's photo in conversation list avatars", async () => {
+    mockFindConversationMany.mockResolvedValue([{
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    }]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      {
+        channelId: "conv-dm",
+        userId: "user-1",
+        displayLanguage: null,
+        selectedLanguages: ["en"],
+        status: "paused",
+        pausedAt: null,
+        user: {
+          name: "Alice",
+          handle: "alice",
+          image: null,
+          imageCropScale: null,
+          imageCropX: null,
+          imageCropY: null,
+        },
+      },
+      {
+        channelId: "conv-dm",
+        userId: "user-2",
+        displayLanguage: null,
+        selectedLanguages: ["ko"],
+        status: "paused",
+        pausedAt: null,
+        user: {
+          name: "Bob",
+          handle: "bob",
+          image: "https://img/bob.jpg",
+          imageCropScale: 1.2,
+          imageCropX: 0.1,
+          imageCropY: 0.2,
+        },
+      },
+    ]);
+    mockUserBlockFindMany.mockResolvedValue([{ blockerId: "user-1", blockedId: "user-2" }]);
+
+    const conversations = await listConversationChannelsForUser("user-1");
+
+    expect(conversations[0]).toEqual(expect.objectContaining({
+      isBlockedCounterpart: true,
+      otherMembers: [{
+        userId: "user-2",
+        name: "Bob",
+        image: null,
+        imageCropScale: null,
+        imageCropX: null,
+        imageCropY: null,
+      }],
+    }));
+  });
+
   describe("findOrCreateDirectConversation", () => {
     it("reuses an existing 1:1 room instead of creating a duplicate", async () => {
       mockUserFindUnique.mockResolvedValue({ id: "user-2" });
@@ -1761,6 +1827,48 @@ describe("app-conversations", () => {
         ],
         skipDuplicates: true,
       });
+    });
+
+    it("does not reuse a pending group room for a direct request", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationMany.mockResolvedValueOnce([{
+        id: "conv-pending-group",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "session-pending-group",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: ["user-2", "user-3"],
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: null,
+      }]);
+      mockFindConversationFirst.mockResolvedValueOnce(null);
+      mockCreateConversation.mockResolvedValue({
+        id: "conv-new-dm",
+        sequenceNumber: 2,
+        title: "Conversation (2)",
+        status: "paused",
+        sessionKey: "session-new-dm",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: ["user-2"],
+        createdAt: new Date("2026-04-12T09:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T09:00:00.000Z"),
+        pausedAt: null,
+      });
+
+      const result = await findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+      });
+
+      expect(result.reused).toBe(false);
+      expect(result.conversation.id).toBe("conv-new-dm");
+      expect(mockCreateConversation).toHaveBeenCalled();
     });
 
     it("rejects a target user that doesn't exist", async () => {
@@ -1965,6 +2073,7 @@ describe("app-conversations", () => {
         pausedAt: null,
         pendingInviteeUserIds: ["user-2", "user-3"],
       });
+      mockUserFindMany.mockResolvedValue([{ id: "user-2" }, { id: "user-3" }]);
 
       await materializePendingConversationInvitees("session-dm");
 
@@ -2023,6 +2132,7 @@ describe("app-conversations", () => {
         pausedAt: null,
         pendingInviteeUserIds: ["user-2", "user-3"],
       });
+      mockUserFindMany.mockResolvedValue([{ id: "user-2" }, { id: "user-3" }]);
       mockUserBlockFindMany.mockResolvedValue([{ blockerId: "user-3", blockedId: "user-1" }]);
 
       await materializePendingConversationInvitees("session-dm");
@@ -2035,6 +2145,30 @@ describe("app-conversations", () => {
       });
       // The pending list is still cleared — a dropped, blocked invitee isn't
       // retried on the next message.
+      expect(mockUpdateConversation).toHaveBeenCalledWith({
+        where: { id: "conv-dm" },
+        data: { pendingInviteeUserIds: [] },
+      });
+    });
+
+    it("drops unknown pending ids before the membership foreign-key write", async () => {
+      mockFindConversationUnique.mockResolvedValue({
+        id: "conv-dm",
+        ownerUserId: "user-1",
+        status: "active",
+        pausedAt: null,
+        pendingInviteeUserIds: ["user-2", "ghost-user"],
+      });
+      mockUserFindMany.mockResolvedValue([{ id: "user-2" }]);
+
+      await materializePendingConversationInvitees("session-dm");
+
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [
+          { channelId: "conv-dm", userId: "user-2", role: "member", status: "active", pausedAt: null },
+        ],
+        skipDuplicates: true,
+      });
       expect(mockUpdateConversation).toHaveBeenCalledWith({
         where: { id: "conv-dm" },
         data: { pendingInviteeUserIds: [] },

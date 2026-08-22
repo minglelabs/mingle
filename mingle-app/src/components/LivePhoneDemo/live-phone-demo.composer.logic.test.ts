@@ -22,6 +22,7 @@ describe('live phone demo composer logic', () => {
       closeKeyboardLabel: '텍스트 입력 닫기',
       composerPlaceholder: '메시지를 입력하세요',
       sendMessageLabel: '메시지 보내기',
+      blockedComposerMessage: '차단된 사용자입니다',
     })
   })
 
@@ -32,6 +33,7 @@ describe('live phone demo composer logic', () => {
       closeKeyboardLabel: 'Close text input',
       composerPlaceholder: 'Type a message',
       sendMessageLabel: 'Send message',
+      blockedComposerMessage: 'This user is blocked.',
     })
   })
 

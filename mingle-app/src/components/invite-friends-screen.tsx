@@ -87,13 +87,16 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
       ?? (locale === "ko" ? "목록을 불러오지 못했습니다. 다시 시도해 주세요." : "Could not load the list. Please try again."),
     userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
     clearSearch: dictionary.connect.clearSearchLabel ?? (locale === "ko" ? "검색어 지우기" : "Clear search"),
-  }), [dictionary, locale]);
+    empty: activeTab === "followers"
+      ? (dictionary.profile.noFollowersLabel ?? "No followers yet.")
+      : (dictionary.profile.noFollowingLabel ?? "No following yet."),
+  }), [activeTab, dictionary, locale]);
 
   const viewerName = session?.user?.name?.trim()
-    || (locale === "ko" ? "나" : "You");
+    || dictionary.profile.selfLabel
+    || "You";
   const viewerImage = typeof session?.user?.image === "string" ? session.user.image : null;
 
-  const activeLabel = labels[activeTab];
   const normalizedQuery = query.trim();
   const selectedIds = useMemo(() => new Set(selectedUsers.map((user) => user.id)), [selectedUsers]);
 
@@ -373,7 +376,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500" role="alert">{labels.error}</p>
           ) : users.length === 0 ? (
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500">
-              {locale === "ko" ? `${activeLabel}가 없습니다.` : `No ${activeLabel.toLowerCase()} yet.`}
+              {labels.empty}
             </p>
           ) : (
             <ul className="border-t border-gray-100">
