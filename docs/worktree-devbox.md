@@ -23,8 +23,6 @@ DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
 DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
 # Keep this only when Cloudflare should be the default device tunnel provider.
 DEVBOX_TUNNEL_PROVIDER=cloudflare
-DEVBOX_VAULT_PATH=secret/mingle/dev
-DEVBOX_VAULT_PROD_PATH=secret/mingle/prod
 DEVBOX_LOCAL_HOST=127.0.0.1
 DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ
 RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551
@@ -67,8 +65,9 @@ scripts/devbox status
 
 `bootstrap`은 루트 공통 env와 세 서비스 env의 비관리 키를 읽어 `secret/mingle/dev`에
 안전하게 patch합니다. record가 없으면 최초 1회만 `kv put`으로 만들고, 기존 record는 `kv patch`만
-사용합니다. 운영 모바일 URL을 사용하는 경우에는 `secret/mingle/prod`를 별도로 준비하고
-`DEVBOX_VAULT_PROD_PATH` 또는 기본 경로를 사용합니다.
+사용합니다. 운영 모바일 URL을 사용하는 경우에는 `secret/mingle/prod`를 별도로 준비합니다.
+두 경로 모두 기본값이 내장되어 있으므로 `DEVBOX_VAULT_PATH`와
+`DEVBOX_VAULT_PROD_PATH`를 env에 넣지 않아도 됩니다.
 
 ## 빠른 시작
 
@@ -210,7 +209,8 @@ scripts/devbox bootstrap
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
     불일치/누락 시 `pod install` 자동 동기화
-  - 공통 Vault 경로는 메인 루트 `.env.local`의 `DEVBOX_VAULT_PATH`로 관리
+  - 공통 Vault 경로 기본값은 `secret/mingle/dev`이며, 필요할 때만 메인 루트 `.env.local`의
+    `DEVBOX_VAULT_PATH` 또는 `--vault-path`로 변경
 
 - `scripts/devbox bootstrap`
   - `.env.local`은 수정하지 않고, 메인 워크트리 루트 `.env.local`의 공통값과
