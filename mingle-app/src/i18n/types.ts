@@ -27,6 +27,9 @@ export type BaseAppDictionarySource = {
     unmuteTts: string;
     textSizeLabel?: string;
     silenceFinalizeLabel?: string;
+    endpointTuningLabel?: string;
+    endpointTuningShortLabel?: string;
+    endpointTuningLongLabel?: string;
     translationModelLabel?: string;
     adBannerPositionLabel?: string;
     adBannerPositionTopLabel?: string;
@@ -183,6 +186,9 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
     unmuteTts: string;
     textSizeLabel: string;
     silenceFinalizeLabel: string;
+    endpointTuningLabel: string;
+    endpointTuningShortLabel: string;
+    endpointTuningLongLabel: string;
     translationModelLabel: string;
     adBannerPositionLabel: string;
     adBannerPositionTopLabel: string;

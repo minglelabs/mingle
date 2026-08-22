@@ -95,6 +95,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
+      sonioxEndpointMaxDelayMs: 3000,
+      sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -123,6 +125,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
+      sonioxEndpointMaxDelayMs: 3000,
+      sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -170,6 +174,8 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
+      demoEndpointMaxDelayMs: 1800,
+      demoEndpointTuningStep: 4,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
       demoInputMode: "text",
@@ -184,6 +190,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
+      sonioxEndpointMaxDelayMs: 1800,
+      sonioxEndpointTuningStep: 4,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
       inputMode: "text",
@@ -196,6 +204,8 @@ describe("/api/account/preferences route", () => {
         id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
+        demoEndpointMaxDelayMs: true,
+        demoEndpointTuningStep: true,
         translationModel: true,
         adBannerPosition: true,
         demoInputMode: true,
@@ -217,6 +227,8 @@ describe("/api/account/preferences route", () => {
         id: "user_123",
         demoTextSizeLevel: 4,
         demoSilenceFinalizeMs: 1000,
+        demoEndpointMaxDelayMs: 1900,
+        demoEndpointTuningStep: 1,
         translationModel: "qwen/qwen3.5-9b",
         demoInputMode: null,
       })
@@ -242,6 +254,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
+      sonioxEndpointMaxDelayMs: 1900,
+      sonioxEndpointTuningStep: 1,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -269,6 +283,8 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: null,
       demoSilenceFinalizeMs: null,
+      demoEndpointMaxDelayMs: null,
+      demoEndpointTuningStep: null,
       translationModel: null,
       adBannerPosition: null,
       demoInputMode: null,
@@ -283,6 +299,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
+      sonioxEndpointMaxDelayMs: 3000,
+      sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -314,6 +332,60 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoSilenceFinalizeMs: 3000,
+      },
+    });
+  });
+
+  it("clamps and persists endpoint max delay updates through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sonioxEndpointMaxDelayMs: 99999,
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoEndpointMaxDelayMs: 3000,
+      },
+    });
+  });
+
+  it("clamps and persists the five-step endpoint tuning preference through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sonioxEndpointTuningStep: 99,
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoEndpointTuningStep: 4,
       },
     });
   });
@@ -457,6 +529,8 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 1500,
+      demoEndpointMaxDelayMs: 2200,
+      demoEndpointTuningStep: 0,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "top",
       demoInputMode: "text",
@@ -475,6 +549,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 1500,
+      sonioxEndpointMaxDelayMs: 2200,
+      sonioxEndpointTuningStep: 0,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "top",
       inputMode: "text",
@@ -487,6 +563,8 @@ describe("/api/account/preferences route", () => {
         id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
+        demoEndpointMaxDelayMs: true,
+        demoEndpointTuningStep: true,
         translationModel: true,
         adBannerPosition: true,
         demoInputMode: true,
@@ -531,6 +609,8 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 900,
+      demoEndpointMaxDelayMs: 1500,
+      demoEndpointTuningStep: 3,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
       demoInputMode: "voice",
@@ -549,6 +629,8 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 900,
+      sonioxEndpointMaxDelayMs: 1500,
+      sonioxEndpointTuningStep: 3,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -569,6 +651,8 @@ describe("/api/account/preferences route", () => {
         id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
+        demoEndpointMaxDelayMs: true,
+        demoEndpointTuningStep: true,
         translationModel: true,
         adBannerPosition: true,
         demoInputMode: true,

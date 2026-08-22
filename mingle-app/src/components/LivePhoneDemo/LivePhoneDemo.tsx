@@ -29,21 +29,24 @@ import {
 } from '@/lib/stt-languages'
 import {
   DEFAULT_INPUT_MODE,
+  DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_SILENCE_MS,
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
-  MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  shouldShowSpeechSplitControl,
+  shouldShowEndpointTuningControl,
+  shouldShowManualSilenceControl,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -1045,6 +1048,9 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  endpointTuningLabel: string
+  endpointTuningShortLabel: string
+  endpointTuningLongLabel: string
   translationModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
@@ -1307,6 +1313,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   switchLiveRoomToastLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  endpointTuningLabel,
+  endpointTuningShortLabel,
+  endpointTuningLongLabel,
   translationModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
@@ -1387,6 +1396,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
+  const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
@@ -1515,6 +1526,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+    sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
     inputMode: DEFAULT_INPUT_MODE,
@@ -1524,12 +1537,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
+    sonioxEndpointMaxDelayMs,
+    sonioxEndpointTuningStep,
     translationModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1646,7 +1661,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
       setTextSizeLevel(next.textSizeLevel)
-      setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
@@ -2020,6 +2034,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         )
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
+        setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
@@ -3362,6 +3378,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    sonioxEndpointMaxDelayMs,
+    sonioxEndpointTuningStep,
     conversationId,
     sessionKeyOverride,
     storageNamespace,
@@ -3415,13 +3433,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizePreviewBadgeLabel = textSizePreviewLanguage.trim().replace('_', '-').split('-')[0]?.toUpperCase() || 'EN'
   const textSizePreviewLabel = `Level ${textSizeLevel}`
   const sliderClassName = [
-    // iOS-like visual style with larger touch area for drag stability on all platforms.
+    // Keep the visible thumb compact while giving the native thumb a 44px touch target.
+    // Mask the track ends by the same 22px inset so the visible range still reaches both ends.
     'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
     'accent-[#0A84FF]',
-    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#D1D1D6]',
-    '[&::-webkit-slider-thumb]:-mt-[7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#C7C7CC] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
-    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-[#D1D1D6]',
-    '[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#C7C7CC] [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
+    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white [&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
+    '[&::-webkit-slider-thumb]:-mt-[19px] [&::-webkit-slider-thumb]:h-11 [&::-webkit-slider-thumb]:w-11 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-transparent [&::-webkit-slider-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-webkit-slider-thumb]:shadow-none',
+    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white [&::-moz-range-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
+    '[&::-moz-range-thumb]:h-11 [&::-moz-range-thumb]:w-11 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-moz-range-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-moz-range-thumb]:shadow-none',
   ].join(' ')
 
   // Boost TTS volume while STT is active to compensate for iOS
@@ -5379,7 +5398,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {shouldShowSpeechSplitControl() && (
+                            {shouldShowManualSilenceControl() && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
@@ -5454,6 +5473,74 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     />
                                   </>
                                 )}
+                              </div>
+                            </label>
+                            )}
+
+                            {shouldShowEndpointTuningControl() && (
+                            <label className="block">
+                              <div
+                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                }`}
+                              >
+                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
+                                  {endpointTuningLabel}
+                                </span>
+                                <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`shrink-0 text-[0.6875rem] font-medium ${
+                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {endpointTuningShortLabel}
+                                </span>
+                                <div className="relative min-w-0 flex-1">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={4}
+                                    step={1}
+                                    value={sonioxEndpointTuningStep}
+                                    disabled={isSilenceFinalizeSliderDisabled}
+                                    onChange={(event) => {
+                                      if (isSilenceFinalizeSliderDisabled) return
+                                      const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
+                                      setSonioxEndpointTuningStep(next)
+                                      clearAccountPreferencesSyncTimer()
+                                      syncAccountPreferencesOverride({
+                                        ...latestAccountPreferencesRef.current,
+                                        sonioxEndpointTuningStep: next,
+                                      })
+                                    }}
+                                    className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                    aria-label={endpointTuningLabel}
+                                  />
+                                  {isSilenceFinalizeSliderLocked && (
+                                    <>
+                                      <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                        {silenceFinalizeLockedMessage}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        aria-label={silenceFinalizeLockedButtonLabel}
+                                        aria-describedby={silenceFinalizeLockedDescriptionId}
+                                        onFocus={handleSilenceFinalizeLockedInteraction}
+                                        onClick={handleSilenceFinalizeLockedInteraction}
+                                        className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                                <span
+                                  className={`shrink-0 text-[0.6875rem] font-medium ${
+                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {endpointTuningLongLabel}
+                                </span>
                               </div>
                             </label>
                             )}
