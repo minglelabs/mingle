@@ -1464,6 +1464,15 @@ decode_dotenv_value() {
   printf '%s' "$value"
 }
 
+encode_private_key_for_vault() {
+  local value="$1"
+  # Keep PEM values single-line in Vault; service runtimes restore these
+  # escaped newlines before using the key.
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
 push_env_file_to_vault_path() {
   local target="$1"
   local path="$2"
@@ -1501,6 +1510,9 @@ push_env_file_to_vault_path() {
     fi
 
     value="$(decode_dotenv_value "$value_raw")"
+    case "$key" in
+      *_PRIVATE_KEY) value="$(encode_private_key_for_vault "$value")" ;;
+    esac
     ensure_single_line_value "$key" "$value"
     kv_args+=("${key}=${value}")
     count=$((count + 1))
