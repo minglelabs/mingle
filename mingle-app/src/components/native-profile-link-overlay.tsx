@@ -3,6 +3,8 @@
 import { DEFAULT_LOCALE, getDictionary, resolveSupportedLocaleTag, type AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import {
   NATIVE_PROFILE_LINK_EVENT,
@@ -11,7 +13,7 @@ import {
   type NativeProfileLinkOverlayRequest,
 } from "@/lib/native-profile-link-overlay";
 import { consumeCurrentHistoryEntry } from "@/lib/slide-surface-history";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const NATIVE_PROFILE_HISTORY_STATE_KEY = "__MINGLE_NATIVE_PROFILE_OVERLAY__";
@@ -51,6 +53,7 @@ function restoreNativeBannerZone(): void {
 export default function NativeProfileLinkOverlay() {
   const pathname = usePathname() || "";
   const router = useRouter();
+  const searchParams = useSearchParams();
   const locale = resolveLocale(pathname);
   const dictionary = useMemo(() => getDictionary(locale), [locale]);
   const [profileOverlay, setProfileOverlay] = useState<ProfileOverlayState | null>(null);
@@ -118,14 +121,19 @@ export default function NativeProfileLinkOverlay() {
           throw new Error("profile_surface_close_failed");
         }
       }
-      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      const conversationListHref = buildNativeAwareTabPath(
+        `/${locale}/conversations`,
+        searchParams,
+        { skipConversationRestore: true, tabRoot: true },
+      );
+      await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
     } finally {
       directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
         pendingDirectConversationNavigationRef.current = false;
         directConversationNavigationReleaseTimerRef.current = null;
       }, 600);
     }
-  }, [locale, router]);
+  }, [locale, router, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

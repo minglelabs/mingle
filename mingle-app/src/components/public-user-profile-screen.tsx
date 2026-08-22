@@ -4,8 +4,10 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
@@ -28,7 +30,7 @@ import {
   UserX,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   useCallback,
@@ -188,6 +190,7 @@ export default function PublicUserProfileScreen({
 }: PublicUserProfileScreenProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -377,8 +380,13 @@ export default function PublicUserProfileScreen({
       await onStartDirectConversation(conversation);
       return;
     }
-    router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
-  }, [locale, onStartDirectConversation, router]);
+    const conversationListHref = buildNativeAwareTabPath(
+      `/${locale}/conversations`,
+      searchParams,
+      { skipConversationRestore: true, tabRoot: true },
+    );
+    await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
+  }, [locale, onStartDirectConversation, router, searchParams]);
 
   const handleMessage = useCallback(async () => {
     if (isOwnProfile || !profile || isMessagePending || profile.isBlocked) return;

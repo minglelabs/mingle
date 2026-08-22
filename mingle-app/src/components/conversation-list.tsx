@@ -3449,8 +3449,28 @@ export default function ConversationList({
       isAuthenticated: sessionStatus === "authenticated",
       hasActiveConversation: Boolean(activeConversation),
       isSearchOpen: showSearch,
+      isListOverlayOpen: Boolean(
+        isCreateChoiceModalOpen
+        || rowActionMenu
+        || renameDialogConversationId
+        || deleteDialogConversationId
+        || languageOnboardingModalOpen
+        || notificationSurfaceOpen
+        || conversationProfileId
+      ),
     }));
-  }, [activeConversation, sessionStatus, showSearch]);
+  }, [
+    activeConversation,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isCreateChoiceModalOpen,
+    languageOnboardingModalOpen,
+    notificationSurfaceOpen,
+    renameDialogConversationId,
+    rowActionMenu,
+    sessionStatus,
+    showSearch,
+  ]);
 
   useEffect(() => {
     if (!isNativeAppRuntime() || sessionStatus === "authenticated") return;

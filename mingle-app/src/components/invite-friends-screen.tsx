@@ -6,9 +6,12 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/app-conversations";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
+import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
 import { motion, useAnimationControls } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -53,6 +56,7 @@ function AvatarCircle({ image, size }: { image: string | null; size: number }) {
 
 export default function InviteFriendsScreen({ dictionary, locale }: InviteFriendsScreenProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const motionControls = useAnimationControls();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -139,9 +143,18 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
     return { conversationId, reused: data.reused === true };
   }, [locale, selectedUsers]);
 
-  const navigateToConversation = useCallback((conversationId: string) => {
-    router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversationId)}`);
-  }, [locale, router]);
+  const navigateToConversation = useCallback(async (conversationId: string) => {
+    const conversationListHref = buildNativeAwareTabPath(
+      `/${locale}/conversations`,
+      searchParams,
+      { skipConversationRestore: true, tabRoot: true },
+    );
+    await replaceWithConversationListThenPush(router, conversationListHref, conversationId);
+  }, [locale, router, searchParams]);
+
+  useEffect(() => {
+    postNativeBannerZone("hidden");
+  }, []);
 
   // Same set of people already has a room together — offer a choice instead
   // of silently reusing it (which would be confusing for a group, unlike
@@ -156,7 +169,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
         setExistingConversationId(conversationId);
         return;
       }
-      navigateToConversation(conversationId);
+      await navigateToConversation(conversationId);
     } catch {
       setStartError(copy.inviteFriendsCreateErrorMessage ?? null);
     } finally {
@@ -164,9 +177,9 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
     }
   }, [copy.inviteFriendsCreateErrorMessage, isStarting, navigateToConversation, requestConversationStart, selectedUsers]);
 
-  const handleContinuePreviousConversation = useCallback(() => {
+  const handleContinuePreviousConversation = useCallback(async () => {
     if (!existingConversationId) return;
-    navigateToConversation(existingConversationId);
+    await navigateToConversation(existingConversationId);
   }, [existingConversationId, navigateToConversation]);
 
   const handleCreateNewDespiteExisting = useCallback(async () => {
@@ -176,7 +189,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
     try {
       const { conversationId } = await requestConversationStart(true);
       setExistingConversationId(null);
-      navigateToConversation(conversationId);
+      await navigateToConversation(conversationId);
     } catch {
       setStartError(copy.inviteFriendsCreateErrorMessage ?? null);
     } finally {

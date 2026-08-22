@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-22 conversation creation banner and history stack
+
+### `2026-08-22-conversation-creation-banner-history` | UI/UX issue found
+
+1. **Starting a conversation showed an AdMob banner and could leave the creation screen underneath the new room**
+   Problem: The conversation-create choice modal inherited the conversations-list banner zone, and creating a group room or opening a direct room from a public profile pushed the room above the creation/profile route. Pressing back could therefore reveal an intermediate creation surface instead of the canonical conversations list.
+   Fix: The create-choice modal and invite-friends screen now hide the native banner. Group creation and profile-based direct conversation navigation first replace the current route with the conversations tab root, wait for it to settle, and then push exactly one conversation room entry. Standalone public-profile and native profile-link entry points use the same canonical stack helper.
+   Data change: None. This is a native banner visibility and navigation-history fix.
+   Verification: Focused banner-zone tests, web TypeScript validation, and targeted ESLint checks passed.
+
 ## 2026-08-20 Android system back audit across all 2.0.0 surfaces
 
 ### `2026-08-20-android-system-back-full-surface-audit` | UI/UX issue found
