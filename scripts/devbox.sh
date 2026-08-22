@@ -5,11 +5,12 @@ set -euo pipefail
 # IMPORTANT CONFIGURATION POLICY
 #
 # Vault is the source of truth for persistent devbox/app/STT configuration.
-# The local Vault is bootstrapped from the MAIN worktree's
-# /Users/nam/mingle/mingle-app/.env.local, not from this feature worktree's
-# .env.local. Keep persistent secrets and shared runtime configuration there,
-# then synchronize them through Vault. Do not add persistent configuration to
-# .devbox.env or use a generated .devbox.env as the solution for missing config.
+# The local Vault is bootstrapped from the MAIN worktree's root
+# /Users/nam/mingle/.env.local plus its service env files, not from this
+# feature worktree's generated .env files. Keep persistent secrets and shared
+# runtime configuration in the main root env, then synchronize them through
+# Vault. Do not add persistent configuration to .devbox.env or use a generated
+# .devbox.env as the solution for missing config.
 #
 # .devbox.env may still be generated as a derived, worktree-local compatibility
 # artifact by existing devbox flows. It is not a source of truth and must not be
@@ -22,6 +23,7 @@ ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 DEVBOX_LOG_DIR="$ROOT_DIR/.devbox-logs"
 DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
+ROOT_ENV_FILE="$ROOT_DIR/.env.local"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
@@ -140,6 +142,7 @@ STT_MANAGED_KEYS=(
 
 is_persistent_devbox_key() {
   case "$1" in
+    DEVBOX_NGROK_WEB_DOMAIN|\
     DEVBOX_CLOUDFLARE_TUNNEL_TOKEN|\
     DEVBOX_CLOUDFLARE_WEB_HOSTNAME|\
     DEVBOX_CLOUDFLARE_STT_HOSTNAME|\
@@ -160,6 +163,7 @@ is_persistent_devbox_key() {
 
 is_shared_app_setting_key() {
   case "$1" in
+    DEVBOX_NGROK_WEB_DOMAIN|\
     DEVBOX_CLOUDFLARE_*|\
     DEVBOX_RN_FALLBACK_*|\
     DEVBOX_TUNNEL_PROVIDER|\
@@ -195,8 +199,8 @@ NGROK_MESSAGING_URL=""
 NGROK_LAST_ERROR=""
 NGROK_LAST_ERROR_KIND=""
 
-# Values loaded from process env, the main-worktree .env.local, Vault, or the
-# worktree-local .devbox.env depending on whether a setting is shared or local.
+# Values loaded from process env, the main-worktree root .env.local, service
+# env files, Vault, or the worktree-local .devbox.env depending on the setting.
 DEFAULT_RN_FALLBACK_SITE_URL="https://mingle-app-xi.vercel.app"
 DEFAULT_RN_FALLBACK_WS_URL="wss://mingle-stt.fly.dev"
 DEVBOX_WORKTREE_NAME=""
@@ -222,7 +226,7 @@ DEVBOX_NGROK_API_PORT=""
 DEVBOX_TUNNEL_PROVIDER="${DEVBOX_TUNNEL_PROVIDER:-}"
 # NOTE:
 # Cloudflare named tunnel variables are persistent shared settings. Keep them
-# in the MAIN worktree's mingle-app/.env.local and synchronize them to Vault.
+# in the MAIN worktree's root .env.local and synchronize them to Vault.
 # An explicitly exported process value may still override them for one run.
 DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}"
 DEVBOX_CLOUDFLARE_WEB_HOSTNAME="${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}"
@@ -322,9 +326,9 @@ Usage:
 
 Commands:
   init         Generate worktree-aware ports/config runtime files.
-  bootstrap    Upload persistent main-worktree env values to Vault and install dependencies.
+  bootstrap    Upload main root shared values and service env values to Vault, then install dependencies.
                --vault-push is accepted as a backward-compatible no-op.
-  vault-up     Start local Vault via Homebrew service and optionally seed main-worktree env values.
+  vault-up     Start local Vault via Homebrew service and optionally seed main root/service env values.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
   gateway      Run OpenClaw gateway from configured openclaw root.
@@ -354,13 +358,13 @@ Environment:
                            Default: ngrok
   DEVBOX_CLOUDFLARE_TUNNEL_TOKEN  Optional: when set with hostnames below,
                            cloudflare provider uses named tunnel mode.
-                           Store persistent values in the MAIN worktree's
-                           mingle-app/.env.local and synchronize them to Vault.
+                           Store persistent values in the MAIN worktree root
+                           .env.local and synchronize them to Vault.
   DEVBOX_CLOUDFLARE_WEB_HOSTNAME  Named tunnel web hostname (e.g. web-dev.example.com)
   DEVBOX_CLOUDFLARE_STT_HOSTNAME  Named tunnel stt hostname (e.g. stt-dev.example.com)
   DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME Named tunnel messaging hostname (e.g. msg-dev.example.com)
   DEVBOX_IOS_TEAM_ID       Optional iOS Team ID used by ios-rn-ipa exportOptions.
-                           Store it in the MAIN worktree's .env.local or Vault.
+                           Store it in the MAIN worktree root .env.local or Vault.
                            Example: 3RFBMN8TKZ
 EOF
 }
@@ -711,15 +715,19 @@ read_vault_cli_env_value_from_local_env_files() {
   local key="$1"
   local value=""
   local file=""
+  local main_root_env_file=""
   local main_app_env_file=""
   local main_stt_env_file=""
   local -a env_files=()
 
+  main_root_env_file="$(main_worktree_env_file root || true)"
   main_app_env_file="$(main_worktree_env_file app || true)"
   main_stt_env_file="$(main_worktree_env_file stt || true)"
   env_files=(
+    "$main_root_env_file"
     "$main_app_env_file"
     "$main_stt_env_file"
+    "$ROOT_ENV_FILE"
     "$APP_ENV_FILE"
     "$STT_ENV_FILE"
   )
@@ -890,15 +898,15 @@ read_app_setting_value() {
     fi
   fi
 
-  if is_shared_app_setting_key "$key"; then
-    value="$(read_main_app_setting_value "$key" || true)"
-    value="$(decode_dotenv_value "$value")"
-    value="$(trim_whitespace "$value")"
-    if [[ -n "$value" ]]; then
-      printf '%s' "$value"
-      return 0
-    fi
-  elif [[ -f "$APP_ENV_FILE" ]]; then
+  value="$(read_main_root_setting_value "$key" || true)"
+  value="$(decode_dotenv_value "$value")"
+  value="$(trim_whitespace "$value")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  if [[ -f "$APP_ENV_FILE" ]]; then
     value="$(read_env_value_from_file "$key" "$APP_ENV_FILE" || true)"
     value="$(decode_dotenv_value "$value")"
     value="$(trim_whitespace "$value")"
@@ -909,7 +917,11 @@ read_app_setting_value() {
   fi
 
   vault_app_path="${DEVBOX_VAULT_APP_PATH:-}"
-  if [[ -z "$vault_app_path" ]] && is_shared_app_setting_key "$key"; then
+  if [[ -z "$vault_app_path" ]]; then
+    vault_app_path="$(read_main_root_setting_value DEVBOX_VAULT_APP_PATH || true)"
+    vault_app_path="$(trim_whitespace "$vault_app_path")"
+  fi
+  if [[ -z "$vault_app_path" ]]; then
     vault_app_path="$(read_main_app_setting_value DEVBOX_VAULT_APP_PATH || true)"
     vault_app_path="$(trim_whitespace "$vault_app_path")"
   fi
@@ -1199,10 +1211,22 @@ main_worktree_env_file() {
   [[ -n "$main_root" ]] || return 1
 
   case "$target" in
+    root) printf '%s/.env.local' "$main_root" ;;
     app) printf '%s/mingle-app/.env.local' "$main_root" ;;
     stt) printf '%s/mingle-stt/.env.local' "$main_root" ;;
     *) return 1 ;;
   esac
+}
+
+read_main_root_setting_value() {
+  local key="$1"
+  local file=""
+  local value=""
+
+  file="$(main_worktree_env_file root || true)"
+  [[ -n "$file" ]] || return 1
+  value="$(read_env_value_from_file "$key" "$file" || true)"
+  decode_dotenv_value "$value"
 }
 
 read_main_app_setting_value() {
@@ -1555,15 +1579,24 @@ push_env_file_to_vault_path() {
 push_env_to_vault_paths() {
   local app_path="${1:-}"
   local stt_path="${2:-}"
+  local root_file=""
   local app_file=""
   local stt_file=""
 
+  root_file="$(main_worktree_env_file root || true)"
   app_file="$(main_worktree_env_file app || true)"
   stt_file="$(main_worktree_env_file stt || true)"
   [[ -n "$app_file" && -f "$app_file" ]] || die "missing main mingle-app/.env.local for Vault bootstrap"
   [[ -n "$stt_file" && -f "$stt_file" ]] || die "missing main mingle-stt/.env.local for Vault bootstrap"
 
   push_env_file_to_vault_path "app" "$app_path" "$app_file"
+  if [[ -n "$root_file" && -f "$root_file" ]]; then
+    # Push the root env after the app env so shared values are the final
+    # source when a legacy service env still contains a duplicate key.
+    push_env_file_to_vault_path "app" "$app_path" "$root_file"
+  else
+    warn "main root .env.local not found; skipping shared root env upload"
+  fi
   push_env_file_to_vault_path "stt" "$stt_path" "$stt_file"
 }
 
@@ -1597,8 +1630,8 @@ cmd_vault_up() {
   if [[ "$seed" -eq 1 ]]; then
     require_devbox_env
     resolve_vault_paths "$vault_app_override" "$vault_stt_override"
-    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --seed (set DEVBOX_VAULT_APP_PATH in the main .env.local or pass --vault-app-path)"
-    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --seed (set DEVBOX_VAULT_STT_PATH in the main .env.local or pass --vault-stt-path)"
+    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --seed (set DEVBOX_VAULT_APP_PATH in the main root .env.local or pass --vault-app-path)"
+    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --seed (set DEVBOX_VAULT_STT_PATH in the main root .env.local or pass --vault-stt-path)"
     vault token lookup >/dev/null 2>&1 || die "vault is running but token lookup failed (run: vault login)"
     push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
   fi
@@ -2070,6 +2103,12 @@ resolve_runtime_nextauth_secret() {
   value="$(read_env_value_from_file NEXTAUTH_SECRET "$runtime_file")"
   if [[ -z "$value" ]]; then
     value="$(read_env_value_from_file AUTH_SECRET "$runtime_file")"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(read_main_root_setting_value NEXTAUTH_SECRET || true)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(read_main_root_setting_value AUTH_SECRET || true)"
   fi
   if [[ -z "$value" ]]; then
     value="$(read_env_value_from_file NEXTAUTH_SECRET "$APP_ENV_FILE")"
@@ -3941,14 +3980,14 @@ cmd_bootstrap() {
     DEVBOX_OPENCLAW_ROOT="$(resolve_openclaw_root)"
   fi
 
-  [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path (set DEVBOX_VAULT_APP_PATH in the main .env.local or pass --vault-app-path)"
-  [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path (set DEVBOX_VAULT_STT_PATH in the main .env.local or pass --vault-stt-path)"
+  [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path (set DEVBOX_VAULT_APP_PATH in the main root .env.local or pass --vault-app-path)"
+  [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path (set DEVBOX_VAULT_STT_PATH in the main root .env.local or pass --vault-stt-path)"
   require_cmd vault
   require_cmd jq
   prepare_vault_cli_env
   vault token lookup >/dev/null 2>&1 || die "Vault is not authenticated (run: vault login)"
   push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
-  log "bootstrap uploaded persistent main-worktree env values to Vault"
+  log "bootstrap uploaded main root shared values and service env values to Vault"
   ensure_workspace_dependencies
   ensure_rn_workspace_dependencies
   ensure_ios_pods_if_needed
@@ -5057,6 +5096,9 @@ cmd_up() {
   runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_app_env_file")"
   if [[ -z "$runtime_realtime_secret" ]]; then
     runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_stt_env_file")"
+  fi
+  if [[ -z "$runtime_realtime_secret" ]]; then
+    runtime_realtime_secret="$(read_main_root_setting_value MINGLE_REALTIME_SECRET || true)"
   fi
   if [[ -z "$runtime_realtime_secret" ]]; then
     runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$APP_ENV_FILE")"

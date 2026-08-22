@@ -54,6 +54,7 @@ DEVBOX_ENV_FILE=${JSON.stringify(devboxEnvPath)}
 DEVBOX_CLOUDFLARE_WEB_HOSTNAME=""
 main_worktree_env_file() {
   case "$1" in
+    root) printf '%s' ${JSON.stringify(mainEnvPath)} ;;
     app) printf '%s' ${JSON.stringify(mainEnvPath)} ;;
     stt) printf '%s' ${JSON.stringify(mainEnvPath)} ;;
     *) return 1 ;;

@@ -188,7 +188,7 @@ Mingle 프로젝트의 백엔드와 모바일 로컬 검증은 일반적인 수�
 
 현재 devbox named tunnel 모드는 web, STT, messaging의 hostname과 Cloudflare token이 모두 있어야 합니다. `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME`이 비어 있으면 named mode가 시작되지 않습니다.
 
-현재 tunnel 구현은 각 프로세스가 별도 public endpoint를 사용하도록 되어 있으므로 web/STT/messaging에 같은 hostname을 재사용하면 안 됩니다. 사용자가 Cloudflare에 messaging hostname과 DNS를 등록한 뒤 메인 워크트리 `mingle-app/.env.local`에 공유 설정을 반영하고 `scripts/devbox bootstrap`으로 Vault에 업로드해야 합니다. 이후 named tunnel을 재시작한 다음 양쪽 모바일 Release 앱을 다시 빌드해야 합니다.
+현재 tunnel 구현은 각 프로세스가 별도 public endpoint를 사용하도록 되어 있으므로 web/STT/messaging에 같은 hostname을 재사용하면 안 됩니다. 사용자가 Cloudflare에 messaging hostname과 DNS를 등록한 뒤 메인 워크트리 루트 `.env.local`에 공유 설정을 반영하고 `scripts/devbox bootstrap`으로 Vault에 업로드해야 합니다. 이후 named tunnel을 재시작한 다음 양쪽 모바일 Release 앱을 다시 빌드해야 합니다.
 
 ### 6.3 Vault secret
 
@@ -248,7 +248,7 @@ Release 빌드 시 다음을 지켜야 합니다.
 
 1. 현재 위치가 `/Users/nam/.codex/worktrees/mingle/pr-206-device-test-rebased`인지 확인합니다.
 2. `git status`, `git log --oneline -10`, `scripts/devbox status`로 브랜치와 runtime을 확인합니다.
-3. Cloudflare에 messaging named hostname을 등록하고 메인 워크트리 `.env.local`의 `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME`에 설정한 뒤 bootstrap합니다.
+3. Cloudflare에 messaging named hostname을 등록하고 메인 워크트리 루트 `.env.local`의 `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME`에 설정한 뒤 bootstrap합니다.
 4. named Cloudflare tunnel로 devbox를 재시작하고 web/STT/messaging health와 WebSocket 연결을 확인합니다.
 5. app/messaging 양쪽이 동일한 `MINGLE_REALTIME_SECRET`을 읽는지 확인합니다. secret 값 자체는 로그나 문서에 출력하지 않습니다.
 6. named URL을 주입한 iOS/Android Release 앱을 clean install합니다.

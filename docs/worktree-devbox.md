@@ -17,7 +17,7 @@
 # 1) 워크트리에서 1회 초기화
 scripts/devbox init
 
-# 2) 메인 워크트리의 영구값을 Vault에 반영 + 의존성 설치
+# 2) 메인 워크트리 루트 공통값과 서비스 env를 Vault에 반영 + 의존성 설치
 scripts/devbox bootstrap
 
 # 2-b) (선택) Vault 경로 저장
@@ -40,7 +40,7 @@ scripts/devbox up --profile device
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
 # 5-a-1) (선택) cloudflare named tunnel(고정 호스트) 사용
-# 메인 워크트리 mingle-app/.env.local에 token/hostname을 저장한 뒤
+# 메인 워크트리 루트 .env.local에 token/hostname을 저장한 뒤
 # `scripts/devbox bootstrap`으로 Vault에도 반영합니다.
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
@@ -122,11 +122,11 @@ scripts/devbox bootstrap
 scripts/devbox up --profile device --with-ios-install --with-ios-clean-install
 # ngrok 한도 이슈가 있으면
 # scripts/devbox up --profile device --tunnel-provider cloudflare --with-ios-install --with-ios-clean-install
-# cloudflare named tunnel(고정 호스트)은 메인 워크트리
-# mingle-app/.env.local의 token/hostname을 사용합니다.
+# cloudflare named tunnel(고정 호스트)은 메인 워크트리 루트
+# .env.local의 token/hostname을 사용합니다.
 ```
 
-### C) 메인 워크트리의 `.env.local` 값을 Vault에 다시 반영해야 할 때
+### C) 메인 워크트리 루트 `.env.local` 값을 Vault에 다시 반영해야 할 때
 
 ```bash
 scripts/devbox vault-up --seed
@@ -135,8 +135,8 @@ scripts/devbox bootstrap
 
 노트:
 - `.devbox.env`가 없으면 `scripts/devbox up ...`이 `init`을 자동 실행합니다.
-- Vault CLI 환경(`VAULT_ADDR`, `VAULT_NAMESPACE`)은 메인 워크트리의
-  `mingle-app/.env.local`/`mingle-stt/.env.local`에 두면 자동 참조됩니다.
+- Vault CLI 환경(`VAULT_ADDR`, `VAULT_NAMESPACE`)은 메인 워크트리 루트
+  `.env.local`에 두면 자동 참조됩니다. 기존 서비스 env 파일도 fallback으로 읽습니다.
 
 ## 주요 명령
 
@@ -147,7 +147,7 @@ scripts/devbox bootstrap
   - 현재 워크트리 경로 해시를 기준으로 기본 포트 슬롯을 안정적으로 선택하고, 충돌 시 다음 슬롯으로 이동
   - `.devbox.env`에는 현재 워크트리의 포트/URL/profile 같은 파생 실행값만 기록
   - Cloudflare token/hostname, fallback URL, AdMob ID, Vault 경로, Team ID 같은 공유값은
-    메인 워크트리 `.env.local`과 Vault에서 읽음
+    메인 워크트리 루트 `.env.local`과 Vault에서 읽음
   - `ngrok.mobile.local.yml` 생성
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
@@ -155,8 +155,8 @@ scripts/devbox bootstrap
   - `--vault-app-path`, `--vault-stt-path`로 Vault 경로를 초기값으로 저장 가능
 
 - `scripts/devbox bootstrap`
-  - `.env.local`은 수정하지 않고, 메인 워크트리의 `mingle-app/.env.local`과
-    `mingle-stt/.env.local`에서 비관리 영구값을 읽어 Vault에 업로드
+  - `.env.local`은 수정하지 않고, 메인 워크트리 루트 `.env.local`의 공통값과
+    `mingle-app/.env.local`/`mingle-stt/.env.local`의 서비스값을 읽어 Vault에 업로드
   - `mingle-app`, `mingle-stt`, `mingle-messaging` 의존성(`pnpm install`) 자동 설치
   - `mingle-app/rn` 의존성(`pnpm install`) 자동 설치
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
@@ -166,14 +166,14 @@ scripts/devbox bootstrap
     - `--vault-app-path <path>`
     - `--vault-stt-path <path>`
   - 전달한 Vault 경로를 저장하고 재적용
-  - `--vault-push`는 이전 호환성을 위한 no-op이며, bootstrap이 항상 메인 워크트리의
-    비관리 키를 Vault 경로로 업로드
+  - `--vault-push`는 이전 호환성을 위한 no-op이며, bootstrap이 항상 메인 루트 공통값과
+    서비스 env의 비관리 키를 Vault 경로로 업로드
     - Vault 경로가 비어 있으면 안전하게 최초 1회 `kv put`으로 생성
     - Vault 경로가 이미 있으면 계속 `kv patch`만 사용하고 파괴적 fallback은 거부
 
 - `scripts/devbox vault-up [--seed]`
   - Homebrew `vault` 서비스를 시작
-  - `--seed`를 주면 메인 워크트리 `.env.local`의 비관리 키를 Vault로 즉시 반영
+  - `--seed`를 주면 메인 워크트리 루트 `.env.local` 공통값과 서비스 env의 비관리 키를 Vault로 즉시 반영
   - 재부팅 후 로컬 Vault가 내려갔을 때 복구용으로 사용
 
 - `scripts/devbox profile --profile local --host <LAN_IP>`
@@ -286,8 +286,8 @@ scripts/devbox bootstrap
 ## 생성/수정 파일
 
 - `.devbox.env`
-- 메인 워크트리의 `mingle-app/.env.local` (devbox는 읽기/참조만 함)
-- 메인 워크트리의 `mingle-stt/.env.local` (devbox는 읽기/참조만 함)
+- 메인 워크트리 루트 `.env.local` (공통값, devbox는 읽기/참조만 함)
+- 메인 워크트리의 `mingle-app/.env.local` / `mingle-stt/.env.local` (서비스값, devbox는 읽기/참조만 함)
 - `ngrok.mobile.local.yml`
 - `.devbox-logs/` (`--log-file` 사용 시 생성, gitignore)
 
@@ -295,10 +295,10 @@ scripts/devbox bootstrap
 
 - `vault` CLI와 `jq`가 로컬에 설치되어 있어야 합니다.
 - `vault login` 등으로 인증이 선행되어야 합니다.
-- `VAULT_ADDR`/`VAULT_NAMESPACE`는 메인 워크트리의 `.env.local`에 둘 수 있습니다.
+- `VAULT_ADDR`/`VAULT_NAMESPACE`는 메인 워크트리 루트 `.env.local`에 둘 수 있습니다.
 - devbox는 Vault 값을 `.env.local`에 자동 반영하지 않습니다(런타임 주입만 수행).
-- `scripts/devbox bootstrap`과 `scripts/devbox vault-up --seed`는 메인 워크트리의
-  `.env.local`에서 비관리 키를 읽어 Vault로 업로드합니다.
+- `scripts/devbox bootstrap`과 `scripts/devbox vault-up --seed`는 메인 워크트리 루트
+  `.env.local`의 공통값과 서비스 env의 비관리 키를 읽어 Vault로 업로드합니다.
 - `--vault-push`는 이전 호환성을 위한 no-op입니다.
 - Homebrew 로컬 Vault를 다시 올릴 때는 `scripts/devbox vault-up` 또는
   `brew services start hashicorp/tap/vault`를 사용할 수 있습니다.
