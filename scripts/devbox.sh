@@ -5146,7 +5146,7 @@ $(ngrok_plan_capacity_hint)"
             cloudflared_named_web_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '2p')"
             cloudflared_named_stt_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '3p')"
 
-            cloudflared_named_messaging_host="$(printf '%s\n' "$cloudflared_named_payload" | sed -n '4p')"
+            cloudflared_named_messaging_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '4p')"
             cloudflared_named_pid_file="$(cloudflared_named_pid_file_path)"
             cloudflared_named_log="$(cloudflared_named_log_file_path)"
             cloudflared_named_config_file="$(cloudflared_named_config_file_path)"
