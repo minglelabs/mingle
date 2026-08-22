@@ -76,6 +76,22 @@ test('handleConversationEventsConnection rejects a missing or invalid token', ()
     assert.equal(bus.subscriberCount('sess_a'), 0);
 });
 
+test('handleConversationEventsConnection rejects a token when the server secret is empty', () => {
+    const bus = new ConversationEventBus();
+    const socket = new FakeSocket();
+    const token = signToken({ sessionKey: 'sess_a', userId: 'user-1', exp: Date.now() + 60_000 }, SECRET);
+
+    handleConversationEventsConnection(
+        socket as unknown as import('ws').WebSocket,
+        `/conversation-events?token=${encodeURIComponent(token)}`,
+        '',
+        bus,
+    );
+
+    assert.equal(socket.closedWith?.code, 4401);
+    assert.equal(bus.subscriberCount('sess_a'), 0);
+});
+
 test('handleConversationEventsConnection subscribes a socket with a valid token and unsubscribes on close', () => {
     const bus = new ConversationEventBus();
     const socket = new FakeSocket();
@@ -141,7 +157,7 @@ test('handleConversationEventsPublish rejects a wrong or missing bearer secret',
     assert.equal(response.statusCode, 401);
 });
 
-test('handleConversationEventsPublish rejects an unconfigured (empty) server secret even if the caller sends one', async () => {
+test('handleConversationEventsPublish rejects an unconfigured server secret', async () => {
     const bus = new ConversationEventBus();
     const request = new FakeRequest('{}', { authorization: 'Bearer anything' });
     const response = new FakeResponse();

@@ -55,10 +55,23 @@ export const getWsUrl = (): string => {
   }
   return `${protocol}://${host}:${WS_PORT}`
 }
-// Same host/port mingle-stt's STT relay socket already resolves to, just a
-// different path — the one long-lived process in this stack also carries
-// conversation push events, so there is no second server to point at.
+// Conversation push normally has its own messaging URL. Railway can leave it
+// unset because the public proxy routes this path to mingle-messaging on the
+// same host; devbox/mobile profiles set it to the messaging tunnel explicitly.
 export const getConversationEventsWsUrl = (): string => {
+  const configured = process.env.NEXT_PUBLIC_MESSAGING_WS_URL?.trim()
+  if (configured) {
+    try {
+      const url = new URL(configured)
+      if (url.pathname === '/' || url.pathname === '') {
+        url.pathname = '/conversation-events'
+      }
+      return url.toString()
+    } catch {
+      return ''
+    }
+  }
+
   try {
     return `${new URL(getWsUrl()).origin}/conversation-events`
   } catch {
@@ -2974,7 +2987,7 @@ export default function useRealtimeSTT({
   // Live sync: a solo room never needed this (nothing else can add a
   // message), but a room shared by more than one real account does — without
   // it, another member's messages only show up on next mount/reload. Opens a
-  // push channel on mingle-stt (membership-checked token minted by the
+  // push channel on mingle-messaging (membership-checked token minted by the
   // server) and re-runs the same fetch+merge above on push; a long-interval
   // poll is the fallback for whenever the socket is down or push is
   // unconfigured in this environment.

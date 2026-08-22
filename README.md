@@ -20,7 +20,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Worktree Local Test Automation (mingle-app + mingle-stt)
+## Worktree Local Test Automation (mingle-app + mingle-stt + mingle-messaging)
 
 To automatically isolate local test environments per branch and worktree:
 
@@ -40,6 +40,7 @@ scripts/devbox up --profile device --tunnel-provider cloudflare
 # export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
 # export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
 # export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
+# export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
 # scripts/devbox up --profile device --tunnel-provider cloudflare
 scripts/devbox up --profile device --device-app-env dev
 scripts/devbox up --profile device --device-app-env prod --with-ios-install --with-ios-clean-install --ios-configuration Release
@@ -80,9 +81,9 @@ scripts/devbox status
 - `scripts/devbox up`, `init`, `mobile`, and `bootstrap` do not auto-sync `.env.local`.
 - If a saved Vault path exists, `scripts/devbox up` injects unmanaged keys (such as API keys)
   into the server process environment at runtime without writing them to files.
-- `--profile device` automatically applies real-device test URLs, including ngrok (`devbox_web` / `devbox_stt`).
+- `--profile device` automatically applies real-device test URLs, including ngrok (`devbox_web` / `devbox_stt` / `devbox_messaging`).
 - `--tunnel-provider cloudflare` configures HTTPS/WSS through a Cloudflare tunnel instead of ngrok.
-  - If `DEVBOX_CLOUDFLARE_TUNNEL_TOKEN`, `DEVBOX_CLOUDFLARE_WEB_HOSTNAME`, and `DEVBOX_CLOUDFLARE_STT_HOSTNAME` are set, it runs in **named tunnel (fixed host)** mode.
+  - If `DEVBOX_CLOUDFLARE_TUNNEL_TOKEN`, `DEVBOX_CLOUDFLARE_WEB_HOSTNAME`, `DEVBOX_CLOUDFLARE_STT_HOSTNAME`, and `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME` are set, it runs in **named tunnel (fixed host)** mode.
   - Without those settings, it falls back to the existing Quick Tunnel (`*.trycloudflare.com`) mode.
 - With `--profile device`, `--device-app-env dev|prod` reads mobile app build URLs from
   `secret/mingle-app/dev` or `secret/mingle-app/prod` and injects them.

@@ -25,7 +25,7 @@ describe("conversation-realtime", () => {
       expect(mintConversationRealtimeToken({ sessionKey: "sess_a", userId: "user-1" })).toBeNull();
     });
 
-    it("mints a token mingle-stt's verify function would accept", () => {
+    it("mints a token mingle-messaging's verify function would accept", () => {
       vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
       const token = mintConversationRealtimeToken({ sessionKey: "sess_a", userId: "user-1" });
       expect(token).not.toBeNull();
@@ -47,7 +47,7 @@ describe("conversation-realtime", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("posts to mingle-stt's publish endpoint derived from the ws origin", () => {
+    it("posts to the messaging publish endpoint derived from the ws origin", () => {
       vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
       vi.stubEnv("NEXT_PUBLIC_WS_URL", "wss://mingle-1-1-4-production.up.railway.app/stt");
       const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
@@ -62,6 +62,20 @@ describe("conversation-realtime", () => {
           headers: expect.objectContaining({ authorization: "Bearer shared-secret" }),
           body: JSON.stringify({ sessionKey: "sess_a", keys: [] }),
         }),
+      );
+    });
+
+    it("posts to the explicitly configured messaging service", () => {
+      vi.stubEnv("MINGLE_REALTIME_SECRET", "shared-secret");
+      vi.stubEnv("MINGLE_MESSAGING_URL", "http://127.0.0.1:3002/");
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+      global.fetch = fetchSpy as unknown as typeof fetch;
+
+      notifyConversationMessage("sess_a");
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "http://127.0.0.1:3002/conversation-events/publish",
+        expect.objectContaining({ method: "POST" }),
       );
     });
 

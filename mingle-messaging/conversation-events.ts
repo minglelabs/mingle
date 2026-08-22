@@ -3,14 +3,9 @@ import type { WebSocket } from 'ws';
 import { verifyRealtimeToken } from './realtime-token';
 
 /**
- * Push delivery for multi-member conversation rooms. mingle-app is
- * serverless and cannot hold a WebSocket open, so this in-memory fan-out
- * lives here instead, next to the STT relay's own persistent connection —
- * the one piece of this stack that already runs as a long-lived process.
- *
- * State is intentionally process-local. A machine restart drops subscribers,
- * which is fine: the client falls back to its own long-interval poll for
- * whatever a dropped socket misses.
+ * In-memory fan-out for conversation and conversation-list notifications.
+ * The app owns persistence and authorization; this service only owns live
+ * WebSocket connections and publishes a small invalidation event.
  */
 export class ConversationEventBus {
     private readonly subscribers = new Map<string, Set<WebSocket>>();
@@ -31,7 +26,7 @@ export class ConversationEventBus {
         if (sockets.size === 0) this.subscribers.delete(sessionKey);
     }
 
-    /** Number of sockets currently watching a room. Test/debug only. */
+    /** Number of sockets currently watching a topic. Test/debug only. */
     subscriberCount(sessionKey: string): number {
         return this.subscribers.get(sessionKey)?.size ?? 0;
     }
@@ -51,7 +46,7 @@ export class ConversationEventBus {
 export const CONVERSATION_EVENTS_WS_PATH = '/conversation-events';
 export const CONVERSATION_EVENTS_PUBLISH_PATH = '/conversation-events/publish';
 
-/** True for any request this module should be given a chance to handle. */
+/** True for either conversation-events endpoint. */
 export function isConversationEventsRequestUrl(rawUrl: string | undefined): boolean {
     if (!rawUrl) return false;
     const path = rawUrl.split('?')[0];
@@ -60,9 +55,7 @@ export function isConversationEventsRequestUrl(rawUrl: string | undefined): bool
 
 /**
  * Handles a WebSocket connection already routed to `/conversation-events`.
- * The token is mingle-app's word that this connection's holder is a real
- * member of the conversation behind `sessionKey` — see realtime-token.ts for
- * what "verifying" it means on this side.
+ * The token is minted by mingle-app after checking channel membership.
  */
 export function handleConversationEventsConnection(
     socket: WebSocket,
@@ -93,17 +86,9 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
 }
 
 /**
- * Handles the plain-HTTP `POST /conversation-events/publish` mingle-app
- * calls right after a message commits. Authenticated with the same shared
- * secret, bearer-style — this is service-to-service, not a per-user token,
- * since mingle-app has already done the membership check by the time it
- * calls this.
- *
- * Accepts a single `sessionKey` (the room itself) and/or a `keys` array —
- * mingle-app fans a single message out to the room's own topic plus a
- * `list:<userId>` topic per member, so every member's conversation LIST
- * screen (not just an already-open room) picks up the new message without a
- * manual refresh. One HTTP call covers all of them instead of one per topic.
+ * Handles the service-to-service publish request from mingle-app after a
+ * message commits. The messaging service never receives or stores message
+ * contents; it only fans out invalidation events to subscribed topics.
  */
 export async function handleConversationEventsPublish(
     request: IncomingMessage,
@@ -112,8 +97,11 @@ export async function handleConversationEventsPublish(
     bus: ConversationEventBus,
 ): Promise<void> {
     const authorization = request.headers.authorization || '';
-    const providedSecret = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : '';
-    if (!secret || providedSecret !== secret) {
+    const providedSecret = authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length).trim()
+        : '';
+    const normalizedSecret = secret.trim();
+    if (!normalizedSecret || providedSecret !== normalizedSecret) {
         response.writeHead(401, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ error: 'unauthorized' }));
         return;
@@ -131,7 +119,9 @@ export async function handleConversationEventsPublish(
     const record = body as Record<string, unknown>;
     const sessionKey = typeof record?.sessionKey === 'string' ? record.sessionKey.trim() : '';
     const extraKeys = Array.isArray(record?.keys)
-        ? record.keys.filter((key): key is string => typeof key === 'string' && key.trim() !== '').map((key) => key.trim())
+        ? record.keys
+            .filter((key): key is string => typeof key === 'string' && key.trim() !== '')
+            .map((key) => key.trim())
         : [];
     const keys = [...new Set(sessionKey ? [sessionKey, ...extraKeys] : extraKeys)];
 

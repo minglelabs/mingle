@@ -70,6 +70,7 @@ function createLocalStorageMock(seed: Record<string, string> = {}) {
 describe('use-realtime-stt pure logic', () => {
   const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL
   const originalWsPath = process.env.NEXT_PUBLIC_WS_PATH
+  const originalMessagingWsUrl = process.env.NEXT_PUBLIC_MESSAGING_WS_URL
 
   afterEach(() => {
     if (originalWsUrl === undefined) {
@@ -81,6 +82,11 @@ describe('use-realtime-stt pure logic', () => {
       delete process.env.NEXT_PUBLIC_WS_PATH
     } else {
       process.env.NEXT_PUBLIC_WS_PATH = originalWsPath
+    }
+    if (originalMessagingWsUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_MESSAGING_WS_URL
+    } else {
+      process.env.NEXT_PUBLIC_MESSAGING_WS_URL = originalMessagingWsUrl
     }
     vi.unstubAllGlobals()
   })
@@ -125,6 +131,13 @@ describe('use-realtime-stt pure logic', () => {
     })
 
     expect(getConversationEventsWsUrl()).toBe('wss://mingle-1-1-4-production.up.railway.app/conversation-events')
+  })
+
+  it('prefers the dedicated messaging WebSocket URL when configured', () => {
+    process.env.NEXT_PUBLIC_MESSAGING_WS_URL = 'wss://messaging.example.com'
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://stt.example.com/stt'
+
+    expect(getConversationEventsWsUrl()).toBe('wss://messaging.example.com/conversation-events')
   })
 
   it('derives the conversation-events push URL from an inferred (non-env-override) ws URL too', () => {

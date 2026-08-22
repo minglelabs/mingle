@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 /**
- * Scopes a WebSocket subscription on mingle-stt to one conversation's
- * sessionKey. Mirrors mingle-stt/realtime-token.ts's verify logic exactly —
+ * Scopes a WebSocket subscription on mingle-messaging to one conversation's
+ * sessionKey. Mirrors mingle-messaging/realtime-token.ts's verify logic —
  * the two packages don't share code (no workspace linking them), so this
  * pairing has to be kept in sync by hand. Signing happens here, after this
- * server has already checked membership; mingle-stt's half never touches a
+ * server has already checked membership; mingle-messaging's half never touches a
  * database, it only checks the signature and expiry.
  */
 export type RealtimeTokenPayload = {
@@ -58,7 +58,7 @@ export function verifyRealtimeToken(token: string, secret: string): RealtimeToke
   return payload;
 }
 
-/** Reads the secret shared with mingle-stt. Empty when realtime push is unconfigured. */
+/** Reads the secret shared with mingle-messaging. Empty when realtime push is unconfigured. */
 export function readRealtimeSecret(): string {
   return (process.env.MINGLE_REALTIME_SECRET || "").trim();
 }

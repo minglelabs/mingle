@@ -5,7 +5,7 @@
 ## 목적
 
 - 워크트리별 포트 충돌 방지
-- `mingle-app` + `mingle-stt` 동시 실행 단일 명령 제공
+- `mingle-app` + `mingle-stt` + `mingle-messaging` 동시 실행 단일 명령 제공
 - PC웹/iOS웹/안드웹/iOS앱/안드앱 테스트 URL/WS 자동 동기화
 - 디바이스 테스트용 ngrok 상시 지원
 - live 테스트(`pnpm test:live`) 포트 자동 주입 (`devbox test`는 기본 비활성)
@@ -31,7 +31,7 @@ scripts/devbox bootstrap --vault-push
 # 3) 현재 상태 확인
 scripts/devbox status
 
-# 4) 로컬 프로필로 서버 실행 (mingle-app + mingle-stt)
+# 4) 로컬 프로필로 서버 실행 (mingle-app + mingle-stt + mingle-messaging)
 scripts/devbox up --profile local
 
 # 5) 디바이스 프로필로 서버+ngrok 실행
@@ -44,6 +44,7 @@ scripts/devbox up --profile device --tunnel-provider cloudflare
 export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
 export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
 export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
+export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
 # 5-b) 디바이스 앱 빌드 URL을 Vault dev/prod로 선택
@@ -107,11 +108,11 @@ scripts/devbox bootstrap
 # OpenClaw gateway가 필요하면 (별도 터미널)
 scripts/devbox gateway --mode dev
 
-# mingle-stt + mingle-app 실행
+# mingle-stt + mingle-messaging + mingle-app 실행
 scripts/devbox up --profile local
 ```
 
-### B) 실기기 전체(앱 재설치 + ngrok + 서버 2개)
+### B) 실기기 전체(앱 재설치 + ngrok + 서버 3개)
 
 ```bash
 cd /Users/nam/.codex/worktrees/5387/mingle
@@ -128,6 +129,7 @@ scripts/devbox up --profile device --with-ios-install --with-ios-clean-install
 # export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
 # export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
 # export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
+# export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
 ```
 
 ### C) 로컬 `.env.local` 값을 Vault에 다시 반영해야 할 때
@@ -147,7 +149,7 @@ scripts/devbox bootstrap --vault-push
 - `scripts/devbox init`
   - `.devbox.env` 생성
   - git worktree 목록 기준으로 다른 워크트리의 `.devbox.env`를 읽어 이미 할당된 포트를 회피해 기본 포트 자동 선택
-    (`web/stt/metro` + `ngrok inspector`)
+    (`web/stt/messaging/metro` + `ngrok inspector`)
   - 현재 워크트리 경로 해시를 기준으로 기본 포트 슬롯을 안정적으로 선택하고, 충돌 시 다음 슬롯으로 이동
   - `.devbox.env`에는 서버 실행용 값뿐 아니라 `pnpm dev/build/start`, RN Android/iOS 빌드가
     바로 읽는 파생 URL/API namespace 값도 함께 기록
@@ -159,7 +161,7 @@ scripts/devbox bootstrap --vault-push
 
 - `scripts/devbox bootstrap`
   - `.env.local`을 수정하지 않는 읽기 전용 동작
-  - `mingle-app`, `mingle-stt` 의존성(`pnpm install`) 자동 설치
+  - `mingle-app`, `mingle-stt`, `mingle-messaging` 의존성(`pnpm install`) 자동 설치
   - `mingle-app/rn` 의존성(`pnpm install`) 자동 설치
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
     불일치/누락 시 `pod install` 자동 동기화
@@ -183,8 +185,8 @@ scripts/devbox bootstrap --vault-push
   - `NEXT_PUBLIC_WS_URL`를 빈 값으로 두고 host+port 조합을 사용
 
 - `scripts/devbox profile --profile device`
-  - 현재 워크트리 ngrok inspector(`DEVBOX_NGROK_API_PORT`)에서 `devbox_web`, `devbox_stt` 터널 URL을 읽어
-    `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`에 반영
+  - 현재 워크트리 ngrok inspector(`DEVBOX_NGROK_API_PORT`)에서 `devbox_web`, `devbox_stt`, `devbox_messaging` 터널 URL을 읽어
+    `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_MESSAGING_WS_URL`에 반영
   - 현재 워크트리 포트와 `config.addr`가 일치하고 `https/wss`인 터널만 허용
 
 - `scripts/devbox gateway --mode dev|run`
@@ -199,7 +201,7 @@ scripts/devbox bootstrap --vault-push
     - 기준 키: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`
     - fallback(마이그레이션 호환): `MINGLE_API_BASE_URL`, `RN_WEB_APP_BASE_URL`, `MINGLE_WEB_APP_BASE_URL`, `MINGLE_WS_URL`, `RN_DEFAULT_WS_URL`, `MINGLE_DEFAULT_WS_URL`
     - 장애 fallback 키: `MINGLE_API_FALLBACK_SITE_URL`, `MINGLE_STT_FALLBACK_WS_URL`
-  - `--device-app-env prod`면 ngrok 및 로컬 서버(mingle-app/mingle-stt) 기동을 생략
+  - `--device-app-env prod`면 ngrok 및 로컬 서버(mingle-app/mingle-stt/mingle-messaging) 기동을 생략
   - `--device-app-env dev`면 기존 device(ngrok) 흐름을 그대로 사용
 
 - `scripts/devbox up --profile local|device`
@@ -209,7 +211,7 @@ scripts/devbox bootstrap --vault-push
   - 저장된 Vault 경로가 있으면 비관리 키(API key 등)를
     서버 프로세스 환경변수로 런타임 주입(파일 미기록)
   - `.env.local` 갱신은 devbox가 수행하지 않음(수동 편집 원칙)
-  - `mingle-stt` + `mingle-app` 동시 실행
+  - `mingle-stt` + `mingle-messaging` + `mingle-app` 동시 실행
   - 기본 web dev server는 `next dev`(Turbopack)으로 실행
     - webpack 동작 확인이 필요하면 `DEVBOX_NEXT_DEV_BUNDLER=webpack`을 붙여 `next dev --webpack`으로 실행 가능
   - `device` 프로필에서 ngrok이 없으면 iTerm/Terminal에 별도 탭/패널로 ngrok 실행 시도
@@ -280,7 +282,7 @@ scripts/devbox bootstrap --vault-push
 
 ## ngrok Free 플랜 참고
 
-- `device` 프로필은 워크트리당 ngrok endpoint 2개(`devbox_web`, `devbox_stt`)를 사용합니다.
+- `device` 프로필은 워크트리당 ngrok endpoint 3개(`devbox_web`, `devbox_stt`, `devbox_messaging`)를 사용합니다.
 - ngrok Free 한도는 계정 생성 시점/플랜 정책에 따라 `online endpoint`가 1~3으로 다를 수 있습니다.
 - 따라서 단일 계정 Free 플랜에서는 `device` 프로필 워크트리 2개 동시(총 endpoint 4개)가
   제한에 걸릴 가능성이 높습니다. (정확 한도는 ngrok 대시보드에서 확인)

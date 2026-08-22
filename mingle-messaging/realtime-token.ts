@@ -1,11 +1,9 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
 /**
- * Verifies the token mingle-app mints after checking channel membership.
- * Mirrors mingle-app/src/lib/realtime-token.ts's payload shape and signing
- * exactly — kept in sync by hand since the two packages share no code.
- * This side never touches a database: the signature is mingle-app's word
- * that the token holder is a real member of `sessionKey`'s conversation.
+ * Verifies the token minted by mingle-app after it has checked conversation
+ * membership. This service deliberately has no database access: the signed
+ * payload is the app's authorization decision.
  */
 export type RealtimeTokenPayload = {
     sessionKey: string;
@@ -24,6 +22,9 @@ function isRealtimeTokenPayload(value: unknown): value is RealtimeTokenPayload {
 }
 
 export function verifyRealtimeToken(token: string, secret: string): RealtimeTokenPayload | null {
+    const normalizedSecret = secret.trim();
+    if (!normalizedSecret) return null;
+
     const separatorIndex = token.indexOf('.');
     if (separatorIndex <= 0) return null;
 
@@ -31,7 +32,7 @@ export function verifyRealtimeToken(token: string, secret: string): RealtimeToke
     const signature = token.slice(separatorIndex + 1);
     if (!body || !signature) return null;
 
-    const expectedSignature = createHmac('sha256', secret).update(body).digest('base64url');
+    const expectedSignature = createHmac('sha256', normalizedSecret).update(body).digest('base64url');
     const provided = Buffer.from(signature, 'utf8');
     const expected = Buffer.from(expectedSignature, 'utf8');
     if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {

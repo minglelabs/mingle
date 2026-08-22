@@ -6,3 +6,6 @@ tunnels:
   devbox_stt:
     addr: 3001
     proto: http
+  devbox_messaging:
+    addr: 3002
+    proto: http

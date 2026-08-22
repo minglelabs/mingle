@@ -252,7 +252,7 @@ describe("handleLogClientEventV1", () => {
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123"]);
   });
 
-  it("does not persist or notify a finalized turn when the sender is blocked in this room", async () => {
+  it("does not persist or notify a finalized turn when the sender is blocked or not a member", async () => {
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(true);
 
     const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {

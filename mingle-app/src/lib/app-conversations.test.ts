@@ -2115,7 +2115,7 @@ describe("app-conversations", () => {
       expect(blocked).toBe(false);
     });
 
-    it("returns false when the sessionKey doesn't resolve to a channel", async () => {
+    it("fails closed when the sessionKey doesn't resolve to a channel", async () => {
       mockFindConversationUnique.mockResolvedValue(null);
 
       const blocked = await isMessageSenderBlockedInConversation({
@@ -2123,7 +2123,21 @@ describe("app-conversations", () => {
         userId: "user-1",
       });
 
-      expect(blocked).toBe(false);
+      expect(blocked).toBe(true);
+    });
+
+    it("fails closed when the sender is not a member of the resolved channel", async () => {
+      mockFindConversationUnique.mockResolvedValue({ id: "conv-dm" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: { name: "Bob", handle: "bob" } },
+      ]);
+
+      const blocked = await isMessageSenderBlockedInConversation({
+        sessionKey: "session-dm",
+        userId: "user-1",
+      });
+
+      expect(blocked).toBe(true);
     });
   });
 });

@@ -1216,6 +1216,9 @@ export async function listChannelMemberUserIdsBySessionKey(sessionKey: string): 
 // Defense in depth behind the client's own composer/mic gating (see
 // isBlockedCounterpart) — even a stale client that still posts a
 // stt_turn_finalized event for a now-blocked room must not have it persist.
+// A caller must also be a real member of the channel. Returning true for an
+// unknown channel or a non-member deliberately fails closed at the message
+// persistence call site, without revealing which part of the check failed.
 // Only meaningful for a 2-real-member room; a block against one member of a
 // 3+ person room doesn't stop the whole room from messaging.
 export async function isMessageSenderBlockedInConversation(args: {
@@ -1226,10 +1229,11 @@ export async function isMessageSenderBlockedInConversation(args: {
     where: { sessionKey: args.sessionKey },
     select: { id: true },
   });
-  if (!channel) return false;
+  if (!channel) return true;
 
   const membersByChannelId = await listChannelMembersByChannelId([channel.id]);
   const members = membersByChannelId.get(channel.id) ?? [];
+  if (!members.some((member) => member.userId === args.userId)) return true;
   if (members.length !== 2) return false;
   const other = members.find((member) => member.userId !== args.userId);
   if (!other) return false;

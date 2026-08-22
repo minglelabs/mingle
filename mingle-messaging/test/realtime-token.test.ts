@@ -5,9 +5,7 @@ import { createHmac } from 'crypto';
 import { verifyRealtimeToken } from '../realtime-token';
 
 // Mirrors mingle-app's signRealtimeToken exactly, since the two packages
-// share no code — this is what confirms the two independent implementations
-// actually interoperate, not just that this side's verify is internally
-// consistent.
+// share no code — this confirms that the independent implementations interoperate.
 function signToken(payload: { sessionKey: string; userId: string; exp: number }, secret: string): string {
     const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
     const signature = createHmac('sha256', secret).update(body).digest('base64url');
