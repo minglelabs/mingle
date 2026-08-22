@@ -54,16 +54,16 @@ test('maps the five endpoint tuning steps from shorter to longer speech splits',
     [0, 1, 2, 3, 4].map((step) => resolveSonioxEndpointTuningProfile(step)),
     [
       { step: 0, latencyAdjustmentLevel: 3, sensitivity: 1.0 },
-      { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.9 },
-      { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.8 },
-      { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.3 },
+      { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.8 },
+      { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.5 },
+      { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.0 },
       { step: 4, latencyAdjustmentLevel: 0, sensitivity: -1.0 },
     ],
   );
   assert.deepEqual(resolveSonioxEndpointTuningProfile('invalid'), {
     step: 2,
     latencyAdjustmentLevel: 1,
-    sensitivity: 0.8,
+    sensitivity: 0.5,
   });
 });
 
@@ -92,7 +92,7 @@ test('uses the per-session endpoint delay and keeps the server-safe bounds', () 
   assert.equal(resolveSonioxEndpointDelayMs('end', 1800), 1800);
   assert.equal(resolveSonioxEndpointDelayMs('end', 3200), 3000);
   assert.equal(resolveSonioxEndpointDelayMs('end', 200), 500);
-  assert.equal(resolveSonioxEndpointDelayMs('end', Number.NaN), 2000);
+  assert.equal(resolveSonioxEndpointDelayMs('end', Number.NaN), 3000);
   assert.equal(resolveSonioxEndpointDelayMs('fin', 500), 500);
 });
 

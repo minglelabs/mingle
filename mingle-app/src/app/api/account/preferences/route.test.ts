@@ -95,7 +95,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
-      sonioxEndpointMaxDelayMs: 2000,
+      sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
@@ -125,7 +125,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
-      sonioxEndpointMaxDelayMs: 2000,
+      sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
@@ -299,7 +299,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
-      sonioxEndpointMaxDelayMs: 2000,
+      sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",

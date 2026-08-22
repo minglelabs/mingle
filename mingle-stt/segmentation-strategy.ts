@@ -31,9 +31,9 @@ export const DEFAULT_SONIOX_ENDPOINT_TUNING_STEP = 2;
 
 export const SONIOX_ENDPOINT_TUNING_PROFILES: readonly SonioxEndpointTuningProfile[] = [
     { step: 0, latencyAdjustmentLevel: 3, sensitivity: 1.0 },
-    { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.9 },
-    { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.8 },
-    { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.3 },
+    { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.8 },
+    { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.5 },
+    { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.0 },
     { step: 4, latencyAdjustmentLevel: 0, sensitivity: -1.0 },
 ];
 
@@ -446,7 +446,7 @@ export function buildSonioxEndpointDetectionConfig(
 
     const maxEndpointDelayMs = Number.isFinite(runtime.endpointDelayMs)
         ? Math.max(500, Math.min(3000, Math.floor(runtime.endpointDelayMs)))
-        : 2000;
+        : 3000;
 
     return {
         enable_endpoint_detection: true,
@@ -480,6 +480,6 @@ export function resolveSonioxEndpointDelayMs(
     configuredSilenceMs: number,
 ): number {
     if (id !== 'end') return configuredSilenceMs;
-    if (!Number.isFinite(configuredSilenceMs)) return 2000;
+    if (!Number.isFinite(configuredSilenceMs)) return 3000;
     return Math.max(500, Math.min(3000, Math.floor(configuredSilenceMs)));
 }
