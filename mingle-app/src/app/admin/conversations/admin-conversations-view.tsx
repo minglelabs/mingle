@@ -76,22 +76,13 @@ function LanguageBadge({ content }: { content: AdminConversationContent }) {
   );
 }
 
-export function AdminConversationList({ channels, cacheKey }: { channels: AdminConversationSummary[]; cacheKey: string }) {
-  const [cachedChannels, setCachedChannels] = useState(channels);
+export function AdminConversationList({ channels }: { channels: AdminConversationSummary[] }) {
   const [search, setSearch] = useState("");
-  useEffect(() => {
-    const cached = readSessionCache<AdminConversationSummary[]>(cacheKey);
-    if (cached) {
-      startTransition(() => setCachedChannels(cached));
-      return;
-    }
-    writeSessionCache(cacheKey, channels);
-  }, [cacheKey, channels]);
   const normalizedSearch = search.trim().toLocaleLowerCase();
-  const visibleChannels = useMemo(() => cachedChannels.filter((channel) => {
+  const visibleChannels = useMemo(() => channels.filter((channel) => {
     if (!normalizedSearch) return true;
     return `${channel.title} ${channel.sessionKey}`.toLocaleLowerCase().includes(normalizedSearch);
-  }), [cachedChannels, normalizedSearch]);
+  }), [channels, normalizedSearch]);
 
   return (
     <section className="rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm">
@@ -110,6 +101,110 @@ export function AdminConversationList({ channels, cacheKey }: { channels: AdminC
         {visibleChannels.length === 0 ? <p className="rounded-lg bg-[#f7f6f2] p-4 text-sm text-[#6f6d68]">현재 페이지에 일치하는 대화방이 없습니다.</p> : null}
       </div>
     </section>
+  );
+}
+
+type ConversationDataChannel = Omit<AdminConversationSummary, "href">;
+type ConversationData = {
+  user: { externalUserId: string | null; email: string | null; name: string | null };
+  channelCount: number;
+  channels: ConversationDataChannel[];
+  selectedChannel: Omit<ConversationDataChannel, "messageCount"> | null;
+};
+
+export type AdminConversationBrowserProps = {
+  userId: string;
+  channelDeleted: "all" | "active" | "deleted";
+  messageDeleted: "all" | "active" | "deleted";
+  sort: string;
+  page: number;
+  channelId: string;
+};
+
+function buildBrowserHref(props: AdminConversationBrowserProps, overrides: { page?: number; channelId?: string } = {}): string {
+  const query = new URLSearchParams({
+    userId: props.userId,
+    channelDeleted: props.channelDeleted,
+    messageDeleted: props.messageDeleted,
+    sort: props.sort,
+    page: String(overrides.page ?? props.page),
+  });
+  const channelId = overrides.channelId ?? props.channelId;
+  if (channelId) query.set("channelId", channelId);
+  return `/admin/conversations?${query.toString()}`;
+}
+
+export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
+  const cacheKey = `data:${props.userId}:${props.channelDeleted}:${props.messageDeleted}:${props.sort}:${props.page}:${props.channelId || "list"}`;
+  const [data, setData] = useState<ConversationData | null>(null);
+  const [isLoading, setIsLoading] = useState(Boolean(props.userId));
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!props.userId) return;
+    let active = true;
+    const query = new URLSearchParams({
+      userId: props.userId,
+      channelDeleted: props.channelDeleted,
+      messageDeleted: props.messageDeleted,
+      sort: props.sort,
+      page: String(props.page),
+    });
+    if (props.channelId) query.set("channelId", props.channelId);
+
+    const load = async () => {
+      const cached = readSessionCache<ConversationData>(cacheKey);
+      if (cached && active) {
+        startTransition(() => {
+          setData(cached);
+          setIsLoading(false);
+        });
+      }
+      try {
+        const response = await fetch(`/admin/conversations/data?${query.toString()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(response.status === 404 ? "not_found" : "load_failed");
+        const fresh = await response.json() as ConversationData;
+        writeSessionCache(cacheKey, fresh);
+        if (!active) return;
+        startTransition(() => {
+          setData(fresh);
+          setIsLoading(false);
+          setError("");
+        });
+      } catch (loadError) {
+        if (!active) return;
+        startTransition(() => {
+          if (!cached) setIsLoading(false);
+          setError(loadError instanceof Error && loadError.message === "not_found" ? "해당 사용자를 찾을 수 없습니다." : "데이터를 새로 불러오지 못했습니다. 캐시된 데이터가 있으면 계속 표시합니다.");
+        });
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [cacheKey, props.channelDeleted, props.channelId, props.messageDeleted, props.page, props.sort, props.userId]);
+
+  if (!props.userId) return <p className="text-sm text-[#6f6d68]">사용자 ID를 입력해 주세요.</p>;
+  if (isLoading && !data) return <p className="rounded-xl border border-[#e5e3dc] bg-white p-5 text-sm text-[#6f6d68]">캐시를 확인하고 대화록을 불러오는 중...</p>;
+  if (!data) return <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">{error || "대화록을 불러오지 못했습니다."}</p>;
+
+  const summaries = data.channels.map((channel) => ({ ...channel, href: buildBrowserHref(props, { channelId: channel.id }) }));
+  const previousHref = props.page > 1 ? buildBrowserHref(props, { page: props.page - 1, channelId: "" }) : undefined;
+  const nextHref = props.page < Math.max(1, Math.ceil(data.channelCount / 20)) ? buildBrowserHref(props, { page: props.page + 1, channelId: "" }) : undefined;
+  const backHref = buildBrowserHref(props, { channelId: "" });
+
+  return (
+    <>
+      <section className="mb-5 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><h2 className="font-semibold">{data.user.name || data.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{data.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {data.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></section>
+      {error ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{error}</p> : null}
+      {!props.channelId ? (
+        <>
+          <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {props.page} / {Math.max(1, Math.ceil(data.channelCount / 20))}페이지 (페이지당 20개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>
+          <AdminConversationList channels={summaries} />
+        </>
+      ) : data.selectedChannel ? (
+        <AdminConversationRoom channel={data.selectedChannel} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={`/admin/conversations/${encodeURIComponent(data.selectedChannel.id)}/messages?${new URLSearchParams({ userId: props.userId, messageDeleted: props.messageDeleted })}`} backHref={backHref} cacheKey={`room:${props.userId}:${data.selectedChannel.id}:${props.messageDeleted}`} />
+      ) : <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">해당 대화방을 찾을 수 없습니다.</p>}
+    </>
   );
 }
 
