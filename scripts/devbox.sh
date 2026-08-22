@@ -3510,6 +3510,11 @@ sync_google_oauth_redirect_uris_for_site_change() {
     return 0
   fi
 
+  if [[ "$client_id" == *.apps.googleusercontent.com ]]; then
+    warn "google redirect sync skipped: $client_id is a Google OAuth web client; add redirect URIs in Google Cloud Console (IAM OAuth Clients API cannot manage this client type)"
+    return 0
+  fi
+
   location="$(read_app_setting_value DEVBOX_GOOGLE_OAUTH_LOCATION || true)"
   location="$(trim_whitespace "$location")"
   [[ -n "$location" ]] || location="global"
