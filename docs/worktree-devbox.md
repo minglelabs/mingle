@@ -21,8 +21,7 @@ DEVBOX_CLOUDFLARE_TUNNEL_TOKEN=...
 DEVBOX_CLOUDFLARE_WEB_HOSTNAME=mingle-app-devbox.photo-for-passport.com
 DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
 DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
-DEVBOX_RN_FALLBACK_SITE_URL=https://mingle-app-xi.vercel.app
-DEVBOX_RN_FALLBACK_WS_URL=wss://mingle-stt.fly.dev
+# Keep this only when Cloudflare should be the default device tunnel provider.
 DEVBOX_TUNNEL_PROVIDER=cloudflare
 DEVBOX_VAULT_PATH=secret/mingle/dev
 DEVBOX_VAULT_PROD_PATH=secret/mingle/prod
