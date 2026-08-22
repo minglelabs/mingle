@@ -722,7 +722,7 @@ describe('/api/translate/finalize route', () => {
     expect(body.messages?.[1]?.role).toBe('user')
   })
 
-  it('uses a longer timeout for non-final QwenCloud requests', async () => {
+  it('uses a seven-second timeout for QwenCloud requests', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
@@ -764,8 +764,8 @@ describe('/api/translate/finalize route', () => {
       expect(res.status).toBe(200)
       expect(json.translations).toEqual({ en: 'no', ja: 'いいえ' })
       const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
-      expect(timeoutSpy).toHaveBeenCalledWith(4_000)
-      expect((requestInit.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs).toBe(4_000)
+      expect(timeoutSpy).toHaveBeenCalledWith(7_000)
+      expect((requestInit.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs).toBe(7_000)
     } finally {
       timeoutSpy.mockRestore()
     }

@@ -46,6 +46,7 @@ const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
+const QWEN_CLOUD_TIMEOUT_MS = 7_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
@@ -853,7 +854,8 @@ function rememberProviderRateLimitCooldown(
   return retryDelayMs
 }
 
-function resolveOpenAICompatibleRequestTimeoutMs(isFinal: boolean): number {
+function resolveOpenAICompatibleRequestTimeoutMs(isFinal: boolean, provider: TranslationProvider): number {
+  if (provider === 'qwen') return QWEN_CLOUD_TIMEOUT_MS
   return isFinal ? OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS : OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS
 }
 
@@ -1348,7 +1350,7 @@ async function createOpenAICompatibleCompletion(
   }
 
   const executeRequest = async () => {
-    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal)
+    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal, config.provider)
     const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(timeoutMs)
       : undefined
