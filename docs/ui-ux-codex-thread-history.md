@@ -321,3 +321,10 @@
 - Issue: Showing every conversation room and its transcript on one screen made room selection and long-history review cumbersome. The message order and room pagination also needed to match support-review behavior: newest records first, with older records revealed progressively below.
 - User impact: Administrators had to scan large transcript blocks before finding the room they needed, and long conversations were difficult to review without loading excessive data at once.
 - Resolution: The default view now shows a latest-first room list with 20 rooms per page. Selecting a room opens a dedicated transcript view ordered newest-to-oldest; it loads 200 messages initially and automatically requests the next 200 older messages as the transcript scroll reaches the bottom. Existing deletion filters, language badges, and loaded-content search remain available.
+
+## 2026-08-22 — Admin conversation browser session cache
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Reopening an already reviewed room caused the browser to wait for the same transcript pages again, making repeated support investigation unnecessarily slow.
+- User impact: Administrators had to wait through repeated transcript loads when switching between a room and the room list or revisiting messages in the same tab.
+- Resolution: Cached loaded room lists and transcript pages in versioned `sessionStorage` keys scoped by user, room, deletion filter, sort, and page. Cached transcript pages are shown immediately and older pages continue to append through the existing authenticated endpoint. The server no longer renders the first 200 messages on every room navigation; it returns the room shell and the client fetches or reuses the first page.

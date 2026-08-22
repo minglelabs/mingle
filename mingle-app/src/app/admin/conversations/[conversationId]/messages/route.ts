@@ -77,6 +77,7 @@ export async function GET(
 
   return NextResponse.json({
     messages: messages.map((message) => ({ ...message, createdAt: message.createdAt.toISOString() })),
+    messageCount,
     page: safePage,
     totalPages,
     hasNext: safePage < totalPages,

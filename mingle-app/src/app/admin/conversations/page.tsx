@@ -8,7 +8,6 @@ import { prisma } from "@/lib/prisma";
 import {
   AdminConversationList,
   AdminConversationRoom,
-  type AdminConversationMessage,
   type AdminConversationSummary,
 } from "./admin-conversations-view";
 
@@ -17,7 +16,6 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Mingle Admin Conversations" };
 
 const CHANNEL_PAGE_SIZE = 20;
-const MESSAGE_PAGE_SIZE = 200;
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -90,51 +88,6 @@ function buildConversationHref(args: {
   return `/admin/conversations?${query.toString()}`;
 }
 
-async function loadMessages(args: {
-  userId: string;
-  sessionKey: string;
-  messageDeleted: DeletedFilter;
-  page: number;
-}) {
-  const where: Prisma.AppMessageWhereInput = {
-    userId: args.userId,
-    sessionKey: args.sessionKey,
-    ...messageDeletedWhere(args.messageDeleted),
-  };
-  const messageCount = await prisma.appMessage.count({ where });
-  const totalPages = Math.max(1, Math.ceil(messageCount / MESSAGE_PAGE_SIZE));
-  const safePage = Math.min(args.page, totalPages);
-  const messages = await prisma.appMessage.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    skip: (safePage - 1) * MESSAGE_PAGE_SIZE,
-    take: MESSAGE_PAGE_SIZE,
-    select: {
-      id: true,
-      sourceLanguage: true,
-      isDeleted: true,
-      createdAt: true,
-      contents: {
-        where: args.messageDeleted === "deleted" ? { isDeleted: true } : args.messageDeleted === "active" ? { isDeleted: { not: true } } : {},
-        orderBy: { createdAt: "asc" },
-        select: { contentType: true, language: true, text: true, isDeleted: true },
-      },
-    },
-  });
-  return {
-    messageCount,
-    page: safePage,
-    totalPages,
-    messages: messages.map((message): AdminConversationMessage => ({
-      id: message.id,
-      createdAt: isoDate(message.createdAt),
-      sourceLanguage: message.sourceLanguage,
-      isDeleted: message.isDeleted,
-      contents: message.contents,
-    })),
-  };
-}
-
 export default async function AdminConversationsPage({ searchParams }: PageProps) {
   if (!(await authenticated())) redirect("/admin");
 
@@ -146,7 +99,6 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
   const sort = normalizeSort(first(params.sort));
   const page = normalizePage(first(params.page));
   const channelId = first(params.channelId);
-  const messagePage = normalizePage(first(params.messagePage));
 
   const user = externalUserId
     ? await prisma.user.findUnique({ where: { externalUserId }, select: { id: true, externalUserId: true, email: true, name: true } })
@@ -168,9 +120,17 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
     })
     : [];
 
+  const messageCountRows = user && !channelId && channels.length > 0
+    ? await prisma.appMessage.groupBy({
+      by: ["sessionKey"],
+      where: { userId: user.id, sessionKey: { in: channels.map((channel) => channel.sessionKey) }, ...messageDeletedWhere(messageDeleted) },
+      _count: { _all: true },
+    })
+    : [];
+  const messageCounts = new Map(messageCountRows.map((row) => [row.sessionKey ?? "", row._count._all]));
   const summaries: AdminConversationSummary[] = user && !channelId
-    ? await Promise.all(channels.map(async (channel) => {
-      const messageCount = await prisma.appMessage.count({ where: { userId: user.id, sessionKey: channel.sessionKey, ...messageDeletedWhere(messageDeleted) } });
+    ? channels.map((channel) => {
+      const messageCount = messageCounts.get(channel.sessionKey) ?? 0;
       return {
         id: channel.id,
         title: channel.title,
@@ -181,7 +141,7 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
         messageCount,
         href: buildConversationHref({ userId: externalUserId, channelDeleted, messageDeleted, sort, page: safeChannelPage, channelId: channel.id }),
       };
-    }))
+    })
     : [];
 
   const selectedChannel = user && channelId
@@ -190,10 +150,6 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
       select: { id: true, title: true, sessionKey: true, isDeleted: true, createdAt: true, updatedAt: true },
     })
     : null;
-  const loadedMessages = selectedChannel && user
-    ? await loadMessages({ userId: user.id, sessionKey: selectedChannel.sessionKey, messageDeleted, page: messagePage })
-    : null;
-
   const backHref = buildConversationHref({ userId: externalUserId, channelDeleted, messageDeleted, sort, page: safeChannelPage });
   const previousChannelsHref = safeChannelPage > 1 ? buildConversationHref({ userId: externalUserId, channelDeleted, messageDeleted, sort, page: safeChannelPage - 1 }) : undefined;
   const nextChannelsHref = safeChannelPage < totalChannelPages ? buildConversationHref({ userId: externalUserId, channelDeleted, messageDeleted, sort, page: safeChannelPage + 1 }) : undefined;
@@ -221,10 +177,10 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
             {!channelId ? (
               <>
                 <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {safeChannelPage} / {totalChannelPages}페이지 (페이지당 {CHANNEL_PAGE_SIZE}개)</span><span className="flex gap-2">{previousChannelsHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousChannelsHref}>이전 대화방</Link> : null}{nextChannelsHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextChannelsHref}>다음 대화방</Link> : null}</span></nav>
-                <AdminConversationList channels={summaries} />
+                <AdminConversationList channels={summaries} cacheKey={`list:${externalUserId}:${channelDeleted}:${messageDeleted}:${sort}:${safeChannelPage}`} />
               </>
-            ) : selectedChannel && loadedMessages ? (
-              <AdminConversationRoom channel={{ ...selectedChannel, createdAt: isoDate(selectedChannel.createdAt), updatedAt: isoDate(selectedChannel.updatedAt) }} messageCount={loadedMessages.messageCount} initialMessages={loadedMessages.messages} initialPage={loadedMessages.page} totalPages={loadedMessages.totalPages} apiUrl={apiUrl} backHref={backHref} />
+            ) : selectedChannel ? (
+              <AdminConversationRoom channel={{ ...selectedChannel, createdAt: isoDate(selectedChannel.createdAt), updatedAt: isoDate(selectedChannel.updatedAt) }} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={apiUrl} backHref={backHref} cacheKey={`room:${externalUserId}:${selectedChannel.id}:${messageDeleted}`} />
             ) : <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">해당 대화방을 찾을 수 없습니다.</p>}
           </>
         )}
