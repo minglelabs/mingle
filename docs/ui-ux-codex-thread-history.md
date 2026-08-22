@@ -307,3 +307,16 @@
 - User impact: Pressing Stop could briefly show the mic as stopped, then running/connecting again, then stopped. Recording ultimately stopped, but the control visually flickered and made the action feel unreliable.
 - Resolution: Added a stop-pending guard for native bridge status/activity handling. While `isStopping` or `nativeStopRequested` is true, the web layer now ignores native statuses and ready server messages that would re-enter a live UI state and suppresses transcript-activity promotion, while still allowing terminal idle/close/error and `stop_recording_ack` handling to complete.
 - Tests: `scripts/devbox test --target app -- src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` covers the stop-pending status and activity-promotion guard.
+
+## 2026-08-22 - Soniox Endpoint Conversation Length Control
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.account-preferences.ts`
+- Issue: After Soniox STT realtime v5 endpoint detection became the active segmentation path, the conversation-length control was hidden and endpoint boundaries used a fixed maximum delay. Users reported that conversations were being cut too aggressively between sentences and asked why they could no longer choose the conversation length.
+- User impact: Users had no visible way to trade a faster response for a longer pause before an endpoint. The old manual silence preference was still stored, but it did not affect endpoint-mode sessions, so the UI and the actual segmentation behavior no longer matched.
+- Resolution:
+  - Restored the speech-split/conversation-length slider for supported modern namespaces and kept it disabled while an STT session is active, preventing a setting change from silently affecting an already-open Soniox session.
+  - Added a separate account preference, `demoEndpointMaxDelayMs`, with a `2000ms` default and a `500..3000ms` server-validated range. The existing manual-finalize preference remains separate with its historical `500ms` default.
+  - The slider value is sent as `soniox_endpoint_max_delay_ms` in the per-session WebSocket start config for browser, iOS, and Android clients. The server clamps untrusted values and falls back to `2000ms` for older clients, so endpoint behavior can vary by user without changing server-wide environment variables.
+  - Slider changes update both the endpoint preference and the manual-finalize preference, so the same user choice remains intuitive if a session later falls back to `fin` behavior.
+  - Kept the existing legacy namespace lock behavior and did not change the mobile/API version (`v1.1.4`) because the new field is additive and backward-compatible.
+- Tests: STT segmentation tests cover per-session delay selection, fallback, and bounds. Account preference tests cover hydration, API defaults, PATCH clamping, and persistence. Web, iOS, and Android start paths now share the same endpoint field.

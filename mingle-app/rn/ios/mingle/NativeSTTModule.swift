@@ -845,6 +845,7 @@ class NativeSTTModule: RCTEventEmitter {
         behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
+        sonioxEndpointMaxDelayMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -939,6 +940,9 @@ class NativeSTTModule: RCTEventEmitter {
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
+        if let sonioxEndpointMaxDelayMs {
+            configPayload["soniox_endpoint_max_delay_ms"] = sonioxEndpointMaxDelayMs
+        }
         if !sonioxLanguageHints.isEmpty {
             configPayload["soniox_language_hints"] = sonioxLanguageHints
         }
@@ -946,7 +950,8 @@ class NativeSTTModule: RCTEventEmitter {
 
         emitStatus("running")
         let silenceLogValue = sonioxManualFinalizeSilenceMs.map(String.init) ?? "server-default"
-        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@", sampleRate, wsUrlString, silenceLogValue)
+        let endpointMaxDelayLogValue = sonioxEndpointMaxDelayMs.map(String.init) ?? "server-default"
+        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@ endpointMaxDelayMs=%@", sampleRate, wsUrlString, silenceLogValue, endpointMaxDelayLogValue)
         resolve([
             "sampleRate": sampleRate,
         ])
@@ -981,6 +986,9 @@ class NativeSTTModule: RCTEventEmitter {
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
+        let sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
+            options["sonioxEndpointMaxDelayMs"]
+        )
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -995,6 +1003,7 @@ class NativeSTTModule: RCTEventEmitter {
                 behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
                 resolve: resolve,
                 reject: reject
             )
@@ -1016,6 +1025,7 @@ class NativeSTTModule: RCTEventEmitter {
                             behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                            sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
                             resolve: resolve,
                             reject: reject
                         )

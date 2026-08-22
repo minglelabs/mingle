@@ -20,8 +20,8 @@ import {
 } from './live-phone-demo.preferences'
 
 describe('speech split control', () => {
-  it('is not exposed as a user setting', () => {
-    expect(shouldShowSpeechSplitControl()).toBe(false)
+  it('is exposed as a user setting', () => {
+    expect(shouldShowSpeechSplitControl()).toBe(true)
   })
 })
 

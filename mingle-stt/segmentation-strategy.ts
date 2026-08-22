@@ -379,7 +379,7 @@ export function resolveSonioxSegmentationRuntime(
             effective: 'end',
             endpointDetection: true,
             carryPolicy: 'none',
-            endpointDelayMs: 2000,
+            endpointDelayMs: resolveSonioxEndpointDelayMs(requested, configuredSilenceMs),
         };
     }
 
@@ -415,11 +415,15 @@ export function buildSonioxEndpointDetectionConfig(
         return { enable_endpoint_detection: false };
     }
 
+    const maxEndpointDelayMs = Number.isFinite(runtime.endpointDelayMs)
+        ? Math.max(500, Math.min(3000, Math.floor(runtime.endpointDelayMs)))
+        : 2000;
+
     return {
         enable_endpoint_detection: true,
         endpoint_latency_adjustment_level: resolveSonioxEndpointLatencyAdjustmentLevel(),
         endpoint_sensitivity: resolveSonioxEndpointSensitivity(),
-        max_endpoint_delay_ms: Math.max(500, Math.min(3000, runtime.endpointDelayMs)),
+        max_endpoint_delay_ms: maxEndpointDelayMs,
     };
 }
 
@@ -431,7 +435,7 @@ export function resolveSonioxEndpointDetectionConfig(
     const runtime = resolveSonioxSegmentationRuntime(id, endpointDelayMs);
     return buildSonioxEndpointDetectionConfig(
         runtime.effective === 'end'
-            ? { ...runtime, endpointDelayMs }
+            ? { ...runtime, endpointDelayMs: resolveSonioxEndpointDelayMs(id, endpointDelayMs) }
             : runtime,
     );
 }
@@ -440,5 +444,7 @@ export function resolveSonioxEndpointDelayMs(
     id: SegmentationStrategyId,
     configuredSilenceMs: number,
 ): number {
-    return resolveSonioxSegmentationRuntime(id, configuredSilenceMs).endpointDelayMs;
+    if (id !== 'end') return configuredSilenceMs;
+    if (!Number.isFinite(configuredSilenceMs)) return 2000;
+    return Math.max(500, Math.min(3000, Math.floor(configuredSilenceMs)));
 }

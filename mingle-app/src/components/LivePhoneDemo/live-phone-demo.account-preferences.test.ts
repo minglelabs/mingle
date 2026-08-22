@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
+import {
+  DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  DEFAULT_SONIOX_SILENCE_MS,
+} from './live-phone-demo.preferences'
 import {
   buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
@@ -14,6 +17,7 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      sonioxEndpointMaxDelayMs: 1800,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
@@ -22,6 +26,7 @@ describe('buildHydratedAccountPreferences', () => {
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      sonioxEndpointMaxDelayMs: 1800,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
@@ -34,6 +39,7 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: 2500,
+      sonioxEndpointMaxDelayMs: 2500,
       translationModel: 'unsupported-model',
       adBannerPosition: 'invalid',
       inputMode: 'unsupported',
@@ -42,6 +48,7 @@ describe('buildHydratedAccountPreferences', () => {
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+      sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
       translationModel: 'gemini-2.5-flash-lite',
       adBannerPosition: 'bottom',
       inputMode: 'voice',
@@ -54,11 +61,13 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 800,
+      sonioxEndpointMaxDelayMs: 1400,
       translationModel: 'gemma-4-31b-it',
       adBannerPosition: 'top',
     }, false)).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 800,
+      sonioxEndpointMaxDelayMs: 1400,
       translationModel: 'gemma-4-31b-it',
       adBannerPosition: 'top',
       inputMode: 'voice',
@@ -77,6 +86,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 3,
         sonioxManualFinalizeSilenceMs: 500,
+        sonioxEndpointMaxDelayMs: 2000,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: null,
         inputMode: 'voice',
@@ -91,6 +101,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
     const currentPreferences: LivePhoneDemoAccountPreferences = {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
+      sonioxEndpointMaxDelayMs: 2000,
       translationModel: 'gemini-2.5-flash-lite',
       adBannerPosition: 'top',
       inputMode: 'text',
@@ -115,6 +126,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
+        sonioxEndpointMaxDelayMs: 1200,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
         inputMode: 'text',
@@ -124,6 +136,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
         sonioxManualFinalizeSilenceMs: 500,
+        sonioxEndpointMaxDelayMs: 2000,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: 'top',
         inputMode: 'voice',
@@ -141,6 +154,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
+        sonioxEndpointMaxDelayMs: 1200,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
         inputMode: 'text',
@@ -204,6 +218,7 @@ describe('buildAccountPreferencesPatchBody', () => {
     expect(buildAccountPreferencesPatchBody({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
+      sonioxEndpointMaxDelayMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
@@ -212,6 +227,7 @@ describe('buildAccountPreferencesPatchBody', () => {
     })).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
+      sonioxEndpointMaxDelayMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',

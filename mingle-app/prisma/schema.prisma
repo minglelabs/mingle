@@ -35,6 +35,7 @@ model User {
   pathname        String?
   demoTextSizeLevel Int?   @map("demo_text_size_level")
   demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
+  demoEndpointMaxDelayMs Int? @default(2000) @map("demo_endpoint_max_delay_ms")
   translationModel  String?  @map("translation_model")
   adBannerPosition  String?  @map("ad_banner_position")
   demoInputMode     String?  @map("demo_input_mode")

@@ -18,6 +18,7 @@ const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const DEFAULT_ENDPOINT_MAX_DELAY_MS = 2000;
 const DEFAULT_SPEAKER_ENABLED = false;
 const DEFAULT_ECHO_ALLOWED = true;
 const DEFAULT_AD_BANNER_POSITION = "bottom";
@@ -29,6 +30,7 @@ const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "producti
 type PreferencesBody = {
   textSizeLevel?: unknown;
   sonioxManualFinalizeSilenceMs?: unknown;
+  sonioxEndpointMaxDelayMs?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
   inputMode?: unknown;
@@ -47,6 +49,7 @@ type UserPreferencesRecord = {
   id: string;
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
+  demoEndpointMaxDelayMs: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
   demoInputMode: string | null;
@@ -235,6 +238,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     id: true,
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
+    demoEndpointMaxDelayMs: true,
     translationModel: true,
     adBannerPosition: true,
     demoInputMode: true,
@@ -335,6 +339,7 @@ export async function GET(request: Request) {
   const response = NextResponse.json({
     textSizeLevel: preferences?.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
+    sonioxEndpointMaxDelayMs: preferences?.demoEndpointMaxDelayMs ?? DEFAULT_ENDPOINT_MAX_DELAY_MS,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
@@ -383,6 +388,7 @@ export async function PATCH(request: Request) {
 
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
+  const nextEndpointMaxDelayMs = asClampedInteger(body.sonioxEndpointMaxDelayMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
   const nextInputMode = normalizeInputMode(body.inputMode);
@@ -391,6 +397,7 @@ export async function PATCH(request: Request) {
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
+    && nextEndpointMaxDelayMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
     && nextInputMode === null
@@ -403,6 +410,7 @@ export async function PATCH(request: Request) {
   const data = {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
+    ...(nextEndpointMaxDelayMs !== null ? { demoEndpointMaxDelayMs: nextEndpointMaxDelayMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
     ...(nextInputMode !== null ? { demoInputMode: nextInputMode } : {}),

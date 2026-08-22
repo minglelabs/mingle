@@ -55,6 +55,7 @@ class NativeSTTModule(
     val behaviorProfile: String,
     val sonioxLanguageHints: List<String>,
     val sonioxManualFinalizeSilenceMs: Int?,
+    val sonioxEndpointMaxDelayMs: Int?,
   )
 
   private data class PendingStartRequest(
@@ -150,6 +151,13 @@ class NativeSTTModule(
       sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
         if (options.hasKey("sonioxManualFinalizeSilenceMs") && !options.isNull("sonioxManualFinalizeSilenceMs")) {
           options.getDouble("sonioxManualFinalizeSilenceMs")
+        } else {
+          null
+        },
+      ),
+      sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
+        if (options.hasKey("sonioxEndpointMaxDelayMs") && !options.isNull("sonioxEndpointMaxDelayMs")) {
+          options.getDouble("sonioxEndpointMaxDelayMs")
         } else {
           null
         },
@@ -322,13 +330,16 @@ class NativeSTTModule(
           options.sonioxManualFinalizeSilenceMs?.let {
             config.put("soniox_manual_finalize_silence_ms", it)
           }
+          options.sonioxEndpointMaxDelayMs?.let {
+            config.put("soniox_endpoint_max_delay_ms", it)
+          }
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
           }
           webSocket.send(config.toString())
           Log.i(
             TAG,
-            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"}",
+            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"} endpointMaxDelayMs=${options.sonioxEndpointMaxDelayMs?.toString() ?: "server-default"}",
           )
         }
 

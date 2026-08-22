@@ -30,6 +30,7 @@ export type MingleSttClientConfig = {
     lang_hints_strict?: boolean;
     soniox_language_hints?: string[];
     soniox_manual_finalize_silence_ms?: number;
+    soniox_endpoint_max_delay_ms?: number;
 };
 
 export type MingleSttFinalTurnPayload = {

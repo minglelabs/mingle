@@ -1,5 +1,6 @@
 import {
   DEFAULT_INPUT_MODE,
+  DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
@@ -24,6 +25,7 @@ export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
   sonioxManualFinalizeSilenceMs?: unknown
+  sonioxEndpointMaxDelayMs?: unknown
   translationModel?: unknown
   adBannerPosition?: unknown
   inputMode?: unknown
@@ -34,6 +36,7 @@ export type AccountPreferencesResponse = {
 export interface LivePhoneDemoAccountPreferences {
   textSizeLevel: number
   sonioxManualFinalizeSilenceMs: number
+  sonioxEndpointMaxDelayMs: number
   translationModel: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
@@ -44,6 +47,7 @@ export interface LivePhoneDemoAccountPreferences {
 export interface AccountPreferencesPatchBody {
   textSizeLevel: number
   sonioxManualFinalizeSilenceMs: number
+  sonioxEndpointMaxDelayMs: number
   translationModel: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
@@ -73,6 +77,10 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
   return normalizeIntegerPreference(value, DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
 }
 
+export function normalizeSonioxEndpointMaxDelayPreference(value: unknown): number {
+  return normalizeIntegerPreference(value, DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
+}
+
 function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
@@ -86,6 +94,9 @@ export function buildHydratedAccountPreferences(
     sonioxManualFinalizeSilenceMs: isLegacySonioxSilenceSliderNamespace
       ? DEFAULT_SONIOX_SILENCE_MS
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
+    sonioxEndpointMaxDelayMs: isLegacySonioxSilenceSliderNamespace
+      ? DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS
+      : normalizeSonioxEndpointMaxDelayPreference(body?.sonioxEndpointMaxDelayMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
@@ -100,6 +111,7 @@ export function buildAccountPreferencesPatchBody(
   return {
     textSizeLevel: preferences.textSizeLevel,
     sonioxManualFinalizeSilenceMs: preferences.sonioxManualFinalizeSilenceMs,
+    sonioxEndpointMaxDelayMs: preferences.sonioxEndpointMaxDelayMs,
     translationModel: preferences.translationModel,
     adBannerPosition: preferences.adBannerPosition,
     inputMode: preferences.inputMode,
@@ -114,6 +126,7 @@ export function serializeAccountPreferencesSyncState(
   return [
     preferences.textSizeLevel,
     preferences.sonioxManualFinalizeSilenceMs,
+    preferences.sonioxEndpointMaxDelayMs,
     preferences.translationModel,
     preferences.adBannerPosition ?? '',
     preferences.inputMode,
