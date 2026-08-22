@@ -38,7 +38,7 @@ MINGLE_REALTIME_SECRET=...
 `VAULT_ADDR`는 현재처럼 `.zshrc`에서 export해도 됩니다. devbox는 이미 export된 값을 우선 사용합니다.
 `VAULT_NAMESPACE`는 사용하는 Vault가 namespace를 요구할 때만 추가합니다. `VAULT_TOKEN`은 파일에
 넣지 말고 `vault login`으로 로컬 Vault CLI 세션에 저장합니다. `MINGLE_REALTIME_SECRET`처럼
-세 서비스가 공유하는 secret도 루트 env로 옮길 수 있으며, bootstrap이 같은 Vault path에 업로드합니다.
+앱과 messaging이 공유하는 secret도 루트 env로 옮길 수 있으며, bootstrap이 같은 Vault path에 업로드합니다.
 
 워크트리별 `DEVBOX_WORKTREE_NAME`, 포트, 현재 tunnel URL, `NEXT_PUBLIC_*`/`MINGLE_TEST_*` URL은
 각 워크트리의 `.devbox.env`에만 남깁니다. 앱/STT/messaging 전용 API key와 DB/auth secret은
