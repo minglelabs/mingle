@@ -1178,6 +1178,14 @@ wss.on('connection', (clientWs) => {
                         language_hints_strict: config.lang_hints_strict !== false,
                     });
                 }
+                if (process.env.SONIOX_ENDPOINT_CONFIG_DEBUG === '1') {
+                    console.log(
+                        `[conn:${connId}] soniox_config=${JSON.stringify({
+                            ...sonioxConfig,
+                            api_key: '[redacted]',
+                        })}`,
+                    );
+                }
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
                 if (isClientConnected) {
