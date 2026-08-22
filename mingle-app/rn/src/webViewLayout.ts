@@ -1,6 +1,21 @@
 import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
 import { classifyConversationWebUrl } from './webViewRestore';
 
+export function resolveMingleWebViewUserAgent(params: {
+  platform: string;
+  clientVersion: string;
+}): string {
+  const normalizedPlatform = params.platform.trim().toLowerCase();
+  const platformLabel = normalizedPlatform === 'ios'
+    ? 'iPhone; iOS'
+    : normalizedPlatform === 'android'
+      ? 'Android'
+      : normalizedPlatform || 'native';
+  const clientVersion = params.clientVersion.trim() || 'unknown';
+
+  return `MingleNative/${clientVersion} (${platformLabel})`;
+}
+
 function splitPathname(pathname: string): string[] {
   return pathname
     .split('/')

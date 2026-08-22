@@ -349,3 +349,11 @@
   - Removed `qwen/qwen3.5-flash` from the selectable catalog and stopped normalizing it as a compatibility alias.
   - Kept `qwen/qwen3.7-flash` as the `Slow` QwenCloud option with its QwenCloud API key and JSON Object request mode.
 - Tests: Catalog normalization, account preference persistence, client-event provider metadata, OpenRouter 3.5 request contracts, and QwenCloud 3.7 versioned-route coverage were updated.
+
+## 2026-08-22 - iOS Dev Tunnel Stylesheet Interstitial
+
+- Surface: `mingle-app/rn/App.tsx`, native WebView loading through the devbox ngrok tunnel.
+- Issue: The iOS WebView used a Safari-shaped User-Agent to avoid an older OAuth WebView issue. Free ngrok treated the WebView as browser traffic and returned its `ERR_NGROK_6024` interstitial HTML for stylesheet and JavaScript subresource requests because the skip header was only attached to the top-level document request.
+- User impact: The server-rendered Mingle page appeared partially unstyled on physical iPhones: Tailwind utility classes were absent while inline styles still applied, producing compressed controls and incorrectly sized conversation actions.
+- Resolution: Replaced the Safari-shaped User-Agent with `MingleNative/<version> (iPhone; iOS)` or `MingleNative/<version> (Android)`. The platform markers preserve runtime platform detection while the non-standard prefix prevents free ngrok from classifying subresource requests as browser traffic.
+- Tests: Added WebView User-Agent coverage for iOS and Android, including assertions that Safari and AppleWebKit tokens are absent.

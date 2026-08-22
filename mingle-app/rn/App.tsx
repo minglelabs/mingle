@@ -47,6 +47,7 @@ import {
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
   resolveNativeBottomBannerWebInsetPx,
+  resolveMingleWebViewUserAgent,
   shouldEnableIosWebViewBackForwardNavigation,
   shouldEnableNativeWebViewDebugging,
   shouldDisableIosWebViewScrolling,
@@ -439,7 +440,6 @@ const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 // Marks that a restored iOS room has received a synthetic list history entry.
 const IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG = '__MINGLE_IOS_ROOM_HISTORY_SEEDED__';
-const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 type SafeAreaPalette = {
   topColor: string;
@@ -765,6 +765,11 @@ function resolveRuntimeClientInfo(): RuntimeClientInfo {
 }
 
 const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
+// Keep the WebView identity app-specific so free ngrok does not serve its browser interstitial to subresources.
+const MINGLE_WEBVIEW_USER_AGENT = resolveMingleWebViewUserAgent({
+  platform: RN_RUNTIME_OS,
+  clientVersion: RUNTIME_CLIENT_INFO.clientVersion,
+});
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -2666,7 +2671,7 @@ function AppInner(): React.JSX.Element {
             ref={webViewRef}
             source={webViewSource}
             originWhitelist={['*']}
-            userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
+            userAgent={MINGLE_WEBVIEW_USER_AGENT}
             javaScriptEnabled
             domStorageEnabled
             cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}

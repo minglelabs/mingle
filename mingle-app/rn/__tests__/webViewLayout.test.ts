@@ -1,4 +1,28 @@
-import { appendNativeRuntimeWebViewParams, shouldEnableIosWebViewBackForwardNavigation } from '../src/webViewLayout';
+import {
+  appendNativeRuntimeWebViewParams,
+  resolveMingleWebViewUserAgent,
+  shouldEnableIosWebViewBackForwardNavigation,
+} from '../src/webViewLayout';
+
+describe('resolveMingleWebViewUserAgent', () => {
+  it('keeps iOS detection while avoiding a browser-shaped User-Agent', () => {
+    const userAgent = resolveMingleWebViewUserAgent({
+      platform: 'ios',
+      clientVersion: '1.1.4',
+    });
+
+    expect(userAgent).toBe('MingleNative/1.1.4 (iPhone; iOS)');
+    expect(userAgent).not.toContain('Safari');
+    expect(userAgent).not.toContain('AppleWebKit');
+  });
+
+  it('keeps Android detection in the app-shaped User-Agent', () => {
+    expect(resolveMingleWebViewUserAgent({
+      platform: 'android',
+      clientVersion: '1.1.4',
+    })).toBe('MingleNative/1.1.4 (Android)');
+  });
+});
 
 describe('appendNativeRuntimeWebViewParams', () => {
   it('adds zone-specific banner fallbacks and client build query params', () => {
