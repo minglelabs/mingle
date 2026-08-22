@@ -3434,11 +3434,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizePreviewLabel = `Level ${textSizeLevel}`
   const sliderClassName = [
     // Keep the visible thumb compact while giving the native thumb a 44px touch target.
+    // Mask the track ends by the same 22px inset so the visible range still reaches both ends.
     'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
     'accent-[#0A84FF]',
-    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#D1D1D6]',
+    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white [&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
     '[&::-webkit-slider-thumb]:-mt-[19px] [&::-webkit-slider-thumb]:h-11 [&::-webkit-slider-thumb]:w-11 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-transparent [&::-webkit-slider-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-webkit-slider-thumb]:shadow-none',
-    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-[#D1D1D6]',
+    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white [&::-moz-range-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
     '[&::-moz-range-thumb]:h-11 [&::-moz-range-thumb]:w-11 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-moz-range-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-moz-range-thumb]:shadow-none',
   ].join(' ')
 
