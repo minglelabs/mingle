@@ -406,6 +406,8 @@ export async function PATCH(request: Request) {
         via: "session_user_id",
         targetUserId: identity.id,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        endpointMaxDelayMs: nextEndpointMaxDelayMs,
+        endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
         adBannerPosition: nextAdBannerPosition,
       });
@@ -423,6 +425,8 @@ export async function PATCH(request: Request) {
         via: "session_email",
         targetUserEmail: identity.email,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        endpointMaxDelayMs: nextEndpointMaxDelayMs,
+        endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
         adBannerPosition: nextAdBannerPosition,
       });
@@ -440,6 +444,8 @@ export async function PATCH(request: Request) {
         via: "external_user_id",
         targetExternalUserId: identity.externalUserId,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        endpointMaxDelayMs: nextEndpointMaxDelayMs,
+        endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
         adBannerPosition: nextAdBannerPosition,
       });
@@ -464,6 +470,8 @@ export async function PATCH(request: Request) {
           targetExternalUserId: identity.externalUserId || null,
           headerExternalUserId: resolveTrackingExternalUserId(request) || null,
           resolvedSessionKey: identity.sessionKey,
+          endpointMaxDelayMs: nextEndpointMaxDelayMs,
+          endpointTuningStep: nextEndpointTuningStep,
           translationModel: nextTranslationModel,
           adBannerPosition: nextAdBannerPosition,
         });
@@ -490,6 +498,8 @@ export async function PATCH(request: Request) {
       targetExternalUserId: tracking.externalUserId,
       headerExternalUserId: resolveTrackingExternalUserId(request) || null,
       resolvedSessionKey: tracking.sessionKey,
+      endpointMaxDelayMs: nextEndpointMaxDelayMs,
+      endpointTuningStep: nextEndpointTuningStep,
       translationModel: nextTranslationModel,
       adBannerPosition: nextAdBannerPosition,
     });

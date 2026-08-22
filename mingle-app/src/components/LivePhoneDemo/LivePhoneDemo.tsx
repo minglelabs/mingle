@@ -1661,9 +1661,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
       setTextSizeLevel(next.textSizeLevel)
-      setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
-      setSonioxEndpointMaxDelayMs(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
-      setSonioxEndpointTuningStep(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
       setAdBannerPosition(next.adBannerPosition)
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
@@ -5511,7 +5508,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       if (isSilenceFinalizeSliderDisabled) return
                                       const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
                                       setSonioxEndpointTuningStep(next)
-                                      window.setTimeout(flushAccountPreferencesSync, 0)
+                                      clearAccountPreferencesSyncTimer()
+                                      syncAccountPreferencesOverride({
+                                        ...latestAccountPreferencesRef.current,
+                                        sonioxEndpointTuningStep: next,
+                                      })
                                     }}
                                     className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
                                     aria-label={endpointTuningLabel}
