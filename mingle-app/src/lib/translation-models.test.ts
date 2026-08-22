@@ -47,7 +47,7 @@ describe('translation model catalog', () => {
       engineProvider: 'qwen',
       infrastructureProvider: 'qwencloud',
       runtimeModel: 'qwen3.7-flash',
-      baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+      baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     })
   })
 })

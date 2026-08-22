@@ -49,7 +49,7 @@ const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
-const QWEN_CLOUD_BASE_URL = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1'
+const QWEN_CLOUD_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 

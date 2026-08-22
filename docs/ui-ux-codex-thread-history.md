@@ -7,7 +7,7 @@
 - User impact: Users could select models that the service no longer intends to operate, and a Qwen 3.7 Flash selection could continue using the wrong regional billing and entitlement path.
 - Resolution:
   - The selectable catalog now contains Gemini 2.5 Flash Lite and Qwen 3.7 Flash only.
-  - Qwen 3.7 Flash uses `https://dashscope-us.aliyuncs.com/compatible-mode/v1` and the QwenCloud API key.
+  - Qwen 3.7 Flash uses `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` and the QwenCloud API key.
   - Removed Gemma 4 and Qwen 3.5 9B runtime/provider fallbacks and compatibility aliases.
   - Existing database preferences for the removed models must be converted once to `qwen/qwen3.7-flash` before deployment.
 - Tests: Updated catalog, preference persistence, client-event logging, versioned finalize route, US endpoint, JSON Object request, and fallback coverage.

@@ -649,7 +649,7 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports Qwen 3.7 Flash through the US QwenCloud endpoint and strips think blocks', async () => {
+    it('supports Qwen 3.7 Flash through the international QwenCloud endpoint and strips think blocks', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
@@ -695,7 +695,7 @@ describe('/api/translate/finalize route', () => {
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions',
+      'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
       expect.objectContaining({
         method: 'POST',
       }),
@@ -1028,7 +1028,7 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('defaults qwen to the US QwenCloud endpoint when only TRANSLATE_API_KEY is set', async () => {
+    it('defaults qwen to the international QwenCloud endpoint when only TRANSLATE_API_KEY is set', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
@@ -1069,7 +1069,7 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
     expect(json.model).toBe('qwen3.7-flash')
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions')
 
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const body = JSON.parse(String(requestInit.body)) as {

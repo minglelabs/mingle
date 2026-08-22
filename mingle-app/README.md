@@ -165,7 +165,7 @@ Qwen 3.7 Flash via QwenCloud (US region):
 ```bash
 TRANSLATE_PROVIDER=qwen
 TRANSLATE_MODEL=qwen/qwen3.7-flash
-TRANSLATE_BASE_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 QWEN_CLOUD_API_KEY=your_qwencloud_key
 ```
 
