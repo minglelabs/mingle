@@ -28,14 +28,11 @@ DEVBOX_VAULT_PATH=secret/mingle/dev
 DEVBOX_VAULT_PROD_PATH=secret/mingle/prod
 DEVBOX_LOCAL_HOST=127.0.0.1
 DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ
-RN_AD_BANNER_POSITION=bottom
-RN_AD_BANNER_HEIGHT_PX=50
 RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551
 RN_ADMOB_APP_ID_ANDROID=ca-app-pub-7057041881494735~1471126891
 RN_ADMOB_BANNER_UNIT_ID_IOS=ca-app-pub-7057041881494735/3768106846
 RN_ADMOB_BANNER_UNIT_ID_ANDROID=ca-app-pub-7057041881494735/6522262692
 MINGLE_REALTIME_SECRET=...
-VAULT_ADDR=http://127.0.0.1:8200
 ```
 
 Google OAuth redirect URI 자동 동기화를 사용할 때만 아래 두 값도 추가합니다.
@@ -48,6 +45,7 @@ DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED=true
 고정 ngrok 도메인을 계속 사용할 때만 `DEVBOX_NGROK_WEB_DOMAIN`도 이 목록에 추가합니다.
 Cloudflare named tunnel만 사용한다면 추가하지 않습니다.
 
+`VAULT_ADDR`는 현재처럼 `.zshrc`에서 export해도 됩니다. devbox는 이미 export된 값을 우선 사용합니다.
 `VAULT_NAMESPACE`는 사용하는 Vault가 namespace를 요구할 때만 추가합니다. `VAULT_TOKEN`은 파일에
 넣지 말고 `vault login`으로 로컬 Vault CLI 세션에 저장합니다. `MINGLE_REALTIME_SECRET`처럼
 세 서비스가 공유하는 secret도 루트 env로 옮길 수 있으며, bootstrap이 같은 Vault path에 업로드합니다.
