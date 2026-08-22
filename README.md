@@ -106,8 +106,8 @@ scripts/devbox status
   creates RN iOS `.xcarchive` / `.ipa` artifacts for App Store upload.
   These commands also work without `.devbox.env` (recommended: `--device-app-env`, `--site-url`, `--ws-url`),
   and URLs can be read from Vault, `.env.local`, or shell environment variables.
-  To pin the Team ID, set `DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ` in the MAIN worktree root `.env.local`
-  and let `scripts/devbox bootstrap` synchronize it to Vault.
+  The iOS Team ID defaults to the `DEVELOPMENT_TEAM` value in `mingle.xcodeproj`.
+  Use `--team-id` or the optional `DEVBOX_IOS_TEAM_ID` override only when exporting with a different team.
 - `scripts/devbox up --profile device --with-mobile-install` prepares the server and installs the mobile app in one run.
 - For `scripts/devbox test --target app`, the `app` target runs unit tests only by default.
   Live tests run only when `--with-live` is provided.
