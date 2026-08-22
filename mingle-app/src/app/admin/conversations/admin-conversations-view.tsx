@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSttLanguageFlag } from "@/lib/stt-languages";
 import { getTranslationLanguageName } from "@/lib/translation-languages";
 
-const CONVERSATION_CACHE_VERSION = "v2";
+const CONVERSATION_CACHE_VERSION = "v3";
 
 function readSessionCache<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -51,6 +51,7 @@ export type AdminConversationSummary = {
   messageCount: number;
   activeMessageCount: number;
   deletedMessageCount: number;
+  latestMessageAt: string | null;
   href: string;
 };
 
@@ -102,7 +103,7 @@ export function AdminConversationList({ channels }: { channels: AdminConversatio
           <Link className="block rounded-lg border border-[#eeeae2] p-4 transition hover:border-[#b45309] hover:bg-[#fffaf0]" href={channel.href} key={channel.id}>
             <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h3><span className="text-xs text-[#898781]">{formatDate(channel.updatedAt)}</span></div>
             <p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p>
-            <p className="mt-2 text-xs text-[#6f6d68]">현재 필터 메시지 {channel.messageCount}개 · 삭제되지 않음 {channel.activeMessageCount}개 · 삭제됨 {channel.deletedMessageCount}개 · 생성 {formatDate(channel.createdAt)}</p>
+            <p className="mt-2 text-xs text-[#6f6d68]">현재 필터 메시지 {channel.messageCount}개 · 삭제되지 않음 {channel.activeMessageCount}개 · 삭제됨 {channel.deletedMessageCount}개 · 최근 메시지 {channel.latestMessageAt ? formatDate(channel.latestMessageAt) : "없음"} · 생성 {formatDate(channel.createdAt)}</p>
           </Link>
         ))}
         {visibleChannels.length === 0 ? <p className="rounded-lg bg-[#f7f6f2] p-4 text-sm text-[#6f6d68]">현재 페이지에 일치하는 대화방이 없습니다.</p> : null}
@@ -130,7 +131,7 @@ export type AdminConversationBrowserProps = {
 };
 
 type DeletedFilter = "all" | "active" | "deleted";
-type ChannelSort = "updated-desc" | "updated-asc" | "created-desc" | "created-asc" | "title-asc" | "title-desc";
+type ChannelSort = "updated-desc" | "updated-asc" | "created-desc" | "created-asc" | "latest-message-desc" | "title-asc" | "title-desc";
 
 function messageCountForFilter(channel: ConversationDataChannel, filter: DeletedFilter): number {
   if (filter === "deleted") return channel.deletedMessageCount;
@@ -144,8 +145,12 @@ function sortChannels(channels: ConversationDataChannel[], sort: ChannelSort): C
       const result = left.title.localeCompare(right.title, "ko");
       return sort === "title-desc" ? -result : result;
     }
-    const leftTime = Date.parse(sort.startsWith("created") ? left.createdAt : left.updatedAt);
-    const rightTime = Date.parse(sort.startsWith("created") ? right.createdAt : right.updatedAt);
+    const leftTime = Date.parse(sort.startsWith("created") ? left.createdAt : sort === "latest-message-desc" ? left.latestMessageAt ?? "" : left.updatedAt);
+    const rightTime = Date.parse(sort.startsWith("created") ? right.createdAt : sort === "latest-message-desc" ? right.latestMessageAt ?? "" : right.updatedAt);
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) return 0;
+      return Number.isNaN(leftTime) ? 1 : -1;
+    }
     const result = rightTime - leftTime;
     return sort.endsWith("-asc") ? -result : result;
   });
@@ -272,7 +277,7 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
     <>
       <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{visibleData.user.name || visibleData.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{visibleData.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {visibleData.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
       {visibleError ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{visibleError}</p> : null}
-      <section className="mb-5 grid gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm md:grid-cols-3"><label className="text-xs font-semibold text-[#6f6d68]">대화방 삭제 여부<select value={channelDeleted} onChange={(event) => { setChannelDeleted(event.target.value as DeletedFilter); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">메시지 삭제 여부<select value={messageDeleted} onChange={(event) => setMessageDeleted(event.target.value as DeletedFilter)} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">대화방 정렬<select value={sort} onChange={(event) => { setSort(event.target.value as ChannelSort); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="updated-desc">최근 수정순</option><option value="updated-asc">오래된 수정순</option><option value="created-desc">최근 생성순</option><option value="created-asc">오래된 생성순</option><option value="title-asc">제목 가나다순</option><option value="title-desc">제목 가나다 역순</option></select></label></section>
+      <section className="mb-5 grid gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm md:grid-cols-3"><label className="text-xs font-semibold text-[#6f6d68]">대화방 삭제 여부<select value={channelDeleted} onChange={(event) => { setChannelDeleted(event.target.value as DeletedFilter); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">메시지 삭제 여부<select value={messageDeleted} onChange={(event) => setMessageDeleted(event.target.value as DeletedFilter)} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">대화방 정렬<select value={sort} onChange={(event) => { setSort(event.target.value as ChannelSort); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="updated-desc">최근 수정순</option><option value="updated-asc">오래된 수정순</option><option value="created-desc">최근 생성순</option><option value="created-asc">오래된 생성순</option><option value="latest-message-desc">최근 메시지 최신순</option><option value="title-asc">제목 가나다순</option><option value="title-desc">제목 가나다 역순</option></select></label></section>
       {!props.channelId ? (
         <>
           <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {displayedPage} / {totalListPages}페이지 (페이지당 20개 · 현재 필터 {filteredChannels.length}개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>

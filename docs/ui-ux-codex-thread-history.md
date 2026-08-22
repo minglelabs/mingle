@@ -357,3 +357,9 @@
 - User impact: Administrators could not treat sorting and filtering like the existing client-side search over the already loaded support data.
 - Resolution: The lookup now fetches the complete room metadata dataset and unfiltered message pages for the selected user. Room deletion filtering, message deletion filtering, sorting, and 20-room pagination run entirely in the browser over the cached/fetched data; the server is only contacted for user/room data retrieval and lazy 200-message pages.
 - Tests: Targeted ESLint and TypeScript validation were run; the repository still reports the known unrelated test type errors in language-selector, dictionary, and dashboard BigInt files.
+
+## 2026-08-23 — Admin conversation latest-message sorting
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/data/route.ts`
+- Issue: Room sorting included room update time, creation time, and title, but not the timestamp of the newest message.
+- Resolution: Added a latest-message timestamp to the cached room metadata and a `최근 메시지 최신순` client-side sort option. Rooms without messages are placed after rooms with messages.

@@ -14,7 +14,7 @@ type PageProps = {
 };
 
 type DeletedFilter = "all" | "active" | "deleted";
-type ChannelSort = "updated-desc" | "updated-asc" | "created-desc" | "created-asc" | "title-asc" | "title-desc";
+type ChannelSort = "updated-desc" | "updated-asc" | "created-desc" | "created-asc" | "latest-message-desc" | "title-asc" | "title-desc";
 
 function first(value: string | string[] | undefined): string {
   return typeof value === "string" ? value.trim() : Array.isArray(value) ? (value[0] ?? "").trim() : "";
@@ -30,7 +30,7 @@ function normalizeDeletedFilter(value: string, fallback: DeletedFilter = "all"):
 }
 
 function normalizeSort(value: string): ChannelSort {
-  return value === "updated-asc" || value === "created-desc" || value === "created-asc" || value === "title-asc" || value === "title-desc" ? value : "updated-desc";
+  return value === "updated-asc" || value === "created-desc" || value === "created-asc" || value === "latest-message-desc" || value === "title-asc" || value === "title-desc" ? value : "updated-desc";
 }
 
 async function authenticated(): Promise<boolean> {

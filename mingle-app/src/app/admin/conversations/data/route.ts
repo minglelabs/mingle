@@ -37,15 +37,17 @@ export async function GET(request: Request) {
       by: ["sessionKey", "isDeleted"],
       where: { userId: user.id, sessionKey: { in: channels.map((channel) => channel.sessionKey) } },
       _count: { _all: true },
+      _max: { createdAt: true },
     })
     : [];
-  const messageCounts = new Map<string, { total: number; active: number; deleted: number }>();
+  const messageCounts = new Map<string, { total: number; active: number; deleted: number; latestMessageAt: Date | null }>();
   for (const row of messageCountRows) {
     const sessionKey = row.sessionKey ?? "";
-    const counts = messageCounts.get(sessionKey) ?? { total: 0, active: 0, deleted: 0 };
+    const counts = messageCounts.get(sessionKey) ?? { total: 0, active: 0, deleted: 0, latestMessageAt: null };
     counts.total += row._count._all;
     if (row.isDeleted === true) counts.deleted += row._count._all;
     else counts.active += row._count._all;
+    if (row._max.createdAt && (!counts.latestMessageAt || row._max.createdAt > counts.latestMessageAt)) counts.latestMessageAt = row._max.createdAt;
     messageCounts.set(sessionKey, counts);
   }
 
@@ -53,7 +55,7 @@ export async function GET(request: Request) {
     user: { externalUserId: user.externalUserId, email: user.email, name: user.name },
     channelCount: channels.length,
     channels: channels.map((channel) => {
-      const counts = messageCounts.get(channel.sessionKey) ?? { total: 0, active: 0, deleted: 0 };
+      const counts = messageCounts.get(channel.sessionKey) ?? { total: 0, active: 0, deleted: 0, latestMessageAt: null };
       return {
         id: channel.id,
         title: channel.title,
@@ -64,6 +66,7 @@ export async function GET(request: Request) {
         messageCount: counts.total,
         activeMessageCount: counts.active,
         deletedMessageCount: counts.deleted,
+        latestMessageAt: counts.latestMessageAt?.toISOString() ?? null,
       };
     }),
     selectedChannel: selectedChannel ? {
