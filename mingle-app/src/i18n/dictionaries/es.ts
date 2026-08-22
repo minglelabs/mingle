@@ -10,7 +10,9 @@ export const esDictionary: BaseAppDictionarySource = {
     muteTts: "Silenciar TTS",
     unmuteTts: "Activar TTS",
     textSizeLabel: "Tamaño de texto",
-    silenceFinalizeLabel: "Duración de silencio para separar voz",
+    silenceFinalizeLabel: "Duración de separación del habla",
+    endpointTuningShortLabel: "Corto",
+    endpointTuningLongLabel: "Largo",
     translationModelLabel: "Modelo de traducción",
   },
   tabs: {

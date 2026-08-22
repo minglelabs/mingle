@@ -21,6 +21,22 @@ export type SonioxSegmentationRuntime =
           endpointDelayMs: number;
       };
 
+export type SonioxEndpointTuningProfile = {
+    step: number;
+    latencyAdjustmentLevel: number;
+    sensitivity: number;
+};
+
+export const DEFAULT_SONIOX_ENDPOINT_TUNING_STEP = 2;
+
+export const SONIOX_ENDPOINT_TUNING_PROFILES: readonly SonioxEndpointTuningProfile[] = [
+    { step: 0, latencyAdjustmentLevel: 3, sensitivity: 1.0 },
+    { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.8 },
+    { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.8 },
+    { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.8 },
+    { step: 4, latencyAdjustmentLevel: 0, sensitivity: 0.0 },
+];
+
 export type NoSegmentationDecision = { action: 'none' };
 
 export type ManualFinalizeDecision =
@@ -408,8 +424,21 @@ export function resolveSonioxEndpointSensitivity(
     return Math.max(-1, Math.min(1, value));
 }
 
+export function resolveSonioxEndpointTuningProfile(
+    raw: unknown,
+): SonioxEndpointTuningProfile {
+    const value = Number(raw);
+    const step = Number.isFinite(value)
+        ? Math.max(0, Math.min(SONIOX_ENDPOINT_TUNING_PROFILES.length - 1, Math.floor(value)))
+        : DEFAULT_SONIOX_ENDPOINT_TUNING_STEP;
+    return SONIOX_ENDPOINT_TUNING_PROFILES[step] || SONIOX_ENDPOINT_TUNING_PROFILES[DEFAULT_SONIOX_ENDPOINT_TUNING_STEP]!;
+}
+
 export function buildSonioxEndpointDetectionConfig(
     runtime: SonioxSegmentationRuntime,
+    options?: {
+        endpointTuningProfile?: SonioxEndpointTuningProfile | null;
+    },
 ): Record<string, unknown> {
     if (!runtime.endpointDetection) {
         return { enable_endpoint_detection: false };
@@ -421,8 +450,10 @@ export function buildSonioxEndpointDetectionConfig(
 
     return {
         enable_endpoint_detection: true,
-        endpoint_latency_adjustment_level: resolveSonioxEndpointLatencyAdjustmentLevel(),
-        endpoint_sensitivity: resolveSonioxEndpointSensitivity(),
+        endpoint_latency_adjustment_level: options?.endpointTuningProfile?.latencyAdjustmentLevel
+            ?? resolveSonioxEndpointLatencyAdjustmentLevel(),
+        endpoint_sensitivity: options?.endpointTuningProfile?.sensitivity
+            ?? resolveSonioxEndpointSensitivity(),
         max_endpoint_delay_ms: maxEndpointDelayMs,
     };
 }
@@ -431,12 +462,16 @@ export function buildSonioxEndpointDetectionConfig(
 export function resolveSonioxEndpointDetectionConfig(
     id: SegmentationStrategyId,
     endpointDelayMs: number,
+    options?: {
+        endpointTuningProfile?: SonioxEndpointTuningProfile | null;
+    },
 ): Record<string, unknown> {
     const runtime = resolveSonioxSegmentationRuntime(id, endpointDelayMs);
     return buildSonioxEndpointDetectionConfig(
         runtime.effective === 'end'
             ? { ...runtime, endpointDelayMs: resolveSonioxEndpointDelayMs(id, endpointDelayMs) }
             : runtime,
+        options,
     );
 }
 

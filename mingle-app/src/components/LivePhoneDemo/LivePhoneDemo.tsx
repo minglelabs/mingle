@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
@@ -30,6 +30,7 @@ import {
 import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
@@ -38,8 +39,6 @@ import {
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
-  MAX_SONIOX_SILENCE_MS,
-  MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
@@ -846,21 +845,6 @@ function findTopVisibleUtteranceDateLabel(
   return formatScrollDateLabel(anchor.createdAtMs, locale)
 }
 
-function deriveRangeValueFromPointer(
-  event: ReactPointerEvent<HTMLInputElement>,
-  min: number,
-  max: number,
-  step: number,
-): number {
-  const rect = event.currentTarget.getBoundingClientRect()
-  if (rect.width <= 0) return min
-  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-  const raw = min + ((max - min) * ratio)
-  const stepped = min + (Math.round((raw - min) / step) * step)
-  const bounded = Math.max(min, Math.min(max, stepped))
-  return Number.isFinite(bounded) ? bounded : min
-}
-
 function isValidFeedbackEmailAddress(value: string): boolean {
   const normalized = value.trim()
   if (!normalized) return false
@@ -1046,6 +1030,8 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  endpointTuningShortLabel: string
+  endpointTuningLongLabel: string
   translationModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
@@ -1308,6 +1294,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   switchLiveRoomToastLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  endpointTuningShortLabel,
+  endpointTuningLongLabel,
   translationModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
@@ -1389,6 +1377,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
+  const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
@@ -1518,6 +1507,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
     inputMode: DEFAULT_INPUT_MODE,
@@ -1528,12 +1518,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     sonioxEndpointMaxDelayMs,
+    sonioxEndpointTuningStep,
     translationModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1652,6 +1643,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setSonioxEndpointMaxDelayMs(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
+      setSonioxEndpointTuningStep(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
       setAdBannerPosition(next.adBannerPosition)
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
@@ -2026,6 +2018,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
+        setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
@@ -3369,6 +3362,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
     sonioxEndpointMaxDelayMs,
+    sonioxEndpointTuningStep,
     conversationId,
     sessionKeyOverride,
     storageNamespace,
@@ -5396,59 +5390,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
                                   {silenceFinalizeLabel}
                                 </span>
-                                <span className="shrink-0 whitespace-nowrap">{sonioxEndpointMaxDelayMs}ms</span>
+                                <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
                               </div>
                               <div className="relative">
                                 <input
                                   type="range"
-                                  min={MIN_SONIOX_SILENCE_MS}
-                                  max={MAX_SONIOX_SILENCE_MS}
-                                  step={100}
-                                  value={sonioxEndpointMaxDelayMs}
+                                  min={0}
+                                  max={4}
+                                  step={1}
+                                  value={sonioxEndpointTuningStep}
                                   disabled={isSilenceFinalizeSliderDisabled}
-                                  onPointerDown={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    event.currentTarget.setPointerCapture(event.pointerId)
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    setSonioxEndpointMaxDelayMs(next)
-                                    setSonioxManualFinalizeSilenceMs(next)
-                                  }}
-                                  onPointerMove={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.buttons !== 1) return
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    setSonioxEndpointMaxDelayMs(next)
-                                    setSonioxManualFinalizeSilenceMs(next)
-                                  }}
-                                  onPointerUp={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                      event.currentTarget.releasePointerCapture(event.pointerId)
-                                    }
-                                    flushAccountPreferencesSync()
-                                  }}
                                   onChange={(event) => {
                                     if (isSilenceFinalizeSliderDisabled) return
-                                    const next = Math.max(
-                                      MIN_SONIOX_SILENCE_MS,
-                                      Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS),
-                                    )
-                                    setSonioxEndpointMaxDelayMs(next)
-                                    setSonioxManualFinalizeSilenceMs(next)
+                                    const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
+                                    setSonioxEndpointTuningStep(next)
+                                    window.setTimeout(flushAccountPreferencesSync, 0)
                                   }}
                                   className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                  aria-label={`${silenceFinalizeLabel} milliseconds`}
+                                  aria-label={silenceFinalizeLabel}
                                 />
+                                <div className="mt-0.5 flex justify-between text-[0.6875rem] font-medium text-gray-400">
+                                  <span>{endpointTuningShortLabel}</span>
+                                  <span>{endpointTuningLongLabel}</span>
+                                </div>
                                 {isSilenceFinalizeSliderLocked && (
                                   <>
                                     <span id={silenceFinalizeLockedDescriptionId} className="sr-only">

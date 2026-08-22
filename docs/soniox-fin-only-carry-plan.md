@@ -30,15 +30,15 @@ no final transcript containing a boundary marker.
 
 ## Follow-up: Per-session endpoint conversation length (2026-08-22)
 
-The endpoint-only carry separation remains unchanged, but the endpoint maximum
-delay is now user-adjustable per STT session. The app stores
-`demoEndpointMaxDelayMs` with a default of `2000`, exposes the existing
-conversation-length slider for the modern namespaces, and sends
-`soniox_endpoint_max_delay_ms` in the WebSocket start config. The server clamps
-the value to `500..3000` and falls back to `2000` for older clients, so user
-preferences do not require per-user server environment variables. The existing
-manual-finalize setting remains separate and continues to default to `500` for
-`fin`/`llm` behavior.
+The endpoint-only carry separation remains unchanged, but endpoint behavior is
+now user-adjustable per STT session. The app stores a five-step
+`demoEndpointTuningStep` preference with the middle step (`2`) as the default,
+exposes a snapping conversation-length slider for modern namespaces, and sends
+`soniox_endpoint_tuning_step` in the WebSocket start config. The server maps the
+step to Soniox's endpoint latency and sensitivity settings for that session.
+The existing `soniox_endpoint_max_delay_ms` remains a hard `500..3000` safety
+cap, while the manual-finalize setting remains separate and continues to
+default to `500` for `fin`/`llm` behavior.
 
 ## 1. Executive summary
 

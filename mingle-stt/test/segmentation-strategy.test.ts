@@ -11,6 +11,7 @@ import {
   resolveSonioxEndpointDetectionConfig,
   resolveSonioxEndpointLatencyAdjustmentLevel,
   resolveSonioxEndpointSensitivity,
+  resolveSonioxEndpointTuningProfile,
   resolveSonioxSegmentationRuntime,
   selectSonioxBoundarySpeakerIds,
 } from '../segmentation-strategy';
@@ -46,6 +47,38 @@ test('enables Soniox semantic endpoint detection for the end strategy', () => {
     endpoint_sensitivity: 0,
     max_endpoint_delay_ms: 1500,
   });
+});
+
+test('maps the five endpoint tuning steps from shorter to longer speech splits', () => {
+  assert.deepEqual(
+    [0, 1, 2, 3, 4].map((step) => resolveSonioxEndpointTuningProfile(step)),
+    [
+      { step: 0, latencyAdjustmentLevel: 3, sensitivity: 1.0 },
+      { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.8 },
+      { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.8 },
+      { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.8 },
+      { step: 4, latencyAdjustmentLevel: 0, sensitivity: 0.0 },
+    ],
+  );
+  assert.deepEqual(resolveSonioxEndpointTuningProfile('invalid'), {
+    step: 2,
+    latencyAdjustmentLevel: 1,
+    sensitivity: 0.8,
+  });
+});
+
+test('uses a per-session endpoint tuning profile in the Soniox request config', () => {
+  assert.deepEqual(
+    resolveSonioxEndpointDetectionConfig('end', 1800, {
+      endpointTuningProfile: resolveSonioxEndpointTuningProfile(4),
+    }),
+    {
+      enable_endpoint_detection: true,
+      endpoint_latency_adjustment_level: 0,
+      endpoint_sensitivity: 0,
+      max_endpoint_delay_ms: 1800,
+    },
+  );
 });
 
 test('keeps Soniox endpoint detection disabled for the manual finalize strategy', () => {

@@ -21,6 +21,9 @@ const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
 const DEFAULT_ENDPOINT_MAX_DELAY_MS = 2000;
+const MIN_ENDPOINT_TUNING_STEP = 0;
+const MAX_ENDPOINT_TUNING_STEP = 4;
+const DEFAULT_ENDPOINT_TUNING_STEP = 2;
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
@@ -28,6 +31,7 @@ type PreferencesBody = {
   textSizeLevel?: unknown;
   sonioxManualFinalizeSilenceMs?: unknown;
   sonioxEndpointMaxDelayMs?: unknown;
+  sonioxEndpointTuningStep?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
 };
@@ -44,6 +48,7 @@ type UserPreferencesRecord = {
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
   demoEndpointMaxDelayMs: number | null;
+  demoEndpointTuningStep: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
 };
@@ -218,6 +223,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
     demoEndpointMaxDelayMs: true,
+    demoEndpointTuningStep: true,
     translationModel: true,
     adBannerPosition: true,
   } as const;
@@ -316,6 +322,7 @@ export async function GET(request: Request) {
     textSizeLevel: preferences?.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
     sonioxEndpointMaxDelayMs: preferences?.demoEndpointMaxDelayMs ?? DEFAULT_ENDPOINT_MAX_DELAY_MS,
+    sonioxEndpointTuningStep: preferences?.demoEndpointTuningStep ?? DEFAULT_ENDPOINT_TUNING_STEP,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
@@ -362,12 +369,18 @@ export async function PATCH(request: Request) {
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextEndpointMaxDelayMs = asClampedInteger(body.sonioxEndpointMaxDelayMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
+  const nextEndpointTuningStep = asClampedInteger(
+    body.sonioxEndpointTuningStep,
+    MIN_ENDPOINT_TUNING_STEP,
+    MAX_ENDPOINT_TUNING_STEP,
+  );
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
     && nextEndpointMaxDelayMs === null
+    && nextEndpointTuningStep === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
   ) {
@@ -378,6 +391,7 @@ export async function PATCH(request: Request) {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextEndpointMaxDelayMs !== null ? { demoEndpointMaxDelayMs: nextEndpointMaxDelayMs } : {}),
+    ...(nextEndpointTuningStep !== null ? { demoEndpointTuningStep: nextEndpointTuningStep } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
   };

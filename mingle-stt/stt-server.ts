@@ -13,6 +13,7 @@ import {
     readSegmentationStrategyId,
     resolveSonioxBoundaryHandling,
     resolveSonioxSegmentationRuntime,
+    resolveSonioxEndpointTuningProfile,
     selectSonioxBoundarySpeakerIds,
     stripEndpointMarkers,
     type SonioxBoundaryMarker,
@@ -598,6 +599,10 @@ wss.on('connection', (clientWs) => {
                     Math.min(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX, Math.floor(raw)),
                 );
             })();
+            const endpointTuningProfile = config.soniox_endpoint_tuning_step === undefined
+                || config.soniox_endpoint_tuning_step === null
+                ? null
+                : resolveSonioxEndpointTuningProfile(config.soniox_endpoint_tuning_step);
             const segmentationRuntime = resolveSonioxSegmentationRuntime(
                 segmentationStrategyId,
                 segmentationStrategyId === 'end'
@@ -610,7 +615,7 @@ wss.on('connection', (clientWs) => {
                 console.warn('[stt-server] llm segmentation not yet implemented; using effective=fin');
             }
             console.log(
-                `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} manualSilenceMs=${sonioxManualFinalizeSilenceMs} endpointMaxDelayMs=${endpointDelayMs}`,
+                `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} manualSilenceMs=${sonioxManualFinalizeSilenceMs} endpointMaxDelayMs=${endpointDelayMs} endpointTuningStep=${endpointTuningProfile?.step ?? 'server-default'} endpointLatencyLevel=${endpointTuningProfile?.latencyAdjustmentLevel ?? 'server-default'} endpointSensitivity=${endpointTuningProfile?.sensitivity ?? 'server-default'}`,
             );
             type SonioxToken = {
                 text?: unknown;
@@ -1165,7 +1170,7 @@ wss.on('connection', (clientWs) => {
                     num_channels: 1,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
-                    ...buildSonioxEndpointDetectionConfig(segmentationRuntime),
+                    ...buildSonioxEndpointDetectionConfig(segmentationRuntime, { endpointTuningProfile }),
                 };
                 if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
                     Object.assign(sonioxConfig, {
