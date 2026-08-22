@@ -307,3 +307,10 @@
 - User impact: Pressing Stop could briefly show the mic as stopped, then running/connecting again, then stopped. Recording ultimately stopped, but the control visually flickered and made the action feel unreliable.
 - Resolution: Added a stop-pending guard for native bridge status/activity handling. While `isStopping` or `nativeStopRequested` is true, the web layer now ignores native statuses and ready server messages that would re-enter a live UI state and suppresses transcript-activity promotion, while still allowing terminal idle/close/error and `stop_recording_ack` handling to complete.
 - Tests: `scripts/devbox test --target app -- src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` covers the stop-pending status and activity-promotion guard.
+## 2026-08-22 — Admin conversation history review controls
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: The admin conversation history view loaded all matching rooms and messages in one unbounded page. The page did not own a scroll viewport, deleted records were difficult to distinguish, and source/translation language codes were shown without readable language names or flags. This made long user histories difficult to inspect and made targeted support investigations slow.
+- User impact: Administrators could lose access to the lower part of a long transcript, could not efficiently find a phrase in the records already loaded, and could not distinguish deleted rooms, messages, and content at a glance.
+- Resolution: Added a bounded full-height scroll viewport, server-side room pagination (10 rooms per page), per-room message pagination (200 messages per page), room sorting, separate room/message deletion filters, deletion status badges, and client-side search restricted to the currently loaded records. Source and translation contents now show a flag, role, and English language name.
+- Tests: TypeScript validation was run; the repository still reports pre-existing errors in unrelated language-selector, dictionary, and dashboard BigInt test files.
