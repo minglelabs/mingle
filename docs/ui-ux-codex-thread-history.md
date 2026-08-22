@@ -342,3 +342,10 @@
 - Issue: Background refreshes still replaced the visible cached room list or transcript as soon as the server response arrived, causing the page to re-render while an administrator was reviewing records.
 - User impact: A support reviewer could see the currently displayed list or transcript shift unexpectedly after a refresh completed.
 - Resolution: Cached data remains the visible source after a lookup. Background responses now update `sessionStorage` first and only enable the top-level `새 데이터 적용` button when the response differs. Clicking the button applies the cached snapshot to the visible list or transcript in one client-side render. The same behavior applies to the initial room message refresh and preserves lazy 200-message loading.
+
+## 2026-08-22 — Admin room loading state during cache/API handoff
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: When navigating from the cached room list to a room, the previous request's data state could remain visible for one render while the new room request was still pending. If that stale snapshot had no selected room detail, the UI incorrectly showed `해당 대화방을 찾을 수 없습니다.` before the API response arrived.
+- User impact: Operators could mistake a transient cache/API handoff state for a genuinely missing conversation.
+- Resolution: Scoped rendered data and error state to the current request key. A room with no usable cached detail now stays in the loading state until the database response completes; only a completed response that confirms the room is absent shows the not-found message. Usable cached room detail remains visible while background refresh waits for manual application.

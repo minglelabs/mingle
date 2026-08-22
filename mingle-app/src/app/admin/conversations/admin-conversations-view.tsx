@@ -145,6 +145,7 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
   const [isLoading, setIsLoading] = useState(Boolean(props.userId));
   const [error, setError] = useState("");
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [resolvedKey, setResolvedKey] = useState("");
 
   useEffect(() => {
     if (!props.userId) return;
@@ -160,32 +161,41 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
 
     const load = async () => {
       const cached = readSessionCache<ConversationData>(cacheKey);
-      if (cached && active) {
+      const usableCached = Boolean(cached && (!props.channelId || cached.selectedChannel));
+      if (usableCached && cached && active) {
         startTransition(() => {
           setData(cached);
           setIsLoading(false);
+          setResolvedKey(cacheKey);
         });
       }
       try {
         const response = await fetch(`/admin/conversations/data?${query.toString()}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(response.status === 404 ? "not_found" : "load_failed");
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null) as { error?: string } | null;
+          throw new Error(errorPayload?.error === "Conversation not found" ? "conversation_not_found" : response.status === 404 ? "not_found" : "load_failed");
+        }
         const fresh = await response.json() as ConversationData;
         writeSessionCache(cacheKey, fresh);
         if (!active) return;
         startTransition(() => {
-          if (cached) {
+          if (usableCached) {
             if (JSON.stringify(cached) !== JSON.stringify(fresh)) setHasUpdate(true);
           } else {
             setData(fresh);
             setIsLoading(false);
+            setResolvedKey(cacheKey);
           }
           setError("");
         });
       } catch (loadError) {
         if (!active) return;
         startTransition(() => {
-          if (!cached) setIsLoading(false);
-          setError(loadError instanceof Error && loadError.message === "not_found" ? "해당 사용자를 찾을 수 없습니다." : "데이터를 새로 불러오지 못했습니다. 캐시된 데이터가 있으면 계속 표시합니다.");
+          if (!usableCached) {
+            setIsLoading(false);
+            setResolvedKey(cacheKey);
+          }
+          setError(loadError instanceof Error && loadError.message === "conversation_not_found" ? "해당 대화방을 찾을 수 없습니다." : loadError instanceof Error && loadError.message === "not_found" ? "해당 사용자를 찾을 수 없습니다." : "데이터를 새로 불러오지 못했습니다. 캐시된 데이터가 있으면 계속 표시합니다.");
         });
       }
     };
@@ -194,12 +204,14 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
   }, [cacheKey, props.channelDeleted, props.channelId, props.messageDeleted, props.page, props.sort, props.userId]);
 
   if (!props.userId) return <p className="text-sm text-[#6f6d68]">사용자 ID를 입력해 주세요.</p>;
-  if (isLoading && !data) return <p className="rounded-xl border border-[#e5e3dc] bg-white p-5 text-sm text-[#6f6d68]">캐시를 확인하고 대화록을 불러오는 중...</p>;
-  if (!data) return <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">{error || "대화록을 불러오지 못했습니다."}</p>;
+  const visibleData = resolvedKey === cacheKey ? data : null;
+  const visibleError = resolvedKey === cacheKey ? error : "";
+  if (!visibleData && (isLoading || !visibleError)) return <p className="rounded-xl border border-[#e5e3dc] bg-white p-5 text-sm text-[#6f6d68]">캐시된 대화록을 확인하고 서버 데이터를 불러오는 중...</p>;
+  if (!visibleData) return <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">{visibleError}</p>;
 
-  const summaries = data.channels.map((channel) => ({ ...channel, href: buildBrowserHref(props, { channelId: channel.id }) }));
+  const summaries = visibleData.channels.map((channel) => ({ ...channel, href: buildBrowserHref(props, { channelId: channel.id }) }));
   const previousHref = props.page > 1 ? buildBrowserHref(props, { page: props.page - 1, channelId: "" }) : undefined;
-  const nextHref = props.page < Math.max(1, Math.ceil(data.channelCount / 20)) ? buildBrowserHref(props, { page: props.page + 1, channelId: "" }) : undefined;
+  const nextHref = props.page < Math.max(1, Math.ceil(visibleData.channelCount / 20)) ? buildBrowserHref(props, { page: props.page + 1, channelId: "" }) : undefined;
   const backHref = buildBrowserHref(props, { channelId: "" });
   const applyUpdate = () => {
     const latest = readSessionCache<ConversationData>(cacheKey);
@@ -212,15 +224,15 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
 
   return (
     <>
-      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{data.user.name || data.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{data.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {data.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
+      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{visibleData.user.name || visibleData.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{visibleData.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {visibleData.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
       {error ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{error}</p> : null}
       {!props.channelId ? (
         <>
-          <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {props.page} / {Math.max(1, Math.ceil(data.channelCount / 20))}페이지 (페이지당 20개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>
+          <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {props.page} / {Math.max(1, Math.ceil(visibleData.channelCount / 20))}페이지 (페이지당 20개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>
           <AdminConversationList channels={summaries} />
         </>
-      ) : data.selectedChannel ? (
-        <AdminConversationRoom channel={data.selectedChannel} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={`/admin/conversations/${encodeURIComponent(data.selectedChannel.id)}/messages?${new URLSearchParams({ userId: props.userId, messageDeleted: props.messageDeleted })}`} backHref={backHref} cacheKey={`room:${props.userId}:${data.selectedChannel.id}:${props.messageDeleted}`} />
+      ) : visibleData.selectedChannel ? (
+        <AdminConversationRoom channel={visibleData.selectedChannel} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={`/admin/conversations/${encodeURIComponent(visibleData.selectedChannel.id)}/messages?${new URLSearchParams({ userId: props.userId, messageDeleted: props.messageDeleted })}`} backHref={backHref} cacheKey={`room:${props.userId}:${visibleData.selectedChannel.id}:${props.messageDeleted}`} />
       ) : <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">해당 대화방을 찾을 수 없습니다.</p>}
     </>
   );
