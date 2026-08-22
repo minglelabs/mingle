@@ -38,8 +38,6 @@ import {
 export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
-const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
-const DEFAULT_QWEN_MODEL = 'qwen/qwen3.5-9b'
 const DEFAULT_QWEN_CLOUD_MODEL = 'qwen3.7-flash'
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
@@ -51,11 +49,11 @@ const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
-const QWEN_CLOUD_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
+const QWEN_CLOUD_BASE_URL = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
-type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai-compatible'
+type TranslationProvider = 'gemini' | 'qwen' | 'openai-compatible'
 
 type TranslationUsage = {
   promptTokens?: number
@@ -77,7 +75,7 @@ type TranslationEngineResult = {
 }
 
 type GeminiTranslationProviderConfig = {
-  provider: 'gemini' | 'gemma'
+  provider: 'gemini'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -180,15 +178,14 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   const normalized = value.trim().toLowerCase()
   if (!normalized) return null
   if (normalized === 'gemini') return normalized
-  if (normalized === 'gemma') return normalized
   if (normalized === 'qwen') return normalized
   if (normalized === 'openai-compatible') return normalized
   if (normalized === 'openai_compatible') return 'openai-compatible'
   return null
 }
 
-function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 'gemini' | 'gemma' {
-  return provider === 'gemini' || provider === 'gemma'
+function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 'gemini' {
+  return provider === 'gemini'
 }
 
 function isGoogleGenerativeProviderConfig(
@@ -198,7 +195,8 @@ function isGoogleGenerativeProviderConfig(
 }
 
 function shouldUsePreviousStateFallback(provider: TranslationProvider): boolean {
-  return provider !== 'gemma'
+  void provider
+  return true
 }
 
 function readTranslateEnv(name: string): string {
@@ -418,7 +416,7 @@ function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
   if ((process.env.OPENROUTER_API_KEY || '').trim()) return OPENROUTER_BASE_URL
   if ((process.env.TOGETHER_API_KEY || '').trim()) return TOGETHER_BASE_URL
   if ((process.env.DASHSCOPE_API_KEY || '').trim()) return QWEN_CLOUD_BASE_URL
-  if (provider === 'qwen' && readTranslateEnv('TRANSLATE_API_KEY').trim()) return OPENROUTER_BASE_URL
+  if (provider === 'qwen' && readTranslateEnv('TRANSLATE_API_KEY').trim()) return QWEN_CLOUD_BASE_URL
   return (process.env.OPENAI_BASE_URL || '').trim()
 }
 
@@ -445,11 +443,7 @@ function resolveTranslationModel(config: {
   const explicitModel = readTranslateEnv('TRANSLATE_MODEL').trim()
   if (explicitModel) return explicitModel
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
-  if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
-  if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
-    return DEFAULT_QWEN_CLOUD_MODEL
-  }
-  if (config.provider === 'qwen') return DEFAULT_QWEN_MODEL
+  if (config.provider === 'qwen') return DEFAULT_QWEN_CLOUD_MODEL
   return ''
 }
 
@@ -494,7 +488,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
   if (requestedModelSelection) {
     if (
       requestedModelSelection.infrastructureProvider === 'google'
-      && (requestedModelSelection.engineProvider === 'gemini' || requestedModelSelection.engineProvider === 'gemma')
+      && requestedModelSelection.engineProvider === 'gemini'
     ) {
       const apiKey = (process.env.GEMINI_API_KEY || '').trim()
       if (!apiKey) {

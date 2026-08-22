@@ -160,36 +160,19 @@ Default configuration:
 - `GEMINI_API_KEY=...`
 - optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
 
-Qwen 3.5 9B via OpenRouter:
-
-```bash
-TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=qwen/qwen3.5-9b
-TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_API_KEY=your_openrouter_key
-```
-
-Qwen 3.7 Flash via QwenCloud:
+Qwen 3.7 Flash via QwenCloud (US region):
 
 ```bash
 TRANSLATE_PROVIDER=qwen
 TRANSLATE_MODEL=qwen/qwen3.7-flash
-TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+TRANSLATE_BASE_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1
 QWEN_CLOUD_API_KEY=your_qwencloud_key
-```
-
-Gemma 4 31B via Google Generative AI:
-
-```bash
-TRANSLATE_PROVIDER=gemma
-TRANSLATE_MODEL=gemma-4-31b-it
-GEMINI_API_KEY=your_google_ai_key
 ```
 
 Notes:
 
 - When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
-- Qwen 3.5 9B continues to use OpenRouter, while Qwen 3.7 Flash uses QwenCloud's international OpenAI-compatible endpoint.
+- Qwen 3.7 Flash uses QwenCloud's US OpenAI-compatible endpoint.
 - QwenCloud Flash requests use JSON Object output mode because QwenCloud currently limits JSON Schema mode to selected Max/Plus models.
 - For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false` when configured.
 - You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.

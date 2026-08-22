@@ -146,7 +146,7 @@ async function importRouteWithQwenEnv(args?: {
 }) {
   vi.resetModules()
   setQwenTranslateEnv({
-    baseUrl: args?.baseUrl ?? 'https://openrouter.ai/api/v1',
+    baseUrl: args?.baseUrl ?? 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
     apiKey: args?.apiKey ?? 'test-qwen-key',
     model: args?.model,
     extraBody: args?.extraBody,
@@ -566,7 +566,7 @@ describe('/api/translate/finalize route', () => {
 
   it('does not immediately retry gemini rate-limit errors when the provider asks for a long retry delay', async () => {
     mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
     ))
 
     const fetchMock = vi.fn()
@@ -578,7 +578,7 @@ describe('/api/translate/finalize route', () => {
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
       isFinal: true,
-      translationModel: 'gemma-4-31b-it',
+      translationModel: 'gemini-2.5-flash-lite',
     }) as never)
     const json = await res.json()
 
@@ -588,61 +588,8 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns an error for repeated gemma requests while a long provider retry delay is still active', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    let nowMs = 1_000_000
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
-
-    mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 59.616803365s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]',
-    ))
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    try {
-      const firstResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-      }) as never)
-      const firstJson = await firstResponse.json()
-
-      expect(firstResponse.status).toBe(502)
-      expect(firstJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-
-      nowMs += 1_000
-
-      const secondResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-        currentTurnPreviousState: {
-          sourceLanguage: 'en',
-          sourceText: 'Like that.',
-          translations: {
-            ko: '그렇게.',
-            ja: 'そんなふうに。',
-          },
-        },
-      }) as never)
-      const secondJson = await secondResponse.json()
-
-      expect(secondResponse.status).toBe(502)
-      expect(secondJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(fetchMock).not.toHaveBeenCalled()
-    } finally {
-      nowSpy.mockRestore()
-    }
-  })
-
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -655,8 +602,8 @@ describe('/api/translate/finalize route', () => {
 
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
+      baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.7-flash',
     })
 
     const res = await POST(makeJsonRequest({
@@ -702,8 +649,8 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports qwen via an OpenAI-compatible endpoint and strips think blocks', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('supports Qwen 3.7 Flash through the US QwenCloud endpoint and strips think blocks', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -726,8 +673,8 @@ describe('/api/translate/finalize route', () => {
 
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
+      baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.7-flash',
     })
 
     const res = await POST(makeJsonRequest({
@@ -740,15 +687,15 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.infrastructureProvider).toBe('qwencloud')
+    expect(json.model).toBe('qwen3.7-flash')
     expect(json.translationPromptTokens).toBe(14)
     expect(json.translationCompletionTokens).toBe(9)
     expect(json.translationTotalTokens).toBe(23)
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://openrouter.ai/api/v1/chat/completions',
+      'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions',
       expect.objectContaining({
         method: 'POST',
       }),
@@ -765,37 +712,18 @@ describe('/api/translate/finalize route', () => {
     const headers = requestInit.headers as Record<string, string>
 
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
-    expect(headers['X-Title']).toBe('mingle-app')
-    expect(body.model).toBe('qwen/qwen3.5-9b')
-    expect(body.extra_body).toBeUndefined()
+    expect(body.model).toBe('qwen3.7-flash')
+    expect(body.extra_body).toEqual({ enable_thinking: false })
     expect(body.response_format).toEqual({
-      type: 'json_schema',
-      json_schema: {
-        name: 'translate_finalize_response',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            ko: {
-              type: 'string',
-              description: 'Translated text for ko.',
-            },
-          },
-          required: ['ko'],
-          additionalProperties: false,
-        },
-      },
+      type: 'json_object',
     })
-    expect(body.reasoning).toEqual({
-      effort: 'none',
-      exclude: true,
-    })
+    expect(body.reasoning).toBeUndefined()
     expect(body.messages?.[0]?.role).toBe('system')
     expect(body.messages?.[1]?.role).toBe('user')
   })
 
-  it('uses a longer timeout for non-final qwen openrouter requests', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('uses a longer timeout for non-final QwenCloud requests', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -821,8 +749,8 @@ describe('/api/translate/finalize route', () => {
 
     try {
       const POST = await importRouteWithQwenEnv({
-        baseUrl: 'https://openrouter.ai/api/v1',
-        model: 'qwen/qwen3.5-9b',
+        baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+        model: 'qwen3.7-flash',
       })
 
       const res = await POST(makeJsonRequest({
@@ -841,42 +769,6 @@ describe('/api/translate/finalize route', () => {
     } finally {
       timeoutSpy.mockRestore()
     }
-  })
-
-  it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {
-          promptTokenCount: 11,
-          candidatesTokenCount: 22,
-          totalTokenCount: 33,
-        },
-      },
-    })
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemma')
-    expect(json.infrastructureProvider).toBe('google')
-    expect(json.model).toBe('gemma-4-31b-it')
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).not.toHaveBeenCalled()
-
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { model?: string }
-    expect(modelConfig.model).toBe('gemma-4-31b-it')
   })
 
   it('uses Qwen 3.7 Flash through QwenCloud on the v1.1.4 route', async () => {
@@ -928,7 +820,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('uses the request translation model before falling back to the DB preference lookup', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -995,7 +887,7 @@ describe('/api/translate/finalize route', () => {
     setQwenTranslateEnv({
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
+      model: 'qwen3.7-flash',
     })
     process.env.GEMINI_API_KEY = 'test-gemini-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
@@ -1024,7 +916,7 @@ describe('/api/translate/finalize route', () => {
     mockGetServerSession.mockResolvedValue(null)
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.externalUserId === 'anon_test_user') {
-        return { translationModel: 'qwen/qwen3.5-9b' }
+        return { translationModel: 'qwen/qwen3.7-flash' }
       }
       return null
     })
@@ -1048,7 +940,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.QWEN_CLOUD_API_KEY = 'test-qwen-cloud-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -1067,8 +959,8 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.infrastructureProvider).toBe('qwencloud')
+    expect(json.model).toBe('qwen3.7-flash')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
@@ -1078,7 +970,7 @@ describe('/api/translate/finalize route', () => {
     mockAppEventLogFindFirst.mockResolvedValue({ userId: 'user_from_session' })
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.id === 'user_from_session') {
-        return { translationModel: 'qwen/qwen3.5-9b' }
+        return { translationModel: 'qwen/qwen3.7-flash' }
       }
       return null
     })
@@ -1102,7 +994,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.QWEN_CLOUD_API_KEY = 'test-qwen-cloud-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -1122,8 +1014,8 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.infrastructureProvider).toBe('qwencloud')
+    expect(json.model).toBe('qwen3.7-flash')
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
         sessionKey: 'sess_test_user',
@@ -1136,8 +1028,8 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('defaults qwen to OpenRouter when only TRANSLATE_API_KEY is set', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('defaults qwen to the US QwenCloud endpoint when only TRANSLATE_API_KEY is set', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1158,7 +1050,7 @@ describe('/api/translate/finalize route', () => {
     vi.resetModules()
     setQwenTranslateEnv({
       apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
+      model: 'qwen3.7-flash',
     })
     delete process.env.TRANSLATE_BASE_URL
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
@@ -1176,8 +1068,8 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(json.model).toBe('qwen3.7-flash')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions')
 
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const body = JSON.parse(String(requestInit.body)) as {
@@ -1186,32 +1078,12 @@ describe('/api/translate/finalize route', () => {
     }
     const headers = requestInit.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
-    expect(body.response_format).toEqual({
-      type: 'json_schema',
-      json_schema: {
-        name: 'translate_finalize_response',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            ko: {
-              type: 'string',
-              description: 'Translated text for ko.',
-            },
-          },
-          required: ['ko'],
-          additionalProperties: false,
-        },
-      },
-    })
-    expect(body.reasoning).toEqual({
-      effort: 'none',
-      exclude: true,
-    })
+    expect(body.response_format).toEqual({ type: 'json_object' })
+    expect(body.reasoning).toBeUndefined()
   })
 
-  it('uses a redetect json schema for qwen OpenRouter requests on versioned routes', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('uses JSON Object mode for QwenCloud redetect requests on versioned routes', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1231,9 +1103,9 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setQwenTranslateEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
+      baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
       apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
+      model: 'qwen3.7-flash',
     })
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
@@ -1264,55 +1136,11 @@ describe('/api/translate/finalize route', () => {
     const body = JSON.parse(String(requestInit.body)) as {
       response_format?: Record<string, unknown>
     }
-    expect(body.response_format).toEqual({
-      type: 'json_schema',
-      json_schema: {
-        name: 'translate_finalize_response',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            sourceLanguage: {
-              type: 'string',
-              description: 'Detected source language code.',
-            },
-            sourceLanguagesMixed: {
-              type: 'boolean',
-              description: 'Whether the current utterance meaningfully mixes multiple source languages.',
-            },
-            sourceTextHasForeignScript: {
-              type: 'boolean',
-              description: 'Whether the current utterance contains substantive foreign script for the detected source language.',
-            },
-            en: {
-              type: 'string',
-              description: 'Translated text for en.',
-            },
-            ja: {
-              type: 'string',
-              description: 'Translated text for ja.',
-            },
-            ko: {
-              type: 'string',
-              description: 'Translated text for ko.',
-            },
-          },
-          required: [
-            'sourceLanguage',
-            'sourceLanguagesMixed',
-            'sourceTextHasForeignScript',
-            'en',
-            'ja',
-            'ko',
-          ],
-          additionalProperties: false,
-        },
-      },
-    })
+    expect(body.response_format).toEqual({ type: 'json_object' })
   })
 
   it('falls back to previous-state translations for non-final qwen provider errors', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1326,8 +1154,8 @@ describe('/api/translate/finalize route', () => {
 
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
+      baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.7-flash',
     })
 
     const res = await POST(makeJsonRequest({
