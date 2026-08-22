@@ -23,7 +23,6 @@ DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
 DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
 # Keep this only when Cloudflare should be the default device tunnel provider.
 DEVBOX_TUNNEL_PROVIDER=cloudflare
-DEVBOX_LOCAL_HOST=127.0.0.1
 DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ
 RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551
 RN_ADMOB_APP_ID_ANDROID=ca-app-pub-7057041881494735~1471126891
