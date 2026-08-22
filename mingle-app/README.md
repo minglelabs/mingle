@@ -372,7 +372,6 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY` (must match the STT server's effective `end` or `fin` mode so the matching speech-split control is rendered)
 - `MINGLE_API_FALLBACK_SITE_URL` (optional fallback web target, defaults to the current Vercel deployment)
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Fly deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional override, defaults to the current 1.0.11 production web deployment)

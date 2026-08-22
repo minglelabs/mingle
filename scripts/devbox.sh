@@ -1565,33 +1565,6 @@ write_runtime_env_from_vault_path() {
   log "loaded ${count} runtime keys from vault (${target})"
 }
 
-resolve_devbox_soniox_segmentation_strategy() {
-  local runtime_stt_env_file="${1:-}"
-  local value=""
-
-  # Keep the app's public UI flag aligned with the exact precedence used by
-  # mingle-stt: worktree-local overrides, then .env, then Vault/runtime env.
-  if [[ -f "$STT_ENV_FILE" ]]; then
-    value="$(read_env_value_from_file SONIOX_SEGMENTATION_STRATEGY "$STT_ENV_FILE" || true)"
-  fi
-  if [[ -z "$value" && -f "$ROOT_DIR/mingle-stt/.env" ]]; then
-    value="$(read_env_value_from_file SONIOX_SEGMENTATION_STRATEGY "$ROOT_DIR/mingle-stt/.env" || true)"
-  fi
-  if [[ -z "$value" && -n "$runtime_stt_env_file" && -f "$runtime_stt_env_file" ]]; then
-    value="$(read_env_value_from_file SONIOX_SEGMENTATION_STRATEGY "$runtime_stt_env_file" || true)"
-  fi
-  if [[ -z "$value" ]]; then
-    value="${SONIOX_SEGMENTATION_STRATEGY:-}"
-  fi
-  value="$(trim_whitespace "$value")"
-
-  if [[ "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" == "end" ]]; then
-    printf 'end'
-  else
-    printf 'fin'
-  fi
-}
-
 resolve_vault_paths() {
   local app_override="${1:-}"
   local stt_override="${2:-}"
@@ -4882,12 +4855,10 @@ cmd_up() {
   local runtime_admob_app_id_android=""
   local runtime_admob_banner_unit_id_ios=""
   local runtime_admob_banner_unit_id_android=""
-  local runtime_soniox_segmentation_strategy=""
   runtime_app_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-runtime-env.XXXXXX")"
   runtime_stt_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-stt-runtime-env.XXXXXX")"
   write_runtime_env_from_vault_path "app" "$DEVBOX_VAULT_APP_PATH" "$runtime_app_env_file"
   write_runtime_env_from_vault_path "stt" "$DEVBOX_VAULT_STT_PATH" "$runtime_stt_env_file"
-  runtime_soniox_segmentation_strategy="$(resolve_devbox_soniox_segmentation_strategy "$runtime_stt_env_file")"
   runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_app_env_file")"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
@@ -5163,7 +5134,6 @@ $(ngrok_plan_capacity_hint)"
     export AUTH_SECRET="$runtime_nextauth_secret"
     export NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT"
     export NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL"
-    export NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY="$runtime_soniox_segmentation_strategy"
     export NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE"
     export RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios"
     export RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android"
@@ -5204,7 +5174,6 @@ $(ngrok_plan_capacity_hint)"
       AUTH_SECRET="$runtime_nextauth_secret" \
       NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT" \
       NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
-      NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY="$runtime_soniox_segmentation_strategy" \
       NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
       RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios" \
       RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \

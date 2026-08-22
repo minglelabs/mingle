@@ -16,28 +16,14 @@ import {
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  resolveSonioxUiSegmentationStrategy,
   shouldShowEndpointTuningControl,
   shouldShowManualSilenceControl,
 } from './live-phone-demo.preferences'
 
-describe('Soniox segmentation UI strategy', () => {
-  it('shows only the endpoint tuning control in end mode', () => {
-    expect(resolveSonioxUiSegmentationStrategy('end')).toBe('end')
-    expect(shouldShowEndpointTuningControl('end')).toBe(true)
-    expect(shouldShowManualSilenceControl('end')).toBe(false)
-  })
-
-  it('shows only the manual silence control in fin mode', () => {
-    expect(resolveSonioxUiSegmentationStrategy('fin')).toBe('fin')
-    expect(shouldShowEndpointTuningControl('fin')).toBe(false)
-    expect(shouldShowManualSilenceControl('fin')).toBe(true)
-  })
-
-  it('treats unsupported and llm values as the effective fin UI', () => {
-    expect(resolveSonioxUiSegmentationStrategy('llm')).toBe('fin')
-    expect(resolveSonioxUiSegmentationStrategy('unexpected')).toBe('fin')
-    expect(resolveSonioxUiSegmentationStrategy(null)).toBe('fin')
+describe('Soniox endpoint UI strategy', () => {
+  it('shows only the endpoint tuning control', () => {
+    expect(shouldShowEndpointTuningControl()).toBe(true)
+    expect(shouldShowManualSilenceControl()).toBe(false)
   })
 })
 
