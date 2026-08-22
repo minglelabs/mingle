@@ -20,6 +20,12 @@ Standalone STT relay server for Mingle.
 - `SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL` (optional, default: `0`, range: `0..3`)
 - `SONIOX_ENDPOINT_SENSITIVITY` (optional, default: `0`, range: `-1..1`)
 
+The web app should set the public `NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY`
+value to the same effective mode so it can render the matching control: `end`
+shows the endpoint tuning slider, while `fin` (and the current `llm` fallback)
+shows the manual silence-duration slider. `scripts/devbox` mirrors the STT
+strategy into the web app automatically.
+
 Soniox segmentation resolves to one effective runtime mode:
 
 - `fin` disables provider endpoint detection and uses the server's manual-finalize

@@ -15,8 +15,24 @@ export const MAX_SONIOX_ENDPOINT_TUNING_STEP = 4
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
 
-export function shouldShowSpeechSplitControl(): boolean {
-  return true
+export type SonioxUiSegmentationStrategy = 'fin' | 'end'
+
+export function resolveSonioxUiSegmentationStrategy(rawValue: unknown = process.env.NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY): SonioxUiSegmentationStrategy {
+  return typeof rawValue === 'string' && rawValue.trim().toLowerCase() === 'end'
+    ? 'end'
+    : 'fin'
+}
+
+export function shouldShowManualSilenceControl(
+  strategy: SonioxUiSegmentationStrategy = resolveSonioxUiSegmentationStrategy(),
+): boolean {
+  return strategy === 'fin'
+}
+
+export function shouldShowEndpointTuningControl(
+  strategy: SonioxUiSegmentationStrategy = resolveSonioxUiSegmentationStrategy(),
+): boolean {
+  return strategy === 'end'
 }
 export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
 export type LivePhoneDemoInputMode = 'voice' | 'text'

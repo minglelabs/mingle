@@ -322,3 +322,15 @@
   - Clarified the control for users who did not understand “Speech Split Timing”: the Korean label is now “한 번에 묶는 말 길이” (“speech length per utterance”), and the short/long labels sit at the left and right ends of a narrower slider so the direction is immediately visible. The five-step snapping behavior and active-session lock remain unchanged.
   - Kept the existing legacy namespace lock behavior and did not change the mobile/API version (`v1.1.4`) because the new field is additive and backward-compatible.
 - Tests: STT segmentation tests cover per-session delay selection, fallback, and bounds. Account preference tests cover hydration, API defaults, PATCH clamping, and persistence. Web, iOS, and Android start paths now share the same endpoint field.
+
+## 2026-08-22 - Strategy-Specific Speech Split Control
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.preferences.ts`
+- Issue: The five-step endpoint control was rendered unconditionally because the feature gate always returned `true`. This made the UI misleading when the STT server was switched back to `fin`, where Soniox endpoint detection is disabled and the server uses the manual silence-duration scheduler.
+- User impact: Users could see a control that did not match the active segmentation behavior. During `end` testing, the endpoint control needed to be visible by itself; during `fin` operation, users needed the original silence-duration control instead.
+- Resolution:
+  - Restored the original `500..3000ms` manual silence slider for effective `fin` UI behavior.
+  - Restricted the five-step endpoint tuning slider to `end` UI behavior, keeping the two controls mutually exclusive.
+  - Added separate labels so `fin` keeps the silence-duration wording while `end` uses the clearer “speech length per utterance” wording.
+  - Added `NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY` as the web UI mirror of the STT strategy. `scripts/devbox` derives it from the same worktree STT environment, so switching the devbox STT mode switches the visible control after restart.
+- Tests: Added strategy resolver tests covering `end`, `fin`, and unsupported/`llm` fallback behavior. The control remains disabled while an STT session is active.

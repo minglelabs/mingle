@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,17 +33,20 @@ import {
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_SILENCE_MS,
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
+  MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  shouldShowSpeechSplitControl,
+  shouldShowEndpointTuningControl,
+  shouldShowManualSilenceControl,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -845,6 +848,21 @@ function findTopVisibleUtteranceDateLabel(
   return formatScrollDateLabel(anchor.createdAtMs, locale)
 }
 
+function deriveRangeValueFromPointer(
+  event: ReactPointerEvent<HTMLInputElement>,
+  min: number,
+  max: number,
+  step: number,
+): number {
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (rect.width <= 0) return min
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  const raw = min + ((max - min) * ratio)
+  const stepped = min + (Math.round((raw - min) / step) * step)
+  const bounded = Math.max(min, Math.min(max, stepped))
+  return Number.isFinite(bounded) ? bounded : min
+}
+
 function isValidFeedbackEmailAddress(value: string): boolean {
   const normalized = value.trim()
   if (!normalized) return false
@@ -1030,6 +1048,7 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  endpointTuningLabel: string
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
   translationModelLabel: string
@@ -1294,6 +1313,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   switchLiveRoomToastLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  endpointTuningLabel,
   endpointTuningShortLabel,
   endpointTuningLongLabel,
   translationModelLabel,
@@ -5380,7 +5400,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {shouldShowSpeechSplitControl() && (
+                            {shouldShowManualSilenceControl() && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
@@ -5389,6 +5409,85 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               >
                                 <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
                                   {silenceFinalizeLabel}
+                                </span>
+                                <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="range"
+                                  min={MIN_SONIOX_SILENCE_MS}
+                                  max={MAX_SONIOX_SILENCE_MS}
+                                  step={100}
+                                  value={sonioxManualFinalizeSilenceMs}
+                                  disabled={isSilenceFinalizeSliderDisabled}
+                                  onPointerDown={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    event.currentTarget.setPointerCapture(event.pointerId)
+                                    const next = deriveRangeValueFromPointer(
+                                      event,
+                                      MIN_SONIOX_SILENCE_MS,
+                                      MAX_SONIOX_SILENCE_MS,
+                                      100,
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  onPointerMove={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    if (event.buttons !== 1) return
+                                    const next = deriveRangeValueFromPointer(
+                                      event,
+                                      MIN_SONIOX_SILENCE_MS,
+                                      MAX_SONIOX_SILENCE_MS,
+                                      100,
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  onPointerUp={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                      event.currentTarget.releasePointerCapture(event.pointerId)
+                                    }
+                                    flushAccountPreferencesSync()
+                                  }}
+                                  onChange={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    const next = Math.max(
+                                      MIN_SONIOX_SILENCE_MS,
+                                      Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                  aria-label={`${silenceFinalizeLabel} milliseconds`}
+                                />
+                                {isSilenceFinalizeSliderLocked && (
+                                  <>
+                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                      {silenceFinalizeLockedMessage}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label={silenceFinalizeLockedButtonLabel}
+                                      aria-describedby={silenceFinalizeLockedDescriptionId}
+                                      onFocus={handleSilenceFinalizeLockedInteraction}
+                                      onClick={handleSilenceFinalizeLockedInteraction}
+                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </label>
+                            )}
+
+                            {shouldShowEndpointTuningControl() && (
+                            <label className="block">
+                              <div
+                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                }`}
+                              >
+                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
+                                  {endpointTuningLabel}
                                 </span>
                                 <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
                               </div>
@@ -5415,7 +5514,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       window.setTimeout(flushAccountPreferencesSync, 0)
                                     }}
                                     className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                    aria-label={silenceFinalizeLabel}
+                                    aria-label={endpointTuningLabel}
                                   />
                                   {isSilenceFinalizeSliderLocked && (
                                     <>
