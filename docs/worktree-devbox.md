@@ -23,6 +23,9 @@ DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
 DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
 # Keep this only when Cloudflare should be the default device tunnel provider.
 DEVBOX_TUNNEL_PROVIDER=cloudflare
+DEVBOX_NGROK_WEB_DOMAIN=unalienated-neurotically-ela.ngrok-free.dev
+DEVBOX_GOOGLE_CLOUD_PROJECT=mingle-486707
+DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED=true
 RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551
 RN_ADMOB_APP_ID_ANDROID=ca-app-pub-7057041881494735~1471126891
 RN_ADMOB_BANNER_UNIT_ID_IOS=ca-app-pub-7057041881494735/3768106846
@@ -30,15 +33,7 @@ RN_ADMOB_BANNER_UNIT_ID_ANDROID=ca-app-pub-7057041881494735/6522262692
 MINGLE_REALTIME_SECRET=...
 ```
 
-Google OAuth redirect URI 자동 동기화를 사용할 때만 아래 두 값도 추가합니다.
-
-```dotenv
-DEVBOX_GOOGLE_CLOUD_PROJECT=mingle-486707
-DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED=true
-```
-
-고정 ngrok 도메인을 계속 사용할 때만 `DEVBOX_NGROK_WEB_DOMAIN`도 이 목록에 추가합니다.
-Cloudflare named tunnel만 사용한다면 추가하지 않습니다.
+고정 ngrok 도메인을 사용하지 않는다면 `DEVBOX_NGROK_WEB_DOMAIN`은 제거합니다.
 
 `VAULT_ADDR`는 현재처럼 `.zshrc`에서 export해도 됩니다. devbox는 이미 export된 값을 우선 사용합니다.
 `VAULT_NAMESPACE`는 사용하는 Vault가 namespace를 요구할 때만 추가합니다. `VAULT_TOKEN`은 파일에
