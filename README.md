@@ -73,7 +73,7 @@ scripts/devbox status
   worktree root `.env.local` (or the service env files), devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
 - Devbox keeps only worktree-local runtime settings in `.devbox.env`; persistent shared settings
-  (Cloudflare token/hostnames, fallback URLs, AdMob IDs, the shared Vault path, Team ID, and machine-wide
+  (Cloudflare token/hostnames, optional fallback URL overrides, AdMob IDs, the shared Vault path, Team ID, and machine-wide
   paths) belong in the MAIN worktree root `.env.local` and Vault. Service `.env.local` files
   remain for service-specific values and are only legacy fallbacks for shared keys.
 - Frontend and app build entrypoints read the main root `.env.local` for shared values and `.devbox.env`

@@ -204,7 +204,7 @@ scripts/devbox bootstrap
     (`web/stt/messaging/metro` + `ngrok inspector`)
   - 현재 워크트리 경로 해시를 기준으로 기본 포트 슬롯을 안정적으로 선택하고, 충돌 시 다음 슬롯으로 이동
   - `.devbox.env`에는 현재 워크트리의 포트/URL/profile 같은 파생 실행값만 기록
-  - Cloudflare token/hostname, fallback URL, AdMob ID, Vault 경로, Team ID 같은 공유값은
+  - Cloudflare token/hostname, 필요할 때만 지정하는 fallback URL override, AdMob ID, Vault 경로, Team ID 같은 공유값은
     메인 워크트리 루트 `.env.local`과 Vault에서 읽음
   - `ngrok.mobile.local.yml` 생성
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
