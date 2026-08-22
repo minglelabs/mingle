@@ -53,7 +53,7 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
   };
 
   return (
-    <main className="h-svh w-full overflow-y-auto overscroll-contain bg-[#f9f9f7] px-4 py-6 text-[#0b0b0b]">
+    <main id="admin-conversations-scroll" className="h-svh w-full overflow-y-auto overscroll-contain bg-[#f9f9f7] px-4 py-6 text-[#0b0b0b]">
       <div className="mx-auto max-w-6xl pb-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-2xl font-semibold">대화록 조회</h1><p className="mt-1 text-sm text-[#6f6d68]">외부 사용자 ID로 저장된 대화방과 메시지를 확인합니다.</p></div>

@@ -202,11 +202,11 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
       const cached = readSessionCache<ConversationData>(cacheKey);
       const usableCached = Boolean(cached && (!props.channelId || cached.selectedChannel));
       if (usableCached && cached && active) {
-        startTransition(() => {
-          setData(cached);
-          setIsLoading(false);
-          setResolvedKey(cacheKey);
-        });
+        setData(cached);
+        setIsLoading(false);
+        setResolvedKey(cacheKey);
+        setError("");
+        setHasUpdate(false);
       }
       try {
         const response = await fetch(`/admin/conversations/data?${query.toString()}`, { cache: "no-store" });
@@ -348,7 +348,6 @@ export function AdminConversationRoom({
   const pageRef = useRef(initialPage);
   const totalPagesRef = useRef(totalPages);
   const messageCountRef = useRef(initialMessageCount);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = search.trim().toLocaleLowerCase();
 
   const loadMessagesPage = useCallback(async (nextPage: number, replace: boolean, background = false) => {
@@ -419,10 +418,15 @@ export function AdminConversationRoom({
   }, [cacheKey, loadMessagesPage]);
 
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || !hasLoadedInitial || !hasNext || isLoading || element.scrollHeight > element.clientHeight + 80) return;
-    void loadOlderMessages();
-  }, [hasLoadedInitial, hasNext, isLoading, loadOlderMessages, messages.length]);
+    const scrollContainer = document.getElementById("admin-conversations-scroll");
+    if (!scrollContainer || !hasLoadedInitial || !hasNext) return;
+    const loadIfNearBottom = () => {
+      if (scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < 640) void loadOlderMessages();
+    };
+    scrollContainer.addEventListener("scroll", loadIfNearBottom, { passive: true });
+    loadIfNearBottom();
+    return () => scrollContainer.removeEventListener("scroll", loadIfNearBottom);
+  }, [hasLoadedInitial, hasNext, loadOlderMessages, isLoading, messages.length]);
 
   const visibleMessages = useMemo(() => {
     const deletionFiltered = messageDeleted === "all"
@@ -462,7 +466,7 @@ export function AdminConversationRoom({
           <div className="flex w-full flex-col items-end gap-2 md:w-80"><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /><label className="block w-full text-xs font-semibold text-[#6f6d68]" htmlFor="room-message-search">현재 불러온 메시지 검색</label><input id="room-message-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="메시지 내용·언어 검색" className="w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" /><p className="w-full text-right text-[11px] text-[#898781]">{visibleMessages.length} / {messages.length}개 표시</p></div>
         </div>
       </div>
-      <div ref={scrollRef} onScroll={(event) => { const element = event.currentTarget; if (element.scrollHeight - element.scrollTop - element.clientHeight < 640) void loadOlderMessages(); }} className="h-[calc(100svh-310px)] min-h-[360px] overflow-y-auto overscroll-contain p-4">
+      <div className="p-4">
         <div className="space-y-3">
           {!hasLoadedInitial && isLoading ? <p className="py-10 text-center text-sm text-[#898781]">메시지를 불러오는 중...</p> : null}
           {visibleMessages.map((message) => (
