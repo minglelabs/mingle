@@ -13,6 +13,7 @@ import {
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
+  getConversationEventsWsUrl,
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
@@ -69,6 +70,7 @@ function createLocalStorageMock(seed: Record<string, string> = {}) {
 describe('use-realtime-stt pure logic', () => {
   const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL
   const originalWsPath = process.env.NEXT_PUBLIC_WS_PATH
+  const originalMessagingWsUrl = process.env.NEXT_PUBLIC_MESSAGING_WS_URL
 
   afterEach(() => {
     if (originalWsUrl === undefined) {
@@ -80,6 +82,11 @@ describe('use-realtime-stt pure logic', () => {
       delete process.env.NEXT_PUBLIC_WS_PATH
     } else {
       process.env.NEXT_PUBLIC_WS_PATH = originalWsPath
+    }
+    if (originalMessagingWsUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_MESSAGING_WS_URL
+    } else {
+      process.env.NEXT_PUBLIC_MESSAGING_WS_URL = originalMessagingWsUrl
     }
     vi.unstubAllGlobals()
   })
@@ -115,6 +122,32 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('derives the conversation-events push URL from the same origin as the STT websocket', () => {
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://mingle-1-1-4-production.up.railway.app/stt'
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('wss://mingle-1-1-4-production.up.railway.app/conversation-events')
+  })
+
+  it('prefers the dedicated messaging WebSocket URL when configured', () => {
+    process.env.NEXT_PUBLIC_MESSAGING_WS_URL = 'wss://messaging.example.com'
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://stt.example.com/stt'
+
+    expect(getConversationEventsWsUrl()).toBe('wss://messaging.example.com/conversation-events')
+  })
+
+  it('derives the conversation-events push URL from an inferred (non-env-override) ws URL too', () => {
+    delete process.env.NEXT_PUBLIC_WS_URL
+    delete process.env.NEXT_PUBLIC_WS_PATH
+    vi.stubGlobal('window', {
+      location: { hostname: 'mingle.local', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('ws://mingle.local:3001/conversation-events')
   })
 
   it('parses only recent stored utterances without full-history parsing', () => {
@@ -926,6 +959,44 @@ describe('use-realtime-stt pure logic', () => {
       partialTranslations: {},
       languages: ['en', 'ko'],
     })).toBeNull()
+  })
+
+  it('stamps a live utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
+        language: 'en',
+      },
+      partialTranscript: 'Still speaking',
+      partialLang: 'en-US',
+      partialTranslations: {},
+      languages: ['en'],
+      viewerUserId: 'user-1',
+      viewerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.speakerUserId).toBe('user-1')
+    expect(built?.speakerImage).toBe('https://cdn/me.jpg')
+  })
+
+  it('stamps a locally finalized utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildFinalizedUtterancePayload({
+      rawText: 'hello',
+      rawLanguage: 'en',
+      languages: ['en'],
+      partialTranslations: {},
+      utteranceSerial: 1,
+      nowMs: 1700000000000,
+      speakerUserId: 'user-1',
+      speakerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.utterance.speakerUserId).toBe('user-1')
+    expect(built?.utterance.speakerImage).toBe('https://cdn/me.jpg')
   })
 
   it('builds live utterances for all pending speakers in chronological order', () => {

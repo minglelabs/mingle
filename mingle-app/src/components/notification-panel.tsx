@@ -1,13 +1,13 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { getConversationDictionary } from "@/i18n/conversations";
+import { resolveLegalDocumentLocale } from "@/i18n/config";
+import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
-import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
+import SlideSurface from "@/components/slide-surface";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NotificationPanelProps = {
   open: boolean;
@@ -17,7 +17,7 @@ type NotificationPanelProps = {
   nativeTopInsetPx?: number;
   onClose: () => void;
   onOpenProfile: (userId: string) => void;
-  onUnreadCountChange: (count: number) => void;
+  onUnreadCountChange?: (count: number) => void;
 };
 
 type NotificationRecord = {
@@ -33,48 +33,6 @@ type NotificationRecord = {
   };
   isFollowing: boolean;
 };
-
-type NotificationCopy = {
-  buttonLabel: string;
-  title: string;
-  closeAction: string;
-  loadingLabel: string;
-  emptyLabel: string;
-  unreadSectionLabel: string;
-  readSectionLabel: string;
-  followMessage: string;
-  followBackAction: string;
-  followingAction: string;
-  loadError: string;
-  followError: string;
-};
-
-const PANEL_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const NOTIFICATION_SWIPE_THRESHOLD_PX = 72;
-const NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND = 650;
-
-function getNotificationCopy(dictionary: AppDictionary, locale: AppLocale): NotificationCopy {
-  const copy = getConversationDictionary(locale, dictionary);
-  const isKorean = locale === "ko";
-
-  return {
-    buttonLabel: copy.notificationsButtonLabel ?? (isKorean ? "알림" : "Notifications"),
-    title: copy.notificationsTitle ?? (isKorean ? "알림" : "Notifications"),
-    closeAction: copy.notificationsCloseAction ?? (isKorean ? "알림 닫기" : "Close notifications"),
-    loadingLabel: copy.notificationsLoadingLabel ?? (isKorean ? "알림을 불러오는 중" : "Loading notifications"),
-    emptyLabel: copy.notificationsEmptyLabel ?? (isKorean ? "아직 알림이 없어요" : "No notifications yet"),
-    unreadSectionLabel: copy.notificationsUnreadSectionLabel ?? (isKorean ? "읽지 않음" : "Unread"),
-    readSectionLabel: copy.notificationsReadSectionLabel ?? (isKorean ? "읽음" : "Read"),
-    followMessage: copy.notificationsFollowMessage ?? (isKorean ? "님이 회원님을 팔로우했습니다." : "followed you."),
-    followBackAction: copy.notificationsFollowBackAction ?? (isKorean ? "맞팔로우" : "Follow back"),
-    followingAction: copy.notificationsFollowingAction ?? (isKorean ? "팔로잉" : "Following"),
-    loadError: copy.notificationsLoadError ?? (isKorean ? "알림을 불러오지 못했습니다." : "Could not load notifications."),
-    followError: copy.notificationsFollowError ?? (isKorean ? "팔로우하지 못했습니다." : "Could not follow this user."),
-  };
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -104,7 +62,11 @@ function parseNotification(value: unknown): NotificationRecord | null {
   };
 }
 
-function formatNotificationTime(isoTimestamp: string, locale: AppLocale): string {
+function formatNotificationTime(
+  isoTimestamp: string,
+  locale: AppLocale,
+  copy: Pick<NotificationCopy, "justNow" | "minutesAgo" | "hoursAgo">,
+): string {
   const timestamp = new Date(isoTimestamp);
   if (Number.isNaN(timestamp.getTime())) return "";
 
@@ -112,18 +74,12 @@ function formatNotificationTime(isoTimestamp: string, locale: AppLocale): string
   const elapsedMinutes = Math.floor(elapsedMs / 60_000);
   const elapsedHours = Math.floor(elapsedMs / 3_600_000);
 
-  if (locale === "ko") {
-    if (elapsedMinutes < 1) return "방금 전";
-    if (elapsedMinutes < 60) return `${elapsedMinutes}분 전`;
-    if (elapsedHours < 24) return `${elapsedHours}시간 전`;
-  } else {
-    if (elapsedMinutes < 1) return "Just now";
-    if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-    if (elapsedHours < 24) return `${elapsedHours}h ago`;
-  }
+  if (elapsedMinutes < 1) return copy.justNow;
+  if (elapsedMinutes < 60) return copy.minutesAgo.replace("{count}", String(elapsedMinutes));
+  if (elapsedHours < 24) return copy.hoursAgo.replace("{count}", String(elapsedHours));
 
   try {
-    return new Intl.DateTimeFormat(locale, {
+    return new Intl.DateTimeFormat(resolveLegalDocumentLocale(locale), {
       month: "numeric",
       day: "numeric",
       hour: "numeric",
@@ -163,11 +119,7 @@ export default function NotificationPanel({
   onOpenProfile,
   onUnreadCountChange,
 }: NotificationPanelProps) {
-  const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
-  const copy = useMemo(() => getNotificationCopy(dictionary, locale), [dictionary, locale]);
+  const copy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -175,30 +127,12 @@ export default function NotificationPanel({
   const [loadError, setLoadError] = useState(false);
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
   const [followErrorId, setFollowErrorId] = useState<string | null>(null);
-  const [viewportWidth, setViewportWidth] = useState(1);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!open || typeof window === "undefined") return;
-    isLeavingRef.current = false;
-    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-    void motionControls.start({ x: 0, transition: PANEL_TRANSITION });
-    return () => window.removeEventListener("resize", syncViewportWidth);
-  }, [motionControls, open]);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
     const normalizedCount = Math.max(0, Math.floor(nextCount));
     setUnreadCount(normalizedCount);
-    onUnreadCountChange(normalizedCount);
+    onUnreadCountChange?.(normalizedCount);
   }, [onUnreadCountChange]);
 
   const markAllNotificationsAsRead = useCallback(() => {
@@ -214,7 +148,7 @@ export default function NotificationPanel({
   }, [updateUnreadCount]);
 
   const loadNotifications = useCallback(async (): Promise<{ unreadCount: number } | null> => {
-    if (!enabled) return null;
+    if (!enabled || !open) return null;
 
     abortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -249,24 +183,20 @@ export default function NotificationPanel({
     } finally {
       if (!controller.signal.aborted) setIsLoading(false);
     }
-  }, [enabled, updateUnreadCount]);
+  }, [enabled, open, updateUnreadCount]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !open) {
       abortControllerRef.current?.abort();
-      setNotifications([]);
-      setHasLoaded(false);
-      setLoadError(false);
-      updateUnreadCount(0);
+      if (!enabled) {
+        setNotifications([]);
+        setHasLoaded(false);
+        setLoadError(false);
+        updateUnreadCount(0);
+      }
       return;
     }
 
-    void loadNotifications();
-    return () => abortControllerRef.current?.abort();
-  }, [enabled, loadNotifications, updateUnreadCount]);
-
-  useEffect(() => {
-    if (!open || !enabled) return;
     let isCurrent = true;
     void loadNotifications().then((result) => {
       if (!isCurrent || !result || result.unreadCount <= 0) return;
@@ -274,38 +204,18 @@ export default function NotificationPanel({
     });
     return () => {
       isCurrent = false;
+      abortControllerRef.current?.abort();
     };
-  }, [enabled, loadNotifications, markAllNotificationsAsRead, open]);
+  }, [enabled, loadNotifications, markAllNotificationsAsRead, open, updateUnreadCount]);
 
   useEffect(() => {
     if (!open) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
-
-  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
-
-  const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    if (
-      info.offset.x >= NOTIFICATION_SWIPE_THRESHOLD_PX
-      || info.velocity.x >= NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND
-    ) {
-      isLeavingRef.current = true;
-      await motionControls.start({ x: "100%", transition: PANEL_TRANSITION });
-      if (isMountedRef.current) onClose();
-      return;
-    }
-    await motionControls.start({ x: 0, transition: PANEL_TRANSITION });
-  }, [motionControls, onClose]);
 
   const markAsRead = useCallback((notification: NotificationRecord) => {
     if (notification.isRead) return;
@@ -363,7 +273,7 @@ export default function NotificationPanel({
 
   const renderNotification = (notification: NotificationRecord) => {
     const actorName = notification.actor.name
-      || (notification.actor.handle ? formatHandle(notification.actor.handle) : (locale === "ko" ? "Mingle 사용자" : "Mingle user"));
+      || (notification.actor.handle ? formatHandle(notification.actor.handle) : (dictionary.connect.userFallbackLabel ?? "Mingle user"));
     const actorHandle = notification.actor.handle ? formatHandle(notification.actor.handle) : "";
     const isPending = pendingFollowIds.has(notification.id);
 
@@ -388,7 +298,7 @@ export default function NotificationPanel({
               <span className="mt-0.5 block truncate text-[12px] text-gray-500">
                 {actorHandle || "\u00A0"}
                 {actorHandle ? " · " : ""}
-                {formatNotificationTime(notification.createdAt, locale)}
+                {formatNotificationTime(notification.createdAt, locale, copy)}
               </span>
             </span>
           </button>
@@ -418,42 +328,13 @@ export default function NotificationPanel({
   };
 
   return (
-    <AnimatePresence initial={false}>
-      {open ? (
-        <motion.div
-          className="absolute inset-0 z-[100] overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          role="presentation"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 h-full w-full bg-slate-950/25"
-            onClick={onClose}
-            aria-label={copy.closeAction}
-          />
-          <motion.aside
-            initial={{ x: "100%" }}
-            animate={motionControls}
-            exit={{ x: "100%" }}
-            transition={PANEL_TRANSITION}
-            drag="x"
-            dragControls={dragControls}
-            dragDirectionLock
-            dragListener={false}
-            dragConstraints={{ left: 0, right: viewportWidth }}
-            dragElastic={0.08}
-            dragMomentum={false}
-            onPointerDown={handlePanelPointerDown}
-            onDragEnd={handleDragEnd}
-            className="absolute inset-y-0 right-0 flex w-full max-w-[430px] flex-col bg-white shadow-2xl"
-            style={{ touchAction: "pan-y" }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={copy.title}
-          >
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
+      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+      style={{ touchAction: "pan-y" }}
+    >
             <header
               className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4"
               style={{
@@ -487,7 +368,7 @@ export default function NotificationPanel({
                     onClick={() => void loadNotifications()}
                     className="rounded-full bg-slate-900 px-4 py-2 text-[13px] font-semibold text-white"
                   >
-                    {locale === "ko" ? "다시 시도" : "Try again"}
+                    {copy.retryAction}
                   </button>
                 </div>
               ) : isLoading && !hasLoaded ? (
@@ -518,9 +399,6 @@ export default function NotificationPanel({
                 </div>
               )}
             </div>
-          </motion.aside>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    </SlideSurface>
   );
 }

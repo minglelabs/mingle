@@ -696,8 +696,16 @@ type NativeNavigationStateCommand = {
   payload?: {
     canGoBack?: boolean;
     canGoForward?: boolean;
+    canHandleNativeBack?: boolean;
     canHandleAndroidBack?: boolean;
     url?: string;
+    // Full-screen overlays (e.g. the profile screen) that render on top of a
+    // conversation room without changing the URL need to temporarily disable
+    // iOS's screen-edge swipe-back gesture themselves — otherwise a tap near
+    // the left edge (where another member's chat-bubble avatar sits) can be
+    // captured by WKWebView's own edge-pan recognizer instead, popping the
+    // room's back-forward list and silently dismissing the overlay.
+    suppressEdgeSwipe?: boolean;
   };
 };
 
@@ -1801,6 +1809,7 @@ function AppInner(): React.JSX.Element {
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
   const [canWebViewHandleAndroidBack, setCanWebViewHandleAndroidBack] = useState(false);
+  const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
@@ -2200,14 +2209,14 @@ function AppInner(): React.JSX.Element {
   ), []);
 
   const handleNativeLocationCheck = useCallback(async (requestId?: string) => {
-    const module = getNativeLocationModule();
-    if (!module?.checkLocationPermission) {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.checkLocationPermission) {
       emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
       return;
     }
 
     try {
-      const result = await module.checkLocationPermission();
+      const result = await nativeLocationModule.checkLocationPermission();
       emitLocationToWeb({
         type: 'permission',
         permission: normalizeNativeLocationPermission(result?.permission),
@@ -2220,14 +2229,14 @@ function AppInner(): React.JSX.Element {
   }, [emitLocationToWeb, getNativeLocationModule]);
 
   const handleNativeLocationRequest = useCallback(async (requestId?: string) => {
-    const module = getNativeLocationModule();
-    if (!module?.requestLocationPermission || !module.getCurrentLocation) {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.requestLocationPermission || !nativeLocationModule.getCurrentLocation) {
       emitLocationToWeb({ type: 'error', code: 'location_unavailable', ...(requestId ? { requestId } : {}) });
       return;
     }
 
     try {
-      const permissionResult = await module.requestLocationPermission();
+      const permissionResult = await nativeLocationModule.requestLocationPermission();
       const permission = normalizeNativeLocationPermission(permissionResult?.permission);
       emitLocationToWeb({
         type: 'permission',
@@ -2237,7 +2246,7 @@ function AppInner(): React.JSX.Element {
       });
       if (permission !== 'granted') return;
 
-      const location = await module.getCurrentLocation();
+      const location = await nativeLocationModule.getCurrentLocation();
       const latitude = typeof location?.latitude === 'number' ? location.latitude : NaN;
       const longitude = typeof location?.longitude === 'number' ? location.longitude : NaN;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -2948,7 +2957,12 @@ function AppInner(): React.JSX.Element {
       if (typeof parsed.payload?.canGoForward === 'boolean') {
         setCanWebViewGoForward(parsed.payload.canGoForward);
       }
-      if (typeof parsed.payload?.canHandleAndroidBack === 'boolean') {
+      if (typeof parsed.payload?.canHandleNativeBack === 'boolean') {
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleNativeBack);
+      }
+      if (typeof parsed.payload?.suppressEdgeSwipe === 'boolean') {
+        setIsEdgeSwipeSuppressedByWeb(parsed.payload.suppressEdgeSwipe);
+      } else if (typeof parsed.payload?.canHandleAndroidBack === 'boolean') {
         setCanWebViewHandleAndroidBack(parsed.payload.canHandleAndroidBack);
       }
       prepareBannerZoneTransition(url);
@@ -3445,7 +3459,7 @@ function AppInner(): React.JSX.Element {
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             injectedJavaScriptBeforeContentLoaded={nativeQaBridgeBootstrapScript}
-            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+            allowsBackForwardNavigationGestures={!isEdgeSwipeSuppressedByWeb && shouldEnableIosWebViewBackForwardNavigation({
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,

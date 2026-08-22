@@ -1,16 +1,7 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 declare const __dirname: string;
-
-type FileSystemModule = {
-  readFileSync: (filePath: string, encoding: 'utf8') => string;
-};
-
-type PathModule = {
-  join: (...paths: string[]) => string;
-  resolve: (...paths: string[]) => string;
-};
-
-const fs = require('fs') as FileSystemModule;
-const path = require('path') as PathModule;
 
 const rnRoot = path.resolve(__dirname, '..');
 
@@ -73,6 +64,7 @@ describe('runtime fallback contract', () => {
     const myPageSource = readWorkspaceFile('../src/components/my-page.tsx');
     const conversationListSource = readWorkspaceFile('../src/components/conversation-list.tsx');
     const publicProfileSource = readWorkspaceFile('../src/components/public-user-profile-screen.tsx');
+    const profileImagePreviewSource = readWorkspaceFile('../src/components/profile-image-preview.tsx');
     const followListSource = readWorkspaceFile('../src/components/follow-list-screen.tsx');
     const profileShareSource = readWorkspaceFile('../src/components/profile-share-screen.tsx');
     const livePhoneSource = readWorkspaceFile('../src/components/LivePhoneDemo/LivePhoneDemo.tsx');
@@ -88,7 +80,9 @@ describe('runtime fallback contract', () => {
     expect(conversationListSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
     expect(conversationListSource).toContain('if (rowActionMenu) {');
     expect(publicProfileSource).toContain('postNativeAndroidBackCapability(true);');
-    expect(publicProfileSource).toContain('if (showProfileImagePreview) {');
+    expect(publicProfileSource).toContain('open={showProfileImagePreview}');
+    expect(profileImagePreviewSource).toContain('registerNativeBackHandler');
+    expect(profileImagePreviewSource).toContain('postNativeAndroidBackCapability(true);');
     expect(followListSource).toContain('postNativeAndroidBackCapability(true);');
     expect(profileShareSource).toContain('postNativeAndroidBackCapability(true);');
     expect(livePhoneSource).toContain('if (deleteAccountDialogOpen) {');

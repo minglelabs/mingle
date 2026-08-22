@@ -12,8 +12,14 @@ export function resolveConversationListNativeBannerZone(params: {
   isAuthenticated: boolean
   hasActiveConversation: boolean
   isSearchOpen: boolean
+  isListOverlayOpen?: boolean
 }): NativeBannerZone {
-  if (!params.isAuthenticated || params.hasActiveConversation || params.isSearchOpen) {
+  if (
+    !params.isAuthenticated
+    || params.hasActiveConversation
+    || params.isSearchOpen
+    || params.isListOverlayOpen
+  ) {
     return 'hidden'
   }
 

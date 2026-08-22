@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronLeft, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -37,10 +37,7 @@ import {
   readPendingBirthDate,
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
-import {
-  deriveDefaultSttLanguagesForLocale,
-  sanitizeSttLanguageSelection,
-} from "@/lib/stt-languages";
+import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -57,6 +54,8 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
+  initialOwnSelectedLanguages?: string[];
+  selectedLanguagesAttribution?: Record<string, string[]>;
   initialSpeechLanguages?: string[];
   initialTranslationLanguagesLinked?: boolean;
   initialDefaultDisplayLanguage?: string | null;
@@ -83,6 +82,7 @@ type MingleHomeProps = {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>;
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
+  isBlockedCounterpart?: boolean;
 };
 
 export type MingleHomeRef = {
@@ -90,6 +90,8 @@ export type MingleHomeRef = {
   stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
+  requestCloseTopmostOverlay: () => boolean;
+  resetNavigationOverlays: () => Promise<void>;
 };
 
 // Conversation rooms require an authenticated account so the existing Apple,
@@ -1193,6 +1195,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       livePhoneDemoRef.current?.prepareForDeletion();
     },
     isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+    requestCloseTopmostOverlay: () => livePhoneDemoRef.current?.requestCloseTopmostOverlay() ?? false,
+    resetNavigationOverlays: async () => {
+      await livePhoneDemoRef.current?.resetNavigationOverlays();
+    },
   }), []);
 
   const handleSignOut = useCallback(() => {
@@ -1890,6 +1896,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
+          selectedLanguagesAttribution={props.selectedLanguagesAttribution}
           initialSpeechLanguages={props.initialSpeechLanguages}
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
           initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}
@@ -1905,6 +1913,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
+          isBlockedCounterpart={props.isBlockedCounterpart}
         />
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">

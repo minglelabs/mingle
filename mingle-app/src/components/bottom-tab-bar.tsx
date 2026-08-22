@@ -28,6 +28,7 @@ export function buildNativeAwareTabPath(
   pathname: string,
   searchParams: Pick<URLSearchParams, "getAll">,
   options?: {
+    preserveConversation?: boolean;
     skipConversationRestore?: boolean;
     tabRoot?: boolean;
   },

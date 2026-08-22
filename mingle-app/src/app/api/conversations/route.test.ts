@@ -6,6 +6,7 @@ const {
   mockListConversationChannelsForExternalUserId,
   mockListConversationChannelsForUser,
   mockCreateConversationChannelForUser,
+  mockFindExistingConversationWithExactMembers,
   mockEnsureTrackingContext,
   mockNormalizeSessionUserIdentity,
   mockResolveOrCreateUserIdForRequest,
@@ -13,11 +14,13 @@ const {
   mockResolveTrackingSessionKey,
   mockSanitizeRequestIdentityValue,
   mockSanitizeSttLanguageSelection,
+  mockUserFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockListConversationChannelsForExternalUserId: vi.fn(),
   mockListConversationChannelsForUser: vi.fn(),
   mockCreateConversationChannelForUser: vi.fn(),
+  mockFindExistingConversationWithExactMembers: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockNormalizeSessionUserIdentity: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
@@ -25,6 +28,7 @@ const {
   mockResolveTrackingSessionKey: vi.fn(),
   mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
+  mockUserFindMany: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -35,10 +39,20 @@ vi.mock("@/lib/auth-options", () => ({
   getAuthOptions: () => ({}),
 }));
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findMany: mockUserFindMany,
+    },
+  },
+}));
+
 vi.mock("@/lib/app-conversations", () => ({
   listConversationChannelsForExternalUserId: mockListConversationChannelsForExternalUserId,
   listConversationChannelsForUser: mockListConversationChannelsForUser,
   createConversationChannelForUser: mockCreateConversationChannelForUser,
+  findExistingConversationWithExactMembers: mockFindExistingConversationWithExactMembers,
+  MAX_CONVERSATION_MEMBERS: 10,
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
@@ -88,6 +102,12 @@ describe("/api/conversations route", () => {
       externalUserId: "anon_local_storage_user",
       sessionKey: "sess_local_storage_user",
     });
+    mockFindExistingConversationWithExactMembers.mockResolvedValue(null);
+    mockUserFindMany.mockImplementation(
+      async (args: { where?: { id?: { in?: string[] } } }) => (
+        (args.where?.id?.in ?? []).map((id) => ({ id }))
+      ),
+    );
   });
 
   it("uses the native list fast path without resolving the guest user twice", async () => {
@@ -227,6 +247,7 @@ describe("/api/conversations route", () => {
         updatedAt: "2026-04-02T00:02:00.000Z",
         pausedAt: "2026-04-02T00:02:00.000Z",
       },
+      reused: false,
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
       locale: "en",
@@ -234,6 +255,7 @@ describe("/api/conversations route", () => {
       selectedLanguages: [],
       speechLanguages: [],
       translationLanguagesLinked: true,
+      inviteeUserIds: [],
     });
   });
 
@@ -290,6 +312,7 @@ describe("/api/conversations route", () => {
         updatedAt: "2026-04-02T00:02:00.000Z",
         pausedAt: "2026-04-02T00:02:00.000Z",
       },
+      reused: false,
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
       locale: "en",
@@ -297,6 +320,7 @@ describe("/api/conversations route", () => {
       selectedLanguages: [],
       speechLanguages: [],
       translationLanguagesLinked: true,
+      inviteeUserIds: [],
     });
   });
 
@@ -338,7 +362,137 @@ describe("/api/conversations route", () => {
       selectedLanguages: ["en", "fr"],
       speechLanguages: ["ko", "ja"],
       translationLanguagesLinked: false,
+      inviteeUserIds: [],
     });
+  });
+
+  it("returns the existing room instead of creating a duplicate when the exact same invitees already have one", async () => {
+    mockFindExistingConversationWithExactMembers.mockResolvedValue({
+      id: "conv_existing",
+      sequenceNumber: 1,
+      title: "Alice, Bob",
+      status: "paused",
+      sessionKey: "conv_session_existing",
+      selectedLanguages: ["en"],
+      createdAt: "2026-04-02T00:02:00.000Z",
+      updatedAt: "2026-04-02T00:02:00.000Z",
+      pausedAt: "2026-04-02T00:02:00.000Z",
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ inviteeUserIds: ["user-a", "user-b"] }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      conversation: {
+        id: "conv_existing",
+        sequenceNumber: 1,
+        title: "Alice, Bob",
+        status: "paused",
+        sessionKey: "conv_session_existing",
+        selectedLanguages: ["en"],
+        createdAt: "2026-04-02T00:02:00.000Z",
+        updatedAt: "2026-04-02T00:02:00.000Z",
+        pausedAt: "2026-04-02T00:02:00.000Z",
+      },
+      reused: true,
+    });
+    expect(mockFindExistingConversationWithExactMembers).toHaveBeenCalledWith({
+      userId: "tracked_user_123",
+      otherUserIds: ["user-a", "user-b"],
+    });
+    expect(mockCreateConversationChannelForUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects invitees that do not exist before checking or storing a room", async () => {
+    mockUserFindMany.mockResolvedValue([{ id: "user-a" }]);
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ inviteeUserIds: ["user-a", "missing-user"] }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_invitee_user_ids" });
+    expect(mockFindExistingConversationWithExactMembers).not.toHaveBeenCalled();
+    expect(mockCreateConversationChannelForUser).not.toHaveBeenCalled();
+  });
+
+  it("skips the duplicate-room check and creates a new room when force is true", async () => {
+    mockCreateConversationChannelForUser.mockResolvedValue({
+      id: "conv_forced",
+      sequenceNumber: 2,
+      title: "Conversation (2)",
+      status: "paused",
+      sessionKey: "conv_session_forced",
+      selectedLanguages: [],
+      createdAt: "2026-04-02T00:02:00.000Z",
+      updatedAt: "2026-04-02T00:02:00.000Z",
+      pausedAt: "2026-04-02T00:02:00.000Z",
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ inviteeUserIds: ["user-a", "user-b"], force: true }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json).toEqual({
+      conversation: {
+        id: "conv_forced",
+        sequenceNumber: 2,
+        title: "Conversation (2)",
+        status: "paused",
+        sessionKey: "conv_session_forced",
+        selectedLanguages: [],
+        createdAt: "2026-04-02T00:02:00.000Z",
+        updatedAt: "2026-04-02T00:02:00.000Z",
+        pausedAt: "2026-04-02T00:02:00.000Z",
+      },
+      reused: false,
+    });
+    expect(mockFindExistingConversationWithExactMembers).not.toHaveBeenCalled();
+  });
+
+  it("doesn't check for a duplicate room when there are no invitees (start alone)", async () => {
+    mockCreateConversationChannelForUser.mockResolvedValue({
+      id: "conv_solo",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "conv_session_solo",
+      selectedLanguages: [],
+      createdAt: "2026-04-02T00:02:00.000Z",
+      updatedAt: "2026-04-02T00:02:00.000Z",
+      pausedAt: "2026-04-02T00:02:00.000Z",
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockFindExistingConversationWithExactMembers).not.toHaveBeenCalled();
   });
 
   it("returns unauthorized when the request identity cannot resolve to a user", async () => {

@@ -2,11 +2,17 @@
 
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
-import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
+import NotificationPanel from "@/components/notification-panel";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   forwardRef,
   lazy,
@@ -21,10 +27,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
 import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
@@ -53,6 +60,7 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import { resolveLanguageSelectorOwnSelectedLanguages } from "@/components/LivePhoneDemo/language-selector.logic";
 import {
   formatBirthDate,
 } from "@/lib/birth-date";
@@ -104,9 +112,7 @@ import {
   isAbortLikeMutationError,
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
-import NotificationPanel from "@/components/notification-panel";
 import NativePushRegistration from "@/components/native-push-registration";
-import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -130,6 +136,14 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
+import {
+  consumeSlideSurfaceHistoryForScope,
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
+} from "@/lib/slide-surface-history";
+import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
@@ -144,19 +158,16 @@ const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
+const CONVERSATION_SURFACE_SCOPE = "conversation";
+const CONVERSATION_NOTIFICATIONS_SURFACE_ID = "notifications";
+const CONVERSATION_PROFILE_SURFACE_ID = "profile";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
-const NOTIFICATION_PROFILE_HISTORY_KEY = "__MINGLE_NOTIFICATION_PROFILE__";
-const CONVERSATION_PROFILE_HISTORY_KEY = "__MINGLE_CONVERSATION_PROFILE__";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
-const CONVERSATION_OVERLAY_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
@@ -174,15 +185,15 @@ type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
-type ConversationOverlayTransitionState = {
-  enterMode: ConversationOverlayEnterMode;
-  exitMode: ConversationOverlayExitMode;
-};
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
 };
 type ConversationHistoryPopStateTransition = ConversationHistoryPopStateTarget & {
   direction: ConversationHistoryNavigationDirection;
+};
+type PendingDirectConversationNavigation = {
+  token: number;
+  profileUserId: string;
 };
 
 type ConversationListWindow = Window & {
@@ -223,31 +234,6 @@ declare global {
   }
 }
 
-const conversationOverlayVariants: Variants = {
-  initial: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.enterMode === "animate"
-      ? { x: "100%" }
-      : { x: "0%" }
-  ),
-  active: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "0%",
-    transition: transitionState.enterMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  retained: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "100%",
-    transition: transitionState.exitMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  exit: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.exitMode === "animate"
-      ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
-      : { x: "0%", transition: { duration: 0 } }
-  ),
-};
-
 interface ConversationItem {
   id: string;
   title: string;
@@ -260,6 +246,11 @@ interface ConversationItem {
   statusLabel: string;
   avatarSrc: string;
   avatarAlt: string;
+  // Real counterpart photo(s) for the room, in join order. Empty for solo
+  // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
+  // (the generated diarization avatar) instead.
+  otherMembers: ConversationChannelOtherMember[];
+  isBlockedCounterpart: boolean;
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -1002,6 +993,8 @@ function mapConversationSummaryToItem(
     statusLabel,
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
+    otherMembers: conversation.otherMembers,
+    isBlockedCounterpart: conversation.isBlockedCounterpart,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -1202,6 +1195,132 @@ function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   }, window.innerHeight);
 }
 
+// Corner-anchored overlap positions for a multi-member room's collage,
+// capped at 4 visible photos — same "up to 4, overlapping" idea as
+// LanguageRowAvatarStack (LivePhoneDemo/language-row-avatar-stack.tsx), but
+// arranged in a fixed square so the room avatar keeps the exact footprint a
+// solo room's generated avatar already occupies in the row, instead of
+// growing wider the more members a room has.
+const CONVERSATION_AVATAR_CLUSTER_LAYOUT: Record<number, Array<{ top: string; left: string }>> = {
+  2: [
+    { top: "0%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+  3: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "19%" },
+  ],
+  4: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+};
+const CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX = 34;
+
+function ConversationRoomAvatar({ item }: { item: ConversationItem }) {
+  const otherMembers = item.otherMembers;
+
+  // Solo room (no other real member yet, or a legacy/demo session): keep the
+  // existing generated per-speaker-turn avatar.
+  if (otherMembers.length === 0) {
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={item.avatarSrc}
+          alt={item.avatarAlt}
+          className="h-14 w-14 rounded-full bg-white object-cover"
+          width={56}
+          height={56}
+          draggable={false}
+          style={CONVERSATION_AVATAR_IMAGE_STYLE}
+          unoptimized
+        />
+      </div>
+    );
+  }
+
+  // Exactly one other real member: show their real photo, same framing as
+  // the generated-avatar case (and the same 56px photo pattern used for a
+  // room member row in conversation-participants-panel.tsx).
+  if (otherMembers.length === 1) {
+    const member = otherMembers[0];
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+          {member.image && !item.isBlockedCounterpart ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={member.image}
+              alt={item.title}
+              width={56}
+              height={56}
+              className="h-full w-full object-cover"
+              style={{
+                transform: buildProfileImageTransform(56, {
+                  scale: member.imageCropScale,
+                  x: member.imageCropX,
+                  y: member.imageCropY,
+                }),
+              }}
+            />
+          ) : (
+            <UserRound size={28} className="text-gray-400" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2+ other members: KakaoTalk-style overlapping photo cluster, capped at 4
+  // slots. A 5th+ member simply isn't shown — matches the "up to 4" spec
+  // without adding a separate overflow affordance the request didn't ask for.
+  const clusterMembers = otherMembers.slice(0, 4);
+  const layout = CONVERSATION_AVATAR_CLUSTER_LAYOUT[clusterMembers.length]
+    ?? CONVERSATION_AVATAR_CLUSTER_LAYOUT[4];
+
+  return (
+    <div className="relative h-14 w-14 shrink-0" title={item.title}>
+      {clusterMembers.map((member, index) => {
+        const position = layout[index] ?? layout[layout.length - 1];
+        return (
+          <span
+            key={member.userId}
+            className="absolute flex items-center justify-center overflow-hidden rounded-full border-2 border-white bg-gray-100"
+            style={{
+              top: position.top,
+              left: position.left,
+              width: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              height: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              zIndex: index + 1,
+            }}
+          >
+            {member.image && !item.isBlockedCounterpart ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.image}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{
+                  transform: buildProfileImageTransform(CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX, {
+                    scale: member.imageCropScale,
+                    x: member.imageCropX,
+                    y: member.imageCropY,
+                  }),
+                }}
+              />
+            ) : (
+              <UserRound size={16} className="text-gray-400" aria-hidden="true" />
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ConversationRow({
   item,
   disabled = false,
@@ -1285,18 +1404,7 @@ function ConversationRow({
       className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
-      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-        <Image
-          src={item.avatarSrc}
-          alt={item.avatarAlt}
-          className="h-14 w-14 rounded-full bg-white object-cover"
-          width={56}
-          height={56}
-          draggable={false}
-          style={CONVERSATION_AVATAR_IMAGE_STYLE}
-          unoptimized
-        />
-      </div>
+      <ConversationRoomAvatar item={item} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
@@ -1370,7 +1478,6 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
 }, ref) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const touchStartXRef = useRef<number | null>(null);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
     readStoredRecentSearches,
@@ -1477,122 +1584,113 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   const hasQuery = normalizeSearchTerm(query).length > 0;
 
   return (
-    <div
-      className="absolute inset-0 z-40 flex flex-col bg-white transition-transform duration-300 ease-in-out"
-      style={{
-        transform: open ? "translateX(0)" : "translateX(100%)",
-        pointerEvents: open ? "auto" : "none",
-        transitionDuration: transitionMode === "animate" ? undefined : "0ms",
-      }}
-      aria-hidden={!open}
-      onTouchStart={(event) => {
-        touchStartXRef.current = event.touches[0]?.clientX ?? null;
-      }}
-      onTouchEnd={(event) => {
-        const startX = touchStartXRef.current;
-        const endX = event.changedTouches[0]?.clientX ?? startX ?? 0;
-        touchStartXRef.current = null;
-
-        if (startX !== null && endX - startX > 60) {
-          dismissSearch();
-        }
-      }}
+    <SlideSurface
+      open={open}
+      onClose={dismissSearch}
+      ariaLabel={copy.searchButtonLabel}
+      nativeBackPriority={20}
+      transitionMode={transitionMode}
+      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
-        <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
-          <Search size={16} className="shrink-0 text-gray-400" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
-            enterKeyHint="search"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={dismissSearch}
-          className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+      <div className="flex h-full min-h-0 flex-col">
+        <form
+          onSubmit={handleSubmit}
+          className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          }}
         >
-          {copy.cancelAction}
-        </button>
-      </form>
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+            <Search size={16} className="shrink-0 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={copy.searchPlaceholder}
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={dismissSearch}
+            className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+          >
+            {copy.cancelAction}
+          </button>
+        </form>
 
-      <div className="flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        {hasQuery ? (
-          filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-[14px]">{copy.noSearchResults}</p>
-            </div>
-          ) : (
-            <div className="pt-2">
-              {filtered.map((item, index) => (
-                <div key={item.id}>
-                  <ConversationRow
-                    item={item}
-                    disabled={actionDisabled}
-                    onSelect={handleResultSelect}
-                  />
-                  {index < filtered.length - 1 && (
-                    <div className="mx-4 h-px bg-gray-100" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <section className="px-4 pb-4 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
-                {copy.recentSearchesTitle}
-              </h2>
-              {recentSearches.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleClearRecentSearches}
-                  className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
-                >
-                  {copy.clearRecentSearchesAction}
-                </button>
-              ) : null}
-            </div>
-            {recentSearches.length === 0 ? (
-              <p className="px-1 py-3 text-[14px] text-gray-400">
-                {copy.noRecentSearches}
-              </p>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          {hasQuery ? (
+            filtered.length === 0 ? (
+              <div className="flex flex-col items-center py-16 text-gray-400">
+                <p className="text-[14px]">{copy.noSearchResults}</p>
+              </div>
             ) : (
-              <div className="space-y-1">
-                {recentSearches.map((recentSearch) => (
-                  <button
-                    key={recentSearch}
-                    type="button"
-                    onClick={() => handleRecentSearchSelect(recentSearch)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <Search size={16} className="text-gray-400" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
-                      {recentSearch}
-                    </span>
-                  </button>
+              <div className="pt-2">
+                {filtered.map((item, index) => (
+                  <div key={item.id}>
+                    <ConversationRow
+                      item={item}
+                      disabled={actionDisabled}
+                      onSelect={handleResultSelect}
+                    />
+                    {index < filtered.length - 1 && (
+                      <div className="mx-4 h-px bg-gray-100" />
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </section>
-        )}
+            )
+          ) : (
+            <section className="px-4 pb-4 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
+                  {copy.recentSearchesTitle}
+                </h2>
+                {recentSearches.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearRecentSearches}
+                    className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
+                  >
+                    {copy.clearRecentSearchesAction}
+                  </button>
+                ) : null}
+              </div>
+              {recentSearches.length === 0 ? (
+                <p className="px-1 py-3 text-[14px] text-gray-400">
+                  {copy.noRecentSearches}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {recentSearches.map((recentSearch) => (
+                    <button
+                      key={recentSearch}
+                      type="button"
+                      onClick={() => handleRecentSearchSelect(recentSearch)}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <Search size={16} className="text-gray-400" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
+                        {recentSearch}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
 });
 
@@ -1640,6 +1738,7 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
@@ -1672,6 +1771,7 @@ export default function ConversationList({
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
   );
+  const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -1682,11 +1782,14 @@ export default function ConversationList({
   );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationProfileId, setNotificationProfileId] = useState<string | null>(null);
-  const [conversationProfileId, setConversationProfileId] = useState<string | null>(null);
+  const [conversationSurfaceHistory, setConversationSurfaceHistory] = useState(() => (
+    typeof window === "undefined"
+      ? []
+      : readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE)
+  ));
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
     !initialListState.hasSnapshot,
@@ -1811,9 +1914,14 @@ export default function ConversationList({
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const notificationSurfaceOpen = conversationSurfaceHistory.some(
+    (entry) => entry.id === CONVERSATION_NOTIFICATIONS_SURFACE_ID,
+  );
+  const conversationProfileSurface = [...conversationSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+  const conversationProfileId = conversationProfileSurface?.value ?? null;
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
-  const notificationProfileIdRef = useRef<string | null>(null);
-  const conversationProfileIdRef = useRef<string | null>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
@@ -1847,6 +1955,12 @@ export default function ConversationList({
   // Keep route-sync from rewriting that still-current room entry into a list
   // entry before the browser finishes the history navigation.
   const pendingConversationHistoryBackRef = useRef(false);
+  // Direct-message navigation starts on a profile surface but must preserve
+  // the participant/menu history underneath it. Keep this guard alive through
+  // the iOS history-settle window so a delayed replay cannot reopen the profile.
+  const pendingDirectConversationNavigationRef = useRef<PendingDirectConversationNavigation | null>(null);
+  const directConversationNavigationTokenRef = useRef(0);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -2330,6 +2444,14 @@ export default function ConversationList({
     }
   }, []);
 
+  const handleConversationSurfaceRequestClose = useCallback((conversationId: string) => {
+    const roomRef = conversationRoomRefs.current.get(conversationId);
+    if (roomRef?.requestCloseTopmostOverlay()) {
+      return false;
+    }
+    return true;
+  }, []);
+
   const applyRunningConversationState = useCallback((
     conversationId: string,
     isRunning: boolean,
@@ -2525,6 +2647,10 @@ export default function ConversationList({
       previousConversation.selectedLanguages,
       defaultSelectedLanguages,
     );
+    const previousViewerSelectedLanguages = resolveLanguageSelectorOwnSelectedLanguages(
+      previousSelectedLanguages,
+      previousConversation.viewerSelectedLanguages,
+    );
     const previousTranslationLanguagesLinked =
       previousConversation.translationLanguagesLinked !== false;
 
@@ -2535,7 +2661,16 @@ export default function ConversationList({
       conversation.id === conversationId
         ? {
             ...conversation,
-            selectedLanguages: [...normalizedSelectedLanguages],
+            // For a multi-member room this is the caller's own next pick,
+            // not the room union — leave the displayed union (selectedLanguages)
+            // untouched here and let the server's response (below) supply the
+            // recomputed union, so it doesn't briefly collapse to just "my"
+            // languages while the PATCH is in flight. Solo rooms have no such
+            // distinction, so updating both together is a no-op behavior change.
+            selectedLanguages: conversation.isMultiMember
+              ? conversation.selectedLanguages
+              : [...normalizedSelectedLanguages],
+            viewerSelectedLanguages: [...normalizedSelectedLanguages],
             translationLanguagesLinked: false,
           }
         : conversation
@@ -2570,6 +2705,7 @@ export default function ConversationList({
             ? {
                 ...conversation,
                 selectedLanguages: [...previousSelectedLanguages],
+                viewerSelectedLanguages: [...previousViewerSelectedLanguages],
                 translationLanguagesLinked: previousTranslationLanguagesLinked,
               }
             : conversation
@@ -2859,108 +2995,99 @@ export default function ConversationList({
     }).sort(compareConversationRecency));
   }, [clearConversationInterimPreview]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncConversationSurfaceHistory = () => {
+      const nextHistory = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      const pendingNavigation = pendingDirectConversationNavigationRef.current;
+      if (pendingNavigation) {
+        const filteredHistory = nextHistory.filter((entry) => (
+          entry.id !== CONVERSATION_PROFILE_SURFACE_ID
+          || entry.value !== pendingNavigation.profileUserId
+        ));
+        if (filteredHistory.length !== nextHistory.length) {
+          setConversationSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setConversationSurfaceHistory(nextHistory);
+    };
+
+    window.addEventListener("popstate", syncConversationSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncConversationSurfaceHistory);
+  }, []);
+
+  const openConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: CONVERSATION_SURFACE_SCOPE,
+      ...entry,
+    });
+    setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+  }, []);
+
+  const closeConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const currentEntries = readSlideSurfaceHistoryForScope(
+        CONVERSATION_SURFACE_SCOPE,
+        window.history.state,
+      );
+      const currentEntry = currentEntries[currentEntries.length - 1];
+      if (
+        currentEntry?.id === entry.id
+        && (entry.value === undefined || currentEntry.value === entry.value)
+      ) {
+        window.history.back();
+        return;
+      }
+    }
+
+    setConversationSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
+  const clearConversationSurfaceHistory = useCallback(() => {
+    if (typeof window !== "undefined") {
+      replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+        entry.scope !== CONVERSATION_SURFACE_SCOPE
+      )));
+    }
+    setConversationSurfaceHistory([]);
+  }, []);
+
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
 
-  const closeNotifications = useCallback(() => {
-    setShowNotifications(false);
-  }, []);
-
-  const openNotificationProfile = useCallback((userId: string) => {
-    postNativeBannerZone("hidden");
-    notificationProfileIdRef.current = userId;
-    if (typeof window !== "undefined") {
-      const currentState = window.history.state;
-      const nextState = currentState && typeof currentState === "object"
-        ? { ...currentState, [NOTIFICATION_PROFILE_HISTORY_KEY]: userId }
-        : { [NOTIFICATION_PROFILE_HISTORY_KEY]: userId };
-      window.history.pushState(nextState, "", window.location.href);
-    }
-    setShowNotifications(true);
-    setNotificationProfileId(userId);
-  }, []);
-
   const openConversationProfile = useCallback((userId: string) => {
+    if (pendingDirectConversationNavigationRef.current) return;
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
     postNativeBannerZone("hidden");
-    conversationProfileIdRef.current = normalizedUserId;
-    if (typeof window !== "undefined") {
-      const currentState = window.history.state;
-      const nextState = currentState && typeof currentState === "object"
-        ? { ...currentState, [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId }
-        : { [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId };
-      window.history.pushState(nextState, "", window.location.href);
-    }
-    setConversationProfileId(normalizedUserId);
-  }, []);
+    openConversationSurface({
+      id: CONVERSATION_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openConversationSurface]);
 
-  const closeNotificationProfile = useCallback(() => {
-    postNativeBannerZone("list");
-    if (
-      typeof window !== "undefined"
-      && window.history.state
-      && typeof window.history.state === "object"
-      && NOTIFICATION_PROFILE_HISTORY_KEY in window.history.state
-    ) {
-      window.history.back();
-      return;
-    }
-    notificationProfileIdRef.current = null;
-    setNotificationProfileId(null);
-  }, []);
-
-  const closeConversationProfile = useCallback(() => {
+  const openNotifications = useCallback(() => {
     postNativeBannerZone("hidden");
-    if (
-      typeof window !== "undefined"
-      && window.history.state
-      && typeof window.history.state === "object"
-      && CONVERSATION_PROFILE_HISTORY_KEY in window.history.state
-    ) {
-      window.history.back();
-      return;
-    }
-    conversationProfileIdRef.current = null;
-    setConversationProfileId(null);
-  }, []);
-
-  useEffect(() => {
-    notificationProfileIdRef.current = notificationProfileId;
-  }, [notificationProfileId]);
-
-  useEffect(() => {
-    conversationProfileIdRef.current = conversationProfileId;
-  }, [conversationProfileId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleNotificationProfilePopState = () => {
-      if (!notificationProfileIdRef.current) return;
-      postNativeBannerZone("list");
-      setNotificationProfileId(null);
-    };
-
-    window.addEventListener("popstate", handleNotificationProfilePopState);
-    return () => window.removeEventListener("popstate", handleNotificationProfilePopState);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleConversationProfilePopState = () => {
-      if (!conversationProfileIdRef.current) return;
-      postNativeBannerZone("hidden");
-      conversationProfileIdRef.current = null;
-      setConversationProfileId(null);
-    };
-
-    window.addEventListener("popstate", handleConversationProfilePopState);
-    return () => window.removeEventListener("popstate", handleConversationProfilePopState);
-  }, []);
+    openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+  }, [openConversationSurface]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -3018,6 +3145,32 @@ export default function ConversationList({
   }, [activeConversation]);
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(buildClientApiPath("/notifications?limit=1"), { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("notification_count_load_failed");
+        return response.json() as Promise<{ unreadCount?: unknown }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const nextUnreadCount = typeof payload.unreadCount === "number" ? payload.unreadCount : 0;
+        setUnreadNotificationCount(Math.max(0, Math.floor(nextUnreadCount)));
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadNotificationCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     if (activeConversation) {
@@ -3053,7 +3206,6 @@ export default function ConversationList({
     setConversations([]);
     setConversationInterimPreviews({});
     setConversationLocalStats({});
-    setShowNotifications(false);
     setUnreadNotificationCount(0);
   }, [sessionStatus]);
 
@@ -3301,8 +3453,28 @@ export default function ConversationList({
       isAuthenticated: sessionStatus === "authenticated",
       hasActiveConversation: Boolean(activeConversation),
       isSearchOpen: showSearch,
+      isListOverlayOpen: Boolean(
+        isCreateChoiceModalOpen
+        || rowActionMenu
+        || renameDialogConversationId
+        || deleteDialogConversationId
+        || languageOnboardingModalOpen
+        || notificationSurfaceOpen
+        || conversationProfileId
+      ),
     }));
-  }, [activeConversation, sessionStatus, showSearch]);
+  }, [
+    activeConversation,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isCreateChoiceModalOpen,
+    languageOnboardingModalOpen,
+    notificationSurfaceOpen,
+    renameDialogConversationId,
+    rowActionMenu,
+    sessionStatus,
+    showSearch,
+  ]);
 
   useEffect(() => {
     if (!isNativeAppRuntime() || sessionStatus === "authenticated") return;
@@ -3421,6 +3593,73 @@ export default function ConversationList({
     refreshConversationLocalStats,
     sessionStatus,
   ]);
+
+  // Live sync for the LIST screen itself: a new message landing in ANY room
+  // this user belongs to should update its preview/ordering here without a
+  // manual refresh, not just inside an already-open room — mirrors
+  // use-realtime-stt.ts's per-room version of the same pattern, just scoped
+  // to this user's own list:<userId> topic on mingle-stt's event bus
+  // instead of one room's sessionKey. A long-interval poll is the fallback
+  // for whenever the socket is down or push is unconfigured.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const openSocket = async () => {
+      if (cancelled) return;
+      try {
+        const response = await fetch(buildConversationApiPath("/list-realtime-token"), {
+          cache: "no-store",
+          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        });
+        if (!response.ok || cancelled) return;
+        const payload = await response.json() as { token?: string | null };
+        const token = payload.token;
+        const wsBase = getConversationEventsWsUrl();
+        if (!token || !wsBase || cancelled) return;
+
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+        socket.onmessage = () => {
+          void refreshConversationList();
+        };
+        socket.onclose = () => {
+          if (cancelled) return;
+          clearReconnectTimer();
+          reconnectTimer = window.setTimeout(openSocket, 5_000);
+        };
+      } catch {
+        // Realtime push failed to set up — the poll fallback below still runs.
+      }
+    };
+
+    void openSocket();
+
+    const pollIntervalMs = 20_000;
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshConversationList();
+    }, pollIntervalMs);
+
+    return () => {
+      cancelled = true;
+      clearReconnectTimer();
+      window.clearInterval(pollTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  }, [refreshConversationList]);
 
   useEffect(() => {
     if (
@@ -3674,6 +3913,89 @@ export default function ConversationList({
     return conversation;
   }, [closeSearchOverlay]);
 
+  const startDirectConversationFromProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    const surfaceEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+    const profileEntry = [...surfaceEntries]
+      .reverse()
+      .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+    const profileUserId = profileEntry
+      ? profileEntry.value ?? conversationProfileId ?? ""
+      : conversationProfileId ?? "";
+    const currentConversation = activeConversationRef.current;
+    const currentConversationId = currentConversation?.id ?? readConversationIdFromLocation();
+    const isCurrentConversation = currentConversationId === conversation.id;
+    const token = directConversationNavigationTokenRef.current + 1;
+    directConversationNavigationTokenRef.current = token;
+    pendingDirectConversationNavigationRef.current = {
+      token,
+      profileUserId,
+    };
+
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      // Consume the profile and every conversation-owned parent surface. This
+      // removes notification/profile entries before the menu depth is reset.
+      await consumeSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      clearConversationSurfaceHistory();
+
+      const currentRoomRef = currentConversationId
+        ? conversationRoomRefs.current.get(currentConversationId)
+        : null;
+      await currentRoomRef?.resetNavigationOverlays();
+
+      if (isCurrentConversation) {
+        // Continuing the room that is already visible does not need a route
+        // entry. Close only the profile/menu surfaces and reveal that room.
+        setConversations((current) => upsertConversation(current, conversation));
+        return;
+      }
+
+      if (currentRoomRef?.isSttSessionRunning()) {
+        await currentRoomRef.stopRecording({ deferRunningStateChange: true });
+      }
+
+      if (currentConversation) {
+        // The current room entry is now the canonical list entry. The next
+        // openConversationSummary call will push exactly one room entry above
+        // it, producing [conversation list] -> [conversation room].
+        closeConversationOverlay(currentConversation, {
+          animateExit: false,
+          replaceUrl: true,
+        });
+      } else if (currentConversationId) {
+        activeConversationRef.current = null;
+        replaceConversationOverlayUrl(null, "direct-conversation-stack-reset");
+        setActiveConversation((current) => (
+          current?.id === currentConversationId ? null : current
+        ));
+      }
+
+      setConversations((current) => upsertConversation(current, conversation));
+      await openConversationSummary(conversation, {
+        enterMode: "instant",
+        syncHistory: "push",
+      });
+    } finally {
+      if (directConversationNavigationReleaseTimerRef.current !== null) {
+        window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      }
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        if (pendingDirectConversationNavigationRef.current?.token === token) {
+          pendingDirectConversationNavigationRef.current = null;
+        }
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
+    }
+  }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
+
 
   const handleCreateConversation = useCallback(async () => {
     if (
@@ -3913,8 +4235,7 @@ export default function ConversationList({
     const canHandleAndroidBack = Boolean(
       (activeConversation && !isCreatingConversation)
       || showSearch
-      || showNotifications
-      || notificationProfileId
+      || notificationSurfaceOpen
       || conversationProfileId
       || rowActionMenu
       || renameDialogConversationId
@@ -3931,27 +4252,25 @@ export default function ConversationList({
     deleteDialogConversationId,
     isCreatingConversation,
     languageOnboardingModalOpen,
-    notificationProfileId,
+    notificationSurfaceOpen,
     renameDialogConversationId,
     rowActionMenu,
-    showNotifications,
     showSearch,
   ]);
 
   useEffect(() => registerNativeBackHandler(() => {
     if (conversationProfileId) {
-      closeConversationProfile();
+      closeConversationSurface({
+        id: CONVERSATION_PROFILE_SURFACE_ID,
+        value: conversationProfileId,
+      });
       return true;
     }
-    if (notificationProfileId) {
-      closeNotificationProfile();
+    if (notificationSurfaceOpen) {
+      closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
       return true;
     }
-    if (showNotifications) {
-      closeNotifications();
-      return true;
-    }
-    if (showSearch) {
+    if (showSearch && !activeConversation) {
       closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
       return true;
     }
@@ -3981,9 +4300,7 @@ export default function ConversationList({
   }, 5), [
     activeConversation,
     closeConversationOverlay,
-    closeConversationProfile,
-    closeNotifications,
-    closeNotificationProfile,
+    closeConversationSurface,
     closeSearchOverlay,
     conversationProfileId,
     deleteDialogConversationId,
@@ -3991,10 +4308,9 @@ export default function ConversationList({
     isRenamingConversation,
     isCreatingConversation,
     languageOnboardingModalOpen,
-    notificationProfileId,
+    notificationSurfaceOpen,
     renameDialogConversationId,
     rowActionMenu,
-    showNotifications,
     showSearch,
   ]);
 
@@ -4512,35 +4828,6 @@ export default function ConversationList({
         />
       ) : null}
 
-      <NotificationPanel
-        open={showNotifications}
-        enabled={sessionStatus === "authenticated"}
-        locale={locale}
-        dictionary={dictionary}
-        nativeTopInsetPx={effectiveNativeTopInsetPx}
-        onClose={closeNotifications}
-        onOpenProfile={openNotificationProfile}
-        onUnreadCountChange={setUnreadNotificationCount}
-      />
-
-      {notificationProfileId ? (
-        <PublicUserProfileScreen
-          dictionary={dictionary}
-          locale={locale}
-          userId={notificationProfileId}
-          onClose={closeNotificationProfile}
-        />
-      ) : null}
-
-      {conversationProfileId ? (
-        <PublicUserProfileScreen
-          dictionary={dictionary}
-          locale={locale}
-          userId={conversationProfileId}
-          onClose={closeConversationProfile}
-        />
-      ) : null}
-
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -4561,15 +4848,15 @@ export default function ConversationList({
           </button>
           <button
             type="button"
-            onClick={() => setShowNotifications(true)}
+            onClick={openNotifications}
             className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
-            aria-label={copy.notificationsButtonLabel ?? (locale === "ko" ? "알림" : "Notifications")}
+            aria-label={notificationCopy.buttonLabel}
           >
             <Bell size={22} strokeWidth={2} />
             {unreadNotificationCount > 0 ? (
               <span
                 className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white"
-                aria-label={`${unreadNotificationCount} ${locale === "ko" ? "개 읽지 않은 알림" : "unread notifications"}`}
+                aria-label={`${unreadNotificationCount} ${notificationCopy.unreadSectionLabel}`}
               >
                 {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
               </span>
@@ -4716,7 +5003,7 @@ export default function ConversationList({
       >
         <button
           type="button"
-          onClick={handleCreateConversation}
+          onClick={() => setIsCreateChoiceModalOpen(true)}
           disabled={actionDisabled}
           className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
@@ -4806,17 +5093,18 @@ export default function ConversationList({
                 const isVisible = activeConversation?.id === conversation.id;
 
                 return (
-                  <motion.div
+                  <SlideSurface
                     key={conversation.id}
-                    custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                    variants={conversationOverlayVariants}
-                    initial="initial"
-                    animate={isVisible ? "active" : "retained"}
-                    exit="exit"
+                    open={isVisible}
+                    onClose={() => void handleCloseActiveConversation()}
+                    onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
+                    ariaLabel={conversation.title}
+                    role="main"
+                    nativeBackPriority={4}
                     className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
                       isVisible ? "" : "pointer-events-none"
                     }`}
-                    aria-hidden={!isVisible}
+                    style={{ touchAction: "pan-y" }}
                   >
                     <Suspense
                       fallback={(
@@ -4841,12 +5129,15 @@ export default function ConversationList({
                           handleConversationDeleted(conversation.id);
                         }}
                         conversationTitle={conversation.title}
+                        isBlockedCounterpart={conversation.isBlockedCounterpart}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}
                         preferredDisplayLanguages={preferredDisplayLanguages}
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
                         initialSelectedLanguages={conversation.selectedLanguages}
+                        initialOwnSelectedLanguages={conversation.viewerSelectedLanguages}
+                        selectedLanguagesAttribution={conversation.selectedLanguagesAttribution}
                         initialSpeechLanguages={conversation.speechLanguages}
                         initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
                         initialDefaultDisplayLanguage={conversation.defaultDisplayLanguage ?? null}
@@ -4885,10 +5176,33 @@ export default function ConversationList({
                         }}
                       />
                     </Suspense>
-                  </motion.div>
+                  </SlideSurface>
                 );
               })}
             </AnimatePresence>
+            <NotificationPanel
+              open={notificationSurfaceOpen}
+              enabled={sessionStatus === "authenticated"}
+              locale={locale}
+              dictionary={dictionary}
+              onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
+              onOpenProfile={openConversationProfile}
+              onUnreadCountChange={setUnreadNotificationCount}
+            />
+            <PublicUserProfileScreen
+              dictionary={dictionary}
+              locale={locale}
+              userId={conversationProfileId ?? ""}
+              open={Boolean(conversationProfileId)}
+              onStartDirectConversation={startDirectConversationFromProfile}
+              onClose={() => {
+                if (!conversationProfileId) return;
+                closeConversationSurface({
+                  id: CONVERSATION_PROFILE_SURFACE_ID,
+                  value: conversationProfileId,
+                });
+              }}
+            />
           </>,
           document.body,
         )
@@ -5019,6 +5333,59 @@ export default function ConversationList({
                   {isDeletingConversation
                     ? deleteConversationCopy.deletingLabel
                     : deleteConversationCopy.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+        {isCreateChoiceModalOpen ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+            onClick={() => setIsCreateChoiceModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={copy.newConversationButtonLabel}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+            >
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    void handleCreateConversation();
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-gray-300 text-[15px] font-semibold text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {copy.startAloneOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    router.push(`/${locale}/conversations/new-group`);
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl text-[15px] font-semibold text-white transition-colors"
+                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+                >
+                  {copy.inviteFriendsOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateChoiceModalOpen(false)}
+                  className="mt-1 inline-flex h-10 items-center justify-center rounded-lg text-[14px] font-medium text-gray-500 transition-colors hover:bg-gray-100"
+                >
+                  {copy.cancelAction}
                 </button>
               </div>
             </motion.div>

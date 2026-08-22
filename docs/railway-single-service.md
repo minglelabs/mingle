@@ -1,22 +1,25 @@
 # Railway Single-Service Deployment
 
-This document describes the new Railway path for running `mingle-app` and
-`mingle-stt` inside one Railway service. It does not replace or modify the
-current Vercel and Fly deployments.
+This document describes the new Railway path for running `mingle-app`,
+`mingle-stt`, and `mingle-messaging` inside one Railway service. It does not
+replace or modify the current Vercel and Fly deployments.
 
 ## Architecture
 
 - Railway builds from the repository root with `railway.json`.
-- `Dockerfile.railway` installs, builds, and packages `mingle-app` and
-  `mingle-stt`.
-- `railway/start-single-service.mjs` starts both servers on internal ports:
+- `Dockerfile.railway` installs, builds, and packages `mingle-app`,
+  `mingle-stt`, and `mingle-messaging`.
+- `railway/start-single-service.mjs` starts all three servers on internal ports:
   - `mingle-app`: `3000`
   - `mingle-stt`: `3001`
+  - `mingle-messaging`: `3002`
 - The Railway-facing process listens on `$PORT`.
 - HTTP traffic is proxied to `mingle-app`.
 - WebSocket traffic under `/stt` is proxied to `mingle-stt`.
-- `/railway/health` returns `200` only when both internal ports are accepting
-  connections.
+- WebSocket traffic under `/conversation-events` and the matching publish
+  endpoint are proxied to `mingle-messaging`.
+- `/railway/health` returns `200` only when all three internal ports are
+  accepting connections.
 
 ## Railway Service Setup
 
@@ -39,6 +42,10 @@ NEXTAUTH_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_SITE_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_WS_PATH=/stt
 MINGLE_STT_WS_PATH=/stt
+MINGLE_MESSAGING_WS_PATH=/conversation-events
+MINGLE_MESSAGING_PUBLISH_PATH=/conversation-events/publish
+MINGLE_MESSAGING_URL=http://127.0.0.1:3002
+MINGLE_REALTIME_SECRET=
 SONIOX_API_KEY=
 TRANSLATE_PROVIDER=gemini
 ```
@@ -70,9 +77,10 @@ RN_ADMOB_BANNER_UNIT_ID_IOS=
 RN_ADMOB_BANNER_UNIT_ID_ANDROID=
 ```
 
-Leave `NEXT_PUBLIC_WS_URL` unset for this single-service deployment. The web
-client uses `NEXT_PUBLIC_WS_PATH=/stt`, so the browser connects to the same
-Railway domain with `wss://<domain>/stt`.
+Leave `NEXT_PUBLIC_WS_URL` and `NEXT_PUBLIC_MESSAGING_WS_URL` unset for this
+single-service deployment. The web client uses `NEXT_PUBLIC_WS_PATH=/stt` for
+STT and derives the messaging WebSocket from the same Railway domain at
+`wss://<domain>/conversation-events`.
 
 ## Database Migration
 
@@ -106,4 +114,10 @@ endpoint is:
 
 ```text
 wss://<railway-domain>/stt
+```
+
+The conversation realtime endpoint is:
+
+```text
+wss://<railway-domain>/conversation-events
 ```

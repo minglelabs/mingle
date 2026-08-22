@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client/index'
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import {
   createTrackedEventLog,
@@ -8,6 +10,7 @@ import {
   sanitizeNonNegativeInt,
   upsertTrackedUser,
 } from '@/lib/app-analytics'
+import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -19,6 +22,12 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
+import { notifyConversationMessage } from '@/server/conversation-realtime'
+import {
+  isMessageSenderBlockedInConversation,
+  listChannelMemberUserIdsBySessionKey,
+  materializePendingConversationInvitees,
+} from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -113,14 +122,25 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const userId = await upsertTrackedUser({ tracking, clientContext })
+    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
+    const session = await getServerSession(getAuthOptions())
+    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
-      const shouldIgnoreDueToConversationClear = await shouldSkipFinalizedTurnPersistence({
-        clientMessageId,
-        sessionKey: tracking.sessionKey,
-      })
+      const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
+        shouldSkipFinalizedTurnPersistence({
+          clientMessageId,
+          sessionKey: tracking.sessionKey,
+        }),
+        // Defense in depth behind the client's own composer/mic gating — a
+        // block between the two members of this room means neither side's
+        // messages should persist any more, even from a stale client.
+        isMessageSenderBlockedInConversation({
+          sessionKey: tracking.sessionKey,
+          userId,
+        }),
+      ])
 
       const messageMetadata: Prisma.JsonObject = {
         clientMessageId,
@@ -144,7 +164,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear) {
+      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
         const message = await prisma.appMessage.upsert({
           where: {
             sessionKey_clientMessageId: {
@@ -249,6 +269,25 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation auto title generation failed:', error)
         }
+
+        // An invitee gets no DB record and can't see the room at all until
+        // this, the owner's first real message — see
+        // pendingInviteeUserIds' doc comment. Must run before the
+        // notify below, so a freshly-materialized member's push actually
+        // reaches them.
+        try {
+          await materializePendingConversationInvitees(tracking.sessionKey)
+        } catch (error) {
+          console.error('Materializing pending conversation invitees failed:', error)
+        }
+
+        // Lets any other member's already-open room — and their
+        // conversation LIST screen, even with the room closed — pick this
+        // up without waiting on their own poll cycle. Fire-and-forget: this
+        // is a latency optimization, never something a message send should
+        // fail on, and a no-op wherever realtime push isn't configured.
+        const memberUserIds = await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
+        notifyConversationMessage(tracking.sessionKey, memberUserIds)
       }
     }
 

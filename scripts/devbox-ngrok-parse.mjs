@@ -84,6 +84,7 @@ export function parseNgrokTunnels(payload, options) {
 
   const expectedWebPort = options.expectedWebPort;
   const expectedSttPort = options.expectedSttPort;
+  const expectedMessagingPort = options.expectedMessagingPort;
   const requireHttps = options.requireHttps === true;
 
   const web = selectTunnel(
@@ -98,13 +99,19 @@ export function parseNgrokTunnels(payload, options) {
     expectedSttPort,
     requireHttps,
   );
+  const messaging = selectTunnel(
+    tunnels,
+    ["devbox_messaging", "messaging"],
+    expectedMessagingPort,
+    requireHttps,
+  );
 
-  if (!web || !stt) {
+  if (!web || !stt || !messaging) {
     const detail = describeTunnels(tunnels);
     const requirementLabel = requireHttps ? "https-only" : "http-or-https";
     return {
       ok: false,
-      reason: `required ngrok tunnels not found (web:${expectedWebPort}, stt:${expectedSttPort}, ${requirementLabel})`,
+      reason: `required ngrok tunnels not found (web:${expectedWebPort}, stt:${expectedSttPort}, messaging:${expectedMessagingPort}, ${requirementLabel})`,
       detail,
     };
   }
@@ -113,6 +120,7 @@ export function parseNgrokTunnels(payload, options) {
     ok: true,
     webUrl: web.publicUrl,
     sttUrl: stt.publicUrl,
+    messagingUrl: messaging.publicUrl,
     detail: describeTunnels(tunnels),
   };
 }
@@ -120,6 +128,7 @@ export function parseNgrokTunnels(payload, options) {
 function main() {
   const expectedWebPort = toInt(process.env.DEVBOX_EXPECT_WEB_PORT);
   const expectedSttPort = toInt(process.env.DEVBOX_EXPECT_STT_PORT);
+  const expectedMessagingPort = toInt(process.env.DEVBOX_EXPECT_MESSAGING_PORT);
   const requireHttps = process.env.DEVBOX_REQUIRE_HTTPS === "1";
 
   const stdin = readFileSync(0, "utf8");
@@ -135,6 +144,7 @@ function main() {
   const result = parseNgrokTunnels(payload, {
     expectedWebPort,
     expectedSttPort,
+    expectedMessagingPort,
     requireHttps,
   });
 
@@ -144,7 +154,7 @@ function main() {
     process.exit(1);
   }
 
-  process.stdout.write(`${result.webUrl}\n${result.sttUrl}\n`);
+  process.stdout.write(`${result.webUrl}\n${result.sttUrl}\n${result.messagingUrl}\n`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

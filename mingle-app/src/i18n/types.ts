@@ -28,6 +28,19 @@ export type BaseAppDictionarySource = {
     notificationsFollowingAction?: string;
     notificationsLoadError?: string;
     notificationsFollowError?: string;
+    notificationsJustNowLabel?: string;
+    notificationsMinutesAgoLabel?: string;
+    notificationsHoursAgoLabel?: string;
+    startAloneOptionLabel?: string;
+    inviteFriendsOptionLabel?: string;
+    inviteFriendsPageTitle?: string;
+    inviteFriendsStartButtonLabel?: string;
+    inviteFriendsMaxMembersReachedMessage?: string;
+    inviteFriendsCreateErrorMessage?: string;
+    inviteFriendsExistingConversationTitle?: string;
+    inviteFriendsExistingConversationMessage?: string;
+    inviteFriendsCreateNewAction?: string;
+    inviteFriendsContinuePreviousAction?: string;
   };
   demo: {
     tapPlayToStart: string;
@@ -148,6 +161,21 @@ export type BaseAppDictionarySource = {
     unblockConfirm?: string;
     blockConfirm?: string;
     blockError?: string;
+    messageAction?: string;
+    messageError?: string;
+    selfLabel?: string;
+    noFollowersLabel?: string;
+    noFollowingLabel?: string;
+    profileShareQrLoadingLabel?: string;
+    profileShareQrUnavailableMessage?: string;
+    profileShareQrScannerUnavailableMessage?: string;
+    profileShareQrInvalidMessage?: string;
+    profileShareQrScanFailedMessage?: string;
+    profileShareQrSavingLabel?: string;
+    profileShareQrDownloadedMessage?: string;
+    profileShareQrDownloadFailedMessage?: string;
+    profileShareQrInstruction?: string;
+    profileShareQrSettingsLabel?: string;
     reportAction?: string;
     reportTitle?: string;
     reportReasonLabel?: string;
@@ -296,11 +324,15 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
       closeKeyboardLabel: string;
       composerPlaceholder: string;
       sendMessageLabel: string;
+      blockedComposerMessage: string;
     };
     copyActions: {
       copyBubbleLabel: string;
       copyAllBubblesLabel: string;
       copiedToastLabel: string;
+      playingIndicatorLabel: string;
+      originalLanguageLabel: string;
+      translationLanguageLabel: string;
     };
     feedback: {
       pageTitle: string;

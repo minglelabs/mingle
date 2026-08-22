@@ -55,6 +55,29 @@ export const getWsUrl = (): string => {
   }
   return `${protocol}://${host}:${WS_PORT}`
 }
+// Conversation push normally has its own messaging URL. Railway can leave it
+// unset because the public proxy routes this path to mingle-messaging on the
+// same host; devbox/mobile profiles set it to the messaging tunnel explicitly.
+export const getConversationEventsWsUrl = (): string => {
+  const configured = process.env.NEXT_PUBLIC_MESSAGING_WS_URL?.trim()
+  if (configured) {
+    try {
+      const url = new URL(configured)
+      if (url.pathname === '/' || url.pathname === '') {
+        url.pathname = '/conversation-events'
+      }
+      return url.toString()
+    } catch {
+      return ''
+    }
+  }
+
+  try {
+    return `${new URL(getWsUrl()).origin}/conversation-events`
+  } catch {
+    return ''
+  }
+}
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
@@ -639,6 +662,9 @@ type ConversationHydrationPayload = {
   utterances?: ConversationHydrationUtterance[]
   hasMoreUtterances?: boolean
   oldestMessageCursor?: ConversationHydrationCursor | null
+  conversation?: {
+    isMultiMember?: boolean
+  }
 }
 
 function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationHydrationCursor | null {
@@ -688,6 +714,12 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
           : {}),
         ...(typeof record.speakerAvatarIndex === 'number'
           ? { speakerAvatarIndex: record.speakerAvatarIndex }
+          : {}),
+        ...(typeof record.speakerUserId === 'string' && record.speakerUserId.trim()
+          ? { speakerUserId: record.speakerUserId.trim() }
+          : {}),
+        ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
+          ? { speakerImage: record.speakerImage.trim() }
           : {}),
       })
     })
@@ -963,6 +995,13 @@ export interface BuildFinalizedUtterancePayloadInput {
   speaker?: string
   speakerAvatarSeed?: string
   speakerAvatarIndex?: number
+  // The viewer's own real account id — a locally-produced utterance is
+  // always "mine" by definition, so this is stamped at creation time rather
+  // than waiting on a server round trip.
+  speakerUserId?: string | null
+  // The viewer's own real profile photo, stamped alongside speakerUserId for
+  // the same reason — no round trip needed to know your own photo.
+  speakerImage?: string | null
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -1022,6 +1061,8 @@ export function buildFinalizedUtterancePayload(
     speaker: (input.speaker || '').trim() || 'unknown',
     ...(input.speakerAvatarSeed?.trim() ? { speakerAvatarSeed: input.speakerAvatarSeed.trim() } : {}),
     ...(typeof input.speakerAvatarIndex === 'number' ? { speakerAvatarIndex: input.speakerAvatarIndex } : {}),
+    ...(input.speakerUserId ? { speakerUserId: input.speakerUserId } : {}),
+    ...(input.speakerImage ? { speakerImage: input.speakerImage } : {}),
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -1055,6 +1096,14 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  // The signed-in viewer's own account id, stamped onto every locally
+  // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
+  // room has more than one real member. Unused by solo rooms.
+  viewerUserId?: string | null
+  // The signed-in viewer's own real profile photo, stamped alongside
+  // viewerUserId so a locally finalized "own" bubble shows the real photo
+  // immediately, without waiting on a server round trip.
+  viewerImage?: string | null
 }
 
 type StopRecordingOptions = {
@@ -1183,6 +1232,12 @@ export function buildLiveUtterance(input: {
   partialLang?: string | null
   partialTranslations: Record<string, string>
   languages: string[]
+  // A live/pending turn is always produced by this device's own mic input —
+  // there is no cross-device streaming of another member's in-progress
+  // speech — so it's always "mine" by definition, same as a locally
+  // finalized utterance.
+  viewerUserId?: string | null
+  viewerImage?: string | null
 }): Utterance | null {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
@@ -1208,6 +1263,8 @@ export function buildLiveUtterance(input: {
     speaker: input.pendingTurn.speaker,
     speakerAvatarSeed: input.pendingTurn.speakerAvatarSeed,
     speakerAvatarIndex: input.pendingTurn.speakerAvatarIndex,
+    speakerUserId: input.viewerUserId,
+    speakerImage: input.viewerImage,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages,
@@ -1222,6 +1279,8 @@ export function buildLiveUtterance(input: {
 export function buildLiveUtterances(input: {
   pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>>
   languages: string[]
+  viewerUserId?: string | null
+  viewerImage?: string | null
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
     const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
@@ -1237,6 +1296,8 @@ export function buildLiveUtterances(input: {
       partialLang: pendingTurn.language,
       partialTranslations: pendingTurn.partialTranslations,
       languages: input.languages,
+      viewerUserId: input.viewerUserId,
+      viewerImage: input.viewerImage,
     })
     return utterance ? [utterance] : []
   })
@@ -2212,6 +2273,8 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  viewerUserId = null,
+  viewerImage = null,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -2242,6 +2305,14 @@ export default function useRealtimeSTT({
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(0)
   const [messageCount, setMessageCount] = useState(0)
+  // Whether the server confirms this room has 2+ real members. Starts false
+  // (solo-room behavior) until the first hydration response lands, then
+  // gates whether locally produced utterances get stamped with the
+  // viewer's real account id/photo at all — a true solo room's diarized
+  // "speaker" turns must never be treated as the viewer's own account.
+  const [isSharedRoom, setIsSharedRoom] = useState(false)
+  const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
+  const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -2737,6 +2808,9 @@ export default function useRealtimeSTT({
       if (!response.ok) return false
 
       const payload = await response.json() as ConversationHydrationPayload
+      if (payload.conversation) {
+        setIsSharedRoom(payload.conversation.isMultiMember === true)
+      }
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -2827,18 +2901,13 @@ export default function useRealtimeSTT({
     persistMessageCountSnapshot(messageCount, storageNamespace)
   }, [messageCount, storageNamespace])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!conversationId) return
-    if (!isStorageHydrated) return
+  // Shared by the one-shot mount hydration below and by conversation-events
+  // push/poll (a second real member's messages otherwise never appear in an
+  // already-open room, since nothing else here re-fetches after mount).
+  const refreshFromServerHydration = useCallback((): Promise<void> => {
+    if (!conversationId) return Promise.resolve()
 
-    const hydrationKey = `${conversationId}:${sessionKeyOverride || ''}`
-    if (serverHydrationKeyRef.current === hydrationKey) return
-    serverHydrationKeyRef.current = hydrationKey
-
-    let cancelled = false
-
-    void fetch(buildConversationHydrationApiPath(conversationId), {
+    return fetch(buildConversationHydrationApiPath(conversationId), {
       cache: 'no-store',
       headers: buildConversationHydrationHeaders(),
     })
@@ -2847,7 +2916,11 @@ export default function useRealtimeSTT({
         return response.json() as Promise<ConversationHydrationPayload>
       })
       .then((payload) => {
-        if (cancelled || !payload) return
+        if (!payload) return
+
+        if (payload.conversation) {
+          setIsSharedRoom(payload.conversation.isMultiMember === true)
+        }
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -2889,21 +2962,95 @@ export default function useRealtimeSTT({
       .catch(() => {
         // Keep local state when server hydration fails.
       })
-
-    return () => {
-      cancelled = true
-    }
   }, [
     buildConversationHydrationHeaders,
     buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
     hasOlderUtterancesFromRefs,
-    isStorageHydrated,
     mergeServerHydrationUtterances,
     queueHasOlderUtterancesRefresh,
-    sessionKeyOverride,
   ])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+    if (!isStorageHydrated) return
+
+    const hydrationKey = `${conversationId}:${sessionKeyOverride || ''}`
+    if (serverHydrationKeyRef.current === hydrationKey) return
+    serverHydrationKeyRef.current = hydrationKey
+
+    void refreshFromServerHydration()
+  }, [conversationId, isStorageHydrated, refreshFromServerHydration, sessionKeyOverride])
+
+  // Live sync: a solo room never needed this (nothing else can add a
+  // message), but a room shared by more than one real account does — without
+  // it, another member's messages only show up on next mount/reload. Opens a
+  // push channel on mingle-messaging (membership-checked token minted by the
+  // server) and re-runs the same fetch+merge above on push; a long-interval
+  // poll is the fallback for whenever the socket is down or push is
+  // unconfigured in this environment.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+
+    let cancelled = false
+    let socket: WebSocket | null = null
+    let reconnectTimer: number | null = null
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+    }
+
+    const openSocket = async () => {
+      if (cancelled) return
+      try {
+        const response = await fetch(
+          buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/realtime-token` as `/${string}`),
+          { cache: 'no-store', headers: buildConversationHydrationHeaders() },
+        )
+        if (!response.ok || cancelled) return
+        const payload = await response.json() as { token?: string | null }
+        const token = payload.token
+        const wsBase = getConversationEventsWsUrl()
+        if (!token || !wsBase || cancelled) return
+
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
+        socket.onmessage = () => {
+          void refreshFromServerHydration()
+        }
+        socket.onclose = () => {
+          if (cancelled) return
+          clearReconnectTimer()
+          reconnectTimer = window.setTimeout(openSocket, 5_000)
+        }
+      } catch {
+        // Realtime push failed to set up — the poll fallback below still runs.
+      }
+    }
+
+    void openSocket()
+
+    const pollIntervalMs = 20_000
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void refreshFromServerHydration()
+    }, pollIntervalMs)
+
+    return () => {
+      cancelled = true
+      clearReconnectTimer()
+      window.clearInterval(pollTimer)
+      if (socket) {
+        socket.onclose = null
+        socket.close()
+      }
+    }
+  }, [buildConversationHydrationHeaders, conversationId, refreshFromServerHydration])
 
   useEffect(() => {
     utterancesRef.current = utterances
@@ -3464,6 +3611,8 @@ export default function useRealtimeSTT({
       speaker: options?.speaker,
       speakerAvatarSeed: options?.speakerAvatarSeed,
       speakerAvatarIndex: options?.speakerAvatarIndex,
+      speakerUserId: effectiveViewerUserId,
+      speakerImage: effectiveViewerImage,
       rawText,
       rawLanguage: rawLang,
       languages: targetLanguages,
@@ -3522,7 +3671,7 @@ export default function useRealtimeSTT({
       speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
       speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
-  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages])
+  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, effectiveViewerUserId, effectiveViewerImage])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -4266,6 +4415,8 @@ export default function useRealtimeSTT({
               ? pendingTurn.speakerAvatarIndex
               : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
           ),
+          speakerUserId: effectiveViewerUserId,
+          speakerImage: effectiveViewerImage,
           rawText,
           rawLanguage: lang,
           languages: targetLanguages,
@@ -4453,6 +4604,8 @@ export default function useRealtimeSTT({
     removePendingTurn,
     startAudioProcessing,
     syncVisiblePendingTurn,
+    effectiveViewerUserId,
+    effectiveViewerImage,
   ])
 
   const startRecording = useCallback(async () => {
@@ -5131,19 +5284,25 @@ export default function useRealtimeSTT({
   const liveUtterances = useMemo(() => buildLiveUtterances({
     pendingTurns: pendingTurnSnapshots,
     languages: liveUtteranceLanguages,
-  }), [pendingTurnSnapshots, liveUtteranceLanguages])
+    viewerUserId: effectiveViewerUserId,
+    viewerImage: effectiveViewerImage,
+  }), [pendingTurnSnapshots, liveUtteranceLanguages, effectiveViewerUserId, effectiveViewerImage])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,
     partialLang: activePendingTurn?.language || partialLang,
     partialTranslations: activePendingTurn?.partialTranslations || partialTranslations,
     languages: liveUtteranceLanguages,
+    viewerUserId: effectiveViewerUserId,
+    viewerImage: effectiveViewerImage,
   }), [
     activePendingTurn,
     partialLang,
     partialTranscript,
     partialTranslations,
     liveUtteranceLanguages,
+    effectiveViewerUserId,
+    effectiveViewerImage,
   ])
 
   return {

@@ -1,11 +1,18 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileShareScreen from "@/components/profile-share-screen";
+import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
 import {
   STT_LANGUAGE_OPTIONS,
@@ -18,14 +25,20 @@ import {
   Check,
   ChevronLeft,
   Loader2,
+  MessageCircle,
   UserRound,
   UserX,
   X,
 } from "lucide-react";
-import { motion, useAnimationControls, type PanInfo } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
@@ -36,7 +49,11 @@ type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
   userId: string;
+  open?: boolean;
   onClose?: () => void;
+  onStartDirectConversation?: (
+    conversation: ConversationChannelSummary,
+  ) => void | Promise<void>;
 };
 
 type PublicUserProfile = {
@@ -59,12 +76,17 @@ type PublicUserProfile = {
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
 
-const PROFILE_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
-const SWIPE_THRESHOLD_PX = 72;
-const SWIPE_VELOCITY_PX_PER_SECOND = 650;
+const PROFILE_SHARE_HISTORY_STATE_KEY = "__MINGLE_PUBLIC_PROFILE_SHARE_SURFACE__";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasProfileShareHistoryEntry(userId: string): boolean {
+  if (typeof window === "undefined" || !userId || !isRecord(window.history.state)) return false;
+  const entry = window.history.state[PROFILE_SHARE_HISTORY_STATE_KEY];
+  return isRecord(entry) && entry.userId === userId;
+}
 
 function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   const isKorean = locale === "ko";
@@ -77,6 +99,9 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
     following: dictionary.connect.followingAction ?? (isKorean ? "팔로잉" : "Following"),
     block: dictionary.profile.blockAction ?? (isKorean ? "차단" : "Block"),
     unblock: dictionary.profile.unblockAction ?? (isKorean ? "차단 해제" : "Unblock"),
+    message: dictionary.profile.messageAction ?? (isKorean ? "메시지 보내기" : "Message"),
+    messageError: dictionary.profile.messageError
+      ?? (isKorean ? "대화를 시작하지 못했습니다." : "Could not start the conversation."),
     report: dictionary.profile.reportAction ?? (isKorean ? "신고" : "Report"),
     blockConfirm: dictionary.profile.blockConfirm
       ?? (isKorean ? "이 사용자를 차단하시겠습니까?" : "Block this user?"),
@@ -159,32 +184,36 @@ export default function PublicUserProfileScreen({
   dictionary,
   locale,
   userId,
+  open = true,
   onClose,
+  onStartDirectConversation,
 }: PublicUserProfileScreenProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
-  const motionControls = useAnimationControls();
-  const isMountedRef = useRef(false);
-  const isLeavingRef = useRef(false);
-  const [viewportWidth, setViewportWidth] = useState(1);
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
   const [actionError, setActionError] = useState(false);
+  const [isMessagePending, setIsMessagePending] = useState(false);
+  const [messageError, setMessageError] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportReason>("spam");
   const [reportMessage, setReportMessage] = useState("");
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const [showProfileShare, setShowProfileShare] = useState(false);
+  const [existingConversation, setExistingConversation] = useState<ConversationChannelSummary | null>(null);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
+  const conversationCopy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
   const normalizedUserId = userId.trim();
+  const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
-
   useEffect(() => {
-    if (sessionStatus === "loading") return;
+    if (!open || sessionStatus === "loading") return;
 
     let cancelled = false;
     setIsLoading(true);
@@ -217,35 +246,43 @@ export default function PublicUserProfileScreen({
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, normalizedUserId, sessionStatus]);
+  }, [isOwnProfile, normalizedUserId, open, sessionStatus]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    isMountedRef.current = true;
-    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
-    syncViewportWidth();
-    window.addEventListener("resize", syncViewportWidth);
-    void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
-
-    return () => {
-      isMountedRef.current = false;
-      window.removeEventListener("resize", syncViewportWidth);
-    };
-  }, [motionControls]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: "native_navigation_state",
-        payload: { canGoBack: window.history.length > 1, url: window.location.href },
-      }));
-    } catch {
-      // Keep browser navigation available when the native bridge is unavailable.
+    if (!open) {
+      setShowProfileShare(false);
+      setExistingConversation(null);
+      return;
     }
-  }, []);
+
+    const handlePopState = () => {
+      if (!hasProfileShareHistoryEntry(profileShareHistoryId)) {
+        setShowProfileShare(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [open, profileShareHistoryId]);
+
+  useEffect(() => {
+    setExistingConversation(null);
+    setMessageError(false);
+  }, [normalizedUserId]);
+
+  const closeProfileShare = useCallback(() => {
+    if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      window.history.back();
+      return;
+    }
+    setShowProfileShare(false);
+  }, [profileShareHistoryId]);
 
   const navigateBack = useCallback(() => {
+    if (showProfileShare) {
+      closeProfileShare();
+      return;
+    }
     if (onClose) {
       onClose();
       return;
@@ -255,44 +292,24 @@ export default function PublicUserProfileScreen({
       return;
     }
     router.push(`/${locale}/connect`);
-  }, [locale, onClose, router]);
-
-  const handleBack = useCallback(async () => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: PROFILE_TRANSITION });
-    if (isMountedRef.current) navigateBack();
-  }, [motionControls, navigateBack]);
+  }, [closeProfileShare, locale, onClose, router, showProfileShare]);
 
   useEffect(() => {
+    if (!open) return;
     postNativeAndroidBackCapability(true);
     return () => {
       postNativeAndroidBackCapability(false);
     };
-  }, []);
+  }, [open]);
 
   useEffect(() => registerNativeBackHandler(() => {
-    if (showProfileImagePreview) {
-      setShowProfileImagePreview(false);
-      return true;
-    }
+    if (!open) return false;
     if (reportOpen) {
       setReportOpen(false);
       return true;
     }
-    void handleBack();
-    return true;
-  }, 30), [handleBack, reportOpen, showProfileImagePreview]);
-
-  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!isMountedRef.current || isLeavingRef.current) return;
-    const threshold = Math.max(SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
-    if (info.offset.x >= threshold || info.velocity.x >= SWIPE_VELOCITY_PX_PER_SECOND) {
-      void handleBack();
-      return;
-    }
-    void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
-  }, [handleBack, motionControls, viewportWidth]);
+    return false;
+  }, 70), [open, reportOpen]);
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
@@ -341,6 +358,83 @@ export default function PublicUserProfileScreen({
     }
   }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
 
+  const requestDirectConversation = useCallback(async (force: boolean) => {
+    if (!profile) throw new Error("direct_conversation_failed");
+    const response = await fetch(buildClientApiPath("/conversations/direct"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: profile.id, locale, force }),
+    });
+    if (!response.ok) throw new Error("direct_conversation_failed");
+    const data = await response.json() as {
+      conversation?: ConversationChannelSummary;
+      reused?: boolean;
+    };
+    const conversation = data.conversation;
+    if (!conversation?.id) throw new Error("direct_conversation_failed");
+    return { conversation, reused: data.reused === true };
+  }, [locale, profile]);
+
+  const openDirectConversation = useCallback(async (conversation: ConversationChannelSummary) => {
+    if (onStartDirectConversation) {
+      await onStartDirectConversation(conversation);
+      return;
+    }
+    const conversationListHref = buildNativeAwareTabPath(
+      `/${locale}/conversations`,
+      searchParams,
+      { skipConversationRestore: true, tabRoot: true },
+    );
+    await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
+  }, [locale, onStartDirectConversation, router, searchParams]);
+
+  const handleMessage = useCallback(async () => {
+    if (isOwnProfile || !profile || isMessagePending || profile.isBlocked) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      const { conversation, reused } = await requestDirectConversation(false);
+      if (reused) {
+        setExistingConversation(conversation);
+        return;
+      }
+      await openDirectConversation(conversation);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [isMessagePending, isOwnProfile, openDirectConversation, profile, requestDirectConversation]);
+
+  const handleContinueExistingConversation = useCallback(async () => {
+    if (!existingConversation || isMessagePending) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      await openDirectConversation(existingConversation);
+      setExistingConversation(null);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [existingConversation, isMessagePending, openDirectConversation]);
+
+  const handleCreateNewDirectConversation = useCallback(async () => {
+    if (isMessagePending) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      const { conversation } = await requestDirectConversation(true);
+      await openDirectConversation(conversation);
+      setExistingConversation(null);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [isMessagePending, openDirectConversation, requestDirectConversation]);
+
   const handleReportSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isOwnProfile || !profile || reportPending) return;
@@ -382,23 +476,30 @@ export default function PublicUserProfileScreen({
     : null;
   const handleOpenProfileShare = useCallback(() => {
     if (!profile) return;
-    const searchParams = new URLSearchParams(window.location.search);
-    searchParams.set("profileUserId", profile.id);
-    router.push(`/${locale}/mypage/share?${searchParams.toString()}`);
-  }, [locale, profile, router]);
+    if (typeof window !== "undefined" && !hasProfileShareHistoryEntry(profileShareHistoryId)) {
+      const currentState = isRecord(window.history.state) ? window.history.state : {};
+      window.history.pushState(
+        {
+          ...currentState,
+          [PROFILE_SHARE_HISTORY_STATE_KEY]: { userId: profileShareHistoryId },
+        },
+        "",
+        window.location.href,
+      );
+    }
+    setShowProfileShare(true);
+  }, [profile, profileShareHistoryId]);
 
   return (
-    <motion.main
-      initial={{ x: "100%" }}
-      animate={motionControls}
-      drag="x"
-      dragConstraints={{ left: 0, right: viewportWidth }}
-      dragElastic={0.08}
-      dragMomentum={false}
-      onDragEnd={handleDragEnd}
-      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
-      style={{ touchAction: "pan-y" }}
-    >
+    <>
+      <SlideSurface
+        open={open}
+        onClose={navigateBack}
+        ariaLabel={name}
+        nativeBackPriority={40}
+        className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4"
         style={{
@@ -408,7 +509,7 @@ export default function PublicUserProfileScreen({
       >
         <button
           type="button"
-          onClick={() => void handleBack()}
+          onClick={navigateBack}
           className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
           aria-label={copy.back}
         >
@@ -494,6 +595,21 @@ export default function PublicUserProfileScreen({
                     {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
                   </button>
                 ) : null}
+                {!isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleMessage()}
+                    disabled={isMessagePending || profile.isBlocked}
+                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100 disabled:opacity-50"
+                  >
+                    {isMessagePending ? "…" : (
+                      <>
+                        <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
+                        {copy.message}
+                      </>
+                    )}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleOpenProfileShare}
@@ -530,6 +646,9 @@ export default function PublicUserProfileScreen({
               ) : null}
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
+              ) : null}
+              {messageError ? (
+                <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.messageError}</p>
               ) : null}
             </section>
           </>
@@ -606,6 +725,29 @@ export default function PublicUserProfileScreen({
           </section>
         </div>
       ) : null}
-    </motion.main>
+      {existingConversation ? (
+        <ExistingConversationChoiceDialog
+          title={conversationCopy.inviteFriendsExistingConversationTitle}
+          message={conversationCopy.inviteFriendsExistingConversationMessage}
+          createNewLabel={conversationCopy.inviteFriendsCreateNewAction}
+          continueLabel={conversationCopy.inviteFriendsContinuePreviousAction}
+          isPending={isMessagePending}
+          onCreateNew={handleCreateNewDirectConversation}
+          onContinue={handleContinueExistingConversation}
+          onDismiss={() => setExistingConversation(null)}
+        />
+      ) : null}
+      </SlideSurface>
+      <ProfileShareScreen
+        dictionary={dictionary}
+        locale={locale}
+        initialHandle={profile?.handle ?? ""}
+        initialUserId={profile?.id ?? ""}
+        open={open && showProfileShare && Boolean(profile)}
+        onClose={closeProfileShare}
+        nativeBackPriority={60}
+        zIndex={130}
+      />
+    </>
   );
 }

@@ -78,6 +78,7 @@ model User {
   sessions               Session[]
   passwordResetTokens    PasswordResetToken[]
   conversationChannels   AppConversationChannel[]
+  conversationMemberships AppConversationChannelMember[]
   followingRelations     UserFollow[]             @relation("UserFollowing")
   followerRelations      UserFollow[]             @relation("UserFollowers")
   receivedNotifications  UserNotification[]       @relation("UserNotificationsReceived")
@@ -292,15 +293,64 @@ model AppConversationChannel {
   translationLanguagesLinked Boolean   @default(true) @map("translation_languages_linked")
   defaultDisplayLanguage     String?   @map("default_display_language")
   pausedAt                   DateTime? @map("paused_at")
+  // Invitees from "message this person" / room creation who do NOT yet have
+  // an AppConversationChannelMember row. Nothing about the room is visible to
+  // them (buildVisibleMembershipWhere is membership-only) or persisted about
+  // their participation until the inviter actually sends a first message —
+  // materializePendingConversationInvitees turns these into real membership
+  // rows at that point and clears this list. Kept on the channel rather than
+  // as membership rows with a "pending" status because the requirement is
+  // literally zero DB footprint for the invitee before a message is sent, not
+  // just zero visibility.
+  pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  owner   User                          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members AppConversationChannelMember[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@map("app_conversation_channels")
+}
+
+model AppConversationChannelMember {
+  id        String   @id @default(cuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  role      String   @default("member") // "owner" | "member"
+  // This member's own preferred display language for this room, written via
+  // the room's existing "display-language" menu screen. Solo rooms keep
+  // using AppConversationChannel.defaultDisplayLanguage unchanged; this only
+  // applies once a channel has 2+ members, since one channel-wide value
+  // can't represent per-viewer preference.
+  displayLanguage String?  @map("display_language")
+  // This member's own selected translation-target languages for a shared
+  // (2+-member) room. The room's language-selection screen shows the UNION
+  // of every member's own selectedLanguages (see resolveRoomLanguageUnion in
+  // app-conversations.ts), with per-language attribution, so one member
+  // deselecting a language doesn't remove it for everyone else. Solo rooms
+  // (0-1 members) keep using AppConversationChannel.selectedLanguages
+  // unchanged, same split as displayLanguage above.
+  selectedLanguages String[] @default([]) @map("selected_languages")
+  // This member's own active/paused state for a shared (2+-member) room.
+  // "One active room per account" is a per-person invariant, not a per-room
+  // one — a single channel-wide status can't represent "active for Alice,
+  // paused for Bob" once a room has more than one real account in it. Solo
+  // rooms (0-1 members) keep using AppConversationChannel.status/pausedAt
+  // unchanged, same split as displayLanguage above.
+  status   String    @default("active") @map("status")
+  pausedAt DateTime? @map("paused_at")
+  joinedAt DateTime  @default(now()) @map("joined_at")
+
+  channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId], map: "app_conversation_channel_members_channel_user_uidx")
+  @@index([userId, joinedAt], map: "app_conversation_channel_members_user_joined_idx")
+  @@index([channelId], map: "app_conversation_channel_members_channel_idx")
+  @@map("app_conversation_channel_members")
 }
 
 model AppFeedback {

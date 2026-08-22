@@ -50,6 +50,12 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mingle uses your microphone for real-time speech translation.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Mingle uses your local network to connect to the dev server during development.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mingle-lnp._tcp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Mingle uses your camera to scan profile QR codes.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

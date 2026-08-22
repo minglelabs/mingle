@@ -1,9 +1,11 @@
 'use client'
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useSession } from 'next-auth/react'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
+import SlideSurface from '@/components/slide-surface'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -15,6 +17,7 @@ import {
   buildLanguageSelectorButtonCodes,
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
+  resolveLanguageSelectorOwnSelectedLanguages,
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
@@ -132,7 +135,6 @@ import {
   LIVE_DEMO_MENU_OVERLAY_CLASSNAME,
   LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME,
   resolveLiveDemoMenuPanelClassName,
-  resolveLiveDemoMenuPanelShadow,
   resolveLiveDemoMenuTriggerClassName,
 } from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
@@ -178,14 +180,6 @@ const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 300
-const MENU_PANEL_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-}
-const MENU_BACKDROP_TRANSITION = {
-  duration: 0.22,
-  ease: 'easeOut' as const,
-}
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
@@ -897,11 +891,6 @@ type FeedbackHistoryResponse = {
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
-type LivePhoneDemoMenuMotionState = {
-  enterMode: LivePhoneDemoMenuTransitionMode
-  exitMode: LivePhoneDemoMenuTransitionMode
-  screenTransitionMode: LivePhoneDemoMenuTransitionMode
-}
 
 type FeedbackPageTab = 'compose' | 'history'
 
@@ -1015,36 +1004,13 @@ function resolveMenuContentTransition(
     : { duration: 0 }
 }
 
-const livePhoneDemoMenuBackdropVariants: Variants = {
-  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
-    opacity: motionState?.enterMode === 'instant' ? 1 : 0,
-  }),
-  active: { opacity: 1, transition: MENU_BACKDROP_TRANSITION },
-  exit: (motionState: LivePhoneDemoMenuMotionState) => ({
-    opacity: 0,
-    transition: motionState.exitMode === 'animate'
-      ? MENU_BACKDROP_TRANSITION
-      : { duration: 0 },
-  }),
-}
-
-const livePhoneDemoMenuPanelVariants: Variants = {
-  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
-    x: motionState?.enterMode === 'instant' ? 0 : '100%',
-  }),
-  active: { x: 0, transition: MENU_PANEL_TRANSITION },
-  exit: (motionState: LivePhoneDemoMenuMotionState) => (
-    motionState.exitMode === 'animate'
-      ? { x: '100%', transition: MENU_PANEL_TRANSITION }
-      : { x: '100%', transition: { duration: 0 } }
-  ),
-}
-
 export interface LivePhoneDemoRef {
   startRecording: () => Promise<void>
   stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => Promise<void>
   prepareForDeletion: () => void
   isSttSessionRunning: () => boolean
+  requestCloseTopmostOverlay: () => boolean
+  resetNavigationOverlays: () => Promise<void>
 }
 
 export type LatestUtterancePayload = {
@@ -1102,6 +1068,12 @@ interface LivePhoneDemoProps {
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
+  // The caller's OWN picks, distinct from initialSelectedLanguages (the room
+  // union) once a room has 2+ members. Solo rooms: identical to the above.
+  initialOwnSelectedLanguages?: string[]
+  // language code -> ids of the members who picked it, for the language
+  // picker's per-row avatar attribution. Empty/undefined for solo rooms.
+  selectedLanguagesAttribution?: Record<string, string[]>
   initialSpeechLanguages?: string[]
   initialTranslationLanguagesLinked?: boolean
   initialDefaultDisplayLanguage?: string | null
@@ -1122,6 +1094,13 @@ interface LivePhoneDemoProps {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
   onOpenProfile?: (userId: string) => void
+  // True when this is a 2-real-member room and a block exists between the
+  // viewer and the other member (either direction) — see
+  // ConversationChannelSummary.isBlockedCounterpart. KakaoTalk-style: the
+  // room itself stays mounted/reachable, but the header title falls back to
+  // a generic placeholder, the composer/mic are replaced with a "blocked"
+  // message, and tapping the counterpart's avatar opens nothing.
+  isBlockedCounterpart?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1230,6 +1209,8 @@ type LivePhoneDemoChatMessageRowProps = {
   bubbleTextClassName: string
   speakingPlaybackKey?: string
   shouldAnimateEntrance: boolean
+  viewerUserId?: string | null
+  onOpenProfile?: (userId: string) => void
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1260,6 +1241,8 @@ function LivePhoneDemoChatMessageRow({
   bubbleTextClassName,
   speakingPlaybackKey,
   shouldAnimateEntrance,
+  viewerUserId,
+  onOpenProfile,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1280,6 +1263,8 @@ function LivePhoneDemoChatMessageRow({
         bubbleTextClassName={bubbleTextClassName}
         speakingPlaybackKey={speakingPlaybackKey}
         shouldAnimateEntrance={shouldAnimateEntrance}
+        viewerUserId={viewerUserId}
+        onOpenProfile={onOpenProfile}
       />
     </div>
   )
@@ -1299,6 +1284,8 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
     if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
     if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+    if (prev.viewerUserId !== next.viewerUserId) return false
+    if (prev.onOpenProfile !== next.onOpenProfile) return false
 
     const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
     const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
@@ -1398,6 +1385,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
+  initialOwnSelectedLanguages,
+  selectedLanguagesAttribution: initialSelectedLanguagesAttribution,
   initialSpeechLanguages,
   initialTranslationLanguagesLinked,
   initialDefaultDisplayLanguage,
@@ -1410,11 +1399,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onConversationStatsChange,
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
-  onTranslationLanguagesLinkedChange,
   onDefaultDisplayLanguageChange,
   onOpenProfile,
+  isBlockedCounterpart = false,
 }, ref) {
+  // Only used to tell "my" bubbles from "theirs" in a room shared by more
+  // than one real account — the solo room's own layout never depends on it.
+  const { data: session } = useSession()
+  const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
+  const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
+  const blockedComposerMessageLabel = composerCopy.blockedComposerMessage
+  // Blocking hides the counterpart's PHOTO and stops messaging — their name
+  // stays visible, and tapping my own avatar should keep opening my own
+  // profile.
+  const handleOpenProfileForBubble = useCallback((userId: string) => {
+    if (isBlockedCounterpart && userId !== viewerUserId) return
+    onOpenProfile?.(userId)
+  }, [isBlockedCounterpart, viewerUserId, onOpenProfile])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
     [fallbackLanguages, initialSelectedLanguages],
@@ -1422,6 +1425,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const conversationSpeechLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSpeechLanguages, conversationSelectedLanguages),
     [conversationSelectedLanguages, initialSpeechLanguages],
+  )
+  // Falls back to the union only when the server hasn't sent an own-list
+  // (e.g. an older solo-room response). An explicit empty list remains empty
+  // for a newly materialized invitee who has not picked a language yet.
+  const conversationOwnSelectedLanguages = useMemo(
+    () => resolveLanguageSelectorOwnSelectedLanguages(
+      conversationSelectedLanguages,
+      initialOwnSelectedLanguages,
+    ),
+    [conversationSelectedLanguages, initialOwnSelectedLanguages],
   )
   const conversationTranslationLanguagesLinked = initialTranslationLanguagesLinked !== false
   const normalizedPreferredDisplayLanguages = useMemo(
@@ -1445,6 +1458,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId ? conversationSelectedLanguages : fallbackLanguages,
   )
+  // The caller's own picks — see initialOwnSelectedLanguages above. Drives
+  // the language picker's add/remove decision and what gets PATCHed; the
+  // union (selectedLanguages) drives what's shown as checked and what's sent
+  // as translation targets.
+  const [ownSelectedLanguages, setOwnSelectedLanguages] = useState<string[]>(
+    conversationId ? conversationOwnSelectedLanguages : fallbackLanguages,
+  )
+  const ownSelectedLanguagesRef = useRef<string[]>(ownSelectedLanguages)
+  const [selectedLanguagesAttribution, setSelectedLanguagesAttribution] = useState<Record<string, string[]>>(
+    initialSelectedLanguagesAttribution ?? {},
+  )
+  const selectedLanguagesAttributionRef = useRef(selectedLanguagesAttribution)
   const [speechLanguages, setSpeechLanguages] = useState<string[]>(
     conversationId ? conversationSpeechLanguages : fallbackLanguages,
   )
@@ -1459,31 +1484,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
-    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
     return {
-      menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel
-        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
-      pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle
-        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
+      menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel,
+      pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle,
     }
-  }, [roomManagementCopy, uiLocale])
+  }, [roomManagementCopy])
   const participantsCopy = useMemo(() => {
-    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
     return {
-      menuItemLabel: roomManagementCopy.participantsMenuItemLabel
-        || (isKorean ? '참여자' : 'Participants'),
-      pageTitle: roomManagementCopy.participantsPageTitle
-        || (isKorean ? '참여자' : 'Participants'),
-      selfLabel: roomManagementCopy.participantsSelfLabel
-        || (isKorean ? '나' : 'You'),
-      loadingLabel: roomManagementCopy.participantsLoadingLabel
-        || (isKorean ? '불러오는 중...' : 'Loading...'),
-      errorLabel: roomManagementCopy.participantsErrorLabel
-        || (isKorean ? '참여자 정보를 불러오지 못했습니다.' : 'Could not load participants.'),
-      retryLabel: roomManagementCopy.participantsRetryLabel
-        || (isKorean ? '다시 시도' : 'Try again'),
+      menuItemLabel: roomManagementCopy.participantsMenuItemLabel,
+      pageTitle: roomManagementCopy.participantsPageTitle,
+      selfLabel: roomManagementCopy.participantsSelfLabel,
+      loadingLabel: roomManagementCopy.participantsLoadingLabel,
+      errorLabel: roomManagementCopy.participantsErrorLabel,
+      retryLabel: roomManagementCopy.participantsRetryLabel,
     }
-  }, [roomManagementCopy, uiLocale])
+  }, [roomManagementCopy])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -1491,6 +1506,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
   const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
+  // Display-language is a third-level surface over conversation management.
+  // Keep management mounted underneath it so closing the top surface consumes
+  // only its own history entry and never reopens the room menu from scratch.
+  const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen === 'display-language'
+    ? 'conversation-management'
+    : menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
@@ -1601,7 +1622,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
-  const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const textSizeDropdownRef = useRef<HTMLDivElement | null>(null)
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -1617,6 +1637,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const composerDraftRef = useRef('')
+  // Restored text mode must not steal focus during a programmatic room
+  // transition. Only an explicit user toggle may request the keyboard.
+  const composerFocusRequestedRef = useRef(false)
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
   const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
@@ -1625,8 +1648,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
   const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
-  const [menuEnterMode, setMenuEnterMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
-  const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
@@ -1652,7 +1673,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setFloatingToastMessage('')
     }, 1500)
   }, [])
-  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
@@ -1698,11 +1718,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
-  const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
-    enterMode: menuEnterMode,
-    exitMode: menuExitMode,
-    screenTransitionMode: menuScreenTransitionMode,
-  }), [menuEnterMode, menuExitMode, menuScreenTransitionMode])
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -1783,12 +1798,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       if (!conversationId) {
         setSelectedLanguages(next.selectedLanguages)
+        setOwnSelectedLanguages(next.selectedLanguages)
         setSpeechLanguages(next.speechLanguages)
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
+      composerFocusRequestedRef.current = false
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
         persistedInputMode: next.inputMode,
@@ -1824,6 +1841,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         return [...nextSelectedLanguages]
       })
+      const nextOwnSelectedLanguages = conversationOwnSelectedLanguages
+      setOwnSelectedLanguages((current) => {
+        if (areLanguageSelectionsEqual(current, nextOwnSelectedLanguages)) {
+          return current
+        }
+
+        return [...nextOwnSelectedLanguages]
+      })
       setSpeechLanguages((current) => {
         if (areLanguageSelectionsEqual(current, conversationSpeechLanguages)) {
           return current
@@ -1840,13 +1865,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     conversationId,
     conversationSelectedLanguages,
+    conversationOwnSelectedLanguages,
     conversationSpeechLanguages,
     conversationTranslationLanguagesLinked,
   ])
 
   useEffect(() => {
+    setSelectedLanguagesAttribution(initialSelectedLanguagesAttribution ?? {})
+  }, [initialSelectedLanguagesAttribution])
+
+  useEffect(() => {
     selectedLanguagesRef.current = selectedLanguages
   }, [selectedLanguages])
+
+  useEffect(() => {
+    ownSelectedLanguagesRef.current = ownSelectedLanguages
+  }, [ownSelectedLanguages])
+
+  useEffect(() => {
+    selectedLanguagesAttributionRef.current = selectedLanguagesAttribution
+  }, [selectedLanguagesAttribution])
 
   useEffect(() => {
     speechLanguagesRef.current = speechLanguages
@@ -1856,8 +1894,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!selectedLanguagesChangePendingRef.current) return
 
     selectedLanguagesChangePendingRef.current = false
-    onSelectedLanguagesChange?.(selectedLanguages)
-  }, [onSelectedLanguagesChange, selectedLanguages])
+    onSelectedLanguagesChange?.(ownSelectedLanguages)
+  }, [onSelectedLanguagesChange, ownSelectedLanguages])
 
   useEffect(() => {
     if (!speechLanguagesChangePendingRef.current) return
@@ -2008,11 +2046,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
-    if (!isComposerOpen) return
+    if (!isComposerOpen) {
+      composerFocusRequestedRef.current = false
+      return
+    }
+    if (!composerFocusRequestedRef.current) return
 
     const timerId = window.setTimeout(() => {
       const textarea = composerTextareaRef.current
       if (!textarea) return
+      composerFocusRequestedRef.current = false
       if (textarea.value !== composerDraftRef.current) {
         textarea.value = composerDraftRef.current
       }
@@ -2161,6 +2204,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
+          composerFocusRequestedRef.current = false
           setIsComposerOpen(hydratedPreferences.inputMode === 'text')
         }
         accountPreferencesLastSyncedStateKeyRef.current =
@@ -2362,16 +2406,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const applyMenuNavigationDepth = useCallback((
     nextDepth: number,
     options?: {
-      enterMode?: LivePhoneDemoMenuTransitionMode
-      exitMode?: LivePhoneDemoMenuTransitionMode
       screenTransitionMode?: LivePhoneDemoMenuTransitionMode
       screen?: LivePhoneDemoMenuScreen
     },
   ) => {
     const previousDepth = menuHistoryDepthRef.current
     const boundedDepth = Math.max(0, Math.min(3, nextDepth))
-    const nextEnterMode = options?.enterMode ?? 'animate'
-    const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
     const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
     const nextDirection: LivePhoneDemoMenuScreenDirection = boundedDepth < previousDepth ? 'back' : 'forward'
@@ -2382,7 +2422,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
-      setMenuExitMode(nextExitMode)
       setDeleteAccountDialogOpen(false)
       setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
@@ -2390,8 +2429,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
 
-    setMenuEnterMode(nextEnterMode)
-    setMenuExitMode('animate')
     setMenuOpen(true)
     setMenuScreen(nextScreen)
   }, [])
@@ -2404,7 +2441,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     },
   ) => {
     applyMenuNavigationDepth(nextDepth, {
-      exitMode: 'animate',
       screenTransitionMode: options?.screenTransitionMode ?? 'animate',
       screen,
     })
@@ -2416,7 +2452,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const closeMenuPanel = useCallback(() => {
     menuHistoryTargetDepthRef.current = null
     applyMenuNavigationDepth(0, {
-      exitMode: 'animate',
       screenTransitionMode: 'animate',
     })
   }, [applyMenuNavigationDepth])
@@ -2472,6 +2507,129 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       )
     }
   }, [applyLanguageSelectorOpen])
+
+  const resetNavigationOverlays = useCallback(async () => {
+    closeLanguageSelector({ syncHistory: 'replace' })
+    setRenameConversationDialogOpen(false)
+    setRenameConversationValue(conversationTitle ?? '')
+
+    const currentDepth = menuHistoryDepthRef.current
+    if (typeof window === 'undefined' || currentDepth <= 0) {
+      menuHistoryTargetDepthRef.current = null
+      applyMenuNavigationDepth(0, { screenTransitionMode: 'instant' })
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let timeoutId: number | null = null
+      let frameId: number | null = null
+
+      const scheduleFrame = (callback: () => void) => (
+        typeof window.requestAnimationFrame === 'function'
+          ? window.requestAnimationFrame(callback)
+          : window.setTimeout(callback, 0)
+      )
+
+      const cancelFrame = (id: number) => {
+        if (typeof window.cancelAnimationFrame === 'function') {
+          window.cancelAnimationFrame(id)
+        } else {
+          window.clearTimeout(id)
+        }
+      }
+
+      const finish = () => {
+        if (settled) return
+        settled = true
+        if (timeoutId !== null) window.clearTimeout(timeoutId)
+        if (frameId !== null) cancelFrame(frameId)
+        resolve()
+      }
+
+      const checkSettled = () => {
+        frameId = null
+        if (settled) return
+        if (menuHistoryDepthRef.current <= 0) {
+          finish()
+          return
+        }
+        frameId = scheduleFrame(checkSettled)
+      }
+
+      timeoutId = window.setTimeout(() => {
+        // History navigation should normally settle through the menu popstate
+        // handler. Keep the transition from hanging forever if a restricted
+        // WebView drops the event, while still leaving the browser target at
+        // the requested depth.
+        menuHistoryTargetDepthRef.current = null
+        const currentState = window.history.state
+        if (currentState && typeof currentState === 'object' && !Array.isArray(currentState)) {
+          const nextState = { ...(currentState as Record<string, unknown>) }
+          delete nextState[MENU_HISTORY_STATE_KEY]
+          delete nextState[MENU_HISTORY_SCREEN_STATE_KEY]
+          window.history.replaceState(nextState, '', window.location.href)
+        }
+        applyMenuNavigationDepth(0, { screenTransitionMode: 'instant' })
+        finish()
+      }, 2000)
+
+      requestCloseMenuPanel()
+      checkSettled()
+    })
+  }, [applyMenuNavigationDepth, closeLanguageSelector, conversationTitle, requestCloseMenuPanel])
+
+  const handleMenuSurfaceRequestClose = useCallback(() => {
+    if (langSelectorOpen) {
+      closeLanguageSelector({ syncHistory: 'back' })
+      return false
+    }
+
+    if (renameConversationDialogOpen) {
+      if (!isRenamingConversation) {
+        setRenameConversationDialogOpen(false)
+        setRenameConversationValue(conversationTitle ?? '')
+      }
+      return false
+    }
+
+    if (deleteConversationDialogOpen) {
+      if (!isDeletingConversation) {
+        setDeleteConversationDialogOpen(false)
+      }
+      return false
+    }
+
+    if (textSizeMenuOpen) {
+      setTextSizeMenuOpen(false)
+      return false
+    }
+
+    if (translationModelMenuOpen) {
+      setTranslationModelMenuOpen(false)
+      return false
+    }
+
+    // The menu depth is the source of truth for nested menu history. Consume
+    // exactly one entry before allowing the room surface to close.
+    if (menuHistoryDepthRef.current > 0) {
+      requestMenuBackStep()
+      return false
+    }
+
+    // Recover gracefully if a stale render says the menu is open while its
+    // history depth has already been reset.
+    if (menuOpen) {
+      closeMenuPanel()
+      return false
+    }
+
+    return true
+  }, [closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+
+  const requestCloseTopmostOverlay = useCallback(() => (
+    !handleMenuSurfaceRequestClose()
+  ), [handleMenuSurfaceRequestClose])
 
   const openLanguageSelector = useCallback((options?: {
     syncHistory?: 'push' | 'none'
@@ -2752,7 +2910,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (requestedDepth !== null) {
         menuIosHistorySettleRef.current = null
         applyMenuNavigationDepth(requestedDepth, {
-          exitMode: 'animate',
           screenTransitionMode: 'animate',
           screen: nextStateScreen,
         })
@@ -2781,8 +2938,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       applyMenuNavigationDepth(nextDepth, {
-        enterMode: isNativeIosHistoryGesture && nextDepth > 0 ? 'instant' : 'animate',
-        exitMode: isNativeIosHistoryGesture && nextDepth === 0 ? 'instant' : 'animate',
         screenTransitionMode: isNativeIosHistoryGesture ? 'instant' : 'animate',
         screen: nextStateScreen,
       })
@@ -3538,6 +3693,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    viewerUserId,
+    viewerImage,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
@@ -4089,31 +4246,52 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleSelectedLanguage = useCallback((code: string) => {
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
-    const currentLanguages = selectedLanguagesRef.current
-    const nextLanguages = currentLanguages.includes(normalizedCode)
-      ? currentLanguages.filter(c => c !== normalizedCode)
-      : [...currentLanguages, normalizedCode]
-    selectedLanguagesRef.current = nextLanguages
+    // Add/remove decisions read the caller's OWN picks, not the room union —
+    // tapping a language that's only checked because another member picked
+    // it should add the caller as a co-picker, never remove it from the room.
+    const currentOwnLanguages = ownSelectedLanguagesRef.current
+    const isOwnSelected = currentOwnLanguages.includes(normalizedCode)
+    const nextOwnLanguages = isOwnSelected
+      ? currentOwnLanguages.filter(c => c !== normalizedCode)
+      : [...currentOwnLanguages, normalizedCode]
+    ownSelectedLanguagesRef.current = nextOwnLanguages
     selectedLanguagesChangePendingRef.current = true
-    setSelectedLanguages(nextLanguages)
-  }, [])
+    setOwnSelectedLanguages(nextOwnLanguages)
 
-  const handleToggleSpeechLanguage = useCallback((code: string) => {
-    const normalizedCode = canonicalizeSttLanguageCode(code)
-    if (!normalizedCode) return
-    const currentLanguages = speechLanguagesRef.current
-    const nextLanguages = currentLanguages.includes(normalizedCode)
-      ? currentLanguages.filter(c => c !== normalizedCode)
-      : [...currentLanguages, normalizedCode]
-    speechLanguagesRef.current = nextLanguages
-    speechLanguagesChangePendingRef.current = true
-    setSpeechLanguages(nextLanguages)
-  }, [])
+    // Optimistically keep the displayed union (what's checked, and what
+    // drives translation targets) in sync with the caller's own edit: adding
+    // always adds to the union; removing only drops from the union if no
+    // OTHER member still holds it — solo rooms have no other member, so this
+    // reduces to the old "remove == remove" behavior exactly.
+    const currentUnion = selectedLanguagesRef.current
+    const otherHolders = (selectedLanguagesAttributionRef.current[normalizedCode] ?? [])
+      .filter((memberId) => memberId !== viewerUserId)
+    const nextUnion = !isOwnSelected
+      ? (currentUnion.includes(normalizedCode) ? currentUnion : [...currentUnion, normalizedCode])
+      : (otherHolders.length > 0
+          ? currentUnion
+          : currentUnion.filter(c => c !== normalizedCode))
+    selectedLanguagesRef.current = nextUnion
+    setSelectedLanguages(nextUnion)
 
-  const handleTranslationLanguagesLinkedChange = useCallback((nextLinked: boolean) => {
-    setTranslationLanguagesLinked(nextLinked)
-    onTranslationLanguagesLinkedChange?.(nextLinked)
-  }, [onTranslationLanguagesLinkedChange])
+    // The per-language "who picked this" avatar badge reads this attribution
+    // map — without updating it here too, the viewer's own avatar wouldn't
+    // appear next to a language they just picked until the next full
+    // hydration from the server.
+    if (viewerUserId) {
+      const currentAttribution = selectedLanguagesAttributionRef.current
+      const nextAttribution = { ...currentAttribution }
+      if (!isOwnSelected) {
+        nextAttribution[normalizedCode] = [...otherHolders, viewerUserId]
+      } else if (otherHolders.length > 0) {
+        nextAttribution[normalizedCode] = otherHolders
+      } else {
+        delete nextAttribution[normalizedCode]
+      }
+      selectedLanguagesAttributionRef.current = nextAttribution
+      setSelectedLanguagesAttribution(nextAttribution)
+    }
+  }, [viewerUserId])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
@@ -4192,6 +4370,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
       const next = !previous
+      composerFocusRequestedRef.current = next
       persistedInputModeRef.current = next ? 'text' : 'voice'
       try {
         localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
@@ -4257,7 +4436,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     },
     prepareForDeletion,
     isSttSessionRunning: () => isSttSessionRunning,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion])
+    requestCloseTopmostOverlay,
+    resetNavigationOverlays,
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
@@ -5015,7 +5196,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
-  const isCenteredMenuLayout = viewportWidthPx >= 640
   const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
@@ -5196,6 +5376,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setComposerHasDraft(false)
         persistComposerDraft('', composerDraftStorageKey)
         persistedInputModeRef.current = 'voice'
+        composerFocusRequestedRef.current = false
         setIsComposerOpen(false)
         setAdBannerPosition('bottom')
         setSessionAdBannerPositionOverride('bottom')
@@ -5239,6 +5420,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       },
       setComposerOpen: (nextOpen: boolean) => {
         persistedInputModeRef.current = nextOpen ? 'text' : 'voice'
+        composerFocusRequestedRef.current = false
         setIsComposerOpen(nextOpen)
         if (!nextOpen) {
           composerTextareaRef.current?.blur()
@@ -5393,6 +5575,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}
+                  conversationId={conversationId}
+                  selectedLanguagesAttribution={selectedLanguagesAttribution}
+                  viewerSelectedLanguages={ownSelectedLanguages}
                 />
               ) : null}
             </div>
@@ -5416,62 +5601,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </div>
         </div>
 
-        <AnimatePresence
-          custom={menuMotionState}
-          onExitComplete={() => {
-            setMenuEnterMode('animate')
-            setMenuExitMode('animate')
-            setMenuScreenTransitionMode('animate')
-            if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {
-              try {
-                menuButtonRef.current?.focus({ preventScroll: true })
-              } catch {
-                menuButtonRef.current?.focus()
-              }
-            }
-          }}
+        <SlideSurface
+          open={menuOpen}
+          onClose={requestMenuBackStep}
+          ariaLabel={menuLabel}
+          nativeBackPriority={9}
+          onRequestClose={handleMenuSurfaceRequestClose}
+          backdropClassName={`${LIVE_DEMO_MENU_OVERLAY_CLASSNAME} flex h-full w-full justify-end sm:justify-center`}
+          backdropFadeWithSurface={false}
+          className={resolveLiveDemoMenuPanelClassName(navSurfaceClassName)}
+          style={{ touchAction: 'pan-y' }}
+          onBackdropClick={requestCloseMenuPanel}
+          stopPropagation
         >
-          {menuOpen && (
-            <motion.div
-              custom={menuMotionState}
-              variants={livePhoneDemoMenuBackdropVariants}
-              initial="initial"
-              animate="active"
-              exit="exit"
-              className={LIVE_DEMO_MENU_OVERLAY_CLASSNAME}
-              onClick={requestCloseMenuPanel}
-            >
-              <div className="flex h-full w-full justify-end sm:justify-center">
-                <motion.div
-                  ref={menuPanelRef}
-                  data-qa="live-demo-menu-panel"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label={menuLabel}
-                  tabIndex={-1}
-                  custom={menuMotionState}
-                  variants={livePhoneDemoMenuPanelVariants}
-                  initial="initial"
-                  animate="active"
-                  exit="exit"
-                  onClick={(event) => event.stopPropagation()}
-                  className={resolveLiveDemoMenuPanelClassName(navSurfaceClassName)}
-                  style={{
-                    boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),
-                  }}
-                >
-                  <div className="relative h-full overflow-hidden">
+          <div data-qa="live-demo-menu-panel" className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'root' ? { x: '0%', opacity: 1 } : { x: '-8%', opacity: 0 }}
+                      animate={{ x: '0%', opacity: 1 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
                       aria-hidden={menuScreen !== 'root'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
                         pointerEvents: menuScreen === 'root' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'root'
-                          ? (menuScreenDirection === 'back' ? 2 : 3)
-                          : 1,
+                        zIndex: 1,
                       }}
                     >
                       <LivePhoneDemoPanelHeader
@@ -5955,15 +6107,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       )}
                     </motion.section>
 
+                    <SlideSurface
+                      open={menuOpen && menuScreen !== 'root'}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={menuLabel}
+                      nativeBackPriority={20}
+                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
+                    >
+                      <div className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'feedback'}
+                      aria-hidden={menuContentScreen !== 'feedback'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'feedback' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'feedback'
+                        pointerEvents: menuContentScreen === 'feedback' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'feedback'
                           ? 3
                           : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
@@ -6221,13 +6384,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'conversation-management'}
+                      aria-hidden={menuContentScreen !== 'conversation-management'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'conversation-management' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'conversation-management'
+                        pointerEvents: menuContentScreen === 'conversation-management' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'conversation-management'
                           ? 3
                           : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
@@ -6294,13 +6457,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
-                      animate={menuScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      animate={menuContentScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'participants'}
+                      aria-hidden={menuContentScreen !== 'participants'}
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
-                        pointerEvents: menuScreen === 'participants' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'participants' ? 4 : 1,
+                        pointerEvents: menuContentScreen === 'participants' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'participants' ? 4 : 1,
                       }}
                     >
                       <ConversationParticipantsPanel
@@ -6314,19 +6477,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         retryLabel={participantsCopy.retryLabel}
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
+                        conversationId={conversationId}
                       />
                     </motion.section>
 
-                    <motion.section
-                      initial={false}
-                      animate={menuScreen === 'display-language' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
-                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
-                      aria-hidden={menuScreen !== 'display-language'}
-                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
-                      style={{
-                        pointerEvents: menuScreen === 'display-language' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'display-language' ? 4 : 1,
-                      }}
+                    <SlideSurface
+                      open={menuOpen && menuScreen === 'display-language'}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={defaultDisplayLanguageCopy.pageTitle}
+                      nativeBackPriority={30}
+                      className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
                     >
                       <LivePhoneDemoPanelHeader
                         title={defaultDisplayLanguageCopy.pageTitle}
@@ -6374,13 +6537,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           })}
                         </div>
                       </div>
-                    </motion.section>
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    </SlideSurface>
+                      </div>
+                    </SlideSurface>
+          </div>
+        </SlideSurface>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           {/* Chat Area */}
@@ -6428,6 +6589,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   bubbleTextClassName={chatBubbleTextClassName}
                   speakingPlaybackKey={activeBubblePlaybackKey}
                   shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
+                  viewerUserId={viewerUserId}
+                  onOpenProfile={handleOpenProfileForBubble}
                 />
               ))}
 
@@ -6787,6 +6950,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
+            {isBlockedCounterpart ? (
+              <div
+                data-qa="live-demo-blocked-bottom-bar"
+                className="flex items-center justify-center py-3 text-[0.92rem] font-medium text-gray-400"
+              >
+                {blockedComposerMessageLabel}
+              </div>
+            ) : (
             <AnimatePresence initial={false} mode="popLayout">
               {isComposerOpen ? (
                 <motion.div
@@ -7047,6 +7218,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+            )}
           </motion.div>
         </div>
       </div>

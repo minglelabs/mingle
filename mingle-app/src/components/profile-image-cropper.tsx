@@ -10,6 +10,7 @@ import {
 } from "@/lib/profile-image-crop";
 import { ImagePlus, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { resolveProfileImageCropCopy } from "@/i18n/profile-image-crop-copy";
 
 const CROP_VIEWPORT_SIZE_PX = 240;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -39,23 +40,6 @@ type ProfileImageCropperProps = {
   onChange: (value: ProfileImageCropperChange) => void;
 };
 
-function getCopy(locale: string) {
-  const isKorean = locale === "ko";
-  return {
-    addPhoto: isKorean ? "프로필 사진 추가" : "Add profile photo",
-    changePhoto: isKorean ? "사진 변경" : "Change photo",
-    hint: isKorean
-      ? "사진을 드래그하고 두 손가락으로 확대·축소하세요."
-      : "Drag the photo and pinch with two fingers to zoom.",
-    invalidFile: isKorean
-      ? "JPG, PNG, WEBP 사진만 10MB 이하로 올릴 수 있습니다."
-      : "Use a JPG, PNG, or WEBP image up to 10MB.",
-    loadError: isKorean
-      ? "사진을 표시하지 못했습니다. 다른 사진을 선택해 주세요."
-      : "Could not display this photo. Please choose another one.",
-  };
-}
-
 function distanceBetween(first: PointerPoint, second: PointerPoint): number {
   return Math.hypot(first.x - second.x, first.y - second.y);
 }
@@ -74,7 +58,7 @@ export default function ProfileImageCropper({
   locale,
   onChange,
 }: ProfileImageCropperProps) {
-  const copy = getCopy(locale);
+  const copy = resolveProfileImageCropCopy(locale);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const pointersRef = useRef<Map<number, PointerPoint>>(new Map());

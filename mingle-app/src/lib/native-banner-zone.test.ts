@@ -32,6 +32,12 @@ describe("resolveConversationListNativeBannerZone", () => {
       hasActiveConversation: false,
       isSearchOpen: true,
     })).toBe("hidden");
+    expect(resolveConversationListNativeBannerZone({
+      isAuthenticated: true,
+      hasActiveConversation: false,
+      isSearchOpen: false,
+      isListOverlayOpen: true,
+    })).toBe("hidden");
   });
 
   it("reasserts authentication hiding only for native clients before build 68", () => {

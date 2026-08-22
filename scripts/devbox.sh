@@ -1,16 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# =============================================================================
+# IMPORTANT CONFIGURATION POLICY
+#
+# Vault is the source of truth for persistent devbox/app/STT/messaging configuration.
+# The local Vault is bootstrapped from the MAIN worktree's root
+# /Users/nam/mingle/.env.local plus its service env files, not from this
+# feature worktree's generated .env files. Keep persistent secrets and shared
+# runtime configuration in the main root env, then synchronize them through
+# Vault. Do not add persistent configuration to .devbox.env or use a generated
+# .devbox.env as the solution for missing config.
+#
+# .devbox.env may still be generated as a derived, worktree-local compatibility
+# artifact by existing devbox flows. It is not a source of truth and must not be
+# copied between worktrees or used instead of the main-worktree bootstrap/Vault
+# flow.
+# =============================================================================
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 DEVBOX_LOG_DIR="$ROOT_DIR/.devbox-logs"
 DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
+ROOT_ENV_FILE="$ROOT_DIR/.env.local"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
+MESSAGING_ENV_FILE="$ROOT_DIR/mingle-messaging/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
 RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
+ANDROID_LOCAL_PROPERTIES_FILE="$ROOT_DIR/mingle-app/rn/android/local.properties"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
 IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.0"
@@ -25,6 +45,7 @@ DEFAULT_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-7057041881494735/3768106846"
 DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID="ca-app-pub-7057041881494735/6522262692"
 DEVBOX_BASE_WEB_PORT=3518
 DEVBOX_BASE_STT_PORT=5518
+DEVBOX_BASE_MESSAGING_PORT=7518
 DEVBOX_BASE_METRO_PORT=8518
 DEVBOX_BASE_NGROK_API_PORT=10518
 DEVBOX_PORT_SLOT_SPACING=20
@@ -72,70 +93,147 @@ prefer_supported_node_runtime
 
 APP_MANAGED_KEYS=(
   DEVBOX_WORKTREE_NAME
+  DEVBOX_ROOT_DIR
   DEVBOX_PROFILE
   DEVBOX_WEB_PORT
   DEVBOX_STT_PORT
+  DEVBOX_MESSAGING_PORT
   DEVBOX_METRO_PORT
+  DEVBOX_NGROK_API_PORT
+  DEVBOX_SITE_URL
+  DEVBOX_RN_WS_URL
+  DEVBOX_RN_MESSAGING_WS_URL
+  DEVBOX_PUBLIC_WS_URL
+  DEVBOX_PUBLIC_MESSAGING_WS_URL
+  DEVBOX_TEST_API_BASE_URL
+  DEVBOX_TEST_WS_URL
   NEXT_PUBLIC_SITE_URL
   NEXTAUTH_URL
   NEXT_PUBLIC_WS_PORT
   NEXT_PUBLIC_WS_URL
+  NEXT_PUBLIC_MESSAGING_WS_URL
   NEXT_PUBLIC_API_NAMESPACE
+  MINGLE_MESSAGING_URL
   # Legacy keys are stripped for migration cleanup.
   RN_WEB_APP_BASE_URL
   RN_DEFAULT_WS_URL
   RN_API_NAMESPACE
+  PORT
   MINGLE_TEST_API_BASE_URL
   MINGLE_TEST_WS_URL
 )
 
 STT_MANAGED_KEYS=(
   DEVBOX_WORKTREE_NAME
+  DEVBOX_ROOT_DIR
   DEVBOX_PROFILE
+  DEVBOX_WEB_PORT
+  DEVBOX_STT_PORT
+  DEVBOX_MESSAGING_PORT
+  DEVBOX_METRO_PORT
+  DEVBOX_NGROK_API_PORT
+  DEVBOX_SITE_URL
+  DEVBOX_RN_WS_URL
+  DEVBOX_RN_MESSAGING_WS_URL
+  DEVBOX_PUBLIC_WS_URL
+  DEVBOX_PUBLIC_MESSAGING_WS_URL
+  DEVBOX_TEST_API_BASE_URL
+  DEVBOX_TEST_WS_URL
   PORT
 )
+
+is_persistent_devbox_key() {
+  case "$1" in
+    DEVBOX_NGROK_WEB_DOMAIN|\
+    DEVBOX_CLOUDFLARE_TUNNEL_TOKEN|\
+    DEVBOX_CLOUDFLARE_WEB_HOSTNAME|\
+    DEVBOX_CLOUDFLARE_STT_HOSTNAME|\
+    DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME|\
+    DEVBOX_RN_FALLBACK_SITE_URL|\
+    DEVBOX_RN_FALLBACK_WS_URL|\
+    DEVBOX_TUNNEL_PROVIDER|\
+    DEVBOX_VAULT_PATH|\
+    DEVBOX_VAULT_PROD_PATH|\
+    DEVBOX_LOCAL_HOST|\
+    DEVBOX_OPENCLAW_ROOT|\
+    DEVBOX_IOS_TEAM_ID)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+is_shared_app_setting_key() {
+  case "$1" in
+    DEVBOX_NGROK_WEB_DOMAIN|\
+    DEVBOX_CLOUDFLARE_*|\
+    DEVBOX_RN_FALLBACK_*|\
+    DEVBOX_TUNNEL_PROVIDER|\
+    DEVBOX_VAULT_PATH|\
+    DEVBOX_VAULT_PROD_PATH|\
+    DEVBOX_LOCAL_HOST|\
+    DEVBOX_OPENCLAW_ROOT|\
+    DEVBOX_IOS_TEAM_ID|\
+    RN_AD_BANNER_POSITION|\
+    RN_AD_BANNER_HEIGHT_PX|\
+    RN_ADMOB_APP_ID_IOS|\
+    RN_ADMOB_APP_ID_ANDROID|\
+    RN_ADMOB_BANNER_UNIT_ID_IOS|\
+    RN_ADMOB_BANNER_UNIT_ID_ANDROID)
+      return 0
+      ;;
+  esac
+  return 1
+}
 
 # Populated by collect_reserved_ports/calc_default_ports.
 RESERVED_ALL_PORTS=""
 DEFAULT_WEB_PORT=""
 DEFAULT_STT_PORT=""
+DEFAULT_MESSAGING_PORT=""
 DEFAULT_METRO_PORT=""
 DEFAULT_NGROK_API_PORT=""
 
 # Populated by ngrok tunnel lookup.
 NGROK_WEB_URL=""
 NGROK_STT_URL=""
+NGROK_MESSAGING_URL=""
 NGROK_LAST_ERROR=""
 NGROK_LAST_ERROR_KIND=""
 
-# Values loaded from shell/vault/.env.local.
+# Values loaded from process env, the main-worktree root .env.local, service
+# env files, Vault, or the worktree-local .devbox.env depending on the setting.
 DEFAULT_RN_FALLBACK_SITE_URL="https://mingle-app-xi.vercel.app"
 DEFAULT_RN_FALLBACK_WS_URL="wss://mingle-stt.fly.dev"
 DEVBOX_WORKTREE_NAME=""
 DEVBOX_ROOT_DIR=""
 DEVBOX_WEB_PORT=""
 DEVBOX_STT_PORT=""
+DEVBOX_MESSAGING_PORT=""
 DEVBOX_METRO_PORT=""
 DEVBOX_PROFILE=""
 DEVBOX_LOCAL_HOST=""
 DEVBOX_SITE_URL=""
 DEVBOX_RN_WS_URL=""
+DEVBOX_RN_MESSAGING_WS_URL=""
 DEVBOX_RN_FALLBACK_SITE_URL=""
 DEVBOX_RN_FALLBACK_WS_URL=""
 DEVBOX_PUBLIC_WS_URL=""
+DEVBOX_PUBLIC_MESSAGING_WS_URL=""
 DEVBOX_TEST_API_BASE_URL=""
 DEVBOX_TEST_WS_URL=""
-DEVBOX_VAULT_APP_PATH=""
-DEVBOX_VAULT_STT_PATH=""
+DEVBOX_VAULT_PATH=""
+DEVBOX_VAULT_PROD_PATH=""
 DEVBOX_NGROK_API_PORT=""
 DEVBOX_TUNNEL_PROVIDER="${DEVBOX_TUNNEL_PROVIDER:-}"
 # NOTE:
-# Cloudflare named tunnel variables are commonly stored in shell startup files
-# (e.g. ~/.zshrc). read_app_setting_value() will look them up there when they
-# are not present in process env or local .env files.
+# Cloudflare named tunnel variables are persistent shared settings. Keep them
+# in the MAIN worktree's root .env.local and synchronize them to Vault.
+# An explicitly exported process value may still override them for one run.
 DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}"
 DEVBOX_CLOUDFLARE_WEB_HOSTNAME="${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}"
 DEVBOX_CLOUDFLARE_STT_HOSTNAME="${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}"
+DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="${DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME:-}"
 DEVBOX_LOG_FILE=""
 DEVBOX_OPENCLAW_ROOT=""
 DEVBOX_IOS_TEAM_ID="${DEVBOX_IOS_TEAM_ID:-}"
@@ -212,9 +310,9 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/devbox [--log-file PATH|auto] <command> [options]
-  scripts/devbox init [--web-port N] [--stt-port N] [--metro-port N] [--ngrok-api-port N] [--host HOST] [--vault-app-path PATH] [--vault-stt-path PATH] [--openclaw-root PATH]
-  scripts/devbox bootstrap [--vault-app-path PATH] [--vault-stt-path PATH] [--vault-push] [--openclaw-root PATH]
-  scripts/devbox vault-up [--seed] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox init [--web-port N] [--stt-port N] [--messaging-port N] [--metro-port N] [--ngrok-api-port N] [--host HOST] [--vault-path PATH] [--openclaw-root PATH]
+  scripts/devbox bootstrap [--vault-path PATH] [--vault-push] [--openclaw-root PATH]
+  scripts/devbox vault-up [--seed] [--vault-path PATH]
   scripts/devbox profile --profile local|device [--host HOST]
   scripts/devbox ngrok-config
   scripts/devbox gateway [--openclaw-root PATH] [--mode dev|run] [--]
@@ -222,7 +320,7 @@ Usage:
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
   scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--qa-bridge] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
   scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-scroll-fps] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
@@ -230,8 +328,9 @@ Usage:
 
 Commands:
   init         Generate worktree-aware ports/config runtime files.
-  bootstrap    Read-only for .env.local; install deps and optionally push local env keys to Vault.
-  vault-up     Start local Vault via Homebrew service and optionally seed local env keys.
+  bootstrap    Upload main root shared values and service env values to Vault, then install dependencies.
+               --vault-push is accepted as a backward-compatible no-op.
+  vault-up     Start local Vault via Homebrew service and optionally seed main root/service env values.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
   gateway      Run OpenClaw gateway from configured openclaw root.
@@ -239,8 +338,8 @@ Commands:
   ios-rn-ipa   Archive/export RN iOS app to .xcarchive/.ipa for App Store/TestFlight.
   ios-rn-ipa-prod Same as ios-rn-ipa, defaulting to --device-app-env prod.
   mobile       Build/install RN iOS and Android apps.
-  up           Start STT + Next app together (device profile includes tunnel startup).
-  down         Stop devbox runtime processes (web/stt/metro/tunnels) for this repo.
+  up           Start STT + messaging + Next app together (device profile includes tunnel startup).
+  down         Stop devbox runtime processes (web/stt/messaging/metro/tunnels) for this repo.
   test         Run mingle-app unit tests by default (live with --with-live).
   qa           Run mingle-app mobile UI QA wrappers (contracts/Appium/iOS regression inventory).
   status       Print current endpoints for PC/iOS/Android web and app targets.
@@ -259,13 +358,19 @@ Environment:
                            Example: abcdef.ngrok-free.app
   DEVBOX_TUNNEL_PROVIDER   Device profile tunnel provider (ngrok|cloudflare).
                            Default: ngrok
+  DEVBOX_VAULT_PATH        Shared development Vault KV path for all services.
+                           Default: secret/mingle/dev
+  DEVBOX_VAULT_PROD_PATH   Optional production Vault KV path for --device-app-env prod.
+                           Default: secret/mingle/prod
   DEVBOX_CLOUDFLARE_TUNNEL_TOKEN  Optional: when set with hostnames below,
-                            cloudflare provider uses named tunnel mode.
-                           This can be defined in shell rc files
-                           (e.g. ~/.zshrc, ~/.zprofile).
+                           cloudflare provider uses named tunnel mode.
+                           Store persistent values in the MAIN worktree root
+                           .env.local and synchronize them to Vault.
   DEVBOX_CLOUDFLARE_WEB_HOSTNAME  Named tunnel web hostname (e.g. web-dev.example.com)
   DEVBOX_CLOUDFLARE_STT_HOSTNAME  Named tunnel stt hostname (e.g. stt-dev.example.com)
+  DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME Named tunnel messaging hostname (e.g. msg-dev.example.com)
   DEVBOX_IOS_TEAM_ID       Optional iOS Team ID used by ios-rn-ipa exportOptions.
+                           Store it in the MAIN worktree root .env.local or Vault.
                            Example: 3RFBMN8TKZ
 EOF
 }
@@ -488,6 +593,11 @@ is_managed_key_for_target() {
         [[ "$item" == "$key" ]] && return 0
       done
       ;;
+    mingle)
+      for item in "${APP_MANAGED_KEYS[@]}" "${STT_MANAGED_KEYS[@]}"; do
+        [[ "$item" == "$key" ]] && return 0
+      done
+      ;;
     *)
       return 1
       ;;
@@ -616,7 +726,29 @@ read_vault_cli_env_value_from_local_env_files() {
   local key="$1"
   local value=""
   local file=""
-  for file in "$APP_ENV_FILE" "$STT_ENV_FILE"; do
+  local main_root_env_file=""
+  local main_app_env_file=""
+  local main_stt_env_file=""
+  local main_messaging_env_file=""
+  local -a env_files=()
+
+  main_root_env_file="$(main_worktree_env_file root || true)"
+  main_app_env_file="$(main_worktree_env_file app || true)"
+  main_stt_env_file="$(main_worktree_env_file stt || true)"
+  main_messaging_env_file="$(main_worktree_env_file messaging || true)"
+  env_files=(
+    "$main_root_env_file"
+    "$main_app_env_file"
+    "$main_stt_env_file"
+    "$main_messaging_env_file"
+    "$ROOT_ENV_FILE"
+    "$APP_ENV_FILE"
+    "$STT_ENV_FILE"
+    "$MESSAGING_ENV_FILE"
+  )
+
+  for file in "${env_files[@]}"; do
+    [[ -n "$file" ]] || continue
     [[ -f "$file" ]] || continue
     value="$(read_env_value_from_file "$key" "$file" || true)"
     value="$(decode_dotenv_value "$value")"
@@ -705,42 +837,6 @@ read_env_value_from_vault() {
   [[ -n "$value" ]] && printf '%s' "$value"
 }
 
-can_read_vault_path() {
-  local path="$1"
-  [[ -n "$path" ]] || return 1
-  command -v vault >/dev/null 2>&1 || return 1
-  command -v jq >/dev/null 2>&1 || return 1
-  prepare_vault_cli_env
-  vault kv get -format=json "$path" >/dev/null 2>&1
-}
-
-auto_detect_default_vault_path() {
-  local target="$1"
-  local candidate=""
-  local -a candidates=()
-
-  case "$target" in
-    app)
-      candidates=("secret/mingle-app/dev" "secret/mingle-app/prod")
-      ;;
-    stt)
-      candidates=("secret/mingle-stt/dev" "secret/mingle-stt/prod")
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-
-  for candidate in "${candidates[@]}"; do
-    if can_read_vault_path "$candidate"; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
 try_read_env_value_from_vault_path() {
   local path="$1"
   local key="$2"
@@ -760,6 +856,7 @@ read_app_setting_value() {
   local key="$1"
   local value=""
   local path=""
+  local vault_path=""
   local seen_paths=""
   local -a candidate_paths=()
 
@@ -771,7 +868,7 @@ read_app_setting_value() {
     return 0
   fi
 
-  if [[ "$key" == DEVBOX_* ]]; then
+  if [[ "$key" == DEVBOX_* ]] && ! is_persistent_devbox_key "$key"; then
     value="$(read_devbox_env_value "$key" || true)"
     value="$(trim_whitespace "$value")"
     if [[ -n "$value" ]]; then
@@ -780,16 +877,17 @@ read_app_setting_value() {
     fi
   fi
 
-  if [[ -n "${DEVBOX_VAULT_APP_PATH:-}" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    value="$(read_env_value_from_vault "$DEVBOX_VAULT_APP_PATH" "$key" || true)"
-    if [[ -n "$value" ]]; then
-      printf '%s' "$value"
-      return 0
-    fi
+  value="$(read_main_root_setting_value "$key" || true)"
+  value="$(decode_dotenv_value "$value")"
+  value="$(trim_whitespace "$value")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
   fi
 
   if [[ -f "$APP_ENV_FILE" ]]; then
     value="$(read_env_value_from_file "$key" "$APP_ENV_FILE" || true)"
+    value="$(decode_dotenv_value "$value")"
     value="$(trim_whitespace "$value")"
     if [[ -n "$value" ]]; then
       printf '%s' "$value"
@@ -797,7 +895,21 @@ read_app_setting_value() {
     fi
   fi
 
-  if [[ "$key" == DEVBOX_* ]]; then
+  vault_path="${DEVBOX_VAULT_PATH:-}"
+  if [[ -z "$vault_path" ]]; then
+    vault_path="$(read_main_root_setting_value DEVBOX_VAULT_PATH || true)"
+    vault_path="$(trim_whitespace "$vault_path")"
+  fi
+
+  if [[ -n "$vault_path" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    value="$(read_env_value_from_vault "$vault_path" "$key" || true)"
+    if [[ -n "$value" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  fi
+
+  if [[ "$key" == DEVBOX_* ]] && ! is_shared_app_setting_key "$key"; then
     value="$(read_devbox_shell_setting_value "$key" || true)"
     value="$(trim_whitespace "$value")"
     if [[ -n "$value" ]]; then
@@ -806,9 +918,9 @@ read_app_setting_value() {
     fi
   fi
 
-  candidate_paths+=("${DEVBOX_VAULT_APP_PATH:-}")
-  candidate_paths+=("secret/mingle-app/dev")
-  candidate_paths+=("secret/mingle-app/prod")
+  candidate_paths+=("$vault_path")
+  candidate_paths+=("secret/mingle/dev")
+  candidate_paths+=("secret/mingle/prod")
 
   for path in "${candidate_paths[@]}"; do
     path="$(trim_whitespace "$path")"
@@ -958,6 +1070,7 @@ collect_reserved_ports() {
         for key in \
           DEVBOX_WEB_PORT \
           DEVBOX_STT_PORT \
+          DEVBOX_MESSAGING_PORT \
           DEVBOX_METRO_PORT \
           DEVBOX_NGROK_API_PORT
         do
@@ -980,11 +1093,12 @@ calc_slot_port() {
 default_port_set_available() {
   local web_port="$1"
   local stt_port="$2"
-  local metro_port="$3"
-  local ngrok_api_port="$4"
+  local messaging_port="$3"
+  local metro_port="$4"
+  local ngrok_api_port="$5"
   local port=""
 
-  for port in "$web_port" "$stt_port" "$metro_port" "$ngrok_api_port"; do
+  for port in "$web_port" "$stt_port" "$messaging_port" "$metro_port" "$ngrok_api_port"; do
     (( port >= 1 && port <= 65535 )) || return 1
     port_list_contains "$RESERVED_ALL_PORTS" "$port" && return 1
     port_in_use "$port" && return 1
@@ -1006,12 +1120,14 @@ calc_default_ports() {
     slot="$(((preferred_slot + attempt) % DEVBOX_PORT_SLOT_LIMIT))"
     DEFAULT_WEB_PORT="$(calc_slot_port "$DEVBOX_BASE_WEB_PORT" "$slot")"
     DEFAULT_STT_PORT="$(calc_slot_port "$DEVBOX_BASE_STT_PORT" "$slot")"
+    DEFAULT_MESSAGING_PORT="$(calc_slot_port "$DEVBOX_BASE_MESSAGING_PORT" "$slot")"
     DEFAULT_METRO_PORT="$(calc_slot_port "$DEVBOX_BASE_METRO_PORT" "$slot")"
     DEFAULT_NGROK_API_PORT="$(calc_slot_port "$DEVBOX_BASE_NGROK_API_PORT" "$slot")"
 
     if default_port_set_available \
       "$DEFAULT_WEB_PORT" \
       "$DEFAULT_STT_PORT" \
+      "$DEFAULT_MESSAGING_PORT" \
       "$DEFAULT_METRO_PORT" \
       "$DEFAULT_NGROK_API_PORT"
     then
@@ -1055,58 +1171,44 @@ find_main_worktree_root() {
   return 1
 }
 
-file_has_non_managed_env_entries() {
-  local file="$1"
-  [[ -f "$file" ]] || return 1
-
-  awk -v start="$MANAGED_START" -v end="$MANAGED_END" '
-    $0 == start { in_block = 1; next }
-    $0 == end { in_block = 0; next }
-    !in_block && $0 ~ /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=.*/ { found = 1; exit }
-    END { exit(found ? 0 : 1) }
-  ' "$file"
-}
-
-sync_env_file_from_main_if_needed() {
-  local label="$1"
-  local source_file="$2"
-  local target_file="$3"
-
-  [[ -f "$source_file" ]] || return 0
-  [[ "$source_file" != "$target_file" ]] || return 0
-
-  if [[ ! -f "$target_file" ]]; then
-    ensure_file_parent "$target_file"
-    cp "$source_file" "$target_file"
-    log "seeded $label env from main worktree"
-    return 0
-  fi
-
-  if file_has_non_managed_env_entries "$target_file"; then
-    return 0
-  fi
-
-  if file_has_non_managed_env_entries "$source_file"; then
-    cp "$source_file" "$target_file"
-    log "seeded $label env from main worktree"
-  fi
-}
-
-seed_env_from_main_worktree() {
+main_worktree_env_file() {
+  local target="$1"
   local main_root=""
-  main_root="$(find_main_worktree_root || true)"
-  [[ -n "$main_root" ]] || return 0
-  main_root="$(cd "$main_root" 2>/dev/null && pwd -P || true)"
-  [[ -n "$main_root" ]] || return 0
 
-  sync_env_file_from_main_if_needed \
-    "mingle-app" \
-    "$main_root/mingle-app/.env.local" \
-    "$APP_ENV_FILE"
-  sync_env_file_from_main_if_needed \
-    "mingle-stt" \
-    "$main_root/mingle-stt/.env.local" \
-    "$STT_ENV_FILE"
+  main_root="$(find_main_worktree_root || true)"
+  [[ -n "$main_root" ]] || return 1
+  main_root="$(cd "$main_root" 2>/dev/null && pwd -P || true)"
+  [[ -n "$main_root" ]] || return 1
+
+  case "$target" in
+    root) printf '%s/.env.local' "$main_root" ;;
+    app) printf '%s/mingle-app/.env.local' "$main_root" ;;
+    stt) printf '%s/mingle-stt/.env.local' "$main_root" ;;
+    messaging) printf '%s/mingle-messaging/.env.local' "$main_root" ;;
+    *) return 1 ;;
+  esac
+}
+
+read_main_root_setting_value() {
+  local key="$1"
+  local file=""
+  local value=""
+
+  file="$(main_worktree_env_file root || true)"
+  [[ -n "$file" ]] || return 1
+  value="$(read_env_value_from_file "$key" "$file" || true)"
+  decode_dotenv_value "$value"
+}
+
+read_main_app_setting_value() {
+  local key="$1"
+  local file=""
+  local value=""
+
+  file="$(main_worktree_env_file app || true)"
+  [[ -n "$file" ]] || return 1
+  value="$(read_env_value_from_file "$key" "$file" || true)"
+  decode_dotenv_value "$value"
 }
 
 workspace_dependency_manifest_checksum() {
@@ -1166,8 +1268,10 @@ write_workspace_dependency_install_marker() {
 ensure_workspace_dependencies() {
   local app_dir="$ROOT_DIR/mingle-app"
   local stt_dir="$ROOT_DIR/mingle-stt"
+  local messaging_dir="$ROOT_DIR/mingle-messaging"
   local app_next_bin="$app_dir/node_modules/.bin/next"
   local stt_tsnode_bin="$stt_dir/node_modules/.bin/ts-node"
+  local messaging_tsnode_bin="$messaging_dir/node_modules/.bin/ts-node"
 
   if workspace_dependencies_need_install "$app_dir" "$app_next_bin"; then
     log "installing dependencies: mingle-app"
@@ -1177,8 +1281,13 @@ ensure_workspace_dependencies() {
     log "installing dependencies: mingle-stt"
     pnpm --dir "$stt_dir" install --frozen-lockfile
   fi
+  if workspace_dependencies_need_install "$messaging_dir" "$messaging_tsnode_bin"; then
+    log "installing dependencies: mingle-messaging"
+    pnpm --dir "$messaging_dir" install --frozen-lockfile
+  fi
   write_workspace_dependency_install_marker "$app_dir"
   write_workspace_dependency_install_marker "$stt_dir"
+  write_workspace_dependency_install_marker "$messaging_dir"
 
   ensure_mingle_app_prisma_client
 }
@@ -1204,6 +1313,32 @@ ensure_rn_workspace_dependencies() {
     pnpm --dir "$rn_dir" install --frozen-lockfile
   fi
   write_workspace_dependency_install_marker "$rn_dir"
+}
+
+resolve_android_sdk_path() {
+  local candidate="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [[ -n "$candidate" && -d "$candidate" ]]; then
+    (cd "$candidate" && pwd -P)
+    return 0
+  fi
+
+  candidate="$HOME/Library/Android/sdk"
+  [[ -d "$candidate" ]] || return 1
+  (cd "$candidate" && pwd -P)
+}
+
+ensure_android_sdk_config() {
+  local sdk_path=""
+  sdk_path="$(resolve_android_sdk_path || true)"
+  [[ -n "$sdk_path" ]] || die "Android SDK not found; set ANDROID_HOME or install it at $HOME/Library/Android/sdk"
+
+  export ANDROID_HOME="$sdk_path"
+  export ANDROID_SDK_ROOT="$sdk_path"
+  mkdir -p "$(dirname "$ANDROID_LOCAL_PROPERTIES_FILE")"
+  if [[ ! -f "$ANDROID_LOCAL_PROPERTIES_FILE" ]] || [[ "$(<"$ANDROID_LOCAL_PROPERTIES_FILE")" != "sdk.dir=$sdk_path" ]]; then
+    printf 'sdk.dir=%s\n' "$sdk_path" > "$ANDROID_LOCAL_PROPERTIES_FILE"
+    log "Android SDK configured automatically: $sdk_path"
+  fi
 }
 
 ensure_ios_pods_if_needed() {
@@ -1356,6 +1491,15 @@ decode_dotenv_value() {
   printf '%s' "$value"
 }
 
+encode_private_key_for_vault() {
+  local value="$1"
+  # Keep PEM values single-line in Vault; service runtimes restore these
+  # escaped newlines before using the key.
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
 push_env_file_to_vault_path() {
   local target="$1"
   local path="$2"
@@ -1393,6 +1537,9 @@ push_env_file_to_vault_path() {
     fi
 
     value="$(decode_dotenv_value "$value_raw")"
+    case "$key" in
+      *_PRIVATE_KEY) value="$(encode_private_key_for_vault "$value")" ;;
+    esac
     ensure_single_line_value "$key" "$value"
     kv_args+=("${key}=${value}")
     count=$((count + 1))
@@ -1438,16 +1585,44 @@ push_env_file_to_vault_path() {
   die "failed to inspect vault path for ${target}: $path"
 }
 
+push_env_to_vault_path() {
+  local path="${1:-}"
+  local root_file=""
+  local app_file=""
+  local stt_file=""
+  local messaging_file=""
+
+  root_file="$(main_worktree_env_file root || true)"
+  app_file="$(main_worktree_env_file app || true)"
+  stt_file="$(main_worktree_env_file stt || true)"
+  messaging_file="$(main_worktree_env_file messaging || true)"
+  [[ -n "$app_file" && -f "$app_file" ]] || die "missing main mingle-app/.env.local for Vault bootstrap"
+  [[ -n "$stt_file" && -f "$stt_file" ]] || die "missing main mingle-stt/.env.local for Vault bootstrap"
+
+  push_env_file_to_vault_path "mingle" "$path" "$app_file"
+  push_env_file_to_vault_path "mingle" "$path" "$stt_file"
+  if [[ -n "$messaging_file" && -f "$messaging_file" ]]; then
+    push_env_file_to_vault_path "mingle" "$path" "$messaging_file"
+  else
+    warn "main mingle-messaging/.env.local not found; skipping messaging service env upload"
+  fi
+  if [[ -n "$root_file" && -f "$root_file" ]]; then
+    # Push the root env last so shared values are the final source when a
+    # legacy service env still contains a duplicate key.
+    push_env_file_to_vault_path "mingle" "$path" "$root_file"
+  else
+    warn "main root .env.local not found; skipping shared root env upload"
+  fi
+}
+
 cmd_vault_up() {
   local seed=0
-  local vault_app_override=""
-  local vault_stt_override=""
+  local vault_override=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --seed) seed=1; shift ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       *) die "unknown option for vault-up: $1" ;;
     esac
   done
@@ -1467,19 +1642,11 @@ cmd_vault_up() {
 
   if [[ "$seed" -eq 1 ]]; then
     require_devbox_env
-    resolve_vault_paths "$vault_app_override" "$vault_stt_override"
-    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --seed (set --vault-app-path or bootstrap once with detected path)"
-    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --seed (set --vault-stt-path or bootstrap once with detected path)"
+    resolve_vault_path "$vault_override"
+    [[ -n "$DEVBOX_VAULT_PATH" ]] || die "missing shared vault path for --seed (set DEVBOX_VAULT_PATH in the main root .env.local or pass --vault-path)"
     vault token lookup >/dev/null 2>&1 || die "vault is running but token lookup failed (run: vault login)"
-    push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
+    push_env_to_vault_path "$DEVBOX_VAULT_PATH"
   fi
-}
-
-push_env_to_vault_paths() {
-  local app_path="${1:-}"
-  local stt_path="${2:-}"
-  push_env_file_to_vault_path "app" "$app_path" "$APP_ENV_FILE"
-  push_env_file_to_vault_path "stt" "$stt_path" "$STT_ENV_FILE"
 }
 
 sync_env_from_vault_path() {
@@ -1520,10 +1687,8 @@ sync_env_from_vault_path() {
 }
 
 sync_env_from_vault_paths() {
-  local app_path="${1:-}"
-  local stt_path="${2:-}"
-  sync_env_from_vault_path "app" "$app_path" "$APP_ENV_FILE"
-  sync_env_from_vault_path "stt" "$stt_path" "$STT_ENV_FILE"
+  local path="${1:-}"
+  sync_env_from_vault_path "mingle" "$path" "$ROOT_ENV_FILE"
 }
 
 write_runtime_env_from_vault_path() {
@@ -1565,39 +1730,19 @@ write_runtime_env_from_vault_path() {
   log "loaded ${count} runtime keys from vault (${target})"
 }
 
-resolve_vault_paths() {
-  local app_override="${1:-}"
-  local stt_override="${2:-}"
-  local app_path="${DEVBOX_VAULT_APP_PATH:-}"
-  local stt_path="${DEVBOX_VAULT_STT_PATH:-}"
-  local detected_app_path=""
-  local detected_stt_path=""
+resolve_vault_path() {
+  local override="${1:-}"
+  local path="${DEVBOX_VAULT_PATH:-}"
 
-  if [[ -n "$app_override" ]]; then
-    app_path="$app_override"
-  fi
-  if [[ -n "$stt_override" ]]; then
-    stt_path="$stt_override"
+  if [[ -n "$override" ]]; then
+    path="$override"
   fi
 
-  if [[ -z "$app_path" ]]; then
-    detected_app_path="$(auto_detect_default_vault_path "app" || true)"
-    if [[ -n "$detected_app_path" ]]; then
-      app_path="$detected_app_path"
-      log "auto-detected vault app path: $app_path"
-    fi
+  if [[ -z "$path" ]]; then
+    path="secret/mingle/dev"
   fi
 
-  if [[ -z "$stt_path" ]]; then
-    detected_stt_path="$(auto_detect_default_vault_path "stt" || true)"
-    if [[ -n "$detected_stt_path" ]]; then
-      stt_path="$detected_stt_path"
-      log "auto-detected vault stt path: $stt_path"
-    fi
-  fi
-
-  DEVBOX_VAULT_APP_PATH="$app_path"
-  DEVBOX_VAULT_STT_PATH="$stt_path"
+  DEVBOX_VAULT_PATH="$path"
 }
 
 resolve_openclaw_root() {
@@ -1688,15 +1833,15 @@ require_devbox_env() {
   fi
   DEVBOX_ROOT_DIR="$ROOT_CANON"
 
-  if [[ -z "${DEVBOX_VAULT_APP_PATH:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_APP_PATH || true)")"
-    [[ -n "$value" ]] && DEVBOX_VAULT_APP_PATH="$value"
+  if [[ -z "${DEVBOX_VAULT_PATH:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_PATH || true)")"
+    [[ -n "$value" ]] && DEVBOX_VAULT_PATH="$value"
   fi
-  if [[ -z "${DEVBOX_VAULT_STT_PATH:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_STT_PATH || true)")"
-    [[ -n "$value" ]] && DEVBOX_VAULT_STT_PATH="$value"
+  resolve_vault_path "$DEVBOX_VAULT_PATH"
+  if [[ -z "${DEVBOX_VAULT_PROD_PATH:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_PROD_PATH || true)")"
+    [[ -n "$value" ]] && DEVBOX_VAULT_PROD_PATH="$value"
   fi
-  resolve_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
 
   if [[ -z "${DEVBOX_OPENCLAW_ROOT:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_OPENCLAW_ROOT || true)")"
@@ -1715,6 +1860,10 @@ require_devbox_env() {
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_STT_PORT || true)")"
     [[ -n "$value" ]] && DEVBOX_STT_PORT="$value"
   fi
+  if [[ -z "${DEVBOX_MESSAGING_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_MESSAGING_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_MESSAGING_PORT="$value"
+  fi
   if [[ -z "${DEVBOX_METRO_PORT:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_METRO_PORT || true)")"
     [[ -n "$value" ]] && DEVBOX_METRO_PORT="$value"
@@ -1725,6 +1874,7 @@ require_devbox_env() {
   fi
   [[ -n "${DEVBOX_WEB_PORT:-}" ]] || DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
   [[ -n "${DEVBOX_STT_PORT:-}" ]] || DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
+  [[ -n "${DEVBOX_MESSAGING_PORT:-}" ]] || DEVBOX_MESSAGING_PORT="$DEFAULT_MESSAGING_PORT"
   [[ -n "${DEVBOX_METRO_PORT:-}" ]] || DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
   [[ -n "${DEVBOX_NGROK_API_PORT:-}" ]] || DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
 
@@ -1748,9 +1898,25 @@ require_devbox_env() {
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_WS_URL || true)")"
     [[ -n "$value" ]] && DEVBOX_RN_WS_URL="$value"
   fi
+  if [[ -z "${DEVBOX_RN_MESSAGING_WS_URL:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_MESSAGING_WS_URL || true)")"
+    [[ -n "$value" ]] && DEVBOX_RN_MESSAGING_WS_URL="$value"
+  fi
   if [[ -z "${DEVBOX_PUBLIC_WS_URL:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PUBLIC_WS_URL || true)")"
     [[ -n "$value" ]] && DEVBOX_PUBLIC_WS_URL="$value"
+  fi
+  if [[ -z "${DEVBOX_PUBLIC_MESSAGING_WS_URL:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PUBLIC_MESSAGING_WS_URL || true)")"
+    [[ -n "$value" ]] && DEVBOX_PUBLIC_MESSAGING_WS_URL="$value"
+  fi
+  if [[ -z "${DEVBOX_RN_FALLBACK_SITE_URL:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_FALLBACK_SITE_URL || true)")"
+    [[ -n "$value" ]] && DEVBOX_RN_FALLBACK_SITE_URL="$value"
+  fi
+  if [[ -z "${DEVBOX_RN_FALLBACK_WS_URL:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_FALLBACK_WS_URL || true)")"
+    [[ -n "$value" ]] && DEVBOX_RN_FALLBACK_WS_URL="$value"
   fi
   if [[ -z "${DEVBOX_TEST_API_BASE_URL:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_TEST_API_BASE_URL || true)")"
@@ -1769,6 +1935,7 @@ require_devbox_env() {
   : "${DEVBOX_WORKTREE_NAME:?missing DEVBOX_WORKTREE_NAME}"
   : "${DEVBOX_WEB_PORT:?missing DEVBOX_WEB_PORT}"
   : "${DEVBOX_STT_PORT:?missing DEVBOX_STT_PORT}"
+  : "${DEVBOX_MESSAGING_PORT:?missing DEVBOX_MESSAGING_PORT}"
   : "${DEVBOX_METRO_PORT:?missing DEVBOX_METRO_PORT}"
   : "${DEVBOX_PROFILE:?missing DEVBOX_PROFILE}"
   case "$DEVBOX_PROFILE" in
@@ -1781,8 +1948,17 @@ require_devbox_env() {
   if [[ -z "${DEVBOX_RN_WS_URL:-}" ]]; then
     DEVBOX_RN_WS_URL="ws://$DEVBOX_LOCAL_HOST:$DEVBOX_STT_PORT"
   fi
+  if [[ -z "${DEVBOX_RN_MESSAGING_WS_URL:-}" ]]; then
+    DEVBOX_RN_MESSAGING_WS_URL="ws://$DEVBOX_LOCAL_HOST:$DEVBOX_MESSAGING_PORT"
+  fi
   if [[ -z "${DEVBOX_PUBLIC_WS_URL:-}" && "$DEVBOX_PROFILE" == "device" ]]; then
     DEVBOX_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL"
+  fi
+  if [[ -z "${DEVBOX_PUBLIC_MESSAGING_WS_URL:-}" && "$DEVBOX_PROFILE" == "device" ]]; then
+    DEVBOX_PUBLIC_MESSAGING_WS_URL="$DEVBOX_RN_MESSAGING_WS_URL"
+  fi
+  if [[ -z "${DEVBOX_PUBLIC_MESSAGING_WS_URL:-}" && "$DEVBOX_PROFILE" == "local" ]]; then
+    DEVBOX_PUBLIC_MESSAGING_WS_URL="$DEVBOX_RN_MESSAGING_WS_URL"
   fi
   if [[ -z "${DEVBOX_TEST_API_BASE_URL:-}" ]]; then
     DEVBOX_TEST_API_BASE_URL="http://127.0.0.1:$DEVBOX_WEB_PORT"
@@ -1792,17 +1968,23 @@ require_devbox_env() {
   fi
   : "${DEVBOX_SITE_URL:?missing DEVBOX_SITE_URL}"
   : "${DEVBOX_RN_WS_URL:?missing DEVBOX_RN_WS_URL}"
+  : "${DEVBOX_RN_MESSAGING_WS_URL:?missing DEVBOX_RN_MESSAGING_WS_URL}"
   : "${DEVBOX_TEST_API_BASE_URL:?missing DEVBOX_TEST_API_BASE_URL}"
   : "${DEVBOX_TEST_WS_URL:?missing DEVBOX_TEST_WS_URL}"
 
   validate_port "DEVBOX_WEB_PORT" "$DEVBOX_WEB_PORT"
   validate_port "DEVBOX_STT_PORT" "$DEVBOX_STT_PORT"
+  validate_port "DEVBOX_MESSAGING_PORT" "$DEVBOX_MESSAGING_PORT"
   validate_port "DEVBOX_METRO_PORT" "$DEVBOX_METRO_PORT"
   validate_port "DEVBOX_NGROK_API_PORT" "$DEVBOX_NGROK_API_PORT"
   validate_http_url "DEVBOX_SITE_URL" "$DEVBOX_SITE_URL"
   validate_ws_url "DEVBOX_RN_WS_URL" "$DEVBOX_RN_WS_URL"
+  validate_ws_url "DEVBOX_RN_MESSAGING_WS_URL" "$DEVBOX_RN_MESSAGING_WS_URL"
   if [[ -n "$DEVBOX_PUBLIC_WS_URL" ]]; then
     validate_ws_url "DEVBOX_PUBLIC_WS_URL" "$DEVBOX_PUBLIC_WS_URL"
+  fi
+  if [[ -n "$DEVBOX_PUBLIC_MESSAGING_WS_URL" ]]; then
+    validate_ws_url "DEVBOX_PUBLIC_MESSAGING_WS_URL" "$DEVBOX_PUBLIC_MESSAGING_WS_URL"
   fi
   validate_http_url "DEVBOX_TEST_API_BASE_URL" "$DEVBOX_TEST_API_BASE_URL"
   validate_ws_url "DEVBOX_TEST_WS_URL" "$DEVBOX_TEST_WS_URL"
@@ -1828,54 +2010,11 @@ EOF
     DEVBOX_PROFILE \
     DEVBOX_WEB_PORT \
     DEVBOX_STT_PORT \
+    DEVBOX_MESSAGING_PORT \
     DEVBOX_METRO_PORT \
-    DEVBOX_NGROK_API_PORT \
-    DEVBOX_LOCAL_HOST \
-    DEVBOX_SITE_URL \
-    DEVBOX_RN_WS_URL \
-    DEVBOX_RN_FALLBACK_SITE_URL \
-    DEVBOX_RN_FALLBACK_WS_URL \
-    DEVBOX_PUBLIC_WS_URL \
-    DEVBOX_TEST_API_BASE_URL \
-    DEVBOX_TEST_WS_URL \
-    NEXT_PUBLIC_SITE_URL \
-    NEXTAUTH_URL \
-    NEXT_PUBLIC_WS_PORT \
-    NEXT_PUBLIC_WS_URL \
-    MINGLE_TEST_API_BASE_URL \
-    MINGLE_TEST_WS_URL \
-    RN_IOS_API_NAMESPACE \
-    RN_ANDROID_API_NAMESPACE \
-    RN_AD_BANNER_POSITION \
-    RN_AD_BANNER_HEIGHT_PX \
-    RN_ADMOB_APP_ID_IOS \
-    RN_ADMOB_APP_ID_ANDROID \
-    RN_ADMOB_BANNER_UNIT_ID_IOS \
-    RN_ADMOB_BANNER_UNIT_ID_ANDROID \
-    DEVBOX_TUNNEL_PROVIDER \
-    DEVBOX_VAULT_APP_PATH \
-    DEVBOX_VAULT_STT_PATH \
-    DEVBOX_OPENCLAW_ROOT \
-    DEVBOX_IOS_TEAM_ID
+    DEVBOX_NGROK_API_PORT
   do
-    case "$key" in
-      NEXT_PUBLIC_SITE_URL|NEXTAUTH_URL) value="${DEVBOX_SITE_URL:-}" ;;
-      DEVBOX_RN_FALLBACK_SITE_URL) value="${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}" ;;
-      DEVBOX_RN_FALLBACK_WS_URL) value="${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}" ;;
-      NEXT_PUBLIC_WS_PORT) value="${DEVBOX_STT_PORT:-}" ;;
-      NEXT_PUBLIC_WS_URL) value="${DEVBOX_RN_WS_URL:-}" ;;
-      MINGLE_TEST_API_BASE_URL) value="${DEVBOX_TEST_API_BASE_URL:-}" ;;
-      MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
-      RN_IOS_API_NAMESPACE) value="${IOS_RN_REQUIRED_API_NAMESPACE:-}" ;;
-      RN_ANDROID_API_NAMESPACE) value="${ANDROID_RN_REQUIRED_API_NAMESPACE:-}" ;;
-      RN_AD_BANNER_POSITION) value="$(resolve_devbox_ad_banner_position)" ;;
-      RN_AD_BANNER_HEIGHT_PX) value="$(resolve_devbox_ad_banner_height_px)" ;;
-      RN_ADMOB_APP_ID_IOS) value="$(resolve_devbox_admob_app_id_ios)" ;;
-      RN_ADMOB_APP_ID_ANDROID) value="$(resolve_devbox_admob_app_id_android)" ;;
-      RN_ADMOB_BANNER_UNIT_ID_IOS) value="$(resolve_devbox_admob_banner_unit_id_ios)" ;;
-      RN_ADMOB_BANNER_UNIT_ID_ANDROID) value="$(resolve_devbox_admob_banner_unit_id_android)" ;;
-      *) value="${!key:-}" ;;
-    esac
+    value="${!key:-}"
     printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
   done
 }
@@ -1889,11 +2028,14 @@ DEVBOX_WORKTREE_NAME=$DEVBOX_WORKTREE_NAME
 DEVBOX_PROFILE=$DEVBOX_PROFILE
 DEVBOX_WEB_PORT=$DEVBOX_WEB_PORT
 DEVBOX_STT_PORT=$DEVBOX_STT_PORT
+DEVBOX_MESSAGING_PORT=$DEVBOX_MESSAGING_PORT
 DEVBOX_METRO_PORT=$DEVBOX_METRO_PORT
 NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL
 NEXTAUTH_URL=$DEVBOX_SITE_URL
 NEXT_PUBLIC_WS_PORT=$DEVBOX_STT_PORT
 NEXT_PUBLIC_WS_URL=$DEVBOX_PUBLIC_WS_URL
+NEXT_PUBLIC_MESSAGING_WS_URL=$DEVBOX_PUBLIC_MESSAGING_WS_URL
+MINGLE_MESSAGING_URL=http://127.0.0.1:$DEVBOX_MESSAGING_PORT
 NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
 MINGLE_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL
 MINGLE_TEST_WS_URL=$DEVBOX_TEST_WS_URL
@@ -1927,6 +2069,12 @@ resolve_runtime_nextauth_secret() {
   value="$(read_env_value_from_file NEXTAUTH_SECRET "$runtime_file")"
   if [[ -z "$value" ]]; then
     value="$(read_env_value_from_file AUTH_SECRET "$runtime_file")"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(read_main_root_setting_value NEXTAUTH_SECRET || true)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(read_main_root_setting_value AUTH_SECRET || true)"
   fi
   if [[ -z "$value" ]]; then
     value="$(read_env_value_from_file NEXTAUTH_SECRET "$APP_ENV_FILE")"
@@ -1989,6 +2137,9 @@ EOF
   cat >> "$NGROK_LOCAL_CONFIG" <<EOF
   devbox_stt:
     addr: $DEVBOX_STT_PORT
+    proto: http
+  devbox_messaging:
+    addr: $DEVBOX_MESSAGING_PORT
     proto: http
 EOF
 }
@@ -2071,7 +2222,9 @@ set_local_profile_values() {
   DEVBOX_LOCAL_HOST="$host"
   DEVBOX_SITE_URL="http://$host:$DEVBOX_WEB_PORT"
   DEVBOX_RN_WS_URL="ws://$host:$DEVBOX_STT_PORT"
+  DEVBOX_RN_MESSAGING_WS_URL="ws://$host:$DEVBOX_MESSAGING_PORT"
   DEVBOX_PUBLIC_WS_URL=""
+  DEVBOX_PUBLIC_MESSAGING_WS_URL="$DEVBOX_RN_MESSAGING_WS_URL"
   DEVBOX_TEST_API_BASE_URL="http://127.0.0.1:$DEVBOX_WEB_PORT"
   DEVBOX_TEST_WS_URL="ws://127.0.0.1:$DEVBOX_STT_PORT"
 }
@@ -2089,7 +2242,7 @@ to_wss_url() {
 ngrok_plan_capacity_hint() {
   cat <<'EOF'
 hint: ngrok free plan limits can vary by account generation (often 1~3 online endpoints).
-      devbox device profile uses 2 endpoints (web+stt) per worktree.
+      devbox device profile uses 3 endpoints (web+stt+messaging) per worktree.
       verify your exact limits from ngrok dashboard usage/billing pages.
 EOF
 }
@@ -2256,10 +2409,11 @@ cloudflared_named_bridge_log_file_path() {
 }
 
 resolve_cloudflare_named_tunnel_settings() {
-  local token web_host stt_host
+  local token web_host stt_host messaging_host
   token="$(trim_whitespace "${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}")"
   web_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}")"
   stt_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}")"
+  messaging_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME:-}")"
 
   if [[ -z "$token" ]]; then
     token="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_TUNNEL_TOKEN || true)")"
@@ -2270,28 +2424,35 @@ resolve_cloudflare_named_tunnel_settings() {
   if [[ -z "$stt_host" ]]; then
     stt_host="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_STT_HOSTNAME || true)")"
   fi
+  if [[ -z "$messaging_host" ]]; then
+    messaging_host="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME || true)")"
+  fi
 
-  if [[ -z "$token" && -z "$web_host" && -z "$stt_host" ]]; then
+  if [[ -z "$token" && -z "$web_host" && -z "$stt_host" && -z "$messaging_host" ]]; then
     return 1
   fi
 
   [[ -n "$token" ]] || die "missing DEVBOX_CLOUDFLARE_TUNNEL_TOKEN for named tunnel mode"
   [[ -n "$web_host" ]] || die "missing DEVBOX_CLOUDFLARE_WEB_HOSTNAME for named tunnel mode"
   [[ -n "$stt_host" ]] || die "missing DEVBOX_CLOUDFLARE_STT_HOSTNAME for named tunnel mode"
+  [[ -n "$messaging_host" ]] || die "missing DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME for named tunnel mode"
 
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
+  messaging_host="$(normalize_domain_input "$messaging_host")"
   validate_host "$web_host"
   validate_host "$stt_host"
+  validate_host "$messaging_host"
   ensure_single_line_value "DEVBOX_CLOUDFLARE_TUNNEL_TOKEN" "$token"
 
-  printf '%s\n%s\n%s\n' "$token" "$web_host" "$stt_host"
+  printf '%s\n%s\n%s\n%s\n' "$token" "$web_host" "$stt_host" "$messaging_host"
 }
 
 resolve_cloudflare_named_hostnames() {
-  local web_host stt_host
+  local web_host stt_host messaging_host
   web_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}")"
   stt_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}")"
+  messaging_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME:-}")"
 
   if [[ -z "$web_host" ]]; then
     web_host="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_WEB_HOSTNAME || true)")"
@@ -2299,20 +2460,26 @@ resolve_cloudflare_named_hostnames() {
   if [[ -z "$stt_host" ]]; then
     stt_host="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_STT_HOSTNAME || true)")"
   fi
+  if [[ -z "$messaging_host" ]]; then
+    messaging_host="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME || true)")"
+  fi
 
-  if [[ -z "$web_host" && -z "$stt_host" ]]; then
+  if [[ -z "$web_host" && -z "$stt_host" && -z "$messaging_host" ]]; then
     return 1
   fi
 
   [[ -n "$web_host" ]] || die "missing DEVBOX_CLOUDFLARE_WEB_HOSTNAME for cloudflare named host profile"
   [[ -n "$stt_host" ]] || die "missing DEVBOX_CLOUDFLARE_STT_HOSTNAME for cloudflare named host profile"
+  [[ -n "$messaging_host" ]] || die "missing DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME for cloudflare named host profile"
 
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
+  messaging_host="$(normalize_domain_input "$messaging_host")"
   validate_host "$web_host"
   validate_host "$stt_host"
+  validate_host "$messaging_host"
 
-  printf '%s\n%s\n' "$web_host" "$stt_host"
+  printf '%s\n%s\n%s\n' "$web_host" "$stt_host" "$messaging_host"
 }
 
 wait_for_cloudflared_named_tunnel() {
@@ -2359,6 +2526,7 @@ write_cloudflared_named_config() {
   local config_file="$1"
   local web_host="$2"
   local stt_host="$3"
+  local messaging_host="$4"
 
   mkdir -p "$(dirname "$config_file")"
   cat >"$config_file" <<EOF
@@ -2370,6 +2538,8 @@ ingress:
     service: http://127.0.0.1:$DEVBOX_WEB_PORT
   - hostname: $stt_host
     service: http://127.0.0.1:$DEVBOX_STT_PORT
+  - hostname: $messaging_host
+    service: http://127.0.0.1:$DEVBOX_MESSAGING_PORT
   - service: http_status:404
 EOF
 }
@@ -2867,6 +3037,7 @@ run_android_mobile_install() {
 
   require_cmd adb
   ensure_rn_workspace_dependencies
+  ensure_android_sdk_config
 
   local gradle_task="installRelease"
   if [[ "$variant" == "debug" ]]; then
@@ -3017,8 +3188,8 @@ Override only if intentional: DEVBOX_ALLOW_LOCAL_PROFILE_IOS_DEVICE=1"
 stop_existing_ngrok_by_inspector_port() {
   local inspector_port="$1"
   local name_patterns=(
-    "ngrok.start.*devbox_web.*devbox_stt"
-    "scripts/ngrok-start-mobile.sh .*devbox_web.*devbox_stt"
+    "ngrok.start.*devbox_web.*devbox_stt.*devbox_messaging"
+    "scripts/ngrok-start-mobile.sh .*devbox_web.*devbox_stt.*devbox_messaging"
     "ngrok.*devbox.mobile.local.yml"
   )
   local pids=""
@@ -3133,8 +3304,9 @@ wait_for_cloudflared_tunnel_url() {
 try_read_ngrok_urls() {
   local expected_web_port="${1:-}"
   local expected_stt_port="${2:-}"
-  local require_https="${3:-0}"
-  local inspector_port="${4:-$DEVBOX_NGROK_API_PORT}"
+  local expected_messaging_port="${3:-}"
+  local require_https="${4:-0}"
+  local inspector_port="${5:-$DEVBOX_NGROK_API_PORT}"
 
   local raw parsed
   NGROK_LAST_ERROR=""
@@ -3150,6 +3322,7 @@ try_read_ngrok_urls() {
     printf '%s' "$raw" | \
       DEVBOX_EXPECT_WEB_PORT="$expected_web_port" \
       DEVBOX_EXPECT_STT_PORT="$expected_stt_port" \
+      DEVBOX_EXPECT_MESSAGING_PORT="$expected_messaging_port" \
       DEVBOX_REQUIRE_HTTPS="$require_https" \
       node "$ROOT_DIR/scripts/devbox-ngrok-parse.mjs" 2>&1
   )" || {
@@ -3160,6 +3333,7 @@ try_read_ngrok_urls() {
 
   NGROK_WEB_URL="$(printf '%s\n' "$parsed" | sed -n '1p')"
   NGROK_STT_URL="$(printf '%s\n' "$parsed" | sed -n '2p')"
+  NGROK_MESSAGING_URL="$(printf '%s\n' "$parsed" | sed -n '3p')"
 
   [[ -n "$NGROK_WEB_URL" ]] || {
     NGROK_LAST_ERROR_KIND="tunnel_mismatch"
@@ -3171,34 +3345,41 @@ try_read_ngrok_urls() {
     NGROK_LAST_ERROR="ngrok stt tunnel url is empty"
     return 1
   }
+  [[ -n "$NGROK_MESSAGING_URL" ]] || {
+    NGROK_LAST_ERROR_KIND="tunnel_mismatch"
+    NGROK_LAST_ERROR="ngrok messaging tunnel url is empty"
+    return 1
+  }
   return 0
 }
 
 read_ngrok_urls() {
   local expected_web_port="${1:-}"
   local expected_stt_port="${2:-}"
-  local require_https="${3:-0}"
-  local inspector_port="${4:-$DEVBOX_NGROK_API_PORT}"
+  local expected_messaging_port="${3:-}"
+  local require_https="${4:-0}"
+  local inspector_port="${5:-$DEVBOX_NGROK_API_PORT}"
 
   require_cmd curl
   require_cmd node
-  try_read_ngrok_urls "$expected_web_port" "$expected_stt_port" "$require_https" "$inspector_port" || {
+  try_read_ngrok_urls "$expected_web_port" "$expected_stt_port" "$expected_messaging_port" "$require_https" "$inspector_port" || {
     if [[ -n "$NGROK_LAST_ERROR" ]]; then
       die "$NGROK_LAST_ERROR"
     fi
-    die "cannot read ngrok web/stt tunnels from inspector (http://127.0.0.1:${inspector_port})"
+    die "cannot read ngrok web/stt/messaging tunnels from inspector (http://127.0.0.1:${inspector_port})"
   }
 }
 
 wait_for_ngrok_tunnels() {
   local expected_web_port="$1"
   local expected_stt_port="$2"
-  local require_https="$3"
-  local inspector_port="${4:-$DEVBOX_NGROK_API_PORT}"
-  local timeout_sec="${5:-20}"
+  local expected_messaging_port="$3"
+  local require_https="$4"
+  local inspector_port="${5:-$DEVBOX_NGROK_API_PORT}"
+  local timeout_sec="${6:-20}"
   local elapsed=0
   while ((elapsed < timeout_sec)); do
-    if try_read_ngrok_urls "$expected_web_port" "$expected_stt_port" "$require_https" "$inspector_port"; then
+    if try_read_ngrok_urls "$expected_web_port" "$expected_stt_port" "$expected_messaging_port" "$require_https" "$inspector_port"; then
       return 0
     fi
     sleep 1
@@ -3301,7 +3482,12 @@ sync_google_oauth_redirect_uris_for_site_change() {
   [[ -z "$client_id" ]] && client_id="$(read_app_setting_value AUTH_GOOGLE_ID || true)"
   client_id="$(trim_whitespace "$client_id")"
   if [[ -z "$client_id" ]]; then
-    warn "skipping google redirect sync: missing oauth client id (set AUTH_GOOGLE_ID in secret/mingle-app/dev|prod or DEVBOX_GOOGLE_OAUTH_CLIENT_ID)"
+    warn "skipping google redirect sync: missing oauth client id (set AUTH_GOOGLE_ID in secret/mingle/dev|prod or DEVBOX_GOOGLE_OAUTH_CLIENT_ID)"
+    return 0
+  fi
+
+  if [[ "$client_id" == *.apps.googleusercontent.com ]]; then
+    warn "google redirect sync skipped: $client_id is a Google OAuth web client; add redirect URIs in Google Cloud Console (IAM OAuth Clients API cannot manage this client type)"
     return 0
   fi
 
@@ -3401,25 +3587,29 @@ sync_google_oauth_redirect_uris_for_site_change() {
 set_device_profile_values_from_urls() {
   local site_url="$1"
   local stt_url="$2"
-  local provider_label="${3:-tunnel}"
+  local messaging_url="$3"
+  local provider_label="${4:-tunnel}"
   local previous_site_url="${DEVBOX_SITE_URL:-}"
 
   DEVBOX_PROFILE="device"
   DEVBOX_LOCAL_HOST="127.0.0.1"
   DEVBOX_SITE_URL="$site_url"
   DEVBOX_RN_WS_URL="$(to_wss_url "$stt_url")"
+  DEVBOX_RN_MESSAGING_WS_URL="$(to_wss_url "$messaging_url")"
   DEVBOX_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL"
+  DEVBOX_PUBLIC_MESSAGING_WS_URL="$DEVBOX_RN_MESSAGING_WS_URL"
   DEVBOX_TEST_API_BASE_URL="http://127.0.0.1:$DEVBOX_WEB_PORT"
   DEVBOX_TEST_WS_URL="ws://127.0.0.1:$DEVBOX_STT_PORT"
 
   validate_https_url "$provider_label web url" "$DEVBOX_SITE_URL"
   validate_wss_url "$provider_label stt url" "$DEVBOX_RN_WS_URL"
+  validate_wss_url "$provider_label messaging url" "$DEVBOX_RN_MESSAGING_WS_URL"
   sync_google_oauth_redirect_uris_for_site_change "$previous_site_url" "$DEVBOX_SITE_URL"
 }
 
 set_device_profile_values() {
-  read_ngrok_urls "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "1" "$DEVBOX_NGROK_API_PORT"
-  set_device_profile_values_from_urls "$NGROK_WEB_URL" "$NGROK_STT_URL" "ngrok"
+  read_ngrok_urls "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "$DEVBOX_MESSAGING_PORT" "1" "$DEVBOX_NGROK_API_PORT"
+  set_device_profile_values_from_urls "$NGROK_WEB_URL" "$NGROK_STT_URL" "$NGROK_MESSAGING_URL" "ngrok"
 }
 
 resolve_device_app_env_override() {
@@ -3429,6 +3619,7 @@ resolve_device_app_env_override() {
   local ws_url=""
   local fallback_site_url=""
   local fallback_ws_url=""
+  local prod_path=""
 
   case "$mode" in
     dev)
@@ -3441,7 +3632,12 @@ resolve_device_app_env_override() {
       [[ -n "$ws_url" ]] || die "missing runtime ws url for --device-app-env dev. Run with --profile device so tunnel URLs are resolved first."
       ;;
     prod)
-      path="secret/mingle-app/prod"
+      prod_path="${DEVBOX_VAULT_PROD_PATH:-}"
+      if [[ -z "$prod_path" ]]; then
+        prod_path="$(read_main_root_setting_value DEVBOX_VAULT_PROD_PATH || true)"
+        prod_path="$(trim_whitespace "$prod_path")"
+      fi
+      path="${prod_path:-secret/mingle/prod}"
       site_url="$(read_env_value_from_vault "$path" NEXT_PUBLIC_SITE_URL || true)"
       [[ -z "$site_url" ]] && site_url="$(read_env_value_from_vault "$path" MINGLE_API_BASE_URL || true)"
       [[ -z "$site_url" ]] && site_url="$(read_env_value_from_vault "$path" RN_WEB_APP_BASE_URL || true)"
@@ -3657,26 +3853,26 @@ wait_for_any_child_exit() {
 
 cmd_init() {
   require_cmd pnpm
-  local web_port="" stt_port="" metro_port="" ngrok_api_port="" host="127.0.0.1"
-  local vault_app_override="" vault_stt_override=""
+  local web_port="" stt_port="" messaging_port="" metro_port="" ngrok_api_port="" host="127.0.0.1"
+  local vault_override=""
   local openclaw_root_override=""
-  local current_web_port="" current_stt_port="" current_metro_port="" current_ngrok_api_port=""
+  local current_web_port="" current_stt_port="" current_messaging_port="" current_metro_port="" current_ngrok_api_port=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --web-port) web_port="${2:-}"; shift 2 ;;
       --stt-port) stt_port="${2:-}"; shift 2 ;;
+      --messaging-port) messaging_port="${2:-}"; shift 2 ;;
       --metro-port) metro_port="${2:-}"; shift 2 ;;
       --ngrok-api-port) ngrok_api_port="${2:-}"; shift 2 ;;
       --host) host="${2:-}"; shift 2 ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       --openclaw-root) openclaw_root_override="${2:-}"; shift 2 ;;
       *) die "unknown option for init: $1" ;;
     esac
   done
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   if [[ -n "$openclaw_root_override" ]]; then
     DEVBOX_OPENCLAW_ROOT="$openclaw_root_override"
   fi
@@ -3687,34 +3883,42 @@ cmd_init() {
   DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
   current_web_port="$(read_devbox_env_value DEVBOX_WEB_PORT || true)"
   current_stt_port="$(read_devbox_env_value DEVBOX_STT_PORT || true)"
+  current_messaging_port="$(read_devbox_env_value DEVBOX_MESSAGING_PORT || true)"
   current_metro_port="$(read_devbox_env_value DEVBOX_METRO_PORT || true)"
   current_ngrok_api_port="$(read_devbox_env_value DEVBOX_NGROK_API_PORT || true)"
   calc_default_ports
 
   [[ -n "$web_port" ]] || web_port="${current_web_port:-$DEFAULT_WEB_PORT}"
   [[ -n "$stt_port" ]] || stt_port="${current_stt_port:-$DEFAULT_STT_PORT}"
+  [[ -n "$messaging_port" ]] || messaging_port="${current_messaging_port:-$DEFAULT_MESSAGING_PORT}"
   [[ -n "$metro_port" ]] || metro_port="${current_metro_port:-$DEFAULT_METRO_PORT}"
   [[ -n "$ngrok_api_port" ]] || ngrok_api_port="${current_ngrok_api_port:-$DEFAULT_NGROK_API_PORT}"
 
   validate_port "web port" "$web_port"
   validate_port "stt port" "$stt_port"
+  validate_port "messaging port" "$messaging_port"
   validate_port "metro port" "$metro_port"
   validate_port "ngrok api port" "$ngrok_api_port"
 
   [[ "$web_port" != "$stt_port" ]] || die "web/stt ports must differ"
+  [[ "$web_port" != "$messaging_port" ]] || die "web/messaging ports must differ"
+  [[ "$stt_port" != "$messaging_port" ]] || die "stt/messaging ports must differ"
   [[ "$web_port" != "$metro_port" ]] || die "web/metro ports must differ"
   [[ "$stt_port" != "$metro_port" ]] || die "stt/metro ports must differ"
   [[ "$ngrok_api_port" != "$web_port" ]] || die "ngrok api/web ports must differ"
   [[ "$ngrok_api_port" != "$stt_port" ]] || die "ngrok api/stt ports must differ"
+  [[ "$ngrok_api_port" != "$messaging_port" ]] || die "ngrok api/messaging ports must differ"
   [[ "$ngrok_api_port" != "$metro_port" ]] || die "ngrok api/metro ports must differ"
 
   port_conflict_check "web" "$web_port"
   port_conflict_check "stt" "$stt_port"
+  port_conflict_check "messaging" "$messaging_port"
   port_conflict_check "metro" "$metro_port"
   port_conflict_check "ngrok api" "$ngrok_api_port"
 
   DEVBOX_WEB_PORT="$web_port"
   DEVBOX_STT_PORT="$stt_port"
+  DEVBOX_MESSAGING_PORT="$messaging_port"
   DEVBOX_METRO_PORT="$metro_port"
   DEVBOX_NGROK_API_PORT="$ngrok_api_port"
   set_local_profile_values "$host"
@@ -3729,16 +3933,13 @@ cmd_init() {
 
 cmd_bootstrap() {
   require_cmd pnpm
-  local vault_app_override=""
-  local vault_stt_override=""
-  local vault_push=0
+  local vault_override=""
   local openclaw_root_override=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
-      --vault-push) vault_push=1; shift ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
+      --vault-push) shift ;; # Backward-compatible no-op: bootstrap always pushes now.
       --openclaw-root) openclaw_root_override="${2:-}"; shift 2 ;;
       *) die "unknown option for bootstrap: $1" ;;
     esac
@@ -3746,7 +3947,7 @@ cmd_bootstrap() {
 
   require_devbox_env
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   if [[ -n "$openclaw_root_override" ]]; then
     DEVBOX_OPENCLAW_ROOT="$openclaw_root_override"
   fi
@@ -3754,12 +3955,13 @@ cmd_bootstrap() {
     DEVBOX_OPENCLAW_ROOT="$(resolve_openclaw_root)"
   fi
 
-  if [[ "$vault_push" -eq 1 ]]; then
-    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --vault-push (set --vault-app-path or bootstrap once with detected path)"
-    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --vault-push (set --vault-stt-path or bootstrap once with detected path)"
-    push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
-  fi
-  log "bootstrap is read-only for .env.local (no seed/sync writes)"
+  [[ -n "$DEVBOX_VAULT_PATH" ]] || die "missing shared vault path (set DEVBOX_VAULT_PATH in the main root .env.local or pass --vault-path)"
+  require_cmd vault
+  require_cmd jq
+  prepare_vault_cli_env
+  vault token lookup >/dev/null 2>&1 || die "Vault is not authenticated (run: vault login)"
+  push_env_to_vault_path "$DEVBOX_VAULT_PATH"
+  log "bootstrap uploaded main root shared values and service env values to one Vault path"
   ensure_workspace_dependencies
   ensure_rn_workspace_dependencies
   ensure_ios_pods_if_needed
@@ -4697,15 +4899,18 @@ cmd_mobile() {
             local cloudflare_named_hosts=""
             cloudflare_named_hosts="$(resolve_cloudflare_named_hostnames || true)"
             if [[ -z "$cloudflare_named_hosts" ]]; then
-              die "cloudflare mobile profile refresh requires named tunnel hostnames (DEVBOX_CLOUDFLARE_WEB_HOSTNAME/STT_HOSTNAME)."
+              die "cloudflare mobile profile refresh requires named tunnel hostnames (DEVBOX_CLOUDFLARE_WEB_HOSTNAME/STT_HOSTNAME/MESSAGING_HOSTNAME)."
             fi
             local cloudflare_named_web_host=""
             local cloudflare_named_stt_host=""
+            local cloudflare_named_messaging_host=""
             cloudflare_named_web_host="$(printf '%s\n' "$cloudflare_named_hosts" | sed -n '1p')"
             cloudflare_named_stt_host="$(printf '%s\n' "$cloudflare_named_hosts" | sed -n '2p')"
+            cloudflare_named_messaging_host="$(printf '%s\n' "$cloudflare_named_hosts" | sed -n '3p')"
             set_device_profile_values_from_urls \
               "https://$cloudflare_named_web_host" \
               "https://$cloudflare_named_stt_host" \
+              "https://$cloudflare_named_messaging_host" \
               "cloudflare"
             ;;
           *)
@@ -4795,8 +5000,7 @@ cmd_mobile() {
 cmd_up() {
   require_devbox_env
   require_cmd pnpm
-  local vault_app_override=""
-  local vault_stt_override=""
+  local vault_override=""
 
   local profile="local"
   local host=""
@@ -4833,8 +5037,7 @@ cmd_up() {
       --android-variant) android_variant="${2:-}"; shift 2 ;;
       --tunnel-provider) tunnel_provider_override="${2:-}"; shift 2 ;;
       --device-app-env) device_app_env="${2:-}"; shift 2 ;;
-      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
-      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      --vault-path) vault_override="${2:-}"; shift 2 ;;
       *) die "unknown option for up: $1" ;;
     esac
   done
@@ -4847,20 +5050,28 @@ cmd_up() {
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
 
-  resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+  resolve_vault_path "$vault_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
-  local runtime_app_env_file=""
-  local runtime_stt_env_file=""
+  local runtime_env_file=""
   local runtime_nextauth_secret=""
+  local runtime_realtime_secret=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_app_id_android=""
   local runtime_admob_banner_unit_id_ios=""
   local runtime_admob_banner_unit_id_android=""
-  runtime_app_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-runtime-env.XXXXXX")"
-  runtime_stt_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-stt-runtime-env.XXXXXX")"
-  write_runtime_env_from_vault_path "app" "$DEVBOX_VAULT_APP_PATH" "$runtime_app_env_file"
-  write_runtime_env_from_vault_path "stt" "$DEVBOX_VAULT_STT_PATH" "$runtime_stt_env_file"
-  runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_app_env_file")"
+  runtime_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-runtime-env.XXXXXX")"
+  write_runtime_env_from_vault_path "mingle" "$DEVBOX_VAULT_PATH" "$runtime_env_file"
+  runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_env_file")"
+  runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$runtime_env_file")"
+  if [[ -z "$runtime_realtime_secret" ]]; then
+    runtime_realtime_secret="$(read_main_root_setting_value MINGLE_REALTIME_SECRET || true)"
+  fi
+  if [[ -z "$runtime_realtime_secret" ]]; then
+    runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$APP_ENV_FILE")"
+  fi
+  if [[ -z "$runtime_realtime_secret" ]]; then
+    runtime_realtime_secret="$(read_env_value_from_file MINGLE_REALTIME_SECRET "$STT_ENV_FILE")"
+  fi
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
   runtime_admob_banner_unit_id_ios="$(resolve_devbox_admob_banner_unit_id_ios)"
@@ -4872,16 +5083,20 @@ cmd_up() {
   local started_tunnel_mode="none"
   local cloudflared_web_url=""
   local cloudflared_stt_url=""
+  local cloudflared_messaging_url=""
   local cloudflared_web_log=""
   local cloudflared_stt_log=""
+  local cloudflared_messaging_log=""
   local cloudflared_web_pid=""
   local cloudflared_stt_pid=""
+  local cloudflared_messaging_pid=""
   local cloudflared_named_log=""
   local cloudflared_named_pid_file=""
   local cloudflared_named_config_file=""
   local cloudflared_named_token=""
   local cloudflared_named_web_host=""
   local cloudflared_named_stt_host=""
+  local cloudflared_named_messaging_host=""
 
   if [[ "$profile" == "device" ]]; then
     if [[ "$device_app_env" == "prod" ]]; then
@@ -4894,9 +5109,9 @@ cmd_up() {
           fi
           write_ngrok_local_config
 
-          if ! try_read_ngrok_urls "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "1" "$DEVBOX_NGROK_API_PORT"; then
+          if ! try_read_ngrok_urls "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "$DEVBOX_MESSAGING_PORT" "1" "$DEVBOX_NGROK_API_PORT"; then
             if [[ "$NGROK_LAST_ERROR_KIND" == "tunnel_mismatch" ]]; then
-              die "running ngrok tunnels do not match this worktree ports(web=$DEVBOX_WEB_PORT stt=$DEVBOX_STT_PORT) or are not https/wss (inspector port=$DEVBOX_NGROK_API_PORT).
+              die "running ngrok tunnels do not match this worktree ports(web=$DEVBOX_WEB_PORT stt=$DEVBOX_STT_PORT messaging=$DEVBOX_MESSAGING_PORT) or are not https/wss (inspector port=$DEVBOX_NGROK_API_PORT).
 $NGROK_LAST_ERROR
 $(ngrok_plan_capacity_hint)"
             fi
@@ -4915,7 +5130,7 @@ $(ngrok_plan_capacity_hint)"
               started_tunnel_mode="ngrok-inline"
             fi
 
-            if ! wait_for_ngrok_tunnels "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "1" "$DEVBOX_NGROK_API_PORT" 20; then
+            if ! wait_for_ngrok_tunnels "$DEVBOX_WEB_PORT" "$DEVBOX_STT_PORT" "$DEVBOX_MESSAGING_PORT" "1" "$DEVBOX_NGROK_API_PORT" 20; then
               if [[ "$started_tunnel_mode" == "ngrok-inline" ]]; then
                 cleanup_processes "${pids[@]}"
               fi
@@ -4923,7 +5138,7 @@ $(ngrok_plan_capacity_hint)"
                 die "$NGROK_LAST_ERROR
 $(ngrok_plan_capacity_hint)"
               fi
-              die "ngrok inspector(port=$DEVBOX_NGROK_API_PORT) did not expose matching web/stt tunnels within 20s.
+              die "ngrok inspector(port=$DEVBOX_NGROK_API_PORT) did not expose matching web/stt/messaging tunnels within 20s.
 $(ngrok_plan_capacity_hint)"
             fi
           else
@@ -4940,6 +5155,7 @@ $(ngrok_plan_capacity_hint)"
             cloudflared_named_web_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '2p')"
             cloudflared_named_stt_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '3p')"
 
+            cloudflared_named_messaging_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '4p')"
             cloudflared_named_pid_file="$(cloudflared_named_pid_file_path)"
             cloudflared_named_log="$(cloudflared_named_log_file_path)"
             cloudflared_named_config_file="$(cloudflared_named_config_file_path)"
@@ -4950,7 +5166,8 @@ $(ngrok_plan_capacity_hint)"
             write_cloudflared_named_config \
               "$cloudflared_named_config_file" \
               "$cloudflared_named_web_host" \
-              "$cloudflared_named_stt_host"
+              "$cloudflared_named_stt_host" \
+              "$cloudflared_named_messaging_host"
 
             log "starting cloudflared named tunnel connector"
             cloudflared --config "$cloudflared_named_config_file" tunnel --no-autoupdate run --token "$cloudflared_named_token" >"$cloudflared_named_log" 2>&1 &
@@ -4966,6 +5183,7 @@ $(ngrok_plan_capacity_hint)"
 
             local cloudflared_named_remote_web_port=""
             local cloudflared_named_remote_stt_port=""
+            local cloudflared_named_remote_messaging_port=""
             if ! cloudflared_named_remote_web_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_web_host" 15)"; then
               cleanup_processes "${pids[@]}"
               rm -f "$cloudflared_named_pid_file"
@@ -4976,21 +5194,30 @@ $(ngrok_plan_capacity_hint)"
               rm -f "$cloudflared_named_pid_file"
               die "cloudflared named tunnel did not publish stt bridge port for $cloudflared_named_stt_host (log: $cloudflared_named_log)"
             fi
+            if ! cloudflared_named_remote_messaging_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_messaging_host" 15)"; then
+              cleanup_processes "${pids[@]}"
+              rm -f "$cloudflared_named_pid_file"
+              die "cloudflared named tunnel did not publish messaging bridge port for $cloudflared_named_messaging_host (log: $cloudflared_named_log)"
+            fi
             ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT" pids
             ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT" pids
+            ensure_cloudflared_named_bridge "messaging" "$cloudflared_named_remote_messaging_port" "$DEVBOX_MESSAGING_PORT" pids
 
             cloudflared_web_url="https://$cloudflared_named_web_host"
             cloudflared_stt_url="https://$cloudflared_named_stt_host"
+            cloudflared_messaging_url="https://$cloudflared_named_messaging_host"
             started_tunnel_mode="cloudflare-named"
-            log "cloudflared named tunnel ready: web=$cloudflared_web_url stt=$cloudflared_stt_url"
+            log "cloudflared named tunnel ready: web=$cloudflared_web_url stt=$cloudflared_stt_url messaging=$cloudflared_messaging_url"
           else
             if [[ "$with_ios_clean_install" -eq 1 ]]; then
               stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"
               stop_existing_cloudflared_by_local_port "$DEVBOX_STT_PORT"
+              stop_existing_cloudflared_by_local_port "$DEVBOX_MESSAGING_PORT"
             fi
 
             cloudflared_web_log="$(mktemp "${TMPDIR:-/tmp}/devbox-cloudflared-web.XXXXXX")"
             cloudflared_stt_log="$(mktemp "${TMPDIR:-/tmp}/devbox-cloudflared-stt.XXXXXX")"
+            cloudflared_messaging_log="$(mktemp "${TMPDIR:-/tmp}/devbox-cloudflared-messaging.XXXXXX")"
 
             log "starting cloudflared quick tunnel for web(port=$DEVBOX_WEB_PORT)"
             cloudflared tunnel --url "http://127.0.0.1:$DEVBOX_WEB_PORT" --no-autoupdate >"$cloudflared_web_log" 2>&1 &
@@ -5002,6 +5229,11 @@ $(ngrok_plan_capacity_hint)"
             cloudflared_stt_pid="$!"
             pids+=("$cloudflared_stt_pid")
 
+            log "starting cloudflared quick tunnel for messaging(port=$DEVBOX_MESSAGING_PORT)"
+            cloudflared tunnel --url "http://127.0.0.1:$DEVBOX_MESSAGING_PORT" --no-autoupdate >"$cloudflared_messaging_log" 2>&1 &
+            cloudflared_messaging_pid="$!"
+            pids+=("$cloudflared_messaging_pid")
+
             if ! cloudflared_web_url="$(wait_for_cloudflared_tunnel_url "$cloudflared_web_log" "$cloudflared_web_pid" 25)"; then
               cleanup_processes "${pids[@]}"
               die "cloudflared web tunnel startup failed (log: $cloudflared_web_log)"
@@ -5010,9 +5242,13 @@ $(ngrok_plan_capacity_hint)"
               cleanup_processes "${pids[@]}"
               die "cloudflared stt tunnel startup failed (log: $cloudflared_stt_log)"
             fi
+            if ! cloudflared_messaging_url="$(wait_for_cloudflared_tunnel_url "$cloudflared_messaging_log" "$cloudflared_messaging_pid" 25)"; then
+              cleanup_processes "${pids[@]}"
+              die "cloudflared messaging tunnel startup failed (log: $cloudflared_messaging_log)"
+            fi
 
             started_tunnel_mode="cloudflare-quick"
-            log "cloudflared quick tunnel ready: web=$cloudflared_web_url stt=$cloudflared_stt_url"
+            log "cloudflared quick tunnel ready: web=$cloudflared_web_url stt=$cloudflared_stt_url messaging=$cloudflared_messaging_url"
           fi
           ;;
         *)
@@ -5028,7 +5264,7 @@ $(ngrok_plan_capacity_hint)"
     log "device app env is prod; skipping device profile URL sync"
   else
     if [[ "$profile" == "device" && "$tunnel_provider" == "cloudflare" && "$device_app_env" != "prod" ]]; then
-      set_device_profile_values_from_urls "$cloudflared_web_url" "$cloudflared_stt_url" "cloudflare"
+      set_device_profile_values_from_urls "$cloudflared_web_url" "$cloudflared_stt_url" "$cloudflared_messaging_url" "cloudflare"
       save_and_refresh
     else
       apply_profile "$profile" "$host"
@@ -5091,20 +5327,20 @@ $(ngrok_plan_capacity_hint)"
   fi
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
-    log "device app env is prod; skipping mingle-app/mingle-stt/tunnel runtime startup"
-    rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
+    log "device app env is prod; skipping mingle-app/mingle-stt/mingle-messaging/tunnel runtime startup"
+    rm -f "$runtime_env_file"
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     return 0
   fi
 
-  log "starting mingle-stt(port=$DEVBOX_STT_PORT) + mingle-app(port=$DEVBOX_WEB_PORT)"
+  log "starting mingle-stt(port=$DEVBOX_STT_PORT) + mingle-messaging(port=$DEVBOX_MESSAGING_PORT) + mingle-app(port=$DEVBOX_WEB_PORT)"
   (
     cd "$ROOT_DIR/mingle-stt"
     best_effort_raise_nofile_limit
-    if [[ -s "$runtime_stt_env_file" ]]; then
+    if [[ -s "$runtime_env_file" ]]; then
       set -a
       # shellcheck disable=SC1090
-      . "$runtime_stt_env_file"
+      . "$runtime_env_file"
       set +a
     fi
     PORT="$DEVBOX_STT_PORT" pnpm dev
@@ -5112,12 +5348,25 @@ $(ngrok_plan_capacity_hint)"
   pids+=("$!")
 
   (
-    cd "$ROOT_DIR/mingle-app"
+    cd "$ROOT_DIR/mingle-messaging"
     best_effort_raise_nofile_limit
-    if [[ -s "$runtime_app_env_file" ]]; then
+    if [[ -s "$runtime_env_file" ]]; then
       set -a
       # shellcheck disable=SC1090
-      . "$runtime_app_env_file"
+      . "$runtime_env_file"
+      set +a
+    fi
+    MINGLE_REALTIME_SECRET="$runtime_realtime_secret" PORT="$DEVBOX_MESSAGING_PORT" pnpm dev
+  ) &
+  pids+=("$!")
+
+  (
+    cd "$ROOT_DIR/mingle-app"
+    best_effort_raise_nofile_limit
+    if [[ -s "$runtime_env_file" ]]; then
+      set -a
+      # shellcheck disable=SC1090
+      . "$runtime_env_file"
       set +a
     fi
     normalize_prisma_database_env
@@ -5128,6 +5377,7 @@ $(ngrok_plan_capacity_hint)"
     export DEVBOX_PROFILE="$DEVBOX_PROFILE"
     export DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT"
     export DEVBOX_STT_PORT="$DEVBOX_STT_PORT"
+    export DEVBOX_MESSAGING_PORT="$DEVBOX_MESSAGING_PORT"
     export DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT"
     export NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL"
     export NEXTAUTH_URL="$DEVBOX_SITE_URL"
@@ -5135,6 +5385,9 @@ $(ngrok_plan_capacity_hint)"
     export AUTH_SECRET="$runtime_nextauth_secret"
     export NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT"
     export NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL"
+    export NEXT_PUBLIC_MESSAGING_WS_URL="$DEVBOX_PUBLIC_MESSAGING_WS_URL"
+    export MINGLE_MESSAGING_URL="http://127.0.0.1:$DEVBOX_MESSAGING_PORT"
+    export MINGLE_REALTIME_SECRET="$runtime_realtime_secret"
     export NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE"
     export RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios"
     export RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android"
@@ -5157,10 +5410,10 @@ $(ngrok_plan_capacity_hint)"
     log "starting Metro(port=$DEVBOX_METRO_PORT)"
     (
       cd "$ROOT_DIR/mingle-app"
-      if [[ -s "$runtime_app_env_file" ]]; then
+      if [[ -s "$runtime_env_file" ]]; then
         set -a
         # shellcheck disable=SC1090
-        . "$runtime_app_env_file"
+        . "$runtime_env_file"
         set +a
       fi
       normalize_prisma_database_env
@@ -5187,7 +5440,7 @@ $(ngrok_plan_capacity_hint)"
     pids+=("$!")
   fi
 
-  rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
+  rm -f "$runtime_env_file"
 
   if [[ "$started_tunnel_mode" == "ngrok-inline" ]]; then
     log "ngrok is running with this process group (Ctrl+C to stop all)"
@@ -5225,17 +5478,21 @@ cmd_down() {
 
   stop_processes_by_pattern "mingle-app next dev" "$ROOT_DIR/mingle-app.*next dev --port"
   stop_processes_by_pattern "mingle-stt dev server" "$ROOT_DIR/mingle-stt.*stt-server.ts"
+  stop_processes_by_pattern "mingle-messaging dev server" "$ROOT_DIR/mingle-messaging.*messaging-server.ts"
   stop_processes_by_pattern "metro" "$ROOT_DIR/mingle-app.*pnpm --dir rn start --port"
 
   stop_listeners_by_port "mingle-app next dev" "$DEVBOX_WEB_PORT"
   stop_listeners_by_port "mingle-stt dev server" "$DEVBOX_STT_PORT"
+  stop_listeners_by_port "mingle-messaging dev server" "$DEVBOX_MESSAGING_PORT"
   stop_listeners_by_port "metro" "$DEVBOX_METRO_PORT"
   stop_existing_ngrok_by_inspector_port "$DEVBOX_NGROK_API_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_STT_PORT"
+  stop_existing_cloudflared_by_local_port "$DEVBOX_MESSAGING_PORT"
   stop_cloudflared_named_tunnel_from_pidfile
   stop_cloudflared_named_bridge "web"
   stop_cloudflared_named_bridge "stt"
+  stop_cloudflared_named_bridge "messaging"
   rm -f "$(cloudflared_named_config_file_path)"
 
   local next_lock_file="$ROOT_DIR/mingle-app/.next/dev/lock"
@@ -5516,7 +5773,7 @@ cmd_status() {
   cat <<EOF
 [devbox] worktree: $DEVBOX_WORKTREE_NAME
 [devbox] profile:  $DEVBOX_PROFILE
-[devbox] ports:    web=$DEVBOX_WEB_PORT stt=$DEVBOX_STT_PORT metro=$DEVBOX_METRO_PORT
+[devbox] ports:    web=$DEVBOX_WEB_PORT stt=$DEVBOX_STT_PORT messaging=$DEVBOX_MESSAGING_PORT metro=$DEVBOX_METRO_PORT
 [devbox] tunnel:   provider=$tunnel_provider$( [[ "$tunnel_provider" == "cloudflare" ]] && printf ' mode=%s' "$cloudflare_mode" )
 $ngrok_line
 $ngrok_domain_line
@@ -5524,11 +5781,11 @@ $ngrok_domain_line
 PC Web      : $DEVBOX_SITE_URL
 iOS Web     : $DEVBOX_SITE_URL
 Android Web : $DEVBOX_SITE_URL
-iOS App     : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
-Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$ANDROID_RN_REQUIRED_API_NAMESPACE
+iOS App     : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_MESSAGING_WS_URL=$DEVBOX_RN_MESSAGING_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
+Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_MESSAGING_WS_URL=$DEVBOX_RN_MESSAGING_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$ANDROID_RN_REQUIRED_API_NAMESPACE
 Live Test   : MINGLE_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL | MINGLE_TEST_WS_URL=$DEVBOX_TEST_WS_URL
-Vault App   : ${DEVBOX_VAULT_APP_PATH:-"(unset)"}
-Vault STT   : ${DEVBOX_VAULT_STT_PATH:-"(unset)"}
+Vault       : ${DEVBOX_VAULT_PATH:-"(unset)"}
+Vault Prod  : ${DEVBOX_VAULT_PROD_PATH:-"secret/mingle/prod (default)"}
 OpenClaw    : root=${DEVBOX_OPENCLAW_ROOT:-$(resolve_openclaw_root)}
 iOS Team ID : ${DEVBOX_IOS_TEAM_ID:-"(auto: mingle.xcodeproj DEVELOPMENT_TEAM)"}
 
@@ -5536,6 +5793,7 @@ Files:
 - $DEVBOX_ENV_FILE
 - $APP_ENV_FILE
 - $STT_ENV_FILE
+- $ROOT_DIR/mingle-messaging/
 - $NGROK_LOCAL_CONFIG
 - $RN_IOS_RUNTIME_XCCONFIG
 
@@ -5544,7 +5802,7 @@ Run:
 - scripts/devbox up --profile local
 - scripts/devbox up --profile device
 - scripts/devbox up --profile device --tunnel-provider cloudflare
-- scripts/devbox bootstrap --vault-push
+- scripts/devbox bootstrap
 - scripts/devbox gateway --mode dev
 - scripts/devbox gateway --mode run -- --bind loopback --port 18789
 - scripts/devbox up --profile device --device-app-env dev --with-ios-install

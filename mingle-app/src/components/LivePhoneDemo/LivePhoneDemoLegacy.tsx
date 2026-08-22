@@ -94,6 +94,7 @@ import {
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
 import { LivePhoneDemoFeedbackMessageText } from './live-phone-demo.feedback-links'
+import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
@@ -136,14 +137,6 @@ const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
-
-type LivePhoneDemoComposerCopy = {
-  manualSpeakerLabel: string
-  openKeyboardLabel: string
-  closeKeyboardLabel: string
-  composerPlaceholder: string
-  sendMessageLabel: string
-}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -259,38 +252,6 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
 
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
-}
-
-export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDemoComposerCopy {
-  const locale = (uiLocale || '').trim().toLowerCase()
-
-  if (locale.startsWith('ko')) {
-    return {
-      manualSpeakerLabel: '나',
-      openKeyboardLabel: '텍스트 입력 열기',
-      closeKeyboardLabel: '텍스트 입력 닫기',
-      composerPlaceholder: '메시지를 입력하세요',
-      sendMessageLabel: '메시지 보내기',
-    }
-  }
-
-  if (locale.startsWith('ja')) {
-    return {
-      manualSpeakerLabel: '自分',
-      openKeyboardLabel: 'テキスト入力を開く',
-      closeKeyboardLabel: 'テキスト入力を閉じる',
-      composerPlaceholder: 'メッセージを入力',
-      sendMessageLabel: 'メッセージを送信',
-    }
-  }
-
-  return {
-    manualSpeakerLabel: 'You',
-    openKeyboardLabel: 'Open text input',
-    closeKeyboardLabel: 'Close text input',
-    composerPlaceholder: 'Type a message',
-    sendMessageLabel: 'Send message',
-  }
 }
 
 export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
@@ -3291,7 +3252,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
-  const isCenteredMenuLayout = viewportWidthPx >= 640
   const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
@@ -3457,7 +3417,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="absolute inset-0 z-50 overflow-hidden bg-black/42"
+              className="absolute inset-0 z-50 overflow-hidden bg-transparent"
               onClick={requestCloseMenuPanel}
             >
               <div className="flex h-full w-full justify-end sm:justify-center">
@@ -3473,11 +3433,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   onClick={(event) => event.stopPropagation()}
                   className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
-                  style={{
-                    boxShadow: isCenteredMenuLayout
-                      ? '0 22px 64px rgba(15, 23, 42, 0.24)'
-                      : '-18px 0 40px rgba(15, 23, 42, 0.22)',
-                  }}
                 >
                   <motion.div
                     initial={false}

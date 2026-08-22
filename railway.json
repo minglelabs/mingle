@@ -9,7 +9,8 @@
       ".dockerignore",
       "railway/**",
       "mingle-app/**",
-      "mingle-stt/**"
+      "mingle-stt/**",
+      "mingle-messaging/**"
     ]
   },
   "deploy": {

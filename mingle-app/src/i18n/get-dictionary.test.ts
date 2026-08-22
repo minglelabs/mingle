@@ -18,7 +18,9 @@ describe("getDictionary", () => {
       expect(dictionary.conversations?.searchPlaceholder).toBeTruthy();
       expect(dictionary.conversations?.newConversationButtonLabel).toBeTruthy();
       expect(dictionary.conversations?.switchLiveRoomToastLabel).toBeTruthy();
+      expect(dictionary.conversations?.inviteFriendsPageTitle).toBeTruthy();
       expect(dictionary.livePhoneDemo.composer.sendMessageLabel).toBeTruthy();
+      expect(dictionary.livePhoneDemo.composer.blockedComposerMessage).toBeTruthy();
       expect(dictionary.livePhoneDemo.copyActions.copiedToastLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.feedback.categoryLabels.feedback).toBeTruthy();
       expect(dictionary.livePhoneDemo.ttsAction.playPronunciationLabel).toBeTruthy();
@@ -48,8 +50,22 @@ describe("getDictionary", () => {
       expect(dictionary.profile.appLanguageDescription).toBeTruthy();
       expect(dictionary.profile.profileShareCopyLinkLabel).toBeTruthy();
       expect(dictionary.profile.settingsLoadError).toBeTruthy();
+      expect(dictionary.profile.messageAction).toBeTruthy();
+      expect(dictionary.profile.messageError).toBeTruthy();
+      expect(dictionary.profile.noFollowersLabel).toBeTruthy();
+      expect(dictionary.profile.noFollowingLabel).toBeTruthy();
+      expect(dictionary.profile.profileShareQrInstruction).toBeTruthy();
       expect(dictionary.connect.searchPlaceholder).toBeTruthy();
       expect(dictionary.connect.clearSearchLabel).toBeTruthy();
     }
+  });
+
+  it("uses English for new supplemental copy outside the 15 primary UI locales", () => {
+    const dictionary = getDictionary("pl");
+
+    expect(dictionary.conversations?.startAloneOptionLabel).toBe("Start alone");
+    expect(dictionary.livePhoneDemo.composer.blockedComposerMessage).toBe("This user is blocked.");
+    expect(dictionary.profile.messageAction).toBe("Message");
+    expect(dictionary.profile.profileShareQrInstruction).toBe("Place the profile QR code inside the frame.");
   });
 });

@@ -110,6 +110,8 @@ export const enDictionary: BaseAppDictionarySource = {
     unblockConfirm: "Unblock this user?",
     blockConfirm: "Block this user?",
     blockError: "Could not update the block status.",
+    messageAction: "Message",
+    messageError: "Could not start the conversation.",
     reportAction: "Report",
     reportTitle: "Report user",
     reportReasonLabel: "Reason",

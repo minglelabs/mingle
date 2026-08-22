@@ -1,6 +1,10 @@
 "use client";
 
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import LanguageFlag from "@/components/language-flag";
 import { X, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -55,6 +59,22 @@ export default function ProfileImagePreview({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    postNativeAndroidBackCapability(true);
+    return () => postNativeAndroidBackCapability(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    return registerNativeBackHandler(() => {
+      onClose();
+      return true;
+    }, 80);
+  }, [onClose, open]);
+
   if (!open) return null;
 
   return (
@@ -63,6 +83,8 @@ export default function ProfileImagePreview({
       role="dialog"
       aria-modal="true"
       aria-label={alt}
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   buildLanguageSelectorItems,
   filterLanguageSelectorItems,
@@ -78,7 +78,7 @@ export default function LanguageOnboardingModal({
     return discoveryOptionCodes
       .map((code) => optionsByCode.get(code))
       .filter((option): option is (typeof discoveryCopy.options)[number] => Boolean(option));
-  }, [discoveryCopy.options, discoveryOptionCodes]);
+  }, [discoveryCopy, discoveryOptionCodes]);
   const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
 
   useEffect(() => {
@@ -127,6 +127,18 @@ export default function LanguageOnboardingModal({
     [filteredItems],
   );
 
+  const handleStepBack = useCallback(() => {
+    if (isConfirming) return;
+    setStep((currentStep) => currentStep === "discovery-source" ? "birth-date" : "language");
+  }, [isConfirming]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (isConfirming) return true;
+    if (step === "language") return true;
+    handleStepBack();
+    return true;
+  }, 30), [handleStepBack, isConfirming, step]);
+
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
@@ -137,18 +149,6 @@ export default function LanguageOnboardingModal({
     if (!isEligibleAge) return;
     setStep("discovery-source");
   };
-
-  const handleStepBack = () => {
-    if (isConfirming) return;
-    setStep((currentStep) => currentStep === "discovery-source" ? "birth-date" : "language");
-  };
-
-  useEffect(() => registerNativeBackHandler(() => {
-    if (isConfirming) return true;
-    if (step === "language") return true;
-    handleStepBack();
-    return true;
-  }, 30), [isConfirming, step]);
 
   const handleFinalConfirm = async () => {
     if (isConfirming || !isEligibleAge || !discoverySource) return;

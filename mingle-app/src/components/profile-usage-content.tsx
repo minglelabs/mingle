@@ -7,6 +7,8 @@ import {
   getSttLanguageDisplayName,
 } from "@/lib/stt-languages";
 import type { AppLocale } from "@/i18n";
+import { resolveLegalDocumentLocale } from "@/i18n/config";
+import type { ProfileUsageCopy } from "@/i18n/profile-management-copy";
 import { BarChart3, Clock3, Loader2, MessageCircle, MessagesSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -24,44 +26,29 @@ type UsageSummary = {
   translationLanguages: UsageLanguageBreakdown[];
 };
 
-export type ProfileUsageCopy = {
-  title: string;
-  totalUsage: string;
-  messages: string;
-  conversations: string;
-  speechLanguages: string;
-  translationLanguages: string;
-  messageCountSuffix: string;
-  noData: string;
-  loadError: string;
-  unknownLanguage: string;
-};
-
 function formatCount(value: number, locale: AppLocale): string {
-  return new Intl.NumberFormat(locale).format(Math.max(0, Math.floor(value)));
+  return new Intl.NumberFormat(resolveLegalDocumentLocale(locale)).format(Math.max(0, Math.floor(value)));
 }
 
 function formatDuration(value: number, locale: AppLocale): string {
+  const displayLocale = resolveLegalDocumentLocale(locale);
   const totalSeconds = Math.max(0, Math.floor(value));
   const hours = Math.floor(totalSeconds / 3_600);
   const minutes = Math.floor((totalSeconds % 3_600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (locale === "ko") {
-    if (hours > 0) return minutes > 0 ? `${hours}시간 ${minutes}분` : `${hours}시간`;
-    if (minutes > 0) return seconds > 0 ? `${minutes}분 ${seconds}초` : `${minutes}분`;
-    return `${seconds}초`;
-  }
-
-  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  if (minutes > 0) return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-  return `${seconds}s`;
+  const formatUnit = (amount: number, unit: "hour" | "minute" | "second") => (
+    new Intl.NumberFormat(displayLocale, { style: "unit", unit, unitDisplay: "short" }).format(amount)
+  );
+  if (hours > 0) return minutes > 0 ? `${formatUnit(hours, "hour")} ${formatUnit(minutes, "minute")}` : formatUnit(hours, "hour");
+  if (minutes > 0) return seconds > 0 ? `${formatUnit(minutes, "minute")} ${formatUnit(seconds, "second")}` : formatUnit(minutes, "minute");
+  return formatUnit(seconds, "second");
 }
 
 function getLanguageLabel(language: string, locale: AppLocale, unknownLabel: string): string {
   const normalized = canonicalizeSttLanguageCode(language);
   return normalized
-    ? getSttLanguageDisplayName(normalized, locale) ?? normalized
+    ? getSttLanguageDisplayName(normalized, resolveLegalDocumentLocale(locale)) ?? normalized
     : language === "unknown" ? unknownLabel : language;
 }
 

@@ -92,7 +92,7 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
     );
 }
 
-wss.on('connection', (clientWs) => {
+wss.on('connection', (clientWs, request) => {
     const connId = ++connectionCounter;
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);

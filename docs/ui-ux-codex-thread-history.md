@@ -1,5 +1,31 @@
 # UI/UX Codex Thread History
 
+## 2026-08-21 - Consume the profile surface before starting a direct conversation
+
+- Surface: Public profile details opened from a conversation room, conversation participants or notifications, Connect search, My Page follow lists, or the native profile-link overlay; the message action inside those profiles; and the text composer after a programmatic room transition.
+- Issue: The profile message action called `router.push` directly while the profile and its parent menu/follow/search surface were represented by separate same-document history entries. The new conversation route was therefore pushed on top of an unconsumed profile entry. On iOS, edge-swipe back could restore the profile and participants surface in the wrong order, and a delayed history replay could reopen a stale profile. When text mode had been persisted, the newly mounted room also focused its composer and opened the keyboard without a user tap.
+- User impact: The expected `room B -> participants -> hamburger -> room A` back sequence was replaced by duplicate profile/participant screens. The same direct-message action from Connect or My Page could lose its parent surface. Android/WebView users could also see the keyboard appear during room restoration.
+- Resolution:
+  - Return the complete direct-conversation summary from `PublicUserProfileScreen` to a parent callback for internal surfaces. Standalone/deep-link profile routes keep their direct route navigation fallback.
+  - Consume only the top profile surface with a history back and wait for the popstate plus two animation frames before pushing the next conversation. Preserve the participant/menu or follow/search entries underneath it.
+  - Keep a short pending-navigation guard that filters a stale profile replay while iOS history settles.
+  - Reuse the currently active conversation without pushing a duplicate route when the direct-conversation API returns the room that is already open.
+  - Make composer focus explicit-user-action-only. Restored input mode and programmatic room transitions can keep the text composer visible without focusing its textarea or opening the keyboard.
+- Data contract: None. No Prisma migration, API namespace, or native bridge change is required.
+- Testing notes: Verify `room B -> participants -> hamburger -> room A` with iOS edge-swipe, repeat the flow from Connect and My Page, verify an already-open direct room does not get a duplicate route, and verify restored text mode does not open the keyboard until the composer toggle is tapped.
+
+## 2026-08-21 - Give the room default-display-language page its own surface
+
+- Surface: Conversation room hamburger menu, conversation management, and default display language.
+- Issue: The default display language page was still rendered as a motion section inside the management child surface. At the third history depth, its edge gesture and native back path therefore shared ownership with the management/menu stack instead of closing only the top page.
+- User impact: An iOS edge-swipe from the default display language page could close or replay more than one room-menu level, leaving the hamburger menu transition visibly out of sync.
+- Resolution:
+  - Keep the conversation-management page mounted beneath the default-display-language page while the third-level history entry is active.
+  - Render default display language as its own nested `SlideSurface` with a higher native-back priority and the same edge-only gesture ownership as other full-screen surfaces.
+  - Let the shared menu depth remain the history source of truth so one swipe/back action consumes exactly one entry.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify management → default display language → iOS edge-swipe returns to management only, Android back returns to management only, and a second back/swipe closes the hamburger menu without closing the room.
+
 ## 2026-08-17 - Open the Current User's Profile From Participants
 
 - Surface: Conversation room hamburger menu, participants page, and profile detail panel.
@@ -997,6 +1023,161 @@
 - Data contract: No schema or API changes. The existing profile data is read server-side for the public shared-link preview.
 - Testing notes: Verify a shared link shows the correct profile photo, name, and handle, the button uses the Mingle icon and key color, and a missing preview still leaves the app-opening action available.
 
+## 2026-08-21 - Profile detail must open from both room participant avatars
+
+- Surface: Conversation room chat-bubble avatars and the conversation participants page.
+- Issue: The shared-room chat bubble intentionally rendered the viewer's own avatar as a non-button, while only another member's avatar could call the profile overlay. The guard was added when the public profile route rejected self IDs, but the profile surface now supports the signed-in user through `/profile`. This left the interaction inconsistent: the same participant profile card could open from the participants page, but the viewer's chat avatar could not open the detail panel.
+- User impact: Tapping a profile photo in a conversation appears to do nothing for the current user, and any bubble without a hydrated `speakerUserId` also remains non-interactive. This is especially confusing in rooms that have real member identities but still show locally cached or pre-hydration bubbles.
+- Evidence: The current shared-room hydration response includes `isMultiMember: true` and `speakerUserId` for both senders. The existing chat-bubble test explicitly asserts that the viewer's own avatar must not render a button, so this is an encoded UI rule rather than a missing database member.
+- Resolution: Reuse the existing `onOpenProfile` callback for both own and other identified member avatars. The profile screen selects `/profile` for the signed-in user and `/users/{id}` for another member; solo-room bubbles without a real account ID remain non-navigable generated speaker avatars.
+- Data contract: None. The existing member IDs and profile endpoints are sufficient.
+- Status: Implemented in-thread on 2026-08-21. Unit verification passed; Release and QA-bridge Debug builds both installed and launched on the connected iPhone. Appium still exposed only `NATIVE_APP`, so direct WebView interaction for this surface remains blocked by the local device automation environment.
+
+## 2026-08-21 - Keep the conversation room behind a profile route
+
+- Surface: The profile detail opened by tapping a participant avatar inside a conversation room.
+- Issue: A room restored by native STT could be visible while the browser history still pointed at the conversation list. Opening the profile route from that state left the list as the back target, so an iOS swipe-back dismissed the room instead of returning to it.
+- Resolution:
+  - Ensure the active conversation has a marked `conversation` history entry before pushing the profile route.
+  - Preserve the active conversation query on the nested profile URL so the return context is not discarded by the native-query path builder.
+  - Keep top-level tab navigation behavior unchanged; only nested profile navigation opts into conversation preservation.
+- Data contract: None. No database or API changes.
+- Testing notes: Verify the profile opens from a restored room and that the header back action and iOS edge-swipe both return to the same conversation room.
+
+## 2026-08-21 - Restrict profile dismissal to the intended back gestures
+
+- Surface: The route-backed public profile opened from a conversation avatar on iOS and Android.
+- Issue: The profile motion root accepted a horizontal drag from any screen position, so a normal center swipe could dismiss the profile and let the same gesture continue into the underlying conversation history. Android hardware back also had no profile-specific native handler and could fall through to the browser history path.
+- Resolution:
+  - Restrict the profile's controlled drag-to-dismiss behavior to pointer starts inside the 32px left edge zone.
+  - Disable competing WebView history gestures while the profile owns the controlled edge swipe, so the same gesture cannot reload or traverse the underlying room.
+  - Register the profile screen as the highest-priority native back handler so Android hardware back closes only the profile route.
+- Data contract: None. No database or API changes.
+- Testing notes: Verify center swipes do not dismiss a route profile, iOS edge-swipe returns directly to the room, and Android hardware back leaves the room open behind the profile.
+
+## 2026-08-21 - Keep every right-side surface above its parent page
+
+- Surface: Notifications and conversation rooms from the conversation list; the conversation menu, public profiles, feedback, participants, and conversation management from a room; and profile edit, profile share, followers/following, profile settings, and settings subpages from My Page.
+- Issue: Some screens were route pages and others were parent-owned state overlays. Route navigation unmounted the conversation room or My Page, while state-owned screens used separate animation and native-back implementations. On iOS, a center swipe could dismiss a profile and continue into the underlying history. On Android, hardware back could close the room before the profile transition finished. The same structure also made nested settings surfaces behave differently from the top-level screens.
+- User impact: Returning from a profile or notification could show a loading or refresh state, leave the conversation room, or land on the conversation list. Similar right-side screens could also disagree about edge-swipe ownership, native back priority, and whether the parent page stayed mounted.
+- Resolution:
+  - Add a shared `SlideSurface` primitive for right-side surfaces. It owns the entrance/exit motion, left-edge-only drag dismissal, native back registration, and native edge-swipe suppression.
+  - Add a shared same-document history stack so opening a surface preserves the current route and parent React tree. Closing a nested surface consumes only its own history entry, allowing notifications to open a profile and return to notifications, or a follow list to open a profile and return to the list.
+  - Keep the conversation room mounted while it is hidden behind the conversation list, and render notifications and conversation profiles as sibling surfaces instead of route replacements for internal entry points.
+  - Convert My Page's profile edit, settings, follow list, public profile, and profile share entry points to parent-preserving surfaces. Convert settings subpages to history-backed nested surfaces.
+  - Apply the shared surface behavior to the conversation hamburger menu while preserving its existing nested menu history. QR-based profile sharing remains the explicit route exception because it coordinates native scanner and QR-save actions.
+- Data contract: None. No Prisma migration or API namespace change is required.
+- Testing notes: TypeScript, targeted ESLint, the shared slide-surface history tests, and the unit test suite pass. Live integration tests require the configured local server. Device verification remains pending for iOS edge-swipe, iOS center-swipe rejection, Android hardware back, and nested surface return paths.
+
+## 2026-08-21 - Keep nested room surfaces on the correct back stack
+
+- Surface: Conversation-room backdrop, hamburger-menu child pages, and the room language selector.
+- Issue: The shared `SlideSurface` kept a semi-transparent hamburger backdrop painted while closed, which darkened the conversation room. A back gesture from a hamburger child page was also allowed to dismiss the parent menu surface because the close dispatcher did not consume the current menu history depth first. The language selector is rendered through a React portal, so its pointer gesture could bubble through the React tree to the room surface and dismiss the room instead of the selector.
+- User impact: The room appeared dimmed, nested menu pages returned directly to the room, the next menu opening could require a second tap, and language-selector edge gestures could leave the room/list history out of sync and cause rooms to reopen unexpectedly.
+- Resolution:
+  - Hide the shared backdrop visually whenever its surface is closed while preserving the mounted parent tree and exit animation.
+  - Treat the hamburger history depth as the source of truth and consume one menu entry before allowing the parent room surface to close. Keep a stale-state fallback that closes a visibly open menu without traversing an additional history entry.
+  - Stop pointer and touch capture at the portaled language-selector root so room edge-swipe handling cannot receive selector gestures.
+  - Expose a topmost-overlay close request through the room refs and let the conversation surface delegate to it before closing. This keeps language selection, dialogs, and nested menu pages ahead of the room/list history transition even when a native or pointer path bypasses the child surface.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the room is undimmed when the hamburger menu is closed; edge-swipe and Android back return one level through hamburger pages; language-selector edge-swipe closes only the selector; and repeated A/B room navigation does not reopen a stale room.
+
+## 2026-08-21 - Give the topmost surface exclusive gesture ownership
+
+- Surface: Conversation hamburger child pages, the room language selector, conversation-list search, and full-screen My Page surfaces.
+- Issue: Hamburger child pages shared the parent menu's motion root, so an iOS edge gesture could move the child and the hamburger together before history settled. The language selector's portal-level event capture blocked the room gesture but did not provide a selector gesture of its own. Search used a custom horizontal touch detector that dismissed from the center of the screen. Full-screen My Page surfaces also applied a panel shadow across the viewport, producing a dark strip at the edge.
+- User impact: Returning from feedback, conversation management, participants, or display-language could briefly close and re-enter the hamburger menu; room language selection could not be dismissed with an iOS edge swipe; a center swipe could unexpectedly close search; and My Page could appear darkened along the right edge.
+- Resolution:
+  - Keep the hamburger root surface stationary and render its child pages inside a separate topmost `SlideSurface`. The child surface consumes one menu history step while the root remains mounted underneath.
+  - Convert the portaled room language selector into a `SlideSurface` with its own edge-only drag and native-back priority. Keep portal event isolation at the surface boundary without suppressing the selector's own gesture.
+  - Convert conversation search from a generic touch-distance detector to `SlideSurface`, preserving its existing history marker and instant/animated transition modes. The shared edge guard now ignores center swipes, while Android hardware back still closes only search.
+  - Remove `shadow-2xl` from full-viewport My Page surfaces so a full-screen surface does not paint a false edge gradient. Shadows remain appropriate for constrained inner cards.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify iOS edge-swipe from each hamburger child returns exactly one level, the room language selector closes without dismissing the room, center swipes do not close search, Android back closes only search or the topmost child surface, and My Page has no right-edge dark strip.
+
+## 2026-08-21 - Keep the conversation hamburger transition visible without dimming the room
+
+- Surface: The hamburger menu opened from a conversation room.
+- Issue: The menu was the only right-side surface wrapped in a backdrop container. That container changed to `opacity: 0` as soon as history closed the menu, hiding the panel before its exit transform could finish. Its black backdrop also darkened the room even though the hamburger is a navigation surface rather than a modal confirmation dialog.
+- User impact: Opening or closing the hamburger could flash instead of sliding smoothly, and the conversation room appeared unnecessarily dimmed behind it.
+- Resolution:
+  - Keep the transparent layout wrapper mounted while the menu's `SlideSurface` performs its entrance or exit transform.
+  - Disable the wrapper's fade-out behavior for this surface so history-driven close transitions remain visible.
+  - Remove the black backdrop color while retaining outside-panel click handling for menu dismissal.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the hamburger enters and exits with one continuous horizontal motion, the room remains at normal brightness, and tapping outside the menu still closes it.
+
+## 2026-08-21 - Remove the conversation menu edge shadow
+
+- Surface: The conversation room and its hamburger menu, including the legacy conversation renderer.
+- Issue: The hamburger panel kept a directional `box-shadow` while its slide surface remained mounted off-screen for transition and history handling. The shadow extended leftward from the hidden panel and appeared as a black gradient along the room's right edge, even before the menu was opened.
+- User impact: The conversation room looked dimmed or visually covered at the right edge both before and during hamburger-menu use, despite the room itself not being modal.
+- Resolution: Remove the panel shadow from the current outer and nested menu surfaces and from the legacy menu renderer. Make the legacy wrapper transparent as well, so both renderers keep the menu's panel border and slide transition without painting a shadow or dimming layer over the room.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the room has uniform brightness before opening the menu, remains uniform while the menu is open, and keeps a smooth menu transition.
+
+## 2026-08-21 - Keep public profiles and profile sharing above their parent surface
+
+- Surface: Public profile details opened from conversation avatars, conversation participants, notifications, follow lists, and Connect search; the profile image preview; and profile sharing from a public profile.
+- Issue: Connect search still navigated to a standalone profile route, the public profile share action navigated to the My Page share route, and the image preview did not register as the topmost Android back target. These paths could unmount the parent page or let Android back close the profile/page instead of only the visible child.
+- User impact: Returning from a profile could lose the search or conversation context, profile sharing could replace the profile instead of layering above it, and pressing Android back while viewing a profile photo could close the entire profile or exit the app.
+- Resolution:
+  - Open Connect search profiles through a scope-owned history-backed `SlideSurface`, preserving the search page and its result snapshot underneath.
+  - Make profile sharing a nested history-backed `SlideSurface` above every public profile entry point, so iOS edge-swipe and Android back close only the share surface and reveal the profile again.
+  - Register the full-screen profile image preview as the highest-priority native back handler and stop its pointer/touch events from reaching the underlying profile surface.
+  - Keep the standalone profile route available for direct/deep-link entry, while internal profile entry points remain parent-preserving overlays.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify profile entry from each listed surface, profile-share open/close and iOS edge-swipe, Connect search restoration, and Android back from both public-profile and My Page photo previews.
+
+## 2026-08-21 - Preserve multi-member language state inside the shared slide surface
+
+- Surface: The conversation-room language selector after integrating room-wide language attribution and deferred invitee membership.
+- Issue: The remote language feature distinguishes the room union from the viewer's own picks, while the local navigation work replaces the selector root with `SlideSurface`. A raw merge could either drop the attributed language UI or restore the old non-gesture overlay. Review also found that an explicitly empty viewer selection was being replaced with the room union, and min/max disabling was calculated from the union instead of the viewer's picks.
+- User impact: A newly materialized invitee could appear to own every language selected by someone else, be unable to add an attributed language, or see the selector lose its one-level iOS/Android back behavior after integration.
+- Resolution:
+  - Keep the remote attribution, member-avatar, pending-invitee, and room-union data flow as the source of truth.
+  - Reapply only the local `SlideSurface` container and its topmost gesture/native-back ownership around the remote selector body.
+  - Preserve an explicitly empty viewer selection and apply add/remove limits to that viewer's own picks rather than the room union.
+  - Keep pending-invitee rooms on per-member status semantics and validate display-language choices against the effective member-language union.
+  - Keep deleted conversations excluded when locating an existing direct-message room.
+- Data contract: Uses the remote `selected_languages` membership column and `pending_invitee_user_ids` channel column without changing their schema or migration order.
+- Testing notes: Verify attributed rows for owner-only, other-only, and shared selections; an invitee with no picks can add a language; selector edge-swipe closes only the selector; pending rooms preserve per-member active state; and deleted direct-message rooms are not reused.
+
+## 2026-08-21 - Keep profile-share URL rendering hydration-safe
+
+- Surface: The profile-share surface opened from My Page and public profile details.
+- Issue: `profile-share-screen.tsx` read `window.location.origin` while computing `profileUrl` during render. The server therefore rendered no profile URL `<span>`, while the browser added that conditional span during its first render, producing a Next.js hydration mismatch.
+- User impact: The profile-share screen could show the Next.js hydration error overlay in the devbox WebView before the share UI stabilized.
+- Resolution: Resolve the browser origin in a client-only effect and keep `profileUrl` empty during the server render and the matching initial client render. Generate the URL, QR code, and link text only after the client origin has been committed.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify the profile-share surface opens without a hydration overlay, then renders the profile URL and QR code after mount; verify direct route and parent-preserving overlay entry points.
+
+## 2026-08-22 - Ask before reusing an existing direct-message room
+
+- Surface: The Message action on public profile details and the existing-room choice used when starting a conversation.
+- Issue: Multiple 1:1 rooms could exist for the same two users, but direct-room lookup used an unspecified first row. The group reuse path also used channel.updatedAt rather than the timestamp of the latest persisted message.
+- User impact: Message this person could open an arbitrary older room, and the direct flow did not let the user choose between continuing the latest room and creating a separate room.
+- Resolution:
+  - Select the reuse candidate by the latest visible app_messages.created_at for both exact-member group rooms and exact 1:1 rooms. Rooms without messages fall back to createdAt for deterministic pending-room behavior.
+  - Show the existing-conversation choice surface for 1:1 profiles as well as group starts, using the same shared modal component and translations.
+  - Continue opens the latest existing room; Create new sends force=true and creates a fresh room without consulting existing-room candidates.
+  - Keep the latest-message lookup as one sessionKey IN query with DISTINCT sessionKey, avoiding an N+1 query per candidate room.
+- Data contract: Adds the direct endpoint's optional force request field and reused response field. No schema change or Prisma migration is required; the existing app_messages sessionKey/createdAt indexes support the recency lookup.
+- Testing notes: Targeted conversation and direct-route tests pass, including latest-message selection and forced 1:1 creation. TypeScript and targeted ESLint pass. Verify both modal choices from a profile with multiple existing 1:1 rooms on iOS and Android.
+
+## 2026-08-22 - Reset the conversation stack when starting a message from a profile
+
+- Surface: The Message action from public profiles opened through Connect search, conversation avatars, participant lists, notifications, and My Page follow lists.
+- Issue: Starting a direct conversation used a route push on top of profile, participant, hamburger-menu, and existing-room history entries. Returning from the new room could therefore replay those old surfaces in the wrong order, especially after an iOS edge-swipe. A composer focus could also be restored while the room was being replaced.
+- User impact: The room could require several unexpected back gestures to reach the list, and a profile or participant surface could reappear after it had already been dismissed. The original active room could also remain recording while the user was moved to another room.
+- Resolution:
+  - Consume every profile-owned surface entry and reset the conversation menu depth to zero before handling the Message action.
+  - If the selected room is the currently visible room, keep the room route and close only the profile/menu surfaces.
+  - Otherwise replace the current room entry with the conversation-list entry, then push exactly one target-room entry, establishing the canonical `[conversation list] -> [conversation room]` stack.
+  - Apply the same list-reset navigation to Connect and My Page profile starts, including native tab-root and conversation-restore guards.
+  - Stop an active source-room STT session before leaving it and keep the delayed iOS navigation guard alive through route settling.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: TypeScript, targeted ESLint, and history/navigation unit tests pass. Verify room-avatar and participant-profile flows for same-room continuation and different/new-room navigation, plus Connect and My Page profile starts, iOS edge-swipe back, Android back, and composer keyboard behavior on rebuilt apps.
 ## 2026-08-20 - Add permission-aware profile locations
 
 - Surface: The location row below the handle on the authenticated My Page and public user profiles.
@@ -1041,3 +1222,17 @@
 - Resolution: Replace the standard OpenStreetMap iframe with Google Maps Embed and pass the viewer's primary locale through the `language` parameter. Keep the existing coordinates and full-screen panel interaction unchanged.
 - Data contract: None. Profile coordinates and localized reverse-geocoded labels remain unchanged.
 - Testing notes: Verify English, Korean, and the remaining primary UI locales render the Google map with the requested language when `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY` is configured. Verify the panel shows the existing map-unavailable fallback when the key is absent.
+
+## 2026-08-22 - Complete multi-member privacy and primary-locale UI copy
+
+- Surface: Conversation list avatars, direct-message entry, pending group invites, the blocked composer state, and the multi-member/profile UI added in this branch.
+- Issue: A blocked counterpart was correctly marked in the conversation summary but the list's `otherMembers` payload still carried the original photo and crop values. Direct-message lookup also accepted any pending room containing the target, so a pending group such as `[B, C]` could be reused for an A-to-B message. Invite creation accepted unknown user ids, which left invalid pending rows that could fail first-message membership materialization. Several new controls and states were localized only for Korean/English, including the public-profile Message action, blocked composer copy, profile sharing, notifications, usage settings, and profile image cropping.
+- User impact: A blocked person's photo could remain visible, a private message could reach an unintended group member, an invalid invite could create a room that failed to materialize reliably, and users in the other primary UI languages could see mixed English/Korean copy in newly added flows.
+- Resolution:
+  - Null counterpart image and crop fields in every conversation summary and hydration path whenever the viewer has blocked the only other real member; retain the name and blocked-room marker so the room remains understandable without exposing the photo.
+  - Narrow pending direct-room reuse to a single pending target id, while keeping exact real-member filtering for materialized rooms.
+  - Validate every invitee against `User` before duplicate checks or persistence, and defensively drop unknown legacy pending ids before the membership foreign-key write.
+  - Use shared composer copy for both current and legacy renderers, including a localized blocked message and send-message label.
+  - Add complete copy tables for all 15 primary UI locales (ko, en, ja, zh-CN, zh-TW, fr, de, es, pt, it, ru, ar, hi, th, vi) across group invitations, profile messaging, QR sharing, notifications, profile image cropping, usage settings, and accessibility labels. New supplemental copy resolves to English for every other supported locale.
+- Data contract: No Prisma migration or API namespace change is required. Invite validation and legacy-row filtering use the existing `User` table and `pending_invitee_user_ids` field.
+- Testing notes: Conversation, route, i18n, composer, copy-action, profile-link, TypeScript, ESLint, and the full 128-file/1,115-test unit suite pass. Verify blocked avatars, A→B messaging from a pending `[B,C]` room, invalid invite rejection, and every newly added UI surface in the 15 primary locales plus an unsupported locale such as Polish.
