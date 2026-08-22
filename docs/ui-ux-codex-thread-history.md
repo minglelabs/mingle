@@ -349,3 +349,11 @@
 - Issue: When navigating from the cached room list to a room, the previous request's data state could remain visible for one render while the new room request was still pending. If that stale snapshot had no selected room detail, the UI incorrectly showed `해당 대화방을 찾을 수 없습니다.` before the API response arrived.
 - User impact: Operators could mistake a transient cache/API handoff state for a genuinely missing conversation.
 - Resolution: Scoped rendered data and error state to the current request key. A room with no usable cached detail now stays in the loading state until the database response completes; only a completed response that confirms the room is absent shows the not-found message. Usable cached room detail remains visible while background refresh waits for manual application.
+
+## 2026-08-23 — Admin conversation client-side controls
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/data/route.ts`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Room sorting, deletion filters, and room pagination were coupled to the database lookup request, so changing a browsing control could trigger another server query and made the cached review experience less responsive.
+- User impact: Administrators could not treat sorting and filtering like the existing client-side search over the already loaded support data.
+- Resolution: The lookup now fetches the complete room metadata dataset and unfiltered message pages for the selected user. Room deletion filtering, message deletion filtering, sorting, and 20-room pagination run entirely in the browser over the cached/fetched data; the server is only contacted for user/room data retrieval and lazy 200-message pages.
+- Tests: Targeted ESLint and TypeScript validation were run; the repository still reports the known unrelated test type errors in language-selector, dictionary, and dashboard BigInt files.

@@ -1,11 +1,9 @@
-import type { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 const MESSAGE_PAGE_SIZE = 200;
-type DeletedFilter = "all" | "active" | "deleted";
 
 function first(value: string | string[] | undefined): string {
   return typeof value === "string" ? value.trim() : Array.isArray(value) ? (value[0] ?? "").trim() : "";
@@ -14,14 +12,6 @@ function first(value: string | string[] | undefined): string {
 function normalizePage(value: string): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 100_000) : 1;
-}
-
-function normalizeDeletedFilter(value: string): DeletedFilter {
-  return value === "active" || value === "deleted" ? value : "all";
-}
-
-function messageDeletedWhere(filter: DeletedFilter): Prisma.AppMessageWhereInput {
-  return filter === "deleted" ? { isDeleted: true } : filter === "active" ? { isDeleted: { not: true } } : {};
 }
 
 export async function GET(
@@ -36,7 +26,6 @@ export async function GET(
   const { conversationId } = await context.params;
   const url = new URL(request.url);
   const externalUserId = first(url.searchParams.get("userId") ?? "");
-  const messageDeleted = normalizeDeletedFilter(first(url.searchParams.get("messageDeleted") ?? ""));
   const page = normalizePage(first(url.searchParams.get("page") ?? ""));
   if (!externalUserId) return NextResponse.json({ error: "Missing userId" }, { status: 400 });
 
@@ -49,10 +38,9 @@ export async function GET(
   });
   if (!channel) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
 
-  const where: Prisma.AppMessageWhereInput = {
+  const where = {
     userId: user.id,
     sessionKey: channel.sessionKey,
-    ...messageDeletedWhere(messageDeleted),
   };
   const messageCount = await prisma.appMessage.count({ where });
   const totalPages = Math.max(1, Math.ceil(messageCount / MESSAGE_PAGE_SIZE));
@@ -68,7 +56,6 @@ export async function GET(
       isDeleted: true,
       createdAt: true,
       contents: {
-        where: messageDeleted === "deleted" ? { isDeleted: true } : messageDeleted === "active" ? { isDeleted: { not: true } } : {},
         orderBy: { createdAt: "asc" },
         select: { contentType: true, language: true, text: true, isDeleted: true },
       },

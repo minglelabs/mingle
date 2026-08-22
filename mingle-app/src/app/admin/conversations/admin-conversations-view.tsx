@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSttLanguageFlag } from "@/lib/stt-languages";
 import { getTranslationLanguageName } from "@/lib/translation-languages";
 
-const CONVERSATION_CACHE_VERSION = "v1";
+const CONVERSATION_CACHE_VERSION = "v2";
 
 function readSessionCache<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -49,6 +49,8 @@ export type AdminConversationSummary = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  activeMessageCount: number;
+  deletedMessageCount: number;
   href: string;
 };
 
@@ -100,7 +102,7 @@ export function AdminConversationList({ channels }: { channels: AdminConversatio
           <Link className="block rounded-lg border border-[#eeeae2] p-4 transition hover:border-[#b45309] hover:bg-[#fffaf0]" href={channel.href} key={channel.id}>
             <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h3><span className="text-xs text-[#898781]">{formatDate(channel.updatedAt)}</span></div>
             <p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p>
-            <p className="mt-2 text-xs text-[#6f6d68]">메시지 {channel.messageCount}개 · 생성 {formatDate(channel.createdAt)}</p>
+            <p className="mt-2 text-xs text-[#6f6d68]">현재 필터 메시지 {channel.messageCount}개 · 삭제되지 않음 {channel.activeMessageCount}개 · 삭제됨 {channel.deletedMessageCount}개 · 생성 {formatDate(channel.createdAt)}</p>
           </Link>
         ))}
         {visibleChannels.length === 0 ? <p className="rounded-lg bg-[#f7f6f2] p-4 text-sm text-[#6f6d68]">현재 페이지에 일치하는 대화방이 없습니다.</p> : null}
@@ -110,11 +112,12 @@ export function AdminConversationList({ channels }: { channels: AdminConversatio
 }
 
 type ConversationDataChannel = Omit<AdminConversationSummary, "href">;
+type ConversationDataRoom = Pick<ConversationDataChannel, "id" | "title" | "sessionKey" | "isDeleted" | "createdAt" | "updatedAt">;
 type ConversationData = {
   user: { externalUserId: string | null; email: string | null; name: string | null };
   channelCount: number;
   channels: ConversationDataChannel[];
-  selectedChannel: Omit<ConversationDataChannel, "messageCount"> | null;
+  selectedChannel: ConversationDataRoom | null;
 };
 
 export type AdminConversationBrowserProps = {
@@ -125,6 +128,28 @@ export type AdminConversationBrowserProps = {
   page: number;
   channelId: string;
 };
+
+type DeletedFilter = "all" | "active" | "deleted";
+type ChannelSort = "updated-desc" | "updated-asc" | "created-desc" | "created-asc" | "title-asc" | "title-desc";
+
+function messageCountForFilter(channel: ConversationDataChannel, filter: DeletedFilter): number {
+  if (filter === "deleted") return channel.deletedMessageCount;
+  if (filter === "active") return channel.activeMessageCount;
+  return channel.messageCount;
+}
+
+function sortChannels(channels: ConversationDataChannel[], sort: ChannelSort): ConversationDataChannel[] {
+  return [...channels].sort((left, right) => {
+    if (sort === "title-asc" || sort === "title-desc") {
+      const result = left.title.localeCompare(right.title, "ko");
+      return sort === "title-desc" ? -result : result;
+    }
+    const leftTime = Date.parse(sort.startsWith("created") ? left.createdAt : left.updatedAt);
+    const rightTime = Date.parse(sort.startsWith("created") ? right.createdAt : right.updatedAt);
+    const result = rightTime - leftTime;
+    return sort.endsWith("-asc") ? -result : result;
+  });
+}
 
 function buildBrowserHref(props: AdminConversationBrowserProps, overrides: { page?: number; channelId?: string } = {}): string {
   const query = new URLSearchParams({
@@ -140,22 +165,31 @@ function buildBrowserHref(props: AdminConversationBrowserProps, overrides: { pag
 }
 
 export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
-  const cacheKey = `data:${props.userId}:${props.channelDeleted}:${props.messageDeleted}:${props.sort}:${props.page}:${props.channelId || "list"}`;
+  const cacheKey = props.channelId ? `data:${props.userId}:room:${props.channelId}` : `data:${props.userId}:list`;
   const [data, setData] = useState<ConversationData | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(props.userId));
   const [error, setError] = useState("");
   const [hasUpdate, setHasUpdate] = useState(false);
   const [resolvedKey, setResolvedKey] = useState("");
+  const [channelDeleted, setChannelDeleted] = useState<DeletedFilter>(props.channelDeleted);
+  const [messageDeleted, setMessageDeleted] = useState<DeletedFilter>(props.messageDeleted);
+  const [sort, setSort] = useState<ChannelSort>(props.sort as ChannelSort);
+  const [listPage, setListPage] = useState(props.page);
+
+  useEffect(() => {
+    startTransition(() => {
+      setChannelDeleted(props.channelDeleted);
+      setMessageDeleted(props.messageDeleted);
+      setSort(props.sort as ChannelSort);
+      setListPage(props.page);
+    });
+  }, [props.channelDeleted, props.messageDeleted, props.page, props.sort, props.userId, props.channelId]);
 
   useEffect(() => {
     if (!props.userId) return;
     let active = true;
     const query = new URLSearchParams({
       userId: props.userId,
-      channelDeleted: props.channelDeleted,
-      messageDeleted: props.messageDeleted,
-      sort: props.sort,
-      page: String(props.page),
     });
     if (props.channelId) query.set("channelId", props.channelId);
 
@@ -201,18 +235,30 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
     };
     void load();
     return () => { active = false; };
-  }, [cacheKey, props.channelDeleted, props.channelId, props.messageDeleted, props.page, props.sort, props.userId]);
+  }, [cacheKey, props.channelId, props.userId]);
 
-  if (!props.userId) return <p className="text-sm text-[#6f6d68]">사용자 ID를 입력해 주세요.</p>;
   const visibleData = resolvedKey === cacheKey ? data : null;
   const visibleError = resolvedKey === cacheKey ? error : "";
+  const filteredChannels = useMemo(() => sortChannels(
+    (visibleData?.channels ?? []).filter((channel) => channelDeleted === "all" || (channelDeleted === "deleted" ? channel.isDeleted === true : channel.isDeleted !== true)),
+    sort,
+  ), [channelDeleted, sort, visibleData?.channels]);
+  if (!props.userId) return <p className="text-sm text-[#6f6d68]">사용자 ID를 입력해 주세요.</p>;
   if (!visibleData && (isLoading || !visibleError)) return <p className="rounded-xl border border-[#e5e3dc] bg-white p-5 text-sm text-[#6f6d68]">캐시된 대화록을 확인하고 서버 데이터를 불러오는 중...</p>;
   if (!visibleData) return <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">{visibleError}</p>;
 
-  const summaries = visibleData.channels.map((channel) => ({ ...channel, href: buildBrowserHref(props, { channelId: channel.id }) }));
-  const previousHref = props.page > 1 ? buildBrowserHref(props, { page: props.page - 1, channelId: "" }) : undefined;
-  const nextHref = props.page < Math.max(1, Math.ceil(visibleData.channelCount / 20)) ? buildBrowserHref(props, { page: props.page + 1, channelId: "" }) : undefined;
-  const backHref = buildBrowserHref(props, { channelId: "" });
+  const totalListPages = Math.max(1, Math.ceil(filteredChannels.length / 20));
+  const displayedPage = Math.min(listPage, totalListPages);
+  const pageChannels = filteredChannels.slice((displayedPage - 1) * 20, displayedPage * 20);
+  const currentProps = { ...props, channelDeleted, messageDeleted, sort, page: displayedPage };
+  const summaries = pageChannels.map((channel) => ({
+    ...channel,
+    messageCount: messageCountForFilter(channel, messageDeleted),
+    href: buildBrowserHref(currentProps, { channelId: channel.id }),
+  }));
+  const previousHref = displayedPage > 1 ? buildBrowserHref(currentProps, { page: displayedPage - 1, channelId: "" }) : undefined;
+  const nextHref = displayedPage < totalListPages ? buildBrowserHref(currentProps, { page: displayedPage + 1, channelId: "" }) : undefined;
+  const backHref = buildBrowserHref(currentProps, { channelId: "" });
   const applyUpdate = () => {
     const latest = readSessionCache<ConversationData>(cacheKey);
     if (!latest) return;
@@ -225,14 +271,15 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
   return (
     <>
       <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{visibleData.user.name || visibleData.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{visibleData.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {visibleData.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
-      {error ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{error}</p> : null}
+      {visibleError ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{visibleError}</p> : null}
+      <section className="mb-5 grid gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm md:grid-cols-3"><label className="text-xs font-semibold text-[#6f6d68]">대화방 삭제 여부<select value={channelDeleted} onChange={(event) => { setChannelDeleted(event.target.value as DeletedFilter); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">메시지 삭제 여부<select value={messageDeleted} onChange={(event) => setMessageDeleted(event.target.value as DeletedFilter)} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">대화방 정렬<select value={sort} onChange={(event) => { setSort(event.target.value as ChannelSort); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="updated-desc">최근 수정순</option><option value="updated-asc">오래된 수정순</option><option value="created-desc">최근 생성순</option><option value="created-asc">오래된 생성순</option><option value="title-asc">제목 가나다순</option><option value="title-desc">제목 가나다 역순</option></select></label></section>
       {!props.channelId ? (
         <>
-          <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {props.page} / {Math.max(1, Math.ceil(visibleData.channelCount / 20))}페이지 (페이지당 20개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>
+          <nav className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-3 text-sm" aria-label="대화방 페이지네이션"><span className="text-[#6f6d68]">대화방 {displayedPage} / {totalListPages}페이지 (페이지당 20개 · 현재 필터 {filteredChannels.length}개)</span><span className="flex gap-2">{previousHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={previousHref}>이전 대화방</Link> : null}{nextHref ? <Link className="rounded border border-[#e5e3dc] px-3 py-1.5 font-semibold hover:bg-[#f4f3ee]" href={nextHref}>다음 대화방</Link> : null}</span></nav>
           <AdminConversationList channels={summaries} />
         </>
       ) : visibleData.selectedChannel ? (
-        <AdminConversationRoom channel={visibleData.selectedChannel} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={`/admin/conversations/${encodeURIComponent(visibleData.selectedChannel.id)}/messages?${new URLSearchParams({ userId: props.userId, messageDeleted: props.messageDeleted })}`} backHref={backHref} cacheKey={`room:${props.userId}:${visibleData.selectedChannel.id}:${props.messageDeleted}`} />
+        <AdminConversationRoom channel={visibleData.selectedChannel} messageDeleted={messageDeleted} initialMessages={[]} initialPage={0} totalPages={0} initialMessageCount={0} apiUrl={`/admin/conversations/${encodeURIComponent(visibleData.selectedChannel.id)}/messages?${new URLSearchParams({ userId: props.userId })}`} backHref={backHref} cacheKey={`room:${props.userId}:${visibleData.selectedChannel.id}`} />
       ) : <p className="rounded-xl border border-[#ead7d2] bg-white p-5 text-sm text-[#9b3c2f]">해당 대화방을 찾을 수 없습니다.</p>}
     </>
   );
@@ -247,6 +294,7 @@ type AdminConversationRoomProps = {
     createdAt: string;
     updatedAt: string;
   };
+  messageDeleted: DeletedFilter;
   initialMessages: AdminConversationMessage[];
   initialPage: number;
   totalPages: number;
@@ -272,6 +320,7 @@ function mergeMessages(latestMessages: AdminConversationMessage[], existingMessa
 
 export function AdminConversationRoom({
   channel,
+  messageDeleted,
   initialMessages,
   initialPage,
   totalPages,
@@ -371,9 +420,12 @@ export function AdminConversationRoom({
   }, [hasLoadedInitial, hasNext, isLoading, loadOlderMessages, messages.length]);
 
   const visibleMessages = useMemo(() => {
-    if (!normalizedSearch) return messages;
-    return messages.filter((message) => [message.sourceLanguage, ...message.contents.map((content) => `${content.language} ${content.text}`)].join(" ").toLocaleLowerCase().includes(normalizedSearch));
-  }, [messages, normalizedSearch]);
+    const deletionFiltered = messageDeleted === "all"
+      ? messages
+      : messages.filter((message) => messageDeleted === "deleted" ? message.isDeleted === true : message.isDeleted !== true);
+    if (!normalizedSearch) return deletionFiltered;
+    return deletionFiltered.filter((message) => [message.sourceLanguage, ...message.contents.map((content) => `${content.language} ${content.text}`)].join(" ").toLocaleLowerCase().includes(normalizedSearch));
+  }, [messageDeleted, messages, normalizedSearch]);
 
   const applyUpdate = () => {
     const latest = readSessionCache<{

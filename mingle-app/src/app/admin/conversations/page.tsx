@@ -60,11 +60,8 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
           <Link className="rounded-md border border-[#e5e3dc] bg-white px-4 py-2 text-sm font-semibold" href="/admin">피드백함으로</Link>
         </header>
 
-        <form className="mb-4 grid gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]" method="get">
-          <input name="userId" defaultValue={browserProps.userId} placeholder="external user ID" className="min-w-0 rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" required />
-          <select name="channelDeleted" defaultValue={browserProps.channelDeleted} className="rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" aria-label="대화방 삭제 여부"><option value="all">대화방: 전체</option><option value="active">대화방: 삭제되지 않음</option><option value="deleted">대화방: 삭제됨</option></select>
-          <select name="messageDeleted" defaultValue={browserProps.messageDeleted} className="rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" aria-label="메시지 삭제 여부"><option value="all">메시지: 전체</option><option value="active">메시지: 삭제되지 않음</option><option value="deleted">메시지: 삭제됨</option></select>
-          <select name="sort" defaultValue={browserProps.sort} className="rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" aria-label="대화방 정렬"><option value="updated-desc">최근 수정순</option><option value="updated-asc">오래된 수정순</option><option value="created-desc">최근 생성순</option><option value="created-asc">오래된 생성순</option><option value="title-asc">제목 가나다순</option><option value="title-desc">제목 가나다 역순</option></select>
+        <form className="mb-4 flex gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm" method="get">
+          <input name="userId" defaultValue={browserProps.userId} placeholder="external user ID" className="min-w-0 flex-1 rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" required />
           <button className="rounded-md bg-[#0b0b0b] px-4 py-2 text-sm font-semibold text-white" type="submit">조회</button>
         </form>
 
