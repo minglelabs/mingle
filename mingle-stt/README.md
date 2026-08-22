@@ -34,7 +34,7 @@ Soniox segmentation resolves to one effective runtime mode:
 - `end` enables Soniox semantic endpoint detection. The client session may set
   `soniox_endpoint_tuning_step` from `0` to `4`. The server maps that value per
   session to the requested endpoint latency level and sensitivity profile:
-  `0=(3,1.0)`, `1=(2,0.8)`, `2=(1,0.8)`, `3=(0,0.8)`, and `4=(0,0.0)`.
+  `0=(3,1.0)`, `1=(2,0.9)`, `2=(1,0.8)`, `3=(0,0.3)`, and `4=(0,-1.0)`.
   Sessions that omit the tuning step use the environment defaults. The separate
   `soniox_endpoint_max_delay_ms` value remains a hard safety cap between `500`
   and `3000` and defaults to `2000`. Provider `<end>` boundaries never create

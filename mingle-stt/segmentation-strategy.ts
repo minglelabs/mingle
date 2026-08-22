@@ -31,10 +31,10 @@ export const DEFAULT_SONIOX_ENDPOINT_TUNING_STEP = 2;
 
 export const SONIOX_ENDPOINT_TUNING_PROFILES: readonly SonioxEndpointTuningProfile[] = [
     { step: 0, latencyAdjustmentLevel: 3, sensitivity: 1.0 },
-    { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.8 },
+    { step: 1, latencyAdjustmentLevel: 2, sensitivity: 0.9 },
     { step: 2, latencyAdjustmentLevel: 1, sensitivity: 0.8 },
-    { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.8 },
-    { step: 4, latencyAdjustmentLevel: 0, sensitivity: 0.0 },
+    { step: 3, latencyAdjustmentLevel: 0, sensitivity: 0.3 },
+    { step: 4, latencyAdjustmentLevel: 0, sensitivity: -1.0 },
 ];
 
 export type NoSegmentationDecision = { action: 'none' };
