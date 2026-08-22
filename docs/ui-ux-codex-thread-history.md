@@ -1,4 +1,5 @@
 # UI/UX Codex Thread History
+
 ## 2026-08-16 - Admin Dashboard Daily Metric Loading Delay
 
 - Surface: `mingle-app/src/app/admin/dashboard/page.tsx`, `mingle-app/src/lib/admin-dashboard-query.ts`, `mingle-app/prisma/schema.prisma`
