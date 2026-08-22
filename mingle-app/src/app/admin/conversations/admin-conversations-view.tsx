@@ -76,6 +76,11 @@ function LanguageBadge({ content }: { content: AdminConversationContent }) {
   );
 }
 
+function CacheUpdateButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
+  if (!visible) return null;
+  return <button className="rounded-md bg-[#b45309] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#92400e]" type="button" onClick={onClick}>새 데이터 적용</button>;
+}
+
 export function AdminConversationList({ channels }: { channels: AdminConversationSummary[] }) {
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -139,6 +144,7 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
   const [data, setData] = useState<ConversationData | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(props.userId));
   const [error, setError] = useState("");
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   useEffect(() => {
     if (!props.userId) return;
@@ -167,8 +173,12 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
         writeSessionCache(cacheKey, fresh);
         if (!active) return;
         startTransition(() => {
-          setData(fresh);
-          setIsLoading(false);
+          if (cached) {
+            if (JSON.stringify(cached) !== JSON.stringify(fresh)) setHasUpdate(true);
+          } else {
+            setData(fresh);
+            setIsLoading(false);
+          }
           setError("");
         });
       } catch (loadError) {
@@ -191,10 +201,18 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
   const previousHref = props.page > 1 ? buildBrowserHref(props, { page: props.page - 1, channelId: "" }) : undefined;
   const nextHref = props.page < Math.max(1, Math.ceil(data.channelCount / 20)) ? buildBrowserHref(props, { page: props.page + 1, channelId: "" }) : undefined;
   const backHref = buildBrowserHref(props, { channelId: "" });
+  const applyUpdate = () => {
+    const latest = readSessionCache<ConversationData>(cacheKey);
+    if (!latest) return;
+    startTransition(() => {
+      setData(latest);
+      setHasUpdate(false);
+    });
+  };
 
   return (
     <>
-      <section className="mb-5 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><h2 className="font-semibold">{data.user.name || data.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{data.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {data.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></section>
+      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{data.user.name || data.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{data.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {data.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
       {error ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{error}</p> : null}
       {!props.channelId ? (
         <>
@@ -234,6 +252,12 @@ type MessagesResponse = {
   hasNext: boolean;
 };
 
+function mergeMessages(latestMessages: AdminConversationMessage[], existingMessages: AdminConversationMessage[]): AdminConversationMessage[] {
+  const byId = new Map<string, AdminConversationMessage>();
+  for (const message of [...latestMessages, ...existingMessages]) byId.set(message.id, message);
+  return [...byId.values()].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+}
+
 export function AdminConversationRoom({
   channel,
   initialMessages,
@@ -251,39 +275,54 @@ export function AdminConversationRoom({
   const [hasLoadedInitial, setHasLoadedInitial] = useState(initialPage > 0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasUpdate, setHasUpdate] = useState(false);
   const [search, setSearch] = useState("");
   const loadingRef = useRef(false);
   const messagesRef = useRef(initialMessages);
+  const pageRef = useRef(initialPage);
+  const totalPagesRef = useRef(totalPages);
+  const messageCountRef = useRef(initialMessageCount);
   const scrollRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = search.trim().toLocaleLowerCase();
 
-  const loadMessagesPage = useCallback(async (nextPage: number, replace: boolean) => {
+  const loadMessagesPage = useCallback(async (nextPage: number, replace: boolean, background = false) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
-    setIsLoading(true);
-    setError("");
+    if (!background) {
+      setIsLoading(true);
+      setError("");
+    }
     try {
       const response = await fetch(`${apiUrl}&page=${nextPage}`, { cache: "no-store" });
       if (!response.ok) throw new Error("message_load_failed");
       const payload = await response.json() as MessagesResponse;
-      const nextMessages = replace ? payload.messages : [...messagesRef.current, ...payload.messages];
-      messagesRef.current = nextMessages;
-      setMessages(nextMessages);
-      setPage(payload.page);
-      setMessageCount(payload.messageCount);
-      setHasNext(payload.hasNext);
-      setHasLoadedInitial(true);
+      const nextMessages = replace ? mergeMessages(payload.messages, messagesRef.current) : [...messagesRef.current, ...payload.messages];
+      const nextPageValue = background ? Math.max(pageRef.current, payload.page) : payload.page;
+      const nextTotalPages = payload.totalPages;
       writeSessionCache(cacheKey, {
         messages: nextMessages,
-        page: payload.page,
-        totalPages: payload.totalPages,
+        page: nextPageValue,
+        totalPages: nextTotalPages,
         messageCount: payload.messageCount,
       });
+      if (background) {
+        if (JSON.stringify(nextMessages) !== JSON.stringify(messagesRef.current) || nextPageValue !== pageRef.current || nextTotalPages !== totalPagesRef.current || payload.messageCount !== messageCountRef.current) setHasUpdate(true);
+        return;
+      }
+      messagesRef.current = nextMessages;
+      pageRef.current = nextPageValue;
+      totalPagesRef.current = nextTotalPages;
+      messageCountRef.current = payload.messageCount;
+      setMessages(nextMessages);
+      setPage(nextPageValue);
+      setMessageCount(payload.messageCount);
+      setHasNext(nextPageValue < nextTotalPages);
+      setHasLoadedInitial(true);
     } catch {
       setError("이전 메시지를 불러오지 못했습니다. 다시 아래로 스크롤해 주세요.");
     } finally {
       loadingRef.current = false;
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
   }, [apiUrl, cacheKey]);
 
@@ -301,14 +340,16 @@ export function AdminConversationRoom({
     }>(cacheKey);
     if (cached) {
       messagesRef.current = cached.messages;
+      pageRef.current = cached.page;
+      totalPagesRef.current = cached.totalPages;
+      messageCountRef.current = cached.messageCount;
       setMessages(cached.messages);
       setPage(cached.page);
       setMessageCount(cached.messageCount);
       setHasNext(cached.page < cached.totalPages);
       setHasLoadedInitial(true);
-      return;
     }
-    void loadMessagesPage(1, true);
+    void loadMessagesPage(1, true, Boolean(cached));
   }, [cacheKey, loadMessagesPage]);
 
   useEffect(() => {
@@ -322,12 +363,34 @@ export function AdminConversationRoom({
     return messages.filter((message) => [message.sourceLanguage, ...message.contents.map((content) => `${content.language} ${content.text}`)].join(" ").toLocaleLowerCase().includes(normalizedSearch));
   }, [messages, normalizedSearch]);
 
+  const applyUpdate = () => {
+    const latest = readSessionCache<{
+      messages: AdminConversationMessage[];
+      page: number;
+      totalPages: number;
+      messageCount: number;
+    }>(cacheKey);
+    if (!latest) return;
+    messagesRef.current = latest.messages;
+    pageRef.current = latest.page;
+    totalPagesRef.current = latest.totalPages;
+    messageCountRef.current = latest.messageCount;
+    startTransition(() => {
+      setMessages(latest.messages);
+      setPage(latest.page);
+      setMessageCount(latest.messageCount);
+      setHasNext(latest.page < latest.totalPages);
+      setHasLoadedInitial(true);
+      setHasUpdate(false);
+    });
+  };
+
   return (
     <section className="rounded-xl border border-[#e5e3dc] bg-white shadow-sm">
       <div className="border-b border-[#eeeae2] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><Link className="text-sm font-semibold text-[#9b3c2f] hover:underline" href={backHref}>← 대화방 목록</Link><h2 className="mt-2 text-xl font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h2><p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p><p className="mt-1 text-xs text-[#6f6d68]">메시지 {hasLoadedInitial ? `${messageCount}개` : "불러오는 중"} · 위가 최신, 아래가 오래된 메시지 · 200개씩 자동 로드</p></div>
-          <div className="w-full md:w-80"><label className="block text-xs font-semibold text-[#6f6d68]" htmlFor="room-message-search">현재 불러온 메시지 검색</label><input id="room-message-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="메시지 내용·언어 검색" className="mt-1 w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" /><p className="mt-1 text-right text-[11px] text-[#898781]">{visibleMessages.length} / {messages.length}개 표시</p></div>
+          <div className="flex w-full flex-col items-end gap-2 md:w-80"><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /><label className="block w-full text-xs font-semibold text-[#6f6d68]" htmlFor="room-message-search">현재 불러온 메시지 검색</label><input id="room-message-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="메시지 내용·언어 검색" className="w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" /><p className="w-full text-right text-[11px] text-[#898781]">{visibleMessages.length} / {messages.length}개 표시</p></div>
         </div>
       </div>
       <div ref={scrollRef} onScroll={(event) => { const element = event.currentTarget; if (element.scrollHeight - element.scrollTop - element.clientHeight < 640) void loadOlderMessages(); }} className="h-[calc(100svh-310px)] min-h-[360px] overflow-y-auto overscroll-contain p-4">

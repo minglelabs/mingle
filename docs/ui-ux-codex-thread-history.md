@@ -335,3 +335,10 @@
 - Issue: Although transcript pages were cached in the browser, a hard refresh still waited for the server page to query the user, count rooms, load the room list, and aggregate message counts before the client could read `sessionStorage`.
 - User impact: Returning to an already reviewed user still showed a slow blank/loading page, defeating the purpose of the browser cache.
 - Resolution: Reduced the server page to an authenticated shell. The client now reads the scoped `sessionStorage` snapshot immediately, renders it, and refreshes the same data in the background through the authenticated admin data endpoint. The endpoint returns room metadata only; transcript pages continue to load lazily and use the existing per-room cache.
+
+## 2026-08-22 — Admin cache-first update apply control
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: Background refreshes still replaced the visible cached room list or transcript as soon as the server response arrived, causing the page to re-render while an administrator was reviewing records.
+- User impact: A support reviewer could see the currently displayed list or transcript shift unexpectedly after a refresh completed.
+- Resolution: Cached data remains the visible source after a lookup. Background responses now update `sessionStorage` first and only enable the top-level `새 데이터 적용` button when the response differs. Clicking the button applies the cached snapshot to the visible list or transcript in one client-side render. The same behavior applies to the initial room message refresh and preserves lazy 200-message loading.
