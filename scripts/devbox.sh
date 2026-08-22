@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# =============================================================================
+# IMPORTANT CONFIGURATION POLICY
+#
+# Vault is the source of truth for persistent devbox/app/STT configuration.
+# The local Vault is bootstrapped from the MAIN worktree's
+# /Users/nam/mingle/mingle-app/.env.local, not from this feature worktree's
+# .env.local. Keep persistent secrets and shared runtime configuration there,
+# then synchronize them through Vault. Do not add persistent configuration to
+# .devbox.env or use a generated .devbox.env as the solution for missing config.
+#
+# .devbox.env may still be generated as a derived, worktree-local compatibility
+# artifact by existing devbox flows. It is not a source of truth and must not be
+# copied between worktrees or used instead of the main-worktree bootstrap/Vault
+# flow.
+# =============================================================================
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
