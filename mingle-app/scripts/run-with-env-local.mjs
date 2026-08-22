@@ -68,14 +68,14 @@ function ensurePrismaAppSchemaUrl(rawValue) {
 }
 
 const cwd = process.cwd();
-const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
 const localEnvPath = findClosestFile(cwd, '.env.local');
+const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
 
-if (devboxEnvPath) {
-  loadEnvFile(devboxEnvPath);
-}
 if (localEnvPath) {
   loadEnvFile(localEnvPath);
+}
+if (devboxEnvPath) {
+  loadEnvFile(devboxEnvPath);
 }
 
 if (process.env.DATABASE_URL !== undefined) {

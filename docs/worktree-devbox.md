@@ -17,7 +17,7 @@
 # 1) 워크트리에서 1회 초기화
 scripts/devbox init
 
-# 2) 읽기 전용 bootstrap + 의존성 설치
+# 2) 메인 워크트리의 영구값을 Vault에 반영 + 의존성 설치
 scripts/devbox bootstrap
 
 # 2-b) (선택) Vault 경로 저장
@@ -25,8 +25,7 @@ scripts/devbox bootstrap \
   --vault-app-path secret/mingle-app/dev \
   --vault-stt-path secret/mingle-stt/dev
 
-# 2-c) (선택) .env.local -> Vault로 업로드
-scripts/devbox bootstrap --vault-push
+# 2-c) `--vault-push`는 이전 호환성을 위해 남아 있지만 이제 생략해도 됩니다.
 
 # 3) 현재 상태 확인
 scripts/devbox status
@@ -41,10 +40,8 @@ scripts/devbox up --profile device
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
 # 5-a-1) (선택) cloudflare named tunnel(고정 호스트) 사용
-export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
-export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
-export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
-export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
+# 메인 워크트리 mingle-app/.env.local에 token/hostname을 저장한 뒤
+# `scripts/devbox bootstrap`으로 Vault에도 반영합니다.
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
 # 5-b) 디바이스 앱 빌드 URL을 Vault dev/prod로 선택
@@ -125,24 +122,21 @@ scripts/devbox bootstrap
 scripts/devbox up --profile device --with-ios-install --with-ios-clean-install
 # ngrok 한도 이슈가 있으면
 # scripts/devbox up --profile device --tunnel-provider cloudflare --with-ios-install --with-ios-clean-install
-# cloudflare named tunnel(고정 호스트) 쓰려면 token/hostname env 추가
-# export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
-# export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
-# export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
-# export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
+# cloudflare named tunnel(고정 호스트)은 메인 워크트리
+# mingle-app/.env.local의 token/hostname을 사용합니다.
 ```
 
-### C) 로컬 `.env.local` 값을 Vault에 다시 반영해야 할 때
+### C) 메인 워크트리의 `.env.local` 값을 Vault에 다시 반영해야 할 때
 
 ```bash
 scripts/devbox vault-up --seed
-scripts/devbox bootstrap --vault-push
+scripts/devbox bootstrap
 ```
 
 노트:
 - `.devbox.env`가 없으면 `scripts/devbox up ...`이 `init`을 자동 실행합니다.
-- Vault CLI 환경(`VAULT_ADDR`, `VAULT_NAMESPACE`)은
-  셸(`.zshrc`) 또는 `mingle-app/.env.local`/`mingle-stt/.env.local`에 두면 자동 참조됩니다.
+- Vault CLI 환경(`VAULT_ADDR`, `VAULT_NAMESPACE`)은 메인 워크트리의
+  `mingle-app/.env.local`/`mingle-stt/.env.local`에 두면 자동 참조됩니다.
 
 ## 주요 명령
 
@@ -151,8 +145,9 @@ scripts/devbox bootstrap --vault-push
   - git worktree 목록 기준으로 다른 워크트리의 `.devbox.env`를 읽어 이미 할당된 포트를 회피해 기본 포트 자동 선택
     (`web/stt/messaging/metro` + `ngrok inspector`)
   - 현재 워크트리 경로 해시를 기준으로 기본 포트 슬롯을 안정적으로 선택하고, 충돌 시 다음 슬롯으로 이동
-  - `.devbox.env`에는 서버 실행용 값뿐 아니라 `pnpm dev/build/start`, RN Android/iOS 빌드가
-    바로 읽는 파생 URL/API namespace 값도 함께 기록
+  - `.devbox.env`에는 현재 워크트리의 포트/URL/profile 같은 파생 실행값만 기록
+  - Cloudflare token/hostname, fallback URL, AdMob ID, Vault 경로, Team ID 같은 공유값은
+    메인 워크트리 `.env.local`과 Vault에서 읽음
   - `ngrok.mobile.local.yml` 생성
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
@@ -160,7 +155,8 @@ scripts/devbox bootstrap --vault-push
   - `--vault-app-path`, `--vault-stt-path`로 Vault 경로를 초기값으로 저장 가능
 
 - `scripts/devbox bootstrap`
-  - `.env.local`을 수정하지 않는 읽기 전용 동작
+  - `.env.local`은 수정하지 않고, 메인 워크트리의 `mingle-app/.env.local`과
+    `mingle-stt/.env.local`에서 비관리 영구값을 읽어 Vault에 업로드
   - `mingle-app`, `mingle-stt`, `mingle-messaging` 의존성(`pnpm install`) 자동 설치
   - `mingle-app/rn` 의존성(`pnpm install`) 자동 설치
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
@@ -169,15 +165,15 @@ scripts/devbox bootstrap --vault-push
   - 옵션으로 Vault KV 경로를 저장
     - `--vault-app-path <path>`
     - `--vault-stt-path <path>`
-  - `.devbox.env`가 있으면 전달한 Vault 경로를 저장하고 재적용
-  - `--vault-push`를 주면 `mingle-app/.env.local`, `mingle-stt/.env.local`의
+  - 전달한 Vault 경로를 저장하고 재적용
+  - `--vault-push`는 이전 호환성을 위한 no-op이며, bootstrap이 항상 메인 워크트리의
     비관리 키를 Vault 경로로 업로드
     - Vault 경로가 비어 있으면 안전하게 최초 1회 `kv put`으로 생성
     - Vault 경로가 이미 있으면 계속 `kv patch`만 사용하고 파괴적 fallback은 거부
 
 - `scripts/devbox vault-up [--seed]`
   - Homebrew `vault` 서비스를 시작
-  - `--seed`를 주면 현재 `.env.local`의 비관리 키를 Vault로 즉시 반영
+  - `--seed`를 주면 메인 워크트리 `.env.local`의 비관리 키를 Vault로 즉시 반영
   - 재부팅 후 로컬 Vault가 내려갔을 때 복구용으로 사용
 
 - `scripts/devbox profile --profile local --host <LAN_IP>`
@@ -207,7 +203,7 @@ scripts/devbox bootstrap --vault-push
 - `scripts/devbox up --profile local|device`
   - `.devbox.env`가 없으면 `init`을 자동 실행(1커맨드 온보딩)
   - 의존성 설치를 자동 수행(Prisma client 누락 시 `db:generate` 포함)
-  - `up`은 `.env.local` 자동 시드/동기화를 수행하지 않음
+  - `up`은 `.env.local` 자동 업로드/동기화를 수행하지 않음
   - 저장된 Vault 경로가 있으면 비관리 키(API key 등)를
     서버 프로세스 환경변수로 런타임 주입(파일 미기록)
   - `.env.local` 갱신은 devbox가 수행하지 않음(수동 편집 원칙)
@@ -247,9 +243,9 @@ scripts/devbox bootstrap --vault-push
 - `scripts/devbox ios-rn-ipa`
   - RN iOS 앱을 `.xcarchive`/`.ipa`로 생성 (App Store/TestFlight 업로드 준비)
   - `.devbox.env` 없이도 실행 가능 (권장: `--device-app-env prod` 또는 `--site-url/--ws-url` 명시)
-  - URL 조회 우선순위: `--device-app-env/--site-url` > `.devbox.env` > Vault/`.env.local`/쉘 환경변수
+  - URL 조회 우선순위: `--device-app-env/--site-url` > 워크트리 `.devbox.env` > 메인 `.env.local`/Vault
   - 기본값: `Release`, `export-method=app-store`
-  - Team ID 우선순위: `--team-id` > `DEVBOX_IOS_TEAM_ID`(셸/.devbox.env) > `mingle.xcodeproj`의 `DEVELOPMENT_TEAM`
+  - Team ID 우선순위: `--team-id` > `DEVBOX_IOS_TEAM_ID`(메인 `.env.local`/Vault) > `mingle.xcodeproj`의 `DEVELOPMENT_TEAM`
   - `--device-app-env prod`로 `secret/mingle-app/prod` URL/WS를 주입
   - `--site-url`, `--ws-url`로 런타임 URL 수동 오버라이드 가능
   - `--archive-path`, `--export-path`, `--export-options-plist` 커스텀 경로 지원
@@ -290,8 +286,8 @@ scripts/devbox bootstrap --vault-push
 ## 생성/수정 파일
 
 - `.devbox.env`
-- `mingle-app/.env.local` (devbox는 읽기/참조만 함)
-- `mingle-stt/.env.local` (devbox는 읽기/참조만 함)
+- 메인 워크트리의 `mingle-app/.env.local` (devbox는 읽기/참조만 함)
+- 메인 워크트리의 `mingle-stt/.env.local` (devbox는 읽기/참조만 함)
 - `ngrok.mobile.local.yml`
 - `.devbox-logs/` (`--log-file` 사용 시 생성, gitignore)
 
@@ -299,8 +295,10 @@ scripts/devbox bootstrap --vault-push
 
 - `vault` CLI와 `jq`가 로컬에 설치되어 있어야 합니다.
 - `vault login` 등으로 인증이 선행되어야 합니다.
-- `VAULT_ADDR`/`VAULT_NAMESPACE`는 셸(`.zshrc`) 또는 `.env.local`에 둘 수 있습니다.
+- `VAULT_ADDR`/`VAULT_NAMESPACE`는 메인 워크트리의 `.env.local`에 둘 수 있습니다.
 - devbox는 Vault 값을 `.env.local`에 자동 반영하지 않습니다(런타임 주입만 수행).
-- `--vault-push`는 `.env.local`의 비관리 키를 Vault로 업로드합니다.
+- `scripts/devbox bootstrap`과 `scripts/devbox vault-up --seed`는 메인 워크트리의
+  `.env.local`에서 비관리 키를 읽어 Vault로 업로드합니다.
+- `--vault-push`는 이전 호환성을 위한 no-op입니다.
 - Homebrew 로컬 Vault를 다시 올릴 때는 `scripts/devbox vault-up` 또는
   `brew services start hashicorp/tap/vault`를 사용할 수 있습니다.

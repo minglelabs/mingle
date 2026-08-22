@@ -11,12 +11,19 @@ const repoRoot = path.resolve(scriptDir, "..");
 const devboxScriptPath = path.join(repoRoot, "scripts", "devbox.sh");
 
 function runDevboxEval(shellBody) {
+  const isolatedMainEnvDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-runtime-main-env-"));
+  const isolatedMainEnvPath = path.join(isolatedMainEnvDir, "empty.env");
+  fs.writeFileSync(isolatedMainEnvPath, "", "utf8");
+
   return execFileSync(
     "/bin/bash",
     [
       "-lc",
       `set -euo pipefail
 source "${devboxScriptPath}"
+main_worktree_env_file() {
+  printf '%s' ${JSON.stringify(isolatedMainEnvPath)}
+}
 ${shellBody}
 `,
     ],
@@ -31,6 +38,32 @@ ${shellBody}
     },
   ).trim();
 }
+
+test("shared devbox settings prefer the main worktree over local derived files", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-shared-setting-"));
+  const mainEnvPath = path.join(tempDir, "main.env");
+  const worktreeEnvPath = path.join(tempDir, "worktree.env");
+  const devboxEnvPath = path.join(tempDir, "devbox.env");
+  fs.writeFileSync(mainEnvPath, "DEVBOX_CLOUDFLARE_WEB_HOSTNAME=main.example.test\n", "utf8");
+  fs.writeFileSync(worktreeEnvPath, "DEVBOX_CLOUDFLARE_WEB_HOSTNAME=stale-worktree.example.test\n", "utf8");
+  fs.writeFileSync(devboxEnvPath, "DEVBOX_CLOUDFLARE_WEB_HOSTNAME=stale-derived.example.test\n", "utf8");
+
+  const output = runDevboxEval(`
+APP_ENV_FILE=${JSON.stringify(worktreeEnvPath)}
+DEVBOX_ENV_FILE=${JSON.stringify(devboxEnvPath)}
+DEVBOX_CLOUDFLARE_WEB_HOSTNAME=""
+main_worktree_env_file() {
+  case "$1" in
+    app) printf '%s' ${JSON.stringify(mainEnvPath)} ;;
+    stt) printf '%s' ${JSON.stringify(mainEnvPath)} ;;
+    *) return 1 ;;
+  esac
+}
+read_app_setting_value DEVBOX_CLOUDFLARE_WEB_HOSTNAME
+`);
+
+  assert.equal(output, "main.example.test");
+});
 
 test("prod devbox fallback keeps production AdMob identifiers when overrides are absent", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-runtime-config-"));

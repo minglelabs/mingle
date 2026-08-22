@@ -26,21 +26,17 @@ To automatically isolate local test environments per branch and worktree:
 
 ```bash
 scripts/devbox init
+# Bootstrap persistent values from the main worktree into Vault and install deps
 scripts/devbox bootstrap
-# Reboot recovery: start local Vault and seed missing dev paths from .env.local
+# Reboot recovery: start local Vault and seed the main worktree env values
 scripts/devbox vault-up --seed
-# Optional if you use Vault
+# Optional: override the Vault paths used by bootstrap
 # scripts/devbox bootstrap --vault-app-path secret/mingle-app/dev --vault-stt-path secret/mingle-stt/dev
-# Optional if you want to upload `.env.local` values to Vault
-# scripts/devbox bootstrap --vault-push
 scripts/devbox up --profile local
 scripts/devbox up --profile device
 scripts/devbox up --profile device --tunnel-provider cloudflare
-# cloudflare named tunnel (fixed hostname) - requires token+hostnames env
-# export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
-# export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
-# export DEVBOX_CLOUDFLARE_STT_HOSTNAME="stt-dev.example.com"
-# export DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME="messaging-dev.example.com"
+# cloudflare named tunnel (fixed hostname) - reads shared values from the
+# main worktree's mingle-app/.env.local or Vault
 # scripts/devbox up --profile device --tunnel-provider cloudflare
 scripts/devbox up --profile device --device-app-env dev
 scripts/devbox up --profile device --device-app-env prod --with-ios-install --with-ios-clean-install --ios-configuration Release
@@ -62,28 +58,31 @@ scripts/devbox status
 
 - Detailed guide: `docs/worktree-devbox.md`
 - Railway single-service deployment guide: `docs/railway-single-service.md`
-- `scripts/devbox bootstrap` is read-only and does not modify `.env.local`.
-  It only installs dependencies and runs validation checks.
-  (If `@prisma/client` artifacts are missing, it automatically runs `db:generate`, and it also checks RN/Pods.)
-- `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely seeds
-  missing Vault KV paths from `mingle-app/.env.local` and `mingle-stt/.env.local`.
+- `scripts/devbox bootstrap` does not modify `.env.local`, but it uploads persistent,
+  non-worktree-managed values from the MAIN worktree's `mingle-app/.env.local` and
+  `mingle-stt/.env.local` to Vault before installing dependencies and running checks.
+  The `--vault-push` option is retained as a backward-compatible no-op.
+- `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely
+  seeds/patches the same MAIN worktree env values into the configured Vault paths.
 - When using Vault, you can save `--vault-app-path` and `--vault-stt-path` for later reuse.
-- `scripts/devbox bootstrap --vault-push` uploads unmanaged keys from
-  `mingle-app/.env.local` and `mingle-stt/.env.local` to Vault.
-  If the target path does not exist yet, devbox creates it once with `kv put`.
+- If a target path does not exist yet, devbox creates it once with `kv put`.
   If the path already exists, devbox keeps using `kv patch` and refuses destructive overwrite fallback.
-- If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in your shell (`.zshrc`) or in
+- If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in the MAIN worktree's
   `mingle-app/.env.local` / `mingle-stt/.env.local`, devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
-- Devbox keeps worktree-local runtime settings in `.devbox.env` while leaving `.env.local` user-managed.
-- Frontend and app build entrypoints also read `.devbox.env`, so `pnpm dev`, `pnpm build`, `pnpm start`,
-  React Native Android builds, and RN iOS flows all resolve the current worktree URLs and namespaces.
-- `scripts/devbox up`, `init`, `mobile`, and `bootstrap` do not auto-sync `.env.local`.
+- Devbox keeps only worktree-local runtime settings in `.devbox.env`; persistent shared settings
+  (Cloudflare token/hostnames, fallback URLs, AdMob IDs, Vault paths, Team ID, and machine-wide
+  paths) belong in the MAIN worktree's `.env.local` and Vault.
+- Frontend and app build entrypoints read the main `.env.local` for shared values and `.devbox.env`
+  for worktree URLs/ports, so `pnpm dev`, `pnpm build`, `pnpm start`, React Native Android builds,
+  and RN iOS flows resolve the current worktree runtime without duplicating shared settings.
+- `scripts/devbox up`, `init`, and `mobile` do not upload or synchronize `.env.local`; `bootstrap`
+  is the explicit main-worktree-to-Vault synchronization step.
 - If a saved Vault path exists, `scripts/devbox up` injects unmanaged keys (such as API keys)
   into the server process environment at runtime without writing them to files.
 - `--profile device` automatically applies real-device test URLs, including ngrok (`devbox_web` / `devbox_stt` / `devbox_messaging`).
 - `--tunnel-provider cloudflare` configures HTTPS/WSS through a Cloudflare tunnel instead of ngrok.
-  - If `DEVBOX_CLOUDFLARE_TUNNEL_TOKEN`, `DEVBOX_CLOUDFLARE_WEB_HOSTNAME`, `DEVBOX_CLOUDFLARE_STT_HOSTNAME`, and `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME` are set, it runs in **named tunnel (fixed host)** mode.
+  - If `DEVBOX_CLOUDFLARE_TUNNEL_TOKEN`, `DEVBOX_CLOUDFLARE_WEB_HOSTNAME`, `DEVBOX_CLOUDFLARE_STT_HOSTNAME`, and `DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME` are present in the main `.env.local` or Vault, it runs in **named tunnel (fixed host)** mode.
   - Without those settings, it falls back to the existing Quick Tunnel (`*.trycloudflare.com`) mode.
 - With `--profile device`, `--device-app-env dev|prod` reads mobile app build URLs from
   `secret/mingle-app/dev` or `secret/mingle-app/prod` and injects them.
@@ -104,8 +103,8 @@ scripts/devbox status
   creates RN iOS `.xcarchive` / `.ipa` artifacts for App Store upload.
   These commands also work without `.devbox.env` (recommended: `--device-app-env`, `--site-url`, `--ws-url`),
   and URLs can be read from Vault, `.env.local`, or shell environment variables.
-  To pin the Team ID, add `export DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ` to `.zshrc` (or your shell),
-  or set the same key in `.devbox.env`.
+  To pin the Team ID, set `DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ` in the MAIN worktree's `.env.local`
+  and let `scripts/devbox bootstrap` synchronize it to Vault.
 - `scripts/devbox up --profile device --with-mobile-install` prepares the server and installs the mobile app in one run.
 - For `scripts/devbox test --target app`, the `app` target runs unit tests only by default.
   Live tests run only when `--with-live` is provided.
