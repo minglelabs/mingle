@@ -314,3 +314,10 @@
 - User impact: Administrators could lose access to the lower part of a long transcript, could not efficiently find a phrase in the records already loaded, and could not distinguish deleted rooms, messages, and content at a glance.
 - Resolution: Added a bounded full-height scroll viewport, server-side room pagination (10 rooms per page), per-room message pagination (200 messages per page), room sorting, separate room/message deletion filters, deletion status badges, and client-side search restricted to the currently loaded records. Source and translation contents now show a flag, role, and English language name.
 - Tests: TypeScript validation was run; the repository still reports pre-existing errors in unrelated language-selector, dictionary, and dashboard BigInt test files.
+
+## 2026-08-22 — Admin conversation room drill-down and infinite history
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Showing every conversation room and its transcript on one screen made room selection and long-history review cumbersome. The message order and room pagination also needed to match support-review behavior: newest records first, with older records revealed progressively below.
+- User impact: Administrators had to scan large transcript blocks before finding the room they needed, and long conversations were difficult to review without loading excessive data at once.
+- Resolution: The default view now shows a latest-first room list with 20 rooms per page. Selecting a room opens a dedicated transcript view ordered newest-to-oldest; it loads 200 messages initially and automatically requests the next 200 older messages as the transcript scroll reaches the bottom. Existing deletion filters, language badges, and loaded-content search remain available.
