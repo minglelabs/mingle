@@ -39,6 +39,7 @@ function buildConversationSummary(
     sessionKey: overrides.sessionKey || "session-1",
     isMultiMember: overrides.isMultiMember ?? false,
     isBlockedCounterpart: overrides.isBlockedCounterpart ?? false,
+    otherMembers: overrides.otherMembers ?? [],
     selectedLanguages: overrides.selectedLanguages || ["en", "ko"],
     latestMessagePreview: Object.prototype.hasOwnProperty.call(overrides, "latestMessagePreview")
       ? overrides.latestMessagePreview

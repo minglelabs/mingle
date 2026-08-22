@@ -2,13 +2,14 @@
 
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
-import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import NotificationPanel from "@/components/notification-panel";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -26,7 +27,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -244,6 +245,10 @@ interface ConversationItem {
   statusLabel: string;
   avatarSrc: string;
   avatarAlt: string;
+  // Real counterpart photo(s) for the room, in join order. Empty for solo
+  // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
+  // (the generated diarization avatar) instead.
+  otherMembers: ConversationChannelOtherMember[];
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -986,6 +991,7 @@ function mapConversationSummaryToItem(
     statusLabel,
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
+    otherMembers: conversation.otherMembers,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -1186,6 +1192,132 @@ function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   }, window.innerHeight);
 }
 
+// Corner-anchored overlap positions for a multi-member room's collage,
+// capped at 4 visible photos — same "up to 4, overlapping" idea as
+// LanguageRowAvatarStack (LivePhoneDemo/language-row-avatar-stack.tsx), but
+// arranged in a fixed square so the room avatar keeps the exact footprint a
+// solo room's generated avatar already occupies in the row, instead of
+// growing wider the more members a room has.
+const CONVERSATION_AVATAR_CLUSTER_LAYOUT: Record<number, Array<{ top: string; left: string }>> = {
+  2: [
+    { top: "0%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+  3: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "19%" },
+  ],
+  4: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+};
+const CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX = 34;
+
+function ConversationRoomAvatar({ item }: { item: ConversationItem }) {
+  const otherMembers = item.otherMembers;
+
+  // Solo room (no other real member yet, or a legacy/demo session): keep the
+  // existing generated per-speaker-turn avatar.
+  if (otherMembers.length === 0) {
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={item.avatarSrc}
+          alt={item.avatarAlt}
+          className="h-14 w-14 rounded-full bg-white object-cover"
+          width={56}
+          height={56}
+          draggable={false}
+          style={CONVERSATION_AVATAR_IMAGE_STYLE}
+          unoptimized
+        />
+      </div>
+    );
+  }
+
+  // Exactly one other real member: show their real photo, same framing as
+  // the generated-avatar case (and the same 56px photo pattern used for a
+  // room member row in conversation-participants-panel.tsx).
+  if (otherMembers.length === 1) {
+    const member = otherMembers[0];
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+          {member.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={member.image}
+              alt={item.title}
+              width={56}
+              height={56}
+              className="h-full w-full object-cover"
+              style={{
+                transform: buildProfileImageTransform(56, {
+                  scale: member.imageCropScale,
+                  x: member.imageCropX,
+                  y: member.imageCropY,
+                }),
+              }}
+            />
+          ) : (
+            <UserRound size={28} className="text-gray-400" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2+ other members: KakaoTalk-style overlapping photo cluster, capped at 4
+  // slots. A 5th+ member simply isn't shown — matches the "up to 4" spec
+  // without adding a separate overflow affordance the request didn't ask for.
+  const clusterMembers = otherMembers.slice(0, 4);
+  const layout = CONVERSATION_AVATAR_CLUSTER_LAYOUT[clusterMembers.length]
+    ?? CONVERSATION_AVATAR_CLUSTER_LAYOUT[4];
+
+  return (
+    <div className="relative h-14 w-14 shrink-0" title={item.title}>
+      {clusterMembers.map((member, index) => {
+        const position = layout[index] ?? layout[layout.length - 1];
+        return (
+          <span
+            key={member.userId}
+            className="absolute flex items-center justify-center overflow-hidden rounded-full border-2 border-white bg-gray-100"
+            style={{
+              top: position.top,
+              left: position.left,
+              width: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              height: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              zIndex: index + 1,
+            }}
+          >
+            {member.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.image}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{
+                  transform: buildProfileImageTransform(CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX, {
+                    scale: member.imageCropScale,
+                    x: member.imageCropX,
+                    y: member.imageCropY,
+                  }),
+                }}
+              />
+            ) : (
+              <UserRound size={16} className="text-gray-400" aria-hidden="true" />
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ConversationRow({
   item,
   disabled = false,
@@ -1269,18 +1401,7 @@ function ConversationRow({
       className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
-      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-        <Image
-          src={item.avatarSrc}
-          alt={item.avatarAlt}
-          className="h-14 w-14 rounded-full bg-white object-cover"
-          width={56}
-          height={56}
-          draggable={false}
-          style={CONVERSATION_AVATAR_IMAGE_STYLE}
-          unoptimized
-        />
-      </div>
+      <ConversationRoomAvatar item={item} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">

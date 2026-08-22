@@ -14,6 +14,15 @@ export type AppConversationChannelStatus =
   | typeof APP_CONVERSATION_STATUS_ACTIVE
   | typeof APP_CONVERSATION_STATUS_PAUSED;
 
+export type ConversationChannelOtherMember = {
+  userId: string;
+  name: string | null;
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
+};
+
 export type ConversationChannelSummary = {
   id: string;
   sequenceNumber: number;
@@ -51,6 +60,12 @@ export type ConversationChannelSummary = {
   latestSpeaker?: string | null;
   latestSpeakerAvatarSeed?: string | null;
   latestSpeakerAvatarIndex?: number | null;
+  // Every OTHER real member's profile photo, for the conversation list's room
+  // avatar: a 2-person room shows the counterpart's real photo instead of the
+  // generated per-speaker-turn avatar; a 3+ person room stacks up to 4 of
+  // these KakaoTalk-style. Empty for solo rooms (nothing to show yet — keep
+  // the generated avatar) and for anonymous callers.
+  otherMembers: ConversationChannelOtherMember[];
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -452,6 +467,26 @@ function resolveViewerFacingPausedAt(
   return viewerMember ? viewerMember.pausedAt : channelWideValue;
 }
 
+// membersByChannelId already carries every field the list avatar needs (see
+// listChannelMembersByChannelId) — this just drops the viewer's own row and
+// the language/status fields the avatar has no use for.
+function resolveOtherMemberAvatars(
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): ConversationChannelOtherMember[] {
+  if (!viewerUserId || !members) return [];
+  return members
+    .filter((member) => member.userId !== viewerUserId)
+    .map((member) => ({
+      userId: member.userId,
+      name: member.name,
+      image: member.image,
+      imageCropScale: member.imageCropScale,
+      imageCropX: member.imageCropX,
+      imageCropY: member.imageCropY,
+    }));
+}
+
 // Shared by both the 1:1 "message this person" entry point and the
 // invite-friends group-creation flow — without it, knowing someone's user id
 // is enough to bypass a block and reach (or create) shared room membership
@@ -515,6 +550,7 @@ function serializeConversationChannel(
   viewerFacingSelectedLanguages?: { languages: string[]; attribution: Record<string, string[]> },
   viewerOwnSelectedLanguages?: string[],
   isBlockedCounterpart?: boolean,
+  otherMembers?: ConversationChannelOtherMember[],
 ): ConversationChannelSummary {
   const selectedLanguages = viewerFacingSelectedLanguages
     ? [...viewerFacingSelectedLanguages.languages]
@@ -532,6 +568,7 @@ function serializeConversationChannel(
     sessionKey: record.sessionKey,
     isMultiMember: isMultiMember === true,
     isBlockedCounterpart: isBlockedCounterpart === true,
+    otherMembers: otherMembers ?? [],
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
       : {}),
@@ -768,6 +805,7 @@ async function serializeConversationChannelWithPreview(
     resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
     resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     blockedCounterpartByChannelId.has(record.id),
+    resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
   );
 }
 
@@ -823,6 +861,7 @@ async function listConversationChannelsForMember(
       resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
       resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       blockedCounterpartByChannelId.has(record.id),
+      resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
     ));
   }
 
@@ -851,6 +890,7 @@ async function listConversationChannelsForMember(
         resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
         resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         blockedCounterpartByChannelId.has(record.id),
+        resolveOtherMemberAvatars(membersByChannelId.get(record.id), viewerUserId),
       );
     })
     .sort((left, right) => {
@@ -1885,6 +1925,7 @@ export async function getConversationHydrationStateForUser(args: {
         conversationRecord.pendingInviteeUserIds,
       ),
       Boolean(blockedCounterpartUserId),
+      resolveOtherMemberAvatars(membersByChannelId.get(conversationRecord.id), args.userId),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,
