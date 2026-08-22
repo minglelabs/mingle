@@ -10,7 +10,7 @@ export const ptDictionary: BaseAppDictionarySource = {
     muteTts: "Silenciar TTS",
     unmuteTts: "Ativar TTS",
     textSizeLabel: "Tamanho do texto",
-    silenceFinalizeLabel: "Ritmo de separação da fala",
+    silenceFinalizeLabel: "Duração da fala por segmento",
     endpointTuningShortLabel: "Curto",
     endpointTuningLongLabel: "Longo",
     translationModelLabel: "Modelo de tradução",

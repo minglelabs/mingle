@@ -3649,42 +3649,54 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                                 <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
                               </div>
-                              <div className="relative">
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={4}
-                                  step={1}
-                                  value={sonioxEndpointTuningStep}
-                                  disabled={isSilenceFinalizeSliderDisabled}
-                                  onChange={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
-                                    setSonioxEndpointTuningStep(next)
-                                    window.setTimeout(flushAccountPreferencesSync, 0)
-                                  }}
-                                  className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                  aria-label={silenceFinalizeLabel}
-                                />
-                                <div className="mt-0.5 flex justify-between text-[0.6875rem] font-medium text-gray-400">
-                                  <span>{endpointTuningShortLabel}</span>
-                                  <span>{endpointTuningLongLabel}</span>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`shrink-0 text-[0.6875rem] font-medium ${
+                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {endpointTuningShortLabel}
+                                </span>
+                                <div className="relative min-w-0 flex-1">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={4}
+                                    step={1}
+                                    value={sonioxEndpointTuningStep}
+                                    disabled={isSilenceFinalizeSliderDisabled}
+                                    onChange={(event) => {
+                                      if (isSilenceFinalizeSliderDisabled) return
+                                      const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
+                                      setSonioxEndpointTuningStep(next)
+                                      window.setTimeout(flushAccountPreferencesSync, 0)
+                                    }}
+                                    className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                    aria-label={silenceFinalizeLabel}
+                                  />
+                                  {isSilenceFinalizeSliderLocked && (
+                                    <>
+                                      <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                        {silenceFinalizeLockedMessage}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        aria-label={silenceFinalizeLockedButtonLabel}
+                                        aria-describedby={silenceFinalizeLockedDescriptionId}
+                                        onFocus={handleSilenceFinalizeLockedInteraction}
+                                        onClick={handleSilenceFinalizeLockedInteraction}
+                                        className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                      />
+                                    </>
+                                  )}
                                 </div>
-                                {isSilenceFinalizeSliderLocked && (
-                                  <>
-                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                      {silenceFinalizeLockedMessage}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      aria-label={silenceFinalizeLockedButtonLabel}
-                                      aria-describedby={silenceFinalizeLockedDescriptionId}
-                                      onFocus={handleSilenceFinalizeLockedInteraction}
-                                      onClick={handleSilenceFinalizeLockedInteraction}
-                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                    />
-                                  </>
-                                )}
+                                <span
+                                  className={`shrink-0 text-[0.6875rem] font-medium ${
+                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {endpointTuningLongLabel}
+                                </span>
                               </div>
                             </label>
                             )}

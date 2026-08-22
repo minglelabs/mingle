@@ -10,7 +10,7 @@ export const frDictionary: BaseAppDictionarySource = {
     muteTts: "Couper le TTS",
     unmuteTts: "Activer le TTS",
     textSizeLabel: "Taille du texte",
-    silenceFinalizeLabel: "Réglage de séparation de la parole",
+    silenceFinalizeLabel: "Longueur de parole par segment",
     endpointTuningShortLabel: "Court",
     endpointTuningLongLabel: "Long",
     translationModelLabel: "Modèle de traduction",

@@ -10,7 +10,7 @@ export const deDictionary: BaseAppDictionarySource = {
     muteTts: "TTS stummschalten",
     unmuteTts: "TTS einschalten",
     textSizeLabel: "Textgröße",
-    silenceFinalizeLabel: "Sprechtrennungs-Timing",
+    silenceFinalizeLabel: "Sprechlänge pro Äußerung",
     endpointTuningShortLabel: "Kurz",
     endpointTuningLongLabel: "Lang",
     translationModelLabel: "Übersetzungsmodell",

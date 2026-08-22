@@ -10,7 +10,7 @@ export const koDictionary: BaseAppDictionarySource = {
     muteTts: "음성 끄기",
     unmuteTts: "음성 켜기",
     textSizeLabel: "텍스트 크기",
-    silenceFinalizeLabel: "발화 분리 타이밍",
+    silenceFinalizeLabel: "한 번에 묶는 말 길이",
     endpointTuningShortLabel: "짧게",
     endpointTuningLongLabel: "길게",
     translationModelLabel: "번역 모델",
