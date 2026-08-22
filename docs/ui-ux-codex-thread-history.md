@@ -307,30 +307,66 @@
 - User impact: Pressing Stop could briefly show the mic as stopped, then running/connecting again, then stopped. Recording ultimately stopped, but the control visually flickered and made the action feel unreliable.
 - Resolution: Added a stop-pending guard for native bridge status/activity handling. While `isStopping` or `nativeStopRequested` is true, the web layer now ignores native statuses and ready server messages that would re-enter a live UI state and suppresses transcript-activity promotion, while still allowing terminal idle/close/error and `stop_recording_ack` handling to complete.
 - Tests: `scripts/devbox test --target app -- src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` covers the stop-pending status and activity-promotion guard.
+## 2026-08-22 — Admin conversation history review controls
 
-## 2026-08-22 - Soniox Endpoint Conversation Length Control
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: The admin conversation history view loaded all matching rooms and messages in one unbounded page. The page did not own a scroll viewport, deleted records were difficult to distinguish, and source/translation language codes were shown without readable language names or flags. This made long user histories difficult to inspect and made targeted support investigations slow.
+- User impact: Administrators could lose access to the lower part of a long transcript, could not efficiently find a phrase in the records already loaded, and could not distinguish deleted rooms, messages, and content at a glance.
+- Resolution: Added a bounded full-height scroll viewport, server-side room pagination (10 rooms per page), per-room message pagination (200 messages per page), room sorting, separate room/message deletion filters, deletion status badges, and client-side search restricted to the currently loaded records. Source and translation contents now show a flag, role, and English language name.
+- Tests: TypeScript validation was run; the repository still reports pre-existing errors in unrelated language-selector, dictionary, and dashboard BigInt test files.
 
-- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.account-preferences.ts`
-- Issue: After Soniox STT realtime v5 endpoint detection became the active segmentation path, the conversation-length control was hidden and endpoint boundaries used a fixed maximum delay. Users reported that conversations were being cut too aggressively between sentences and asked why they could no longer choose the conversation length.
-- User impact: Users had no visible way to trade a faster response for a longer pause before an endpoint. The old manual silence preference was still stored, but it did not affect endpoint-mode sessions, so the UI and the actual segmentation behavior no longer matched.
-- Resolution:
-  - Restored the speech-split/conversation-length control as a five-step snapping slider for supported modern namespaces. The middle position is the default; moving left selects shorter speech splits and moving right selects longer speech splits.
-  - Added a separate account preference, `demoEndpointTuningStep`, with a `0..4` range and a default of `2`. The existing manual-finalize preference remains separate with its historical `500ms` default.
-  - The selected step is sent as `soniox_endpoint_tuning_step` in the per-session WebSocket start config for browser, iOS, and Android clients. The server maps it to Soniox endpoint latency/sensitivity for that session, so endpoint behavior can vary by user without changing server-wide environment variables.
-  - Kept `soniox_endpoint_max_delay_ms` as a separate hard safety cap. Slider changes affect the tuning profile only and do not pretend that the cap itself controls normal endpoint timing.
-  - Kept the control disabled while an STT session is active, preventing a setting change from silently affecting an already-open Soniox session. Legacy namespace locking remains unchanged.
-  - Clarified the control for users who did not understand “Speech Split Timing”: the Korean label is now “한 번에 묶는 말 길이” (“speech length per utterance”), and the short/long labels sit at the left and right ends of a narrower slider so the direction is immediately visible. The five-step snapping behavior and active-session lock remain unchanged.
-  - Kept the existing legacy namespace lock behavior and did not change the mobile/API version (`v1.1.4`) because the new field is additive and backward-compatible.
-- Tests: STT segmentation tests cover per-session delay selection, fallback, and bounds. Account preference tests cover hydration, API defaults, PATCH clamping, and persistence. Web, iOS, and Android start paths now share the same endpoint field.
+## 2026-08-22 — Admin conversation room drill-down and infinite history
 
-## 2026-08-22 - Strategy-Specific Speech Split Control
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Showing every conversation room and its transcript on one screen made room selection and long-history review cumbersome. The message order and room pagination also needed to match support-review behavior: newest records first, with older records revealed progressively below.
+- User impact: Administrators had to scan large transcript blocks before finding the room they needed, and long conversations were difficult to review without loading excessive data at once.
+- Resolution: The default view now shows a latest-first room list with 20 rooms per page. Selecting a room opens a dedicated transcript view ordered newest-to-oldest; it loads 200 messages initially and automatically requests the next 200 older messages as the transcript scroll reaches the bottom. Existing deletion filters, language badges, and loaded-content search remain available.
 
-- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.preferences.ts`
-- Issue: The five-step endpoint control was rendered unconditionally because the feature gate always returned `true`. This made the UI misleading when the STT server was switched back to `fin`, where Soniox endpoint detection is disabled and the server uses the manual silence-duration scheduler.
-- User impact: Users could see a control that did not match the active segmentation behavior. During `end` testing, the endpoint control needed to be visible by itself; during `fin` operation, users needed the original silence-duration control instead.
-- Resolution:
-  - Restored the original `500..3000ms` manual silence slider for effective `fin` UI behavior.
-  - Restricted the five-step endpoint tuning slider to `end` UI behavior, keeping the two controls mutually exclusive.
-  - Added separate labels so `fin` keeps the silence-duration wording while `end` uses the clearer “speech length per utterance” wording.
-  - Added `NEXT_PUBLIC_SONIOX_SEGMENTATION_STRATEGY` as the web UI mirror of the STT strategy. `scripts/devbox` derives it from the same worktree STT environment, so switching the devbox STT mode switches the visible control after restart.
-- Tests: Added strategy resolver tests covering `end`, `fin`, and unsupported/`llm` fallback behavior. The control remains disabled while an STT session is active.
+## 2026-08-22 — Admin conversation browser session cache
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Reopening an already reviewed room caused the browser to wait for the same transcript pages again, making repeated support investigation unnecessarily slow.
+- User impact: Administrators had to wait through repeated transcript loads when switching between a room and the room list or revisiting messages in the same tab.
+- Resolution: Cached loaded room lists and transcript pages in versioned `sessionStorage` keys scoped by user, room, deletion filter, sort, and page. Cached transcript pages are shown immediately and older pages continue to append through the existing authenticated endpoint. The server no longer renders the first 200 messages on every room navigation; it returns the room shell and the client fetches or reuses the first page.
+
+## 2026-08-22 — Admin conversation cache-first refresh
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/data/route.ts`
+- Issue: Although transcript pages were cached in the browser, a hard refresh still waited for the server page to query the user, count rooms, load the room list, and aggregate message counts before the client could read `sessionStorage`.
+- User impact: Returning to an already reviewed user still showed a slow blank/loading page, defeating the purpose of the browser cache.
+- Resolution: Reduced the server page to an authenticated shell. The client now reads the scoped `sessionStorage` snapshot immediately, renders it, and refreshes the same data in the background through the authenticated admin data endpoint. The endpoint returns room metadata only; transcript pages continue to load lazily and use the existing per-room cache.
+
+## 2026-08-22 — Admin cache-first update apply control
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: Background refreshes still replaced the visible cached room list or transcript as soon as the server response arrived, causing the page to re-render while an administrator was reviewing records.
+- User impact: A support reviewer could see the currently displayed list or transcript shift unexpectedly after a refresh completed.
+- Resolution: Cached data remains the visible source after a lookup. Background responses now update `sessionStorage` first and only enable the top-level `새 데이터 적용` button when the response differs. Clicking the button applies the cached snapshot to the visible list or transcript in one client-side render. The same behavior applies to the initial room message refresh and preserves lazy 200-message loading.
+
+## 2026-08-22 — Admin room loading state during cache/API handoff
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: When navigating from the cached room list to a room, the previous request's data state could remain visible for one render while the new room request was still pending. If that stale snapshot had no selected room detail, the UI incorrectly showed `해당 대화방을 찾을 수 없습니다.` before the API response arrived.
+- User impact: Operators could mistake a transient cache/API handoff state for a genuinely missing conversation.
+- Resolution: Scoped rendered data and error state to the current request key. A room with no usable cached detail now stays in the loading state until the database response completes; only a completed response that confirms the room is absent shows the not-found message. Usable cached room detail remains visible while background refresh waits for manual application.
+
+## 2026-08-23 — Admin conversation client-side controls
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/data/route.ts`, `mingle-app/src/app/admin/conversations/[conversationId]/messages/route.ts`
+- Issue: Room sorting, deletion filters, and room pagination were coupled to the database lookup request, so changing a browsing control could trigger another server query and made the cached review experience less responsive.
+- User impact: Administrators could not treat sorting and filtering like the existing client-side search over the already loaded support data.
+- Resolution: The lookup now fetches the complete room metadata dataset and unfiltered message pages for the selected user. Room deletion filtering, message deletion filtering, sorting, and 20-room pagination run entirely in the browser over the cached/fetched data; the server is only contacted for user/room data retrieval and lazy 200-message pages.
+- Tests: Targeted ESLint and TypeScript validation were run; the repository still reports the known unrelated test type errors in language-selector, dictionary, and dashboard BigInt files.
+
+## 2026-08-23 — Admin conversation latest-message sorting
+
+- Surface: `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/conversations/data/route.ts`
+- Issue: Room sorting included room update time, creation time, and title, but not the timestamp of the newest message.
+- Resolution: Added a latest-message timestamp to the cached room metadata and a `최근 메시지 최신순` client-side sort option. Rooms without messages are placed after rooms with messages.
+
+## 2026-08-23 — Admin conversation single-scroll cache-first room view
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`
+- Issue: The room view had both a page-level scroll area and a fixed-height transcript scroll area. Cache hydration also used a transition, so a repeat lookup could keep showing the loading state while the background database refresh was pending.
+- User impact: Operators had to manage two scrollbars while reading a transcript and could wait for the database refresh instead of seeing the same user's cached room list immediately.
+- Resolution: Removed the inner transcript scroll container and kept one full-height admin page scroll area. Older message loading now listens to that single page scroll position. Cached user data is applied synchronously as soon as the client starts, while the fresh response continues in the background and only enables the manual update control.
