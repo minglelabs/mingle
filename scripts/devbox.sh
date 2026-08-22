@@ -2012,33 +2012,9 @@ EOF
     DEVBOX_STT_PORT \
     DEVBOX_MESSAGING_PORT \
     DEVBOX_METRO_PORT \
-    DEVBOX_NGROK_API_PORT \
-    DEVBOX_SITE_URL \
-    DEVBOX_RN_WS_URL \
-    DEVBOX_RN_MESSAGING_WS_URL \
-    DEVBOX_PUBLIC_WS_URL \
-    DEVBOX_PUBLIC_MESSAGING_WS_URL \
-    DEVBOX_TEST_API_BASE_URL \
-    DEVBOX_TEST_WS_URL \
-    NEXT_PUBLIC_SITE_URL \
-    NEXTAUTH_URL \
-    NEXT_PUBLIC_WS_PORT \
-    NEXT_PUBLIC_WS_URL \
-    NEXT_PUBLIC_MESSAGING_WS_URL \
-    MINGLE_MESSAGING_URL \
-    MINGLE_TEST_API_BASE_URL \
-    MINGLE_TEST_WS_URL
+    DEVBOX_NGROK_API_PORT
   do
-    case "$key" in
-      NEXT_PUBLIC_SITE_URL|NEXTAUTH_URL) value="${DEVBOX_SITE_URL:-}" ;;
-      NEXT_PUBLIC_WS_PORT) value="${DEVBOX_STT_PORT:-}" ;;
-      NEXT_PUBLIC_WS_URL) value="${DEVBOX_RN_WS_URL:-}" ;;
-      NEXT_PUBLIC_MESSAGING_WS_URL) value="${DEVBOX_RN_MESSAGING_WS_URL:-}" ;;
-      MINGLE_MESSAGING_URL) value="http://127.0.0.1:${DEVBOX_MESSAGING_PORT:-}" ;;
-      MINGLE_TEST_API_BASE_URL) value="${DEVBOX_TEST_API_BASE_URL:-}" ;;
-      MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
-      *) value="${!key:-}" ;;
-    esac
+    value="${!key:-}"
     printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
   done
 }
