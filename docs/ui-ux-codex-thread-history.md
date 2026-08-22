@@ -1,5 +1,64 @@
 # UI/UX Codex Thread History
 
+## 2026-08-22 - Soniox Endpoint Tuning Has No Perceptible Difference Across Steps
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/use-realtime-stt.ts`, `mingle-app/rn/ios/mingle/NativeSTTModule.swift`, `mingle-app/rn/android/app/src/main/java/com/minglelabs/mingle/rn/NativeSTTModule.kt`, `mingle-stt/stt-server.ts`, and `mingle-stt/segmentation-strategy.ts`.
+- Review snapshot: branch `codex/soniox-endpoint-conversation-length`, commit `631cd936`.
+- Reported issue: With `SONIOX_SEGMENTATION_STRATEGY=end`, the user compared the first, third, and fifth UI positions and reported that all three appeared to split speech at nearly the same points. The five-step control therefore does not currently communicate or deliver a noticeable difference in speech segment length.
+- Intended product behavior: The control was designed as a five-position “speech length per utterance” setting. The middle position is the product default, the left side is intended to produce shorter speech segments, and the right side is intended to produce longer speech segments. The control is disabled while an STT session is active, so a new STT connection is required after changing it.
+- Important terminology: `soniox_endpoint_tuning_step` is not a Soniox API field. It is a Mingle-owned session field. Mingle maps it to Soniox's `endpoint_latency_adjustment_level` and `endpoint_sensitivity` fields before opening the upstream Soniox WebSocket.
+
+### Current data path
+
+- The UI stores a numeric step from `0` through `4`; the visible labels are `1/5` through `5/5`, and the default is step `2` (`3/5`).
+- The browser STT path sends `soniox_endpoint_tuning_step` in the initial WebSocket configuration.
+- The native iOS and Android bridges also include the same field in their initial WebSocket configuration, so native apps do not rely on a browser-only path.
+- The STT server reads the field once for each client connection, resolves a profile, and logs the resolved values.
+- When the effective strategy is `end`, the server sends Soniox an upstream configuration containing `enable_endpoint_detection`, `endpoint_latency_adjustment_level`, `endpoint_sensitivity`, and `max_endpoint_delay_ms`.
+- The current Mingle profile table is:
+
+  | UI position | Internal step | Soniox latency level | Soniox sensitivity |
+  | --- | ---: | ---: | ---: |
+  | 1/5, shortest | 0 | 3 | 1.0 |
+  | 2/5 | 1 | 2 | 0.8 |
+  | 3/5, product default | 2 | 1 | 0.8 |
+  | 4/5 | 3 | 0 | 0.8 |
+  | 5/5, longest | 4 | 0 | 0.0 |
+
+### What the Soniox documentation actually establishes
+
+- Soniox documents these endpoint fields as part of the real-time request, with examples that include all three controls: [`Endpoint detection`](https://soniox.com/docs/stt/rt/endpoint-detection).
+- `endpoint_latency_adjustment_level` is allowed from `0` to `3`; higher values reduce endpoint latency more aggressively and can produce more endpoints. It is a latency/aggressiveness control, not a target utterance duration.
+- `endpoint_sensitivity` is allowed from `-1.0` to `1.0`; higher values make endpoints more likely, while lower values make them less likely. It also does not specify a sentence length.
+- `max_endpoint_delay_ms` is a hard upper bound on how long Soniox may wait after speech has ended. It is not a requested or guaranteed segment length.
+- Soniox describes endpointing as semantic: pauses, intonation, speech patterns, and conversational context influence the decision. Even with a higher latency adjustment level, Soniox may wait when the model believes the speaker will continue.
+- The documentation therefore supports connection/request-level configuration at session start, but does not promise that changing the values during an active session will take effect or that any value will produce a deterministic number of seconds or words per segment.
+
+### Evidence currently available
+
+- The local strategy tests assert that the five Mingle profiles resolve to five different pairs of Soniox values and that a profile is included in the generated upstream configuration. These are unit tests of Mingle's mapping logic, not proof that the upstream service applied the values to real audio.
+- The server code passes the resolved profile into the actual upstream Soniox configuration before calling `sttWs.send(...)`.
+- The client and native bridge code passes the selected step into the Mingle STT WebSocket configuration. The UI dependency list also includes the step, so a newly started session reads the selected value.
+- A devbox Android connection log confirmed the default path was resolved as `endpointTuningStep=2`, `endpointLatencyLevel=1`, and `endpointSensitivity=0.8`. We do not yet have captured server logs for the user's 1/5 and 5/5 comparison sessions, nor an upstream wire capture of those exact requests.
+- The user's result is a real product observation: 1/5, 3/5, and 5/5 did not look materially different in the tested conversations. It is not yet enough to distinguish among an ignored upstream option, a weak semantic effect for that speech sample, a test that reused an existing STT connection, or an overly subtle/incorrect profile mapping.
+
+### Main unresolved questions for external review
+
+1. Does Soniox STT RT v5 apply `endpoint_latency_adjustment_level` and `endpoint_sensitivity` from the first JSON configuration message on every newly opened upstream WebSocket, or are there additional protocol/version requirements that are not represented in the current implementation?
+2. Is the Mingle WebSocket definitely reopened after every slider change in the tested flow? The UI blocks changes during an active STT session, but the A/B procedure must still stop the old session and start a new one.
+3. Does the native iOS/Android path reach the same server code and preserve the numeric step without coercing or replacing it? The source code appears to do so, but this needs runtime logs for steps `0`, `2`, and `4`.
+4. Are the selected profile values sufficiently separated to make a noticeable product difference? The current middle and long profiles both use sensitivity `0.8`, and the endpoint model is semantic rather than duration-based.
+5. Is an endpoint-based control the right product abstraction? If the requirement is “do not split until at least this much silence” or “allow the user to finish a longer thought,” the existing `fin` manual-finalization path may be more deterministic than endpoint tuning.
+
+### Required verification before treating the control as working
+
+- Log the exact resolved profile at every new STT connection for test steps `0`, `2`, and `4` on both iOS and Android.
+- Use the same prerecorded or tightly scripted speech sample and start a fresh connection for each step. Record each `<end>` timestamp relative to the last spoken audio, endpoint count, and final segment text.
+- Confirm the upstream Soniox JSON contains the expected numeric values, while never logging the API key.
+- Run a direct Soniox control sample outside Mingle with the same three profile pairs. This separates a Soniox behavior limitation from a Mingle forwarding or lifecycle bug.
+- Compare the endpoint mode against `fin` with explicit manual-finalize silence windows. The endpoint slider should not be described as a guaranteed sentence-length or silence-duration control until the A/B measurements show a stable and user-visible effect.
+
+
 ## 2026-08-16 - Admin Dashboard Daily Metric Loading Delay
 
 - Surface: `mingle-app/src/app/admin/dashboard/page.tsx`, `mingle-app/src/lib/admin-dashboard-query.ts`, `mingle-app/prisma/schema.prisma`
