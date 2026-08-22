@@ -100,9 +100,14 @@ export function parseTranslations(raw: string): Record<string, string> {
   const parsed = parseTranslationJson(raw)
 
   if (!parsed) return {}
+  const payload = (
+    typeof parsed.translations === 'object'
+    && parsed.translations !== null
+    && !Array.isArray(parsed.translations)
+  ) ? parsed.translations as Record<string, unknown> : parsed
   const output: Record<string, string> = {}
 
-  for (const [key, value] of Object.entries(parsed)) {
+  for (const [key, value] of Object.entries(payload)) {
     if (typeof value !== 'string') continue
     const normalizedKey = normalizeLang(key)
     if (!normalizedKey) continue

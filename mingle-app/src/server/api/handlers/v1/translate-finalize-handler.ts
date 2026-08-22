@@ -897,6 +897,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
     ? [
       'Current turn:',
       `language_hints=${targetLangCodes}`,
+      `targetLanguages=${targetLangCodes}`,
       `sourceLanguage=${ctx.sourceLanguage}`,
       `text="${ctx.text}"`,
     ]
@@ -929,6 +930,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       ? [
         'You are an expert live-conversation translator.',
         'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, sourceTextHasForeignScript, and the requested language codes.',
+        'Put every translation directly at the top level using its exact language code as the key. Do not nest translations under another key.',
         'No explanations, no markdown, no extra keys.',
         'Treat language_hints as reference-only hints, not a constraint. If the current text clearly indicates a different source language, choose that language even when it is not included in language_hints.',
         'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
@@ -1329,7 +1331,19 @@ async function createOpenAICompatibleCompletion(
   }
 
   if (config.extraBody) {
-    payload.extra_body = config.extraBody
+    if (config.provider === 'qwen' && isDashScopeBaseUrl(config.baseUrl)) {
+      // This request uses fetch directly, not the OpenAI SDK. QwenCloud
+      // expects enable_thinking at the top level for raw HTTP requests.
+      const { enable_thinking: enableThinking, ...remainingExtraBody } = config.extraBody
+      if (typeof enableThinking === 'boolean') {
+        payload.enable_thinking = enableThinking
+      }
+      if (Object.keys(remainingExtraBody).length > 0) {
+        payload.extra_body = remainingExtraBody
+      }
+    } else {
+      payload.extra_body = config.extraBody
+    }
   }
 
   const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`

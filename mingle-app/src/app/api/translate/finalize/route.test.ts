@@ -705,6 +705,7 @@ describe('/api/translate/finalize route', () => {
     const body = JSON.parse(String(requestInit.body)) as {
       model?: string
       messages?: Array<{ role?: string, content?: string }>
+      enable_thinking?: boolean
       extra_body?: Record<string, unknown>
       response_format?: Record<string, unknown>
       reasoning?: Record<string, unknown>
@@ -713,7 +714,8 @@ describe('/api/translate/finalize route', () => {
 
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
     expect(body.model).toBe('qwen3.7-flash')
-    expect(body.extra_body).toEqual({ enable_thinking: false })
+    expect(body.enable_thinking).toBe(false)
+    expect(body.extra_body).toBeUndefined()
     expect(body.response_format).toEqual({
       type: 'json_object',
     })
@@ -1073,11 +1075,13 @@ describe('/api/translate/finalize route', () => {
 
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const body = JSON.parse(String(requestInit.body)) as {
+      enable_thinking?: boolean
       response_format?: Record<string, unknown>
       reasoning?: Record<string, unknown>
     }
     const headers = requestInit.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
+    expect(body.enable_thinking).toBe(false)
     expect(body.response_format).toEqual({ type: 'json_object' })
     expect(body.reasoning).toBeUndefined()
   })
@@ -1510,6 +1514,7 @@ describe('/api/translate/finalize route', () => {
 
       const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
       expect(userPrompt).toContain('language_hints=en, ja, ko')
+      expect(userPrompt).toContain('targetLanguages=en, ja, ko')
       expect(userPrompt).toContain('sourceLanguage=ja')
       expect(userPrompt).not.toContain('detect_source_language=')
       expect(userPrompt).not.toContain('is_final=')

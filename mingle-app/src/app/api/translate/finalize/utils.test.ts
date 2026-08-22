@@ -68,6 +68,11 @@ describe('translate/finalize utils', () => {
     })
   })
 
+  it('unwraps translations nested by an OpenAI-compatible provider', () => {
+    expect(parseTranslations('{"sourceLanguage":"ja","translations":{"en":"Yes.","ko":"네."}}'))
+      .toEqual({ en: 'Yes.', ko: '네.' })
+  })
+
   it('parses detected source language from strict json payload', () => {
     expect(parseDetectedSourceLanguage('{"sourceLanguage":"ko","ko":"안녕하세요","ja":"こんにちは"}'))
       .toBe('ko')
