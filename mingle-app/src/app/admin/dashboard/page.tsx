@@ -122,6 +122,12 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
           >
             피드백함으로
           </Link>
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-md border border-[#e5e3dc] bg-white px-4 text-sm font-semibold text-[#52514e] transition hover:bg-[#f4f3ee]"
+            href="/admin/conversations"
+          >
+            대화록 조회
+          </Link>
         </div>
       </header>
 
