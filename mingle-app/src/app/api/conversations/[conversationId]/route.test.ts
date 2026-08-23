@@ -10,6 +10,7 @@ const {
   mockUpdateConversationChannelSpeechLanguages,
   mockUpdateConversationChannelTranslationLanguagesLinked,
   mockUpdateConversationChannelTitle,
+  mockMarkConversationChannelRead,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
   mockSanitizeSttLanguageSelection,
@@ -22,6 +23,7 @@ const {
   mockUpdateConversationChannelSpeechLanguages: vi.fn(),
   mockUpdateConversationChannelTranslationLanguagesLinked: vi.fn(),
   mockUpdateConversationChannelTitle: vi.fn(),
+  mockMarkConversationChannelRead: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
@@ -48,6 +50,7 @@ vi.mock("@/lib/app-conversations", () => ({
   updateConversationChannelSpeechLanguages: mockUpdateConversationChannelSpeechLanguages,
   updateConversationChannelTranslationLanguagesLinked: mockUpdateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelTitle: mockUpdateConversationChannelTitle,
+  markConversationChannelRead: mockMarkConversationChannelRead,
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
@@ -579,6 +582,27 @@ describe("/api/conversations/[conversationId] route", () => {
       conversationId: "conv_1",
       userId: "tracked_user_123",
       title: "Trip planning",
+    });
+  });
+
+  it("marks a conversation read without creating an in-app notification", async () => {
+    mockMarkConversationChannelRead.mockResolvedValue(true);
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markRead: true }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ read: true });
+    expect(mockMarkConversationChannelRead).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
     });
   });
 

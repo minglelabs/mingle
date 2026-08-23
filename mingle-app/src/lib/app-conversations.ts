@@ -43,6 +43,9 @@ export type ConversationChannelSummary = {
   // resolveBlockedCounterpartUserIdByChannelId.
   isBlockedCounterpart: boolean;
   messageCount?: number;
+  // Number of visible messages sent by another room member after the viewer
+  // last opened this room. Kept optional for conversation-shell responses.
+  unreadMessageCount?: number;
   selectedLanguages?: string[];
   // language code -> ids of the members who picked it. Only populated for
   // multi-member rooms; empty for solo rooms (nothing to attribute).
@@ -207,6 +210,7 @@ type ChannelMemberProfile = {
   selectedLanguages: string[];
   status: string;
   pausedAt: Date | null;
+  lastReadAt: Date | null;
 };
 
 // A pending invitee has no membership row to resolve a name/handle from (see
@@ -241,6 +245,7 @@ async function listChannelMembersByChannelId(
       selectedLanguages: true,
       status: true,
       pausedAt: true,
+      lastReadAt: true,
       user: {
         select: {
           name: true,
@@ -269,6 +274,7 @@ async function listChannelMembersByChannelId(
       selectedLanguages: row.selectedLanguages,
       status: row.status,
       pausedAt: row.pausedAt,
+      lastReadAt: row.lastReadAt,
     });
     membersByChannelId.set(row.channelId, members);
   }
@@ -546,6 +552,7 @@ function serializeConversationChannel(
   latestSpeakerAvatarSeed?: string | null,
   latestSpeakerAvatarIndex?: number | null,
   messageCount?: number,
+  unreadMessageCount?: number,
   viewerFacingTitle?: string,
   viewerFacingDisplayLanguage?: string | null,
   viewerFacingStatus?: string,
@@ -575,6 +582,9 @@ function serializeConversationChannel(
     otherMembers: otherMembers ?? [],
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
+      : {}),
+    ...(typeof unreadMessageCount === "number"
+      ? { unreadMessageCount: normalizeConversationMessageCount(unreadMessageCount) }
       : {}),
     selectedLanguages,
     selectedLanguagesAttribution: viewerFacingSelectedLanguages?.attribution ?? {},
@@ -777,6 +787,45 @@ async function listVisibleMessageCountsBySessionKey(
   return countBySessionKey;
 }
 
+async function listUnreadMessageCountsByChannelId(
+  channelIds: string[],
+  viewerUserId?: string | null,
+): Promise<Map<string, number>> {
+  if (channelIds.length === 0 || !viewerUserId) {
+    return new Map();
+  }
+
+  const rows = await prisma.$queryRaw<Array<{
+    channelId: string;
+    unreadCount: number | bigint;
+  }>>(Prisma.sql`
+    SELECT
+      channel.id AS "channelId",
+      COUNT(message.id)::int AS "unreadCount"
+    FROM app.app_conversation_channels AS channel
+    JOIN app.app_conversation_channel_members AS member
+      ON member.channel_id = channel.id
+      AND member.user_id = ${viewerUserId}
+    LEFT JOIN app.app_messages AS message
+      ON message.session_key = channel.session_key
+      AND (message.is_deleted = false OR message.is_deleted IS NULL)
+      AND message.user_id IS NOT NULL
+      AND message.user_id <> member.user_id
+      AND (member.last_read_at IS NULL OR message.created_at > member.last_read_at)
+    WHERE channel.id IN (${Prisma.join(channelIds)})
+      AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
+    GROUP BY channel.id
+  `);
+
+  const unreadCountByChannelId = new Map<string, number>();
+  for (const row of rows) {
+    const count = Number(row.unreadCount);
+    if (!row.channelId || !Number.isFinite(count)) continue;
+    unreadCountByChannelId.set(row.channelId, normalizeConversationMessageCount(count));
+  }
+  return unreadCountByChannelId;
+}
+
 async function serializeConversationChannelWithPreview(
   record: ConversationChannelRecord,
   viewerUserId?: string | null,
@@ -800,6 +849,7 @@ async function serializeConversationChannelWithPreview(
     latestMessage?.speaker,
     latestMessage?.speakerAvatarSeed,
     latestMessage?.speakerAvatarIndex,
+    undefined,
     undefined,
     resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, pendingInviteeProfiles),
     resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -861,6 +911,7 @@ async function listConversationChannelsForMember(
       undefined,
       undefined,
       undefined,
+      undefined,
       resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record)),
       resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -878,9 +929,10 @@ async function listConversationChannelsForMember(
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
-  const [latestMessageSummaryBySessionKey, messageCountBySessionKey] = await Promise.all([
+  const [latestMessageSummaryBySessionKey, messageCountBySessionKey, unreadMessageCountByChannelId] = await Promise.all([
     listLatestMessageSummaryBySessionKey(sessionKeys),
     listVisibleMessageCountsBySessionKey(sessionKeys),
+    listUnreadMessageCountsByChannelId(records.map((record) => record.id), viewerUserId),
   ]);
 
   return records
@@ -894,6 +946,7 @@ async function listConversationChannelsForMember(
         latestMessage?.speakerAvatarSeed,
         latestMessage?.speakerAvatarIndex,
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
+        unreadMessageCountByChannelId.get(record.id) ?? 0,
         resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record)),
         resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -1684,6 +1737,24 @@ export async function getConversationSessionKeyForMember(args: {
   return record?.sessionKey ?? null;
 }
 
+// Marks only the caller's membership row as read. The message list remains
+// the source of truth; this timestamp is just the per-user cursor used by the
+// conversation-list unread aggregate.
+export async function markConversationChannelRead(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<boolean> {
+  const result = await prisma.appConversationChannelMember.updateMany({
+    where: {
+      channelId: args.conversationId,
+      userId: args.userId,
+      channel: buildVisibleConversationWhere(),
+    },
+    data: { lastReadAt: new Date() },
+  });
+  return result.count > 0;
+}
+
 export type ConversationMemberSummary = {
   userId: string;
   name: string | null;
@@ -1921,6 +1992,7 @@ export async function getConversationHydrationStateForUser(args: {
   return {
     conversation: serializeConversationChannel(
       conversationRecord,
+      undefined,
       undefined,
       undefined,
       undefined,

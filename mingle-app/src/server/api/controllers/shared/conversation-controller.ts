@@ -9,6 +9,7 @@ import {
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
   listConversationMembersForUser,
+  markConversationChannelRead,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -91,6 +92,7 @@ export async function patchConversationResponse(
     translationLanguagesLinked?: unknown;
     defaultDisplayLanguage?: unknown;
     title?: unknown;
+    markRead?: unknown;
   };
   try {
     body = await request.json();
@@ -104,9 +106,14 @@ export async function patchConversationResponse(
   const hasTranslationLanguagesLinked = body.translationLanguagesLinked !== undefined;
   const hasDefaultDisplayLanguage = body.defaultDisplayLanguage !== undefined;
   const hasTitle = typeof body.title === "string";
+  const hasMarkRead = body.markRead !== undefined;
 
-  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasDefaultDisplayLanguage && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasDefaultDisplayLanguage && !hasTitle && !hasMarkRead) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
+  }
+
+  if (hasMarkRead && body.markRead !== true) {
+    return NextResponse.json({ error: "invalid_mark_read" }, { status: 400 });
   }
 
   if (hasTranslationLanguagesLinked && typeof body.translationLanguagesLinked !== "boolean") {
@@ -233,7 +240,28 @@ export async function patchConversationResponse(
     }
   }
 
+  if (hasMarkRead) {
+    const markedRead = await markConversationChannelRead({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+    if (!markedRead) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+  }
+
   if (!conversation) {
+    if (hasMarkRead) {
+      const trackingHints = resolvedUser.tracking
+        ? {
+            externalUserId: resolvedUser.tracking.externalUserId,
+            sessionKey: resolvedUser.tracking.sessionKey,
+          }
+        : resolvedUser.identity;
+      const response = NextResponse.json({ read: true });
+      applyTrackingCookies(request, response, trackingHints);
+      return response;
+    }
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

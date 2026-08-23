@@ -17,6 +17,9 @@ type PushMessage = {
   actorId: string;
   actorLabel: string;
   recipientLanguage: string;
+  messagePreview?: string;
+  sessionKey?: string;
+  conversationId?: string;
 };
 
 type PushSendResult = {
@@ -114,6 +117,18 @@ function resolvePushPlatform(value: string): PushPlatform | null {
 function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
   const language = message.recipientLanguage.trim().toLowerCase();
+  if (message.type === "conversation_message") {
+    const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
+    if (language === "ko") return { title: "새 메시지", body: `${label}님: ${preview}` };
+    if (language === "ja") return { title: "新しいメッセージ", body: `${label}さん: ${preview}` };
+    if (language === "zh-cn") return { title: "新消息", body: `${label}：${preview}` };
+    if (language === "zh-tw") return { title: "新訊息", body: `${label}：${preview}` };
+    if (language === "es") return { title: "Nuevo mensaje", body: `${label}: ${preview}` };
+    if (language === "fr") return { title: "Nouveau message", body: `${label} : ${preview}` };
+    if (language === "de") return { title: "Neue Nachricht", body: `${label}: ${preview}` };
+    if (language === "pt") return { title: "Nova mensagem", body: `${label}: ${preview}` };
+    return { title: "New message", body: `${label}: ${preview}` };
+  }
   if (message.type === "follow") {
     if (language === "ko") return { title: "새 팔로워", body: `${label}님이 회원님을 팔로우했습니다.` };
     if (language === "ja") return { title: "新しいフォロワー", body: `${label}さんがあなたをフォローしました。` };
@@ -130,11 +145,14 @@ function resolvePushCopy(message: PushMessage): { title: string; body: string } 
 }
 
 function createPushData(message: PushMessage): Record<string, string> {
-  return {
+  const data: Record<string, string> = {
     type: message.type,
     notificationId: message.notificationId,
     actorId: message.actorId,
   };
+  if (message.sessionKey) data.sessionKey = message.sessionKey;
+  if (message.conversationId) data.conversationId = message.conversationId;
+  return data;
 }
 
 async function sendApnsNotification(
@@ -164,6 +182,9 @@ async function sendApnsNotification(
     type: message.type,
     notificationId: message.notificationId,
     actorId: message.actorId,
+    messageId: message.notificationId,
+    ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
+    ...(message.conversationId ? { conversationId: message.conversationId } : {}),
   });
 
   return new Promise((resolve) => {
@@ -373,6 +394,80 @@ export async function sendPushNotificationForUserNotification(notificationId: st
       : []
   ));
 
+  if (invalidTokenIds.length > 0) {
+    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
+  }
+}
+
+// Message pushes deliberately do not create UserNotification rows. The
+// in-app notification panel is reserved for non-message events such as
+// follows; conversation unread state is tracked by each membership cursor.
+export async function sendPushNotificationForConversationMessage(args: {
+  messageId: string;
+  sessionKey: string;
+  sourceText: string;
+  senderUserId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  const apnsConfig = readApnsConfig();
+  const fcmConfig = readFcmConfig();
+  if (!apnsConfig && !fcmConfig) return;
+
+  const recipientUserIds = [...new Set(
+    args.memberUserIds.filter((userId) => userId.trim() && userId !== args.senderUserId),
+  )];
+  if (recipientUserIds.length === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...new Set([args.senderUserId, ...recipientUserIds])] } },
+    select: {
+      id: true,
+      name: true,
+      handle: true,
+      language: true,
+      pageLanguage: true,
+      pushTokens: {
+        select: {
+          id: true,
+          platform: true,
+          token: true,
+          environment: true,
+        },
+      },
+    },
+  });
+  const sender = users.find((user) => user.id === args.senderUserId);
+  const actorLabel = sender?.name?.trim() || (sender?.handle ? `@${sender.handle}` : "Someone");
+  const messagePreview = args.sourceText.replace(/\s+/g, " ").trim().slice(0, 240);
+  if (!messagePreview) return;
+
+  const targetEntries: Array<{ tokenId: string; promise: Promise<PushSendResult> }> = [];
+  for (const recipientUserId of recipientUserIds) {
+    const recipient = users.find((user) => user.id === recipientUserId);
+    if (!recipient) continue;
+    const message: PushMessage = {
+      notificationId: args.messageId,
+      type: "conversation_message",
+      actorId: args.senderUserId,
+      actorLabel,
+      recipientLanguage: recipient.pageLanguage?.trim() || recipient.language?.trim() || "en",
+      messagePreview,
+      sessionKey: args.sessionKey,
+    };
+    for (const target of recipient.pushTokens as PushTarget[]) {
+      targetEntries.push({
+        tokenId: target.id,
+        promise: sendPushToTarget(target, message, apnsConfig, fcmConfig),
+      });
+    }
+  }
+
+  const results = await Promise.allSettled(targetEntries.map((entry) => entry.promise));
+  const invalidTokenIds = results.flatMap((result, index) => (
+    result.status === "fulfilled" && result.value.invalidToken
+      ? [targetEntries[index]?.tokenId]
+      : []
+  ));
   if (invalidTokenIds.length > 0) {
     await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
   }

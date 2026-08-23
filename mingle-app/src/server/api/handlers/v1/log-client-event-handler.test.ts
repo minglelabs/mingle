@@ -10,6 +10,7 @@ const {
   mockUpsertTrackedUser,
   mockMaybeGenerateConversationTitleForSession,
   mockNotifyConversationMessage,
+  mockSendPushNotificationForConversationMessage,
   mockMaterializePendingConversationInvitees,
   mockIsMessageSenderBlockedInConversation,
   mockListChannelMemberUserIdsBySessionKey,
@@ -24,6 +25,7 @@ const {
   mockUpsertTrackedUser: vi.fn(),
   mockMaybeGenerateConversationTitleForSession: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
+  mockSendPushNotificationForConversationMessage: vi.fn(),
   mockMaterializePendingConversationInvitees: vi.fn(),
   mockIsMessageSenderBlockedInConversation: vi.fn(),
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
@@ -76,6 +78,10 @@ vi.mock("@/server/conversation-realtime", () => ({
   notifyConversationMessage: mockNotifyConversationMessage,
 }));
 
+vi.mock("@/server/push-notifications", () => ({
+  sendPushNotificationForConversationMessage: mockSendPushNotificationForConversationMessage,
+}));
+
 vi.mock("@/lib/app-conversations", () => ({
   materializePendingConversationInvitees: mockMaterializePendingConversationInvitees,
   isMessageSenderBlockedInConversation: mockIsMessageSenderBlockedInConversation,
@@ -98,6 +104,7 @@ describe("handleLogClientEventV1", () => {
     mockAppEventLogFindFirst.mockResolvedValue(null);
     mockCreateTrackedEventLog.mockResolvedValue(undefined);
     mockMaybeGenerateConversationTitleForSession.mockResolvedValue(undefined);
+    mockSendPushNotificationForConversationMessage.mockResolvedValue(undefined);
     mockMaterializePendingConversationInvitees.mockResolvedValue(undefined);
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(false);
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
@@ -185,6 +192,13 @@ describe("handleLogClientEventV1", () => {
     // reaches them for this first message.
     expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledWith("sess_123");
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123"]);
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+      messageId: "message_123",
+      sessionKey: "sess_123",
+      sourceText: "안녕하세요",
+      senderUserId: "user_123",
+      memberUserIds: ["user_123"],
+    });
   });
 
   it("notifies every real member's list topic, not just the room's own sessionKey", async () => {
@@ -206,6 +220,13 @@ describe("handleLogClientEventV1", () => {
     expect(response.status).toBe(200);
     expect(mockListChannelMemberUserIdsBySessionKey).toHaveBeenCalledWith("sess_123");
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"]);
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+      messageId: "message_123",
+      sessionKey: "sess_123",
+      sourceText: "안녕하세요",
+      senderUserId: "user_123",
+      memberUserIds: ["user_123", "user_456"],
+    });
   });
 
   it("still notifies the room even when fetching member ids for the list fan-out fails", async () => {

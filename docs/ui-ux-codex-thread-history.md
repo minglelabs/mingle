@@ -1,5 +1,18 @@
 # UI/UX Codex Thread History
 
+## 2026-08-23 - Separate unread conversation messages from the notification panel
+
+- Surface: Conversation list rows, the conversations bottom-tab icon, the existing in-app notification panel, and native message delivery.
+- Issue: A message from another member needed to remain visible as unread in the room list and as a tab-level aggregate without flooding the notification panel with one notification per message. The notification panel is currently used for non-message events such as follows, while APNs/FCM are expected to alert users about incoming messages.
+- User impact: Without a per-user room read cursor, users could not tell which rooms had new messages or how many were waiting. Reusing `UserNotification` for messages would also make the follow-oriented notification panel noisy and mix two different concepts of notification.
+- Resolution:
+  - Store `app_conversation_channel_members.last_read_at` as a per-user, per-room read cursor.
+  - Count only visible messages sent by another member after that cursor. Existing membership rows are backfilled to the migration time so historical transcripts do not appear unread on first rollout; newly materialized invitees retain a null cursor and see the first counterpart message as unread.
+  - Render a capped `99+` room-row badge and the sum of all room unread counts on the conversations tab icon. Opening a room marks that member's cursor read, and an active room also clears the cursor when a finalized message arrives.
+  - Keep `UserNotification` and its existing follow-only API filter unchanged. Message persistence now separately fans out a localized `conversation_message` push through APNs or FCM to every other real room member, without creating an in-app notification row.
+- Data change: Added `app.app_conversation_channel_members.last_read_at` through `20260823104805_add_conversation_member_read_cursor`. The migration uses explicit `app` schema names and backfills existing membership rows.
+- Testing notes: Focused conversation-list, mark-read route, and finalized-message handler tests pass. TypeScript and ESLint pass. Physical-device verification should confirm unread counts update after a counterpart message, clear after opening the room, and do not add entries to the notification panel while iOS/Android push delivery remains enabled.
+
 ## 2026-08-23 - Widen message-bubble language flag hit areas
 
 - Surface: The language flag selector rendered inline inside a message bubble.

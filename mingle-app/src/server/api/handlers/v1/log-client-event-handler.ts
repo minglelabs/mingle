@@ -23,6 +23,7 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import {
   isMessageSenderBlockedInConversation,
   listChannelMemberUserIdsBySessionKey,
@@ -288,6 +289,17 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // fail on, and a no-op wherever realtime push isn't configured.
         const memberUserIds = await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
         notifyConversationMessage(tracking.sessionKey, memberUserIds)
+        if (messageId) {
+          void sendPushNotificationForConversationMessage({
+            messageId,
+            sessionKey: tracking.sessionKey,
+            sourceText,
+            senderUserId: userId,
+            memberUserIds,
+          }).catch((error) => {
+            console.error('Conversation message push failed:', error)
+          })
+        }
       }
     }
 

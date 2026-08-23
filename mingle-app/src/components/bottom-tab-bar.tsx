@@ -4,7 +4,10 @@ import type { AppDictionary } from "@/i18n/types";
 import { MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
+import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   NATIVE_TAB_ROOT_QUERY_KEY,
@@ -16,6 +19,7 @@ type BottomTabBarProps = {
   activeRoute: "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
+  unreadConversationMessageCount?: number;
 };
 
 type NativeBridgeWindow = Window & {
@@ -76,8 +80,10 @@ export default function BottomTabBar({
   activeRoute,
   dictionary,
   locale,
+  unreadConversationMessageCount,
 }: BottomTabBarProps) {
   const { data: session } = useSession();
+  const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,6 +111,62 @@ export default function BottomTabBar({
   const isMypageActive = activeRoute === "mypage"
     || pathname === mypagePath
     || pathname.startsWith(`${mypagePath}/`);
+  const visibleUnreadConversationMessageCount = Math.max(
+    0,
+    Math.floor(unreadConversationMessageCount ?? loadedUnreadConversationMessageCount),
+  );
+  const unreadConversationMessageLabel = dictionary.conversations?.notificationsUnreadSectionLabel
+    || "Unread messages";
+
+  useEffect(() => {
+    if (unreadConversationMessageCount !== undefined) return;
+
+    let cancelled = false;
+    const loadUnreadConversationMessageCount = async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/conversations?view=native-list"), {
+          cache: "no-store",
+          headers: buildConversationRequestIdentityHeaders({
+            fallbackExternalUserId: getOrCreateTrackingUserId(),
+            clientApiNamespace,
+          }),
+        });
+        if (!response.ok) throw new Error("conversation_unread_count_load_failed");
+        const payload = await response.json() as {
+          conversations?: Array<{ unreadMessageCount?: unknown }>;
+        };
+        const nextCount = Array.isArray(payload.conversations)
+          ? payload.conversations.reduce((total, conversation) => {
+              const count = typeof conversation.unreadMessageCount === "number"
+                ? conversation.unreadMessageCount
+                : 0;
+              return total + (Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0);
+            }, 0)
+          : 0;
+        if (!cancelled) setLoadedUnreadConversationMessageCount(nextCount);
+      } catch {
+        if (!cancelled) setLoadedUnreadConversationMessageCount(0);
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadUnreadConversationMessageCount();
+      }
+    };
+
+    void loadUnreadConversationMessageCount();
+    const pollTimer = window.setInterval(loadUnreadConversationMessageCount, 20_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [unreadConversationMessageCount]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -146,16 +208,28 @@ export default function BottomTabBar({
           router.replace(conversationsHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.titles.chats}
+        aria-label={visibleUnreadConversationMessageCount > 0
+          ? `${dictionary.titles.chats}, ${visibleUnreadConversationMessageCount} ${unreadConversationMessageLabel}`
+          : dictionary.titles.chats}
         aria-current={isConversationsActive ? "page" : undefined}
       >
-        <MessageCircle
-          size={26}
-          fill={isConversationsActive ? "#f59e0b" : "none"}
-          stroke={isConversationsActive ? "#f59e0b" : "#9ca3af"}
-          strokeWidth={1.9}
-          aria-hidden="true"
-        />
+        <span className="relative inline-flex">
+          <MessageCircle
+            size={26}
+            fill={isConversationsActive ? "#f59e0b" : "none"}
+            stroke={isConversationsActive ? "#f59e0b" : "#9ca3af"}
+            strokeWidth={1.9}
+            aria-hidden="true"
+          />
+          {visibleUnreadConversationMessageCount > 0 ? (
+            <span
+              className="absolute -right-3 -top-2 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white"
+              aria-hidden="true"
+            >
+              {visibleUnreadConversationMessageCount > 99 ? "99+" : visibleUnreadConversationMessageCount}
+            </span>
+          ) : null}
+        </span>
       </button>
       <button
         type="button"

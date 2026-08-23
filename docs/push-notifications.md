@@ -1,6 +1,6 @@
 # Native Push Notifications
 
-Mingle notifications are still stored in `app_user_notifications` and shown by the existing notification panel. A native installation now registers one APNs or FCM token per installation, and the server sends a push after a notification is created.
+Non-message notifications such as follows are stored in `app_user_notifications` and shown by the existing notification panel. Conversation messages use a separate unread cursor in the room membership and do not create notification-panel rows; the server sends their native push directly to the other room members.
 
 ## Server configuration
 
@@ -52,4 +52,4 @@ iOS     ios/v2.0.0  (build 74)
 Android android/v2.0.0  (version code 72)
 ```
 
-The iOS build includes the `aps-environment` entitlement. Android requests `POST_NOTIFICATIONS` on Android 13 and later and creates the `mingle_notifications` channel. Testing was intentionally not run for this change; verify the release on physical devices after provider credentials are configured.
+The iOS build includes the `aps-environment` entitlement. Android requests `POST_NOTIFICATIONS` on Android 13 and later and creates the `mingle_notifications` channel. Verify message pushes, room unread counts, and the notification-panel separation on physical devices after provider credentials are configured.

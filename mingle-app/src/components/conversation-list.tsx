@@ -242,6 +242,8 @@ interface ConversationItem {
   timeLabel: string;
   statsLabel: string;
   statsFullLabel: string;
+  unreadMessageCount: number;
+  unreadMessageLabel: string;
   status: "active" | "paused";
   statusLabel: string;
   avatarSrc: string;
@@ -940,6 +942,7 @@ function mapConversationSummaryToItem(
   labels: {
     activeStatusLabel: string;
     pausedStatusLabel: string;
+    unreadMessagesLabel?: string;
   },
   localStats: ConversationLocalStats = EMPTY_CONVERSATION_LOCAL_STATS,
   interimPreview?: LatestUtterancePayload,
@@ -989,6 +992,8 @@ function mapConversationSummaryToItem(
       : "",
     statsLabel: `${usageDurationLabel} · ${messageCountLabel}`,
     statsFullLabel: `STT ${usageDurationLabel}, ${messageCountLabel}`,
+    unreadMessageCount: Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
+    unreadMessageLabel: labels.unreadMessagesLabel || "Unread messages",
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
@@ -1422,16 +1427,27 @@ function ConversationRow({
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 flex-col items-end leading-none">
-            <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
-              {item.timeLabel}
-            </span>
-            <span
-              className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
-              title={item.statsFullLabel}
-            >
-              {item.statsLabel}
-            </span>
+          <div className="flex shrink-0 items-start gap-2">
+            {item.unreadMessageCount > 0 ? (
+              <span
+                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+              >
+                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
+              </span>
+            ) : null}
+            <div className="flex flex-col items-end leading-none">
+              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
+                {item.timeLabel}
+              </span>
+              <span
+                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
+                title={item.statsFullLabel}
+              >
+                {item.statsLabel}
+              </span>
+            </div>
           </div>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
@@ -2114,12 +2130,22 @@ export default function ConversationList({
         conversation,
         locale,
         timeLabelsReady,
-        copy,
+        {
+          ...copy,
+          unreadMessagesLabel: copy.notificationsUnreadSectionLabel,
+        },
         conversationLocalStats[conversation.id],
         conversationInterimPreviews[conversation.id],
       )
     )),
     [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+  );
+  const unreadConversationMessageCount = useMemo(
+    () => conversations.reduce(
+      (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
+      0,
+    ),
+    [conversations],
   );
   const mountedConversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -2261,6 +2287,23 @@ export default function ConversationList({
     ));
     return nextConversations;
   }, [conversationCacheIdentity, initialNativeUi]);
+
+  const markConversationAsRead = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId) return;
+
+    void fetch(buildConversationApiPath(`/${normalizedConversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+      body: JSON.stringify({ markRead: true }),
+    }).catch(() => {
+      // A failed read marker is harmless; the next list refresh will keep the
+      // server-side unread count until the room can be opened successfully.
+    });
+  }, []);
 
   const triggerPullToRefresh = useCallback(async () => {
     if (isRefreshingConversations || isHydratingConversations || activeConversation || showSearch) {
@@ -3051,6 +3094,11 @@ export default function ConversationList({
 
     clearConversationInterimPreview(conversationId);
 
+    const isActiveConversation = activeConversationRef.current?.id === conversationId;
+    if (isActiveConversation) {
+      markConversationAsRead(conversationId);
+    }
+
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== conversationId) {
         return conversation;
@@ -3066,9 +3114,10 @@ export default function ConversationList({
           typeof payload.speakerAvatarIndex === "number" && Number.isInteger(payload.speakerAvatarIndex)
             ? payload.speakerAvatarIndex
             : conversation.latestSpeakerAvatarIndex ?? null,
+        ...(isActiveConversation ? { unreadMessageCount: 0 } : {}),
       };
     }).sort(compareConversationRecency));
-  }, [clearConversationInterimPreview]);
+  }, [clearConversationInterimPreview, markConversationAsRead]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3948,8 +3997,17 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
-    activeConversationRef.current = conversation;
-    setActiveConversation(conversation);
+    const openedConversation = conversation.unreadMessageCount
+      ? { ...conversation, unreadMessageCount: 0 }
+      : conversation;
+    activeConversationRef.current = openedConversation;
+    setActiveConversation(openedConversation);
+    setConversations((current) => current.map((currentConversation) => (
+      currentConversation.id === conversation.id
+        ? { ...currentConversation, unreadMessageCount: 0 }
+        : currentConversation
+    )));
+    markConversationAsRead(conversation.id);
 
     // Perform history sync here (not in an effect) so that restore / popstate-open
     // paths do not redundantly push duplicate ?conversation= entries.
@@ -3985,8 +4043,8 @@ export default function ConversationList({
       }
     }
 
-    return conversation;
-  }, [closeSearchOverlay]);
+    return openedConversation;
+  }, [closeSearchOverlay, markConversationAsRead]);
 
   const startDirectConversationFromProfile = useCallback(async (
     conversation: ConversationChannelSummary,
@@ -5108,6 +5166,7 @@ export default function ConversationList({
         activeRoute="conversations"
         dictionary={dictionary}
         locale={locale}
+        unreadConversationMessageCount={unreadConversationMessageCount}
       />
 
       {isClientReady && typeof document !== "undefined"

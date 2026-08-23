@@ -343,6 +343,9 @@ model AppConversationChannelMember {
   // unchanged, same split as displayLanguage above.
   status   String    @default("active") @map("status")
   pausedAt DateTime? @map("paused_at")
+  // The last time this member opened the room. Message unread counts are
+  // derived from messages sent by other members after this timestamp.
+  lastReadAt DateTime? @map("last_read_at")
   joinedAt DateTime  @default(now()) @map("joined_at")
 
   channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)

@@ -9,6 +9,7 @@ const {
   mockAppMessageFindMany,
   mockAppMessageCount,
   mockAppMessageGroupBy,
+  mockQueryRaw,
   mockAppEventLogFindFirst,
   mockChannelMemberFindMany,
   mockChannelMemberCreateMany,
@@ -29,6 +30,7 @@ const {
   mockAppMessageFindMany: vi.fn(),
   mockAppMessageCount: vi.fn(),
   mockAppMessageGroupBy: vi.fn(),
+  mockQueryRaw: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockChannelMemberFindMany: vi.fn(),
   mockChannelMemberCreateMany: vi.fn(),
@@ -81,6 +83,7 @@ vi.mock("@/lib/prisma", () => {
       }
       return Promise.all(arg as Promise<unknown>[]);
     }),
+    $queryRaw: mockQueryRaw,
   };
   return { prisma };
 });
@@ -107,6 +110,7 @@ import {
   listConversationChannelsForExternalUserId,
   listConversationMembersForUser,
   listConversationChannelsForUser,
+  markConversationChannelRead,
   materializePendingConversationInvitees,
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelSelectedLanguages,
@@ -119,6 +123,7 @@ describe("app-conversations", () => {
     vi.clearAllMocks();
     mockAppMessageFindMany.mockResolvedValue([]);
     mockAppMessageGroupBy.mockResolvedValue([]);
+    mockQueryRaw.mockResolvedValue([]);
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
     mockChannelMemberFindMany.mockResolvedValue([]);
     mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
@@ -954,6 +959,32 @@ describe("app-conversations", () => {
         _all: true,
       },
     });
+  });
+
+  it("includes the unread message count returned for each viewer membership", async () => {
+    mockFindConversationMany.mockResolvedValue([{
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-a",
+      selectedLanguages: ["en", "ko"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T09:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T12:00:00.000Z"),
+      pausedAt: null,
+    }]);
+    mockQueryRaw.mockResolvedValue([{ channelId: "conv-a", unreadCount: 3 }]);
+
+    const conversations = await listConversationChannelsForUser("user-1");
+
+    expect(conversations[0]).toEqual(expect.objectContaining({
+      id: "conv-a",
+      unreadMessageCount: 3,
+    }));
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
   });
 
   it("hydrates only the latest visible message batch in chronological order", async () => {
@@ -2061,6 +2092,41 @@ describe("app-conversations", () => {
       });
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("markConversationChannelRead", () => {
+    it("updates only a visible member's read cursor", async () => {
+      mockChannelMemberUpdateMany.mockResolvedValue({ count: 1 });
+
+      const marked = await markConversationChannelRead({
+        conversationId: "conv-a",
+        userId: "user-1",
+      });
+
+      expect(marked).toBe(true);
+      expect(mockChannelMemberUpdateMany).toHaveBeenCalledWith({
+        where: {
+          channelId: "conv-a",
+          userId: "user-1",
+          channel: {
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+            ],
+          },
+        },
+        data: { lastReadAt: expect.any(Date) },
+      });
+    });
+
+    it("returns false when the membership does not exist", async () => {
+      mockChannelMemberUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(markConversationChannelRead({
+        conversationId: "missing",
+        userId: "user-1",
+      })).resolves.toBe(false);
     });
   });
 
