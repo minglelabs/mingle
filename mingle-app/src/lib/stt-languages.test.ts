@@ -11,6 +11,8 @@ import {
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
   getSttLanguageDisplayName,
+  sanitizeSttLanguageSelection,
+  sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
 
 describe('STT language catalog', () => {
@@ -70,5 +72,12 @@ describe('STT language catalog', () => {
     expect(getSttLanguageDisplayName('ko', 'ko')).toBe('한국어')
     expect(getSttLanguageDisplayName('ko', 'en')).toBe('Korean')
     expect(getSttLanguageDisplayName('unknown', 'ko')).toBeNull()
+  })
+
+  it('keeps the per-user five-language limit separate from a shared room union', () => {
+    const languages = ['en', 'ko', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de']
+
+    expect(sanitizeSttLanguageSelection(languages)).toEqual(languages.slice(0, 5))
+    expect(sanitizeSttLanguageUnion(languages)).toEqual(languages)
   })
 })

@@ -161,6 +161,35 @@ export function sanitizeSttLanguageSelection(
     : (fallback.length > 0 ? [...fallback] : [])
 }
 
+// A member may select at most MAX_STT_LANGUAGE_SELECTION languages, but a
+// shared room displays/translates the union of every member's selections.
+// Keep this normalization separate so the room union is not silently clipped
+// back to one member's five-language limit on the client.
+export function sanitizeSttLanguageUnion(
+  rawValue: unknown,
+  fallbackLanguages: readonly string[] = [],
+): SttLanguageCode[] {
+  const fallback = fallbackLanguages
+    .map((language) => canonicalizeSttLanguageCode(language))
+    .filter((language): language is SttLanguageCode => Boolean(language));
+
+  if (!Array.isArray(rawValue)) {
+    return fallback.length > 0 ? [...new Set(fallback)] : [];
+  }
+
+  const deduped: SttLanguageCode[] = [];
+  for (const item of rawValue) {
+    if (typeof item !== 'string') continue;
+    const normalized = canonicalizeSttLanguageCode(item);
+    if (!normalized || deduped.includes(normalized)) continue;
+    deduped.push(normalized);
+  }
+
+  return deduped.length > 0
+    ? deduped
+    : (fallback.length > 0 ? [...new Set(fallback)] : []);
+}
+
 export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | undefined): SttLanguageCode[] {
   const localeLanguage = typeof rawLocale === 'string'
     ? canonicalizeSttLanguageCode(rawLocale)

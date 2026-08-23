@@ -63,11 +63,11 @@ export type ConversationChannelSummary = {
   latestSpeaker?: string | null;
   latestSpeakerAvatarSeed?: string | null;
   latestSpeakerAvatarIndex?: number | null;
-  // Every OTHER real member's profile photo, for the conversation list's room
-  // avatar: a 2-person room shows the counterpart's real photo instead of the
-  // generated per-speaker-turn avatar; a 3+ person room stacks up to 4 of
-  // these KakaoTalk-style. Empty for solo rooms (nothing to show yet — keep
-  // the generated avatar) and for anonymous callers.
+  // Every OTHER real or pending member's profile photo, for the conversation
+  // list's room avatar: a 2-person room shows the counterpart's real photo
+  // instead of the generated per-speaker-turn avatar; a 3+ person room stacks
+  // up to 4 of these KakaoTalk-style. Empty for solo rooms and anonymous
+  // callers.
   otherMembers: ConversationChannelOtherMember[];
   createdAt: string;
   updatedAt: string;
@@ -213,19 +213,79 @@ type ChannelMemberProfile = {
   lastReadAt: Date | null;
 };
 
+type PendingInviteeProfile = {
+  userId: string;
+  name: string | null;
+  handle: string | null;
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
+  defaultConversationLanguages: string[];
+};
+
+function resolveDefaultConversationLanguages(
+  rawValue: unknown,
+  locale?: string | null,
+): string[] {
+  const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
+  const normalizedLanguages = sanitizeSttLanguageSelection(
+    rawValue,
+    fallbackLanguages,
+  );
+  // Keep this defensive fallback for older test doubles and any future
+  // sanitizer implementation that declines to apply its fallback argument.
+  return normalizedLanguages.length > 0 ? normalizedLanguages : fallbackLanguages;
+}
+
+async function listUserDefaultConversationLanguagesById(
+  userIds: string[],
+): Promise<Map<string, string[]>> {
+  const uniqueUserIds = [...new Set(userIds.filter((userId) => userId.trim()))];
+  if (uniqueUserIds.length === 0) return new Map();
+
+  const rows = await prisma.user.findMany({
+    where: { id: { in: uniqueUserIds } },
+    select: { id: true, defaultConversationLanguages: true },
+  });
+
+  return new Map(rows.map((row) => [
+    row.id,
+    resolveDefaultConversationLanguages(row.defaultConversationLanguages),
+  ]));
+}
+
 // A pending invitee has no membership row to resolve a name/handle from (see
 // resolveEffectiveMemberCount), so the 2-person title override needs a
-// separate, lightweight lookup just for display purposes — batched across
-// every record being serialized, same pattern as listChannelMembersByChannelId.
+// separate lookup just for display/language attribution — batched across every
+// record being serialized, same pattern as listChannelMembersByChannelId.
 async function listPendingInviteeProfilesByUserIds(
   userIds: string[],
-): Promise<Map<string, { userId: string; name: string | null; handle: string | null }>> {
+): Promise<Map<string, PendingInviteeProfile>> {
   if (userIds.length === 0) return new Map();
   const rows = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, name: true, handle: true },
+    select: {
+      id: true,
+      name: true,
+      handle: true,
+      image: true,
+      imageCropScale: true,
+      imageCropX: true,
+      imageCropY: true,
+      defaultConversationLanguages: true,
+    },
   });
-  return new Map(rows.map((row) => [row.id, { userId: row.id, name: row.name, handle: row.handle }]));
+  return new Map(rows.map((row) => [row.id, {
+    userId: row.id,
+    name: row.name,
+    handle: row.handle,
+    image: row.image,
+    imageCropScale: row.imageCropScale,
+    imageCropX: row.imageCropX,
+    imageCropY: row.imageCropY,
+    defaultConversationLanguages: resolveDefaultConversationLanguages(row.defaultConversationLanguages),
+  }]));
 }
 
 async function listChannelMembersByChannelId(
@@ -254,6 +314,7 @@ async function listChannelMembersByChannelId(
           imageCropScale: true,
           imageCropX: true,
           imageCropY: true,
+          defaultConversationLanguages: true,
         },
       },
     },
@@ -262,6 +323,10 @@ async function listChannelMembersByChannelId(
   const membersByChannelId = new Map<string, ChannelMemberProfile[]>();
   for (const row of rows) {
     const members = membersByChannelId.get(row.channelId) ?? [];
+    const persistedSelectedLanguages = sanitizeSttLanguageSelection(row.selectedLanguages);
+    const selectedLanguages = persistedSelectedLanguages.length > 0
+      ? persistedSelectedLanguages
+      : resolveDefaultConversationLanguages(row.user.defaultConversationLanguages);
     members.push({
       userId: row.userId,
       name: row.user.name,
@@ -271,7 +336,12 @@ async function listChannelMembersByChannelId(
       imageCropX: row.user.imageCropX,
       imageCropY: row.user.imageCropY,
       displayLanguage: row.displayLanguage,
-      selectedLanguages: row.selectedLanguages,
+      // Existing shared-room rows can predate per-member language
+      // initialization. Treat an empty row as "use this user's persisted
+      // conversation defaults" so the first shared-room response contains
+      // both members' real preferences instead of making the counterpart
+      // disappear from the union.
+      selectedLanguages,
       status: row.status,
       pausedAt: row.pausedAt,
       lastReadAt: row.lastReadAt,
@@ -369,15 +439,17 @@ function resolveViewerFacingDisplayLanguage(
 // Once a room has 2+ real or pending members, one person's language
 // selection shouldn't hide another member's still-wanted language from the
 // shared picker — the picker shows the UNION of everyone's own
-// selectedLanguages, each row attributed to whoever picked it. A member who
-// hasn't opened the language screen yet contributes nothing (see the loop
-// below) rather than falling back to the channel-wide list. Solo rooms (0-1
-// total members) keep the channel-wide list as-is, no attribution.
+// selectedLanguages, each row attributed to whoever picked it. An empty
+// membership row is resolved to that user's persisted conversation defaults
+// by listChannelMembersByChannelId, and pending invitees are resolved from
+// their user profile below. Solo rooms (0-1 total members) keep the
+// channel-wide list as-is, with no attribution.
 function resolveRoomLanguageUnion(
   channelWideSelectedLanguages: string[],
   members: ChannelMemberProfile[] | undefined,
   pendingInviteeUserIds: string[] = [],
   viewerUserId?: string | null,
+  pendingInviteeProfiles: PendingInviteeProfile[] = [],
 ): { languages: string[]; attribution: Record<string, string[]> } {
   if (!members || resolveEffectiveMemberCount(members, pendingInviteeUserIds) < 2) {
     return { languages: [...channelWideSelectedLanguages], attribution: {} };
@@ -385,22 +457,29 @@ function resolveRoomLanguageUnion(
 
   const attribution: Record<string, string[]> = {};
   const languageOrder: string[] = [];
-  for (const member of members) {
-    // A member who has never opened the language picker contributes nothing —
-    // NOT the channel-wide value. Falling back to channel-wide here would
-    // make any language in that stale field stick forever: every other
-    // member's removal would still find this untouched member "still wanting"
-    // it, since they'd be attributed to a language they never actually
-    // picked. The channel's own value is only the room's *starting* value,
-    // mirrored onto the owner's row at creation (see
-    // createConversationChannelForUser) — it is not an ongoing fallback.
-    for (const language of member.selectedLanguages) {
+  const addMemberLanguages = (userId: string, selectedLanguages: readonly string[]) => {
+    for (const language of selectedLanguages) {
       if (!attribution[language]) {
         attribution[language] = [];
         languageOrder.push(language);
       }
-      attribution[language].push(member.userId);
+      if (!attribution[language].includes(userId)) {
+        attribution[language].push(userId);
+      }
     }
+  };
+
+  for (const member of members) {
+    addMemberLanguages(member.userId, member.selectedLanguages);
+  }
+
+  const pendingInviteeProfileById = new Map(
+    pendingInviteeProfiles.map((profile) => [profile.userId, profile]),
+  );
+  for (const userId of pendingInviteeUserIds) {
+    const profile = pendingInviteeProfileById.get(userId);
+    if (!profile) continue;
+    addMemberLanguages(userId, profile.defaultConversationLanguages);
   }
 
   // Order the display list around the viewer's own picks, in their own pick
@@ -480,9 +559,14 @@ function resolveOtherMemberAvatars(
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
   blockedCounterpartUserId: string | null | undefined = null,
+  pendingInviteeProfiles: PendingInviteeProfile[] = [],
 ): ConversationChannelOtherMember[] {
-  if (!viewerUserId || !members) return [];
-  return members
+  if (!viewerUserId) return [];
+  const realMembers = members ?? [];
+  return [
+    ...realMembers,
+    ...pendingInviteeProfiles,
+  ]
     .filter((member) => member.userId !== viewerUserId)
     .map((member) => {
       const isBlockedCounterpart = member.userId === blockedCounterpartUserId;
@@ -838,7 +922,7 @@ async function serializeConversationChannelWithPreview(
   const latestMessage = summaryBySessionKey.get(record.sessionKey);
   const pendingInviteeProfiles = record.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
-    .filter((profile): profile is { userId: string; name: string | null; handle: string | null } => Boolean(profile));
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
   const blockedCounterpartByChannelId = viewerUserId
     ? await resolveBlockedCounterpartUserIdByChannelId(viewerUserId, membersByChannelId)
     : new Map<string, string>();
@@ -856,13 +940,20 @@ async function serializeConversationChannelWithPreview(
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
-    resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
+    resolveRoomLanguageUnion(
+      record.selectedLanguages,
+      membersByChannelId.get(record.id),
+      record.pendingInviteeUserIds,
+      viewerUserId,
+      pendingInviteeProfiles,
+    ),
     resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     blockedCounterpartByChannelId.has(record.id),
     resolveOtherMemberAvatars(
       membersByChannelId.get(record.id),
       viewerUserId,
       blockedCounterpartByChannelId.get(record.id),
+      pendingInviteeProfiles,
     ),
   );
 }
@@ -897,7 +988,7 @@ async function listConversationChannelsForMember(
   ]);
   const resolvePendingInviteeProfiles = (record: ConversationChannelRecord) => record.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
-    .filter((profile): profile is { userId: string; name: string | null; handle: string | null } => Boolean(profile));
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
   const blockedCounterpartByChannelId = viewerUserId
     ? await resolveBlockedCounterpartUserIdByChannelId(viewerUserId, membersByChannelId)
     : new Map<string, string>();
@@ -917,13 +1008,20 @@ async function listConversationChannelsForMember(
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
-      resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
+      resolveRoomLanguageUnion(
+        record.selectedLanguages,
+        membersByChannelId.get(record.id),
+        record.pendingInviteeUserIds,
+        viewerUserId,
+        resolvePendingInviteeProfiles(record),
+      ),
       resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       blockedCounterpartByChannelId.has(record.id),
       resolveOtherMemberAvatars(
         membersByChannelId.get(record.id),
         viewerUserId,
         blockedCounterpartByChannelId.get(record.id),
+        resolvePendingInviteeProfiles(record),
       ),
     ));
   }
@@ -952,13 +1050,20 @@ async function listConversationChannelsForMember(
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
-        resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id), record.pendingInviteeUserIds, viewerUserId),
+        resolveRoomLanguageUnion(
+          record.selectedLanguages,
+          membersByChannelId.get(record.id),
+          record.pendingInviteeUserIds,
+          viewerUserId,
+          resolvePendingInviteeProfiles(record),
+        ),
         resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         blockedCounterpartByChannelId.has(record.id),
         resolveOtherMemberAvatars(
           membersByChannelId.get(record.id),
           viewerUserId,
           blockedCounterpartByChannelId.get(record.id),
+          resolvePendingInviteeProfiles(record),
         ),
       );
     })
@@ -1014,6 +1119,22 @@ export async function createConversationChannelForUser(
   const normalizedSelectedLanguages = sanitizeSttLanguageSelection(options?.selectedLanguages);
   const normalizedSpeechLanguages = sanitizeSttLanguageSelection(options?.speechLanguages);
   const translationLanguagesLinked = options?.translationLanguagesLinked !== false;
+  const inviteeUserIds = [...new Set((options?.inviteeUserIds || []).filter((id) => id && id !== userId))];
+  if (inviteeUserIds.length > MAX_CONVERSATION_MEMBERS - 1) {
+    throw new Error("too_many_invitees");
+  }
+  await assertNoBlockAmong(userId, inviteeUserIds);
+
+  // A new shared room starts from each participant's persisted conversation
+  // defaults. The owner is written immediately; pending invitees are read
+  // from their user profile until first-message materialization creates their
+  // membership row.
+  const defaultLanguagesByUserId = await listUserDefaultConversationLanguagesById([
+    userId,
+    ...inviteeUserIds,
+  ]);
+  const ownerDefaultConversationLanguages = defaultLanguagesByUserId.get(userId)
+    ?? deriveDefaultSttLanguagesForLocale(normalizedLocale);
   // A caller that omits both (e.g. "message this person," which has no
   // language-selection step of its own) still needs a REAL persisted
   // default, not just an empty array: an empty selectedLanguages means empty
@@ -1026,15 +1147,10 @@ export async function createConversationChannelForUser(
     ? normalizedSpeechLanguages
     : normalizedSelectedLanguages.length > 0
       ? [...normalizedSelectedLanguages]
-      : deriveDefaultSttLanguagesForLocale(normalizedLocale);
+      : [...ownerDefaultConversationLanguages];
   const resolvedSelectedLanguages = normalizedSelectedLanguages.length > 0
     ? normalizedSelectedLanguages
     : [...resolvedSpeechLanguages];
-  const inviteeUserIds = [...new Set((options?.inviteeUserIds || []).filter((id) => id && id !== userId))];
-  if (inviteeUserIds.length > MAX_CONVERSATION_MEMBERS - 1) {
-    throw new Error("too_many_invitees");
-  }
-  await assertNoBlockAmong(userId, inviteeUserIds);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -1282,9 +1398,13 @@ export async function materializePendingConversationInvitees(sessionKey: string)
   // id cannot make the first message's membership materialization fail.
   const existingInvitees = await prisma.user.findMany({
     where: { id: { in: channel.pendingInviteeUserIds } },
-    select: { id: true },
+    select: { id: true, defaultConversationLanguages: true },
   });
   const existingInviteeUserIds = new Set(existingInvitees.map((user) => user.id));
+  const defaultLanguagesByUserId = new Map(existingInvitees.map((user) => [
+    user.id,
+    resolveDefaultConversationLanguages(user.defaultConversationLanguages),
+  ]));
   const validPendingInviteeUserIds = channel.pendingInviteeUserIds.filter(
     (inviteeUserId) => existingInviteeUserIds.has(inviteeUserId),
   );
@@ -1321,6 +1441,8 @@ export async function materializePendingConversationInvitees(sessionKey: string)
               role: "member",
               status: channel.status,
               pausedAt: channel.pausedAt,
+              selectedLanguages: defaultLanguagesByUserId.get(inviteeUserId)
+                ?? deriveDefaultSttLanguagesForLocale(undefined),
             })),
             skipDuplicates: true,
           }),
@@ -1634,11 +1756,16 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
     return null;
   }
 
+  const pendingInviteeUserIds = existing.pendingInviteeUserIds ?? [];
   const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
   const members = membersByChannelId.get(args.conversationId);
+  const pendingInviteeProfileById = await listPendingInviteeProfilesByUserIds(pendingInviteeUserIds);
+  const pendingInviteeProfiles = pendingInviteeUserIds
+    .map((userId) => pendingInviteeProfileById.get(userId))
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
   const isMultiMember = resolveEffectiveMemberCount(
     members,
-    existing.pendingInviteeUserIds,
+    pendingInviteeUserIds,
   ) >= 2;
 
   if (normalizedDefaultDisplayLanguage) {
@@ -1646,8 +1773,9 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
       ? resolveRoomLanguageUnion(
           existing.selectedLanguages,
           members,
-          existing.pendingInviteeUserIds,
+          pendingInviteeUserIds,
           args.userId,
+          pendingInviteeProfiles,
         ).languages
       : sanitizeSttLanguageSelection(
           existing.selectedLanguages,
@@ -1788,22 +1916,29 @@ export async function listConversationMembersForUser(args: {
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true },
+    select: { id: true, pendingInviteeUserIds: true },
   });
 
   if (!conversationRecord) {
     return null;
   }
 
+  const pendingInviteeUserIds = conversationRecord.pendingInviteeUserIds ?? [];
   const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
   const members = membersByChannelId.get(conversationRecord.id) ?? [];
+  const pendingInviteeProfileById = await listPendingInviteeProfilesByUserIds(
+    pendingInviteeUserIds,
+  );
+  const pendingInviteeProfiles = pendingInviteeUserIds
+    .map((userId) => pendingInviteeProfileById.get(userId))
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.userId,
     membersByChannelId,
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
 
-  return members.map((member) => {
+  const realMemberSummaries = members.map((member) => {
     const blocked = member.userId === blockedCounterpartUserId;
     return {
       userId: member.userId,
@@ -1820,6 +1955,20 @@ export async function listConversationMembersForUser(args: {
       blocked,
     };
   });
+
+  const pendingMemberSummaries = pendingInviteeProfiles.map((profile) => ({
+    userId: profile.userId,
+    name: profile.name,
+    handle: profile.handle,
+    image: profile.image,
+    imageCropScale: profile.imageCropScale,
+    imageCropX: profile.imageCropX,
+    imageCropY: profile.imageCropY,
+    selectedLanguages: profile.defaultConversationLanguages,
+    blocked: false,
+  }));
+
+  return [...realMemberSummaries, ...pendingMemberSummaries];
 }
 
 export async function getConversationHydrationStateForUser(args: {
@@ -1920,7 +2069,7 @@ export async function getConversationHydrationStateForUser(args: {
   const members = membersByChannelId.get(conversationRecord.id);
   const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
-    .filter((profile): profile is { userId: string; name: string | null; handle: string | null } => Boolean(profile));
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
   // A real photo only makes sense once there's more than one real account in
   // the room — a solo session's diarized "speaker" turns aren't a second
   // real identity, so they keep the generated animal avatar unchanged. Real
@@ -2029,6 +2178,7 @@ export async function getConversationHydrationStateForUser(args: {
         membersByChannelId.get(conversationRecord.id),
         conversationRecord.pendingInviteeUserIds,
         args.userId,
+        pendingInviteeProfiles,
       ),
       resolveViewerOwnSelectedLanguages(
         conversationRecord.selectedLanguages,
@@ -2041,6 +2191,7 @@ export async function getConversationHydrationStateForUser(args: {
         membersByChannelId.get(conversationRecord.id),
         args.userId,
         blockedCounterpartUserId,
+        pendingInviteeProfiles,
       ),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),

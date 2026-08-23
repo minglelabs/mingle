@@ -1,5 +1,18 @@
 # UI/UX Codex Thread History
 
+## 2026-08-23 - Restore per-member language ownership in shared rooms
+
+- Surface: Conversation-room language picker, language attribution avatars, room-list language preview, and translation targets.
+- Issue: Shared rooms were intended to show the union of each member's own language choices, with the viewer's choices in the key color and languages chosen only by another member in blue. New or deferred invitee membership rows could be empty, and legacy empty rows were treated as contributing nothing, so the counterpart's choices and attribution disappeared. The client also reused the per-user five-language sanitizer for the room union.
+- User impact: A member could appear to be using the viewer's language selection, the counterpart's language could vanish from the picker, and languages beyond the first five could be omitted from the visible/translated room state.
+- Resolution:
+  - Initialize a new room from each participant's `User.defaultConversationLanguages`. The creator's defaults are persisted on their membership row; pending invitees contribute their profile defaults until first-message materialization, which now writes those defaults to their membership rows.
+  - Treat an existing empty membership selection as that user's persisted conversation defaults at read time, preserving the intended per-member ownership without a destructive data rewrite.
+  - Return pending invitee profile images and language selections through the room member data used by language attribution avatars.
+  - Keep the five-language limit per member, but normalize the room union without that limit so every distinct member-selected language remains a translation target. The compact room-list flag preview may show the first five while the room picker and translation pipeline retain the full union.
+- Data contract: No Prisma schema or migration change. Existing `User.defaultConversationLanguages`, `AppConversationChannelMember.selectedLanguages`, and pending invitee fields are reused.
+- Testing notes: Added coverage for persisted defaults on new shared rooms, empty legacy member rows, pending invitee materialization, and the distinction between the per-user five-language limit and an uncapped room union. Physical-device verification should use two accounts with different defaults, change each side independently, confirm amber/blue attribution and avatars, then send a message and verify every union language receives translation.
+
 ## 2026-08-23 - Separate unread conversation messages from the notification panel
 
 - Surface: Conversation list rows, the conversations bottom-tab icon, the existing in-app notification panel, and native message delivery.

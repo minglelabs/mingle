@@ -28,10 +28,12 @@ import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
+  MAX_STT_LANGUAGE_SELECTION,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
+  sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
 import {
   DEFAULT_INPUT_MODE,
@@ -1428,11 +1430,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onOpenProfile?.(userId)
   }, [isBlockedCounterpart, viewerUserId, onOpenProfile])
   const conversationSelectedLanguages = useMemo(
-    () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
+    () => sanitizeSttLanguageUnion(initialSelectedLanguages, fallbackLanguages),
     [fallbackLanguages, initialSelectedLanguages],
   )
   const conversationSpeechLanguages = useMemo(
-    () => sanitizeSttLanguageSelection(initialSpeechLanguages, conversationSelectedLanguages),
+    () => sanitizeSttLanguageSelection(
+      initialSpeechLanguages,
+      conversationSelectedLanguages.slice(0, MAX_STT_LANGUAGE_SELECTION),
+    ),
     [conversationSelectedLanguages, initialSpeechLanguages],
   )
   // Falls back to the union only when the server hasn't sent an own-list
@@ -1566,7 +1571,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [selectedLanguages],
   )
   const normalizedDisplayLanguageOptions = useMemo(
-    () => sanitizeSttLanguageSelection([
+    () => sanitizeSttLanguageUnion([
       ...effectiveTranslationLanguages,
       ...conversationSelectedLanguages,
     ]),

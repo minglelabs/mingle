@@ -74,6 +74,7 @@ import {
   deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
   sanitizeSttLanguageSelection,
+  sanitizeSttLanguageUnion,
 } from "@/lib/stt-languages";
 import {
   NATIVE_UI_EVENT,
@@ -966,7 +967,7 @@ function mapConversationSummaryToItem(
   const messageCountLabel = formatLivePhoneDemoMessageCount(
     resolveConversationDisplayMessageCount(conversation, localStats.messageCount),
   );
-  const selectedLanguages = sanitizeSttLanguageSelection(
+  const selectedLanguages = sanitizeSttLanguageUnion(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
   );
@@ -975,7 +976,10 @@ function mapConversationSummaryToItem(
     selectedLanguages,
   );
   const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
-  const languageCodes = selectedLanguages;
+  // A room union may contain more than one member's five-language personal
+  // limit. Keep the list-row preview compact; the room picker and translation
+  // pipeline still receive the complete union.
+  const languageCodes = selectedLanguages.slice(0, 5);
   const avatar = getSpeakerAvatar(
     latestSpeaker || conversation.sessionKey,
     latestSpeakerAvatarSeed || conversation.id,
@@ -2740,7 +2744,7 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+    const previousSelectedLanguages = sanitizeSttLanguageUnion(
       previousConversation.selectedLanguages,
       currentDefaultLanguages,
     );
