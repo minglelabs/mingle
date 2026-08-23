@@ -16,7 +16,7 @@ export type LivePhoneDemoBubbleDisplayCopy = {
 const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
   ko: {
     displayModeLabel: '말풍선 표시 방식',
-    expandedModeLabel: '발화별로 표시',
+    expandedModeLabel: '번역문 펼쳐보기',
     collapsedModeLabel: '하나의 말풍선으로 표시',
     expandBubbleLabel: '발화별 말풍선 펼치기',
     collapseBubbleLabel: '발화별 말풍선 접기',
