@@ -1813,6 +1813,10 @@ export default function ConversationList({
       : deriveDefaultConversationLanguages(normalizedInitialPrimaryLanguage, locale)
   ));
   const defaultConversationLanguagesSyncVersionRef = useRef(0);
+  const defaultSelectedLanguagesRef = useRef<string[]>(defaultSelectedLanguages);
+  useEffect(() => {
+    defaultSelectedLanguagesRef.current = defaultSelectedLanguages;
+  }, [defaultSelectedLanguages]);
   const [preferredDisplayLanguages, setPreferredDisplayLanguages] = useState<string[]>(
     normalizedInitialPrimaryLanguages,
   );
@@ -1877,6 +1881,7 @@ export default function ConversationList({
       );
       if (nextLanguages.length > 0) {
         defaultConversationLanguagesSyncVersionRef.current += 1;
+        defaultSelectedLanguagesRef.current = nextLanguages;
         setDefaultSelectedLanguages(nextLanguages);
       }
     };
@@ -2626,13 +2631,62 @@ export default function ConversationList({
       });
   }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
+  const persistUserDefaultConversationLanguages = useCallback((
+    conversationId: string,
+    nextLanguages: string[],
+    previousLanguages: string[],
+    expectedVersion: number,
+  ) => {
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+
+    void fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultConversationLanguages: nextLanguages }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Default conversation language update failed (${response.status})`);
+        }
+        return await response.json() as {
+          defaultConversationLanguages?: unknown;
+        };
+      })
+      .then((profile) => {
+        if (defaultConversationLanguagesSyncVersionRef.current !== expectedVersion) return;
+
+        const savedLanguages = sanitizeSttLanguageSelection(
+          profile.defaultConversationLanguages,
+          nextLanguages,
+        );
+        defaultSelectedLanguagesRef.current = savedLanguages;
+        setDefaultSelectedLanguages(savedLanguages);
+      })
+      .catch((error: unknown) => {
+        const stale = defaultConversationLanguagesSyncVersionRef.current !== expectedVersion;
+        logConversationMutationFailure({
+          label: "selected-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildClientApiPath("/profile"),
+          error,
+          stale,
+        });
+        if (stale) return;
+
+        defaultSelectedLanguagesRef.current = [...previousLanguages];
+        setDefaultSelectedLanguages(previousLanguages);
+      });
+  }, [authenticatedUserId, sessionStatus]);
+
   const handleConversationSelectedLanguagesChange = useCallback((
     conversationId: string,
     nextSelectedLanguages: string[],
   ) => {
+    const currentDefaultLanguages = defaultSelectedLanguagesRef.current;
     const normalizedSelectedLanguages = sanitizeSttLanguageSelection(
       nextSelectedLanguages,
-      defaultSelectedLanguages,
+      currentDefaultLanguages,
     );
     if (normalizedSelectedLanguages.length === 0) {
       return;
@@ -2645,7 +2699,7 @@ export default function ConversationList({
 
     const previousSelectedLanguages = sanitizeSttLanguageSelection(
       previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
+      currentDefaultLanguages,
     );
     const previousViewerSelectedLanguages = resolveLanguageSelectorOwnSelectedLanguages(
       previousSelectedLanguages,
@@ -2653,6 +2707,11 @@ export default function ConversationList({
     );
     const previousTranslationLanguagesLinked =
       previousConversation.translationLanguagesLinked !== false;
+    const previousDefaultLanguages = [...currentDefaultLanguages];
+    const nextDefaultLanguagesVersion = defaultConversationLanguagesSyncVersionRef.current + 1;
+    defaultConversationLanguagesSyncVersionRef.current = nextDefaultLanguagesVersion;
+    defaultSelectedLanguagesRef.current = [...normalizedSelectedLanguages];
+    setDefaultSelectedLanguages(normalizedSelectedLanguages);
 
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
@@ -2686,8 +2745,20 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
-        setConversations((current) => upsertConversation(current, nextConversation));
+        if (languageSettingsSyncVersionRef.current.get(conversationId) === nextVersion) {
+          setConversations((current) => upsertConversation(current, nextConversation));
+        }
+        // Speech-language and translation-link mutations share the room
+        // version guard, but they do not invalidate this successful
+        // selected-language change. The user default has its own version guard.
+        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
+          persistUserDefaultConversationLanguages(
+            conversationId,
+            normalizedSelectedLanguages,
+            previousDefaultLanguages,
+            nextDefaultLanguagesVersion,
+          );
+        }
       })
       .catch((error: unknown) => {
         const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
@@ -2699,6 +2770,10 @@ export default function ConversationList({
           error,
           stale,
         });
+        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
+          defaultSelectedLanguagesRef.current = [...previousDefaultLanguages];
+          setDefaultSelectedLanguages(previousDefaultLanguages);
+        }
         if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
@@ -2713,7 +2788,7 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [defaultSelectedLanguages]);
+  }, [persistUserDefaultConversationLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,

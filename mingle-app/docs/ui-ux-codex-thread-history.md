@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-23 Conversation language defaults follow room selections
+
+### `2026-08-23-conversation-language-default-sync` | UI/UX issue found
+
+1. **Changing target languages inside a conversation did not update the user's default conversation languages**
+   Problem: The room language selector changed only the current conversation, while the same preference remained available from My Page as a separate user-level setting. A later conversation could therefore start with an older language list.
+   Fix: The selector's own language list now updates the local default immediately and, after the conversation PATCH succeeds, persists the same ordered list to the authenticated user's existing `default_conversation_languages` field through the profile API. Separate version guards keep rapid changes and unrelated language-setting responses from overwriting the newest choice; failed room/profile writes roll back the optimistic default when it is still current.
+   Data change: None. The existing user field, profile PATCH endpoint, and new-conversation payload already support the preference.
+   Verification: Focused conversation-list, conversation PATCH, and profile API tests passed; TypeScript validation, targeted ESLint, and `git diff --check` passed. Physical-device verification remains pending.
+
 ## 2026-08-23 Message-bubble display mode
 
 ### `2026-08-23-message-bubble-display-mode` | UI/UX issue found
