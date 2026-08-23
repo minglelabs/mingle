@@ -23,6 +23,7 @@ describe('ChatBubble', () => {
           createdAtMs: new Date('2026-03-11T12:58:00+09:00').getTime(),
         },
         uiLocale: 'en',
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -78,6 +79,35 @@ describe('ChatBubble', () => {
     expect(html).toContain('class="align-middle"')
   })
 
+  it('renders the expanded original and translation rows by default with per-row copy buttons', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-expanded-default',
+          originalText: 'Original message',
+          originalLang: 'en',
+          targetLanguages: ['ko', 'ja'],
+          translations: {
+            ko: '번역 메시지',
+            ja: '翻訳メッセージ',
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect((html.match(/data-expanded-chat-bubble-row="true"/g) || []).length).toBe(3)
+    expect((html.match(/data-message-copy-button="true"/g) || []).length).toBe(4)
+    expect(html).toContain('data-chat-bubble-toggle="true"')
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('aria-label="Collapse message bubbles"')
+    expect(html).toContain('rotate-90')
+    expect(html).not.toContain('data-chat-bubble-language-badges')
+    expect(html).toContain('Original message')
+    expect(html).toContain('번역 메시지')
+    expect(html).toContain('翻訳メッセージ')
+  })
+
   it('matches interim translation text to the draft input gray without a cursor', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
@@ -96,6 +126,7 @@ describe('ChatBubble', () => {
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
         languageOrder: ['ko'],
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -133,6 +164,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'ko',
         languageOrder: ['ja', 'en', 'ko'],
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -166,6 +198,7 @@ describe('ChatBubble', () => {
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
         languageOrder: ['ko'],
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -191,6 +224,7 @@ describe('ChatBubble', () => {
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
         languageOrder: ['ko'],
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -216,6 +250,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'en',
         isDraft: true,
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -261,6 +296,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 
@@ -284,6 +320,7 @@ describe('ChatBubble', () => {
           },
         },
         uiLocale: 'en',
+        bubbleDisplayMode: 'collapsed',
       }),
     )
 

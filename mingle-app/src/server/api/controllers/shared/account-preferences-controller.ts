@@ -20,7 +20,9 @@ const DEFAULT_TEXT_SIZE_LEVEL = 2;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const DEFAULT_BUBBLE_DISPLAY_MODE = "expanded";
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
+const BUBBLE_DISPLAY_MODES = new Set(["expanded", "collapsed"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
@@ -28,6 +30,7 @@ type PreferencesBody = {
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
+  bubbleDisplayMode?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -43,6 +46,7 @@ type UserPreferencesRecord = {
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
+  demoBubbleDisplayMode: string | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -78,6 +82,14 @@ function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
   const normalized = value.trim().toLowerCase();
   return AD_BANNER_POSITIONS.has(normalized)
     ? (normalized as "top" | "bottom")
+    : null;
+}
+
+function normalizeBubbleDisplayMode(value: unknown): "expanded" | "collapsed" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return BUBBLE_DISPLAY_MODES.has(normalized)
+    ? (normalized as "expanded" | "collapsed")
     : null;
 }
 
@@ -216,6 +228,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoSilenceFinalizeMs: true,
     translationModel: true,
     adBannerPosition: true,
+    demoBubbleDisplayMode: true,
   } as const;
 
   if (identity.id) {
@@ -314,6 +327,8 @@ export async function GET(request: Request) {
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
+    bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
+      ?? DEFAULT_BUBBLE_DISPLAY_MODE,
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -358,11 +373,13 @@ export async function PATCH(request: Request) {
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
+    && nextBubbleDisplayMode === null
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -372,6 +389,7 @@ export async function PATCH(request: Request) {
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
   };
 
   if (identity.id) {

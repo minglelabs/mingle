@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-23 Message-bubble display mode
+
+### `2026-08-23-message-bubble-display-mode` | UI/UX issue found
+
+1. **The 2.0.0 conversation bubble combined the original utterance and translations, while some users need the 1.1.4-style separate rows**
+   Problem: A single combined bubble is compact, but it makes the original and each translation harder to compare and gives users no per-utterance copy action. Rapid taps near the language controls also benefit from a stable, explicit layout.
+   Fix: Added a persistent user-level bubble display preference with two modes: separate original/translation bubbles and the combined bubble. The preference is exposed below the translation-model selector in the conversation hamburger menu and defaults to separate bubbles. Each message now has a side control stack with copy above an animated chevron; the chevron points down when expanded and right when collapsed. Separate rows also expose their own copy buttons.
+   Data change: Added nullable `app_users.demo_bubble_display_mode` with an `expanded` default and account-preferences GET/PATCH support. Existing users and older clients fall back safely to the expanded mode.
+   Verification: Focused ChatBubble, account-preferences, and account-preferences route tests passed; targeted ESLint and local Prisma migration deployment passed. Physical-device interaction verification remains pending.
+
 ## 2026-08-22 conversation creation banner and history stack
 
 ### `2026-08-22-conversation-creation-banner-history` | UI/UX issue found

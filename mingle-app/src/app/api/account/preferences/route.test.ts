@@ -100,6 +100,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: "expanded",
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
@@ -128,6 +129,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: "expanded",
     });
     expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
       expect.any(NextRequest),
@@ -175,6 +177,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
+      demoBubbleDisplayMode: "collapsed",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -189,6 +192,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: "collapsed",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -201,6 +205,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        demoBubbleDisplayMode: true,
       },
     });
   });
@@ -247,6 +252,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: "expanded",
     });
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -274,6 +280,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: null,
       demoSpeakerEnabled: null,
       demoEchoAllowed: null,
+      demoBubbleDisplayMode: null,
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -288,6 +295,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: "expanded",
     });
   });
 
@@ -452,6 +460,33 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists the bubble display mode through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        bubbleDisplayMode: "collapsed",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoBubbleDisplayMode: "collapsed",
+      },
+    });
+  });
+
   it("returns the stored DB-backed preferences for tracking users without a session", async () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue({
@@ -462,6 +497,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
+      demoBubbleDisplayMode: "collapsed",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
@@ -480,6 +516,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: "collapsed",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
@@ -492,6 +529,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        demoBubbleDisplayMode: true,
       },
     });
   });
@@ -536,6 +574,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: "voice",
       demoSpeakerEnabled: false,
       demoEchoAllowed: true,
+      demoBubbleDisplayMode: null,
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
@@ -554,6 +593,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: "expanded",
     });
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
@@ -574,6 +614,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        demoBubbleDisplayMode: true,
       },
     });
   });

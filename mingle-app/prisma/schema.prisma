@@ -44,6 +44,7 @@ model User {
   demoInputMode         String?   @map("demo_input_mode")
   demoSpeakerEnabled    Boolean?  @default(false) @map("demo_speaker_enabled")
   demoEchoAllowed       Boolean?  @default(true) @map("demo_echo_allowed")
+  demoBubbleDisplayMode String?   @default("expanded") @map("demo_bubble_display_mode")
   totalUsageSec         Int       @default(0) @map("total_usage_sec")
   handle                String    @unique(map: "app_users_handle_key")
   bio                   String?   @db.Text

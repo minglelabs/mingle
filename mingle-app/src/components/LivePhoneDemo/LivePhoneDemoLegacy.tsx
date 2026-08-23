@@ -61,6 +61,10 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_BUBBLE_DISPLAY_MODE,
+  type LivePhoneDemoBubbleDisplayMode,
+} from './live-phone-demo.bubble-display'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -822,6 +826,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
+  const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(DEFAULT_BUBBLE_DISPLAY_MODE)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
@@ -914,6 +919,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
+    bubbleDisplayMode: DEFAULT_BUBBLE_DISPLAY_MODE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -923,7 +929,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    bubbleDisplayMode,
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1312,6 +1319,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
+        setBubbleDisplayMode(hydratedPreferences.bubbleDisplayMode)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
           setIsComposerOpen(hydratedPreferences.inputMode === 'text')
@@ -4244,6 +4252,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPlayTranslation={handlePlayTranslationBubbleTts}
                       bubbleTextClassName={chatBubbleTextClassName}
                       speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
+                      bubbleDisplayMode={bubbleDisplayMode}
                     />
                   </div>
                 ))}

@@ -19,6 +19,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'expanded',
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
@@ -27,6 +28,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'expanded',
     })
   })
 
@@ -47,6 +49,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: 'expanded',
     })
   })
 
@@ -64,6 +67,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: 'expanded',
     })
   })
 })
@@ -82,6 +86,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        bubbleDisplayMode: 'expanded',
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -96,6 +101,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -120,6 +126,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        bubbleDisplayMode: 'expanded',
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
@@ -129,6 +136,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        bubbleDisplayMode: 'collapsed',
       }),
     })).toBe(true)
   })
@@ -146,6 +154,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        bubbleDisplayMode: 'collapsed',
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -209,6 +218,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
     })).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
@@ -217,6 +227,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
     })
   })
 })

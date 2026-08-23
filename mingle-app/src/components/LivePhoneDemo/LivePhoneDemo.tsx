@@ -64,6 +64,11 @@ import {
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
 import {
+  DEFAULT_BUBBLE_DISPLAY_MODE,
+  type LivePhoneDemoBubbleDisplayMode,
+} from './live-phone-demo.bubble-display'
+import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
+import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
   type TranslationModelBadge,
@@ -1211,6 +1216,7 @@ type LivePhoneDemoChatMessageRowProps = {
   shouldAnimateEntrance: boolean
   viewerUserId?: string | null
   onOpenProfile?: (userId: string) => void
+  bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1243,6 +1249,7 @@ function LivePhoneDemoChatMessageRow({
   shouldAnimateEntrance,
   viewerUserId,
   onOpenProfile,
+  bubbleDisplayMode,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1265,6 +1272,7 @@ function LivePhoneDemoChatMessageRow({
         shouldAnimateEntrance={shouldAnimateEntrance}
         viewerUserId={viewerUserId}
         onOpenProfile={onOpenProfile}
+        bubbleDisplayMode={bubbleDisplayMode}
       />
     </div>
   )
@@ -1286,6 +1294,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
     if (prev.viewerUserId !== next.viewerUserId) return false
     if (prev.onOpenProfile !== next.onOpenProfile) return false
+    if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
 
     const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
     const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
@@ -1502,6 +1511,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
+  const bubbleDisplayCopy = useMemo(() => resolveLivePhoneDemoBubbleDisplayCopy(uiLocale), [uiLocale])
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
@@ -1514,9 +1524,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     : menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
+  const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
+  const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(DEFAULT_BUBBLE_DISPLAY_MODE)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
@@ -1626,6 +1638,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
+  const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(0)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
   const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
@@ -1658,6 +1672,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
+  const bubbleDisplayModeListboxId = useId()
   const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
   const nativeBannerPositionFromQuery = nativeConversationBannerPositionFromQuery ?? legacyNativeBannerPositionFromQuery
@@ -1681,6 +1696,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
+    bubbleDisplayMode: DEFAULT_BUBBLE_DISPLAY_MODE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -1690,7 +1706,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    bubbleDisplayMode,
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2209,6 +2226,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
+        setBubbleDisplayMode(hydratedPreferences.bubbleDisplayMode)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
           composerFocusRequestedRef.current = false
@@ -2425,6 +2443,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
+    setBubbleDisplayModeMenuOpen(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
     setMenuScreenDirection(nextDirection)
 
@@ -2617,6 +2636,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
+    if (bubbleDisplayModeMenuOpen) {
+      setBubbleDisplayModeMenuOpen(false)
+      return false
+    }
+
     // The menu depth is the source of truth for nested menu history. Consume
     // exactly one entry before allowing the room surface to close.
     if (menuHistoryDepthRef.current > 0) {
@@ -2632,7 +2656,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     return true
-  }, [closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   const requestCloseTopmostOverlay = useCallback(() => (
     !handleMenuSurfaceRequestClose()
@@ -2748,6 +2772,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride({
       ...latestAccountPreferencesRef.current,
       translationModel: nextTranslationModel,
+    })
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+
+  const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
+    setBubbleDisplayModeMenuOpen(false)
+    if (latestAccountPreferencesRef.current.bubbleDisplayMode === nextBubbleDisplayMode) return
+    setBubbleDisplayMode(nextBubbleDisplayMode)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      bubbleDisplayMode: nextBubbleDisplayMode,
     })
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
@@ -3074,6 +3109,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
+      if (bubbleDisplayModeMenuOpen) {
+        setBubbleDisplayModeMenuOpen(false)
+        try {
+          bubbleDisplayModeButtonRef.current?.focus({ preventScroll: true })
+        } catch {
+          bubbleDisplayModeButtonRef.current?.focus()
+        }
+        return
+      }
       requestMenuBackStep()
     }
 
@@ -3081,7 +3125,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -3121,6 +3165,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!bubbleDisplayModeMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      if (bubbleDisplayModeDropdownRef.current?.contains(event.target)) return
+      setBubbleDisplayModeMenuOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [bubbleDisplayModeMenuOpen])
 
   useEffect(() => {
     if (showMenuButton) return
@@ -3193,6 +3252,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
+    if (bubbleDisplayModeMenuOpen) {
+      setBubbleDisplayModeMenuOpen(false)
+      return true
+    }
+
     if (isComposerOpen) {
       setIsComposerOpen(false)
       composerTextareaRef.current?.blur()
@@ -3222,6 +3286,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     requestMenuBackStep,
     textSizeMenuOpen,
     translationModelMenuOpen,
+    bubbleDisplayModeMenuOpen,
   ])
 
   const handleDeleteAccountConfirm = useCallback(() => {
@@ -5659,6 +5724,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTranslationModelMenuOpen(false)
+                                      setBubbleDisplayModeMenuOpen(false)
                                       setTextSizeMenuOpen((open) => !open)
                                     }}
                                     aria-label={textSizeLabel}
@@ -5853,6 +5919,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
+                                      setBubbleDisplayModeMenuOpen(false)
                                       setTranslationModelMenuOpen((open) => !open)
                                     }}
                                     aria-label={translationModelLabel}
@@ -5928,6 +5995,111 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                                       <TranslationModelBadgeChip badge={option.badge} />
                                                     ) : null}
                                                   </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="block">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{bubbleDisplayCopy.displayModeLabel}</span>
+                                <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
+                                  <button
+                                    ref={bubbleDisplayModeButtonRef}
+                                    data-qa="live-demo-bubble-display-mode"
+                                    type="button"
+                                    onClick={() => {
+                                      setTextSizeMenuOpen(false)
+                                      setTranslationModelMenuOpen(false)
+                                      setBubbleDisplayModeMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={bubbleDisplayCopy.displayModeLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={bubbleDisplayModeMenuOpen}
+                                    aria-controls={bubbleDisplayModeListboxId}
+                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                  >
+                                    <div className="min-w-0 flex-1 text-center">
+                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                        {bubbleDisplayMode === 'expanded'
+                                          ? bubbleDisplayCopy.expandedModeLabel
+                                          : bubbleDisplayCopy.collapsedModeLabel}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center text-gray-500 transition-colors duration-200 group-hover:text-amber-600 ${
+                                        bubbleDisplayModeMenuOpen ? 'text-amber-700' : ''
+                                      }`}
+                                    >
+                                      <ChevronDown
+                                        size={16}
+                                        strokeWidth={2.3}
+                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          bubbleDisplayModeMenuOpen ? 'rotate-180' : 'rotate-0'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {bubbleDisplayModeMenuOpen && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      >
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div
+                                            id={bubbleDisplayModeListboxId}
+                                            role="listbox"
+                                            aria-label={bubbleDisplayCopy.displayModeLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {([
+                                              { value: 'expanded' as const, label: bubbleDisplayCopy.expandedModeLabel },
+                                              { value: 'collapsed' as const, label: bubbleDisplayCopy.collapsedModeLabel },
+                                            ]).map((option) => {
+                                              const isSelected = option.value === bubbleDisplayMode
+
+                                              return (
+                                                <button
+                                                  key={option.value}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleBubbleDisplayModeSelect(option.value)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                    isSelected
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                  }`}
+                                                >
+                                                  <span className="min-w-0 flex-1 truncate text-[0.94rem] font-semibold">
+                                                    {option.label}
+                                                  </span>
                                                   <span
                                                     className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
                                                       isSelected
@@ -6601,6 +6773,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
                   viewerUserId={viewerUserId}
                   onOpenProfile={handleOpenProfileForBubble}
+                  bubbleDisplayMode={bubbleDisplayMode}
                 />
               ))}
 

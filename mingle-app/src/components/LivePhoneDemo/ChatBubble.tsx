@@ -1,9 +1,9 @@
 'use client'
 
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { UserRound } from 'lucide-react'
+import { ChevronRight, UserRound } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import LanguageFlag from '@/components/language-flag'
@@ -16,6 +16,11 @@ import MessageCopyButton from './MessageCopyButton'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
+import {
+  DEFAULT_BUBBLE_DISPLAY_MODE,
+  type LivePhoneDemoBubbleDisplayMode,
+} from './live-phone-demo.bubble-display'
+import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const MESSAGE_BUBBLE_MAX_WIDTH = '90%'
@@ -107,6 +112,7 @@ interface ChatBubbleProps {
    * through `/users/{id}`, so both directions use the same callback.
    */
   onOpenProfile?: (userId: string) => void
+  bubbleDisplayMode?: LivePhoneDemoBubbleDisplayMode
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -401,6 +407,154 @@ function ChatLanguageBadge({
   )
 }
 
+function formatBubbleLanguageLabel(rawLanguage: string, isOriginal: boolean): string {
+  if (isOriginal) {
+    const originalLabel = getOriginalLanguageBadgeLabel(rawLanguage)
+    if (originalLabel === '❓') return originalLabel
+    return originalLabel.replace(/_/g, '-').toUpperCase()
+  }
+
+  return rawLanguage.trim().replace(/_/g, '-').toUpperCase()
+}
+
+interface ExpandedChatBubbleRowProps {
+  utterance: Utterance
+  lang: string
+  text: string
+  isOriginal: boolean
+  isDraft: boolean
+  translationState?: 'interim' | 'final'
+  bubbleTextClassName: string
+  copyActionCopy: ReturnType<typeof resolveLivePhoneDemoCopyActionCopy>
+  ttsActionCopy: ReturnType<typeof resolveLivePhoneDemoTtsActionCopy>
+  allText: string
+  isOwnMessage: boolean
+  speakingPlaybackKey?: string
+  onPlayOriginal?: (utterance: Utterance) => void
+  onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
+}
+
+function ExpandedChatBubbleRow({
+  utterance,
+  lang,
+  text,
+  isOriginal,
+  isDraft,
+  translationState,
+  bubbleTextClassName,
+  copyActionCopy,
+  ttsActionCopy,
+  allText,
+  isOwnMessage,
+  speakingPlaybackKey,
+  onPlayOriginal,
+  onPlayTranslation,
+}: ExpandedChatBubbleRowProps) {
+  const hasText = Boolean(text.trim())
+  const isSpeaking = Boolean(
+    speakingPlaybackKey
+      && speakingPlaybackKey === (
+        isOriginal
+          ? buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
+          : buildTranslationPlaybackKey(utterance.id, lang)
+      ),
+  )
+  const textClassName = isOriginal
+    ? `${bubbleTextClassName} ${isDraft ? 'text-gray-400' : 'text-gray-900'}`
+    : `${bubbleTextClassName} ${translationState === 'interim' ? 'text-gray-500' : 'text-gray-700'}`
+  const metaClassName = isOriginal ? 'text-gray-400' : 'text-amber-500'
+  const languageLabel = formatBubbleLanguageLabel(lang, isOriginal)
+  const bubbleBody = (
+    <p
+      data-expanded-bubble-content
+      style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+      className={`${textClassName} min-w-0 whitespace-pre-wrap break-words`}
+    >
+      <span
+        data-expanded-bubble-meta
+        className={`mr-2 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 ${metaClassName}`}
+      >
+        <LanguageFlag language={lang} className="text-base leading-none" />
+        <span className="text-[11px] font-semibold uppercase leading-none">{languageLabel}</span>
+      </span>
+      {hasText ? (
+        <span data-expanded-bubble-text className="align-middle">
+          {text}
+          {isSpeaking && <SpeakingIndicator label={copyActionCopy.playingIndicatorLabel} />}
+          {isOriginal && isDraft && (
+            <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+          )}
+        </span>
+      ) : (
+        <span
+          data-interim-translation-cursor
+          className="inline-flex h-4 items-center gap-0.5 align-middle"
+        >
+          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+        </span>
+      )}
+    </p>
+  )
+  const bubble = hasText ? (
+    <CopyableBubbleSurface
+      {...(isOriginal ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
+      text={text}
+      allText={allText}
+      copyBubbleLabel={copyActionCopy.copyBubbleLabel}
+      copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
+      playPronunciationLabel={isOriginal && isDraft ? undefined : ttsActionCopy.playPronunciationLabel}
+      onPlayPronunciation={isOriginal
+        ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
+        : (() => onPlayTranslation?.(utterance, lang, text))}
+      className={`inline w-fit max-w-full rounded-2xl border px-3.5 py-2 shadow-sm ${
+        isOriginal
+          ? 'border-gray-200 bg-white'
+          : 'border-amber-100 bg-amber-50/80'
+      }`}
+    >
+      {bubbleBody}
+    </CopyableBubbleSurface>
+  ) : (
+    <div
+      {...(isOriginal ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
+      data-translation-state={translationState}
+      className={`inline w-fit max-w-full rounded-2xl border px-3.5 py-2 shadow-sm ${
+        isOriginal
+          ? 'border-gray-200 bg-white'
+          : 'border-amber-100 bg-amber-50/80'
+      }`}
+    >
+      {bubbleBody}
+    </div>
+  )
+
+  return (
+    <div
+      data-expanded-chat-bubble-row
+      data-translation-state={translationState}
+      className={`flex w-full min-w-0 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+    >
+      <div
+        data-chat-message-bubble
+        data-display-language={lang}
+        data-translation-state={isOriginal ? undefined : translationState}
+        className="min-w-0 max-w-[calc(100%-2rem)] w-fit"
+      >
+        {bubble}
+      </div>
+      {hasText && (
+        <MessageCopyButton
+          label={copyActionCopy.copyBubbleLabel}
+          text={text}
+          className="mb-2 h-5 self-end items-start pb-1"
+        />
+      )}
+    </div>
+  )
+}
+
 function ChatBubble({
   utterance,
   uiLocale,
@@ -416,6 +570,7 @@ function ChatBubble({
   shouldAnimateEntrance = true,
   viewerUserId,
   onOpenProfile,
+  bubbleDisplayMode = DEFAULT_BUBBLE_DISPLAY_MODE,
 }: ChatBubbleProps) {
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
@@ -444,6 +599,13 @@ function ChatBubble({
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
   const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
+  const bubbleDisplayCopy = resolveLivePhoneDemoBubbleDisplayCopy(uiLocale)
+  const [isBubbleExpanded, setIsBubbleExpanded] = useState(
+    bubbleDisplayMode === 'expanded',
+  )
+  useEffect(() => {
+    setIsBubbleExpanded(bubbleDisplayMode === 'expanded')
+  }, [bubbleDisplayMode])
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
@@ -501,6 +663,25 @@ function ChatBubble({
     utterance.originalText,
     completedTranslationEntries,
   )
+
+  const expandedBubbleEntries = [
+    {
+      key: `original:${originalDisplayLanguage}`,
+      lang: originalDisplayLanguage,
+      text: utterance.originalText,
+      isOriginal: true,
+      isDraft,
+      translationState: undefined,
+    },
+    ...translationEntries.map((entry) => ({
+      key: `translation:${entry.lang}`,
+      lang: entry.lang,
+      text: entry.text,
+      isOriginal: false,
+      isDraft: false,
+      translationState: entry.state,
+    })),
+  ]
 
   const activeBubbleText = (
     <span
@@ -591,6 +772,40 @@ function ChatBubble({
     </CopyableBubbleSurface>
   )
 
+  const bubbleControls = (
+    <div
+      data-chat-bubble-controls
+      className="mb-1.5 flex shrink-0 flex-col items-center gap-1 self-end"
+    >
+      <MessageCopyButton
+        label={isBubbleExpanded ? copyActionCopy.copyAllBubblesLabel : copyActionCopy.copyBubbleLabel}
+        text={isBubbleExpanded ? combinedUtteranceCopyText : activeText}
+        className="h-5 items-start pb-1"
+      />
+      <button
+        type="button"
+        data-chat-bubble-toggle
+        aria-label={isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
+        aria-expanded={isBubbleExpanded}
+        title={isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
+        onPointerDown={(event) => event.stopPropagation()}
+        onTouchStart={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          setIsBubbleExpanded((expanded) => !expanded)
+        }}
+        className="inline-flex h-6 w-7 touch-manipulation items-center justify-center rounded-md text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
+      >
+        <ChevronRight
+          size={16}
+          strokeWidth={2.4}
+          aria-hidden="true"
+          className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isBubbleExpanded ? 'rotate-90' : 'rotate-0'}`}
+        />
+      </button>
+    </div>
+  )
+
   const avatarImage = utterance.speakerImage ? (
     <Image
       src={utterance.speakerImage}
@@ -651,7 +866,39 @@ function ChatBubble({
     </div>
   )
 
-  const messageColumn = (
+  const messageColumn = isBubbleExpanded ? (
+    <div
+      key="message"
+      className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+    >
+      <div
+        data-chat-message-bubble-stack
+        style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
+        className={`flex min-w-0 w-fit flex-col gap-1.5 ${isOwnMessage ? 'items-end' : 'items-start'}`}
+      >
+        {expandedBubbleEntries.map((entry) => (
+          <ExpandedChatBubbleRow
+            key={entry.key}
+            utterance={utterance}
+            lang={entry.lang}
+            text={entry.text}
+            isOriginal={entry.isOriginal}
+            isDraft={entry.isDraft}
+            translationState={entry.translationState}
+            bubbleTextClassName={bubbleTextClassName}
+            copyActionCopy={copyActionCopy}
+            ttsActionCopy={ttsActionCopy}
+            allText={combinedUtteranceCopyText}
+            isOwnMessage={isOwnMessage}
+            speakingPlaybackKey={speakingPlaybackKey}
+            onPlayOriginal={onPlayOriginal}
+            onPlayTranslation={onPlayTranslation}
+          />
+        ))}
+      </div>
+      {bubbleControls}
+    </div>
+  ) : (
     <div key="message" className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
       <div
         data-chat-message-bubble-stack
@@ -674,11 +921,7 @@ function ChatBubble({
         </div>
       </div>
 
-      <MessageCopyButton
-        label={copyActionCopy.copyBubbleLabel}
-        text={activeText}
-        className="mb-3 h-5 self-end items-start pb-1"
-      />
+      {bubbleControls}
     </div>
   )
 
@@ -718,6 +961,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
   if (prev.viewerUserId !== next.viewerUserId) return false
   if (prev.onOpenProfile !== next.onOpenProfile) return false
+  if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
