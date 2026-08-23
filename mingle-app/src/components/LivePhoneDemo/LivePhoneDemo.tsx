@@ -1737,6 +1737,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return nextHeight
   }, [])
 
+  const focusComposerTextarea = useCallback(() => {
+    const textarea = composerTextareaRef.current
+    if (!textarea) return
+
+    textarea.focus({ preventScroll: true })
+    const cursor = textarea.value.length
+    textarea.setSelectionRange(cursor, cursor)
+  }, [])
+
   useEffect(() => {
     if (!normalizedDefaultFeedbackEmail) return
     if (feedbackEmailEdited) return
@@ -2060,15 +2069,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         textarea.value = composerDraftRef.current
       }
       syncComposerTextareaHeight(textarea)
-      textarea.focus({ preventScroll: true })
-      const cursor = textarea.value.length
-      textarea.setSelectionRange(cursor, cursor)
+      focusComposerTextarea()
     }, 40)
 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [isComposerOpen, syncComposerTextareaHeight])
+  }, [focusComposerTextarea, isComposerOpen, syncComposerTextareaHeight])
 
   useEffect(() => {
     const textarea = composerTextareaRef.current
@@ -4399,7 +4406,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const textarea = composerTextareaRef.current
     const nextText = (textarea?.value ?? composerDraftRef.current).trim()
     if (!nextText) {
-      textarea?.focus({ preventScroll: true })
+      focusComposerTextarea()
       return
     }
 
@@ -4415,6 +4422,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     setComposerHasDraft(false)
     persistComposerDraft('', composerDraftStorageKey)
+    // Keep the same textarea focused so submitting does not dismiss the
+    // mobile keyboard or require the user to tap the field again.
+    focusComposerTextarea()
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
         syncComposerTextareaHeight(composerTextareaRef.current)
@@ -4422,7 +4432,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, submitExternalUtterance, syncComposerTextareaHeight])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -7062,6 +7072,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       type="submit"
                       disabled={!composerCanSend}
+                      onPointerDown={(event) => {
+                        // Do not let the send button steal focus from the textarea.
+                        event.preventDefault()
+                      }}
                       aria-label={composerCopy.sendMessageLabel}
                       className={`inline-flex shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
                         composerCanSend

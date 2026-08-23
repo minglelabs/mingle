@@ -1298,3 +1298,16 @@
 - Issue: The room view had both a page-level scroll area and a fixed-height transcript scroll area. Cache hydration also used a transition, so a repeat lookup could keep showing the loading state while the background database refresh was pending.
 - User impact: Operators had to manage two scrollbars while reading a transcript and could wait for the database refresh instead of seeing the same user's cached room list immediately.
 - Resolution: Removed the inner transcript scroll container and kept one full-height admin page scroll area. Older message loading now listens to that single page scroll position. Cached user data is applied synchronously as soon as the client starts, while the fresh response continues in the background and only enables the manual update control.
+
+## 2026-08-23 — Keep the keyboard open after text-message submission
+
+- Surface: The conversation room's keyboard-mode message composer on the current mobile/web conversation surface.
+- Issue: Tapping the send button caused the textarea to lose focus, so iOS/Android mobile WebViews dismissed the keyboard immediately after each submitted message.
+- User impact: Users had to reopen or retap the composer before entering the next message, making rapid text conversations unnecessarily slow.
+- Resolution:
+  - Keep the existing composer open state unchanged after a successful submit.
+  - Re-focus the same textarea and place the caret at the end after clearing the submitted draft.
+  - Prevent the send button's pointer-down default from stealing textarea focus, avoiding a keyboard close-and-reopen flash.
+  - Preserve the existing close button, native back handling, and outside-tap blur behavior so users can still dismiss the keyboard intentionally.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Verify multiple consecutive sends on iOS and Android, confirm the keyboard stays visible without flickering, confirm the caret is ready for the next message, and confirm tapping outside or using the close/back controls still dismisses it.
