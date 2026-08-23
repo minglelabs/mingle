@@ -6,6 +6,7 @@ import {
   evaluateProviderEndpointDecision,
   ManualFinalizeCarryController,
   partitionSonioxTokensAtFirstBoundary,
+  resolveSessionSegmentationStrategy,
   resolveSonioxBoundaryHandling,
   resolveSonioxEndpointDelayMs,
   resolveSonioxEndpointDetectionConfig,
@@ -283,3 +284,21 @@ test('manual carry controller fires one unresolved expiry', async () => {
   assert.equal(expiryCount, 1);
   carry.dispose();
 });
+
+test('resolveSessionSegmentationStrategy respects valid client-requested mode', () => {
+    assert.equal(resolveSessionSegmentationStrategy('fin', 'end'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('end', 'fin'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy('FIN', 'end'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('END', 'fin'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(' fin ', 'end'), 'fin');
+});
+
+test('resolveSessionSegmentationStrategy falls back to server default for invalid input', () => {
+    assert.equal(resolveSessionSegmentationStrategy(undefined, 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(null, 'fin'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('', 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy('invalid', 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(123, 'fin'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('llm', 'end'), 'end');
+});
+

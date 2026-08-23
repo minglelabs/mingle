@@ -1037,6 +1037,7 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  sttSegmentationMode?: string | null
 }
 
 type StopRecordingOptions = {
@@ -2195,6 +2196,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  sttSegmentationMode,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -4572,6 +4574,7 @@ export default function useRealtimeSTT({
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
+          ...(sttSegmentationMode ? { stt_segmentation_mode: sttSegmentationMode } : {}),
         }
         socket.send(JSON.stringify(config))
       }
@@ -4615,7 +4618,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

@@ -369,6 +369,21 @@ export function readSegmentationStrategyId(): SegmentationStrategyId {
     return 'fin';
 }
 
+/**
+ * Resolve the segmentation strategy for a single WebSocket session.
+ * If the client requests a valid mode ('fin' or 'end') in the handshake,
+ * use it; otherwise fall back to the server-wide default.
+ */
+export function resolveSessionSegmentationStrategy(
+    clientRequested: unknown,
+    serverDefault: SegmentationStrategyId,
+): SegmentationStrategyId {
+    if (typeof clientRequested !== 'string') return serverDefault;
+    const normalized = clientRequested.trim().toLowerCase();
+    if (normalized === 'fin' || normalized === 'end') return normalized;
+    return serverDefault;
+}
+
 export function resolveSonioxSegmentationRuntime(
     requested: SegmentationStrategyId,
     configuredSilenceMs: number,

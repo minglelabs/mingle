@@ -11,6 +11,7 @@ import {
     ManualFinalizeCarryController,
     partitionSonioxTokensAtFirstBoundary,
     readSegmentationStrategyId,
+    resolveSessionSegmentationStrategy,
     resolveSonioxBoundaryHandling,
     resolveSonioxSegmentationRuntime,
     selectSonioxBoundarySpeakerIds,
@@ -588,7 +589,10 @@ wss.on('connection', (clientWs) => {
                     Math.min(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX, Math.floor(raw)),
                 );
             })();
-            const segmentationStrategyId = readSegmentationStrategyId();
+            const segmentationStrategyId = resolveSessionSegmentationStrategy(
+                config.stt_segmentation_mode,
+                readSegmentationStrategyId(),
+            );
             const segmentationRuntime = resolveSonioxSegmentationRuntime(
                 segmentationStrategyId,
                 sonioxManualFinalizeSilenceMs,

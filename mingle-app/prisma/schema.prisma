@@ -40,6 +40,7 @@ model User {
   demoInputMode     String?  @map("demo_input_mode")
   demoSpeakerEnabled Boolean? @default(false) @map("demo_speaker_enabled")
   demoEchoAllowed Boolean? @default(true) @map("demo_echo_allowed")
+  sttSegmentationMode String?  @map("stt_segmentation_mode")
   totalUsageSec   Int      @default(0) @map("total_usage_sec")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")

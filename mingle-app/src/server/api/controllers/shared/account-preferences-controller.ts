@@ -21,6 +21,7 @@ const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
+const STT_SEGMENTATION_MODES = new Set(["fin", "end"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
@@ -28,6 +29,7 @@ type PreferencesBody = {
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
+  sttSegmentationMode?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -43,6 +45,7 @@ type UserPreferencesRecord = {
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
+  sttSegmentationMode: string | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -78,6 +81,14 @@ function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
   const normalized = value.trim().toLowerCase();
   return AD_BANNER_POSITIONS.has(normalized)
     ? (normalized as "top" | "bottom")
+    : null;
+}
+
+function normalizeSttSegmentationMode(value: unknown): "fin" | "end" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return STT_SEGMENTATION_MODES.has(normalized)
+    ? (normalized as "fin" | "end")
     : null;
 }
 
@@ -216,6 +227,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoSilenceFinalizeMs: true,
     translationModel: true,
     adBannerPosition: true,
+    sttSegmentationMode: true,
   } as const;
 
   if (identity.id) {
@@ -314,6 +326,7 @@ export async function GET(request: Request) {
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
+    sttSegmentationMode: normalizeSttSegmentationMode(preferences?.sttSegmentationMode),
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -358,11 +371,13 @@ export async function PATCH(request: Request) {
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
+    && nextSttSegmentationMode === null
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -372,6 +387,7 @@ export async function PATCH(request: Request) {
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextSttSegmentationMode !== null ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
   };
 
   if (identity.id) {

@@ -53,6 +53,8 @@ import {
   shouldSendTranslationModelPreference,
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
+  SttSegmentationMode,
+  DEFAULT_STT_SEGMENTATION_MODE,
 } from './live-phone-demo.account-preferences'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
@@ -863,6 +865,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(DEFAULT_STT_SEGMENTATION_MODE)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
@@ -956,6 +959,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
+    sttSegmentationMode: DEFAULT_STT_SEGMENTATION_MODE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -965,7 +969,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    sttSegmentationMode,
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1353,6 +1358,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         )
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        setSttSegmentationMode(hydratedPreferences.sttSegmentationMode)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
@@ -2468,6 +2474,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    sttSegmentationMode,
     translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
