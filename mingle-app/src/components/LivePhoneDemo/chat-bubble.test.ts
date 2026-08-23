@@ -106,6 +106,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('Original message')
     expect(html).toContain('번역 메시지')
     expect(html).toContain('翻訳メッセージ')
+    expect(html).toContain('inline-block w-fit max-w-full rounded-2xl border')
+    expect(html).not.toContain('inline w-fit max-w-full rounded-2xl border')
   })
 
   it('matches interim translation text to the draft input gray without a cursor', () => {

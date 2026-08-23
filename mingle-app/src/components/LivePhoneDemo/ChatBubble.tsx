@@ -497,6 +497,11 @@ function ExpandedChatBubbleRow({
       )}
     </p>
   )
+  const bubbleSurfaceClassName = `inline-block w-fit max-w-full rounded-2xl border px-3.5 py-2 align-top shadow-sm ${
+    isOriginal
+      ? 'border-gray-200 bg-white'
+      : 'border-amber-100 bg-amber-50/80'
+  }`
   const bubble = hasText ? (
     <CopyableBubbleSurface
       {...(isOriginal ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
@@ -508,11 +513,7 @@ function ExpandedChatBubbleRow({
       onPlayPronunciation={isOriginal
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, lang, text))}
-      className={`inline w-fit max-w-full rounded-2xl border px-3.5 py-2 shadow-sm ${
-        isOriginal
-          ? 'border-gray-200 bg-white'
-          : 'border-amber-100 bg-amber-50/80'
-      }`}
+      className={bubbleSurfaceClassName}
     >
       {bubbleBody}
     </CopyableBubbleSurface>
@@ -520,11 +521,7 @@ function ExpandedChatBubbleRow({
     <div
       {...(isOriginal ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
       data-translation-state={translationState}
-      className={`inline w-fit max-w-full rounded-2xl border px-3.5 py-2 shadow-sm ${
-        isOriginal
-          ? 'border-gray-200 bg-white'
-          : 'border-amber-100 bg-amber-50/80'
-      }`}
+      className={bubbleSurfaceClassName}
     >
       {bubbleBody}
     </div>

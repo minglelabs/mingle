@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-23 Expanded message bubble layout regression
+
+### `2026-08-23-expanded-message-bubble-layout-regression` | UI/UX issue found
+
+1. **Opening a message bubble could separate its background from the text on iOS**
+   Problem: The expanded original/translation rows used an inline `div` to wrap block-level paragraph content. On the iOS WebView, the bubble border and background collapsed into a narrow strip while the text and controls were displaced to the side.
+   Fix: Expanded bubble surfaces now use a shared `inline-block` layout so the border, background, padding, and block text remain one shrink-to-fit bubble. The same class is used for interim rows to keep both states consistent.
+   Data change: None. This is a presentation-only fix.
+   Verification: Focused ChatBubble tests and `git diff --check` passed. Physical-device verification remains pending.
+
 ## 2026-08-23 Conversation language defaults follow room selections
 
 ### `2026-08-23-conversation-language-default-sync` | UI/UX issue found
