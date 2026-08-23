@@ -1,5 +1,18 @@
 # UI/UX Codex Thread History
 
+## 2026-08-23 - Widen message-bubble language flag hit areas
+
+- Surface: The language flag selector rendered inline inside a message bubble.
+- Issue: Each flag button was only 30px wide, and the 6px gap between adjacent buttons left little horizontal tolerance when three or more languages were present. Rapidly switching between flags made the middle button especially easy to miss. The final flag also sat too close to the message text.
+- User impact: On narrow mobile screens, users could tap the wrong language or fail to switch languages when tapping the center of a three-or-more-flag group. The flag group and message text also read as visually crowded.
+- Resolution:
+  - Keep each visible flag at its existing 30px circular size so the visual hierarchy and vertical footprint do not grow.
+  - Give every flag button a 42px-wide, 30px-high horizontal hit area with the visual flag centered inside it; this expands the left and right touch tolerance without increasing the vertical target.
+  - Preserve a visible gap between the flags and add extra trailing space before the message text.
+  - Keep selection, original-language quote marking, and event propagation behavior on the outer button.
+- Data contract: None. No Prisma migration, API namespace, server, or native bridge change is required.
+- Testing notes: The focused `ChatBubble` unit test covers a three-language bubble and verifies three expanded hit areas. Physical-device verification should confirm rapid center-flag switching on narrow iOS and Android layouts.
+
 ## 2026-08-21 - Consume the profile surface before starting a direct conversation
 
 - Surface: Public profile details opened from a conversation room, conversation participants or notifications, Connect search, My Page follow lists, or the native profile-link overlay; the message action inside those profiles; and the text composer after a programmatic room transition.

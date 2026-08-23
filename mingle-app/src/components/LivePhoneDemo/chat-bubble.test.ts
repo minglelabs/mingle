@@ -40,6 +40,9 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-black')
     expect(html).not.toContain('“”')
     expect(html).toContain('h-[30px] w-[30px]')
+    expect(html).toContain('h-[30px] w-[42px]')
+    expect(html).toContain('mr-2 inline-flex items-center gap-1.5')
+    expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(1)
     expect(html).toContain('h-[11px] w-[11px]')
     expect(html).toContain('data-display-language="en"')
     expect((html.match(/data-chat-message-bubble="true"/g) || []).length).toBe(1)
@@ -265,6 +268,29 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(2)
     expect((html.match(/data-original-language-quote-badge/g) || []).length).toBe(1)
     expect(html).not.toContain('data-message-tts-button')
+  })
+
+  it('gives every language flag a wider horizontal hit area in a multi-language bubble', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-multi-language-flags',
+          originalText: 'Hello there',
+          originalLang: 'en',
+          targetLanguages: ['ko', 'ja'],
+          translations: {
+            ko: '안녕하세요',
+            ja: 'こんにちは',
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(3)
+    expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
+    expect((html.match(/h-\[30px\] w-\[42px\]/g) || []).length).toBe(3)
+    expect(html).toContain('mr-2 inline-flex items-center gap-1.5')
   })
 
   it('keeps the solo-room left-anchored layout when there is no viewer/speaker account match', () => {

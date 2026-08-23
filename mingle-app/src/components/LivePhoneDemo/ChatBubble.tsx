@@ -366,31 +366,37 @@ function ChatLanguageBadge({
         event.stopPropagation()
         onSelect?.()
       }}
-      className={`relative inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
+      className="relative inline-flex h-[30px] w-[42px] shrink-0 items-center justify-center bg-transparent p-0 text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1"
+    >
+      <span
+        data-chat-language-badge-visual
+        aria-hidden="true"
+        className={`pointer-events-none relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
         isSelected
           ? 'border-amber-400 ring-1 ring-amber-200/80'
           : 'border-gray-200/80'
       }`}
-    >
-      <LanguageFlag language={lang} className="text-[17px] leading-none" />
-      {isOriginal && (
-        <span
-          data-original-language-quote-badge
-          aria-hidden="true"
-          className="absolute -right-1 -top-1 inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
-        >
-          <Image
-            data-original-language-quote-icon
+      >
+        <LanguageFlag language={lang} className="text-[17px] leading-none" />
+        {isOriginal && (
+          <span
+            data-original-language-quote-badge
             aria-hidden="true"
-            src="/chat/original-language-quote.png"
-            alt=""
-            width={12}
-            height={12}
-            className="h-[11px] w-[11px] object-contain"
-            unoptimized
-          />
-        </span>
-      )}
+            className="absolute -right-1 -top-1 inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+          >
+            <Image
+              data-original-language-quote-icon
+              aria-hidden="true"
+              src="/chat/original-language-quote.png"
+              alt=""
+              width={12}
+              height={12}
+              className="h-[11px] w-[11px] object-contain"
+              unoptimized
+            />
+          </span>
+        )}
+      </span>
     </button>
   )
 }
@@ -517,7 +523,7 @@ function ChatBubble({
         )}
         <span
           data-chat-bubble-language-badges
-          className="mr-1 inline-flex items-center gap-1.5 align-middle whitespace-nowrap"
+          className="mr-2 inline-flex items-center gap-1.5 align-middle whitespace-nowrap"
         >
           {languageOptions.map((lang) => {
             const isOriginal = normalizeTranslationLanguageKey(lang)
