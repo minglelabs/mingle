@@ -616,6 +616,8 @@ type NativeSttStartPayload = {
   apiNamespace?: string;
   behaviorProfile?: string;
   sonioxManualFinalizeSilenceMs?: number;
+  sonioxEndpointMaxDelayMs?: number;
+  sonioxEndpointTuningStep?: number;
 };
 
 type NativeSttStopPayload = {
@@ -2700,6 +2702,12 @@ function AppInner(): React.JSX.Element {
       ? payload.conversationId.trim()
       : '';
     nativeSttConversationIdRef.current = conversationId || null;
+    const sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
+      payload?.sonioxEndpointMaxDelayMs,
+    );
+    const sonioxEndpointTuningStep = parseOptionalSonioxManualFinalizeSilenceMs(
+      payload?.sonioxEndpointTuningStep,
+    );
 
     const startPayload = {
       sttModel,
@@ -2708,6 +2716,12 @@ function AppInner(): React.JSX.Element {
       ...(behaviorProfile ? { behaviorProfile } : {}),
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
+        : {}),
+      ...(typeof sonioxEndpointMaxDelayMs === 'number'
+        ? { sonioxEndpointMaxDelayMs }
+        : {}),
+      ...(typeof sonioxEndpointTuningStep === 'number'
+        ? { sonioxEndpointTuningStep }
         : {}),
     };
 

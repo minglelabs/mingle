@@ -15,7 +15,11 @@ import {
   type MingleBehaviorProfile,
 } from '@/lib/client-behavior-profile'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
-import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
+import {
+  DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+  DEFAULT_SONIOX_SILENCE_MS,
+} from './live-phone-demo.preferences'
 import {
   readRequestedApiNamespaceFromSearch,
   resolveNativeAppTrackingContext,
@@ -343,6 +347,8 @@ type NativeSttStartCommand = {
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
     sonioxManualFinalizeSilenceMs: number
+    sonioxEndpointMaxDelayMs: number
+    sonioxEndpointTuningStep: number
   }
 }
 
@@ -1091,6 +1097,8 @@ interface UseRealtimeSTTOptions {
   enableTts?: boolean
   enableAec?: boolean
   sonioxManualFinalizeSilenceMs?: number
+  sonioxEndpointMaxDelayMs?: number
+  sonioxEndpointTuningStep?: number
   usageLimitSec?: number | null
   conversationId?: string
   sessionKeyOverride?: string
@@ -2268,6 +2276,8 @@ export default function useRealtimeSTT({
   enableTts,
   enableAec = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
+  sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  sonioxEndpointTuningStep = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
   conversationId,
   sessionKeyOverride,
@@ -4680,6 +4690,8 @@ export default function useRealtimeSTT({
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxManualFinalizeSilenceMs,
+            sonioxEndpointMaxDelayMs,
+            sonioxEndpointTuningStep,
           },
         })
         if (!posted) {
@@ -4729,6 +4741,8 @@ export default function useRealtimeSTT({
           release_variant: runtimeBehaviorContext.releaseVariant,
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
+          soniox_endpoint_max_delay_ms: sonioxEndpointMaxDelayMs,
+          soniox_endpoint_tuning_step: sonioxEndpointTuningStep,
         }
         socket.send(JSON.stringify(config))
       }
@@ -4772,7 +4786,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

@@ -5,6 +5,8 @@ type NativeSttStartOptions = {
   sttModel?: string;
   aecEnabled?: boolean;
   sonioxManualFinalizeSilenceMs?: number;
+  sonioxEndpointMaxDelayMs?: number;
+  sonioxEndpointTuningStep?: number;
 };
 
 type NativeSttStopOptions = {

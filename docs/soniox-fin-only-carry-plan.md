@@ -28,6 +28,18 @@ Validation included STT unit/build checks, the full app unit suite, an
 with trailing silence. Effective `end` produced zero carry lifecycle events and
 no final transcript containing a boundary marker.
 
+## Follow-up: Per-session endpoint conversation length (2026-08-22)
+
+The endpoint-only carry separation remains unchanged, but endpoint behavior is
+now user-adjustable per STT session. The app stores a five-step
+`demoEndpointTuningStep` preference with the middle step (`2`) as the default,
+exposes a snapping conversation-length slider for modern namespaces, and sends
+`soniox_endpoint_tuning_step` in the WebSocket start config. The server maps the
+step to Soniox's endpoint latency and sensitivity settings for that session.
+The existing `soniox_endpoint_max_delay_ms` remains a hard `500..3000` safety
+cap, while the manual-finalize setting remains separate and continues to
+default to `500` for `fin`/`llm` behavior.
+
 ## 1. Executive summary
 
 The target is to make the carry mechanism a strictly `fin`-only behavior.
@@ -559,7 +571,9 @@ Exit criterion: no partial/obsolete abstraction remains that suggests carry is a
 - Run unit/build checks through devbox.
 - Run local STT integration with both modes.
 - Run the connected iPhone against the device profile and Cloudflare tunnel.
-- Keep endpoint tuning at the current experiment values (`latency adjustment=0`, `sensitivity=0.7`, `max delay=2000ms`) unless the test intentionally compares settings.
+- Keep endpoint sensitivity and latency adjustment at the current experiment
+  values (`latency adjustment=0`, `sensitivity=0.7`). Compare the per-session
+  maximum endpoint delay at `500`, `2000`, and `3000ms` during validation.
 - Test normal conversation, alternating speakers, long pauses, rapid follow-up speech, and stopping mid-sentence.
 
 Exit criterion: automated and live acceptance criteria below are satisfied.
@@ -699,9 +713,9 @@ Mitigation: ordered token processing, safe fresh-turn handling, concise anomaly 
 
 ## 15. Non-goals
 
-- Retuning endpoint sensitivity, latency adjustment, or maximum endpoint delay.
+- Retuning endpoint sensitivity or latency adjustment.
 - Changing Soniox diarization policy.
-- Changing the conversation UI or the silence-setting menu.
+- Changing unrelated conversation UI or audio settings.
 - Replacing Soniox with another provider.
 - Implementing the future `llm` segmentation strategy.
 - Changing translation behavior.
