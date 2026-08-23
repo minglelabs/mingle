@@ -497,10 +497,11 @@ function ExpandedChatBubbleRow({
       )}
     </p>
   )
+  const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleSurfaceClassName = `inline-block w-fit max-w-full rounded-2xl border px-3.5 py-2 align-top shadow-sm ${
     isOriginal
-      ? 'border-gray-200 bg-white'
-      : 'border-amber-100 bg-amber-50/80'
+      ? `border-gray-200 ${bubbleBackgroundClassName}`
+      : `border-amber-100 ${bubbleBackgroundClassName}`
   }`
   const bubble = hasText ? (
     <CopyableBubbleSurface
@@ -655,6 +656,7 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
+  const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
     flag,
     utterance.originalText,
@@ -906,7 +908,7 @@ function ChatBubble({
           data-chat-message-bubble
           data-display-language={activeLanguage}
           data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
-          className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
+          className={`w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-3.5 py-2 shadow-sm`}
         >
           <div
             data-original-bubble-row

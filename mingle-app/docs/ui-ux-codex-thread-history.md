@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-23 Speaker-based message bubble color
+
+### `2026-08-23-speaker-based-message-bubble-color` | UI/UX issue found
+
+1. **Original and translated rows did not share a clear speaker identity color**
+   Problem: Expanded mode previously used white for the original row and amber for translation rows, which made language type compete with the more important distinction between the other participant's messages and the viewer's own messages.
+   Fix: Both original and translated bubbles now use white for other speakers and a light key-color background for the viewer's own messages. The existing border, radius, shadow, alignment, language flags, and text treatment remain unchanged.
+   Data change: None. This is a presentation-only change.
+   Verification: Focused ChatBubble tests, TypeScript, ESLint, and `git diff --check` passed. Physical-device verification remains pending.
+
 ## 2026-08-23 Expanded message bubble layout regression
 
 ### `2026-08-23-expanded-message-bubble-layout-regression` | UI/UX issue found

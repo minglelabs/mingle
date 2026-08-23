@@ -110,6 +110,63 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('inline w-fit max-w-full rounded-2xl border')
   })
 
+  it('uses one speaker-based background color for every expanded row', () => {
+    const otherHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-other-color',
+          originalText: 'Other original',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: { ko: '다른 사람 번역' },
+          speakerUserId: 'user-other',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-me',
+      }),
+    )
+    const ownHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-own-color',
+          originalText: 'My original',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: { ko: '내 번역' },
+          speakerUserId: 'user-me',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-me',
+      }),
+    )
+
+    expect(otherHtml).toContain('border-gray-200 bg-white')
+    expect(otherHtml).toContain('border-amber-100 bg-white')
+    expect(otherHtml).not.toContain('border-gray-200 bg-amber-50/80')
+    expect(otherHtml).not.toContain('border-amber-100 bg-amber-50/80')
+    expect(ownHtml).toContain('border-gray-200 bg-amber-50/80')
+    expect(ownHtml).toContain('border-amber-100 bg-amber-50/80')
+    expect(ownHtml).not.toContain('border-gray-200 bg-white')
+    expect(ownHtml).not.toContain('border-amber-100 bg-white')
+
+    const ownCollapsedHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-own-collapsed-color',
+          originalText: 'My collapsed original',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: { ko: '내 접힌 번역' },
+          speakerUserId: 'user-me',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-me',
+        bubbleDisplayMode: 'collapsed',
+      }),
+    )
+    expect(ownCollapsedHtml).toContain('border border-gray-200 bg-amber-50/80')
+  })
+
   it('matches interim translation text to the draft input gray without a cursor', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
