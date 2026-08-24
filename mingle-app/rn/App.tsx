@@ -373,7 +373,7 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
-) || 'https://mingle-app-xi.vercel.app';
+) || 'https://mingle-1-1-4-production.up.railway.app';
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],

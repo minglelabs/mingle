@@ -109,8 +109,8 @@ NGROK_LAST_ERROR=""
 NGROK_LAST_ERROR_KIND=""
 
 # Values loaded from shell/vault/.env.local.
-DEFAULT_RN_FALLBACK_SITE_URL="https://mingle-app-xi.vercel.app"
-DEFAULT_RN_FALLBACK_WS_URL="wss://mingle-stt.fly.dev"
+DEFAULT_RN_FALLBACK_SITE_URL="https://mingle-1-1-4-production.up.railway.app"
+DEFAULT_RN_FALLBACK_WS_URL="wss://mingle-1-1-4-production.up.railway.app/stt"
 DEVBOX_WORKTREE_NAME=""
 DEVBOX_ROOT_DIR=""
 DEVBOX_WEB_PORT=""

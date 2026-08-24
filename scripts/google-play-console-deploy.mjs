@@ -487,9 +487,9 @@ function buildReleaseAab(plan) {
     NEXT_PUBLIC_WS_URL:
       process.env.NEXT_PUBLIC_WS_URL?.trim() || defaultRuntimeUrls.wsUrl,
     MINGLE_API_FALLBACK_SITE_URL:
-      process.env.MINGLE_API_FALLBACK_SITE_URL?.trim() || LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+      process.env.MINGLE_API_FALLBACK_SITE_URL?.trim() || RAILWAY_WEB_APP_BASE_URL,
     MINGLE_STT_FALLBACK_WS_URL:
-      process.env.MINGLE_STT_FALLBACK_WS_URL?.trim() || LEGACY_PRODUCTION_WS_URL,
+      process.env.MINGLE_STT_FALLBACK_WS_URL?.trim() || RAILWAY_WS_URL,
     MINGLE_LEGACY_SITE_URL:
       process.env.MINGLE_LEGACY_SITE_URL?.trim()
       || process.env.MINGLE_API_FALLBACK_SITE_URL?.trim()
