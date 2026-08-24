@@ -1521,3 +1521,21 @@
   - Reduce the bubble-to-toggle gap from 4px to 2px. The reclaimed space is available to the bubble while the localized text control remains attached to the bubble baseline.
 - Data contract: None. No Prisma migration, API namespace, or native change is required.
 - Testing notes: Verify short Korean, English, and Japanese rows (`또`, `Again`, `また`), mixed rows such as `What is it?`, and long multi-line translations on narrow iPhone and Android widths. Text should remain beside the flag when it fits, wrap only after the bubble reaches its safe maximum width, and keep Expand/Collapse 2px from the bubble.
+
+## 2026-08-24 — Complete profile details in image preview
+
+- Surface: The full-screen profile-image preview opened by tapping another member's profile photo, plus the user's own profile-image preview.
+- Issue: The preview showed only one language pill below the image. It omitted the profile identity details that were already available on the public profile surface, so the image view felt disconnected from the profile the user had selected.
+- Resolution:
+  - Added a compact translucent information card below the image with the display name, `@handle`, and bio.
+  - Kept the primary-language flag and localized language name in a separated, aligned row so language metadata remains visible without competing with the identity details.
+  - Reused the same preview structure for the current user's image so opening either kind of profile has consistent hierarchy.
+- Data contract: No Prisma migration or API change is required. The existing public profile response already supplies name, handle, bio, and primary language data.
+- Testing notes: Verify a profile with all fields, a profile with only a name and language, and a profile with no image or optional text. The card must remain readable on narrow iOS and Android screens and must close with the existing close button, backdrop tap, edge/back navigation, and Android back handler.
+
+## 2026-08-24 — Profile edit persistence and handle conflict feedback
+
+- Surface: The profile edit form for display name, handle, and bio.
+- Issue: The profile PATCH response updated the handle and bio in local state but omitted the saved display name, so a successful name edit could appear to revert. Duplicate handles also needed a clear save-time explanation.
+- Resolution: Apply the API response's name and nullable bio to local profile state, preserve the unique-handle conflict response, and distinguish handle conflicts from unrelated profile-save failures.
+- Testing notes: Verify name-only edits, clearing name or bio, and saving a handle already used by another account.

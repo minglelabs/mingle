@@ -206,7 +206,7 @@ describe("/api/profile route", () => {
   });
 
   it("returns a conflict when a handle is already in use", async () => {
-    mockUserUpdate.mockRejectedValue({ code: "P2002" });
+    mockUserUpdate.mockRejectedValue({ code: "P2002", meta: { target: ["handle"] } });
 
     const response = await PATCH(new NextRequest("https://example.com/api/profile", {
       method: "PATCH",

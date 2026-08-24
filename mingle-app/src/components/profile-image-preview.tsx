@@ -17,6 +17,10 @@ type ProfileImagePreviewProps = {
   language?: string | null;
   flag?: string | null;
   languageName?: string | null;
+  languageLabel?: string | null;
+  name?: string | null;
+  handle?: string | null;
+  bio?: string | null;
   closeLabel: string;
   onClose: () => void;
 };
@@ -31,6 +35,10 @@ export default function ProfileImagePreview({
   language,
   flag,
   languageName,
+  languageLabel,
+  name,
+  handle,
+  bio,
   closeLabel,
   onClose,
 }: ProfileImagePreviewProps) {
@@ -120,14 +128,24 @@ export default function ProfileImagePreview({
           )}
         </div>
 
-        {language || flag || languageName ? (
-          <div className="mt-5 flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white backdrop-blur-sm">
-            {language ? (
-              <LanguageFlag language={language} className="text-[1.45rem] leading-none" />
-            ) : flag ? (
-              <span className="text-[1.45rem] leading-none" aria-hidden="true">{flag}</span>
+        {(name?.trim() || handle?.trim() || bio?.trim() || language || flag || languageName) ? (
+          <div className="mt-5 w-full max-w-[min(20rem,85vw)] rounded-[24px] border border-white/15 bg-white/12 px-5 py-4 text-white shadow-[0_12px_36px_rgba(0,0,0,0.18)] backdrop-blur-md">
+            {name?.trim() ? <p className="truncate text-center text-[19px] font-semibold tracking-[-0.01em]">{name.trim()}</p> : null}
+            {handle?.trim() ? <p className="mt-0.5 truncate text-center text-[13px] text-white/65">@{handle.trim().replace(/^@+/, "")}</p> : null}
+            {bio?.trim() ? <p className="mt-3 whitespace-pre-wrap break-words text-center text-[14px] leading-relaxed text-white/85">{bio.trim()}</p> : null}
+            {language || flag || languageName ? (
+              <div className={`${name?.trim() || handle?.trim() || bio?.trim() ? "mt-4 border-t border-white/15 pt-3" : ""} flex items-center justify-center gap-2`}>
+                {language ? (
+                  <LanguageFlag language={language} className="text-[1.35rem] leading-none" />
+                ) : flag ? (
+                  <span className="text-[1.35rem] leading-none" aria-hidden="true">{flag}</span>
+                ) : null}
+                <span className="flex flex-col items-start">
+                  {languageLabel ? <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/55">{languageLabel}</span> : null}
+                  {languageName ? <span className="text-[14px] font-semibold">{languageName}</span> : null}
+                </span>
+              </div>
             ) : null}
-            {languageName ? <span className="text-[15px] font-semibold">{languageName}</span> : null}
           </div>
         ) : null}
       </div>

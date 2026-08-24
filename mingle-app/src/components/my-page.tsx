@@ -2021,7 +2021,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         }),
       });
       if (!response.ok) {
-        if (response.status === 409) return "handle_taken";
+        if (response.status === 409) {
+          const errorBody = await response.json().catch(() => null) as { error?: unknown } | null;
+          if (errorBody?.error === "handle_taken") return "handle_taken";
+          return "failed";
+        }
         if (response.status === 400) {
           const errorBody = await response.json().catch(() => null) as { error?: unknown } | null;
           if (errorBody?.error === "invalid_handle") return "handle_invalid";
@@ -2033,7 +2037,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       setProfile((current) => ({
         ...current,
         handle: typeof saved.handle === "string" ? saved.handle : current.handle,
-        bio: typeof saved.bio === "string" ? saved.bio : current.bio,
+        name: typeof saved.name === "string" ? saved.name : saved.name === null ? null : current.name,
+        bio: typeof saved.bio === "string" ? saved.bio : saved.bio === null ? null : current.bio,
         birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         primaryLanguages: sanitizeSttLanguageSelection(
@@ -2200,6 +2205,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           y: profile.imageCropY,
         }}
         flag={nationalityFlag}
+        name={name}
+        handle={profile.handle}
+        bio={bio}
+        languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? "Primary language"}
         languageName={nationalityName}
         closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
         onClose={() => setShowProfileImagePreview(false)}

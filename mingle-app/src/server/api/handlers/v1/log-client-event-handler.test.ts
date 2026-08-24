@@ -202,7 +202,7 @@ describe("handleLogClientEventV1", () => {
   });
 
   it("records hydration order diagnostics without creating another conversation message", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const metadata = {
       conversationId: "conversation_123",
       trigger: "push",
@@ -237,15 +237,11 @@ describe("handleLogClientEventV1", () => {
         clientMetadata: metadata,
       },
     }));
-    expect(warnSpy).toHaveBeenCalledWith(
+    expect(infoSpy).toHaveBeenCalledWith(
       "[conversation-order] hydration timestamp drift preserved",
-      expect.objectContaining({
-        sessionKey: "sess_123",
-        userId: "user_123",
-        metadata,
-      }),
+      { metadata },
     );
-    warnSpy.mockRestore();
+    infoSpy.mockRestore();
   });
 
   it("notifies every real member's list topic, not just the room's own sessionKey", async () => {

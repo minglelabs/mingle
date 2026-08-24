@@ -538,6 +538,10 @@ export default function PublicUserProfileScreen({
                 y: profile.imageCropY,
               }}
               language={languageOption?.code}
+              name={name}
+              handle={profile.handle}
+              bio={bio}
+              languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "주 사용 언어" : "Primary language")}
               languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}

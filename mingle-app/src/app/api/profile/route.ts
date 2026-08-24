@@ -190,6 +190,18 @@ function normalizeLocationPermissionStatus(value: unknown): {
     : { value: null, valid: false };
 }
 
+function isHandleUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "P2002") {
+    return false;
+  }
+  const meta = "meta" in error && typeof error.meta === "object" && error.meta !== null
+    ? error.meta as { target?: unknown }
+    : null;
+  if (!meta || meta.target === undefined) return true;
+  return meta.target === "handle"
+    || (Array.isArray(meta.target) && meta.target.some((value) => value === "handle"));
+}
+
 export async function GET() {
   const session = await getServerSession(getAuthOptions());
   const userId = getSessionUserId(session);
@@ -428,14 +440,9 @@ export async function PATCH(request: NextRequest) {
       birthDate: serializePrivateBirthDate(privateFields?.birthDate),
     });
   } catch (error) {
-    if (
-      typeof error === "object"
-      && error !== null
-      && "code" in error
-      && error.code === "P2002"
-    ) {
+    if (isHandleUniqueViolation(error)) {
       return NextResponse.json({ error: "handle_taken" }, { status: 409 });
     }
-    return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
+    return NextResponse.json({ error: "profile_save_failed" }, { status: 500 });
   }
 }
