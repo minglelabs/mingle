@@ -379,3 +379,10 @@
 - Issue: The room view had both a page-level scroll area and a fixed-height transcript scroll area. Cache hydration also used a transition, so a repeat lookup could keep showing the loading state while the background database refresh was pending.
 - User impact: Operators had to manage two scrollbars while reading a transcript and could wait for the database refresh instead of seeing the same user's cached room list immediately.
 - Resolution: Removed the inner transcript scroll container and kept one full-height admin page scroll area. Older message loading now listens to that single page scroll position. Cached user data is applied synchronously as soon as the client starts, while the fresh response continues in the background and only enables the manual update control.
+
+## 2026-08-24 — Admin conversation staged browser history
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversation-lookup-form.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/dashboard/page.tsx`
+- Issue: The admin conversation review flow had an unnecessary dashboard entry point, and the initial external-user lookup could remain in browser history. Pressing Back from a room could therefore return to the pre-lookup screen instead of the room list.
+- User impact: Operators could lose the loaded room list while navigating through a user’s history and had to repeat the lookup before continuing their review.
+- Resolution: Removed the dashboard conversation button, changed external-user lookup navigation to replace the pre-lookup URL, and kept room selection as an explicit history push. Browser Back now moves from a room to its room list while preserving the loaded user context.
