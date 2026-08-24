@@ -37,6 +37,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_session_stopped',
   'stt_turn_started',
   'stt_turn_finalized',
+  'conversation_hydration_order_preserved',
 ])
 
 function stripEndpointMarkers(text: string): string {
@@ -345,6 +346,14 @@ export async function handleLogClientEventV1(request: NextRequest) {
       eventType,
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
+
+    if (eventType === 'conversation_hydration_order_preserved') {
+      console.warn('[conversation-order] hydration timestamp drift preserved', {
+        sessionKey: tracking.sessionKey,
+        userId,
+        metadata: clientMetadata,
+      })
+    }
 
     return response
   } catch (error) {

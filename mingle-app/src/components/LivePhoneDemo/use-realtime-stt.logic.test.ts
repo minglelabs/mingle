@@ -17,6 +17,7 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  findConversationHydrationOrderConflicts,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   mergeServerHydrationUtteranceIntoStoreState,
@@ -402,6 +403,80 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 2,
       },
     ])
+  })
+
+  it('preserves local speech order when server persistence time would move a finalized turn', () => {
+    const localCreatedAtMs = 1700000000004
+    const liveCreatedAtMs = 1700000000005
+    const serverCreatedAtMs = 1700000001000
+    const finalizedId = `u-${localCreatedAtMs}-4`
+    const liveId = `u-${liveCreatedAtMs}-5`
+    const localStore = createUtteranceStoreState([
+      {
+        id: finalizedId,
+        originalText: 'Fourth locally finalized turn',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: localCreatedAtMs,
+      },
+    ])
+    const serverUtterance = {
+      id: finalizedId,
+      originalText: 'Fourth server-confirmed turn',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: '네 번째 서버 확정 발화' },
+      translationFinalized: { ko: true },
+      createdAtMs: serverCreatedAtMs,
+    }
+    const liveUtterance = {
+      id: liveId,
+      originalText: 'Fifth live turn',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: liveCreatedAtMs,
+    }
+
+    const conflicts = findConversationHydrationOrderConflicts({
+      localUtterances: localStore.utterances,
+      liveUtterances: [liveUtterance],
+      serverUtterances: [serverUtterance],
+    })
+    expect(conflicts).toEqual([
+      {
+        utteranceId: finalizedId,
+        localCreatedAtMs,
+        serverCreatedAtMs,
+        crossedUtteranceIds: [liveId],
+        crossedLiveUtteranceIds: [liveId],
+      },
+    ])
+
+    const mergedStore = mergeServerHydrationUtteranceIntoStoreState(localStore, serverUtterance)
+    expect(mergedStore.utterances[0]).toEqual(expect.objectContaining({
+      id: finalizedId,
+      originalText: 'Fourth server-confirmed turn',
+      createdAtMs: localCreatedAtMs,
+    }))
+    expect(mergeDisplayUtterances({
+      utterances: mergedStore.utterances,
+      liveUtterances: [liveUtterance],
+    }).map((utterance) => utterance.id)).toEqual([finalizedId, liveId])
+  })
+
+  it('does not report hydration timestamp drift that cannot change visible order', () => {
+    expect(findConversationHydrationOrderConflicts({
+      localUtterances: [
+        { id: 'u-local', createdAtMs: 100 },
+        { id: 'u-later', createdAtMs: 300 },
+      ],
+      liveUtterances: [],
+      serverUtterances: [{ id: 'u-local', createdAtMs: 200 }],
+    })).toEqual([])
   })
 
   it('applies pending translation updates on top of a server hydrated utterance', () => {

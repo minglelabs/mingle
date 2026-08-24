@@ -87,6 +87,7 @@ const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
 const LOG_CLIENT_EVENT_MAX_ATTEMPTS = 2
 const LOG_CLIENT_EVENT_RETRY_DELAY_MS = 500
+const HYDRATION_ORDER_DIAGNOSTIC_DEDUPE_LIMIT = 200
 
 // Only events carrying a clientMessageId are safely deduped server-side, so only those
 // are worth retrying; retrying the rest risks duplicate analytics rows.
@@ -1939,11 +1940,105 @@ function removeTranslationPrioritiesForUtterance(
   return nextPriorities
 }
 
+type HydrationOrderAnchor = Pick<Utterance, 'id' | 'createdAtMs'>
+type ConversationHydrationRefreshTrigger = 'mount' | 'push' | 'poll'
+
+export type ConversationHydrationOrderConflict = {
+  utteranceId: string
+  localCreatedAtMs: number
+  serverCreatedAtMs: number
+  crossedUtteranceIds: string[]
+  crossedLiveUtteranceIds: string[]
+}
+
+function compareUtteranceOrderTimestamp(left: number, right: number): -1 | 0 | 1 {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
+export function findConversationHydrationOrderConflicts(input: {
+  localUtterances: HydrationOrderAnchor[]
+  liveUtterances: HydrationOrderAnchor[]
+  serverUtterances: HydrationOrderAnchor[]
+}): ConversationHydrationOrderConflict[] {
+  const localById = new Map(input.localUtterances.map((utterance) => [utterance.id, utterance]))
+  const anchorsById = new Map<string, { utterance: HydrationOrderAnchor, isLive: boolean }>()
+
+  for (const utterance of input.localUtterances) {
+    anchorsById.set(utterance.id, { utterance, isLive: false })
+  }
+  for (const utterance of input.liveUtterances) {
+    if (!anchorsById.has(utterance.id)) {
+      anchorsById.set(utterance.id, { utterance, isLive: true })
+    }
+  }
+
+  const conflicts: ConversationHydrationOrderConflict[] = []
+  for (const serverUtterance of input.serverUtterances) {
+    const localUtterance = localById.get(serverUtterance.id)
+    if (!localUtterance) continue
+
+    const localCreatedAtMs = inferUtteranceCreatedAtMs(localUtterance)
+    const serverCreatedAtMs = inferUtteranceCreatedAtMs(serverUtterance)
+    if (
+      localCreatedAtMs === null
+      || serverCreatedAtMs === null
+      || localCreatedAtMs === serverCreatedAtMs
+    ) {
+      continue
+    }
+
+    const crossedUtteranceIds: string[] = []
+    const crossedLiveUtteranceIds: string[] = []
+    for (const [anchorId, anchor] of anchorsById) {
+      if (anchorId === serverUtterance.id) continue
+      const anchorCreatedAtMs = inferUtteranceCreatedAtMs(anchor.utterance)
+      if (anchorCreatedAtMs === null) continue
+      if (
+        compareUtteranceOrderTimestamp(localCreatedAtMs, anchorCreatedAtMs)
+        === compareUtteranceOrderTimestamp(serverCreatedAtMs, anchorCreatedAtMs)
+      ) {
+        continue
+      }
+      crossedUtteranceIds.push(anchorId)
+      if (anchor.isLive) crossedLiveUtteranceIds.push(anchorId)
+    }
+
+    if (crossedUtteranceIds.length === 0) continue
+    conflicts.push({
+      utteranceId: serverUtterance.id,
+      localCreatedAtMs,
+      serverCreatedAtMs,
+      crossedUtteranceIds,
+      crossedLiveUtteranceIds,
+    })
+  }
+
+  return conflicts
+}
+
 export function mergeServerHydrationUtteranceIntoStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
 ): UtteranceStoreState {
-  const serverUtterance = normalizeStoredUtterance(utterance)
+  const normalizedServerUtterance = normalizeStoredUtterance(utterance)
+  const existingUtterance = store.utterances.find((item) => item.id === normalizedServerUtterance.id)
+  const existingCreatedAtMs = existingUtterance
+    ? inferUtteranceCreatedAtMs(existingUtterance)
+    : null
+  // A locally captured utterance already has the speech-order timestamp that
+  // positioned its live draft. AppMessage.createdAt is a later persistence
+  // timestamp, so replacing the former with the latter can move a finalized
+  // bubble across a newer live turn during push/poll hydration. Server content
+  // remains authoritative; only the established display-order timestamp stays
+  // immutable for an utterance that is already present on this client.
+  const serverUtterance = existingCreatedAtMs === null
+    ? normalizedServerUtterance
+    : {
+        ...normalizedServerUtterance,
+        createdAtMs: existingCreatedAtMs,
+      }
   const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)
   const basePriorities = removeTranslationPrioritiesForUtterance(
     store.translationPriorities,
@@ -2218,7 +2313,12 @@ interface RecentTurnContextPayload {
 }
 
 interface ClientEventLogPayload {
-  eventType: 'stt_session_started' | 'stt_session_stopped' | 'stt_turn_started' | 'stt_turn_finalized'
+  eventType:
+    | 'stt_session_started'
+    | 'stt_session_stopped'
+    | 'stt_turn_started'
+    | 'stt_turn_finalized'
+    | 'conversation_hydration_order_preserved'
   clientMessageId?: string
   sourceLanguage?: string
   sourceText?: string
@@ -2466,6 +2566,8 @@ export default function useRealtimeSTT({
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
+  const logClientEventRef = useRef<((payload: ClientEventLogPayload) => Promise<void>) | null>(null)
+  const hydrationOrderDiagnosticKeysRef = useRef<Set<string>>(new Set())
   const streamRef = useRef<MediaStream | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -2822,6 +2924,54 @@ export default function useRealtimeSTT({
     return nextStore
   }, [])
 
+  const reportConversationHydrationOrderConflicts = useCallback((
+    trigger: ConversationHydrationRefreshTrigger,
+    utterancesFromServer: Utterance[],
+  ) => {
+    const liveUtterances = Object.values(pendingTurnsBySpeakerRef.current).map((turn) => ({
+      id: turn.utteranceId,
+      createdAtMs: turn.createdAtMs,
+    }))
+    const conflicts = findConversationHydrationOrderConflicts({
+      localUtterances: utterancesRef.current,
+      liveUtterances,
+      serverUtterances: utterancesFromServer,
+    })
+
+    for (const conflict of conflicts) {
+      const diagnosticKey = [
+        conversationId || 'unknown',
+        conflict.utteranceId,
+        conflict.localCreatedAtMs,
+        conflict.serverCreatedAtMs,
+      ].join(':')
+      const reportedKeys = hydrationOrderDiagnosticKeysRef.current
+      if (reportedKeys.has(diagnosticKey)) continue
+      if (reportedKeys.size >= HYDRATION_ORDER_DIAGNOSTIC_DEDUPE_LIMIT) {
+        const oldestKey = reportedKeys.values().next().value
+        if (typeof oldestKey === 'string') reportedKeys.delete(oldestKey)
+      }
+      reportedKeys.add(diagnosticKey)
+
+      void logClientEventRef.current?.({
+        eventType: 'conversation_hydration_order_preserved',
+        metadata: {
+          conversationId: conversationId || null,
+          trigger,
+          utteranceId: conflict.utteranceId,
+          localCreatedAtMs: conflict.localCreatedAtMs,
+          serverCreatedAtMs: conflict.serverCreatedAtMs,
+          timestampDeltaMs: conflict.serverCreatedAtMs - conflict.localCreatedAtMs,
+          crossedUtteranceCount: conflict.crossedUtteranceIds.length,
+          crossedUtteranceIds: conflict.crossedUtteranceIds.slice(0, 10),
+          crossedLiveUtteranceIds: conflict.crossedLiveUtteranceIds.slice(0, 10),
+          localTimestampPreserved: true,
+        },
+        keepalive: true,
+      })
+    }
+  }, [conversationId])
+
   const loadOlderUtterances = useCallback(async (): Promise<boolean> => {
     const stored = storedUtterancesRef.current
     const alreadyLoaded = storageLoadedCountRef.current
@@ -2957,7 +3107,9 @@ export default function useRealtimeSTT({
   // Shared by the one-shot mount hydration below and by conversation-events
   // push/poll (a second real member's messages otherwise never appear in an
   // already-open room, since nothing else here re-fetches after mount).
-  const refreshFromServerHydration = useCallback((): Promise<void> => {
+  const refreshFromServerHydration = useCallback((
+    trigger: ConversationHydrationRefreshTrigger,
+  ): Promise<void> => {
     if (!conversationId) return Promise.resolve()
 
     return fetch(buildConversationHydrationApiPath(conversationId), {
@@ -3003,6 +3155,8 @@ export default function useRealtimeSTT({
           return
         }
 
+        reportConversationHydrationOrderConflicts(trigger, utterancesFromServer)
+
         setUtteranceStore((current) => {
           const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
           const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
@@ -3024,6 +3178,7 @@ export default function useRealtimeSTT({
     hasOlderUtterancesFromRefs,
     mergeServerHydrationUtterances,
     queueHasOlderUtterancesRefresh,
+    reportConversationHydrationOrderConflicts,
   ])
 
   useEffect(() => {
@@ -3035,7 +3190,7 @@ export default function useRealtimeSTT({
     if (serverHydrationKeyRef.current === hydrationKey) return
     serverHydrationKeyRef.current = hydrationKey
 
-    void refreshFromServerHydration()
+    void refreshFromServerHydration('mount')
   }, [conversationId, isStorageHydrated, refreshFromServerHydration, sessionKeyOverride])
 
   // Live sync: a solo room never needed this (nothing else can add a
@@ -3075,7 +3230,7 @@ export default function useRealtimeSTT({
 
         socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
         socket.onmessage = () => {
-          void refreshFromServerHydration()
+          void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
           if (cancelled) return
@@ -3092,7 +3247,7 @@ export default function useRealtimeSTT({
     const pollIntervalMs = 20_000
     const pollTimer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return
-      void refreshFromServerHydration()
+      void refreshFromServerHydration('poll')
     }, pollIntervalMs)
 
     return () => {
@@ -3505,6 +3660,7 @@ export default function useRealtimeSTT({
       // Logging must not affect UX.
     }
   }, [ensureSessionKey, usageSec])
+  logClientEventRef.current = logClientEvent
 
   const synthesizeTtsViaApi = useCallback(async (text: string, language: string): Promise<Blob | null> => {
     const normalizedText = text.trim()
