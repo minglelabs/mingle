@@ -10,6 +10,7 @@ import {
   MAX_STT_LANGUAGE_SELECTION,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 type SignupPayload = {
   email?: unknown;
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await createWithDefaultHandle({ name, email }, (handle) => prisma.user.create({
+    const createdUser = await createWithDefaultHandle({ name, email }, (handle) => prisma.user.create({
       data: {
         email,
         name,
@@ -103,7 +104,17 @@ export async function POST(request: Request) {
         firstSeenAt: now,
         lastSeenAt: now,
       },
+      select: { id: true },
     }));
+
+    try {
+      await ensureSignupWelcomeOnboarding({
+        userId: createdUser.id,
+        locale: primaryLanguages[0] ?? "en",
+      });
+    } catch (error) {
+      console.error("[signup-welcome] email signup onboarding failed", error);
+    }
   } catch (error: unknown) {
     if (isPrismaUniqueConstraintError(error)) {
       return NextResponse.json({ error: "email_already_registered" }, { status: 409 });

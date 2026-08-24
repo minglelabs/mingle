@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockUserFindUnique,
   mockUserCreate,
+  mockEnsureSignupWelcomeOnboarding,
 } = vi.hoisted(() => ({
   mockUserFindUnique: vi.fn(),
   mockUserCreate: vi.fn(),
+  mockEnsureSignupWelcomeOnboarding: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -15,6 +17,10 @@ vi.mock("@/lib/prisma", () => ({
       create: mockUserCreate,
     },
   },
+}));
+
+vi.mock("@/lib/signup-welcome-onboarding", () => ({
+  ensureSignupWelcomeOnboarding: mockEnsureSignupWelcomeOnboarding,
 }));
 
 import { POST } from "@/app/api/auth/signup/route";
@@ -147,6 +153,10 @@ describe("/api/auth/signup route", () => {
 
     expect(response.status).toBe(201);
     expect(json).toEqual({ ok: true, created: true });
+    expect(mockEnsureSignupWelcomeOnboarding).toHaveBeenCalledWith({
+      userId: "user_new",
+      locale: "ko",
+    });
     expect(mockUserCreate).toHaveBeenCalledTimes(1);
     const createCall = mockUserCreate.mock.calls[0]?.[0] as {
       data: {

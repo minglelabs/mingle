@@ -9,6 +9,7 @@ import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -420,6 +421,19 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
   // Apple uses form_post, so getAuthOptions("apple") swaps these cookies to None.
   cookies: buildOAuthCookies("lax"),
   events: {
+    async createUser({ user }) {
+      const userId = normalizeUserId(user?.id);
+      if (!userId) return;
+
+      try {
+        await ensureSignupWelcomeOnboarding({
+          userId,
+          locale: "en",
+        });
+      } catch (error) {
+        console.error("[signup-welcome] OAuth onboarding failed", error);
+      }
+    },
     async signIn({ user }) {
       const userId = normalizeUserId(user?.id);
       if (!userId) return;
