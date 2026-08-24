@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Reduce spacing between consecutive chat messages
+
+- **Surface:** Modern and legacy conversation message lists.
+- **Issue:** Every message used a uniform 12px vertical gap, which made consecutive messages from the same speaker look unnecessarily separated.
+- **Resolution:** Consecutive messages from the same identified speaker now use a 2px gap. Messages from different speakers use a reduced 6px gap. Speaker identity uses the real user ID when available and falls back to solo-session speaker labels or avatar identity.
+- **Scope:** Applies to both current and legacy conversation renderers. Unknown speaker identities remain on the safer 6px gap rather than being incorrectly grouped.
+- **Data change:** None.
+
 ## 2026-08-24 - Widen message bubbles and flow flags inline with text
 
 - Surface: Collapsed and expanded conversation-room message bubbles for both the viewer and other speakers.

@@ -71,6 +71,7 @@ import {
   DEFAULT_BUBBLE_DISPLAY_MODE,
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
+import { resolveLivePhoneDemoMessageSpacingClass } from './live-phone-demo.message-spacing'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -4366,7 +4367,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
               onPointerDown={markUserScrollIntent}
-              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
+              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={{
                 paddingTop: chatPaddingTop,
                 paddingBottom: chatPaddingBottom,
@@ -4383,9 +4384,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </button>
               )}
               <AnimatePresence mode="popLayout">
-                {displayUtterances.map((u) => (
+                {displayUtterances.map((u, index) => (
                   <div
                     key={u.id}
+                    className={resolveLivePhoneDemoMessageSpacingClass(displayUtterances[index - 1], u)}
                     data-utterance-created-at={
                       (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
                         ? String(Math.floor(u.createdAtMs))

@@ -178,7 +178,7 @@ describe('live-phone-demo scroll/platform logic', () => {
         'function postNativeQaCommand',
       )
       const chatMessageMapSource = readSourceBetween(
-        '{timelineItems.map((item) => (',
+        '{timelineItems.map((item, index) => {',
         '            {/* Demo typing animation */}',
       )
 
@@ -194,6 +194,8 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(chatMessageMapSource).toContain('onPlayOriginal={handlePlayOriginalBubbleTts}')
       expect(chatMessageMapSource).toContain('onPlayTranslation={handlePlayTranslationBubbleTts}')
       expect(chatMessageMapSource).toContain('speakingPlaybackKey={activeBubblePlaybackKey}')
+      expect(chatMessageMapSource).toContain('resolveLivePhoneDemoMessageSpacingClass')
+      expect(chatMessageMapSource).toContain("'mt-1.5'")
       expect(chatMessageMapSource).not.toContain('<ChatBubble')
       expect(chatMessageMapSource).not.toContain('style={{')
       expect(chatMessageMapSource).not.toContain('onPlayOriginal={()')

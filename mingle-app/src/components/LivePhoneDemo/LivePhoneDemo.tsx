@@ -76,6 +76,7 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
+import { resolveLivePhoneDemoMessageSpacingClass } from './live-phone-demo.message-spacing'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
@@ -6989,7 +6990,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
               onPointerDown={markUserScrollIntent}
-              className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
+              className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={chatViewportStyle}
             >
               {nativeChatTopSpacerPx > 0 && (
@@ -7007,34 +7008,49 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
-              {timelineItems.map((item) => (
-                item.kind === 'leave-notice' ? (
-                  <MemoizedLivePhoneDemoLeaveNoticeRow
-                    key={`leave:${item.notice.userId}:${item.notice.leftAtMs}`}
-                    notice={item.notice}
-                    uiLocale={uiLocale}
-                  />
-                ) : (
-                  <MemoizedLivePhoneDemoChatMessageRow
-                    key={`${item.utterance.id}:${displayLanguageSelectionKey}`}
-                    utterance={item.utterance}
-                    uiLocale={uiLocale}
-                    preferredDisplayLanguage={preferredDisplayLanguage}
-                    preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
-                    defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
-                    languageOrder={normalizedDisplayLanguageOptions}
-                    isDraft={draftUtteranceIds.has(item.utterance.id)}
-                    onPlayOriginal={handlePlayOriginalBubbleTts}
-                    onPlayTranslation={handlePlayTranslationBubbleTts}
-                    bubbleTextClassName={chatBubbleTextClassName}
-                    speakingPlaybackKey={activeBubblePlaybackKey}
-                    shouldAnimateEntrance={animatedDisplayUtteranceIds.has(item.utterance.id)}
-                    viewerUserId={viewerUserId}
-                    onOpenProfile={handleOpenProfileForBubble}
-                    bubbleDisplayMode={bubbleDisplayMode}
-                  />
+              {timelineItems.map((item, index) => {
+                const previousItem = timelineItems[index - 1]
+                const spacingClass = item.kind === 'message' && previousItem?.kind === 'message'
+                  ? resolveLivePhoneDemoMessageSpacingClass(previousItem.utterance, item.utterance)
+                  : index > 0
+                    ? 'mt-1.5'
+                    : ''
+
+                return (
+                  <div
+                    key={item.kind === 'leave-notice'
+                      ? `leave:${item.notice.userId}:${item.notice.leftAtMs}`
+                      : `${item.utterance.id}:${displayLanguageSelectionKey}`
+                    }
+                    className={spacingClass}
+                  >
+                    {item.kind === 'leave-notice' ? (
+                      <MemoizedLivePhoneDemoLeaveNoticeRow
+                        notice={item.notice}
+                        uiLocale={uiLocale}
+                      />
+                    ) : (
+                      <MemoizedLivePhoneDemoChatMessageRow
+                        utterance={item.utterance}
+                        uiLocale={uiLocale}
+                        preferredDisplayLanguage={preferredDisplayLanguage}
+                        preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+                        defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
+                        languageOrder={normalizedDisplayLanguageOptions}
+                        isDraft={draftUtteranceIds.has(item.utterance.id)}
+                        onPlayOriginal={handlePlayOriginalBubbleTts}
+                        onPlayTranslation={handlePlayTranslationBubbleTts}
+                        bubbleTextClassName={chatBubbleTextClassName}
+                        speakingPlaybackKey={activeBubblePlaybackKey}
+                        shouldAnimateEntrance={animatedDisplayUtteranceIds.has(item.utterance.id)}
+                        viewerUserId={viewerUserId}
+                        onOpenProfile={handleOpenProfileForBubble}
+                        bubbleDisplayMode={bubbleDisplayMode}
+                      />
+                    )}
+                  </div>
                 )
-              ))}
+              })}
 
             {/* Demo typing animation */}
             {demoTypingLang && (
