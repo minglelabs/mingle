@@ -395,7 +395,13 @@ async function resolveDailyMetricSnapshots(range: AdminDashboardDateRange): Prom
 
     for (const dayKey of daysToCalculate) {
       const snapshot = calculated.get(dayKey);
-      if (snapshot) cachedByDay.set(dayKey, { day: parseDayKey(dayKey), ...snapshot });
+      if (snapshot) {
+        cachedByDay.set(dayKey, {
+          day: parseDayKey(dayKey),
+          ...snapshot,
+          usageMetricVersion: USAGE_METRIC_VERSION,
+        });
+      }
     }
   }
 
