@@ -44,5 +44,5 @@ export function resolveLivePhoneDemoMessageSpacingClass(
 ): string {
   const spacing = resolveLivePhoneDemoMessageSpacing(previous, current)
   if (spacing === 'first') return ''
-  return spacing === 'same-speaker' ? 'mt-0.5' : 'mt-1.5'
+  return spacing === 'same-speaker' ? 'mt-1' : 'mt-1.5'
 }

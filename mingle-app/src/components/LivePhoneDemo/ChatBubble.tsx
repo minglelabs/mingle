@@ -777,7 +777,7 @@ function ChatBubble({
   const bubbleControls = (
     <div
       data-chat-bubble-controls
-      className="mb-1.5 flex shrink-0 flex-col items-center gap-1 self-end"
+      className="flex shrink-0 flex-col items-center gap-1 self-end"
     >
       <button
         type="button"
@@ -861,9 +861,10 @@ function ChatBubble({
   const messageColumn = (
     <motion.div
       key="message"
+      data-chat-message-column
       layout
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
-      className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+      className={`flex min-w-0 flex-1 items-end gap-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
     >
       <AnimatePresence initial={false} mode="popLayout">
         {isBubbleExpanded ? (
@@ -875,7 +876,7 @@ function ChatBubble({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 5 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className={`flex min-w-0 flex-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+            className="min-w-0 w-fit max-w-full"
           >
             <div
               data-chat-message-bubble-stack
@@ -924,7 +925,7 @@ function ChatBubble({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className={`flex min-w-0 flex-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+            className="min-w-0 w-fit max-w-full"
           >
             <div
               data-chat-message-bubble-stack

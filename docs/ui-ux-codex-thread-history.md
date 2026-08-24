@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Attach Expand and Collapse to the bubble bottom edge
+
+- **Surface:** Collapsed and expanded message bubbles for both the viewer and other speakers.
+- **Issue:** The bubble content wrapper filled all remaining row width, pushing `Expand` to the far right for incoming messages and `Collapse` to the far left for the viewer's messages. The previous 2px same-speaker message gap was also slightly too tight.
+- **Resolution:** Let the bubble content use its natural width and shrink only when the row is crowded, so the localized toggle remains directly beside the bubble. Bottom-align the toggle with the bubble, place it on the right of incoming bubbles and the left of the viewer's bubbles, and use a 4px bubble-to-toggle gap. Increase same-speaker message spacing from 2px to 4px while retaining the 6px gap when the speaker changes.
+- **Data change:** None.
+
 ## 2026-08-24 - Keep the empty-room prompt visible after Start
 
 - **Surface:** Empty conversation-room background prompt in the current and legacy live demo screens.

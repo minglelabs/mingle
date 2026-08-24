@@ -133,6 +133,48 @@ describe('ChatBubble', () => {
     )
   })
 
+  it('keeps the localized toggle attached to the bubble bottom edge on both sides', () => {
+    const renderBubble = (speakerUserId: string, viewerUserId: string) => renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: `u-toggle-${speakerUserId}`,
+          originalText: 'Short message',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId,
+        },
+        uiLocale: 'en',
+        viewerUserId,
+        bubbleDisplayMode: 'collapsed',
+      }),
+    )
+    const openingTag = (html: string, marker: string) => {
+      const start = html.indexOf(marker)
+      return html.slice(start, html.indexOf('>', start) + 1)
+    }
+
+    const otherHtml = renderBubble('user-other', 'user-me')
+    const otherMessageColumnTag = openingTag(otherHtml, 'data-chat-message-column')
+    const otherContentSwitchTag = openingTag(otherHtml, 'data-chat-bubble-content-switch="collapsed"')
+    const otherControlsTag = openingTag(otherHtml, 'data-chat-bubble-controls')
+
+    expect(otherMessageColumnTag).toContain('items-end gap-1')
+    expect(otherMessageColumnTag).not.toContain('gap-1.5')
+    expect(otherMessageColumnTag).not.toContain('flex-row-reverse')
+    expect(otherContentSwitchTag).toContain('min-w-0 w-fit max-w-full')
+    expect(otherContentSwitchTag).not.toContain('flex-1')
+    expect(otherControlsTag).toContain('self-end')
+    expect(otherControlsTag).not.toContain('mb-1.5')
+    expect(otherHtml.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
+      otherHtml.indexOf('data-chat-bubble-controls'),
+    )
+
+    const ownHtml = renderBubble('user-me', 'user-me')
+    const ownMessageColumnTag = openingTag(ownHtml, 'data-chat-message-column')
+    expect(ownMessageColumnTag).toContain('items-end gap-1')
+    expect(ownMessageColumnTag).toContain('flex-row-reverse')
+  })
+
   it('uses one speaker-based background color for every expanded row', () => {
     const otherHtml = renderToStaticMarkup(
       createElement(ChatBubble, {

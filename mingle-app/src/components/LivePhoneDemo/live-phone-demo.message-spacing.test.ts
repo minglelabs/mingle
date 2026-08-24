@@ -10,7 +10,7 @@ describe('live-phone-demo message spacing', () => {
     expect(resolveLivePhoneDemoMessageSpacing(undefined, { speakerUserId: 'user-1' })).toBe('first')
   })
 
-  it('keeps consecutive messages from the same account nearly together', () => {
+  it('keeps a small visible gap between consecutive messages from the same account', () => {
     expect(resolveLivePhoneDemoMessageSpacing(
       { speakerUserId: 'user-1' },
       { speakerUserId: 'user-1' },
@@ -18,7 +18,7 @@ describe('live-phone-demo message spacing', () => {
     expect(resolveLivePhoneDemoMessageSpacingClass(
       { speakerUserId: 'user-1' },
       { speakerUserId: 'user-1' },
-    )).toBe('mt-0.5')
+    )).toBe('mt-1')
   })
 
   it('uses the reduced larger gap when the speaker changes', () => {
