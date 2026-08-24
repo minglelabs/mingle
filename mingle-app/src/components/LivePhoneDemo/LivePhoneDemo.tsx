@@ -12,6 +12,7 @@ import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
+import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -5468,16 +5469,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
     paddingRight: 'max(calc(env(safe-area-inset-right) + 6px), 10px)',
   }), [chatPaddingBottom, chatPaddingTop])
-  const showEmptyState = utterances.length === 0
-    && liveUtterances.length === 0
-    && !partialTranscript
-    && !demoTypingText
-    && !demoTypingLang
-    && !isDemoAnimating
-    && !isActive
-    && !isError
-    && !isLimitReached
-    && !composerHasDraft
+  const showEmptyState = shouldShowConversationEmptyState({
+    utteranceCount: utterances.length,
+    liveUtteranceCount: liveUtterances.length,
+    hasPartialTranscript: Boolean(partialTranscript),
+    hasDemoTypingText: Boolean(demoTypingText),
+    hasDemoTypingLanguage: Boolean(demoTypingLang),
+    isDemoAnimating,
+    isError,
+    isLimitReached,
+    hasComposerDraft: composerHasDraft,
+  })
   const bottomBarTopPaddingPx = isComposerOpen
     ? COMPOSER_MODE_TOP_MARGIN_PX
     : VOICE_MODE_TOP_MARGIN_PX

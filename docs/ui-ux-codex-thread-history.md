@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Keep the empty-room prompt visible after Start
+
+- **Surface:** Empty conversation-room background prompt in the current and legacy live demo screens.
+- **Issue:** The prompt disappeared immediately when the user pressed Start because the empty-state condition treated an active STT session as content.
+- **Resolution:** Keep the localized prompt visible while the room has no persisted message, live utterance, partial transcript, demo typing state, draft, error, or usage-limit state. Starting STT alone no longer hides it; the first actual speech/message content still replaces it.
+- **Data change:** None.
+
 ## 2026-08-24 - Reduce spacing between consecutive chat messages
 
 - **Surface:** Modern and legacy conversation message lists.

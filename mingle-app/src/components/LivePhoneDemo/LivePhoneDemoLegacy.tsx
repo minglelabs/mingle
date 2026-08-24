@@ -9,6 +9,7 @@ import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
+import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import {
   buildLanguageSelectorHistoryState,
   clearLanguageSelectorHistoryState,
@@ -3348,16 +3349,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
-  const showEmptyState = utterances.length === 0
-    && liveUtterances.length === 0
-    && !partialTranscript
-    && !demoTypingText
-    && !demoTypingLang
-    && !isDemoAnimating
-    && !isActive
-    && !isError
-    && !isLimitReached
-    && !composerDraft.trim()
+  const showEmptyState = shouldShowConversationEmptyState({
+    utteranceCount: utterances.length,
+    liveUtteranceCount: liveUtterances.length,
+    hasPartialTranscript: Boolean(partialTranscript),
+    hasDemoTypingText: Boolean(demoTypingText),
+    hasDemoTypingLanguage: Boolean(demoTypingLang),
+    isDemoAnimating,
+    isError,
+    isLimitReached,
+    hasComposerDraft: Boolean(composerDraft.trim()),
+  })
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
