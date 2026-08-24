@@ -85,6 +85,7 @@ export const getConversationEventsWsUrl = (): string => {
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
+const NATIVE_CONNECT_WATCHDOG_MS = 12_000
 const LOG_CLIENT_EVENT_MAX_ATTEMPTS = 2
 const LOG_CLIENT_EVENT_RETRY_DELAY_MS = 500
 const HYDRATION_ORDER_DIAGNOSTIC_DEDUPE_LIMIT = 200
@@ -517,6 +518,32 @@ export function shouldHandleNativeBridgeServerMessage(input: {
 }): boolean {
   if (!(input.isStopping || input.nativeStopRequested)) return true
   return input.message.status !== 'ready'
+}
+
+export function shouldTakeOverNativeSttOwnerForMessage(input: {
+  hasActiveOwner: boolean
+  isCurrentOwner: boolean
+  messageConversationId?: string | null
+  currentConversationId?: string | null
+}): boolean {
+  if (!input.hasActiveOwner || input.isCurrentOwner) return false
+  const messageConversationId = (input.messageConversationId || '').trim()
+  const currentConversationId = (input.currentConversationId || '').trim()
+  return Boolean(messageConversationId && currentConversationId && messageConversationId === currentConversationId)
+}
+
+export function shouldRunNativeConnectingWatchdog(input: {
+  connectionStatus: ConnectionStatus
+  useNativeStt: boolean
+  isCurrentOwner: boolean
+  isStopping?: boolean
+  nativeStopRequested?: boolean
+}): boolean {
+  return input.connectionStatus === 'connecting'
+    && input.useNativeStt
+    && input.isCurrentOwner
+    && !input.isStopping
+    && !input.nativeStopRequested
 }
 
 export function shouldTrackUsageForConnectionStatus(connectionStatus: ConnectionStatus): boolean {
@@ -2735,6 +2762,33 @@ export default function useRealtimeSTT({
     return isCurrentNativeSttOwner()
   }, [claimCurrentNativeSttOwner, isCurrentNativeSttOwner])
 
+  const claimCurrentNativeSttOwnerForMessage = useCallback((message: {
+    conversationId?: string
+    queueId?: string
+  }): boolean => {
+    if (claimCurrentNativeSttOwnerIfUnclaimed()) return true
+    if (!shouldTakeOverNativeSttOwnerForMessage({
+      hasActiveOwner: Boolean(activeNativeSttOwnerKey),
+      isCurrentOwner: isCurrentNativeSttOwner(),
+      messageConversationId: message.conversationId,
+      currentConversationId: conversationId,
+    })) {
+      logSttDebug('native.queue.owner_blocked', {
+        conversationId: conversationId || null,
+        messageConversationId: message.conversationId || null,
+        queueId: message.queueId || null,
+      })
+      return false
+    }
+
+    logSttDebug('native.queue.owner_takeover', {
+      conversationId: conversationId || null,
+      queueId: message.queueId || null,
+    })
+    claimCurrentNativeSttOwner()
+    return true
+  }, [claimCurrentNativeSttOwner, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isCurrentNativeSttOwner])
+
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
     const bridge = window.ReactNativeWebView
@@ -4362,6 +4416,48 @@ export default function useRealtimeSTT({
     await stopRecordingGracefully()
   }, [prepareForDeletion, stopRecordingGracefully])
 
+  useEffect(() => {
+    if (!shouldRunNativeConnectingWatchdog({
+      connectionStatus,
+      useNativeStt: useNativeSttRef.current,
+      isCurrentOwner: isCurrentNativeSttOwner(),
+      isStopping: isStoppingRef.current,
+      nativeStopRequested: nativeStopRequestedRef.current,
+    })) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (!shouldRunNativeConnectingWatchdog({
+        connectionStatus: connectionStatusRef.current,
+        useNativeStt: useNativeSttRef.current,
+        isCurrentOwner: isCurrentNativeSttOwner(),
+        isStopping: isStoppingRef.current,
+        nativeStopRequested: nativeStopRequestedRef.current,
+      })) {
+        return
+      }
+
+      logSttDebug('native.connect.watchdog_timeout', {
+        conversationId: conversationId || null,
+        timeoutMs: NATIVE_CONNECT_WATCHDOG_MS,
+      })
+      void logClientEvent({
+        eventType: 'stt_session_stopped',
+        metadata: {
+          reason: 'native_connect_timeout',
+          timeoutMs: NATIVE_CONNECT_WATCHDOG_MS,
+        },
+        keepalive: true,
+      })
+      void stopRecordingGracefully(false, 'native_connect_timeout')
+    }, NATIVE_CONNECT_WATCHDOG_MS)
+
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [connectionStatus, conversationId, isCurrentNativeSttOwner, logClientEvent, stopRecordingGracefully])
+
   const visualize = useCallback(() => {
     if (analyserRef.current) {
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
@@ -5004,12 +5100,23 @@ export default function useRealtimeSTT({
 
       if (detail.type === 'status') {
         if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
+          logSttDebug('native.status.owner_blocked', {
+            conversationId: conversationId || null,
+            nativeStatus: detail.status,
+          })
           return
         }
-        logSttDebug('native.status', { status: detail.status })
+        const previousConnectionStatus = connectionStatusRef.current
         const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
           nativeStatus: detail.status,
-          previousConnectionStatus: connectionStatusRef.current,
+          previousConnectionStatus,
+        })
+        logSttDebug('native.status', {
+          conversationId: conversationId || null,
+          nativeStatus: detail.status,
+          previousConnectionStatus,
+          nextConnectionStatus,
+          isCurrentOwner: isCurrentNativeSttOwner(),
         })
         if (!shouldApplyNativeBridgeConnectionStatus({
           nextConnectionStatus,
@@ -5035,7 +5142,7 @@ export default function useRealtimeSTT({
         if (!isNativeSttMessageForConversation(detail, conversationId)) {
           return
         }
-        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
+        if (!claimCurrentNativeSttOwnerForMessage(detail)) {
           return
         }
         if (detail.queueId && typeof window !== 'undefined') {
@@ -5140,7 +5247,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -5151,7 +5258,15 @@ export default function useRealtimeSTT({
     const queuedMessages = readNativeSttMessageQueue(cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE)
     const { matching, remaining } = splitNativeSttMessagesForConversation(queuedMessages, conversationId)
     if (matching.length === 0) return
-    if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
+    const ownershipMessage = matching.find((message) => Boolean(message.conversationId)) || matching[0]
+    if (!claimCurrentNativeSttOwnerForMessage(ownershipMessage)) return
+
+    logSttDebug('native.queue.drain', {
+      conversationId: conversationId || null,
+      queuedCount: queuedMessages.length,
+      matchingCount: matching.length,
+      remainingCount: remaining.length,
+    })
 
     cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE = remaining
     for (const queuedMessage of matching as NativeSttQueuedMessage[]) {
@@ -5164,7 +5279,7 @@ export default function useRealtimeSTT({
         } satisfies NativeSttBridgeMessageEvent,
       }))
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isStorageHydrated])
+  }, [claimCurrentNativeSttOwnerForMessage, conversationId, isStorageHydrated])
 
   useEffect(() => {
     if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {
@@ -5435,10 +5550,25 @@ export default function useRealtimeSTT({
   useEffect(() => {
     return () => {
       clearConnectionErrorResetTimer()
+      if (useNativeSttRef.current && isCurrentNativeSttOwner()) {
+        nativeStopRequestedRef.current = true
+        logSttDebug('native.unmount.stop', {
+          conversationId: conversationId || null,
+          connectionStatus: connectionStatusRef.current,
+        })
+        void sendNativeSttCommand({
+          type: 'native_stt_stop',
+          payload: {
+            pendingText: '',
+            pendingLanguage: 'unknown',
+          },
+        })
+      }
+      resolvePendingNativeStopAck()
       releaseCurrentNativeSttOwner()
       cleanup()
     }
-  }, [clearConnectionErrorResetTimer, cleanup, releaseCurrentNativeSttOwner])
+  }, [clearConnectionErrorResetTimer, cleanup, conversationId, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resolvePendingNativeStopAck, sendNativeSttCommand])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'

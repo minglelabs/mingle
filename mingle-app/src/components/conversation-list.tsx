@@ -4412,21 +4412,31 @@ export default function ConversationList({
   const handleCloseActiveConversation = useCallback(async () => {
     if (!activeConversation || isCreatingConversation) return;
 
+    const closingConversation = activeConversation;
+    const roomRef = conversationRoomRefs.current.get(closingConversation.id);
+    if (roomRef?.isSttSessionRunning()) {
+      try {
+        await roomRef.stopRecording({ deferRunningStateChange: true });
+      } catch {
+        // The room unmount cleanup still sends an idempotent native stop fallback.
+      }
+    }
+
     const currentConversationId = readConversationIdFromLocation();
     if (
       typeof window !== "undefined"
-      && currentConversationId === activeConversation.id
+      && currentConversationId === closingConversation.id
       && window.history.length > 1
     ) {
       postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
       pendingConversationHistoryBackRef.current = true;
-      closeConversationOverlay(activeConversation, { animateExit: true });
+      closeConversationOverlay(closingConversation, { animateExit: true });
       window.history.back();
       return;
     }
 
-    closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
+    closeConversationOverlay(closingConversation, { animateExit: true, replaceUrl: true });
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => {

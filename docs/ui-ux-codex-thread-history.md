@@ -1398,3 +1398,18 @@
   - Added metadata-only diagnostics for request ID, provider, location receive time, reverse-geocode outcome, and profile persistence timing. Coordinates and address text are not logged.
 - Data contract: No Prisma migration, API namespace, or new server endpoint is required. Android now includes the Google Play Services location client dependency.
 - Testing notes: Verify location acquisition on Android with GPS disabled or slow, with cached location available, and with network fallback. Verify iOS edge swipe from the left screen edge dismisses the panel, while center swipes remain available for map/content scrolling. Confirm reverse-geocode and profile-save failures leave a bounded error state.
+
+## 2026-08-24 — Android native STT ready, teardown, and keyboard-microphone recovery
+
+- Surface: Android native STT capture, the React Native-to-WebView bridge, conversation-room lifecycle, and both keyboard/voice microphone controls.
+- Issue: Android reported audio capture as `running` before the STT server confirmed `ready`. The web UI correctly treated that early signal as `connecting`, but the native layer never emitted a distinct server-confirmed ready state and the React Native start Promise could overwrite an early ready event with `running`. A room close or hook unmount could also release only the web owner while native capture continued. Queued native messages then waited behind a stale owner until the room remounted, and the keyboard-mode microphone could lose its click while the textarea blurred and the WebView resized.
+- User impact: The microphone could remain disabled behind an indefinite connecting spinner even though native capture had started. Transcripts could appear only after leaving and reopening the room, and tapping the microphone from keyboard mode could feel unresponsive.
+- Resolution:
+  - Promote the explicit STT server `ready` payload to an Android native status event and preserve that status across audio-route recovery.
+  - Preserve an already received `ready` state when the asynchronous React Native start call resolves, with raw server-message recognition as a bridge-level fallback.
+  - Stop the active room's STT session before closing the conversation and send an idempotent native stop during hook unmount if the owner still exists.
+  - Reclaim a stale native owner only when a queued message carries an explicit conversation ID matching the current room; add metadata-only debug markers for blocked ownership, takeover, queue drain, unmount stop, and watchdog timeout.
+  - Add a 12-second native connecting watchdog that stops the stale session, returns the control to an actionable state, and records the timeout through the existing STT session event path.
+  - Prevent microphone pointer-down from stealing textarea focus. Once the click is confirmed, switch keyboard mode to voice mode before starting STT so viewport/layout movement cannot cancel the initiating gesture.
+- Data contract: No Prisma migration or API namespace change is required. The mobile version remains `2.0.0` with `android/v2.0.0`.
+- Testing notes: Verify first-start ready transition, rapid stop/start, room close while connecting and while ready, force-close/re-entry queue behavior, keyboard-mode microphone start, audio-route recovery, and the 12-second timeout fallback on an intentionally unreachable STT endpoint.

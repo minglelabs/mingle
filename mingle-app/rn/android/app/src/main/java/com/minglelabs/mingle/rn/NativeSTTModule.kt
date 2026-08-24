@@ -75,6 +75,7 @@ class NativeSTTModule(
 
   @Volatile private var hasListeners = false
   @Volatile private var webSocketReady = false
+  @Volatile private var serverReady = false
   @Volatile private var audioRecord: AudioRecord? = null
   @Volatile private var audioThread: Thread? = null
   @Volatile private var webSocket: WebSocket? = null
@@ -297,6 +298,7 @@ class NativeSTTModule(
         .build()
       webSocketClient = socketClient
       webSocketReady = false
+      serverReady = false
       lastClientSilenced = null
 
       val request = Request.Builder()
@@ -308,7 +310,12 @@ class NativeSTTModule(
 
       webSocket = socketClient.newWebSocket(request, object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
+          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+            webSocket.cancel()
+            return
+          }
           webSocketReady = true
+          serverReady = false
           val config = JSONObject()
             .put("sample_rate", currentSampleRate)
             .put("stt_model", options.sttModel)
@@ -338,6 +345,13 @@ class NativeSTTModule(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+            return
+          }
+          if (isServerReadyMessage(text)) {
+            serverReady = true
+            emitStatus("ready")
+          }
           emitMessage(text)
           if (gracefulStopPending && isStopRecordingAck(text)) {
             finishGracefulStop()
@@ -345,7 +359,7 @@ class NativeSTTModule(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-          if (!isRunning.get()) {
+          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
             return
           }
           emitClose(reason.ifBlank { "socket_closing" })
@@ -353,7 +367,7 @@ class NativeSTTModule(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-          if (!isRunning.get()) {
+          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
             return
           }
           emitClose(reason.ifBlank { "socket_closed" })
@@ -361,7 +375,7 @@ class NativeSTTModule(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-          if (!isRunning.get()) {
+          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
             return
           }
           emitError("ws_failure: ${t.message ?: "unknown"}")
@@ -418,7 +432,7 @@ class NativeSTTModule(
       startAudioThread(nextCapture)
       previousRecord.release()
       setForegroundServiceEnabled(nextCapture.profile.foregroundServiceEnabled)
-      emitStatus("running")
+      emitStatus(if (serverReady) "ready" else "running")
       Log.i(TAG, "audio capture recreated reason=$reason profile=${nextCapture.profile.label}")
     } catch (switchError: Throwable) {
       nextCapture.record.stopSafely()
@@ -441,7 +455,7 @@ class NativeSTTModule(
           ),
         )
         setForegroundServiceEnabled(previousProfile.foregroundServiceEnabled)
-        emitStatus("running")
+        emitStatus(if (serverReady) "ready" else "running")
       } catch (rollbackError: Throwable) {
         previousRecord.release()
         cleanup(reason = "audio_capture_recover_failed", emitClose = true)
@@ -625,7 +639,7 @@ class NativeSTTModule(
           return
         }
         lastClientSilenced = silenced
-        emitStatus(if (silenced) "silenced" else "running")
+        emitStatus(if (silenced) "silenced" else if (serverReady) "ready" else "running")
       }
     }
     recordingCallback = callback
@@ -756,6 +770,7 @@ class NativeSTTModule(
     if (gracefulStopPending) return
     gracefulStopPending = true
     webSocketReady = false
+    serverReady = false
 
     stopAudioThread()
     stopStallMonitor()
@@ -805,6 +820,13 @@ class NativeSTTModule(
       false
     }
 
+  private fun isServerReadyMessage(raw: String): Boolean =
+    try {
+      JSONObject(raw).optString("status").trim().equals("ready", ignoreCase = true)
+    } catch (_: Throwable) {
+      false
+    }
+
   private fun cleanup(
     reason: String?,
     emitClose: Boolean,
@@ -813,6 +835,7 @@ class NativeSTTModule(
     gracefulStopPending = false
     val wasRunning = isRunning.getAndSet(false)
     webSocketReady = false
+    serverReady = false
 
     val socket = webSocket
     webSocket = null

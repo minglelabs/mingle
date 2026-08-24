@@ -26,6 +26,10 @@ import {
   startNativeStt,
   stopNativeStt,
 } from './src/nativeStt';
+import {
+  isNativeSttServerReadyMessage,
+  resolveNativeSttStatusAfterStart,
+} from './src/nativeSttStatus';
 
 import {
   addNativeTtsListener,
@@ -2772,7 +2776,7 @@ function AppInner(): React.JSX.Element {
         wsUrl,
         ...startPayload,
       });
-      nativeStatusRef.current = 'running';
+      nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const code = typeof (error as { code?: unknown })?.code === 'string'
@@ -2791,7 +2795,7 @@ function AppInner(): React.JSX.Element {
             wsUrl: fallbackWsUrl,
             ...startPayload,
           });
-          nativeStatusRef.current = 'running';
+          nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
           return;
         } catch (fallbackError: unknown) {
           const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
@@ -3263,6 +3267,9 @@ function AppInner(): React.JSX.Element {
     });
 
     const messageSub = addNativeSttListener('message', event => {
+      if (isNativeSttServerReadyMessage(event.raw)) {
+        nativeStatusRef.current = 'ready';
+      }
       if (nativeStatusRef.current) {
         emitToWeb({ type: 'status', status: nativeStatusRef.current });
       }

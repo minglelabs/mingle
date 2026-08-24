@@ -522,6 +522,13 @@ export function resolveHydratedComposerOpenState(input: {
   return input.persistedInputMode === 'text'
 }
 
+export function shouldCloseComposerBeforeMicStart(input: {
+  isComposerOpen: boolean
+  isSttSessionRunning: boolean
+}): boolean {
+  return input.isComposerOpen && !input.isSttSessionRunning
+}
+
 export function resolveScrollToBottomButtonBottomPx(input: {
   baseBottomPx: number
   isNativeAppRuntime: boolean
@@ -4440,7 +4447,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [viewerUserId])
 
-  const handleMicPointerDown = useCallback(() => {
+  const handleMicPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
     if (!enableAutoTTS || isActive) return
     void primeAudioPlayback()
   }, [enableAutoTTS, isActive, primeAudioPlayback])
@@ -4506,13 +4514,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
+  const closeComposerForVoiceRecording = useCallback(() => {
+    composerFocusRequestedRef.current = false
+    persistedInputModeRef.current = 'voice'
+    composerTextareaRef.current?.blur()
+    setIsComposerOpen(false)
+    try {
+      localStorage.setItem(LS_KEY_INPUT_MODE, 'voice')
+    } catch {
+      // Ignore local persistence failures and keep in-memory state.
+    }
+  }, [])
+
   const handleMicClick = useCallback(() => {
     if (isSttSessionRunning) {
       void handleStopRecording()
       return
     }
+    if (shouldCloseComposerBeforeMicStart({ isComposerOpen, isSttSessionRunning })) {
+      closeComposerForVoiceRecording()
+    }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
+  }, [closeComposerForVoiceRecording, handleStartRecording, handleStopRecording, isComposerOpen, isSttSessionRunning])
 
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
