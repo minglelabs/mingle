@@ -1364,3 +1364,12 @@
   - Preserve the existing close button, native back handling, and outside-tap blur behavior so users can still dismiss the keyboard intentionally.
 - Data contract: None. No Prisma migration, API namespace, or server change is required.
 - Testing notes: Verify multiple consecutive sends on iOS and Android, confirm the keyboard stays visible without flickering, confirm the caret is ready for the next message, and confirm tapping outside or using the close/back controls still dismisses it.
+
+## 2026-08-24 — Remove unsolicited iOS Bonjour permission prompt
+
+- Surface: iOS native app launch configuration in `mingle-app/rn/ios/mingle/AppDelegate.swift` and `mingle-app/rn/ios/mingle/Info.plist`.
+- Issue: The app requested iOS Local Network access on first launch even though the product does not use Bonjour discovery in its normal conversation flow. The prompt was especially confusing because it appeared before any user action that needed local-network access.
+- User impact: A first-time iPhone install showed an unexpected Bonjour/Local Network permission dialog, creating uncertainty about why Mingle needed access to nearby devices.
+- Resolution: Removed the launch-time `NWBrowser` call that browsed the unused `_mingle-lnp._tcp` Bonjour service and removed its matching `NSBonjourServices` and `NSLocalNetworkUsageDescription` declarations. Android has no corresponding Bonjour implementation and was not changed. `NSAllowsLocalNetworking` remains because it is a transport exception for development endpoints and does not itself request the permission dialog.
+- Data contract: None. No Prisma migration, API namespace, or server change is required.
+- Testing notes: Install a newly rebuilt iOS app on a clean device and confirm that the initial launch no longer shows a Local Network/Bonjour permission prompt. Verify microphone, camera, photo-library, location, and push-notification permission flows remain unchanged.

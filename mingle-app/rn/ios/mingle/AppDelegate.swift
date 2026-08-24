@@ -3,7 +3,6 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import UserNotifications
-import Network
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -11,15 +10,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
-  // Retained so it isn't deallocated before the browse completes.
-  private var localNetworkPermissionBrowser: NWBrowser?
 
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
-    triggerLocalNetworkPermissionPrompt()
 
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
@@ -87,25 +83,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     )
   }
 
-  // Direct-IP WebSocket connections (ws://<lan-ip>:<port>) never trigger iOS's
-  // Local Network permission prompt on their own — only Bonjour/mDNS browsing
-  // does. Without this, the app silently blocks local-network sockets forever
-  // (no error callback, no Settings entry, connection just hangs) since iOS
-  // never asks the user to grant access. Browsing for an unused service type
-  // is enough to force the system prompt; the type itself doesn't need to
-  // resolve to anything.
-  private func triggerLocalNetworkPermissionPrompt() {
-    let browser = NWBrowser(for: .bonjour(type: "_mingle-lnp._tcp", domain: nil), using: .tcp)
-    localNetworkPermissionBrowser = browser
-    browser.stateUpdateHandler = { state in
-      NSLog("[LocalNetworkPermission] browser state: \(state)")
-    }
-    browser.start(queue: .main)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-      browser.cancel()
-      self?.localNetworkPermissionBrowser = nil
-    }
-  }
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
