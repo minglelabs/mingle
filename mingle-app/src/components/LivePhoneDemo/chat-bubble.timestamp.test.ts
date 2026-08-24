@@ -12,29 +12,12 @@ function buildExpectedAbsoluteTimestampLines(
 ): string[] {
   const created = new Date(createdAtMs);
   const dateLine = `${created.getMonth() + 1}/${created.getDate()}`;
-  const parts = new Intl.DateTimeFormat(locale, {
+  const timeLine = new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
-  }).formatToParts(created);
+  }).format(created);
 
-  let hour = "";
-  let minute = "";
-  let dayPeriod = "";
-
-  for (const part of parts) {
-    if (part.type === "hour") hour = part.value;
-    if (part.type === "minute") minute = part.value;
-    if (part.type === "dayPeriod") dayPeriod = part.value.trim();
-  }
-
-  const timeLine = hour && minute
-    ? `${hour}:${minute}`
-    : new Intl.DateTimeFormat(locale, {
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(created);
-
-  return dayPeriod ? [dateLine, timeLine, dayPeriod] : [dateLine, timeLine];
+  return [dateLine, timeLine];
 }
 
 describe("formatChatBubbleTimestamp", () => {
@@ -73,6 +56,17 @@ describe("formatChatBubbleTimestamp", () => {
     expect(formatChatBubbleTimestampLines(createdAtMs, "en")).toEqual(
       buildExpectedAbsoluteTimestampLines(createdAtMs, "en"),
     );
+  });
+
+  it("keeps localized absolute timestamps to two lines", () => {
+    vi.spyOn(Date, "now").mockReturnValue(
+      new Date("2026-08-24T13:06:10+09:00").getTime(),
+    );
+    const createdAtMs = new Date("2024-08-23T18:59:00+09:00").getTime();
+
+    expect(formatChatBubbleTimestampLines(createdAtMs, "ko")).toHaveLength(2);
+    expect(formatChatBubbleTimestampLines(createdAtMs, "en-US")).toHaveLength(2);
+    expect(formatChatBubbleTimestampLines(createdAtMs, "ja")).toHaveLength(2);
   });
 
   it("returns an empty timestamp for missing timestamps", () => {

@@ -41,12 +41,12 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-original-language-quote-icon')
     expect(html).toContain('text-black')
     expect(html).not.toContain('“”')
-    expect(html).toContain('h-[30px] w-[30px]')
-    expect(html).toContain('h-[30px] w-[42px]')
+    expect(html).toContain('h-[18px] w-[18px]')
+    expect(html).toContain('h-5 w-6')
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(1)
-    expect((html.match(/data-chat-language-badge-variant="circle"/g) || []).length).toBe(1)
-    expect(html).toContain('h-[11px] w-[11px]')
+    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(1)
+    expect(html).toContain('h-[9px] w-[9px]')
     expect(html).toContain('data-display-language="en"')
     expect((html.match(/data-chat-message-bubble="true"/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(1)
@@ -63,7 +63,7 @@ describe('ChatBubble', () => {
       html.indexOf('data-original-bubble-row'),
     )
     expect(html).toContain('max-width:100%')
-    expect(html).toContain('px-2.5 py-1.5')
+    expect(html).toContain('px-2.5 py-1')
     expect(html).not.toContain('px-3.5 py-2')
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
@@ -113,7 +113,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('>Collapse</button>')
     expect(html).toContain('data-chat-bubble-content-switch="expanded"')
     expect(html).toContain('my-0.5 h-px w-full bg-gray-200/60')
-    expect(html).toContain('mr-0 inline-flex align-middle')
+    expect(html).toContain('mr-1.5 inline-flex align-middle')
+    expect(html).toContain('py-0.5')
     expect(html).toContain('max-width:100%')
     expect(html).toContain('px-2 py-1')
     expect(html).not.toContain('shrink-0 pt-0.5')
@@ -160,7 +161,7 @@ describe('ChatBubble', () => {
     const otherContentSwitchTag = openingTag(otherHtml, 'data-chat-bubble-content-switch="collapsed"')
     const otherControlsTag = openingTag(otherHtml, 'data-chat-bubble-controls')
 
-    expect(otherMessageColumnTag).toContain('flex-col items-start gap-0.5')
+    expect(otherMessageColumnTag).toContain('flex-col items-start gap-px')
     expect(otherMessageColumnTag).not.toContain('gap-1 ')
     expect(otherMessageColumnTag).not.toContain('gap-1.5')
     expect(otherMessageColumnTag).not.toContain('flex-row-reverse')
@@ -170,14 +171,14 @@ describe('ChatBubble', () => {
     expect(otherControlsTag).toContain('self-end')
     expect(otherControlsTag).not.toContain('mb-1.5')
     const otherBubbleLineTag = openingTag(otherHtml, 'data-chat-bubble-line')
-    expect(otherBubbleLineTag).toContain('items-end gap-0.5')
+    expect(otherBubbleLineTag).toContain('items-end gap-px')
     expect(otherHtml.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
       otherHtml.indexOf('data-chat-bubble-controls'),
     )
 
     const ownHtml = renderBubble('user-me', 'user-me')
     const ownMessageColumnTag = openingTag(ownHtml, 'data-chat-message-column')
-    expect(ownMessageColumnTag).toContain('max-w-full items-end gap-0.5')
+    expect(ownMessageColumnTag).toContain('max-w-full items-end gap-px')
     expect(ownMessageColumnTag).not.toContain('flex-row-reverse')
   })
 
@@ -493,7 +494,8 @@ describe('ChatBubble', () => {
 
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
-    expect((html.match(/h-\[30px\] w-\[42px\]/g) || []).length).toBe(3)
+    expect((html.match(/h-5 w-6/g) || []).length).toBe(3)
+    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(3)
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
   })
 
@@ -538,7 +540,7 @@ describe('ChatBubble', () => {
     )
   })
 
-  it('right-aligns own messages without an avatar and keeps controls before time and bubble', () => {
+  it('right-aligns own messages without an avatar and stacks time above controls beside the bubble', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -557,12 +559,16 @@ describe('ChatBubble', () => {
     expect(html).toContain('justify-end')
     expect(html).not.toContain('flex-row-reverse')
     expect(html).not.toContain('data-speaker-avatar-column')
-    expect(html.indexOf('data-chat-bubble-controls')).toBeLessThan(
-      html.indexOf('data-original-bubble-timestamp'),
+    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
+      html.indexOf('data-chat-bubble-controls'),
     )
     expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
       html.indexOf('data-chat-message-bubble-stack'),
     )
+    expect(html.indexOf('data-chat-bubble-controls')).toBeLessThan(
+      html.indexOf('data-chat-message-bubble-stack'),
+    )
+    expect(html).toContain('data-chat-bubble-own-meta="true"')
   })
 
   it('renders the counterpart name and up to five collapsed language flags above the bubble', () => {
@@ -595,11 +601,39 @@ describe('ChatBubble', () => {
     expect(html).toContain('>정은교</span>')
     expect((html.match(/data-chat-bubble-header-language-badges="true"/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(5)
+    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(5)
+    expect((html.match(/border-b-2 border-amber-400/g) || []).length).toBeGreaterThanOrEqual(1)
+    expect(html).toContain('h-5 min-h-5')
+    expect(html).toContain('text-sm font-medium leading-5')
     expect(html).not.toContain('data-chat-bubble-language-badges')
     expect(html).toContain('rounded-2xl rounded-tl-none')
     expect(html.indexOf('data-chat-speaker-header')).toBeLessThan(
       html.indexOf('data-chat-message-bubble-stack'),
     )
+
+    const expandedHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-counterpart-header-expanded',
+          originalText: '상대 메시지',
+          originalLang: 'en',
+          targetLanguages: ['ko', 'ja'],
+          translations: {
+            ko: '상대 메시지',
+            ja: '相手のメッセージ',
+          },
+          speakerUserId: 'user-b',
+          speakerName: '정은교',
+        },
+        uiLocale: 'ko',
+        viewerUserId: 'user-a',
+        bubbleDisplayMode: 'expanded',
+      }),
+    )
+
+    expect(expandedHtml).toContain('h-5 min-h-5')
+    expect(expandedHtml).toContain('text-sm font-medium leading-5')
+    expect(expandedHtml).not.toContain('data-chat-bubble-header-language-badges')
   })
 
   it('renders the real photo instead of the animal avatar when speakerImage is set', () => {

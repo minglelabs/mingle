@@ -387,7 +387,7 @@ function ChatLanguageBadge({
         data-chat-language-badge-visual
         aria-hidden="true"
         className={isIconVariant
-          ? 'pointer-events-none relative inline-flex h-[18px] w-[18px] items-center justify-center bg-transparent text-[17px] leading-none transition-transform active:scale-95'
+          ? `pointer-events-none relative box-border inline-flex h-[18px] w-[18px] items-center justify-center bg-transparent text-[17px] leading-none transition-transform active:scale-95 ${isSelected ? 'border-b-2 border-amber-400' : ''}`
           : `pointer-events-none relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
             isSelected
               ? 'border-amber-400 ring-1 ring-amber-200/80'
@@ -481,7 +481,7 @@ function ExpandedChatBubbleRow({
     >
       <span
         data-expanded-bubble-meta
-        className="mr-0 inline-flex align-middle whitespace-nowrap"
+        className="mr-1.5 inline-flex align-middle whitespace-nowrap"
       >
         <ChatLanguageBadge
           lang={lang}
@@ -552,7 +552,7 @@ function ExpandedChatBubbleRow({
       <div
         data-expanded-chat-bubble-row
         data-translation-state={translationState}
-        className="w-full min-w-0"
+        className="w-full min-w-0 py-0.5"
       >
         <div
           data-expanded-bubble-content-wrapper
@@ -731,6 +731,7 @@ function ChatBubble({
                   lang={lang}
                   isOriginal={isOriginal}
                   isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                  variant="icon"
                   uiLocale={uiLocale}
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                   translationLanguageLabel={copyActionCopy.translationLanguageLabel}
@@ -793,7 +794,7 @@ function ChatBubble({
   const bubbleControls = (
     <div
       data-chat-bubble-controls
-      className="flex shrink-0 flex-col items-center gap-1 self-end"
+      className="flex shrink-0 flex-col items-end gap-0 self-end"
     >
       <button
         type="button"
@@ -807,7 +808,7 @@ function ChatBubble({
           event.stopPropagation()
           setIsBubbleExpanded((expanded) => !expanded)
         }}
-        className="inline-flex h-7 min-w-[3.25rem] touch-manipulation items-center justify-center rounded-md px-1.5 text-xs font-medium text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
+        className="inline-flex h-5 min-w-0 touch-manipulation items-center justify-center whitespace-nowrap rounded-md px-0 text-[10px] font-medium leading-5 text-black/[0.34] transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
       >
         {isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
       </button>
@@ -832,12 +833,12 @@ function ChatBubble({
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
-      className="flex min-w-0 max-w-full items-center gap-0.5 overflow-hidden px-0.5"
+      className="flex h-5 min-h-5 min-w-0 max-w-full items-center gap-0.5 overflow-hidden px-0.5"
     >
       {speakerName && (
         <span
           data-chat-speaker-name
-          className="min-w-0 max-w-[12rem] truncate text-[11px] font-medium leading-5 text-gray-500"
+          className="h-5 min-w-0 max-w-[12rem] truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
         </span>
@@ -856,6 +857,7 @@ function ChatBubble({
                 lang={lang}
                 isOriginal={isOriginal}
                 isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                variant="icon"
                 uiLocale={uiLocale}
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                 translationLanguageLabel={copyActionCopy.translationLanguageLabel}
@@ -1005,7 +1007,7 @@ function ChatBubble({
               data-display-language={activeLanguage}
               data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2.5 py-1.5 shadow-sm`}
+              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2.5 py-1 shadow-sm`}
             >
               <div
                 data-original-bubble-row
@@ -1027,8 +1029,18 @@ function ChatBubble({
       uiLocale={uiLocale}
       align="right"
       minWidth="2.5rem"
-      className="text-[10px] text-black/[0.3]"
+      className="text-[10px] font-medium leading-5 text-black/[0.34]"
     />
+  ) : null
+
+  const ownMeta = isOwnMessage ? (
+    <div
+      data-chat-bubble-own-meta
+      className="flex shrink-0 flex-col items-end justify-end gap-0 self-end"
+    >
+      {ownTimestamp}
+      {bubbleControls}
+    </div>
   ) : null
 
   const messageColumn = (
@@ -1038,18 +1050,17 @@ function ChatBubble({
       layout
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
       className={isOwnMessage
-        ? 'flex min-w-0 max-w-full items-end gap-0.5'
-        : 'flex min-w-0 flex-1 flex-col items-start gap-0.5'}
+        ? 'flex min-w-0 max-w-full items-end gap-px'
+        : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
       <div
         data-chat-bubble-line
-        className="flex min-w-0 max-w-full items-end gap-0.5"
+        className="flex min-w-0 max-w-full items-end gap-px"
       >
         {isOwnMessage ? (
           <>
-            {bubbleControls}
-            {ownTimestamp}
+            {ownMeta}
             {bubbleContentSwitch}
           </>
         ) : (

@@ -1,10 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-08-25 - Compact language header and aligned bubble metadata
+
+- **Surface:** Collapsed/expanded shared-room message bubbles, sender header, language selectors, and timestamp metadata.
+- **Issue:** The counterpart header's circular flags made it taller than the sender name, so expanding a bubble could shift its vertical position. The collapsed bubble also used the same circular flags, expanded rows had no text offset after their icon, and localized absolute timestamps could occupy three lines when the locale exposed a separate day period.
+- **Resolution:** Use a fixed 20px sender header in both collapsed and expanded states. Increase the sender name to `text-sm`, render collapsed flags as compact icons with the original-language quote badge, and show the selected language with only an amber key-color underline. Add a small icon-to-text gap in expanded rows, a small vertical inset between rows, and reduce collapsed bubble vertical padding/line-height pressure.
+- **Metadata:** Bring `Expand`/`Collapse` directly beside the bubble, match its typography to the timestamp, and place the viewer's time above the toggle in a compact vertical metadata column. Timestamp formatting now combines localized time and day-period text into one line, keeping absolute timestamps to at most two lines (`date` + `time`).
+- **Data change:** None.
+- **Testing notes:** Verify collapsed/expanded toggles do not move the counterpart bubble vertically, selected underlines, original quote badges, long localized names, 2024 date timestamps, and narrow iOS/Android layouts.
+
 ## 2026-08-25 - Add sender identity and KakaoTalk-style message alignment
 
 - **Surface:** Shared-room message bubbles for counterpart and viewer messages.
 - **Issue:** Counterpart bubbles had no real profile name, collapsed language flags consumed the first line inside the bubble, and viewer bubbles still reserved an avatar column. Incoming and outgoing messages therefore did not read like a conventional messenger thread.
-- **Resolution:** Shared-room hydration now attaches the sender's profile `name` (never the handle) to each persisted utterance. Counterpart messages show that name above the bubble; in collapsed mode, up to five circular language flags move beside the name and remain interactive. The original-language quote marker is preserved.
+- **Resolution:** Shared-room hydration now attaches the sender's profile `name` (never the handle) to each persisted utterance. Counterpart messages show that name above the bubble; in collapsed mode, up to five compact language icons move beside the name and remain interactive. The original-language quote marker is preserved.
 - **Alignment:** Counterpart bubbles retain the avatar and use a sharp top-left corner. Viewer bubbles omit both avatar and name, align their bubble to the right edge of the message area, and place controls in the order `Expand/Collapse → time → bubble`.
 - **Data change:** No migration. The hydration payload gains the read-only `speakerName` presentation field sourced from existing membership profile data.
 - **Testing notes:** Verify 1:1 and group rooms, long names, five-or-more room languages, collapsed/expanded toggling, profile-avatar taps on counterpart messages, and the viewer's right-edge layout on narrow iOS and Android screens.
