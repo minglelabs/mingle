@@ -23,6 +23,7 @@ import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, LocateFixed, Loader2, MapPin } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type ProfileLocationProps = {
   profileLocation: ProfileLocationRecord | null;
@@ -131,14 +132,16 @@ export default function ProfileLocation({
       setPermission("granted");
       setMapOpen(true);
       finishLocationRequest(null);
+      toast.success(copy.saveSuccess);
     } catch {
       finishLocationRequest(copy.locationError);
     }
-  }, [copy.locationError, finishLocationRequest, locale, onSaveLocation, setMapOpen]);
+  }, [copy.locationError, copy.saveSuccess, finishLocationRequest, locale, onSaveLocation, setMapOpen]);
 
   const requestCurrentLocation = useCallback(async () => {
     if (!isOwnProfile || !onSaveLocation || isRequesting) return;
     const requestId = String(++requestSequenceRef.current);
+    setMapOpen(true);
     setIsRequesting(true);
     setError(null);
 
@@ -201,7 +204,7 @@ export default function ProfileLocation({
         finishLocationRequest(copy.permissionDenied);
       }
     }
-  }, [clearStoredLocation, copy.locationError, copy.permissionDenied, finishLocationRequest, isOwnProfile, isRequesting, onSaveLocation, saveCurrentLocation]);
+  }, [clearStoredLocation, copy.locationError, copy.permissionDenied, finishLocationRequest, isOwnProfile, isRequesting, onSaveLocation, saveCurrentLocation, setMapOpen]);
 
   const openMap = useCallback(() => {
     setError(null);
@@ -233,7 +236,7 @@ export default function ProfileLocation({
       ) : isOwnProfile ? (
         <button
           type="button"
-          onClick={openMap}
+          onClick={() => void requestCurrentLocation()}
           className="mt-1 inline-flex items-center gap-1 rounded-md text-[13px] font-medium text-slate-500 transition hover:text-slate-900 active:opacity-70"
         >
           <MapPin size={14} strokeWidth={2} aria-hidden="true" />
@@ -291,8 +294,15 @@ export default function ProfileLocation({
                   referrerPolicy="strict-origin-when-cross-origin"
                 />
               ) : (
-                <div className="flex min-h-[300px] items-center justify-center px-6 text-center text-[16px] text-gray-500">
-                  {copy.mapUnavailable}
+                <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 px-6 text-center text-[16px] text-gray-500">
+                  {isRequesting ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+                      <span>{copy.requestingLocation}</span>
+                    </>
+                  ) : (
+                    <span>{displayLocation ? copy.mapUnavailable : copy.mapEmpty}</span>
+                  )}
                 </div>
               )}
 
