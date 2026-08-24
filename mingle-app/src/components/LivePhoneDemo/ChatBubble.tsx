@@ -12,7 +12,6 @@ import {
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
-import MessageCopyButton from './MessageCopyButton'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -538,17 +537,10 @@ function ExpandedChatBubbleRow({
         data-chat-message-bubble
         data-display-language={lang}
         data-translation-state={isOriginal ? undefined : translationState}
-        className="min-w-0 max-w-[calc(100%-2rem)] w-fit"
+        className="min-w-0 max-w-full w-fit"
       >
         {bubble}
       </div>
-      {hasText && (
-        <MessageCopyButton
-          label={copyActionCopy.copyBubbleLabel}
-          text={text}
-          className="mb-2 h-5 self-end items-start pb-1"
-        />
-      )}
     </div>
   )
 }
@@ -776,11 +768,6 @@ function ChatBubble({
       data-chat-bubble-controls
       className="mb-1.5 flex shrink-0 flex-col items-center gap-1 self-end"
     >
-      <MessageCopyButton
-        label={isBubbleExpanded ? copyActionCopy.copyAllBubblesLabel : copyActionCopy.copyBubbleLabel}
-        text={isBubbleExpanded ? combinedUtteranceCopyText : activeText}
-        className="h-5 items-start pb-1"
-      />
       <button
         type="button"
         data-chat-bubble-toggle
