@@ -100,6 +100,7 @@ export async function POST(request: Request) {
         passwordHash,
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
+        defaultDisplayLanguage: primaryLanguages[0] ?? null,
         birthDate,
         firstSeenAt: now,
         lastSeenAt: now,

@@ -248,6 +248,7 @@ export async function PATCH(request: NextRequest) {
     nationality?: string | null;
     primaryLanguages?: string[];
     defaultConversationLanguages?: string[];
+    defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
     discoverySource?: DiscoverySource | null;
     imageCropScale?: number | null;
@@ -334,6 +335,7 @@ export async function PATCH(request: NextRequest) {
 
   const hasPrimaryLanguages = Object.prototype.hasOwnProperty.call(body, "primaryLanguages");
   const hasNationality = Object.prototype.hasOwnProperty.call(body, "nationality");
+  let initialDisplayLanguageCandidate: string | null | undefined;
 
   if (hasNationality) {
     const nationality = normalizeNationality(body.nationality);
@@ -343,6 +345,7 @@ export async function PATCH(request: NextRequest) {
     data.nationality = nationality.value;
     if (!hasPrimaryLanguages) {
       data.primaryLanguages = nationality.value ? [nationality.value] : [];
+      initialDisplayLanguageCandidate = nationality.value;
     }
   }
 
@@ -353,6 +356,7 @@ export async function PATCH(request: NextRequest) {
     }
     data.primaryLanguages = primaryLanguages.value;
     data.nationality = primaryLanguages.value[0] ?? null;
+    initialDisplayLanguageCandidate = primaryLanguages.value[0] ?? null;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "defaultConversationLanguages")) {
@@ -423,6 +427,20 @@ export async function PATCH(request: NextRequest) {
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no_fields_to_update" }, { status: 400 });
+  }
+
+  // OAuth users receive their primary languages during the post-login
+  // onboarding PATCH rather than the email signup request. Initialize the
+  // display preference only when it has never been chosen, so later profile
+  // edits do not overwrite an explicit display-language choice.
+  if (initialDisplayLanguageCandidate !== undefined) {
+    const existingPreference = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { defaultDisplayLanguage: true },
+    });
+    if (existingPreference?.defaultDisplayLanguage === null) {
+      data.defaultDisplayLanguage = initialDisplayLanguageCandidate;
+    }
   }
 
   try {

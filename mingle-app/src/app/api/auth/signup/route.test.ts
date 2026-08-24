@@ -175,6 +175,7 @@ describe("/api/auth/signup route", () => {
     expect(createCall.data.passwordHash.startsWith("pbkdf2_sha256$")).toBe(true);
     expect(createCall.data.nationality).toBe("ko");
     expect(createCall.data.primaryLanguages).toEqual(["ko"]);
+    expect((createCall.data as { defaultDisplayLanguage?: string | null }).defaultDisplayLanguage).toBe("ko");
     expect(createCall.data.birthDate).toEqual(new Date("2000-01-01T00:00:00.000Z"));
     expect(createCall.data.firstSeenAt).toBeInstanceOf(Date);
     expect(createCall.data.lastSeenAt).toBeInstanceOf(Date);
