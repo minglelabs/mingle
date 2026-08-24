@@ -20,6 +20,7 @@ const {
   mockFindConversationUnique,
   mockUserFindUnique,
   mockUserFindMany,
+  mockUserUpdate,
   mockUserBlockFindFirst,
   mockUserBlockFindMany,
 } = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ const {
   mockFindConversationUnique: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserFindMany: vi.fn(),
+  mockUserUpdate: vi.fn(),
   mockUserBlockFindFirst: vi.fn(),
   mockUserBlockFindMany: vi.fn(),
 }));
@@ -67,6 +69,7 @@ vi.mock("@/lib/prisma", () => {
     user: {
       findUnique: mockUserFindUnique,
       findMany: mockUserFindMany,
+      update: mockUserUpdate,
     },
     userBlock: {
       findFirst: mockUserBlockFindFirst,
@@ -134,6 +137,7 @@ describe("app-conversations", () => {
     mockChannelMemberUpdateMany.mockResolvedValue({ count: 0 });
     mockUserFindUnique.mockResolvedValue(null);
     mockUserFindMany.mockResolvedValue([]);
+    mockUserUpdate.mockResolvedValue({});
     mockUserBlockFindFirst.mockResolvedValue(null);
     mockUserBlockFindMany.mockResolvedValue([]);
   });
@@ -262,6 +266,7 @@ describe("app-conversations", () => {
         imageCropX: true,
         imageCropY: true,
         defaultConversationLanguages: true,
+        defaultDisplayLanguage: true,
       },
     });
     expect(state?.conversation.title).toBe("Bob");
@@ -651,6 +656,10 @@ describe("app-conversations", () => {
       where: { channelId_userId: { channelId: "conv-dm", userId: "user-1" } },
       data: { displayLanguage: "ko" },
     });
+    expect(mockUserUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { defaultDisplayLanguage: "ko" },
+    });
     expect(mockUpdateConversation).not.toHaveBeenCalled();
   });
 
@@ -735,6 +744,10 @@ describe("app-conversations", () => {
     expect(mockUpdateConversation).toHaveBeenCalledWith(expect.objectContaining({
       data: { defaultDisplayLanguage: "ko" },
     }));
+    expect(mockUserUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { defaultDisplayLanguage: "ko" },
+    });
     expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
   });
 
@@ -1757,6 +1770,64 @@ describe("app-conversations", () => {
       ko: ["user-2"],
     });
     expect(result.viewerSelectedLanguages).toEqual(["ja", "en"]);
+  });
+
+  it("initializes a new room from the owner's persisted default display language", async () => {
+    mockFindConversationFirst.mockResolvedValue(null);
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "user-1",
+        defaultConversationLanguages: ["ko", "en"],
+        defaultDisplayLanguage: "en",
+      },
+    ]);
+    mockCreateConversation.mockResolvedValue({
+      id: "conv-display-default",
+      sequenceNumber: 1,
+      title: "ko:1",
+      status: "paused",
+      sessionKey: "session-display-default",
+      selectedLanguages: ["ko", "en"],
+      speechLanguages: ["ko", "en"],
+      translationLanguagesLinked: true,
+      defaultDisplayLanguage: "en",
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      {
+        channelId: "conv-display-default",
+        userId: "user-1",
+        displayLanguage: "en",
+        selectedLanguages: ["ko", "en"],
+        user: { name: "Alice", handle: "alice", defaultDisplayLanguage: "en" },
+      },
+    ]);
+
+    const result = await createConversationChannelForUser("user-1", {
+      locale: "ko",
+      selectedLanguages: ["ko", "en"],
+      speechLanguages: ["ko", "en"],
+    });
+
+    expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ defaultDisplayLanguage: "en" }),
+    }));
+    expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+      data: [{
+        channelId: "conv-display-default",
+        userId: "user-1",
+        role: "owner",
+        status: "paused",
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        selectedLanguages: ["ko", "en"],
+        displayLanguage: "en",
+      }],
+      skipDuplicates: true,
+    });
+    expect(result.defaultDisplayLanguage).toBe("en");
   });
 
   it("rejects starting a room with more than 10 total members", async () => {

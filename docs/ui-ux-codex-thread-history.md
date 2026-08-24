@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-25 - Persist default display language and preserve keyboard mode
+
+- **Surface:** Conversation hamburger menu, default display-language selection, text-size defaults, and the live conversation composer controls.
+- **Issue:** Default display language was only stored on the current channel or membership, so a choice could disappear when the user created another room. The hamburger menu also buried the selector inside conversation management. The server fallback still returned Level 2 when no text-size preference had been saved. Tapping the keyboard-mode microphone switched the composer to voice mode, and the voice-mode keyboard button had a small touch target.
+- **Resolution:** Move the localized default display-language selector to the top of the room hamburger menu, directly above text size. Persist the user's choice in `app_users.default_display_language` while retaining the current room/member value, and use that user default when initializing subsequent rooms or resolving an older membership without an explicit room value. Raise the server-side no-preference text-size default to Level 3.
+- **Interaction:** Starting STT from keyboard mode no longer closes the keyboard composer or changes the persisted input mode. Increase only the voice-mode keyboard-toggle hit area from 34px to 44px; the keyboard-mode control remains unchanged.
+- **Data change:** Add the nullable `app_users.default_display_language` column and migration. No API namespace or native version change.
+- **Testing notes:** Verify the selector opens from the hamburger root, a selected language survives room changes and a fresh session, older rooms fall back to the user's stored value, text-size defaults to Level 3 only when no explicit preference exists, keyboard-mode microphone start keeps the textarea/keyboard layout, and the enlarged voice-mode keyboard button does not alter the keyboard-mode layout.
+
 ## 2026-08-25 - Compact language header and aligned bubble metadata
 
 - **Surface:** Collapsed/expanded shared-room message bubbles, sender header, language selectors, and timestamp metadata.

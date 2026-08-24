@@ -7,7 +7,6 @@ import {
   resolveStableKeyboardViewportInsetPx,
   resolveComposerDraftStorageKey,
   resizeComposerTextarea,
-  shouldCloseComposerBeforeMicStart,
 } from './LivePhoneDemo'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 
@@ -77,23 +76,6 @@ describe('live phone demo composer logic', () => {
     expect(resolveHydratedComposerOpenState({
       currentIsComposerOpen: true,
       persistedInputMode: 'voice',
-    })).toBe(false)
-  })
-
-  it('closes keyboard mode only when the microphone starts a new STT session', () => {
-    expect(shouldCloseComposerBeforeMicStart({
-      isComposerOpen: true,
-      isSttSessionRunning: false,
-    })).toBe(true)
-
-    expect(shouldCloseComposerBeforeMicStart({
-      isComposerOpen: true,
-      isSttSessionRunning: true,
-    })).toBe(false)
-
-    expect(shouldCloseComposerBeforeMicStart({
-      isComposerOpen: false,
-      isSttSessionRunning: false,
     })).toBe(false)
   })
 

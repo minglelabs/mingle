@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
-const DEFAULT_TEXT_SIZE_LEVEL = 2;
+const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 5000;
 const DEFAULT_SILENCE_MS = 1000;

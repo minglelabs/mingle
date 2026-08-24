@@ -54,6 +54,7 @@ model User {
   nationality           String?
   primaryLanguages      String[]  @default([]) @map("primary_languages")
   defaultConversationLanguages String[] @default([]) @map("default_conversation_languages")
+  defaultDisplayLanguage String?  @map("default_display_language")
   locationLatitude      Float?    @map("location_latitude")
   locationLongitude     Float?    @map("location_longitude")
   locationCity          String?   @map("location_city")

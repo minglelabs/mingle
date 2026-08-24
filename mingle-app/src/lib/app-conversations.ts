@@ -229,6 +229,7 @@ type ChannelMemberProfile = {
   imageCropX: number | null;
   imageCropY: number | null;
   displayLanguage: string | null;
+  defaultDisplayLanguage: string | null;
   selectedLanguages: string[];
   status: string;
   pausedAt: Date | null;
@@ -258,6 +259,7 @@ type PendingInviteeProfile = {
   imageCropX: number | null;
   imageCropY: number | null;
   defaultConversationLanguages: string[];
+  defaultDisplayLanguage: string | null;
 };
 
 function resolveDefaultConversationLanguages(
@@ -291,6 +293,30 @@ async function listUserDefaultConversationLanguagesById(
   ]));
 }
 
+function resolvePersistedDisplayLanguage(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string") return null;
+  return sanitizeSttLanguageSelection([rawValue])[0] ?? null;
+}
+
+async function listUserDefaultDisplayLanguagesById(
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const uniqueUserIds = [...new Set(userIds.filter((userId) => userId.trim()))];
+  if (uniqueUserIds.length === 0) return new Map();
+
+  const rows = await prisma.user.findMany({
+    where: { id: { in: uniqueUserIds } },
+    select: { id: true, defaultDisplayLanguage: true },
+  });
+
+  return new Map(
+    rows.flatMap((row) => {
+      const language = resolvePersistedDisplayLanguage(row.defaultDisplayLanguage);
+      return language ? [[row.id, language] as const] : [];
+    }),
+  );
+}
+
 // A pending invitee has no membership row to resolve a name/handle from (see
 // resolveEffectiveMemberCount), so the 2-person title override needs a
 // separate lookup just for display/language attribution — batched across every
@@ -310,6 +336,7 @@ async function listPendingInviteeProfilesByUserIds(
       imageCropX: true,
       imageCropY: true,
       defaultConversationLanguages: true,
+      defaultDisplayLanguage: true,
     },
   });
   return new Map(rows.map((row) => [row.id, {
@@ -321,6 +348,7 @@ async function listPendingInviteeProfilesByUserIds(
     imageCropX: row.imageCropX,
     imageCropY: row.imageCropY,
     defaultConversationLanguages: resolveDefaultConversationLanguages(row.defaultConversationLanguages),
+    defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
   }]));
 }
 
@@ -352,6 +380,7 @@ async function listChannelMembersByChannelId(
           imageCropX: true,
           imageCropY: true,
           defaultConversationLanguages: true,
+          defaultDisplayLanguage: true,
         },
       },
     },
@@ -373,6 +402,7 @@ async function listChannelMembersByChannelId(
       imageCropX: row.user.imageCropX,
       imageCropY: row.user.imageCropY,
       displayLanguage: row.displayLanguage,
+      defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.user.defaultDisplayLanguage),
       // Existing shared-room rows can predate per-member language
       // initialization. Treat an empty row as "use this user's persisted
       // conversation defaults" so the first shared-room response contains
@@ -475,11 +505,16 @@ function resolveViewerFacingDisplayLanguage(
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
   pendingInviteeUserIds: string[] = [],
+  pendingInviteeProfiles: PendingInviteeProfile[] = [],
 ): string | null {
   if (!viewerUserId || !members) return channelWideValue;
   if (resolveEffectiveMemberCount(members, pendingInviteeUserIds) < 2) return channelWideValue;
   const viewerMember = members.find((member) => member.userId === viewerUserId);
-  return viewerMember?.displayLanguage?.trim() || channelWideValue;
+  const pendingViewer = pendingInviteeProfiles.find((profile) => profile.userId === viewerUserId);
+  return viewerMember?.displayLanguage?.trim()
+    || viewerMember?.defaultDisplayLanguage?.trim()
+    || pendingViewer?.defaultDisplayLanguage?.trim()
+    || channelWideValue;
 }
 
 // Once a room has 2+ real or pending members, one person's language
@@ -987,7 +1022,7 @@ async function serializeConversationChannelWithPreview(
     undefined,
     undefined,
     resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, pendingInviteeProfiles, record.userEditedTitleAt),
-    resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+    resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds, pendingInviteeProfiles),
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
@@ -1055,7 +1090,7 @@ async function listConversationChannelsForMember(
       undefined,
       undefined,
       resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record), record.userEditedTitleAt),
-      resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+      resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds, resolvePendingInviteeProfiles(record)),
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
@@ -1097,7 +1132,7 @@ async function listConversationChannelsForMember(
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
         unreadMessageCountByChannelId.get(record.id) ?? 0,
         resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record), record.userEditedTitleAt),
-        resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
+        resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds, resolvePendingInviteeProfiles(record)),
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
@@ -1180,9 +1215,10 @@ export async function createConversationChannelForUser(
   // defaults. The owner is written immediately; pending invitees are read
   // from their user profile until first-message materialization creates their
   // membership row.
-  const defaultLanguagesByUserId = await listUserDefaultConversationLanguagesById([
-    userId,
-    ...inviteeUserIds,
+  const defaultUserIds = [userId, ...inviteeUserIds];
+  const [defaultLanguagesByUserId, defaultDisplayLanguagesByUserId] = await Promise.all([
+    listUserDefaultConversationLanguagesById(defaultUserIds),
+    listUserDefaultDisplayLanguagesById(defaultUserIds),
   ]);
   const ownerDefaultConversationLanguages = defaultLanguagesByUserId.get(userId)
     ?? deriveDefaultSttLanguagesForLocale(normalizedLocale);
@@ -1202,6 +1238,11 @@ export async function createConversationChannelForUser(
   const resolvedSelectedLanguages = normalizedSelectedLanguages.length > 0
     ? normalizedSelectedLanguages
     : [...resolvedSpeechLanguages];
+  const ownerDefaultDisplayLanguage = defaultDisplayLanguagesByUserId.get(userId) ?? null;
+  const ownerDisplayLanguage = ownerDefaultDisplayLanguage
+    && resolvedSelectedLanguages.includes(ownerDefaultDisplayLanguage)
+    ? ownerDefaultDisplayLanguage
+    : null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -1234,6 +1275,9 @@ export async function createConversationChannelForUser(
             selectedLanguages: resolvedSelectedLanguages,
             speechLanguages: resolvedSpeechLanguages,
             translationLanguagesLinked,
+            ...(inviteeUserIds.length === 0 && ownerDisplayLanguage
+              ? { defaultDisplayLanguage: ownerDisplayLanguage }
+              : {}),
             pausedAt: new Date(),
             // Invitees get no membership row yet — see the field's doc
             // comment. materializePendingConversationInvitees turns these
@@ -1260,6 +1304,7 @@ export async function createConversationChannelForUser(
               status: created.status,
               pausedAt: created.pausedAt,
               selectedLanguages: resolvedSelectedLanguages,
+              ...(ownerDisplayLanguage ? { displayLanguage: ownerDisplayLanguage } : {}),
             },
           ],
           skipDuplicates: true,
@@ -1467,13 +1512,19 @@ export async function materializePendingConversationInvitees(sessionKey: string)
   // id cannot make the first message's membership materialization fail.
   const existingInvitees = await prisma.user.findMany({
     where: { id: { in: channel.pendingInviteeUserIds } },
-    select: { id: true, defaultConversationLanguages: true },
+    select: { id: true, defaultConversationLanguages: true, defaultDisplayLanguage: true },
   });
   const existingInviteeUserIds = new Set(existingInvitees.map((user) => user.id));
   const defaultLanguagesByUserId = new Map(existingInvitees.map((user) => [
     user.id,
     resolveDefaultConversationLanguages(user.defaultConversationLanguages),
   ]));
+  const defaultDisplayLanguagesByUserId = new Map(
+    existingInvitees.flatMap((user) => {
+      const language = resolvePersistedDisplayLanguage(user.defaultDisplayLanguage);
+      return language ? [[user.id, language] as const] : [];
+    }),
+  );
   const validPendingInviteeUserIds = channel.pendingInviteeUserIds.filter(
     (inviteeUserId) => existingInviteeUserIds.has(inviteeUserId),
   );
@@ -1503,15 +1554,22 @@ export async function materializePendingConversationInvitees(sessionKey: string)
   return prisma.$transaction(async (tx) => {
     if (inviteeUserIdsToMaterialize.length > 0) {
       await tx.appConversationChannelMember.createMany({
-        data: inviteeUserIdsToMaterialize.map((inviteeUserId) => ({
-          channelId: channel.id,
-          userId: inviteeUserId,
-          role: "member",
-          status: channel.status,
-          pausedAt: channel.pausedAt,
-          selectedLanguages: defaultLanguagesByUserId.get(inviteeUserId)
-            ?? deriveDefaultSttLanguagesForLocale(undefined),
-        })),
+        data: inviteeUserIdsToMaterialize.map((inviteeUserId) => {
+          const selectedLanguages = defaultLanguagesByUserId.get(inviteeUserId)
+            ?? deriveDefaultSttLanguagesForLocale(undefined);
+          const defaultDisplayLanguage = defaultDisplayLanguagesByUserId.get(inviteeUserId);
+          return {
+            channelId: channel.id,
+            userId: inviteeUserId,
+            role: "member",
+            status: channel.status,
+            pausedAt: channel.pausedAt,
+            selectedLanguages,
+            ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
+              ? { displayLanguage: defaultDisplayLanguage }
+              : {}),
+          };
+        }),
         skipDuplicates: true,
       });
     }
@@ -1867,25 +1925,32 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
   // their own language — a single channel-wide value can't represent that, so
   // this becomes the caller's own membership preference instead of a shared
   // setting. Solo rooms keep writing the channel-wide field as before.
-  let record: ConversationChannelRecord;
-  if (isMultiMember) {
-    await prisma.appConversationChannelMember.update({
-      where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
-      data: { displayLanguage: normalizedDefaultDisplayLanguage },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: args.userId },
+      data: { defaultDisplayLanguage: normalizedDefaultDisplayLanguage },
     });
-    record = await prisma.appConversationChannel.findUniqueOrThrow({
-      where: { id: args.conversationId },
-      select: conversationChannelSelect,
-    });
-  } else {
-    record = await prisma.appConversationChannel.update({
+
+    if (isMultiMember) {
+      await tx.appConversationChannelMember.update({
+        where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
+        data: { displayLanguage: normalizedDefaultDisplayLanguage },
+      });
+      return;
+    }
+
+    await tx.appConversationChannel.update({
       where: { id: args.conversationId },
       data: {
         defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
       },
-      select: conversationChannelSelect,
     });
-  }
+  });
+
+  const record = await prisma.appConversationChannel.findUniqueOrThrow({
+    where: { id: args.conversationId },
+    select: conversationChannelSelect,
+  });
 
   return serializeConversationChannelWithPreview(record, args.userId);
 }
@@ -2249,6 +2314,7 @@ export async function getConversationHydrationStateForUser(args: {
         membersByChannelId.get(conversationRecord.id),
         args.userId,
         conversationRecord.pendingInviteeUserIds,
+        pendingInviteeProfiles,
       ),
       resolveViewerFacingStatus(
         conversationRecord.status,

@@ -211,7 +211,7 @@ const VOICE_MODE_STT_BUTTON_WIDTH_PX = 136
 const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 45
 const VOICE_MODE_STT_ICON_SIZE_PX = 20
 const VOICE_MODE_STT_STOP_SIZE_PX = 14
-const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
+const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 44
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
 const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
@@ -525,13 +525,6 @@ export function resolveHydratedComposerOpenState(input: {
   }
 
   return input.persistedInputMode === 'text'
-}
-
-export function shouldCloseComposerBeforeMicStart(input: {
-  isComposerOpen: boolean
-  isSttSessionRunning: boolean
-}): boolean {
-  return input.isComposerOpen && !input.isSttSessionRunning
 }
 
 export function resolveScrollToBottomButtonBottomPx(input: {
@@ -988,6 +981,7 @@ function resolveMenuScreenForDepth(
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
+  if (preferredScreen === 'display-language') return 'display-language'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -1589,12 +1583,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
   const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
-  // Display-language is a third-level surface over conversation management.
-  // Keep management mounted underneath it so closing the top surface consumes
-  // only its own history entry and never reopens the room menu from scratch.
-  const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen === 'display-language'
-    ? 'conversation-management'
-    : menuScreen
+  // Display-language is a second-level surface opened directly from the room
+  // menu. The conversation-management page remains an independent surface.
+  const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
@@ -2822,7 +2813,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
-    pushMenuHistoryEntry(3, 'display-language')
+    pushMenuHistoryEntry(2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDefaultDisplayLanguageSelect = useCallback((nextLanguage: string) => {
@@ -4541,28 +4532,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
-  const closeComposerForVoiceRecording = useCallback(() => {
-    composerFocusRequestedRef.current = false
-    persistedInputModeRef.current = 'voice'
-    composerTextareaRef.current?.blur()
-    setIsComposerOpen(false)
-    try {
-      localStorage.setItem(LS_KEY_INPUT_MODE, 'voice')
-    } catch {
-      // Ignore local persistence failures and keep in-memory state.
-    }
-  }, [])
-
   const handleMicClick = useCallback(() => {
     if (isSttSessionRunning) {
       void handleStopRecording()
       return
     }
-    if (shouldCloseComposerBeforeMicStart({ isComposerOpen, isSttSessionRunning })) {
-      closeComposerForVoiceRecording()
-    }
     void handleStartRecording()
-  }, [closeComposerForVoiceRecording, handleStartRecording, handleStopRecording, isComposerOpen, isSttSessionRunning])
+  }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
 
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
@@ -5859,6 +5835,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <div className="px-4 py-4">
                           <div className="space-y-4">
+                            {conversationId && (
+                              <button
+                                type="button"
+                                onClick={handleDefaultDisplayLanguageMenuItemPress}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                              >
+                                <span className="min-w-0 flex-1">{defaultDisplayLanguageCopy.menuItemLabel}</span>
+                                <span className="flex shrink-0 items-center gap-2 text-gray-500">
+                                  <LanguageFlag
+                                    language={resolvedDefaultDisplayLanguage || ''}
+                                    className="text-[0.9rem] leading-none"
+                                  />
+                                  <ChevronRight size={18} strokeWidth={2.4} />
+                                </span>
+                              </button>
+                            )}
+
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-2 font-semibold">{textSizeLabel}</span>
@@ -6853,23 +6846,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
 
-                          {conversationId && (
-                            <button
-                              type="button"
-                              onClick={handleDefaultDisplayLanguageMenuItemPress}
-                              className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                            >
-                              <span className="min-w-0 flex-1">{defaultDisplayLanguageCopy.menuItemLabel}</span>
-                              <span className="flex shrink-0 items-center gap-2 text-gray-500">
-                                <LanguageFlag
-                                  language={resolvedDefaultDisplayLanguage || ''}
-                                  className="text-[0.9rem] leading-none"
-                                />
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          )}
-
                           <button
                             type="button"
                             onClick={handleDeleteConversationMenuItemPress}
@@ -7668,6 +7644,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"
                       type="button"
+                      onPointerDown={(event) => event.preventDefault()}
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}
                       className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
