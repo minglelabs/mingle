@@ -1386,3 +1386,15 @@
 - Diagnostics: Before applying the protected merge, compare the incoming server timestamp with the existing local timestamp and all committed/live timeline anchors. If the server timestamp would cross another visible utterance, emit `conversation_hydration_order_preserved` through the existing client-event API. The event is stored in `AppEventLog` and emits the backend log marker `[conversation-order] hydration timestamp drift preserved`, including the hydration trigger (`mount`, `push`, or `poll`), both timestamps, delta, and crossed message IDs. Diagnostic events are deduplicated client-side and contain no transcript text, so a TestFlight or internal-test build can validate the hypothesis without Metro.
 - Data contract: No Prisma migration or API namespace change is required. The existing client-event endpoint accepts one additional additive event type.
 - Testing notes: Added a regression case where server persistence time would move finalized turn 4 below live turn 5; the merge keeps `4, 5` while still applying server-confirmed content. Added diagnostics coverage confirming the event is stored and logged without creating or notifying another conversation message. Targeted tests, TypeScript, and ESLint pass.
+
+## 2026-08-24 — Profile location reliability and edge-swipe navigation
+
+- Surface: `mingle-app/src/components/profile-location.tsx`, the Android native location bridge, and the profile PATCH flow.
+- Issue: The location panel used an independent full-screen animation instead of the shared `SlideSurface`, so an iOS edge swipe could be handled by the native WebView history gesture instead of dismissing the location panel. Android waited on a single `LocationManager` provider and could remain on `Getting your current location...` when GPS did not produce a fix. Reverse geocoding and profile persistence had no request-level timeout, so a slow upstream could leave the loading state unresolved.
+- Resolution:
+  - Reused `SlideSurface` for the location panel so its shared edge gesture and native navigation suppression apply consistently with other profile surfaces.
+  - Added Android fused-location, fresh last-known, and simultaneous network/GPS fallback paths while retaining a bounded 12-second overall timeout.
+  - Added bounded reverse-geocode and profile-save/clear requests. A transient location failure no longer clears an existing saved location; permission denial still performs the privacy cleanup.
+  - Added metadata-only diagnostics for request ID, provider, location receive time, reverse-geocode outcome, and profile persistence timing. Coordinates and address text are not logged.
+- Data contract: No Prisma migration, API namespace, or new server endpoint is required. Android now includes the Google Play Services location client dependency.
+- Testing notes: Verify location acquisition on Android with GPS disabled or slow, with cached location available, and with network fallback. Verify iOS edge swipe from the left screen edge dismisses the panel, while center swipes remain available for map/content scrolling. Confirm reverse-geocode and profile-save failures leave a bounded error state.

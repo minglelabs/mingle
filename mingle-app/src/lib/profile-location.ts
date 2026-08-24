@@ -13,6 +13,15 @@ export type LocalizedProfileLocation = Pick<ProfileLocationRecord, "city" | "cou
 
 const reverseGeocodeCache = new Map<string, LocalizedProfileLocation>();
 const REVERSE_GEOCODE_CACHE_LIMIT = 80;
+const REVERSE_GEOCODE_TIMEOUT_MS = 8_000;
+
+export type ReverseGeocodeOptions = {
+  requestId?: string;
+};
+
+function logReverseGeocode(event: string, payload: Record<string, unknown>): void {
+  console.info(`[ProfileLocation] ${event}`, payload);
+}
 
 export function normalizeProfileLocation(value: unknown): ProfileLocationRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -61,17 +70,32 @@ function boundedCacheSet(key: string, value: LocalizedProfileLocation): void {
 export async function reverseGeocodeProfileLocation(
   location: ProfileLocationRecord,
   locale: AppLocale,
+  options: ReverseGeocodeOptions = {},
 ): Promise<LocalizedProfileLocation> {
   const language = geocoderLanguage(locale);
   const key = `${location.latitude.toFixed(2)},${location.longitude.toFixed(2)}:${language}`;
   const cached = reverseGeocodeCache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    logReverseGeocode("reverse_geocode_cache_hit", {
+      requestId: options.requestId ?? "",
+      language,
+    });
+    return cached;
+  }
 
   const fallback = {
     city: location.city,
     country: location.country,
     countryCode: location.countryCode,
   } satisfies LocalizedProfileLocation;
+
+  const startedAtMs = Date.now();
+  const controller = typeof AbortController === "undefined" ? null : new AbortController();
+  const timeoutId = setTimeout(() => controller?.abort(), REVERSE_GEOCODE_TIMEOUT_MS);
+  logReverseGeocode("reverse_geocode_start", {
+    requestId: options.requestId ?? "",
+    language,
+  });
 
   try {
     const query = new URLSearchParams({
@@ -85,8 +109,16 @@ export async function reverseGeocodeProfileLocation(
     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query.toString()}`, {
       headers: { Accept: "application/json" },
       cache: "force-cache",
+      ...(controller ? { signal: controller.signal } : {}),
     });
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+      logReverseGeocode("reverse_geocode_fallback", {
+        requestId: options.requestId ?? "",
+        durationMs: Date.now() - startedAtMs,
+        reason: `http_${response.status}`,
+      });
+      return fallback;
+    }
     const payload = await response.json() as { address?: Record<string, unknown> };
     const address = payload.address ?? {};
     const text = (candidate: unknown) => typeof candidate === "string" && candidate.trim()
@@ -98,9 +130,23 @@ export async function reverseGeocodeProfileLocation(
       countryCode: text(address.country_code)?.toLowerCase() ?? fallback.countryCode,
     } satisfies LocalizedProfileLocation;
     boundedCacheSet(key, result);
+    logReverseGeocode("reverse_geocode_success", {
+      requestId: options.requestId ?? "",
+      durationMs: Date.now() - startedAtMs,
+      language,
+    });
     return result;
-  } catch {
+  } catch (error: unknown) {
+    logReverseGeocode("reverse_geocode_fallback", {
+      requestId: options.requestId ?? "",
+      durationMs: Date.now() - startedAtMs,
+      reason: controller?.signal.aborted
+        ? "timeout"
+        : error instanceof Error ? error.message : String(error),
+    });
     return fallback;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

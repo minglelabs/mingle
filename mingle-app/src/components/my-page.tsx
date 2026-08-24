@@ -140,6 +140,58 @@ function parseProfileBirthDate(value: unknown): BirthDateParts | null {
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
 
+type ProfileLocationPatchContext = {
+  operation: "permission_sync" | "save" | "clear";
+  requestId?: string;
+};
+
+const PROFILE_LOCATION_PATCH_TIMEOUT_MS = 10_000;
+
+async function patchProfileLocation(
+  body: Record<string, unknown>,
+  context: ProfileLocationPatchContext,
+): Promise<Response> {
+  const controller = new AbortController();
+  const startedAtMs = Date.now();
+  let didTimeout = false;
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, PROFILE_LOCATION_PATCH_TIMEOUT_MS);
+
+  console.info("[ProfileLocation] profile_patch_start", {
+    operation: context.operation,
+    requestId: context.requestId ?? "",
+  });
+  try {
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    console.info("[ProfileLocation] profile_patch_response", {
+      operation: context.operation,
+      requestId: context.requestId ?? "",
+      status: response.status,
+      durationMs: Date.now() - startedAtMs,
+    });
+    return response;
+  } catch (error: unknown) {
+    console.warn("[ProfileLocation] profile_patch_failed", {
+      operation: context.operation,
+      requestId: context.requestId ?? "",
+      durationMs: Date.now() - startedAtMs,
+      reason: didTimeout
+        ? "timeout"
+        : error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 const MY_PAGE_SURFACE_SCOPE = "mypage";
 const MY_PAGE_SETTINGS_SCOPE = "mypage-settings";
 const MY_PAGE_PROFILE_EDIT_SURFACE_ID = "profile-edit";
@@ -1851,11 +1903,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     setLocationPermission(nextPermission);
     if (nextPermission === "granted") {
       try {
-        await fetch(buildClientApiPath("/profile"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ locationPermissionStatus: "granted" }),
-        });
+        await patchProfileLocation(
+          { locationPermissionStatus: "granted" },
+          { operation: "permission_sync" },
+        );
       } catch {
         // The native permission remains authoritative for the current screen.
       }
@@ -1864,11 +1915,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     setProfile((current) => ({ ...current, location: null }));
     const cleanupStatus = nextPermission === "unknown" ? "unavailable" : nextPermission;
     try {
-      await fetch(buildClientApiPath("/profile"), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationPermissionStatus: cleanupStatus }),
-      });
+      await patchProfileLocation(
+        { locationPermissionStatus: cleanupStatus },
+        { operation: "permission_sync" },
+      );
     } catch {
       // The local profile is cleared immediately even if the cleanup request is retried later.
     }
@@ -1893,15 +1943,17 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     };
   }, [sessionUserId, syncLocationPermission]);
 
-  const handleSaveLocation = useCallback(async (nextLocation: ProfileLocationRecord) => {
+  const handleSaveLocation = useCallback(async (
+    nextLocation: ProfileLocationRecord,
+    context?: { requestId?: string },
+  ) => {
     locationPermissionSyncVersionRef.current += 1;
-    const response = await fetch(buildClientApiPath("/profile"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: nextLocation,
-        locationPermissionStatus: "granted",
-      }),
+    const response = await patchProfileLocation({
+      location: nextLocation,
+      locationPermissionStatus: "granted",
+    }, {
+      operation: "save",
+      requestId: context?.requestId,
     });
     if (!response.ok) throw new Error("location_save_failed");
     const data = await response.json() as { location?: unknown };
@@ -1911,16 +1963,15 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     setProfile((current) => ({ ...current, location: savedLocation }));
   }, []);
 
-  const handleClearLocation = useCallback(async () => {
+  const handleClearLocation = useCallback(async (context?: { requestId?: string }) => {
     locationPermissionSyncVersionRef.current += 1;
     locationPermissionRef.current = "denied";
     setLocationPermission("denied");
     setProfile((current) => ({ ...current, location: null }));
-    const response = await fetch(buildClientApiPath("/profile"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locationPermissionStatus: "denied" }),
-    });
+    const response = await patchProfileLocation(
+      { locationPermissionStatus: "denied" },
+      { operation: "clear", requestId: context?.requestId },
+    );
     if (!response.ok) throw new Error("location_clear_failed");
   }, []);
 

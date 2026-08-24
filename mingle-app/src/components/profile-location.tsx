@@ -19,8 +19,7 @@ import {
   reverseGeocodeProfileLocation,
   type ProfileLocationRecord,
 } from "@/lib/profile-location";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
-import { AnimatePresence, motion } from "framer-motion";
+import SlideSurface from "@/components/slide-surface";
 import { ArrowLeft, LocateFixed, Loader2, MapPin } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -29,15 +28,37 @@ type ProfileLocationProps = {
   profileLocation: ProfileLocationRecord | null;
   locale: AppLocale;
   isOwnProfile: boolean;
-  onSaveLocation?: (location: ProfileLocationRecord) => Promise<void>;
-  onClearLocation?: () => Promise<void>;
+  onSaveLocation?: (
+    location: ProfileLocationRecord,
+    context?: { requestId?: string },
+  ) => Promise<void>;
+  onClearLocation?: (context?: { requestId?: string }) => Promise<void>;
   onMapOpenChange?: (open: boolean) => void;
 };
 
-const PROFILE_LOCATION_PANEL_TRANSITION = {
-  duration: 0.32,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
+const PROFILE_LOCATION_SAVE_TIMEOUT_MS = 12_000;
+
+function logProfileLocation(event: string, payload: Record<string, unknown>): void {
+  console.info(`[ProfileLocation] ${event}`, payload);
+}
+
+async function withProfileLocationTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorCode: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 function locationLabel(
   location: Pick<ProfileLocationRecord, "city" | "country"> | null,
@@ -85,19 +106,26 @@ export default function ProfileLocation({
     };
   }, [locale, profileLocation]);
 
-  useEffect(() => {
-    if (!isMapOpen) return;
-    return registerNativeBackHandler(() => {
-      setMapOpen(false);
-      return true;
-    }, 40);
-  }, [isMapOpen, setMapOpen]);
-
-  const clearStoredLocation = useCallback(async () => {
+  const clearStoredLocation = useCallback(async (requestId?: string) => {
     if (!onClearLocation) return;
+    const startedAtMs = Date.now();
+    logProfileLocation("location_clear_start", { requestId: requestId ?? "" });
     try {
-      await onClearLocation();
-    } catch {
+      await withProfileLocationTimeout(
+        onClearLocation({ requestId }),
+        PROFILE_LOCATION_SAVE_TIMEOUT_MS,
+        "location_clear_timeout",
+      );
+      logProfileLocation("location_clear_success", {
+        requestId: requestId ?? "",
+        durationMs: Date.now() - startedAtMs,
+      });
+    } catch (error: unknown) {
+      logProfileLocation("location_clear_failed", {
+        requestId: requestId ?? "",
+        durationMs: Date.now() - startedAtMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
       // The caller keeps the last rendered value when a best-effort privacy cleanup fails.
     }
   }, [onClearLocation]);
@@ -108,10 +136,22 @@ export default function ProfileLocation({
   }, []);
 
   const saveCurrentLocation = useCallback(async (
-    coordinates: { latitude: number; longitude: number; accuracy?: number | null },
+    coordinates: {
+      latitude: number;
+      longitude: number;
+      accuracy?: number | null;
+      provider?: string;
+      receivedAtMs?: number;
+    },
     requestId: string,
   ) => {
     if (requestId !== String(requestSequenceRef.current)) return;
+    logProfileLocation("location_received", {
+      requestId,
+      provider: coordinates.provider ?? "unknown",
+      accuracy: coordinates.accuracy ?? null,
+      receivedAtMs: coordinates.receivedAtMs ?? Date.now(),
+    });
     const candidate = normalizeProfileLocation({
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
@@ -124,16 +164,32 @@ export default function ProfileLocation({
       return;
     }
 
-    const localized = await reverseGeocodeProfileLocation(candidate, locale);
+    const localized = await reverseGeocodeProfileLocation(candidate, locale, { requestId });
     const nextLocation: ProfileLocationRecord = { ...candidate, ...localized };
+    if (requestId !== String(requestSequenceRef.current)) return;
+    const saveStartedAtMs = Date.now();
+    logProfileLocation("location_save_start", { requestId });
     try {
-      await onSaveLocation?.(nextLocation);
+      await withProfileLocationTimeout(
+        onSaveLocation?.(nextLocation, { requestId }) ?? Promise.resolve(),
+        PROFILE_LOCATION_SAVE_TIMEOUT_MS,
+        "location_save_timeout",
+      );
+      logProfileLocation("location_save_success", {
+        requestId,
+        durationMs: Date.now() - saveStartedAtMs,
+      });
       setLocalizedLocation(nextLocation);
       setPermission("granted");
       setMapOpen(true);
       finishLocationRequest(null);
       toast.success(copy.saveSuccess);
-    } catch {
+    } catch (error: unknown) {
+      logProfileLocation("location_save_failed", {
+        requestId,
+        durationMs: Date.now() - saveStartedAtMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
       finishLocationRequest(copy.locationError);
     }
   }, [copy.locationError, copy.saveSuccess, finishLocationRequest, locale, onSaveLocation, setMapOpen]);
@@ -141,6 +197,8 @@ export default function ProfileLocation({
   const requestCurrentLocation = useCallback(async () => {
     if (!isOwnProfile || !onSaveLocation || isRequesting) return;
     const requestId = String(++requestSequenceRef.current);
+    const requestStartedAtMs = Date.now();
+    logProfileLocation("location_request_start", { requestId });
     setMapOpen(true);
     setIsRequesting(true);
     setError(null);
@@ -158,7 +216,14 @@ export default function ProfileLocation({
       if (settled) return;
       finish();
       setPermission(nextPermission);
-      void clearStoredLocation();
+      if (nextPermission === "denied" || nextPermission === "blocked") {
+        void clearStoredLocation(requestId);
+      }
+      logProfileLocation("location_permission_denied", {
+        requestId,
+        permission: nextPermission,
+        durationMs: Date.now() - requestStartedAtMs,
+      });
       finishLocationRequest(copy.permissionDenied);
     };
 
@@ -173,7 +238,11 @@ export default function ProfileLocation({
       }
       if (event.type === "error") {
         finish();
-        void clearStoredLocation();
+        logProfileLocation("location_error", {
+          requestId,
+          code: event.code,
+          durationMs: Date.now() - requestStartedAtMs,
+        });
         finishLocationRequest(copy.locationError);
         return;
       }
@@ -185,10 +254,15 @@ export default function ProfileLocation({
     timeoutId = setTimeout(() => {
       if (settled) return;
       finish();
+      logProfileLocation("location_request_timeout", {
+        requestId,
+        durationMs: Date.now() - requestStartedAtMs,
+      });
       finishLocationRequest(copy.locationError);
     }, 15_000);
 
     if (isNativeLocationBridgeAvailable() && postNativeLocationRequest(requestId)) {
+      logProfileLocation("location_request_sent_to_native", { requestId });
       return;
     }
 
@@ -196,12 +270,25 @@ export default function ProfileLocation({
       const browserLocation = await getBrowserCurrentLocation();
       await saveCurrentLocation(browserLocation, requestId);
       if (!settled) finish();
-    } catch {
+    } catch (error: unknown) {
       if (!settled) {
         finish();
-        setPermission("denied");
-        await clearStoredLocation();
-        finishLocationRequest(copy.permissionDenied);
+        const isPermissionDenied = typeof error === "object"
+          && error !== null
+          && "code" in error
+          && (error as { code?: unknown }).code === 1;
+        if (isPermissionDenied) {
+          setPermission("denied");
+          await clearStoredLocation(requestId);
+          finishLocationRequest(copy.permissionDenied);
+        } else {
+          logProfileLocation("location_browser_failed", {
+            requestId,
+            durationMs: Date.now() - requestStartedAtMs,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          finishLocationRequest(copy.locationError);
+        }
       }
     }
   }, [clearStoredLocation, copy.locationError, copy.permissionDenied, finishLocationRequest, isOwnProfile, isRequesting, onSaveLocation, saveCurrentLocation, setMapOpen]);
@@ -249,19 +336,14 @@ export default function ProfileLocation({
         </p>
       )}
 
-      <AnimatePresence initial={false}>
-        {isMapOpen ? (
-          <motion.section
-            key="profile-location-panel"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={PROFILE_LOCATION_PANEL_TRANSITION}
-            className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label={copy.mapTitle}
-          >
+      <SlideSurface
+        open={isMapOpen}
+        onClose={() => setMapOpen(false)}
+        ariaLabel={copy.mapTitle}
+        nativeBackPriority={40}
+        className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950 shadow-2xl"
+        style={{ touchAction: "pan-y" }}
+      >
             <header
               className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
               style={{
@@ -334,9 +416,7 @@ export default function ProfileLocation({
                 <p className="text-center text-[12px] text-gray-400">{copy.attribution}</p>
               </div>
             </div>
-          </motion.section>
-        ) : null}
-      </AnimatePresence>
+      </SlideSurface>
     </>
   );
 }

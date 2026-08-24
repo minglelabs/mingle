@@ -1373,6 +1373,8 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             "latitude": location.coordinate.latitude,
             "longitude": location.coordinate.longitude,
             "accuracy": location.horizontalAccuracy,
+            "provider": "core_location",
+            "receivedAtMs": Int(Date().timeIntervalSince1970 * 1000),
         ])
     }
 

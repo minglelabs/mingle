@@ -156,7 +156,13 @@ type NativePushNotificationModule = {
 type NativeLocationModule = {
   checkLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
   requestLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
-  getCurrentLocation?: () => Promise<{ latitude?: unknown; longitude?: unknown; accuracy?: unknown }>;
+  getCurrentLocation?: () => Promise<{
+    latitude?: unknown;
+    longitude?: unknown;
+    accuracy?: unknown;
+    provider?: unknown;
+    receivedAtMs?: unknown;
+  }>;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -815,7 +821,15 @@ type NativeSttEvent =
 type NativeLocationPermission = 'granted' | 'denied' | 'blocked' | 'not_determined' | 'unavailable' | 'unknown';
 type NativeLocationEvent =
   | { type: 'permission'; permission: NativeLocationPermission; requestId?: string; platform?: string }
-  | { type: 'location'; latitude: number; longitude: number; accuracy?: number | null; requestId?: string }
+  | {
+      type: 'location';
+      latitude: number;
+      longitude: number;
+      accuracy?: number | null;
+      provider?: string;
+      receivedAtMs?: number;
+      requestId?: string;
+    }
   | { type: 'error'; code: string; requestId?: string };
 
 function normalizeNativeLocationPermission(value: unknown): NativeLocationPermission {
@@ -2225,7 +2239,16 @@ function AppInner(): React.JSX.Element {
         platform: typeof result?.platform === 'string' ? result.platform : Platform.OS,
         ...(requestId ? { requestId } : {}),
       });
-    } catch {
+      console.info('[NativeLocation] permission', {
+        requestId: requestId ?? '',
+        permission: normalizeNativeLocationPermission(result?.permission),
+        platform: typeof result?.platform === 'string' ? result.platform : Platform.OS,
+      });
+    } catch (error: unknown) {
+      console.warn('[NativeLocation] permission_failed', {
+        requestId: requestId ?? '',
+        error: error instanceof Error ? error.message : String(error),
+      });
       emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
     }
   }, [emitLocationToWeb, getNativeLocationModule]);
@@ -2258,14 +2281,32 @@ function AppInner(): React.JSX.Element {
       const accuracy = typeof location?.accuracy === 'number' && Number.isFinite(location.accuracy)
         ? location.accuracy
         : null;
+      const provider = typeof location?.provider === 'string' && location.provider.trim().length > 0
+        ? location.provider.trim()
+        : 'native_unknown';
+      const receivedAtMs = typeof location?.receivedAtMs === 'number' && Number.isFinite(location.receivedAtMs)
+        ? location.receivedAtMs
+        : Date.now();
+      console.info('[NativeLocation] location_received', {
+        requestId: requestId ?? '',
+        provider,
+        accuracy,
+        receivedAtMs,
+      });
       emitLocationToWeb({
         type: 'location',
         latitude,
         longitude,
         accuracy,
+        provider,
+        receivedAtMs,
         ...(requestId ? { requestId } : {}),
       });
-    } catch {
+    } catch (error: unknown) {
+      console.warn('[NativeLocation] request_failed', {
+        requestId: requestId ?? '',
+        error: error instanceof Error ? error.message : String(error),
+      });
       emitLocationToWeb({ type: 'error', code: 'location_failed', ...(requestId ? { requestId } : {}) });
     }
   }, [emitLocationToWeb, getNativeLocationModule]);

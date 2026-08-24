@@ -20,6 +20,8 @@ export type NativeLocationEvent =
       latitude: number;
       longitude: number;
       accuracy?: number | null;
+      provider?: string;
+      receivedAtMs?: number;
       requestId?: string;
     }
   | {
@@ -101,6 +103,8 @@ export function getBrowserCurrentLocation(): Promise<{
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  provider: "browser";
+  receivedAtMs: number;
 }> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -112,6 +116,8 @@ export function getBrowserCurrentLocation(): Promise<{
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+        provider: "browser",
+        receivedAtMs: Date.now(),
       }),
       (error) => reject(error),
       { enableHighAccuracy: false, timeout: 12_000, maximumAge: 0 },
