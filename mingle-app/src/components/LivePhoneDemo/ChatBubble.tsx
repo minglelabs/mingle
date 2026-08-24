@@ -22,7 +22,7 @@ import {
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
-const MESSAGE_BUBBLE_MAX_WIDTH = '99%'
+const MESSAGE_BUBBLE_MAX_WIDTH = '100%'
 
 // 재생키 빌더 (LivePhoneDemo의 것과 동일 규칙)
 function buildOriginalPlaybackKey(utteranceId: string, lang: string): string {
@@ -864,7 +864,7 @@ function ChatBubble({
       data-chat-message-column
       layout
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
-      className={`flex min-w-0 flex-1 items-end gap-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+      className={`flex min-w-0 flex-1 items-end gap-0.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
     >
       <AnimatePresence initial={false} mode="popLayout">
         {isBubbleExpanded ? (
@@ -876,7 +876,8 @@ function ChatBubble({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 5 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="min-w-0 w-fit max-w-full"
+            className="min-w-0 w-max max-w-full shrink"
+            style={{ flexBasis: 'max-content' }}
           >
             <div
               data-chat-message-bubble-stack
@@ -925,7 +926,8 @@ function ChatBubble({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="min-w-0 w-fit max-w-full"
+            className="min-w-0 w-max max-w-full shrink"
+            style={{ flexBasis: 'max-content' }}
           >
             <div
               data-chat-message-bubble-stack

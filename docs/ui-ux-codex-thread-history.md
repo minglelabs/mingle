@@ -1509,3 +1509,15 @@
 - Resolution: Keep the notification center delegate and background/tap handling unchanged, but return an empty presentation option set from `willPresent`. APNs delivery continues, while foreground iOS messages no longer show a banner, play a sound, or update the badge.
 - Data contract: None. No Prisma migration, API namespace, or server payload change is required.
 - Testing notes: Install the new iOS TestFlight build on a device, keep Mingle in the foreground, send a message from a second account, and confirm there is no banner, sound, or badge change. Background and notification-tap behavior must still work.
+
+## 2026-08-24 — Let message bubbles use their natural available width
+
+- Surface: Collapsed and expanded message bubbles in the 2.0.0 conversation room, including the localized Expand/Collapse control beside each bubble.
+- Issue: The bubble content switch used `fit-content` as a shrinkable flex item beside the toggle. During flex sizing, WebKit could resolve that item near its min-content width before the message received the remaining row width. A language badge could therefore occupy the first line by itself while short text such as `Again`, `What is it?`, or a short Japanese translation wrapped underneath even though substantial horizontal room remained.
+- User impact: Short messages looked arbitrarily narrow, longer messages wrapped much earlier than necessary, and expanded multi-language bubbles became tall and visually uneven.
+- Resolution:
+  - Start both collapsed and expanded bubble sizing from their max-content width, then allow the flex row to shrink them only when the available conversation width is genuinely smaller.
+  - Keep the bubble capped by the full remaining message column so long text naturally grows to the widest safe width before wrapping.
+  - Reduce the bubble-to-toggle gap from 4px to 2px. The reclaimed space is available to the bubble while the localized text control remains attached to the bubble baseline.
+- Data contract: None. No Prisma migration, API namespace, or native change is required.
+- Testing notes: Verify short Korean, English, and Japanese rows (`또`, `Again`, `また`), mixed rows such as `What is it?`, and long multi-line translations on narrow iPhone and Android widths. Text should remain beside the flag when it fits, wrap only after the bubble reaches its safe maximum width, and keep Expand/Collapse 2px from the bubble.

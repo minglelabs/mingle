@@ -61,7 +61,7 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
-    expect(html).toContain('max-width:99%')
+    expect(html).toContain('max-width:100%')
     expect(html).toContain('px-2.5 py-1.5')
     expect(html).not.toContain('px-3.5 py-2')
     expect(html).not.toContain('data-original-bubble-tail')
@@ -112,7 +112,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-bubble-content-switch="expanded"')
     expect(html).toContain('my-1 h-px w-full bg-gray-200/60')
     expect(html).toContain('mr-0.5 inline-flex align-middle')
-    expect(html).toContain('max-width:99%')
+    expect(html).toContain('max-width:100%')
     expect(html).toContain('px-2.5 py-1.5')
     expect(html).not.toContain('shrink-0 pt-0.5')
     expect(html).not.toContain('rotate-90')
@@ -158,10 +158,12 @@ describe('ChatBubble', () => {
     const otherContentSwitchTag = openingTag(otherHtml, 'data-chat-bubble-content-switch="collapsed"')
     const otherControlsTag = openingTag(otherHtml, 'data-chat-bubble-controls')
 
-    expect(otherMessageColumnTag).toContain('items-end gap-1')
+    expect(otherMessageColumnTag).toContain('items-end gap-0.5')
+    expect(otherMessageColumnTag).not.toContain('gap-1 ')
     expect(otherMessageColumnTag).not.toContain('gap-1.5')
     expect(otherMessageColumnTag).not.toContain('flex-row-reverse')
-    expect(otherContentSwitchTag).toContain('min-w-0 w-fit max-w-full')
+    expect(otherContentSwitchTag).toContain('min-w-0 w-max max-w-full shrink')
+    expect(otherContentSwitchTag).toContain('flex-basis:max-content')
     expect(otherContentSwitchTag).not.toContain('flex-1')
     expect(otherControlsTag).toContain('self-end')
     expect(otherControlsTag).not.toContain('mb-1.5')
@@ -171,8 +173,38 @@ describe('ChatBubble', () => {
 
     const ownHtml = renderBubble('user-me', 'user-me')
     const ownMessageColumnTag = openingTag(ownHtml, 'data-chat-message-column')
-    expect(ownMessageColumnTag).toContain('items-end gap-1')
+    expect(ownMessageColumnTag).toContain('items-end gap-0.5')
     expect(ownMessageColumnTag).toContain('flex-row-reverse')
+  })
+
+  it('starts bubble sizing from max-content before shrinking to the available row width', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-natural-width',
+          originalText: '또',
+          originalLang: 'ko',
+          targetLanguages: ['en', 'ja'],
+          translations: {
+            en: 'Again',
+            ja: 'また',
+          },
+          speakerUserId: 'user-me',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-me',
+      }),
+    )
+
+    const openingTag = (markup: string, marker: string) => {
+      const start = markup.indexOf(marker)
+      return markup.slice(start, markup.indexOf('>', start) + 1)
+    }
+    const contentSwitchTag = openingTag(html, 'data-chat-bubble-content-switch="expanded"')
+    expect(contentSwitchTag).toContain('w-max max-w-full shrink')
+    expect(contentSwitchTag).toContain('flex-basis:max-content')
+    expect(html).toContain('max-width:100%')
+    expect(html.indexOf('🇺🇸')).toBeLessThan(html.indexOf('Again'))
   })
 
   it('uses one speaker-based background color for every expanded row', () => {
