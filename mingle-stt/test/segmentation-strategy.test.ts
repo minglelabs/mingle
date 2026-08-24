@@ -6,6 +6,7 @@ import {
   evaluateProviderEndpointDecision,
   ManualFinalizeCarryController,
   partitionSonioxTokensAtFirstBoundary,
+  readSegmentationStrategyId,
   resolveSessionSegmentationStrategy,
   resolveSonioxBoundaryHandling,
   resolveSonioxEndpointDelayMs,
@@ -16,6 +17,21 @@ import {
   resolveSonioxSegmentationRuntime,
   selectSonioxBoundarySpeakerIds,
 } from '../segmentation-strategy';
+
+test('defaults the server segmentation strategy to endpoint mode', () => {
+  const previous = process.env.SONIOX_SEGMENTATION_STRATEGY;
+  delete process.env.SONIOX_SEGMENTATION_STRATEGY;
+
+  try {
+    assert.equal(readSegmentationStrategyId(), 'end');
+  } finally {
+    if (previous === undefined) {
+      delete process.env.SONIOX_SEGMENTATION_STRATEGY;
+    } else {
+      process.env.SONIOX_SEGMENTATION_STRATEGY = previous;
+    }
+  }
+});
 
 test('resolves requested and effective segmentation modes once', () => {
   assert.deepEqual(resolveSonioxSegmentationRuntime('fin', 700), {
@@ -338,4 +354,3 @@ test('resolveSessionSegmentationStrategy falls back to server default for invali
     assert.equal(resolveSessionSegmentationStrategy(123, 'fin'), 'fin');
     assert.equal(resolveSessionSegmentationStrategy('llm', 'end'), 'end');
 });
-

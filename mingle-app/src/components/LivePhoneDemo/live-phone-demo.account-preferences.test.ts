@@ -7,6 +7,8 @@ import {
 import {
   buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
+  normalizeSonioxEndpointMaxDelayPreference,
+  normalizeSonioxManualFinalizeSilencePreference,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
@@ -94,6 +96,14 @@ describe('buildHydratedAccountPreferences', () => {
       adBannerPosition: 'top',
       sttSegmentationMode: ' FIN ',
     }, false).sttSegmentationMode).toBe('fin')
+  })
+})
+
+describe('normalize Soniox timing preferences', () => {
+  it('allows Fin silence up to 5000ms and keeps End delay capped at 3000ms', () => {
+    expect(normalizeSonioxManualFinalizeSilencePreference(5000)).toBe(5000)
+    expect(normalizeSonioxManualFinalizeSilencePreference(6000)).toBe(5000)
+    expect(normalizeSonioxEndpointMaxDelayPreference(5000)).toBe(3000)
   })
 })
 

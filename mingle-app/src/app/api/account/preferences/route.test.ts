@@ -94,7 +94,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -125,7 +125,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -279,7 +279,7 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("falls back to the 500ms DB default when silence finalize is unset", async () => {
+  it("falls back to the 1000ms DB default when silence finalize is unset", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -304,7 +304,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -338,7 +338,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        demoSilenceFinalizeMs: 3000,
+        demoSilenceFinalizeMs: 5000,
       },
     });
   });

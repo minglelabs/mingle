@@ -4,8 +4,8 @@
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.preferences.ts`
 - Issue: The silence-based speech split mode had its silence-duration control hidden while the endpoint-mode five-step speech-length control remained visible. Users could therefore see a misleading “speech length per utterance” setting when they had selected silence-based splitting.
-- User impact: Silence-based splitting did not expose the original 500–3000ms silence window, and the visible control described a different segmentation behavior.
-- Resolution: Show the 500–3000ms silence-duration slider only for silence-based splitting, and show the existing five-step endpoint tuning slider only for automatic endpoint detection. The server and account-preference clamps remain aligned at 500–3000ms. A 5000ms maximum is intentionally deferred because it can delay finalization and merge separate utterances; expand it only after real-device usage demonstrates a need.
+- User impact: Silence-based splitting did not expose the original silence-duration control, and the visible control described a different segmentation behavior.
+- Resolution: Show the 500–5000ms silence-duration slider only for silence-based splitting, with a 1000ms default, and show the existing five-step endpoint tuning slider only for automatic endpoint detection. The endpoint safety cap remains 500–3000ms, so extending the Fin silence window does not change End behavior.
 - Verification: Update the preference UI contract test and verify both current and legacy live-demo menus switch controls when the segmentation mode changes.
 
 ## 2026-08-24 - Per-user STT Speech Split Mode Selector

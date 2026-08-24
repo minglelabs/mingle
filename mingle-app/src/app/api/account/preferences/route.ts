@@ -16,8 +16,10 @@ const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
 const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
-const MAX_SILENCE_MS = 3000;
-const DEFAULT_SILENCE_MS = 500;
+const MAX_SILENCE_MS = 5000;
+const DEFAULT_SILENCE_MS = 1000;
+const MIN_ENDPOINT_MAX_DELAY_MS = 500;
+const MAX_ENDPOINT_MAX_DELAY_MS = 3000;
 const DEFAULT_ENDPOINT_MAX_DELAY_MS = 3000;
 const MIN_ENDPOINT_TUNING_STEP = 0;
 const MAX_ENDPOINT_TUNING_STEP = 4;
@@ -414,7 +416,11 @@ export async function PATCH(request: Request) {
 
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
-  const nextEndpointMaxDelayMs = asClampedInteger(body.sonioxEndpointMaxDelayMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
+  const nextEndpointMaxDelayMs = asClampedInteger(
+    body.sonioxEndpointMaxDelayMs,
+    MIN_ENDPOINT_MAX_DELAY_MS,
+    MAX_ENDPOINT_MAX_DELAY_MS,
+  );
   const nextEndpointTuningStep = asClampedInteger(
     body.sonioxEndpointTuningStep,
     MIN_ENDPOINT_TUNING_STEP,

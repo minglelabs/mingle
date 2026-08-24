@@ -7,13 +7,15 @@ export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
 export const LS_KEY_INPUT_MODE = 'mingle_demo_input_mode'
 export const DEFAULT_TEXT_SIZE_LEVEL = 3
-export const DEFAULT_SONIOX_SILENCE_MS = 500
+export const DEFAULT_SONIOX_SILENCE_MS = 1000
 export const DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS = 3000
+export const MIN_SONIOX_ENDPOINT_MAX_DELAY_MS = 500
+export const MAX_SONIOX_ENDPOINT_MAX_DELAY_MS = 3000
 export const DEFAULT_SONIOX_ENDPOINT_TUNING_STEP = 2
 export const MIN_SONIOX_ENDPOINT_TUNING_STEP = 0
 export const MAX_SONIOX_ENDPOINT_TUNING_STEP = 4
 export const MIN_SONIOX_SILENCE_MS = 500
-export const MAX_SONIOX_SILENCE_MS = 3000
+export const MAX_SONIOX_SILENCE_MS = 5000
 
 export type SonioxUiSegmentationStrategy = 'fin' | 'end'
 

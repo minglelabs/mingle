@@ -4,8 +4,10 @@ import {
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_ENDPOINT_MAX_DELAY_MS,
   MAX_SONIOX_ENDPOINT_TUNING_STEP,
   MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_ENDPOINT_MAX_DELAY_MS,
   MIN_SONIOX_ENDPOINT_TUNING_STEP,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
@@ -24,7 +26,8 @@ const MAX_TEXT_SIZE_LEVEL = 5
 export const DEFAULT_SPEAKER_ENABLED = false
 export const DEFAULT_ECHO_ALLOWED = true
 export type SttSegmentationMode = 'fin' | 'end'
-export const DEFAULT_STT_SEGMENTATION_MODE: SttSegmentationMode | null = null
+export const DEFAULT_STT_SEGMENTATION_MODE: SttSegmentationMode = 'end'
+export const DEFAULT_STT_SEGMENTATION_PREFERENCE: SttSegmentationMode | null = null
 export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom'
 
 export type AccountPreferencesResponse = {
@@ -103,7 +106,12 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
 }
 
 export function normalizeSonioxEndpointMaxDelayPreference(value: unknown): number {
-  return normalizeIntegerPreference(value, DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
+  return normalizeIntegerPreference(
+    value,
+    DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    MIN_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    MAX_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  )
 }
 
 export function normalizeSonioxEndpointTuningStepPreference(value: unknown): number {
@@ -145,7 +153,7 @@ export function buildHydratedAccountPreferences(
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
     echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
-    sttSegmentationMode: normalizeSttSegmentationMode(body?.sttSegmentationMode) ?? DEFAULT_STT_SEGMENTATION_MODE,
+    sttSegmentationMode: normalizeSttSegmentationMode(body?.sttSegmentationMode) ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
   }
 }
 

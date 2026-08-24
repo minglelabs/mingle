@@ -62,10 +62,12 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
-const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500;
+const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 1000;
 const SONIOX_ENDPOINT_MAX_DELAY_MS_DEFAULT = 3000;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
-const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3000;
+const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 5000;
+const SONIOX_ENDPOINT_MAX_DELAY_MS_MIN = 500;
+const SONIOX_ENDPOINT_MAX_DELAY_MS_MAX = 3000;
 const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS = 1200;
 const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS = 700;
 const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
@@ -602,8 +604,8 @@ wss.on('connection', (clientWs) => {
                 const raw = Number(config.soniox_endpoint_max_delay_ms);
                 if (!Number.isFinite(raw)) return SONIOX_ENDPOINT_MAX_DELAY_MS_DEFAULT;
                 return Math.max(
-                    SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN,
-                    Math.min(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX, Math.floor(raw)),
+                    SONIOX_ENDPOINT_MAX_DELAY_MS_MIN,
+                    Math.min(SONIOX_ENDPOINT_MAX_DELAY_MS_MAX, Math.floor(raw)),
                 );
             })();
             const endpointTuningProfile = config.soniox_endpoint_tuning_step === undefined

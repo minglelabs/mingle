@@ -382,7 +382,7 @@ export function readSegmentationStrategyId(): SegmentationStrategyId {
     const raw = (process.env['SONIOX_SEGMENTATION_STRATEGY'] ?? '').trim().toLowerCase();
     if (raw === 'end') return 'end';
     if (raw === 'llm') return 'llm';
-    return 'fin';
+    return 'end';
 }
 
 /**

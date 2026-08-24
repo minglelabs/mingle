@@ -58,6 +58,7 @@ import {
   type LivePhoneDemoAccountPreferences,
   SttSegmentationMode,
   DEFAULT_STT_SEGMENTATION_MODE,
+  DEFAULT_STT_SEGMENTATION_PREFERENCE,
 } from './live-phone-demo.account-preferences'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
@@ -880,7 +881,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
-  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(DEFAULT_STT_SEGMENTATION_MODE)
+  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(DEFAULT_STT_SEGMENTATION_PREFERENCE)
   const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
   const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
@@ -978,7 +979,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
-    sttSegmentationMode: DEFAULT_STT_SEGMENTATION_MODE,
+    sttSegmentationMode: DEFAULT_STT_SEGMENTATION_PREFERENCE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -2499,14 +2500,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
-    sttSegmentationMode,
+    sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
-  const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? 'end'
+  const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
     if (isSttSessionRunning) return
     if (latestAccountPreferencesRef.current.sttSegmentationMode === nextMode) return

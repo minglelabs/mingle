@@ -42,6 +42,7 @@ describe('readPersistedIntegerPreference', () => {
   it('uses the persisted value when it is valid', () => {
     expect(readPersistedIntegerPreference('5', DEFAULT_TEXT_SIZE_LEVEL, 1, 5)).toBe(5)
     expect(readPersistedIntegerPreference('3000', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(3000)
+    expect(readPersistedIntegerPreference('5000', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(5000)
   })
 
   it('falls back for invalid or non-positive values', () => {

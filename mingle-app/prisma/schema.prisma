@@ -34,7 +34,7 @@ model User {
   apiNamespaceHistory String[] @default([]) @map("api_namespace_history")
   pathname        String?
   demoTextSizeLevel Int?   @map("demo_text_size_level")
-  demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
+  demoSilenceFinalizeMs Int? @default(1000) @map("demo_silence_finalize_ms")
   demoEndpointMaxDelayMs Int? @default(3000) @map("demo_endpoint_max_delay_ms")
   demoEndpointTuningStep Int? @default(2) @map("demo_endpoint_tuning_step")
   translationModel  String?  @map("translation_model")
