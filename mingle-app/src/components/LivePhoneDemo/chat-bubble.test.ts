@@ -42,7 +42,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-black')
     expect(html).not.toContain('“”')
     expect(html).toContain('h-[18px] w-[18px]')
-    expect(html).toContain('h-5 w-6')
+    expect(html).toContain('h-5 w-7')
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(1)
@@ -171,7 +171,7 @@ describe('ChatBubble', () => {
     expect(otherControlsTag).toContain('self-end')
     expect(otherControlsTag).not.toContain('mb-1.5')
     const otherBubbleLineTag = openingTag(otherHtml, 'data-chat-bubble-line')
-    expect(otherBubbleLineTag).toContain('items-end gap-px')
+    expect(otherBubbleLineTag).toContain('items-end gap-1')
     expect(otherHtml.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
       otherHtml.indexOf('data-chat-bubble-controls'),
     )
@@ -494,7 +494,7 @@ describe('ChatBubble', () => {
 
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
-    expect((html.match(/h-5 w-6/g) || []).length).toBe(3)
+    expect((html.match(/h-5 w-7/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(3)
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
   })
@@ -604,7 +604,8 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(5)
     expect((html.match(/border-b-2 border-amber-400/g) || []).length).toBeGreaterThanOrEqual(1)
     expect(html).toContain('h-5 min-h-5')
-    expect(html).toContain('text-sm font-medium leading-5')
+    expect(html).toContain('text-base font-medium leading-5')
+    expect(html).toContain('w-max min-w-0 max-w-full')
     expect(html).not.toContain('data-chat-bubble-language-badges')
     expect(html).toContain('rounded-2xl rounded-tl-none')
     expect(html.indexOf('data-chat-speaker-header')).toBeLessThan(
@@ -632,7 +633,7 @@ describe('ChatBubble', () => {
     )
 
     expect(expandedHtml).toContain('h-5 min-h-5')
-    expect(expandedHtml).toContain('text-sm font-medium leading-5')
+    expect(expandedHtml).toContain('text-base font-medium leading-5')
     expect(expandedHtml).not.toContain('data-chat-bubble-header-language-badges')
   })
 

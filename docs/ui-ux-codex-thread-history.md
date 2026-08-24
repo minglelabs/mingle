@@ -5,9 +5,17 @@
 - **Surface:** Collapsed/expanded shared-room message bubbles, sender header, language selectors, and timestamp metadata.
 - **Issue:** The counterpart header's circular flags made it taller than the sender name, so expanding a bubble could shift its vertical position. The collapsed bubble also used the same circular flags, expanded rows had no text offset after their icon, and localized absolute timestamps could occupy three lines when the locale exposed a separate day period.
 - **Resolution:** Use a fixed 20px sender header in both collapsed and expanded states. Increase the sender name to `text-sm`, render collapsed flags as compact icons with the original-language quote badge, and show the selected language with only an amber key-color underline. Add a small icon-to-text gap in expanded rows, a small vertical inset between rows, and reduce collapsed bubble vertical padding/line-height pressure.
-- **Metadata:** Bring `Expand`/`Collapse` directly beside the bubble, match its typography to the timestamp, and place the viewer's time above the toggle in a compact vertical metadata column. Timestamp formatting now combines localized time and day-period text into one line, keeping absolute timestamps to at most two lines (`date` + `time`).
+- **Metadata:** Keep `Expand`/`Collapse` close but visibly separated from the bubble, match its typography to the timestamp, and place the viewer's time above the toggle in a compact vertical metadata column. Timestamp formatting now combines localized time and day-period text into one line, keeping absolute timestamps to at most two lines (`date` + `time`).
 - **Data change:** None.
 - **Testing notes:** Verify collapsed/expanded toggles do not move the counterpart bubble vertically, selected underlines, original quote badges, long localized names, 2024 date timestamps, and narrow iOS/Android layouts.
+
+## 2026-08-25 - Widen language hit areas and sender header
+
+- **Surface:** Collapsed language icons, counterpart sender header, and bubble-to-toggle spacing.
+- **Issue:** Compact language buttons had little horizontal breathing room and were difficult to tap in a row. The sender name was slightly smaller than the message text, while a short bubble could make the name-and-language header look unnecessarily constrained. The toggle also became visually too close after the previous gap reduction.
+- **Resolution:** Increase icon button width from 24px to 28px while keeping the visual flag at 18px, enlarge the sender name to `text-base` inside the same fixed 20px line, let the header use its natural width up to the available screen width, and restore a 4px bubble-to-toggle gap.
+- **Data change:** None.
+- **Testing notes:** Verify five adjacent flags remain individually tappable, the header can be wider than a short bubble, and the fixed header height remains identical when toggling expansion.
 
 ## 2026-08-25 - Add sender identity and KakaoTalk-style message alignment
 

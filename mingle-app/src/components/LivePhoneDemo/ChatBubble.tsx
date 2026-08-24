@@ -380,7 +380,7 @@ function ChatLanguageBadge({
         onSelect?.()
       }}
       className={isIconVariant
-        ? 'relative inline-flex h-5 w-6 shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'
+        ? 'relative inline-flex h-5 w-7 shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'
         : 'relative inline-flex h-[30px] w-[42px] shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'}
     >
       <span
@@ -833,12 +833,12 @@ function ChatBubble({
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
-      className="flex h-5 min-h-5 min-w-0 max-w-full items-center gap-0.5 overflow-hidden px-0.5"
+      className="flex h-5 min-h-5 w-max min-w-0 max-w-full items-center gap-0.5 overflow-visible px-0.5"
     >
       {speakerName && (
         <span
           data-chat-speaker-name
-          className="h-5 min-w-0 max-w-[12rem] truncate text-sm font-medium leading-5 text-gray-500"
+          className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-base font-medium leading-5 text-gray-500"
         >
           {speakerName}
         </span>
@@ -846,7 +846,7 @@ function ChatBubble({
       {shouldShowCollapsedHeaderLanguages && (
         <span
           data-chat-bubble-header-language-badges
-          className="inline-flex min-w-0 items-center gap-0 whitespace-nowrap"
+          className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"
         >
           {collapsedHeaderLanguageOptions.map((lang) => {
             const isOriginal = normalizeTranslationLanguageKey(lang)
@@ -1056,7 +1056,7 @@ function ChatBubble({
       {speakerHeader}
       <div
         data-chat-bubble-line
-        className="flex min-w-0 max-w-full items-end gap-px"
+        className="flex min-w-0 max-w-full items-end gap-1"
       >
         {isOwnMessage ? (
           <>
