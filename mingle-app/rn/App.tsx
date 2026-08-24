@@ -439,7 +439,7 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
-) || 'https://mingle-app-xi.vercel.app';
+) || 'https://mingle-1-1-4-production.up.railway.app';
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
@@ -626,6 +626,7 @@ type NativeSttStartPayload = {
   apiNamespace?: string;
   behaviorProfile?: string;
   sonioxManualFinalizeSilenceMs?: number;
+  sttSegmentationMode?: string;
   sonioxEndpointMaxDelayMs?: number;
   sonioxEndpointTuningStep?: number;
 };
@@ -2747,6 +2748,13 @@ function AppInner(): React.JSX.Element {
       ? payload.conversationId.trim()
       : '';
     nativeSttConversationIdRef.current = conversationId || null;
+    const normalizedSttSegmentationMode = typeof payload?.sttSegmentationMode === 'string'
+      ? payload.sttSegmentationMode.trim().toLowerCase()
+      : '';
+    const sttSegmentationMode = normalizedSttSegmentationMode === 'fin'
+      || normalizedSttSegmentationMode === 'end'
+      ? normalizedSttSegmentationMode as 'fin' | 'end'
+      : undefined;
     const sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxEndpointMaxDelayMs,
     );
@@ -2762,6 +2770,7 @@ function AppInner(): React.JSX.Element {
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
         : {}),
+      ...(sttSegmentationMode ? { sttSegmentationMode } : {}),
       ...(typeof sonioxEndpointMaxDelayMs === 'number'
         ? { sonioxEndpointMaxDelayMs }
         : {}),

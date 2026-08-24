@@ -68,18 +68,18 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-chat-bubble-language-badges')).toBeLessThan(
       html.indexOf('data-current-bubble-text-value'),
     )
-    expect(html).toContain('aria-label="Copy"')
-    expect(html).toContain('data-message-copy-button')
+    expect(html).not.toContain('aria-label="Copy"')
+    expect(html).not.toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
-    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(0)
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
-      html.indexOf('aria-label="Copy"'),
+      html.indexOf('data-copyable-bubble'),
     )
     expect(html).toContain('class="align-middle"')
   })
 
-  it('renders the expanded original and translation rows by default with per-row copy buttons', () => {
+  it('renders expanded original and translation rows as copyable surfaces without persistent copy buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -97,7 +97,8 @@ describe('ChatBubble', () => {
     )
 
     expect((html.match(/data-expanded-chat-bubble-row="true"/g) || []).length).toBe(3)
-    expect((html.match(/data-message-copy-button="true"/g) || []).length).toBe(4)
+    expect((html.match(/data-copyable-bubble="true"/g) || []).length).toBe(3)
+    expect((html.match(/data-message-copy-button="true"/g) || []).length).toBe(0)
     expect(html).toContain('data-chat-bubble-toggle="true"')
     expect(html).toContain('aria-expanded="true"')
     expect(html).toContain('aria-label="Collapse message bubbles"')
@@ -197,13 +198,14 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-sm text-gray-400')
     expect(html).not.toContain('bg-amber-50')
     expect(html).not.toContain('bg-gray-100 border border-gray-200')
-    expect(html).toContain('aria-label="Copy"')
-    expect(html).toContain('data-message-copy-button')
-    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect(html).not.toContain('aria-label="Copy"')
+    expect(html).not.toContain('data-message-copy-button')
+    expect(html).toContain('data-copyable-bubble')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(0)
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
     expect(html).not.toContain('data-original-bubble-body')
     expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
-      html.indexOf('aria-label="Copy"'),
+      html.indexOf('data-copyable-bubble'),
     )
     expect(html).not.toContain('data-interim-translation-cursor')
   })
@@ -318,7 +320,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('bg-amber-400 align-middle animate-pulse')
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
-    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(0)
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(0)
     expect((html.match(/data-copyable-bubble-double-tap-action="copy"/g) || []).length).toBe(1)
   })

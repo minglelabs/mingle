@@ -100,7 +100,7 @@ export function AdminConversationList({ channels }: { channels: AdminConversatio
       </div>
       <div className="space-y-2">
         {visibleChannels.map((channel) => (
-          <Link className="block rounded-lg border border-[#eeeae2] p-4 transition hover:border-[#b45309] hover:bg-[#fffaf0]" href={channel.href} key={channel.id}>
+          <Link className="block rounded-lg border border-[#eeeae2] p-4 transition hover:border-[#b45309] hover:bg-[#fffaf0]" href={channel.href} key={channel.id} replace={false}>
             <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h3><span className="text-xs text-[#898781]">{formatDate(channel.updatedAt)}</span></div>
             <p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p>
             <p className="mt-2 text-xs text-[#6f6d68]">현재 필터 메시지 {channel.messageCount}개 · 삭제되지 않음 {channel.activeMessageCount}개 · 삭제됨 {channel.deletedMessageCount}개 · 최근 메시지 {channel.latestMessageAt ? formatDate(channel.latestMessageAt) : "없음"} · 생성 {formatDate(channel.createdAt)}</p>
@@ -462,7 +462,7 @@ export function AdminConversationRoom({
     <section className="rounded-xl border border-[#e5e3dc] bg-white shadow-sm">
       <div className="border-b border-[#eeeae2] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><Link className="text-sm font-semibold text-[#9b3c2f] hover:underline" href={backHref}>← 대화방 목록</Link><h2 className="mt-2 text-xl font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h2><p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p><p className="mt-1 text-xs text-[#6f6d68]">메시지 {hasLoadedInitial ? `${messageCount}개` : "불러오는 중"} · 위가 최신, 아래가 오래된 메시지 · 200개씩 자동 로드</p></div>
+          <div><Link className="text-sm font-semibold text-[#9b3c2f] hover:underline" href={backHref} replace>← 대화방 목록</Link><h2 className="mt-2 text-xl font-semibold">{channel.title || "제목 없음"} <StatusBadge deleted={channel.isDeleted} /></h2><p className="mt-1 break-all text-xs text-[#898781]">{channel.sessionKey}</p><p className="mt-1 text-xs text-[#6f6d68]">메시지 {hasLoadedInitial ? `${messageCount}개` : "불러오는 중"} · 위가 최신, 아래가 오래된 메시지 · 200개씩 자동 로드</p></div>
           <div className="flex w-full flex-col items-end gap-2 md:w-80"><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /><label className="block w-full text-xs font-semibold text-[#6f6d68]" htmlFor="room-message-search">현재 불러온 메시지 검색</label><input id="room-message-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="메시지 내용·언어 검색" className="w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" /><p className="w-full text-right text-[11px] text-[#898781]">{visibleMessages.length} / {messages.length}개 표시</p></div>
         </div>
       </div>

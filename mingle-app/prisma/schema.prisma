@@ -38,7 +38,7 @@ model User {
   apiNamespaceHistory   String[]  @default([]) @map("api_namespace_history")
   pathname              String?
   demoTextSizeLevel     Int?      @map("demo_text_size_level")
-  demoSilenceFinalizeMs Int?      @default(500) @map("demo_silence_finalize_ms")
+  demoSilenceFinalizeMs Int?      @default(1000) @map("demo_silence_finalize_ms")
   demoEndpointMaxDelayMs Int?     @default(3000) @map("demo_endpoint_max_delay_ms")
   demoEndpointTuningStep Int?     @default(2) @map("demo_endpoint_tuning_step")
   translationModel      String?   @map("translation_model")
@@ -47,6 +47,7 @@ model User {
   demoSpeakerEnabled    Boolean?  @default(false) @map("demo_speaker_enabled")
   demoEchoAllowed       Boolean?  @default(true) @map("demo_echo_allowed")
   demoBubbleDisplayMode String?   @default("expanded") @map("demo_bubble_display_mode")
+  sttSegmentationMode   String?   @map("stt_segmentation_mode")
   totalUsageSec         Int       @default(0) @map("total_usage_sec")
   handle                String    @unique(map: "app_users_handle_key")
   bio                   String?   @db.Text
@@ -526,6 +527,7 @@ model AdminDashboardDailyMetric {
   dauCount               Int      @map("dau_count")
   messageCount           Int      @map("message_count")
   usageSeconds           Float    @map("usage_seconds")
+  usageMetricVersion     Int      @default(0) @map("usage_metric_version")
   sttAvgMs               Float?   @map("stt_avg_ms")
   sttP95Ms               Float?   @map("stt_p95_ms")
   translationAvgMs       Float?   @map("translation_avg_ms")

@@ -277,8 +277,8 @@ def quoteBuildConfigString = { String value ->
 
 def runtimeSiteUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_SITE_URL", repoRuntimeEnvProperties, ["NEXT_PUBLIC_SITE_URL", "DEVBOX_SITE_URL"], "https://mingle-2-0-0-production.up.railway.app")
 def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoRuntimeEnvProperties, ["NEXT_PUBLIC_WS_URL", "DEVBOX_RN_WS_URL"], "wss://mingle-2-0-0-production.up.railway.app/stt")
-def legacyProductionSiteUrl = readEnvOrPropertyOrDefault("MINGLE_API_FALLBACK_SITE_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_SITE_URL", "RN_WEB_APP_FALLBACK_BASE_URL", "MINGLE_LEGACY_SITE_URL"], "https://mingle-app-xi.vercel.app")
-def legacyProductionWsUrl = readEnvOrPropertyOrDefault("MINGLE_STT_FALLBACK_WS_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_WS_URL", "RN_DEFAULT_WS_FALLBACK_URL", "MINGLE_LEGACY_WS_URL"], "wss://mingle-stt.fly.dev")
+def legacyProductionSiteUrl = readEnvOrPropertyOrDefault("MINGLE_API_FALLBACK_SITE_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_SITE_URL", "RN_WEB_APP_FALLBACK_BASE_URL", "MINGLE_LEGACY_SITE_URL"], "https://mingle-1-1-4-production.up.railway.app")
+def legacyProductionWsUrl = readEnvOrPropertyOrDefault("MINGLE_STT_FALLBACK_WS_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_WS_URL", "RN_DEFAULT_WS_FALLBACK_URL", "MINGLE_LEGACY_WS_URL"], "wss://mingle-1-1-4-production.up.railway.app/stt")
 def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoRuntimeEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v2.0.0")
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))

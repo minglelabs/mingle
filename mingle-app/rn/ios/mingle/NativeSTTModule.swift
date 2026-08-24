@@ -847,6 +847,7 @@ class NativeSTTModule: RCTEventEmitter {
         releaseVariant: String,
         behaviorProfile: String,
         sonioxManualFinalizeSilenceMs: Int?,
+        sttSegmentationMode: String?,
         sonioxEndpointMaxDelayMs: Int?,
         sonioxEndpointTuningStep: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
@@ -943,6 +944,9 @@ class NativeSTTModule: RCTEventEmitter {
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
+        if let sttSegmentationMode, !sttSegmentationMode.isEmpty {
+            configPayload["stt_segmentation_mode"] = sttSegmentationMode
+        }
         if let sonioxEndpointMaxDelayMs {
             configPayload["soniox_endpoint_max_delay_ms"] = sonioxEndpointMaxDelayMs
         }
@@ -987,6 +991,13 @@ class NativeSTTModule: RCTEventEmitter {
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
+        let normalizedSttSegmentationMode = (options["sttSegmentationMode"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let sttSegmentationMode = normalizedSttSegmentationMode == "fin"
+            || normalizedSttSegmentationMode == "end"
+            ? normalizedSttSegmentationMode
+            : nil
         let sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxEndpointMaxDelayMs"]
         )
@@ -1006,6 +1017,7 @@ class NativeSTTModule: RCTEventEmitter {
                 releaseVariant: releaseVariant,
                 behaviorProfile: behaviorProfile,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                sttSegmentationMode: sttSegmentationMode,
                 sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
                 sonioxEndpointTuningStep: sonioxEndpointTuningStep,
                 resolve: resolve,
@@ -1028,6 +1040,7 @@ class NativeSTTModule: RCTEventEmitter {
                             releaseVariant: releaseVariant,
                             behaviorProfile: behaviorProfile,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                            sttSegmentationMode: sttSegmentationMode,
                             sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
                             sonioxEndpointTuningStep: sonioxEndpointTuningStep,
                             resolve: resolve,

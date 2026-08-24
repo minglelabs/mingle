@@ -15,7 +15,7 @@ Standalone STT relay server for Mingle.
 - `GLADIA_API_KEY` (optional, for gladia modes)
 - `DEEPGRAM_API_KEY` (optional, for deepgram modes)
 - `FIREWORKS_API_KEY` (optional, for fireworks mode)
-- `SONIOX_SEGMENTATION_STRATEGY` (optional: `fin`, `end`, or `llm`; default: `fin`)
+- `SONIOX_SEGMENTATION_STRATEGY` (optional: `fin`, `end`, or `llm`; default: `end`)
 - `SONIOX_MANUAL_FINALIZE_COOLDOWN_MS` (optional, default: `1200`, range: `300..5000`)
 - `SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL` (optional, default: `0`, range: `0..3`)
 - `SONIOX_ENDPOINT_SENSITIVITY` (optional, default: `0`, range: `-1..1`)
@@ -39,12 +39,12 @@ Soniox segmentation resolves to one effective runtime mode:
 
 The Soniox manual finalize silence window comes from the client session config
 (`soniox_manual_finalize_silence_ms`). The server clamps that value to the
-`500..3000` range and falls back to `500` when the client does not provide a
+`500..5000` range and falls back to `1000` when the client does not provide a
 valid value. If no new Soniox realtime text arrives during this interval, the
 server requests a manual finalize. Endpoint mode uses the per-session tuning
 step for latency and sensitivity, while `soniox_endpoint_max_delay_ms` remains
-only a hard cap. This lets users adjust endpoint behavior without changing
-server-wide environment variables.
+only a hard `500..3000` cap. This lets users adjust endpoint behavior without
+changing server-wide environment variables.
 
 `mingle-stt` loads `.env.local` first, then `.env` in this directory.
 If these variables are missing, it safely falls back to the defaults above.

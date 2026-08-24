@@ -15,6 +15,12 @@ export const esDictionary: BaseAppDictionarySource = {
     endpointTuningShortLabel: "Corto",
     endpointTuningLongLabel: "Largo",
     translationModelLabel: "Modelo de traducción",
+    adBannerPositionLabel: "Posición del anuncio",
+    adBannerPositionTopLabel: "Arriba",
+    adBannerPositionBottomLabel: "Abajo",
+    sttSegmentationModeLabel: "Modo de separación de voz",
+    sttSegmentationModeEndLabel: "Detección automática",
+    sttSegmentationModeFinLabel: "Separación basada en silencio",
   },
   tabs: {
     chats: "Chats",

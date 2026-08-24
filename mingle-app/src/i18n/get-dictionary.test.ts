@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, SUPPORTED_LOCALES, getDictionary } from "@/i18n";
+import { localeDictionaries } from "@/i18n/dictionaries/catalog";
+import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
+
+const LIVE_DEMO_PREFERENCE_LABEL_KEYS = [
+  "silenceFinalizeLabel",
+  "endpointTuningLabel",
+  "endpointTuningShortLabel",
+  "endpointTuningLongLabel",
+  "adBannerPositionLabel",
+  "adBannerPositionTopLabel",
+  "adBannerPositionBottomLabel",
+  "sttSegmentationModeLabel",
+  "sttSegmentationModeEndLabel",
+  "sttSegmentationModeFinLabel",
+] as const;
 
 describe("getDictionary", () => {
   it("returns dedicated dictionaries for the expanded locale catalog", () => {
@@ -29,6 +44,17 @@ describe("getDictionary", () => {
       expect(dictionary.versionPolicy.checkingTitle).toBeTruthy();
       expect(dictionary.versionPolicy.updateButtonLabel).toBeTruthy();
       expect(dictionary.versionPolicy.unknownVersionLabel).toBeTruthy();
+    }
+  });
+
+  it("defines live-demo preference labels for every primary UI locale", () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const demo = localeDictionaries[locale].demo;
+
+      for (const key of LIVE_DEMO_PREFERENCE_LABEL_KEYS) {
+        expect(Object.prototype.hasOwnProperty.call(demo, key), `${locale}.${key}`).toBe(true);
+        expect(demo[key], `${locale}.${key}`).toBeTruthy();
+      }
     }
   });
 

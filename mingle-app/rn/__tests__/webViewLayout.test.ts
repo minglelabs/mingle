@@ -32,7 +32,7 @@ describe('appendNativeRuntimeWebViewParams', () => {
 });
 
 describe('shouldEnableIosWebViewBackForwardNavigation', () => {
-  const BASE = 'https://mingle-app-xi.vercel.app';
+  const BASE = 'https://mingle-1-1-4-production.up.railway.app';
 
   it('returns false on Android', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({

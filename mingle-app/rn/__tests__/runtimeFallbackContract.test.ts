@@ -1,7 +1,16 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
 declare const __dirname: string;
+
+type FileSystemModule = {
+  readFileSync: (filePath: string, encoding: 'utf8') => string;
+};
+
+type PathModule = {
+  join: (...paths: string[]) => string;
+  resolve: (...paths: string[]) => string;
+};
+
+const fs = require('fs') as FileSystemModule;
+const path = require('path') as PathModule;
 
 const rnRoot = path.resolve(__dirname, '..');
 

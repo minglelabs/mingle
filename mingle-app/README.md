@@ -372,12 +372,12 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `MINGLE_API_FALLBACK_SITE_URL` (optional fallback web target, defaults to the current Vercel deployment)
-- `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Fly deployment)
-- `MINGLE_LEGACY_SITE_URL` (optional override, defaults to the current 1.0.11 production web deployment)
-- `MINGLE_LEGACY_WS_URL` (optional override, defaults to the current 1.0.11 production STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.3`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.1.3`, the app shows an error instead of loading the WebView.
+- `MINGLE_API_FALLBACK_SITE_URL` (optional fallback web target, defaults to the current Railway deployment)
+- `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Railway deployment)
+- `MINGLE_LEGACY_SITE_URL` (optional compatibility fallback override; device builds default to the current Railway web deployment)
+- `MINGLE_LEGACY_WS_URL` (optional compatibility fallback override; device builds default to the current Railway STT deployment)
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.0.0`; Android uses `android/v2.0.0`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.0.0`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 

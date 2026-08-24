@@ -18,15 +18,18 @@ const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
 const DEFAULT_TEXT_SIZE_LEVEL = 2;
 const MIN_SILENCE_MS = 500;
-const MAX_SILENCE_MS = 3000;
-const DEFAULT_SILENCE_MS = 500;
+const MAX_SILENCE_MS = 5000;
+const DEFAULT_SILENCE_MS = 1000;
 const DEFAULT_BUBBLE_DISPLAY_MODE = "expanded";
+const MIN_ENDPOINT_MAX_DELAY_MS = 500;
+const MAX_ENDPOINT_MAX_DELAY_MS = 3000;
 const DEFAULT_ENDPOINT_MAX_DELAY_MS = 3000;
 const MIN_ENDPOINT_TUNING_STEP = 0;
 const MAX_ENDPOINT_TUNING_STEP = 4;
 const DEFAULT_ENDPOINT_TUNING_STEP = 2;
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const BUBBLE_DISPLAY_MODES = new Set(["expanded", "collapsed"]);
+const STT_SEGMENTATION_MODES = new Set(["fin", "end"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
@@ -37,6 +40,7 @@ type PreferencesBody = {
   translationModel?: unknown;
   adBannerPosition?: unknown;
   bubbleDisplayMode?: unknown;
+  sttSegmentationMode?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -55,6 +59,7 @@ type UserPreferencesRecord = {
   translationModel: string | null;
   adBannerPosition: string | null;
   demoBubbleDisplayMode: string | null;
+  sttSegmentationMode: string | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -99,6 +104,20 @@ function normalizeBubbleDisplayMode(value: unknown): "expanded" | "collapsed" | 
   return BUBBLE_DISPLAY_MODES.has(normalized)
     ? (normalized as "expanded" | "collapsed")
     : null;
+}
+
+function normalizeSttSegmentationMode(value: unknown): "fin" | "end" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return STT_SEGMENTATION_MODES.has(normalized)
+    ? (normalized as "fin" | "end")
+    : null;
+}
+
+function hasValidSttSegmentationMode(body: PreferencesBody): boolean {
+  if (!Object.prototype.hasOwnProperty.call(body, "sttSegmentationMode")) return false;
+  return body.sttSegmentationMode === null
+    || normalizeSttSegmentationMode(body.sttSegmentationMode) !== null;
 }
 
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
@@ -239,6 +258,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     translationModel: true,
     adBannerPosition: true,
     demoBubbleDisplayMode: true,
+    sttSegmentationMode: true,
   } as const;
 
   if (identity.id) {
@@ -341,6 +361,7 @@ export async function GET(request: Request) {
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
     bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
       ?? DEFAULT_BUBBLE_DISPLAY_MODE,
+    sttSegmentationMode: normalizeSttSegmentationMode(preferences?.sttSegmentationMode),
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -383,7 +404,11 @@ export async function PATCH(request: Request) {
 
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
-  const nextEndpointMaxDelayMs = asClampedInteger(body.sonioxEndpointMaxDelayMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
+  const nextEndpointMaxDelayMs = asClampedInteger(
+    body.sonioxEndpointMaxDelayMs,
+    MIN_ENDPOINT_MAX_DELAY_MS,
+    MAX_ENDPOINT_MAX_DELAY_MS,
+  );
   const nextEndpointTuningStep = asClampedInteger(
     body.sonioxEndpointTuningStep,
     MIN_ENDPOINT_TUNING_STEP,
@@ -392,6 +417,8 @@ export async function PATCH(request: Request) {
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
   const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
+  const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
+  const hasNextSttSegmentationMode = hasValidSttSegmentationMode(body);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
@@ -400,6 +427,7 @@ export async function PATCH(request: Request) {
     && nextTranslationModel === null
     && nextAdBannerPosition === null
     && nextBubbleDisplayMode === null
+    && !hasNextSttSegmentationMode
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -412,6 +440,7 @@ export async function PATCH(request: Request) {
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
     ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
+    ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
   };
 
   if (identity.id) {

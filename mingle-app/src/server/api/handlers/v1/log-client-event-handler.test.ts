@@ -376,6 +376,49 @@ describe("handleLogClientEventV1", () => {
     expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
   });
 
+  it("drops implausible client durations and records an anomaly", async () => {
+    const request = new NextRequest("https://example.com/api/ios/v1.0.11/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "u-1787436329897-118",
+        sourceLanguage: "en",
+        sourceText: "hello",
+        sttDurationMs: 96241201,
+        totalDurationMs: 96242889,
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          sttDurationMs: null,
+          totalDurationMs: null,
+          metadata: expect.objectContaining({
+            durationAnomaly: true,
+            durationAnomalyFields: ["sttDurationMs", "totalDurationMs"],
+          }),
+        }),
+        update: expect.objectContaining({
+          sttDurationMs: null,
+          totalDurationMs: null,
+        }),
+      }),
+    );
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          durationAnomaly: true,
+          durationAnomalyFields: ["sttDurationMs", "totalDurationMs"],
+        }),
+      }),
+    );
+  });
+
   it("ignores stale finalized turns after the conversation was cleared", async () => {
     mockAppEventLogFindFirst.mockResolvedValue({
       createdAt: new Date("2026-04-09T00:00:00.000Z"),

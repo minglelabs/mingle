@@ -18,6 +18,9 @@ export const koDictionary: BaseAppDictionarySource = {
     adBannerPositionLabel: "광고 위치",
     adBannerPositionTopLabel: "상단",
     adBannerPositionBottomLabel: "하단",
+    sttSegmentationModeLabel: "발화 분리 방식",
+    sttSegmentationModeEndLabel: "자동 감지",
+    sttSegmentationModeFinLabel: "침묵 기반 분리",
   },
   tabs: {
     chats: "채팅",

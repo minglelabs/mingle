@@ -53,6 +53,7 @@ class NativeSTTModule(
     val releaseVariant: String,
     val behaviorProfile: String,
     val sonioxManualFinalizeSilenceMs: Int?,
+    val sttSegmentationMode: String?,
     val sonioxEndpointMaxDelayMs: Int?,
     val sonioxEndpointTuningStep: Int?,
   )
@@ -154,6 +155,10 @@ class NativeSTTModule(
           null
         },
       ),
+      sttSegmentationMode = options.getString("sttSegmentationMode")
+        ?.trim()
+        ?.lowercase()
+        ?.takeIf { it == "fin" || it == "end" },
       sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
         if (options.hasKey("sonioxEndpointMaxDelayMs") && !options.isNull("sonioxEndpointMaxDelayMs")) {
           options.getDouble("sonioxEndpointMaxDelayMs")
@@ -336,6 +341,9 @@ class NativeSTTModule(
           }
           options.sonioxEndpointTuningStep?.let {
             config.put("soniox_endpoint_tuning_step", it)
+          }
+          options.sttSegmentationMode?.let {
+            config.put("stt_segmentation_mode", it)
           }
           webSocket.send(config.toString())
           Log.i(

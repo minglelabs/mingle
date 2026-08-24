@@ -7,6 +7,8 @@ import {
 import {
   buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
+  normalizeSonioxEndpointMaxDelayPreference,
+  normalizeSonioxManualFinalizeSilencePreference,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
@@ -37,6 +39,7 @@ describe('buildHydratedAccountPreferences', () => {
       speakerEnabled: true,
       echoAllowed: false,
       bubbleDisplayMode: 'expanded',
+      sttSegmentationMode: null,
     })
   })
 
@@ -62,6 +65,7 @@ describe('buildHydratedAccountPreferences', () => {
       speakerEnabled: false,
       echoAllowed: true,
       bubbleDisplayMode: 'expanded',
+      sttSegmentationMode: null,
     })
   })
 
@@ -84,7 +88,26 @@ describe('buildHydratedAccountPreferences', () => {
       speakerEnabled: false,
       echoAllowed: true,
       bubbleDisplayMode: 'expanded',
+      sttSegmentationMode: null,
     })
+  })
+
+  it('normalizes a stored STT segmentation mode during hydration', () => {
+    expect(buildHydratedAccountPreferences({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'gemma-4-31b-it',
+      adBannerPosition: 'top',
+      sttSegmentationMode: ' FIN ',
+    }, false).sttSegmentationMode).toBe('fin')
+  })
+})
+
+describe('normalize Soniox timing preferences', () => {
+  it('allows Fin silence up to 5000ms and keeps End delay capped at 3000ms', () => {
+    expect(normalizeSonioxManualFinalizeSilencePreference(5000)).toBe(5000)
+    expect(normalizeSonioxManualFinalizeSilencePreference(6000)).toBe(5000)
+    expect(normalizeSonioxEndpointMaxDelayPreference(5000)).toBe(3000)
   })
 })
 
@@ -105,6 +128,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         speakerEnabled: false,
         echoAllowed: true,
         bubbleDisplayMode: 'expanded',
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -122,6 +146,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       speakerEnabled: true,
       echoAllowed: false,
       bubbleDisplayMode: 'collapsed',
+      sttSegmentationMode: null,
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -149,6 +174,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         speakerEnabled: true,
         echoAllowed: false,
         bubbleDisplayMode: 'expanded',
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
@@ -161,6 +187,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         speakerEnabled: false,
         echoAllowed: true,
         bubbleDisplayMode: 'collapsed',
+        sttSegmentationMode: null,
       }),
     })).toBe(true)
   })
@@ -181,6 +208,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         speakerEnabled: true,
         echoAllowed: false,
         bubbleDisplayMode: 'collapsed',
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -247,6 +275,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       speakerEnabled: true,
       echoAllowed: false,
       bubbleDisplayMode: 'collapsed',
+      sttSegmentationMode: null,
     })).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
@@ -258,6 +287,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       speakerEnabled: true,
       echoAllowed: false,
       bubbleDisplayMode: 'collapsed',
+      sttSegmentationMode: null,
     })
   })
 })

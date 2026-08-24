@@ -98,20 +98,28 @@ export function clearPendingLanguagePreferences(): void {
   }
 }
 export const DEFAULT_TEXT_SIZE_LEVEL = 3
-export const DEFAULT_SONIOX_SILENCE_MS = 500
+export const DEFAULT_SONIOX_SILENCE_MS = 1000
 export const DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS = 3000
+export const MIN_SONIOX_ENDPOINT_MAX_DELAY_MS = 500
+export const MAX_SONIOX_ENDPOINT_MAX_DELAY_MS = 3000
 export const DEFAULT_SONIOX_ENDPOINT_TUNING_STEP = 2
 export const MIN_SONIOX_ENDPOINT_TUNING_STEP = 0
 export const MAX_SONIOX_ENDPOINT_TUNING_STEP = 4
 export const MIN_SONIOX_SILENCE_MS = 500
-export const MAX_SONIOX_SILENCE_MS = 3000
+export const MAX_SONIOX_SILENCE_MS = 5000
 
-export function shouldShowManualSilenceControl(): boolean {
-  return false
+export type SonioxUiSegmentationStrategy = 'fin' | 'end'
+
+export function shouldShowManualSilenceControl(
+  strategy: SonioxUiSegmentationStrategy = 'fin',
+): boolean {
+  return strategy === 'fin'
 }
 
-export function shouldShowEndpointTuningControl(): boolean {
-  return true
+export function shouldShowEndpointTuningControl(
+  strategy: SonioxUiSegmentationStrategy = 'end',
+): boolean {
+  return strategy === 'end'
 }
 export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
 export type LivePhoneDemoInputMode = 'voice' | 'text'

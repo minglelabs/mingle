@@ -15,6 +15,12 @@ export const jaDictionary: BaseAppDictionarySource = {
     endpointTuningShortLabel: "短く",
     endpointTuningLongLabel: "長く",
     translationModelLabel: "翻訳モデル",
+    adBannerPositionLabel: "広告の位置",
+    adBannerPositionTopLabel: "上",
+    adBannerPositionBottomLabel: "下",
+    sttSegmentationModeLabel: "発話分離方式",
+    sttSegmentationModeEndLabel: "自動検出",
+    sttSegmentationModeFinLabel: "無音による分離",
   },
   tabs: {
     chats: "チャット",
