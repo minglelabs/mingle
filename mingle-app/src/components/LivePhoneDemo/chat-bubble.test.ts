@@ -125,7 +125,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('Original message')
     expect(html).toContain('번역 메시지')
     expect(html).toContain('翻訳メッセージ')
-    expect(html).toContain('inline-block w-fit max-w-full rounded-2xl border')
+    expect(html).toContain('inline-block w-fit max-w-full rounded-2xl rounded-tl-none border')
     expect(html).not.toContain('inline w-fit max-w-full rounded-2xl border')
     expect(html.indexOf('data-expanded-bubble-content')).toBeLessThan(
       html.indexOf('data-expanded-bubble-meta'),
@@ -160,7 +160,7 @@ describe('ChatBubble', () => {
     const otherContentSwitchTag = openingTag(otherHtml, 'data-chat-bubble-content-switch="collapsed"')
     const otherControlsTag = openingTag(otherHtml, 'data-chat-bubble-controls')
 
-    expect(otherMessageColumnTag).toContain('items-end gap-0.5')
+    expect(otherMessageColumnTag).toContain('flex-col items-start gap-0.5')
     expect(otherMessageColumnTag).not.toContain('gap-1 ')
     expect(otherMessageColumnTag).not.toContain('gap-1.5')
     expect(otherMessageColumnTag).not.toContain('flex-row-reverse')
@@ -169,14 +169,16 @@ describe('ChatBubble', () => {
     expect(otherContentSwitchTag).not.toContain('flex-1')
     expect(otherControlsTag).toContain('self-end')
     expect(otherControlsTag).not.toContain('mb-1.5')
+    const otherBubbleLineTag = openingTag(otherHtml, 'data-chat-bubble-line')
+    expect(otherBubbleLineTag).toContain('items-end gap-0.5')
     expect(otherHtml.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
       otherHtml.indexOf('data-chat-bubble-controls'),
     )
 
     const ownHtml = renderBubble('user-me', 'user-me')
     const ownMessageColumnTag = openingTag(ownHtml, 'data-chat-message-column')
-    expect(ownMessageColumnTag).toContain('items-end gap-0.5')
-    expect(ownMessageColumnTag).toContain('flex-row-reverse')
+    expect(ownMessageColumnTag).toContain('max-w-full items-end gap-0.5')
+    expect(ownMessageColumnTag).not.toContain('flex-row-reverse')
   })
 
   it('starts bubble sizing from max-content before shrinking to the available row width', () => {
@@ -536,7 +538,7 @@ describe('ChatBubble', () => {
     )
   })
 
-  it('right-aligns the bubble and moves the avatar after it when the viewer is the sender', () => {
+  it('right-aligns own messages without an avatar and keeps controls before time and bubble', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -545,6 +547,7 @@ describe('ChatBubble', () => {
           originalLang: 'en',
           translations: {},
           speakerUserId: 'user-a',
+          createdAtMs: new Date('2026-03-11T12:58:00+09:00').getTime(),
         },
         uiLocale: 'en',
         viewerUserId: 'user-a',
@@ -552,9 +555,50 @@ describe('ChatBubble', () => {
     )
 
     expect(html).toContain('justify-end')
-    expect(html).toContain('flex-row-reverse')
-    expect(html.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
-      html.indexOf('data-speaker-avatar-column'),
+    expect(html).not.toContain('flex-row-reverse')
+    expect(html).not.toContain('data-speaker-avatar-column')
+    expect(html.indexOf('data-chat-bubble-controls')).toBeLessThan(
+      html.indexOf('data-original-bubble-timestamp'),
+    )
+    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
+      html.indexOf('data-chat-message-bubble-stack'),
+    )
+  })
+
+  it('renders the counterpart name and up to five collapsed language flags above the bubble', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-counterpart-header',
+          originalText: '상대 메시지',
+          originalLang: 'en',
+          targetLanguages: ['ko', 'ja', 'zh-CN', 'fr', 'de', 'es'],
+          translations: {
+            ko: '상대 메시지',
+            ja: '相手のメッセージ',
+            'zh-CN': '对方消息',
+            fr: 'Message du correspondant',
+            de: 'Nachricht des Gegenübers',
+            es: 'Mensaje del interlocutor',
+          },
+          speakerUserId: 'user-b',
+          speakerName: '정은교',
+        },
+        uiLocale: 'ko',
+        viewerUserId: 'user-a',
+        bubbleDisplayMode: 'collapsed',
+      }),
+    )
+
+    expect(html).toContain('data-chat-speaker-header="true"')
+    expect(html).toContain('data-chat-speaker-name="true"')
+    expect(html).toContain('>정은교</span>')
+    expect((html.match(/data-chat-bubble-header-language-badges="true"/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(5)
+    expect(html).not.toContain('data-chat-bubble-language-badges')
+    expect(html).toContain('rounded-2xl rounded-tl-none')
+    expect(html.indexOf('data-chat-speaker-header')).toBeLessThan(
+      html.indexOf('data-chat-message-bubble-stack'),
     )
   })
 
@@ -612,7 +656,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('/avatars/animals/')
   })
 
-  it('makes both identified member avatars onOpenProfile buttons', () => {
+  it('keeps counterpart avatar profile action while own messages render no avatar', () => {
     const otherHtml = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -644,9 +688,8 @@ describe('ChatBubble', () => {
         onOpenProfile: () => {},
       }),
     )
-    const avatarColumnStart = ownHtml.indexOf('data-speaker-avatar-column')
-    const avatarColumnHtml = ownHtml.slice(avatarColumnStart, avatarColumnStart + 400)
-    expect(avatarColumnHtml).toContain('<button')
+    expect(ownHtml).not.toContain('data-speaker-avatar-column')
+    expect(ownHtml).not.toContain('onOpenProfile')
   })
 
   it('does not render visible tts icon buttons', () => {

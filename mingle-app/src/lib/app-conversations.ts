@@ -85,6 +85,9 @@ export type ConversationHydrationUtterance = {
   speaker: string | null;
   speakerAvatarSeed: string | null;
   speakerAvatarIndex: number | null;
+  // The sender's real profile name for shared-room bubbles. This stays null
+  // for solo-room diarization turns, where `speaker` is not an account name.
+  speakerName: string | null;
   // The real account that sent this message, if any — lets the client tell
   // "mine" from "theirs" for bubble alignment. Distinct from `speaker`, which
   // is a free-text diarization label used inside a single solo session.
@@ -2162,6 +2165,7 @@ export async function getConversationHydrationStateForUser(args: {
   const isMultiMemberByRealMembers = (members?.length ?? 0) >= 2;
   const isMultiMember = resolveEffectiveMemberCount(members, conversationRecord.pendingInviteeUserIds) >= 2;
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
+  const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.userId,
     membersByChannelId,
@@ -2202,6 +2206,9 @@ export async function getConversationHydrationStateForUser(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
+      speakerName: isMultiMemberByRealMembers && message.userId
+        ? (nameByUserId.get(message.userId) ?? null)
+        : null,
       // Gated the same way as speakerImage: a solo session's diarized
       // "speaker" turns all resolve to the SAME single real account (the
       // one signed-in device), so leaving this populated there would make

@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-25 - Add sender identity and KakaoTalk-style message alignment
+
+- **Surface:** Shared-room message bubbles for counterpart and viewer messages.
+- **Issue:** Counterpart bubbles had no real profile name, collapsed language flags consumed the first line inside the bubble, and viewer bubbles still reserved an avatar column. Incoming and outgoing messages therefore did not read like a conventional messenger thread.
+- **Resolution:** Shared-room hydration now attaches the sender's profile `name` (never the handle) to each persisted utterance. Counterpart messages show that name above the bubble; in collapsed mode, up to five circular language flags move beside the name and remain interactive. The original-language quote marker is preserved.
+- **Alignment:** Counterpart bubbles retain the avatar and use a sharp top-left corner. Viewer bubbles omit both avatar and name, align their bubble to the right edge of the message area, and place controls in the order `Expand/Collapse → time → bubble`.
+- **Data change:** No migration. The hydration payload gains the read-only `speakerName` presentation field sourced from existing membership profile data.
+- **Testing notes:** Verify 1:1 and group rooms, long names, five-or-more room languages, collapsed/expanded toggling, profile-avatar taps on counterpart messages, and the viewer's right-edge layout on narrow iOS and Android screens.
+
 ## 2026-08-25 - Tighten bubble text leading and expanded language markers
 
 - **Surface:** Collapsed and expanded translated message bubbles.

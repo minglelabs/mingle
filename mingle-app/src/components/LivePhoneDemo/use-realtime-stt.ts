@@ -791,6 +791,9 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
         ...(typeof record.speakerAvatarIndex === 'number'
           ? { speakerAvatarIndex: record.speakerAvatarIndex }
           : {}),
+        ...(typeof record.speakerName === 'string' && record.speakerName.trim()
+          ? { speakerName: record.speakerName.trim() }
+          : {}),
         ...(typeof record.speakerUserId === 'string' && record.speakerUserId.trim()
           ? { speakerUserId: record.speakerUserId.trim() }
           : {}),

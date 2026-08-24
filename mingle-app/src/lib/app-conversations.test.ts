@@ -1254,6 +1254,7 @@ describe("app-conversations", () => {
 
     expect(state?.utterances[0]?.speakerImage).toBe("https://cdn/bob.jpg");
     expect(state?.utterances[0]?.speakerUserId).toBe("user-2");
+    expect(state?.utterances[0]?.speakerName).toBe("Bob");
     expect(state?.conversation.isMultiMember).toBe(true);
   });
 
