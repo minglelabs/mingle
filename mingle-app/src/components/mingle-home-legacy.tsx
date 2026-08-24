@@ -1588,8 +1588,11 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
           textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
           silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
           sttSegmentationModeLabel={props.dictionary.demo.sttSegmentationModeLabel ?? "Speech Split Mode"}
-          sttSegmentationModeEndLabel={props.dictionary.demo.sttSegmentationModeEndLabel ?? "Automatic detection (End)"}
-          sttSegmentationModeFinLabel={props.dictionary.demo.sttSegmentationModeFinLabel ?? "Silence-based split (Fin)"}
+          sttSegmentationModeEndLabel={props.dictionary.demo.sttSegmentationModeEndLabel ?? "Automatic detection"}
+          sttSegmentationModeFinLabel={props.dictionary.demo.sttSegmentationModeFinLabel ?? "Silence-based split"}
+          endpointTuningLabel={props.dictionary.demo.endpointTuningLabel ?? "Speech Length per Utterance"}
+          endpointTuningShortLabel={props.dictionary.demo.endpointTuningShortLabel ?? "Short"}
+          endpointTuningLongLabel={props.dictionary.demo.endpointTuningLongLabel ?? "Long"}
           translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
           adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
           adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}

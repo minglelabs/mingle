@@ -16,12 +16,14 @@ import {
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  shouldShowSpeechSplitControl,
+  shouldShowEndpointTuningControl,
+  shouldShowManualSilenceControl,
 } from './live-phone-demo.preferences'
 
-describe('speech split control', () => {
-  it('is not exposed as a user setting', () => {
-    expect(shouldShowSpeechSplitControl()).toBe(false)
+describe('Soniox endpoint UI strategy', () => {
+  it('shows only the endpoint tuning control', () => {
+    expect(shouldShowEndpointTuningControl()).toBe(true)
+    expect(shouldShowManualSilenceControl()).toBe(false)
   })
 })
 

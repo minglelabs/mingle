@@ -538,6 +538,8 @@ type NativeSttStartPayload = {
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: string;
+  sonioxEndpointMaxDelayMs?: number;
+  sonioxEndpointTuningStep?: number;
 };
 
 type NativeSttStopPayload = {
@@ -2017,6 +2019,12 @@ function AppInner(): React.JSX.Element {
       || normalizedSttSegmentationMode === 'end'
       ? normalizedSttSegmentationMode as 'fin' | 'end'
       : undefined;
+    const sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
+      payload?.sonioxEndpointMaxDelayMs,
+    );
+    const sonioxEndpointTuningStep = parseOptionalSonioxManualFinalizeSilenceMs(
+      payload?.sonioxEndpointTuningStep,
+    );
 
     const startPayload = {
       sttModel,
@@ -2028,6 +2036,12 @@ function AppInner(): React.JSX.Element {
         ? { sonioxManualFinalizeSilenceMs }
         : {}),
       ...(sttSegmentationMode ? { sttSegmentationMode } : {}),
+      ...(typeof sonioxEndpointMaxDelayMs === 'number'
+        ? { sonioxEndpointMaxDelayMs }
+        : {}),
+      ...(typeof sonioxEndpointTuningStep === 'number'
+        ? { sonioxEndpointTuningStep }
+        : {}),
     };
 
     try {

@@ -14,6 +14,7 @@ import {
     resolveSessionSegmentationStrategy,
     resolveSonioxBoundaryHandling,
     resolveSonioxSegmentationRuntime,
+    resolveSonioxEndpointTuningProfile,
     selectSonioxBoundarySpeakerIds,
     stripEndpointMarkers,
     type SonioxBoundaryMarker,
@@ -62,6 +63,7 @@ const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500;
+const SONIOX_ENDPOINT_MAX_DELAY_MS_DEFAULT = 3000;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3000;
 const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS = 1200;
@@ -596,15 +598,32 @@ wss.on('connection', (clientWs) => {
                 config.stt_segmentation_mode,
                 readSegmentationStrategyId(),
             );
+            const sonioxEndpointMaxDelayMs = (() => {
+                const raw = Number(config.soniox_endpoint_max_delay_ms);
+                if (!Number.isFinite(raw)) return SONIOX_ENDPOINT_MAX_DELAY_MS_DEFAULT;
+                return Math.max(
+                    SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN,
+                    Math.min(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX, Math.floor(raw)),
+                );
+            })();
+            const endpointTuningProfile = config.soniox_endpoint_tuning_step === undefined
+                || config.soniox_endpoint_tuning_step === null
+                ? null
+                : resolveSonioxEndpointTuningProfile(config.soniox_endpoint_tuning_step);
             const segmentationRuntime = resolveSonioxSegmentationRuntime(
                 segmentationStrategyId,
-                sonioxManualFinalizeSilenceMs,
+                segmentationStrategyId === 'end'
+                    ? sonioxEndpointMaxDelayMs
+                    : sonioxManualFinalizeSilenceMs,
             );
             const usesSonioxEndpointDetection = segmentationRuntime.effective === 'end';
             const endpointDelayMs = segmentationRuntime.endpointDelayMs;
             if (segmentationRuntime.requested === 'llm') {
                 console.warn('[stt-server] llm segmentation not yet implemented; using effective=fin');
             }
+            console.log(
+                `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} manualSilenceMs=${sonioxManualFinalizeSilenceMs} endpointMaxDelayMs=${endpointDelayMs} endpointTuningStep=${endpointTuningProfile?.step ?? 'server-default'} endpointLatencyLevel=${endpointTuningProfile?.latencyAdjustmentLevel ?? 'server-default'} endpointSensitivity=${endpointTuningProfile?.sensitivity ?? 'server-default'}`,
+            );
             type SonioxToken = {
                 text?: unknown;
                 start_ms?: unknown;
@@ -1158,13 +1177,21 @@ wss.on('connection', (clientWs) => {
                     num_channels: 1,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
-                    ...buildSonioxEndpointDetectionConfig(segmentationRuntime),
+                    ...buildSonioxEndpointDetectionConfig(segmentationRuntime, { endpointTuningProfile }),
                 };
                 if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
                     Object.assign(sonioxConfig, {
                         language_hints: sonioxLanguageHints,
                         language_hints_strict: config.lang_hints_strict !== false,
                     });
+                }
+                if (process.env.SONIOX_ENDPOINT_CONFIG_DEBUG === '1') {
+                    console.log(
+                        `[conn:${connId}] soniox_config=${JSON.stringify({
+                            ...sonioxConfig,
+                            api_key: '[redacted]',
+                        })}`,
+                    );
                 }
                 sttWs!.send(JSON.stringify(sonioxConfig));
 

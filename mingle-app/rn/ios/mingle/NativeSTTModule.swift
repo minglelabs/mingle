@@ -846,6 +846,8 @@ class NativeSTTModule: RCTEventEmitter {
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
         sttSegmentationMode: String?,
+        sonioxEndpointMaxDelayMs: Int?,
+        sonioxEndpointTuningStep: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -943,6 +945,12 @@ class NativeSTTModule: RCTEventEmitter {
         if let sttSegmentationMode, !sttSegmentationMode.isEmpty {
             configPayload["stt_segmentation_mode"] = sttSegmentationMode
         }
+        if let sonioxEndpointMaxDelayMs {
+            configPayload["soniox_endpoint_max_delay_ms"] = sonioxEndpointMaxDelayMs
+        }
+        if let sonioxEndpointTuningStep {
+            configPayload["soniox_endpoint_tuning_step"] = sonioxEndpointTuningStep
+        }
         if !sonioxLanguageHints.isEmpty {
             configPayload["soniox_language_hints"] = sonioxLanguageHints
         }
@@ -950,7 +958,9 @@ class NativeSTTModule: RCTEventEmitter {
 
         emitStatus("running")
         let silenceLogValue = sonioxManualFinalizeSilenceMs.map(String.init) ?? "server-default"
-        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@", sampleRate, wsUrlString, silenceLogValue)
+        let endpointMaxDelayLogValue = sonioxEndpointMaxDelayMs.map(String.init) ?? "server-default"
+        let endpointTuningStepLogValue = sonioxEndpointTuningStep.map(String.init) ?? "server-default"
+        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@ endpointMaxDelayMs=%@ endpointTuningStep=%@", sampleRate, wsUrlString, silenceLogValue, endpointMaxDelayLogValue, endpointTuningStepLogValue)
         resolve([
             "sampleRate": sampleRate,
         ])
@@ -992,6 +1002,12 @@ class NativeSTTModule: RCTEventEmitter {
             || normalizedSttSegmentationMode == "end"
             ? normalizedSttSegmentationMode
             : nil
+        let sonioxEndpointMaxDelayMs = parseOptionalSonioxManualFinalizeSilenceMs(
+            options["sonioxEndpointMaxDelayMs"]
+        )
+        let sonioxEndpointTuningStep = parseOptionalSonioxManualFinalizeSilenceMs(
+            options["sonioxEndpointTuningStep"]
+        )
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -1007,6 +1023,8 @@ class NativeSTTModule: RCTEventEmitter {
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 sttSegmentationMode: sttSegmentationMode,
+                sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
+                sonioxEndpointTuningStep: sonioxEndpointTuningStep,
                 resolve: resolve,
                 reject: reject
             )
@@ -1029,6 +1047,8 @@ class NativeSTTModule: RCTEventEmitter {
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             sttSegmentationMode: sttSegmentationMode,
+                            sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
+                            sonioxEndpointTuningStep: sonioxEndpointTuningStep,
                             resolve: resolve,
                             reject: reject
                         )

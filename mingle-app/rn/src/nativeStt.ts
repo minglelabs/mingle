@@ -7,6 +7,8 @@ type NativeSttStartOptions = {
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: 'fin' | 'end';
+  sonioxEndpointMaxDelayMs?: number;
+  sonioxEndpointTuningStep?: number;
 };
 
 type NativeSttStopOptions = {
