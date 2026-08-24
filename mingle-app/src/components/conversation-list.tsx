@@ -2038,6 +2038,7 @@ export default function ConversationList({
   const isImportingLegacyConversationRef = useRef(false);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
+  const routeConversationHydrationRef = useRef<string | null>(null);
   const pullRefreshStartYRef = useRef<number | null>(null);
   const pullRefreshTrackingRef = useRef(false);
   const viewportWidthPx = useViewportWidthPx();
@@ -2330,6 +2331,22 @@ export default function ConversationList({
     ));
     return nextConversations;
   }, [conversationCacheIdentity, initialNativeUi]);
+
+  const hydrateConversationSummary = useCallback(async (conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId) {
+      throw new Error("conversation_id_required");
+    }
+
+    const response = await fetch(
+      buildConversationApiPath(`/${encodeURIComponent(normalizedConversationId)}`),
+      {
+        cache: "no-store",
+        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+    );
+    return readConversationResponse(response);
+  }, []);
 
   const markConversationAsRead = useCallback((conversationId: string) => {
     const normalizedConversationId = conversationId.trim();
@@ -3416,20 +3433,6 @@ export default function ConversationList({
       document.removeEventListener("visibilitychange", refreshCurrentConversationLocalStats);
     };
   }, [refreshConversationLocalStats]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!initialConversationIdToOpen) return;
-    if (activeConversation || isHydratingConversations) return;
-    if (conversations.some((conversation) => conversation.id === initialConversationIdToOpen)) return;
-    if (readConversationIdFromLocation() !== initialConversationIdToOpen) return;
-    replaceConversationOverlayUrl(null, "initial-conversation-missing");
-  }, [
-    activeConversation,
-    conversations,
-    initialConversationIdToOpen,
-    isHydratingConversations,
-  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -4610,9 +4613,50 @@ export default function ConversationList({
       );
     if (routeSyncConversationIdRef.current === routeConversationId && !isHistoryRestore) return;
     if (isCreatingConversation || isImportingLegacyConversation) return;
+    // A freshly-created room can be present in the URL before the list refresh
+    // has returned it. Do not treat that normal hydration window as a missing
+    // room, and do not open another surface against a stale list snapshot.
+    if (isHydratingConversations) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
-    if (!matchedConversation) return;
+    if (!matchedConversation) {
+      if (routeConversationHydrationRef.current === routeConversationId) return;
+
+      routeConversationHydrationRef.current = routeConversationId;
+      void hydrateConversationSummary(routeConversationId)
+        .then((hydratedConversation) => {
+          if (readConversationIdFromLocation() !== routeConversationId) return;
+
+          setConversations((current) => upsertConversation(current, hydratedConversation));
+          routeSyncConversationIdRef.current = routeConversationId;
+          return openConversationSummary(hydratedConversation, {
+            enterMode: "instant",
+            syncHistory: "none",
+            clearManualCloseSuppression: isHistoryRestore,
+          });
+        })
+        .catch((error: unknown) => {
+          routeSyncConversationIdRef.current = null;
+          if (readConversationIdFromLocation() === routeConversationId) {
+            replaceConversationOverlayUrl(null, "route-conversation-hydration-failed");
+          }
+          const aborted = isAbortLikeMutationError(error);
+          logConversationMutationFailure({
+            label: "route-hydrate",
+            conversationId: routeConversationId,
+            error,
+            aborted,
+          });
+          if (aborted) return;
+          window.alert(copy.openErrorMessage);
+        })
+        .finally(() => {
+          if (routeConversationHydrationRef.current === routeConversationId) {
+            routeConversationHydrationRef.current = null;
+          }
+        });
+      return;
+    }
 
     if (isHistoryRestore) {
       conversationHistoryPopStateTargetRef.current = null;
@@ -4664,7 +4708,9 @@ export default function ConversationList({
     activeConversation,
     conversations,
     copy.openErrorMessage,
+    hydrateConversationSummary,
     isCreatingConversation,
+    isHydratingConversations,
     isImportingLegacyConversation,
     mutatingConversationId,
     openConversationSummary,
@@ -5579,7 +5625,7 @@ export default function ConversationList({
                   type="button"
                   onClick={() => {
                     setIsCreateChoiceModalOpen(false);
-                    router.push(`/${locale}/conversations/new-group`);
+                    router.push(buildPathWithCurrentSearchParams(`/${locale}/conversations/new-group`));
                   }}
                   className="inline-flex h-12 items-center justify-center rounded-xl text-[15px] font-semibold text-white transition-colors"
                   style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}

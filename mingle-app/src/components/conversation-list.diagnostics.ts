@@ -6,6 +6,7 @@ export type ConversationMutationFailureLabel =
   | "language-onboarding"
   | "default-display-language"
   | "route-open"
+  | "route-hydrate"
   | "popstate-open"
   | "create";
 

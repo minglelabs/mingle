@@ -105,8 +105,8 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
       router.back();
       return;
     }
-    router.push(`/${locale}/conversations`);
-  }, [locale, router]);
+    router.push(buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, { tabRoot: true }));
+  }, [locale, router, searchParams]);
 
   const handleBack = useCallback(async () => {
     if (!isMountedRef.current || isLeavingRef.current) return;
