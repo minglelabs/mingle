@@ -3710,8 +3710,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       onClick={() => handleSttSegmentationModeSelect(option.value)}
                                       className={`min-h-10 rounded-[1rem] px-2 py-2 text-[0.75rem] font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50 ${
                                         isSelected
-                                          ? 'bg-white text-gray-950 shadow-sm'
-                                          : 'text-gray-500 hover:text-gray-800'
+                                          ? 'border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border border-transparent text-gray-500 hover:border-amber-200 hover:bg-white hover:text-amber-700'
                                       }`}
                                     >
                                       {option.label}

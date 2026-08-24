@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - STT Mode Selection Emphasis
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
+- Issue: The active STT segmentation mode used a white selected button on a gray segmented control, so it had less visual emphasis than the existing ad-position selector.
+- User impact: Users could see the current mode label but had to inspect the control more closely to distinguish the active mode.
+- Resolution: Reused the amber key-color selected state from the ad-position selector for both current and legacy STT mode controls, while preserving the existing pressed and disabled behavior.
+- Verification: Run the live-demo preference tests and verify the selected End/Fin option remains visibly highlighted on the mobile builds.
+
 ## 2026-08-24 - Mode-specific STT Segmentation Controls
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.preferences.ts`
