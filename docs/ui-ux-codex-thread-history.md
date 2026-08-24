@@ -1,5 +1,30 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - STT Mode Selection Emphasis
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
+- Issue: The active STT segmentation mode used a white selected button on a gray segmented control, so it had less visual emphasis than the existing ad-position selector.
+- User impact: Users could see the current mode label but had to inspect the control more closely to distinguish the active mode.
+- Resolution: Reused the amber key-color selected state from the ad-position selector for both current and legacy STT mode controls, while preserving the existing pressed and disabled behavior.
+- Verification: Run the live-demo preference tests and verify the selected End/Fin option remains visibly highlighted on the mobile builds.
+
+## 2026-08-24 - Mode-specific STT Segmentation Controls
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.preferences.ts`
+- Issue: The silence-based speech split mode had its silence-duration control hidden while the endpoint-mode five-step speech-length control remained visible. Users could therefore see a misleading “speech length per utterance” setting when they had selected silence-based splitting.
+- User impact: Silence-based splitting did not expose the original silence-duration control, and the visible control described a different segmentation behavior.
+- Resolution: Show the 500–5000ms silence-duration slider only for silence-based splitting, with a 1000ms default, and show the existing five-step endpoint tuning slider only for automatic endpoint detection. The endpoint safety cap remains 500–3000ms, so extending the Fin silence window does not change End behavior.
+- Verification: Update the preference UI contract test and verify both current and legacy live-demo menus switch controls when the segmentation mode changes.
+
+## 2026-08-24 - Per-user STT Speech Split Mode Selector
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/i18n/dictionaries/en.ts`, `mingle-app/src/i18n/dictionaries/ko.ts`
+- Issue: Soniox speech segmentation was controlled only by the server-wide `SONIOX_SEGMENTATION_STRATEGY`, so a user who needed conservative silence-based `fin` splitting could not choose it without affecting every active session. The account-preference hydration contract also had no visible control for the newly stored per-user value.
+- User impact: Users could not control whether a live transcript used automatic provider endpoint detection (`end`) or silence-based manual finalization (`fin`). Changing the mode during an active STT session could also make the next session's behavior ambiguous if the control remained interactive.
+- Resolution: Added a two-option segmented control in both current and legacy live-demo menus. Existing `null` preferences remain the server fallback but render as the default `Automatic detection` option. The user-facing labels do not expose provider strategy names. The main branch's five-step speech-length control is restored for endpoint mode and remains available alongside the mode selector. Both controls are disabled while STT is connecting or active, and changes are persisted through the existing account-preference sync path. Added Korean and English copy while other locales inherit the English fallback through the dictionary merge.
+- Accessibility: The control uses a labeled `role="group"`, `aria-pressed` state per option, visible focus rings, and disabled-state feedback during an active recording.
+- Verification: Targeted account-preference tests pass; manual device verification should confirm that changing the selector, starting a new recording, and switching between web and native STT produces the selected mode in the session handshake.
+
 ## 2026-08-16 - Admin Dashboard Daily Metric Loading Delay
 
 - Surface: `mingle-app/src/app/admin/dashboard/page.tsx`, `mingle-app/src/lib/admin-dashboard-query.ts`, `mingle-app/prisma/schema.prisma`
@@ -370,3 +395,10 @@
 - Issue: The room view had both a page-level scroll area and a fixed-height transcript scroll area. Cache hydration also used a transition, so a repeat lookup could keep showing the loading state while the background database refresh was pending.
 - User impact: Operators had to manage two scrollbars while reading a transcript and could wait for the database refresh instead of seeing the same user's cached room list immediately.
 - Resolution: Removed the inner transcript scroll container and kept one full-height admin page scroll area. Older message loading now listens to that single page scroll position. Cached user data is applied synchronously as soon as the client starts, while the fresh response continues in the background and only enables the manual update control.
+
+## 2026-08-24 — Admin conversation staged browser history
+
+- Surface: `mingle-app/src/app/admin/conversations/page.tsx`, `mingle-app/src/app/admin/conversations/admin-conversation-lookup-form.tsx`, `mingle-app/src/app/admin/conversations/admin-conversations-view.tsx`, `mingle-app/src/app/admin/dashboard/page.tsx`
+- Issue: The admin conversation review flow had an unnecessary dashboard entry point, and the initial external-user lookup could remain in browser history. Pressing Back from a room could therefore return to the pre-lookup screen instead of the room list.
+- User impact: Operators could lose the loaded room list while navigating through a user’s history and had to repeat the lookup before continuing their review.
+- Resolution: Removed the dashboard conversation button, changed external-user lookup navigation to replace the pre-lookup URL, and kept room selection as an explicit history push. Browser Back now moves from a room to its room list while preserving the loaded user context.

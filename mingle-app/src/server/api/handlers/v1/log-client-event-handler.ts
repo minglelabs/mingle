@@ -29,6 +29,81 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_turn_finalized',
 ])
 
+// This is a defensive ceiling for a client-reported single-turn duration, not a
+// usage or billing limit. A normal turn should be much shorter, but the generous
+// ceiling avoids rejecting a genuinely long uninterrupted utterance while still
+// blocking stale/background timers measured in hours or days.
+const MAX_REPORTED_TURN_DURATION_MS = 30 * 60 * 1000
+
+type DurationValidation = {
+  sttDurationMs: number | null | undefined
+  totalDurationMs: number | null | undefined
+  anomaly: {
+    fields: string[]
+    reasons: string[]
+  } | null
+}
+
+function validateReportedTurnDurations(body: Record<string, unknown>): DurationValidation {
+  const hasSttDuration = Object.prototype.hasOwnProperty.call(body, 'sttDurationMs')
+  const hasTotalDuration = Object.prototype.hasOwnProperty.call(body, 'totalDurationMs')
+  const anomalyFields: string[] = []
+  const anomalyReasons: string[] = []
+
+  const addAnomaly = (field: string, reason: string) => {
+    if (!anomalyFields.includes(field)) anomalyFields.push(field)
+    if (!anomalyReasons.includes(reason)) anomalyReasons.push(reason)
+  }
+
+  const sanitizeDuration = (field: string, present: boolean): number | null | undefined => {
+    if (!present) return undefined
+    const parsed = sanitizeNonNegativeInt(body[field])
+    if (parsed === null) {
+      addAnomaly(field, 'not_a_non_negative_integer')
+      return null
+    }
+    if (parsed > MAX_REPORTED_TURN_DURATION_MS) {
+      addAnomaly(field, 'exceeds_max_reported_turn_duration')
+      return null
+    }
+    return parsed
+  }
+
+  const sttDurationMs = sanitizeDuration('sttDurationMs', hasSttDuration)
+  let totalDurationMs = sanitizeDuration('totalDurationMs', hasTotalDuration)
+
+  if (sttDurationMs === null && totalDurationMs !== undefined && totalDurationMs !== null) {
+    totalDurationMs = null
+    addAnomaly('totalDurationMs', 'paired_with_invalid_stt_duration')
+  } else if (
+    typeof sttDurationMs === 'number'
+    && typeof totalDurationMs === 'number'
+    && totalDurationMs < sttDurationMs
+  ) {
+    totalDurationMs = null
+    addAnomaly('totalDurationMs', 'less_than_stt_duration')
+  }
+
+  return {
+    sttDurationMs,
+    totalDurationMs,
+    anomaly: anomalyFields.length > 0
+      ? { fields: anomalyFields, reasons: anomalyReasons }
+      : null,
+  }
+}
+
+function addDurationAnomalyMetadata(
+  metadata: Prisma.JsonObject,
+  anomaly: DurationValidation['anomaly'],
+) {
+  if (!anomaly) return
+  metadata.durationAnomaly = true
+  metadata.durationAnomalyFields = anomaly.fields
+  metadata.durationAnomalyReasons = anomaly.reasons
+  metadata.durationAnomalyMaxMs = MAX_REPORTED_TURN_DURATION_MS
+}
+
 function stripEndpointMarkers(text: string): string {
   return text.replace(/<\/?(?:end|fin)>/giu, '')
 }
@@ -86,8 +161,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const sourceLanguage = normalizeLang(body.sourceLanguage)
   const sourceTextRaw = sanitizeText(body.sourceText, 20000)
   const sourceText = sourceTextRaw ? stripEndpointMarkers(sourceTextRaw).trim() : null
-  const sttDurationMs = sanitizeNonNegativeInt(body.sttDurationMs)
-  const totalDurationMs = sanitizeNonNegativeInt(body.totalDurationMs)
+  const durationValidation = validateReportedTurnDurations(body)
+  const { sttDurationMs, totalDurationMs } = durationValidation
   const provider = sanitizeText(body.provider, 64)
   const infrastructureProvider = sanitizeText(body.infrastructureProvider, 64)
   const model = sanitizeText(body.model, 128)
@@ -133,6 +208,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
       if (
         process.env.NODE_ENV !== 'production'
@@ -165,8 +241,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
             translationPromptTokens: translationPromptTokens ?? undefined,
             translationCompletionTokens: translationCompletionTokens ?? undefined,
             translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs: sttDurationMs ?? undefined,
-            totalDurationMs: totalDurationMs ?? undefined,
+            sttDurationMs,
+            totalDurationMs,
             metadata: messageMetadata,
           },
           update: {
@@ -180,8 +256,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
             translationPromptTokens: translationPromptTokens ?? undefined,
             translationCompletionTokens: translationCompletionTokens ?? undefined,
             translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs: sttDurationMs ?? undefined,
-            totalDurationMs: totalDurationMs ?? undefined,
+            sttDurationMs,
+            totalDurationMs,
             metadata: messageMetadata,
           },
           select: {
@@ -263,8 +339,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
     if (translationPromptTokens !== null) eventMetadata.translationPromptTokens = translationPromptTokens
     if (translationCompletionTokens !== null) eventMetadata.translationCompletionTokens = translationCompletionTokens
     if (translationTotalTokens !== null) eventMetadata.translationTotalTokens = translationTotalTokens
-    if (sttDurationMs !== null) eventMetadata.sttDurationMs = sttDurationMs
-    if (totalDurationMs !== null) eventMetadata.totalDurationMs = totalDurationMs
+    if (typeof sttDurationMs === 'number') eventMetadata.sttDurationMs = sttDurationMs
+    if (typeof totalDurationMs === 'number') eventMetadata.totalDurationMs = totalDurationMs
+    addDurationAnomalyMetadata(eventMetadata, durationValidation.anomaly)
     if (clientMetadata) eventMetadata.clientMetadata = clientMetadata
 
     await createTrackedEventLog({

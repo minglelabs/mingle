@@ -4,8 +4,10 @@ import {
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_ENDPOINT_MAX_DELAY_MS,
   MAX_SONIOX_ENDPOINT_TUNING_STEP,
   MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_ENDPOINT_MAX_DELAY_MS,
   MIN_SONIOX_ENDPOINT_TUNING_STEP,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
@@ -23,6 +25,9 @@ const MIN_TEXT_SIZE_LEVEL = 1
 const MAX_TEXT_SIZE_LEVEL = 5
 export const DEFAULT_SPEAKER_ENABLED = false
 export const DEFAULT_ECHO_ALLOWED = true
+export type SttSegmentationMode = 'fin' | 'end'
+export const DEFAULT_STT_SEGMENTATION_MODE: SttSegmentationMode = 'end'
+export const DEFAULT_STT_SEGMENTATION_PREFERENCE: SttSegmentationMode | null = null
 export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom'
 
 export type AccountPreferencesResponse = {
@@ -35,6 +40,7 @@ export type AccountPreferencesResponse = {
   inputMode?: unknown
   speakerEnabled?: unknown
   echoAllowed?: unknown
+  sttSegmentationMode?: unknown
 }
 
 export interface LivePhoneDemoAccountPreferences {
@@ -47,6 +53,7 @@ export interface LivePhoneDemoAccountPreferences {
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
   echoAllowed: boolean
+  sttSegmentationMode: SttSegmentationMode | null
 }
 
 export interface AccountPreferencesPatchBody {
@@ -59,6 +66,7 @@ export interface AccountPreferencesPatchBody {
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
   echoAllowed: boolean
+  sttSegmentationMode: SttSegmentationMode | null
 }
 
 function normalizeIntegerPreference(
@@ -98,7 +106,12 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
 }
 
 export function normalizeSonioxEndpointMaxDelayPreference(value: unknown): number {
-  return normalizeIntegerPreference(value, DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
+  return normalizeIntegerPreference(
+    value,
+    DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    MIN_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    MAX_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  )
 }
 
 export function normalizeSonioxEndpointTuningStepPreference(value: unknown): number {
@@ -112,6 +125,12 @@ export function normalizeSonioxEndpointTuningStepPreference(value: unknown): num
 
 function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
+}
+
+function normalizeSttSegmentationMode(value: unknown): SttSegmentationMode | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'fin' || normalized === 'end' ? normalized : null
 }
 
 export function buildHydratedAccountPreferences(
@@ -134,6 +153,7 @@ export function buildHydratedAccountPreferences(
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
     echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
+    sttSegmentationMode: normalizeSttSegmentationMode(body?.sttSegmentationMode) ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
   }
 }
 
@@ -150,6 +170,7 @@ export function buildAccountPreferencesPatchBody(
     inputMode: preferences.inputMode,
     speakerEnabled: preferences.speakerEnabled,
     echoAllowed: preferences.echoAllowed,
+    sttSegmentationMode: preferences.sttSegmentationMode,
   }
 }
 
@@ -166,6 +187,7 @@ export function serializeAccountPreferencesSyncState(
     preferences.inputMode,
     preferences.speakerEnabled ? '1' : '0',
     preferences.echoAllowed ? '1' : '0',
+    preferences.sttSegmentationMode ?? '',
   ].join(':')
 }
 

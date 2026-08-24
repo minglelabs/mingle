@@ -21,9 +21,14 @@ import {
 } from './live-phone-demo.preferences'
 
 describe('Soniox endpoint UI strategy', () => {
-  it('shows only the endpoint tuning control', () => {
-    expect(shouldShowEndpointTuningControl()).toBe(true)
-    expect(shouldShowManualSilenceControl()).toBe(false)
+  it('shows the silence-duration control only for silence-based splitting', () => {
+    expect(shouldShowManualSilenceControl('fin')).toBe(true)
+    expect(shouldShowManualSilenceControl('end')).toBe(false)
+  })
+
+  it('shows the endpoint tuning control only for automatic endpoint detection', () => {
+    expect(shouldShowEndpointTuningControl('end')).toBe(true)
+    expect(shouldShowEndpointTuningControl('fin')).toBe(false)
   })
 })
 
@@ -37,6 +42,7 @@ describe('readPersistedIntegerPreference', () => {
   it('uses the persisted value when it is valid', () => {
     expect(readPersistedIntegerPreference('5', DEFAULT_TEXT_SIZE_LEVEL, 1, 5)).toBe(5)
     expect(readPersistedIntegerPreference('3000', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(3000)
+    expect(readPersistedIntegerPreference('5000', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(5000)
   })
 
   it('falls back for invalid or non-positive values', () => {

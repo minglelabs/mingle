@@ -37,8 +37,8 @@ exposes a snapping conversation-length slider for modern namespaces, and sends
 `soniox_endpoint_tuning_step` in the WebSocket start config. The server maps the
 step to Soniox's endpoint latency and sensitivity settings for that session.
 The existing `soniox_endpoint_max_delay_ms` remains a hard `500..3000` safety
-cap, while the manual-finalize setting remains separate and continues to
-default to `500` for `fin`/`llm` behavior.
+cap, while the manual-finalize setting remains separate, accepts `500..5000`,
+and defaults to `1000` for `fin`/`llm` behavior.
 
 ## 1. Executive summary
 

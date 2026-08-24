@@ -323,8 +323,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.4;
-				MINGLE_LEGACY_SITE_URL = "https://mingle-app-xi.vercel.app";
-				MINGLE_LEGACY_WS_URL = "wss://mingle-stt.fly.dev";
+				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
+				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
 				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.4;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
@@ -368,8 +368,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.4;
-				MINGLE_LEGACY_SITE_URL = "https://mingle-app-xi.vercel.app";
-				MINGLE_LEGACY_WS_URL = "wss://mingle-stt.fly.dev";
+				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
+				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
 				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.4;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;

@@ -56,6 +56,9 @@ import {
   shouldSendTranslationModelPreference,
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
+  SttSegmentationMode,
+  DEFAULT_STT_SEGMENTATION_MODE,
+  DEFAULT_STT_SEGMENTATION_PREFERENCE,
 } from './live-phone-demo.account-preferences'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
@@ -698,6 +701,9 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  sttSegmentationModeLabel: string
+  sttSegmentationModeEndLabel: string
+  sttSegmentationModeFinLabel: string
   endpointTuningLabel: string
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
@@ -834,6 +840,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  sttSegmentationModeLabel,
+  sttSegmentationModeEndLabel,
+  sttSegmentationModeFinLabel,
   endpointTuningLabel,
   endpointTuningShortLabel,
   endpointTuningLongLabel,
@@ -872,6 +881,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(DEFAULT_STT_SEGMENTATION_PREFERENCE)
   const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
   const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
@@ -969,6 +979,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
+    sttSegmentationMode: DEFAULT_STT_SEGMENTATION_PREFERENCE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -980,7 +991,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    sttSegmentationMode,
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1370,6 +1382,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         )
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        setSttSegmentationMode(hydratedPreferences.sttSegmentationMode)
         setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
         setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
         setTranslationModel(hydratedPreferences.translationModel)
@@ -2487,12 +2500,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+  const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
+  const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
+    if (isSttSessionRunning) return
+    if (latestAccountPreferencesRef.current.sttSegmentationMode === nextMode) return
+    setSttSegmentationMode(nextMode)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      sttSegmentationMode: nextMode,
+    })
+  }, [clearAccountPreferencesSyncTimer, isSttSessionRunning, syncAccountPreferencesOverride])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
@@ -3657,7 +3682,46 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {shouldShowManualSilenceControl() && (
+                            <div className="block">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{sttSegmentationModeLabel}</span>
+                                <span className="shrink-0 whitespace-nowrap text-gray-500">
+                                  {selectedSttSegmentationMode === 'end'
+                                    ? sttSegmentationModeEndLabel
+                                    : sttSegmentationModeFinLabel}
+                                </span>
+                              </div>
+                              <div
+                                role="group"
+                                aria-label={sttSegmentationModeLabel}
+                                className="grid grid-cols-2 gap-2 rounded-[1.25rem] bg-gray-100 p-1"
+                              >
+                                {([
+                                  { value: 'end' as const, label: sttSegmentationModeEndLabel },
+                                  { value: 'fin' as const, label: sttSegmentationModeFinLabel },
+                                ]).map((option) => {
+                                  const isSelected = selectedSttSegmentationMode === option.value
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      disabled={isSttSessionRunning}
+                                      onClick={() => handleSttSegmentationModeSelect(option.value)}
+                                      className={`min-h-10 rounded-[1rem] px-2 py-2 text-[0.75rem] font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        isSelected
+                                          ? 'border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border border-transparent text-gray-500 hover:border-amber-200 hover:bg-white hover:text-amber-700'
+                                      }`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {shouldShowManualSilenceControl(selectedSttSegmentationMode) && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
@@ -3736,7 +3800,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </label>
                             )}
 
-                            {shouldShowEndpointTuningControl() && (
+                            {shouldShowEndpointTuningControl(selectedSttSegmentationMode) && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${

@@ -316,6 +316,7 @@ type NativeSttStartCommand = {
     behaviorProfile: MingleBehaviorProfile
     sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
+    sttSegmentationMode?: string
     sonioxEndpointMaxDelayMs: number
     sonioxEndpointTuningStep: number
   }
@@ -1045,6 +1046,7 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  sttSegmentationMode?: string | null
 }
 
 type StopRecordingOptions = {
@@ -2205,6 +2207,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  sttSegmentationMode,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -4531,6 +4534,7 @@ export default function useRealtimeSTT({
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
+            ...(sttSegmentationMode ? { sttSegmentationMode } : {}),
             sonioxEndpointMaxDelayMs,
             sonioxEndpointTuningStep,
           },
@@ -4584,6 +4588,7 @@ export default function useRealtimeSTT({
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
+          ...(sttSegmentationMode ? { stt_segmentation_mode: sttSegmentationMode } : {}),
           soniox_endpoint_max_delay_ms: sonioxEndpointMaxDelayMs,
           soniox_endpoint_tuning_step: sonioxEndpointTuningStep,
         }
@@ -4629,7 +4634,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

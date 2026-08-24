@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
+import { AdminConversationLookupForm } from "./admin-conversation-lookup-form";
 import { AdminConversationBrowser, type AdminConversationBrowserProps } from "./admin-conversations-view";
 
 export const dynamic = "force-dynamic";
@@ -60,10 +61,7 @@ export default async function AdminConversationsPage({ searchParams }: PageProps
           <Link className="rounded-md border border-[#e5e3dc] bg-white px-4 py-2 text-sm font-semibold" href="/admin">피드백함으로</Link>
         </header>
 
-        <form className="mb-4 flex gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm" method="get">
-          <input name="userId" defaultValue={browserProps.userId} placeholder="external user ID" className="min-w-0 flex-1 rounded-md border border-[#d9d6ce] px-3 py-2 text-sm" required />
-          <button className="rounded-md bg-[#0b0b0b] px-4 py-2 text-sm font-semibold text-white" type="submit">조회</button>
-        </form>
+        <AdminConversationLookupForm defaultUserId={browserProps.userId} />
 
         <AdminConversationBrowser {...browserProps} />
       </div>

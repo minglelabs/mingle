@@ -1587,6 +1587,9 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
           unmuteTtsLabel={props.dictionary.demo.unmuteTts}
           textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
           silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+          sttSegmentationModeLabel={props.dictionary.demo.sttSegmentationModeLabel ?? "Speech Split Mode"}
+          sttSegmentationModeEndLabel={props.dictionary.demo.sttSegmentationModeEndLabel ?? "Automatic detection"}
+          sttSegmentationModeFinLabel={props.dictionary.demo.sttSegmentationModeFinLabel ?? "Silence-based split"}
           endpointTuningLabel={props.dictionary.demo.endpointTuningLabel ?? "Speech Length per Utterance"}
           endpointTuningShortLabel={props.dictionary.demo.endpointTuningShortLabel ?? "Short"}
           endpointTuningLongLabel={props.dictionary.demo.endpointTuningLongLabel ?? "Long"}

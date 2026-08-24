@@ -6,6 +6,8 @@ import {
   evaluateProviderEndpointDecision,
   ManualFinalizeCarryController,
   partitionSonioxTokensAtFirstBoundary,
+  readSegmentationStrategyId,
+  resolveSessionSegmentationStrategy,
   resolveSonioxBoundaryHandling,
   resolveSonioxEndpointDelayMs,
   resolveSonioxEndpointDetectionConfig,
@@ -15,6 +17,21 @@ import {
   resolveSonioxSegmentationRuntime,
   selectSonioxBoundarySpeakerIds,
 } from '../segmentation-strategy';
+
+test('defaults the server segmentation strategy to endpoint mode', () => {
+  const previous = process.env.SONIOX_SEGMENTATION_STRATEGY;
+  delete process.env.SONIOX_SEGMENTATION_STRATEGY;
+
+  try {
+    assert.equal(readSegmentationStrategyId(), 'end');
+  } finally {
+    if (previous === undefined) {
+      delete process.env.SONIOX_SEGMENTATION_STRATEGY;
+    } else {
+      process.env.SONIOX_SEGMENTATION_STRATEGY = previous;
+    }
+  }
+});
 
 test('resolves requested and effective segmentation modes once', () => {
   assert.deepEqual(resolveSonioxSegmentationRuntime('fin', 700), {
@@ -319,4 +336,21 @@ test('manual carry controller fires one unresolved expiry', async () => {
   assert.equal(carry.isProvisional, true);
   assert.equal(expiryCount, 1);
   carry.dispose();
+});
+
+test('resolveSessionSegmentationStrategy respects valid client-requested mode', () => {
+    assert.equal(resolveSessionSegmentationStrategy('fin', 'end'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('end', 'fin'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy('FIN', 'end'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('END', 'fin'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(' fin ', 'end'), 'fin');
+});
+
+test('resolveSessionSegmentationStrategy falls back to server default for invalid input', () => {
+    assert.equal(resolveSessionSegmentationStrategy(undefined, 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(null, 'fin'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('', 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy('invalid', 'end'), 'end');
+    assert.equal(resolveSessionSegmentationStrategy(123, 'fin'), 'fin');
+    assert.equal(resolveSessionSegmentationStrategy('llm', 'end'), 'end');
 });

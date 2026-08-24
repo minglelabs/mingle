@@ -4,7 +4,6 @@ import { parseDayKey, resolveTodayKey, startOfDayUtc } from "./admin-dashboard-m
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
-  createMany: vi.fn(),
   upsert: vi.fn(),
   queryRawUnsafe: vi.fn(),
 }));
@@ -13,7 +12,6 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminDashboardDailyMetric: {
       findMany: mocks.findMany,
-      createMany: mocks.createMany,
       upsert: mocks.upsert,
     },
     $queryRawUnsafe: mocks.queryRawUnsafe,
@@ -56,6 +54,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: index + 2,
       messageCount: index + 3,
       usageSeconds: index + 4,
+      usageMetricVersion: 1,
       sttAvgMs: index + 5,
       sttP95Ms: index + 6,
       translationAvgMs: index + 7,
@@ -65,7 +64,6 @@ describe("loadAdminDashboardMetrics", () => {
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys));
 
     expect(mocks.queryRawUnsafe).not.toHaveBeenCalled();
-    expect(mocks.createMany).not.toHaveBeenCalled();
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(metrics[0].points.map((point) => point.value)).toEqual([4, 5, 6]);
     expect(metrics[1].points.map((point) => point.value)).toEqual([3, 4, 5]);
@@ -79,19 +77,23 @@ describe("loadAdminDashboardMetrics", () => {
     const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
     mocks.findMany.mockResolvedValue([]);
     setRawMetricResults("2026-08-03");
-    mocks.createMany.mockResolvedValue({ count: dayKeys.length });
+    mocks.upsert.mockResolvedValue({});
 
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys));
 
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
-    expect(mocks.createMany).toHaveBeenCalledTimes(1);
-    expect(mocks.createMany.mock.calls[0][0].data).toHaveLength(3);
-    expect(mocks.createMany.mock.calls[0][0].data[0]).toMatchObject({
+    const usageQuery = mocks.queryRawUnsafe.mock.calls[3][0] as string;
+    expect(usageQuery).toContain('"app"."app_event_logs"');
+    expect(usageQuery).toContain('"usage_sec"');
+    expect(usageQuery).not.toContain('"app"."app_messages"');
+    expect(mocks.upsert).toHaveBeenCalledTimes(3);
+    expect(mocks.upsert.mock.calls[0][0].create).toMatchObject({
       day: rawDay("2026-08-02"),
       signupCount: 0,
       dauCount: 0,
       messageCount: 0,
       usageSeconds: 0,
+      usageMetricVersion: 1,
       sttAvgMs: null,
       translationAvgMs: null,
     });
@@ -99,6 +101,34 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[1].points.map((point) => point.value)).toEqual([0, 4, 0]);
     expect(metrics[4].points.map((point) => point.value)).toEqual([null, 100, null]);
     expect(metrics[4].secondarySeries?.points.map((point) => point.value)).toEqual([null, 180, null]);
+  });
+
+  it("rebuilds a cache row written with an older usage metric", async () => {
+    const dayKey = "2026-08-02";
+    mocks.findMany.mockResolvedValue([{
+      day: rawDay(dayKey),
+      signupCount: 1,
+      dauCount: 1,
+      messageCount: 1,
+      usageSeconds: 999999,
+      usageMetricVersion: 0,
+      sttAvgMs: 1,
+      sttP95Ms: 1,
+      translationAvgMs: 1,
+      translationP95Ms: 1,
+    }]);
+    setRawMetricResults(dayKey);
+    mocks.upsert.mockResolvedValue({});
+
+    const metrics = await loadAdminDashboardMetrics(makeRange([dayKey]));
+
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].update).toMatchObject({
+      usageSeconds: 5,
+      usageMetricVersion: 1,
+    });
+    expect(metrics[0].points[0].value).toBe(5);
   });
 
   it("refreshes only the current day while retaining the cached history", async () => {
@@ -113,6 +143,7 @@ describe("loadAdminDashboardMetrics", () => {
       sttP95Ms: 1,
       translationAvgMs: 1,
       translationP95Ms: 1,
+      usageMetricVersion: 1,
     }]);
     setRawMetricResults(today);
     mocks.upsert.mockResolvedValue({});
@@ -120,7 +151,6 @@ describe("loadAdminDashboardMetrics", () => {
     const metrics = await loadAdminDashboardMetrics(makeRange([today]));
 
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
-    expect(mocks.createMany).not.toHaveBeenCalled();
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.upsert.mock.calls[0][0].where.day).toEqual(rawDay(today));
     expect(metrics[0].points[0].value).toBe(5);

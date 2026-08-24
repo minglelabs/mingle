@@ -94,7 +94,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -102,6 +102,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
@@ -124,7 +125,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -132,6 +133,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
       expect.any(NextRequest),
@@ -181,6 +183,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
+      sttSegmentationMode: "fin",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -197,6 +200,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: "fin",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -211,6 +215,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });
@@ -261,6 +266,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -273,7 +279,7 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("falls back to the 500ms DB default when silence finalize is unset", async () => {
+  it("falls back to the 1000ms DB default when silence finalize is unset", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -298,7 +304,7 @@ describe("/api/account/preferences route", () => {
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 3,
-      sonioxManualFinalizeSilenceMs: 500,
+      sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
@@ -306,6 +312,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
   });
 
@@ -331,12 +338,12 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        demoSilenceFinalizeMs: 3000,
+        demoSilenceFinalizeMs: 5000,
       },
     });
   });
 
-  it("clamps and persists endpoint max delay updates through PATCH", async () => {
+  it("persists STT segmentation mode and clamps endpoint max delay through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -348,6 +355,7 @@ describe("/api/account/preferences route", () => {
     const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
+        sttSegmentationMode: "FIN",
         sonioxEndpointMaxDelayMs: 99999,
       }),
     }));
@@ -359,11 +367,12 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoEndpointMaxDelayMs: 3000,
+        sttSegmentationMode: "fin",
       },
     });
   });
 
-  it("clamps and persists the five-step endpoint tuning preference through PATCH", async () => {
+  it("clears the STT segmentation override and clamps endpoint tuning through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -375,6 +384,7 @@ describe("/api/account/preferences route", () => {
     const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
+        sttSegmentationMode: null,
         sonioxEndpointTuningStep: 99,
       }),
     }));
@@ -386,6 +396,7 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoEndpointTuningStep: 4,
+        sttSegmentationMode: null,
       },
     });
   });
@@ -556,6 +567,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
@@ -570,6 +582,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });
@@ -636,6 +649,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
@@ -658,6 +672,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });
