@@ -6,6 +6,7 @@ type NativeSttStartOptions = {
   aecEnabled?: boolean;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
+  sttSegmentationMode?: 'fin' | 'end';
 };
 
 type NativeSttStopOptions = {

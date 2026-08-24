@@ -100,6 +100,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
@@ -128,6 +129,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
       expect.any(NextRequest),
@@ -175,6 +177,7 @@ describe("/api/account/preferences route", () => {
       demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
+      sttSegmentationMode: "fin",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -189,6 +192,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: "fin",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -201,6 +205,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });
@@ -247,6 +252,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -288,6 +294,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
   });
 
@@ -314,6 +321,60 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoSilenceFinalizeMs: 3000,
+      },
+    });
+  });
+
+  it("persists a supported STT segmentation mode through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sttSegmentationMode: "FIN",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        sttSegmentationMode: "fin",
+      },
+    });
+  });
+
+  it("clears the STT segmentation override when PATCH receives null", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sttSegmentationMode: null,
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        sttSegmentationMode: null,
       },
     });
   });
@@ -480,6 +541,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
@@ -492,6 +554,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });
@@ -554,6 +617,7 @@ describe("/api/account/preferences route", () => {
       inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     });
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
@@ -574,6 +638,7 @@ describe("/api/account/preferences route", () => {
         demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
+        sttSegmentationMode: true,
       },
     });
   });

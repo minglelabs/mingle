@@ -142,12 +142,15 @@ wss.on('connection', (clientWs) => {
         disposeSonioxSpeakerStates = null;
     };
 
-    const sendReadyStatus = () => {
+    const sendReadyStatus = (extra: Record<string, unknown> = {}) => {
         if (clientWs.readyState !== WebSocket.OPEN) return;
         clientWs.send(JSON.stringify(
-            releaseRuntime.buildReadyPayload({
-                sonioxLanguageHintsEnabled: SONIOX_USE_LANGUAGE_HINTS,
-            }),
+            {
+                ...releaseRuntime.buildReadyPayload({
+                    sonioxLanguageHintsEnabled: SONIOX_USE_LANGUAGE_HINTS,
+                }),
+                ...extra,
+            },
         ));
     };
 
@@ -1166,7 +1169,9 @@ wss.on('connection', (clientWs) => {
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
                 if (isClientConnected) {
-                    sendReadyStatus();
+                    sendReadyStatus({
+                        stt_segmentation_mode: segmentationRuntime.effective,
+                    });
                 } else {
                     sttWs?.close();
                 }

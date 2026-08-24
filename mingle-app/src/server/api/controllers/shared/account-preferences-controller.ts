@@ -92,6 +92,12 @@ function normalizeSttSegmentationMode(value: unknown): "fin" | "end" | null {
     : null;
 }
 
+function hasValidSttSegmentationMode(body: PreferencesBody): boolean {
+  if (!Object.prototype.hasOwnProperty.call(body, "sttSegmentationMode")) return false;
+  return body.sttSegmentationMode === null
+    || normalizeSttSegmentationMode(body.sttSegmentationMode) !== null;
+}
+
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
   return {
     id: typeof session?.user?.id === "string" ? session.user.id.trim() : "",
@@ -372,12 +378,13 @@ export async function PATCH(request: Request) {
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
   const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
+  const hasNextSttSegmentationMode = hasValidSttSegmentationMode(body);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
-    && nextSttSegmentationMode === null
+    && !hasNextSttSegmentationMode
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -387,7 +394,7 @@ export async function PATCH(request: Request) {
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
-    ...(nextSttSegmentationMode !== null ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
+    ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
   };
 
   if (identity.id) {

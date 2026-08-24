@@ -845,6 +845,7 @@ class NativeSTTModule: RCTEventEmitter {
         behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
+        sttSegmentationMode: String?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -939,6 +940,9 @@ class NativeSTTModule: RCTEventEmitter {
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
+        if let sttSegmentationMode, !sttSegmentationMode.isEmpty {
+            configPayload["stt_segmentation_mode"] = sttSegmentationMode
+        }
         if !sonioxLanguageHints.isEmpty {
             configPayload["soniox_language_hints"] = sonioxLanguageHints
         }
@@ -981,6 +985,13 @@ class NativeSTTModule: RCTEventEmitter {
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
+        let normalizedSttSegmentationMode = (options["sttSegmentationMode"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let sttSegmentationMode = normalizedSttSegmentationMode == "fin"
+            || normalizedSttSegmentationMode == "end"
+            ? normalizedSttSegmentationMode
+            : nil
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -995,6 +1006,7 @@ class NativeSTTModule: RCTEventEmitter {
                 behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                sttSegmentationMode: sttSegmentationMode,
                 resolve: resolve,
                 reject: reject
             )
@@ -1016,6 +1028,7 @@ class NativeSTTModule: RCTEventEmitter {
                             behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+                            sttSegmentationMode: sttSegmentationMode,
                             resolve: resolve,
                             reject: reject
                         )

@@ -27,6 +27,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     })
   })
 
@@ -47,6 +48,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     })
   })
 
@@ -64,7 +66,18 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      sttSegmentationMode: null,
     })
+  })
+
+  it('normalizes a stored STT segmentation mode during hydration', () => {
+    expect(buildHydratedAccountPreferences({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'gemma-4-31b-it',
+      adBannerPosition: 'top',
+      sttSegmentationMode: ' FIN ',
+    }, false).sttSegmentationMode).toBe('fin')
   })
 })
 
@@ -82,6 +95,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -96,6 +110,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -120,6 +135,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
@@ -129,6 +145,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        sttSegmentationMode: null,
       }),
     })).toBe(true)
   })
@@ -146,6 +163,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -209,6 +227,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     })).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
@@ -217,6 +236,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      sttSegmentationMode: null,
     })
   })
 })

@@ -312,6 +312,7 @@ type NativeSttStartCommand = {
     behaviorProfile: MingleBehaviorProfile
     sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
+    sttSegmentationMode?: string
   }
 }
 
@@ -4523,6 +4524,7 @@ export default function useRealtimeSTT({
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
+            ...(sttSegmentationMode ? { sttSegmentationMode } : {}),
           },
         })
         if (!posted) {

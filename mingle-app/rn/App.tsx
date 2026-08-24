@@ -537,6 +537,7 @@ type NativeSttStartPayload = {
   behaviorProfile?: string;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
+  sttSegmentationMode?: string;
 };
 
 type NativeSttStopPayload = {
@@ -2009,6 +2010,13 @@ function AppInner(): React.JSX.Element {
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
+    const normalizedSttSegmentationMode = typeof payload?.sttSegmentationMode === 'string'
+      ? payload.sttSegmentationMode.trim().toLowerCase()
+      : '';
+    const sttSegmentationMode = normalizedSttSegmentationMode === 'fin'
+      || normalizedSttSegmentationMode === 'end'
+      ? normalizedSttSegmentationMode as 'fin' | 'end'
+      : undefined;
 
     const startPayload = {
       sttModel,
@@ -2019,6 +2027,7 @@ function AppInner(): React.JSX.Element {
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
         : {}),
+      ...(sttSegmentationMode ? { sttSegmentationMode } : {}),
     };
 
     try {

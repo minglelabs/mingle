@@ -55,6 +55,7 @@ class NativeSTTModule(
     val behaviorProfile: String,
     val sonioxLanguageHints: List<String>,
     val sonioxManualFinalizeSilenceMs: Int?,
+    val sttSegmentationMode: String?,
   )
 
   private data class PendingStartRequest(
@@ -154,6 +155,10 @@ class NativeSTTModule(
           null
         },
       ),
+      sttSegmentationMode = options.getString("sttSegmentationMode")
+        ?.trim()
+        ?.lowercase()
+        ?.takeIf { it == "fin" || it == "end" },
     )
 
     if (hasRecordAudioPermission()) {
@@ -324,6 +329,9 @@ class NativeSTTModule(
           }
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
+          }
+          options.sttSegmentationMode?.let {
+            config.put("stt_segmentation_mode", it)
           }
           webSocket.send(config.toString())
           Log.i(

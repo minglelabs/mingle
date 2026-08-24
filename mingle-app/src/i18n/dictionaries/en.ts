@@ -15,6 +15,9 @@ export const enDictionary: BaseAppDictionarySource = {
     adBannerPositionLabel: "Ad Position",
     adBannerPositionTopLabel: "Top",
     adBannerPositionBottomLabel: "Bottom",
+    sttSegmentationModeLabel: "Speech Split Mode",
+    sttSegmentationModeEndLabel: "Automatic detection (End)",
+    sttSegmentationModeFinLabel: "Silence-based split (Fin)",
   },
   tabs: {
     chats: "Chats",

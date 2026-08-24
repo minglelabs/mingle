@@ -31,6 +31,9 @@ export type BaseAppDictionarySource = {
     adBannerPositionLabel?: string;
     adBannerPositionTopLabel?: string;
     adBannerPositionBottomLabel?: string;
+    sttSegmentationModeLabel?: string;
+    sttSegmentationModeEndLabel?: string;
+    sttSegmentationModeFinLabel?: string;
   };
   tabs: {
     chats: string;
@@ -187,6 +190,9 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
     adBannerPositionLabel: string;
     adBannerPositionTopLabel: string;
     adBannerPositionBottomLabel: string;
+    sttSegmentationModeLabel: string;
+    sttSegmentationModeEndLabel: string;
+    sttSegmentationModeFinLabel: string;
   };
   livePhoneDemo: {
     composer: {

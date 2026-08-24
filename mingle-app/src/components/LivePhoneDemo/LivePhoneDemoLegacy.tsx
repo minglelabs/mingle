@@ -40,7 +40,6 @@ import {
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  shouldShowSpeechSplitControl,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -697,6 +696,9 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  sttSegmentationModeLabel: string
+  sttSegmentationModeEndLabel: string
+  sttSegmentationModeFinLabel: string
   translationModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
@@ -830,6 +832,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  sttSegmentationModeLabel,
+  sttSegmentationModeEndLabel,
+  sttSegmentationModeFinLabel,
   translationModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
@@ -2479,6 +2484,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+  const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? 'end'
+  const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
+    if (isSttSessionRunning) return
+    if (latestAccountPreferencesRef.current.sttSegmentationMode === nextMode) return
+    setSttSegmentationMode(nextMode)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      sttSegmentationMode: nextMode,
+    })
+  }, [clearAccountPreferencesSyncTimer, isSttSessionRunning, syncAccountPreferencesOverride])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
@@ -3643,7 +3659,46 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {shouldShowSpeechSplitControl() && (
+                            <div className="block">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{sttSegmentationModeLabel}</span>
+                                <span className="shrink-0 whitespace-nowrap text-gray-500">
+                                  {selectedSttSegmentationMode === 'end'
+                                    ? sttSegmentationModeEndLabel
+                                    : sttSegmentationModeFinLabel}
+                                </span>
+                              </div>
+                              <div
+                                role="group"
+                                aria-label={sttSegmentationModeLabel}
+                                className="grid grid-cols-2 gap-2 rounded-[1.25rem] bg-gray-100 p-1"
+                              >
+                                {([
+                                  { value: 'end' as const, label: sttSegmentationModeEndLabel },
+                                  { value: 'fin' as const, label: sttSegmentationModeFinLabel },
+                                ]).map((option) => {
+                                  const isSelected = selectedSttSegmentationMode === option.value
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      disabled={isSttSessionRunning}
+                                      onClick={() => handleSttSegmentationModeSelect(option.value)}
+                                      className={`min-h-10 rounded-[1rem] px-2 py-2 text-[0.75rem] font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        isSelected
+                                          ? 'bg-white text-gray-950 shadow-sm'
+                                          : 'text-gray-500 hover:text-gray-800'
+                                      }`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {selectedSttSegmentationMode === 'fin' && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
