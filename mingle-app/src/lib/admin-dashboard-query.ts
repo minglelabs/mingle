@@ -16,6 +16,7 @@ import {
  * is already stored in, no timezone conversion needed.
  */
 const DAY_BUCKET_EXPR = (column: string) => `date_trunc('day', "${column}")`;
+const USAGE_METRIC_VERSION = 1;
 
 type RawDayCount = { day: Date; value: bigint | number };
 type RawDayLatency = { day: Date; avg_ms: number | null; p95_ms: number | null };
@@ -31,7 +32,7 @@ type DailyMetricSnapshot = {
   translationP95Ms: number | null;
 };
 
-type CachedDailyMetric = DailyMetricSnapshot & { day: Date };
+type CachedDailyMetric = DailyMetricSnapshot & { day: Date; usageMetricVersion: number };
 
 const EMPTY_DAILY_METRIC: DailyMetricSnapshot = {
   signupCount: 0,
@@ -148,13 +149,62 @@ async function queryMessageCount(range: AdminDashboardDateRange): Promise<DailyR
   return toDailyRows(rows);
 }
 
+/**
+ * Usage is a per-user cumulative counter in app_event_logs. Sum each positive
+ * delta between snapshots, carrying the last snapshot before the range into the
+ * window so the first day is not undercounted. A counter reset contributes zero.
+ * This deliberately does not use app_messages duration fields: those are
+ * per-turn client diagnostics and can be corrupted by a suspended/stale timer.
+ */
 async function queryUsageSeconds(range: AdminDashboardDateRange): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
-    `select ${DAY_BUCKET_EXPR("created_at")} as day, coalesce(sum("stt_duration_ms"), 0) / 1000.0 as value
-     from "app"."app_messages"
-     where "is_deleted" is distinct from true
-       and "stt_duration_ms" is not null
-       and "created_at" >= $1 and "created_at" < $2
+    `with usage_in_range as materialized (
+       select "user_id", "id", "created_at", "usage_sec"
+       from "app"."app_event_logs"
+       where "user_id" is not null
+         and "usage_sec" is not null
+         and "created_at" >= $1 and "created_at" < $2
+     ),
+     usage_users as materialized (
+       select distinct "user_id"
+       from usage_in_range
+     ),
+     usage_before_start as materialized (
+       select distinct on (el."user_id")
+         el."user_id", el."id", el."created_at", el."usage_sec"
+       from "app"."app_event_logs" as el
+       join usage_users as uu on uu."user_id" = el."user_id"
+       where el."usage_sec" is not null
+         and el."created_at" < $1
+       order by el."user_id", el."created_at" desc, el."id" desc
+     ),
+     usage_events as materialized (
+       select "user_id", "id", "created_at", "usage_sec"
+       from usage_before_start
+       union all
+       select "user_id", "id", "created_at", "usage_sec"
+       from usage_in_range
+     ),
+     usage_snapshots as (
+       select
+         "created_at",
+         "usage_sec",
+         lag("usage_sec") over (
+           partition by "user_id"
+           order by "created_at" asc, "id" asc
+         ) as previous_usage_sec
+       from usage_events
+     )
+     select ${DAY_BUCKET_EXPR("created_at")} as day,
+       coalesce(sum(
+         case
+           when previous_usage_sec is null then 0::bigint
+           when "usage_sec" < previous_usage_sec then 0::bigint
+           else ("usage_sec" - previous_usage_sec)::bigint
+         end
+       ), 0)::bigint as value
+     from usage_snapshots
+     where "created_at" >= $1 and "created_at" < $2
      group by day
      order by day`,
     range.rangeStart,
@@ -261,16 +311,22 @@ async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<M
       sttP95Ms: true,
       translationAvgMs: true,
       translationP95Ms: true,
+      usageMetricVersion: true,
     },
   });
 
-  return new Map(rows.map((row) => [formatDayKey(row.day), row]));
+  return new Map(
+    rows
+      .filter((row) => row.usageMetricVersion === USAGE_METRIC_VERSION)
+      .map((row) => [formatDayKey(row.day), row]),
+  );
 }
 
 function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: Date) {
   return {
     day: parseDayKey(dayKey),
     ...snapshot,
+    usageMetricVersion: USAGE_METRIC_VERSION,
     createdAt: now,
     updatedAt: now,
   };
@@ -282,17 +338,20 @@ async function persistDailyMetricSnapshots(
   currentDayKey: string | undefined,
 ): Promise<void> {
   const now = new Date();
-  const historicalRows = historicalDayKeys.flatMap((dayKey) => {
+  await Promise.all(historicalDayKeys.flatMap((dayKey) => {
     const snapshot = snapshots.get(dayKey);
-    return snapshot ? [snapshotToCacheRow(dayKey, snapshot, now)] : [];
-  });
+    if (!snapshot) return [];
 
-  if (historicalRows.length > 0) {
-    await prisma.adminDashboardDailyMetric.createMany({
-      data: historicalRows,
-      skipDuplicates: true,
-    });
-  }
+    return [prisma.adminDashboardDailyMetric.upsert({
+      where: { day: parseDayKey(dayKey) },
+      create: snapshotToCacheRow(dayKey, snapshot, now),
+      update: {
+        ...snapshot,
+        usageMetricVersion: USAGE_METRIC_VERSION,
+        updatedAt: now,
+      },
+    })];
+  }));
 
   if (currentDayKey) {
     const snapshot = snapshots.get(currentDayKey);
@@ -302,6 +361,7 @@ async function persistDailyMetricSnapshots(
         create: snapshotToCacheRow(currentDayKey, snapshot, now),
         update: {
           ...snapshot,
+          usageMetricVersion: USAGE_METRIC_VERSION,
           updatedAt: now,
         },
       });

@@ -330,6 +330,7 @@ model AdminDashboardDailyMetric {
   dauCount               Int      @map("dau_count")
   messageCount           Int      @map("message_count")
   usageSeconds           Float    @map("usage_seconds")
+  usageMetricVersion     Int      @default(0) @map("usage_metric_version")
   sttAvgMs               Float?   @map("stt_avg_ms")
   sttP95Ms               Float?   @map("stt_p95_ms")
   translationAvgMs       Float?   @map("translation_avg_ms")
