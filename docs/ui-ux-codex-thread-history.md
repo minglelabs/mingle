@@ -1,5 +1,18 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Widen message bubbles and flow flags inline with text
+
+- Surface: Collapsed and expanded conversation-room message bubbles for both the viewer and other speakers.
+- Issue: The bubble stack reserved 10% of its available width, the expanded layout gave every flag a dedicated flex column, and the outer bubble used relatively generous horizontal and vertical padding. The viewer's expanded rows also reversed that flag column to the right side. The collapsed flag group retained a 6px flex gap on top of each button's existing 42px touch area.
+- User impact: Long messages wrapped earlier than necessary, both sides appeared to leave excess trailing space, the flag column consumed text width, the viewer's flag placement differed from other messages, and multi-language flags looked visually disconnected.
+- Resolution:
+  - Reduce the reserved width from 10% to 1% by increasing the message stack maximum width from 90% to 99%.
+  - Move each expanded row's circular flag into the same inline text flow as its message. Flags now remain before the text for both speaker directions and no longer reserve a full-height column.
+  - Reduce outer bubble padding from 14px horizontal and 8-10px vertical to 10px horizontal and 6px vertical. Tighten divider spacing from 6px to 4px per side.
+  - Preserve each flag's 42px touch area and 30px visual circle while removing the extra 6px flex gap between adjacent collapsed-mode flags. Reduce the final flag-to-text gap from 8px to 4px.
+- Data change: None. Message contents, speaker alignment, copy/playback behavior, display preferences, API namespaces, and native code are unchanged.
+- Testing notes: Verify long single-line and wrapped text on narrow devices, both own/other expanded rows, three-or-more collapsed flags, original quote badges, and rapid flag taps after the visual spacing reduction.
+
 ## 2026-08-24 - Stack original and translated text inside one animated bubble
 
 - Surface: The conversation-room message bubble when the user's bubble display preference is set to the expanded mode.

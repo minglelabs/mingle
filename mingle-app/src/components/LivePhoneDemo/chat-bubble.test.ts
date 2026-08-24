@@ -43,7 +43,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('“”')
     expect(html).toContain('h-[30px] w-[30px]')
     expect(html).toContain('h-[30px] w-[42px]')
-    expect(html).toContain('mr-2 inline-flex items-center gap-1.5')
+    expect(html).toContain('mr-1 inline-flex items-center gap-0')
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(1)
     expect(html).toContain('h-[11px] w-[11px]')
     expect(html).toContain('data-display-language="en"')
@@ -61,7 +61,9 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
-    expect(html).toContain('max-width:90%')
+    expect(html).toContain('max-width:99%')
+    expect(html).toContain('px-2.5 py-1.5')
+    expect(html).not.toContain('px-3.5 py-2')
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
@@ -108,7 +110,11 @@ describe('ChatBubble', () => {
     expect(html).toContain('aria-label="Collapse"')
     expect(html).toContain('>Collapse</button>')
     expect(html).toContain('data-chat-bubble-content-switch="expanded"')
-    expect(html).toContain('my-1.5 h-px w-full bg-gray-200/60')
+    expect(html).toContain('my-1 h-px w-full bg-gray-200/60')
+    expect(html).toContain('mr-0.5 inline-flex align-middle')
+    expect(html).toContain('max-width:99%')
+    expect(html).toContain('px-2.5 py-1.5')
+    expect(html).not.toContain('shrink-0 pt-0.5')
     expect(html).not.toContain('rotate-90')
     expect(html).not.toContain('>EN<')
     expect(html).not.toContain('>KO<')
@@ -119,6 +125,12 @@ describe('ChatBubble', () => {
     expect(html).toContain('翻訳メッセージ')
     expect(html).toContain('inline-block w-fit max-w-full rounded-2xl border')
     expect(html).not.toContain('inline w-fit max-w-full rounded-2xl border')
+    expect(html.indexOf('data-expanded-bubble-content')).toBeLessThan(
+      html.indexOf('data-expanded-bubble-meta'),
+    )
+    expect(html.indexOf('data-expanded-bubble-meta')).toBeLessThan(
+      html.indexOf('Original message'),
+    )
   })
 
   it('uses one speaker-based background color for every expanded row', () => {
@@ -157,6 +169,14 @@ describe('ChatBubble', () => {
     expect(ownHtml).toContain('border-gray-200 bg-amber-50/80')
     expect(ownHtml).not.toContain('border-gray-200 bg-white')
     expect(ownHtml).not.toContain('border-amber-100')
+
+    const ownOriginalRowStart = ownHtml.indexOf('data-expanded-chat-bubble-row')
+    const ownOriginalRowEnd = ownHtml.indexOf('data-expanded-bubble-divider')
+    const ownOriginalRowHtml = ownHtml.slice(ownOriginalRowStart, ownOriginalRowEnd)
+    expect(ownOriginalRowHtml).not.toContain('flex-row-reverse')
+    expect(ownOriginalRowHtml.indexOf('data-chat-language-badge')).toBeLessThan(
+      ownOriginalRowHtml.indexOf('My original'),
+    )
 
     const ownCollapsedHtml = renderToStaticMarkup(
       createElement(ChatBubble, {
@@ -375,7 +395,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-message-tts-button')
   })
 
-  it('gives every language flag a wider horizontal hit area in a multi-language bubble', () => {
+  it('keeps wide flag hit areas while reducing visible spacing between languages', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -396,7 +416,7 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
     expect((html.match(/h-\[30px\] w-\[42px\]/g) || []).length).toBe(3)
-    expect(html).toContain('mr-2 inline-flex items-center gap-1.5')
+    expect(html).toContain('mr-1 inline-flex items-center gap-0')
   })
 
   it('keeps the solo-room left-anchored layout when there is no viewer/speaker account match', () => {
