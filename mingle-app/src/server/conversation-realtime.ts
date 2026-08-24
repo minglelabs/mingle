@@ -87,11 +87,12 @@ export function mintConversationListRealtimeToken(userId: string): string | null
  * room AND to every member's conversation-list screen (`memberUserIds`) —
  * without the list fan-out, a member who has the room closed only finds out
  * about a new message on their next poll/mount instead of immediately.
- * Best-effort and fire-and-forget on purpose: realtime push is a latency
- * optimization over the client's own poll fallback, never something a
- * message send should fail on.
+ * Best-effort: realtime push is still a latency optimization over the
+ * client's own poll fallback, never something a message send should fail on.
+ * The returned promise is awaited by message handlers so a serverless request
+ * does not terminate before the publish request has been handed to messaging.
  */
-export function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = []): void {
+export async function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = []): Promise<void> {
   const secret = readRealtimeSecret();
   const publishUrl = resolveConversationEventsPublishUrl();
   const normalizedSessionKey = sessionKey.trim();
@@ -100,15 +101,23 @@ export function notifyConversationMessage(sessionKey: string, memberUserIds: str
   )];
   if (!secret || !publishUrl || (!normalizedSessionKey && listKeys.length === 0)) return;
 
-  fetch(publishUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys }),
-  }).catch(() => {
+  try {
+    const response = await fetch(publishUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys }),
+    });
+    if (!response.ok) {
+      console.warn("[conversation-realtime] publish_failed", { status: response.status });
+    }
+  } catch (error) {
     // A dropped notification just means that one client relies on its poll
     // fallback for this message instead of getting it pushed.
-  });
+    console.warn("[conversation-realtime] publish_error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

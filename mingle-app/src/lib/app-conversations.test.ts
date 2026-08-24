@@ -2534,8 +2534,13 @@ describe("app-conversations", () => {
         pendingInviteeUserIds: ["user-2", "user-3"],
       });
       mockUserFindMany.mockResolvedValue([{ id: "user-2" }, { id: "user-3" }]);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { userId: "user-1" },
+        { userId: "user-2" },
+        { userId: "user-3" },
+      ]);
 
-      await materializePendingConversationInvitees("session-dm");
+      const memberUserIds = await materializePendingConversationInvitees("session-dm");
 
       expect(mockFindConversationUnique).toHaveBeenCalledWith({
         where: { sessionKey: "session-dm" },
@@ -2557,6 +2562,11 @@ describe("app-conversations", () => {
       expect(mockUpdateConversation).toHaveBeenCalledWith({
         where: { id: "conv-dm" },
         data: { pendingInviteeUserIds: [] },
+      });
+      expect(memberUserIds).toEqual(["user-1", "user-2", "user-3"]);
+      expect(mockChannelMemberFindMany).toHaveBeenCalledWith({
+        where: { channelId: "conv-dm" },
+        select: { userId: true },
       });
     });
 

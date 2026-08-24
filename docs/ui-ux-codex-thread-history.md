@@ -1,5 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Stabilize new shared-room navigation and first-message delivery
+
+- Surface: Native conversation-list → invite-friends → shared conversation navigation, the conversation-room overlay route, and first-message realtime/push delivery.
+- Issue: The new-group action used a raw route without carrying the native API namespace and layout parameters. A namespace-less conversation route could therefore fall through to the legacy entry. At the same time, the room URL could arrive before the list snapshot contained the newly-created room, while the first message materialization and member fan-out used separate state reads.
+- User impact: A newly-created shared room could show a mixture of legacy and current UI, fail to open until a later refresh, or show the creator's first message without immediately delivering it to the other members. The canonical message could still be stored, making the issue look like a disappearing message after an app restart.
+- Resolution:
+  - Preserve the current native search parameters when opening the new-group route and when using the invite screen's history fallback.
+  - Infer a native release variant from preserved platform/version parameters when `apiNamespace` is temporarily absent, so a native route does not silently select the legacy entry.
+  - Keep a room URL while the conversation list hydrates. If the list still lacks that room, hydrate the single conversation by ID and open the returned room summary instead of deleting the route.
+  - Materialize pending invitees and read the committed member IDs inside one interactive Prisma transaction. Use that committed set for the first-message realtime and push fan-out.
+  - Await the messaging publish request and push attempt while keeping both failures non-fatal to message persistence. Add bounded server logs for membership readiness, publish failures, and push failures without logging session-key contents.
+- Data contract: No Prisma schema or migration change. Existing conversation, membership, realtime, and push contracts are reused.
+- Testing notes: Physical-device testing is intentionally left to the requester. Verify native iOS and Android new-group creation, immediate first-message delivery to every invitee, force-close/reopen persistence, and the absence of legacy UI. Also verify that a realtime/push transport failure still leaves the message persisted and recoverable by polling.
+
 ## 2026-08-23 - Restore per-member language ownership in shared rooms
 
 - Surface: Conversation-room language picker, language attribution avatars, room-list language preview, and translation targets.

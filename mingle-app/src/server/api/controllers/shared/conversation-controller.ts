@@ -455,7 +455,7 @@ export async function leaveConversationResponse(
   // room and conversation-list screen pick up the departure and the new "X
   // left" notice without waiting on their own poll cycle.
   const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
-  notifyConversationMessage(conversation.sessionKey, memberUserIds);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
 
   const trackingHints = resolvedUser.tracking
     ? {

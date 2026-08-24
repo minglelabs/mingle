@@ -229,6 +229,36 @@ describe("handleLogClientEventV1", () => {
     });
   });
 
+  it("uses the committed first-message membership set for realtime and push fan-out", async () => {
+    mockMaterializePendingConversationInvitees.mockResolvedValue(["user_123", "user_456"]);
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
+
+    const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "client_message_committed_members",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: {},
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(200);
+    expect(mockListChannelMemberUserIdsBySessionKey).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"]);
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+      messageId: "message_123",
+      sessionKey: "sess_123",
+      sourceText: "안녕하세요",
+      senderUserId: "user_123",
+      memberUserIds: ["user_123", "user_456"],
+    });
+  });
+
   it("still notifies the room even when fetching member ids for the list fan-out fails", async () => {
     mockListChannelMemberUserIdsBySessionKey.mockRejectedValue(new Error("db_unavailable"));
 

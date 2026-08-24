@@ -1443,8 +1443,10 @@ export async function findExistingConversationWithExactMembers(args: {
 // pendingInviteeUserIds doc comment for why this doesn't happen at invite
 // time. Keyed by sessionKey since that's what the message-write path
 // (log-client-event-handler.ts) already has on hand. No-op for solo rooms
-// and rooms that have already been materialized.
-export async function materializePendingConversationInvitees(sessionKey: string): Promise<void> {
+// and rooms that have already been materialized. When materialization occurs,
+// return the member IDs read inside the same committed transaction so the
+// message fan-out cannot race a second, stale membership query.
+export async function materializePendingConversationInvitees(sessionKey: string): Promise<string[] | null> {
   const channel = await prisma.appConversationChannel.findUnique({
     where: { sessionKey },
     select: {
@@ -1455,7 +1457,7 @@ export async function materializePendingConversationInvitees(sessionKey: string)
       pendingInviteeUserIds: true,
     },
   });
-  if (!channel || channel.pendingInviteeUserIds.length === 0) return;
+  if (!channel || channel.pendingInviteeUserIds.length === 0) return null;
 
   // Older rows may contain ids that were accepted before invite validation
   // existed. Filter those rows before the foreign-key write so a bad pending
@@ -1495,28 +1497,33 @@ export async function materializePendingConversationInvitees(sessionKey: string)
     (inviteeUserId) => !blockedInviteeUserIds.has(inviteeUserId),
   );
 
-  await prisma.$transaction([
-    ...(inviteeUserIdsToMaterialize.length > 0
-      ? [
-          prisma.appConversationChannelMember.createMany({
-            data: inviteeUserIdsToMaterialize.map((inviteeUserId) => ({
-              channelId: channel.id,
-              userId: inviteeUserId,
-              role: "member",
-              status: channel.status,
-              pausedAt: channel.pausedAt,
-              selectedLanguages: defaultLanguagesByUserId.get(inviteeUserId)
-                ?? deriveDefaultSttLanguagesForLocale(undefined),
-            })),
-            skipDuplicates: true,
-          }),
-        ]
-      : []),
-    prisma.appConversationChannel.update({
+  return prisma.$transaction(async (tx) => {
+    if (inviteeUserIdsToMaterialize.length > 0) {
+      await tx.appConversationChannelMember.createMany({
+        data: inviteeUserIdsToMaterialize.map((inviteeUserId) => ({
+          channelId: channel.id,
+          userId: inviteeUserId,
+          role: "member",
+          status: channel.status,
+          pausedAt: channel.pausedAt,
+          selectedLanguages: defaultLanguagesByUserId.get(inviteeUserId)
+            ?? deriveDefaultSttLanguagesForLocale(undefined),
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    await tx.appConversationChannel.update({
       where: { id: channel.id },
       data: { pendingInviteeUserIds: [] },
-    }),
-  ]);
+    });
+
+    const members = await tx.appConversationChannelMember.findMany({
+      where: { channelId: channel.id },
+      select: { userId: true },
+    });
+    return members.map((member) => member.userId);
+  });
 }
 
 // Who to fan a realtime "a message landed" push out to for the conversation

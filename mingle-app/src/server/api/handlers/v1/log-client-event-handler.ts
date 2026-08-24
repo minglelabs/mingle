@@ -276,29 +276,47 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // pendingInviteeUserIds' doc comment. Must run before the
         // notify below, so a freshly-materialized member's push actually
         // reaches them.
+        let committedMemberUserIds: string[] | null = null
         try {
-          await materializePendingConversationInvitees(tracking.sessionKey)
+          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey)
+          if (Array.isArray(committedMemberUserIds)) {
+            console.info('[conversation-message] membership-ready', {
+              messageId,
+              memberCount: committedMemberUserIds.length,
+            })
+          }
         } catch (error) {
           console.error('Materializing pending conversation invitees failed:', error)
         }
 
-        // Lets any other member's already-open room — and their
-        // conversation LIST screen, even with the room closed — pick this
-        // up without waiting on their own poll cycle. Fire-and-forget: this
-        // is a latency optimization, never something a message send should
-        // fail on, and a no-op wherever realtime push isn't configured.
-        const memberUserIds = await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
-        notifyConversationMessage(tracking.sessionKey, memberUserIds)
+        // If this was the first message in a pending-invite room, use the
+        // member IDs returned from the committed materialization transaction.
+        // Otherwise, use the current membership snapshot for an already-live
+        // room. In both cases the list fan-out is based on a stable member set.
+        const memberUserIds = committedMemberUserIds
+          ?? await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
+        try {
+          // Lets any other member's already-open room — and their conversation
+          // LIST screen — pick this up without waiting on their own poll cycle.
+          // The publish helper absorbs transport failures, but awaiting it here
+          // keeps the request alive long enough for the messaging service to
+          // receive the event instead of dropping it after the response ends.
+          await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+        } catch (error) {
+          console.error('Conversation realtime notification failed:', error)
+        }
         if (messageId) {
-          void sendPushNotificationForConversationMessage({
-            messageId,
-            sessionKey: tracking.sessionKey,
-            sourceText,
-            senderUserId: userId,
-            memberUserIds,
-          }).catch((error) => {
+          try {
+            await sendPushNotificationForConversationMessage({
+              messageId,
+              sessionKey: tracking.sessionKey,
+              sourceText,
+              senderUserId: userId,
+              memberUserIds,
+            })
+          } catch (error) {
             console.error('Conversation message push failed:', error)
-          })
+          }
         }
       }
     }
