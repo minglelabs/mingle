@@ -15,6 +15,8 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo, {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
   type LatestUtterancePayload,
   type LivePhoneDemoRef,
 } from "@/components/LivePhoneDemo/LivePhoneDemo";
@@ -419,6 +421,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [signupName, setSignupName] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
+  const signupPasswordConfirmRef = useRef<HTMLInputElement | null>(null);
+  const [emailSheetKeyboardInsetPx, setEmailSheetKeyboardInsetPx] = useState(0);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const pendingNativeProviderRef = useRef<NativeAuthProvider | null>(null);
@@ -1171,6 +1175,32 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   ]);
 
   useEffect(() => {
+    if (!isEmailSheetOpen || typeof window === "undefined") {
+      setEmailSheetKeyboardInsetPx(0);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const syncKeyboardInset = () => {
+      const nextInsetPx = resolveKeyboardViewportInsetPx(viewport);
+      setEmailSheetKeyboardInsetPx((currentInsetPx) => (
+        resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx)
+      ));
+    };
+
+    syncKeyboardInset();
+    viewport.addEventListener("resize", syncKeyboardInset);
+    viewport.addEventListener("scroll", syncKeyboardInset);
+
+    return () => {
+      viewport.removeEventListener("resize", syncKeyboardInset);
+      viewport.removeEventListener("scroll", syncKeyboardInset);
+    };
+  }, [isEmailSheetOpen]);
+
+  useEffect(() => {
     return () => {
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
@@ -1526,6 +1556,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               animation: isEmailSheetClosing
                 ? "email-overlay-out 0.22s ease both"
                 : "email-overlay-in 0.2s ease both",
+              paddingBottom: emailSheetKeyboardInsetPx,
             }}
             onClick={handleCloseEmailSheet}
           >
@@ -1539,6 +1570,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 animation: isEmailSheetClosing
                   ? "email-sheet-out 0.24s cubic-bezier(0.4, 0, 0.2, 1) both"
                   : "email-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both",
+                maxHeight: emailSheetKeyboardInsetPx > 0
+                  ? `calc(88vh - ${emailSheetKeyboardInsetPx}px)`
+                  : undefined,
               }}
             >
               <div className="overflow-hidden">
@@ -1704,9 +1738,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                           setSignupPassword(event.target.value);
                           setEmailAuthErrorCode(null);
                         }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            signupPasswordConfirmRef.current?.focus();
+                          }
+                        }}
+                        onFocus={(event) => {
+                          event.target.scrollIntoView({ block: "center", behavior: "smooth" });
+                        }}
                         disabled={emailSheetDisabled}
                         autoComplete="new-password"
                         type="password"
+                        enterKeyHint="next"
                         className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
                         placeholder={props.dictionary.profile.passwordFieldPlaceholder}
                       />
@@ -1715,14 +1759,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         {props.dictionary.profile.passwordConfirmFieldLabel}
                       </label>
                       <input
+                        ref={signupPasswordConfirmRef}
                         value={signupPasswordConfirm}
                         onChange={(event) => {
                           setSignupPasswordConfirm(event.target.value);
                           setEmailAuthErrorCode(null);
                         }}
+                        onFocus={(event) => {
+                          event.target.scrollIntoView({ block: "center", behavior: "smooth" });
+                        }}
                         disabled={emailSheetDisabled}
                         autoComplete="new-password"
                         type="password"
+                        enterKeyHint="done"
                         className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
                         placeholder={props.dictionary.profile.passwordConfirmFieldPlaceholder}
                       />
