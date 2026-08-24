@@ -22,7 +22,7 @@ import {
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
-import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationLeaveNotice } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
@@ -150,6 +150,7 @@ import {
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
+import { formatLivePhoneDemoLeaveNoticeText, resolveLivePhoneDemoConversationLeaveCopy } from './live-phone-demo.leave-copy'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import {
@@ -1114,6 +1115,11 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // See ConversationChannelSummary.isMultiMember — decides whether the
+  // room-management menu's row-removal action is "delete" (solo room,
+  // deletes for the owner) or "leave" (shared room, removes just the
+  // caller's own membership — see leaveConversationChannel).
+  isMultiMember?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1314,6 +1320,39 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
   },
 )
 
+// Renders a departed member's "{name} left" line in the message timeline —
+// KakaoTalk-style: plain centered text, not a bubble, shown only inside the
+// room itself (never a toast, push notification, or list-preview text). See
+// ConversationLeaveNotice / leaveConversationChannel.
+function LivePhoneDemoLeaveNoticeRow({
+  notice,
+  uiLocale,
+}: {
+  notice: ConversationLeaveNotice
+  uiLocale: string
+}) {
+  const displayName = notice.name?.trim() || (notice.handle ? `@${notice.handle.trim()}` : '')
+  if (!displayName) return null
+
+  return (
+    <div
+      data-leave-notice-user-id={notice.userId}
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex justify-center py-1"
+    >
+      <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
+        {formatLivePhoneDemoLeaveNoticeText(uiLocale, displayName)}
+      </span>
+    </div>
+  )
+}
+
+const MemoizedLivePhoneDemoLeaveNoticeRow = memo(LivePhoneDemoLeaveNoticeRow)
+
+type LivePhoneDemoTimelineItem =
+  | { kind: 'message'; timestampMs: number; utterance: Utterance }
+  | { kind: 'leave-notice'; timestampMs: number; notice: ConversationLeaveNotice }
+
 function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
   if (typeof window === 'undefined') return false
   const bridge = window.ReactNativeWebView
@@ -1422,6 +1461,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  isMultiMember = false,
 }, ref) {
   // Only used to tell "my" bubbles from "theirs" in a room shared by more
   // than one real account — the solo room's own layout never depends on it.
@@ -1505,6 +1545,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
+  const leaveConversationCopy = useMemo(() => resolveLivePhoneDemoConversationLeaveCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
     return {
@@ -3767,6 +3808,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     hasOlderUtterances,
     isStorageHydrated,
     persistedUtteranceCount,
+    leaveNotices,
     replaceConversationHistoryForQa,
     // Demo animation states
     isDemoAnimating,
@@ -4086,14 +4128,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       const trackingUserId = getOrCreateTrackingUserId()
-      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
-        method: 'DELETE',
-        headers: buildTrackingRequestHeaders({
-          sessionKey: resolveConversationSessionKey(),
-          trackingUserId,
-          nativeAppUpdate,
-        }),
-      })
+      // A multi-member room's row-removal action is "leave" (removes just
+      // this caller's membership, see leaveConversationChannel), not
+      // "delete" — see the isMultiMember prop doc comment.
+      const response = await fetch(
+        buildClientApiPath(`/conversations/${conversationId}${isMultiMember ? '/leave' : ''}`),
+        {
+          method: isMultiMember ? 'POST' : 'DELETE',
+          headers: buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId,
+            nativeAppUpdate,
+          }),
+        },
+      )
 
       if (!response.ok && response.status !== 404) {
         throw new Error(`conversation_delete_failed:${response.status}`)
@@ -4106,9 +4154,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
       onConversationDeleted?.()
-      toast.success(deleteConversationCopy.successToastLabel)
+      toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
     } catch {
-      toast.error(deleteConversationCopy.errorToastLabel)
+      toast.error(isMultiMember ? leaveConversationCopy.errorToastLabel : deleteConversationCopy.errorToastLabel)
     } finally {
       setIsDeletingConversation(false)
     }
@@ -4119,7 +4167,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     deleteConversationCopy.successToastLabel,
     forceStopTtsPlayback,
     isDeletingConversation,
+    isMultiMember,
     isSttSessionRunning,
+    leaveConversationCopy.errorToastLabel,
+    leaveConversationCopy.successToastLabel,
     nativeAppUpdate,
     onConversationDeleted,
     prepareForDeletion,
@@ -5271,6 +5322,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }),
     [displayUtteranceIds],
   )
+  // Interleaves "{name} left" notices into the message timeline by
+  // timestamp — display-only merge, kept separate from displayUtterances so
+  // every existing scroll/animation/draft-tracking consumer above keeps
+  // reading message-only data untouched.
+  const timelineItems = useMemo<LivePhoneDemoTimelineItem[]>(() => {
+    const items: LivePhoneDemoTimelineItem[] = displayUtterances.map((utterance) => ({
+      kind: 'message',
+      timestampMs: typeof utterance.createdAtMs === 'number' && Number.isFinite(utterance.createdAtMs)
+        ? utterance.createdAtMs
+        : 0,
+      utterance,
+    }))
+    for (const notice of leaveNotices) {
+      items.push({ kind: 'leave-notice', timestampMs: notice.leftAtMs, notice })
+    }
+    items.sort((a, b) => a.timestampMs - b.timestampMs)
+    return items
+  }, [displayUtterances, leaveNotices])
 
   useEffect(() => {
     previousDisplayUtteranceIdsRef.current = displayUtteranceIds
@@ -6718,8 +6787,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <Trash2 size={17} strokeWidth={2.2} />
-                              <span className="min-w-0 flex-1">{deleteConversationCopy.menuItemLabel}</span>
+                              {isMultiMember ? <LogOut size={17} strokeWidth={2.2} /> : <Trash2 size={17} strokeWidth={2.2} />}
+                              <span className="min-w-0 flex-1">
+                                {isMultiMember ? leaveConversationCopy.menuItemLabel : deleteConversationCopy.menuItemLabel}
+                              </span>
                             </span>
                             <span className="shrink-0 text-rose-500">
                               <ChevronRight size={18} strokeWidth={2.4} />
@@ -6752,6 +6823,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
                         conversationId={conversationId}
+                        leftBadgeLabel={leaveConversationCopy.leftBadgeLabel}
                       />
                     </motion.section>
 
@@ -6848,25 +6920,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
-              {displayUtterances.map((u) => (
-                <MemoizedLivePhoneDemoChatMessageRow
-                  key={`${u.id}:${displayLanguageSelectionKey}`}
-                  utterance={u}
-                  uiLocale={uiLocale}
-                  preferredDisplayLanguage={preferredDisplayLanguage}
-                  preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
-                  defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
-                  languageOrder={normalizedDisplayLanguageOptions}
-                  isDraft={draftUtteranceIds.has(u.id)}
-                  onPlayOriginal={handlePlayOriginalBubbleTts}
-                  onPlayTranslation={handlePlayTranslationBubbleTts}
-                  bubbleTextClassName={chatBubbleTextClassName}
-                  speakingPlaybackKey={activeBubblePlaybackKey}
-                  shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
-                  viewerUserId={viewerUserId}
-                  onOpenProfile={handleOpenProfileForBubble}
-                  bubbleDisplayMode={bubbleDisplayMode}
-                />
+              {timelineItems.map((item) => (
+                item.kind === 'leave-notice' ? (
+                  <MemoizedLivePhoneDemoLeaveNoticeRow
+                    key={`leave:${item.notice.userId}:${item.notice.leftAtMs}`}
+                    notice={item.notice}
+                    uiLocale={uiLocale}
+                  />
+                ) : (
+                  <MemoizedLivePhoneDemoChatMessageRow
+                    key={`${item.utterance.id}:${displayLanguageSelectionKey}`}
+                    utterance={item.utterance}
+                    uiLocale={uiLocale}
+                    preferredDisplayLanguage={preferredDisplayLanguage}
+                    preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+                    defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
+                    languageOrder={normalizedDisplayLanguageOptions}
+                    isDraft={draftUtteranceIds.has(item.utterance.id)}
+                    onPlayOriginal={handlePlayOriginalBubbleTts}
+                    onPlayTranslation={handlePlayTranslationBubbleTts}
+                    bubbleTextClassName={chatBubbleTextClassName}
+                    speakingPlaybackKey={activeBubblePlaybackKey}
+                    shouldAnimateEntrance={animatedDisplayUtteranceIds.has(item.utterance.id)}
+                    viewerUserId={viewerUserId}
+                    onOpenProfile={handleOpenProfileForBubble}
+                    bubbleDisplayMode={bubbleDisplayMode}
+                  />
+                )
               ))}
 
             {/* Demo typing animation */}
@@ -7123,15 +7203,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   role="dialog"
                   aria-modal="true"
-                  aria-label={deleteConversationCopy.dialogTitle}
+                  aria-label={isMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
                   onClick={(event) => event.stopPropagation()}
                   className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
                 >
                   <p className="text-sm font-semibold text-gray-900">
-                    {deleteConversationCopy.dialogTitle}
+                    {isMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                    {deleteConversationCopy.dialogMessage}
+                    {isMultiMember ? leaveConversationCopy.dialogMessage : deleteConversationCopy.dialogMessage}
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
@@ -7141,7 +7221,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       disabled={isDeletingConversation}
                       className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {deleteConversationCopy.cancelLabel}
+                      {isMultiMember ? leaveConversationCopy.cancelLabel : deleteConversationCopy.cancelLabel}
                     </button>
                     <button
                       type="button"
@@ -7151,9 +7231,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       disabled={isDeletingConversation}
                       className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
                     >
-                      {isDeletingConversation
-                        ? deleteConversationCopy.deletingLabel
-                        : deleteConversationCopy.confirmLabel}
+                      {isMultiMember
+                        ? (isDeletingConversation ? leaveConversationCopy.leavingLabel : leaveConversationCopy.confirmLabel)
+                        : (isDeletingConversation ? deleteConversationCopy.deletingLabel : deleteConversationCopy.confirmLabel)}
                     </button>
                   </div>
                 </motion.div>

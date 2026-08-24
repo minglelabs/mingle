@@ -349,6 +349,16 @@ model AppConversationChannelMember {
   // derived from messages sent by other members after this timestamp.
   lastReadAt DateTime? @map("last_read_at")
   joinedAt DateTime  @default(now()) @map("joined_at")
+  // Set when this member leaves a shared (2+-member) room. The row is kept
+  // (never deleted) rather than removed outright: the remaining members'
+  // room title/avatar/message speaker attribution all read from full
+  // membership history (see resolveViewerFacingTitle and friends in
+  // app-conversations.ts), and this timestamp is also what drives the
+  // in-room "X left" notice. Every read/write that should treat a departed
+  // member as if they were never here (visibility, dedup matching, message
+  // sending, own status/language/pause state) filters on leftAt: null
+  // instead of deleting the row.
+  leftAt DateTime? @map("left_at")
 
   channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)

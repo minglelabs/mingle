@@ -28,7 +28,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Trash2, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -37,6 +37,7 @@ import {
   formatLivePhoneDemoUsageDuration,
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
+import { resolveLivePhoneDemoConversationLeaveCopy } from "@/components/LivePhoneDemo/live-phone-demo.leave-copy";
 import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
@@ -254,6 +255,11 @@ interface ConversationItem {
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
   isBlockedCounterpart: boolean;
+  // Whether the delete-vs-leave row menu action applies: a solo room keeps
+  // "delete" (deletes for the owner, the only real member), a 2+-member
+  // room switches to "leave" (removes just the caller's own membership, see
+  // leaveConversationChannel).
+  isMultiMember: boolean;
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -1004,6 +1010,7 @@ function mapConversationSummaryToItem(
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
     isBlockedCounterpart: conversation.isBlockedCounterpart,
+    isMultiMember: conversation.isMultiMember,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -1497,6 +1504,15 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   actionDisabled = false,
 }, ref) {
   const [query, setQuery] = useState("");
+  // The panel this input lives in slides in from the right via a CSS
+  // transform (see SlideSurface's SURFACE_TRANSITION, 0.32s) — the
+  // browser-drawn text caret tracks that transform in real time, so
+  // focusing immediately on open makes the caret visibly travel from the
+  // right edge to its resting position instead of just appearing there.
+  // Keep the caret itself invisible (but the input still genuinely
+  // focused, so iOS still treats this as gesture-triggered and opens the
+  // keyboard) until the slide settles.
+  const [caretHidden, setCaretHidden] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
@@ -1532,22 +1548,31 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   useEffect(() => {
     if (!open) {
       blurInput();
+      setCaretHidden(false);
       return;
     }
+
+    // transitionMode "instant" means the panel is already in its resting
+    // position (no slide to hide the caret from).
+    const shouldHideCaret = transitionMode !== "instant";
+    setCaretHidden(shouldHideCaret);
 
     focusInput();
     const animationFrameId = window.requestAnimationFrame(() => {
       focusInput();
     });
+    // 340ms: just past SlideSurface's SURFACE_TRANSITION.duration (0.32s),
+    // so the caret reappears only once the slide has actually settled.
     const timeoutId = window.setTimeout(() => {
       focusInput();
-    }, 220);
+      setCaretHidden(false);
+    }, shouldHideCaret ? 340 : 220);
 
     return () => {
       window.cancelAnimationFrame(animationFrameId);
       window.clearTimeout(timeoutId);
     };
-  }, [blurInput, focusInput, open]);
+  }, [blurInput, focusInput, open, transitionMode]);
 
   const persistRecentSearch = useCallback((rawValue: string) => {
     const normalized = normalizeSearchTerm(rawValue);
@@ -1630,7 +1655,9 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+                caretHidden ? "caret-transparent" : ""
+              }`}
               enterKeyHint="search"
               autoCapitalize="none"
               autoCorrect="off"
@@ -1800,6 +1827,10 @@ export default function ConversationList({
     () => resolveLivePhoneDemoConversationDeleteCopy(locale),
     [locale],
   );
+  const leaveConversationCopy = useMemo(
+    () => resolveLivePhoneDemoConversationLeaveCopy(locale),
+    [locale],
+  );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
   const [conversationSurfaceHistory, setConversationSurfaceHistory] = useState(() => (
@@ -1939,6 +1970,14 @@ export default function ConversationList({
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  // The row-removal confirm dialog covers both delete (solo room, deletes
+  // for the owner) and leave (shared room, removes just the caller) — this
+  // decides which copy/handler applies for whichever conversation is
+  // currently targeted by deleteDialogConversationId.
+  const deleteDialogTargetIsMultiMember = useMemo(
+    () => conversations.some((conversation) => conversation.id === deleteDialogConversationId && conversation.isMultiMember),
+    [conversations, deleteDialogConversationId],
+  );
   const notificationSurfaceOpen = conversationSurfaceHistory.some(
     (entry) => entry.id === CONVERSATION_NOTIFICATIONS_SURFACE_ID,
   );
@@ -2443,7 +2482,16 @@ export default function ConversationList({
     roomManagementCopy.renameErrorToastLabel,
   ]);
 
-  const handleDeleteConversationFromList = useCallback(async () => {
+  // Solo room -> DELETE (deletes for the owner, the only real member).
+  // Shared room -> POST .../leave (removes just the caller's own
+  // membership, see leaveConversationChannel). Branches internally rather
+  // than duplicating the function, same as handleDeleteConversationConfirm
+  // in LivePhoneDemo.tsx: the STT-stop guard, in-flight tracking
+  // (deletingConversationIdsRef — every race-protection check keyed off it
+  // elsewhere applies equally either way), and local-state eviction
+  // (handleConversationDeleted) are identical regardless of which action
+  // removed the room.
+  const handleRemoveConversationFromList = useCallback(async () => {
     if (isDeletingConversation || !deleteDialogConversationId) return;
 
     setIsDeletingConversation(true);
@@ -2455,37 +2503,47 @@ export default function ConversationList({
           roomRef.prepareForDeletion?.();
           await roomRef.stopRecording({ deferRunningStateChange: true, discardPendingFinalization: true });
         } catch {
-          // Ignore stop races and continue deleting the room.
+          // Ignore stop races and continue removing the room.
         }
       }
 
-      const response = await fetch(buildConversationApiPath(`/${deleteDialogConversationId}`), {
-        method: "DELETE",
-        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      });
-      const body = await response.json().catch(() => ({})) as { deletedConversationId?: string; error?: string };
+      const response = await fetch(
+        buildConversationApiPath(`/${deleteDialogConversationId}${deleteDialogTargetIsMultiMember ? "/leave" : ""}`),
+        {
+          method: deleteDialogTargetIsMultiMember ? "POST" : "DELETE",
+          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        },
+      );
+      const body = await response.json().catch(() => ({})) as {
+        deletedConversationId?: string;
+        leftConversationId?: string;
+        error?: string;
+      };
+      const removedConversationId = body.deletedConversationId || body.leftConversationId;
       if (response.status === 404) {
         handleConversationDeleted(deleteDialogConversationId);
         setDeleteDialogConversationId(null);
         return;
       }
-      if (!response.ok || !body.deletedConversationId) {
-        throw new Error(body.error || "conversation_delete_failed");
+      if (!response.ok || !removedConversationId) {
+        throw new Error(body.error || (deleteDialogTargetIsMultiMember ? "conversation_leave_failed" : "conversation_delete_failed"));
       }
 
-      handleConversationDeleted(body.deletedConversationId);
+      handleConversationDeleted(removedConversationId);
       setDeleteDialogConversationId(null);
     } catch {
       deletingConversationIdsRef.current.delete(deleteDialogConversationId);
-      window.alert(deleteConversationCopy.errorToastLabel);
+      window.alert(deleteDialogTargetIsMultiMember ? leaveConversationCopy.errorToastLabel : deleteConversationCopy.errorToastLabel);
     } finally {
       setIsDeletingConversation(false);
     }
   }, [
     deleteConversationCopy.errorToastLabel,
     deleteDialogConversationId,
+    deleteDialogTargetIsMultiMember,
     handleConversationDeleted,
     isDeletingConversation,
+    leaveConversationCopy.errorToastLabel,
   ]);
 
   const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
@@ -5219,8 +5277,17 @@ export default function ConversationList({
                     }}
                     className="flex w-full items-center justify-between rounded-b-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
                   >
-                    <span>{deleteConversationCopy.menuItemLabel}</span>
-                    <Trash2 className="h-4 w-4 shrink-0 text-slate-400" />
+                    {rowActionMenu.item.isMultiMember ? (
+                      <>
+                        <span>{leaveConversationCopy.menuItemLabel}</span>
+                        <LogOut className="h-4 w-4 shrink-0 text-slate-400" />
+                      </>
+                    ) : (
+                      <>
+                        <span>{deleteConversationCopy.menuItemLabel}</span>
+                        <Trash2 className="h-4 w-4 shrink-0 text-slate-400" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>,
@@ -5268,6 +5335,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}
                         preferredDisplayLanguages={preferredDisplayLanguages}
@@ -5438,15 +5506,15 @@ export default function ConversationList({
               transition={{ duration: 0.2, ease: "easeOut" }}
               role="dialog"
               aria-modal="true"
-              aria-label={deleteConversationCopy.dialogTitle}
+              aria-label={deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
               onClick={(event) => event.stopPropagation()}
               className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
             >
               <p className="text-sm font-semibold text-gray-900">
-                {deleteConversationCopy.dialogTitle}
+                {deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                {deleteConversationCopy.dialogMessage}
+                {deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogMessage : deleteConversationCopy.dialogMessage}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
@@ -5458,19 +5526,19 @@ export default function ConversationList({
                   disabled={isDeletingConversation}
                   className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {deleteConversationCopy.cancelLabel}
+                  {deleteDialogTargetIsMultiMember ? leaveConversationCopy.cancelLabel : deleteConversationCopy.cancelLabel}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    void handleDeleteConversationFromList();
+                    void handleRemoveConversationFromList();
                   }}
                   disabled={isDeletingConversation}
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
                 >
-                  {isDeletingConversation
-                    ? deleteConversationCopy.deletingLabel
-                    : deleteConversationCopy.confirmLabel}
+                  {deleteDialogTargetIsMultiMember
+                    ? (isDeletingConversation ? leaveConversationCopy.leavingLabel : leaveConversationCopy.confirmLabel)
+                    : (isDeletingConversation ? deleteConversationCopy.deletingLabel : deleteConversationCopy.confirmLabel)}
                 </button>
               </div>
             </motion.div>

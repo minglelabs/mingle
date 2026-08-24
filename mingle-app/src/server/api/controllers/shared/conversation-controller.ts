@@ -8,6 +8,8 @@ import {
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
+  leaveConversationChannel,
+  listChannelMemberUserIdsBySessionKey,
   listConversationMembersForUser,
   markConversationChannelRead,
   normalizeConversationChannelStatus,
@@ -21,7 +23,7 @@ import {
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
-import { mintConversationRealtimeToken } from "@/server/conversation-realtime";
+import { mintConversationRealtimeToken, notifyConversationMessage } from "@/server/conversation-realtime";
 
 export const runtime = "nodejs";
 
@@ -414,6 +416,55 @@ export async function deleteConversationResponse(
     : resolvedUser.identity;
   const response = NextResponse.json({
     deletedConversationId: conversation.id,
+  });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+export async function leaveConversationResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let conversation;
+  try {
+    conversation = await leaveConversationChannel({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+  } catch (error) {
+    console.error("[conversations] leave_failed", error);
+    return NextResponse.json({ error: "conversation_channel_leave_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Same best-effort push used for a landed message (see
+  // log-client-event-handler.ts) — lets any remaining member's already-open
+  // room and conversation-list screen pick up the departure and the new "X
+  // left" notice without waiting on their own poll cycle.
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({
+    leftConversationId: conversation.id,
   });
   applyTrackingCookies(request, response, trackingHints);
   return response;

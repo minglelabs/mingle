@@ -27,6 +27,8 @@ type ConversationParticipantsPanelProps = {
   // Solo (0-1 member) rooms have no membership list worth fetching — the
   // panel just shows the signed-in user, same as before this prop existed.
   conversationId?: string | null;
+  // Badge shown next to a departed member's name (e.g. "나감" / "Left").
+  leftBadgeLabel?: string;
 };
 
 type ParticipantProfile = {
@@ -40,6 +42,10 @@ type ParticipantProfile = {
   nationality: string | null;
   primaryLanguages: string[];
   blocked: boolean;
+  // True once this member has left the room (see leaveConversationChannel).
+  // Unlike `blocked`, this never hides the photo or blocks a profile tap —
+  // leaving isn't blocking.
+  left: boolean;
 };
 
 type ProfileLoadState = "idle" | "loading" | "ready" | "error";
@@ -76,6 +82,7 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
     blocked: false,
+    left: false,
   };
 }
 
@@ -96,6 +103,7 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     nationality: null,
     primaryLanguages: [],
     blocked: value.blocked === true,
+    left: value.left === true,
   };
 }
 
@@ -122,6 +130,7 @@ function buildSessionFallbackProfile(
     nationality: null,
     primaryLanguages: [],
     blocked: false,
+    left: false,
   };
 }
 
@@ -129,16 +138,21 @@ function ParticipantRow({
   member,
   fallbackName,
   badgeLabel,
+  leftBadgeLabel,
   onOpenProfile,
 }: {
   member: ParticipantProfile;
   fallbackName: string;
   badgeLabel?: string;
+  leftBadgeLabel?: string;
   onOpenProfile?: (userId: string) => void;
 }) {
   // Blocking hides the photo and stops profile taps, but the name/handle
   // stay real — the point is hiding what's new (their current photo,
   // reachability), not making someone you already know unrecognizable.
+  // Leaving is neither: the photo, name, and profile tap all stay exactly
+  // as they are for an active member — only a badge and a dimmed row mark
+  // that they're no longer in the room.
   const displayName = member.name?.trim() || fallbackName;
   const displayLanguages = sanitizeSttLanguageSelection(
     member.primaryLanguages,
@@ -146,13 +160,16 @@ function ParticipantRow({
   );
   const displayHandle = formatHandle(member.handle);
   const resolvedOnOpenProfile = member.blocked ? undefined : onOpenProfile;
+  const resolvedBadgeLabel = member.left ? leftBadgeLabel : badgeLabel;
 
   return (
     <button
       type="button"
       onClick={() => resolvedOnOpenProfile?.(member.id)}
       disabled={!resolvedOnOpenProfile}
-      className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
+      className={`w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white ${
+        member.left ? "opacity-60" : ""
+      }`}
     >
       <div className="flex items-center gap-3">
         <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
@@ -185,9 +202,13 @@ function ParticipantRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
-            {badgeLabel ? (
-              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
-                {badgeLabel}
+            {resolvedBadgeLabel ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[0.72rem] font-semibold ${
+                  member.left ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {resolvedBadgeLabel}
               </span>
             ) : null}
           </div>
@@ -210,6 +231,7 @@ export default function ConversationParticipantsPanel({
   onOpenProfile,
   onBack,
   conversationId,
+  leftBadgeLabel,
 }: ConversationParticipantsPanelProps) {
   const { data: session } = useSession();
   const fallbackProfile = useMemo(
@@ -317,6 +339,7 @@ export default function ConversationParticipantsPanel({
               key={member.id}
               member={member}
               fallbackName={fallbackName}
+              leftBadgeLabel={leftBadgeLabel}
               onOpenProfile={onOpenProfile}
             />
           ))}

@@ -1699,13 +1699,23 @@ write_runtime_env_from_vault_path() {
   : > "$file"
   [[ -n "$path" ]] || return 0
 
-  require_cmd vault
-  require_cmd jq
+  # Best-effort shared-secret pull: every caller of this runtime env file
+  # already falls back to a local .env.local value when a key isn't here
+  # (see resolve_runtime_nextauth_secret, the MINGLE_REALTIME_SECRET chain
+  # in cmd_up, etc.), so a missing Vault CLI/jq should degrade to "no shared
+  # values available" instead of hard-failing `up` for stateless setups.
+  if ! command -v vault >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    log "vault/jq not found; skipping shared runtime env pull for ${target} (using local .env.local fallbacks)"
+    return 0
+  fi
   prepare_vault_cli_env
   log "loading ${target} runtime env from vault path: $path"
 
   local payload
-  payload="$(vault kv get -format=json "$path")" || die "failed to read vault path: $path"
+  if ! payload="$(vault kv get -format=json "$path" 2>&1)"; then
+    log "vault kv get failed for ${path} (unreachable/unauthenticated); skipping shared runtime env pull for ${target} (using local .env.local fallbacks)"
+    return 0
+  fi
 
   local line key value count formatted
   count=0

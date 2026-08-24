@@ -662,6 +662,13 @@ export function parseRecentStoredUtterances(rawValue: string, limit: number): {
   }
 }
 
+type ConversationHydrationLeaveNoticePayload = {
+  userId?: string
+  name?: string | null
+  handle?: string | null
+  leftAtMs?: number
+}
+
 type ConversationHydrationPayload = {
   usageSec?: number
   messageCount?: number
@@ -671,6 +678,40 @@ type ConversationHydrationPayload = {
   conversation?: {
     isMultiMember?: boolean
   }
+  leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+}
+
+// One member's departure (see leaveConversationChannel on the server), for
+// rendering an in-room "{name} left" notice — KakaoTalk-style: this is
+// chrome shown only inside the room's own message timeline, never a toast,
+// push notification, or list-preview text. Not paginated: the server always
+// returns the room's complete departure history regardless of the message
+// window, so this can be replaced wholesale on every hydration refresh.
+export type ConversationLeaveNotice = {
+  userId: string
+  name: string | null
+  handle: string | null
+  leftAtMs: number
+}
+
+function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): ConversationLeaveNotice[] {
+  if (!Array.isArray(rawNotices)) return []
+
+  const result: ConversationLeaveNotice[] = []
+  for (const raw of rawNotices) {
+    if (!raw || typeof raw !== 'object') continue
+    const record = raw as ConversationHydrationLeaveNoticePayload
+    const userId = typeof record.userId === 'string' ? record.userId.trim() : ''
+    const leftAtMs = typeof record.leftAtMs === 'number' ? record.leftAtMs : Number(record.leftAtMs)
+    if (!userId || !Number.isFinite(leftAtMs) || leftAtMs <= 0) continue
+    result.push({
+      userId,
+      name: typeof record.name === 'string' ? record.name : null,
+      handle: typeof record.handle === 'string' ? record.handle : null,
+      leftAtMs: Math.floor(leftAtMs),
+    })
+  }
+  return result
 }
 
 function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationHydrationCursor | null {
@@ -2321,6 +2362,7 @@ export default function useRealtimeSTT({
   // viewer's real account id/photo at all — a true solo room's diarized
   // "speaker" turns must never be treated as the viewer's own account.
   const [isSharedRoom, setIsSharedRoom] = useState(false)
+  const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -2821,6 +2863,7 @@ export default function useRealtimeSTT({
       if (payload.conversation) {
         setIsSharedRoom(payload.conversation.isMultiMember === true)
       }
+      setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -2931,6 +2974,7 @@ export default function useRealtimeSTT({
         if (payload.conversation) {
           setIsSharedRoom(payload.conversation.isMultiMember === true)
         }
+        setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -5345,6 +5389,7 @@ export default function useRealtimeSTT({
     hasOlderUtterances,
     isStorageHydrated,
     persistedUtteranceCount,
+    leaveNotices,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,

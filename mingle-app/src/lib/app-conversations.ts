@@ -100,6 +100,19 @@ export type ConversationHydrationCursor = {
   messageId: string;
 };
 
+// One member's departure (see leaveConversationChannel), for the client to
+// render as an in-timeline "{name} left" notice positioned by leftAtMs
+// against the surrounding utterances' createdAtMs. This is UI chrome, not a
+// translated message — no AppMessage row is created for it, and the client
+// is expected to render the notice text itself from its own locale copy
+// (same approach as the delete confirmation dialog's copy file).
+export type ConversationHydrationLeaveNotice = {
+  userId: string;
+  name: string | null;
+  handle: string | null;
+  leftAtMs: number;
+};
+
 export type ConversationHydrationState = {
   conversation: ConversationChannelSummary;
   usageSec: number;
@@ -107,6 +120,7 @@ export type ConversationHydrationState = {
   utterances: ConversationHydrationUtterance[];
   hasMoreUtterances: boolean;
   oldestMessageCursor: ConversationHydrationCursor | null;
+  leaveNotices: ConversationHydrationLeaveNotice[];
 };
 
 type ConversationChannelRecord = {
@@ -123,6 +137,7 @@ type ConversationChannelRecord = {
   createdAt: Date;
   updatedAt: Date;
   pausedAt: Date | null;
+  userEditedTitleAt: Date | null;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -143,6 +158,7 @@ const conversationChannelSelect = {
   createdAt: true,
   updatedAt: true,
   pausedAt: true,
+  userEditedTitleAt: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -192,9 +208,12 @@ function buildVisibleMessageContentWhere(): Prisma.AppMessageContentWhereInput {
 // non-owner member (someone invited into a multi-member room) can use it too.
 // ownerUserId stays on the channel purely as creator/admin metadata (it drives
 // sequenceNumber numbering and delete permission) — it is not an auth check.
+// leftAt: null excludes a member who has left (see leaveConversationChannel)
+// — their membership row is kept for history, but the room must behave as if
+// it doesn't exist for them: no more reads, writes, or dedup matches.
 function buildVisibleMembershipWhere(userId: string): Prisma.AppConversationChannelWhereInput {
   return {
-    members: { some: { userId } },
+    members: { some: { userId, leftAt: null } },
   };
 }
 
@@ -211,7 +230,21 @@ type ChannelMemberProfile = {
   status: string;
   pausedAt: Date | null;
   lastReadAt: Date | null;
+  // Set once this member leaves the room (see leaveConversationChannel). Most
+  // resolvers below should filter to active (leftAt: null) members — see
+  // filterActiveMembers — except the ones that intentionally preserve a
+  // departed member's presence: title, avatar, and isMultiMember.
+  leftAt: Date | null;
 };
+
+// Active-membership filter shared by every resolver that represents a
+// member's OWN ongoing state (status, pause, language, dedup matching,
+// message permission) — a departed member has none of that anymore. Callers
+// that instead need the room's full identity/history (title, avatars,
+// isMultiMember) intentionally pass the unfiltered member list.
+function filterActiveMembers(members: ChannelMemberProfile[] | undefined): ChannelMemberProfile[] {
+  return (members ?? []).filter((member) => !member.leftAt);
+}
 
 type PendingInviteeProfile = {
   userId: string;
@@ -306,6 +339,7 @@ async function listChannelMembersByChannelId(
       status: true,
       pausedAt: true,
       lastReadAt: true,
+      leftAt: true,
       user: {
         select: {
           name: true,
@@ -345,6 +379,7 @@ async function listChannelMembersByChannelId(
       status: row.status,
       pausedAt: row.pausedAt,
       lastReadAt: row.lastReadAt,
+      leftAt: row.leftAt,
     });
     membersByChannelId.set(row.channelId, members);
   }
@@ -402,16 +437,24 @@ async function resolveBlockedCounterpartUserIdByChannelId(
 // looking, so it's computed at read time from membership, never stored.
 // 2 members: the other person's name. 3+: every other member's name,
 // comma-joined (e.g. "a, b, c"). Solo (0-1 members) keeps the stored title.
+// Once someone has left (see leaveConversationChannel), they immediately
+// drop out of this list — the title reflects who's CURRENTLY in the room,
+// not room history, so a 2-person room whose only other member left falls
+// back to the stored/generic title (nobody left to name). A room the
+// members have manually renamed (userEditedTitleAt set) always keeps that
+// title instead — auto-naming only applies to the untouched default.
 function resolveViewerFacingTitle(
   storedTitle: string,
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
   pendingInviteeProfiles: Array<{ userId: string; name: string | null; handle: string | null }> = [],
+  userEditedTitleAt?: Date | null,
 ): string {
+  if (userEditedTitleAt) return storedTitle;
   if (!viewerUserId || !members) return storedTitle;
   if (resolveEffectiveMemberCount(members, pendingInviteeProfiles.map((p) => p.userId)) < 2) return storedTitle;
   const others = [
-    ...members.filter((member) => member.userId !== viewerUserId),
+    ...filterActiveMembers(members).filter((member) => member.userId !== viewerUserId),
     ...pendingInviteeProfiles,
   ];
   if (others.length === 0) return storedTitle;
@@ -469,7 +512,10 @@ function resolveRoomLanguageUnion(
     }
   };
 
-  for (const member of members) {
+  // A departed member (leftAt set) no longer contributes a "still wanted"
+  // language to the room's shared translation target list — see
+  // filterActiveMembers.
+  for (const member of filterActiveMembers(members)) {
     addMemberLanguages(member.userId, member.selectedLanguages);
   }
 
@@ -554,7 +600,9 @@ function resolveViewerFacingPausedAt(
 
 // membersByChannelId already carries every field the list avatar needs (see
 // listChannelMembersByChannelId) — this just drops the viewer's own row and
-// the language/status fields the avatar has no use for.
+// the language/status fields the avatar has no use for. Same "currently in
+// the room" rule as resolveViewerFacingTitle: a departed member drops out of
+// the avatar stack immediately, not just on next room-composition change.
 function resolveOtherMemberAvatars(
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
@@ -562,7 +610,7 @@ function resolveOtherMemberAvatars(
   pendingInviteeProfiles: PendingInviteeProfile[] = [],
 ): ConversationChannelOtherMember[] {
   if (!viewerUserId) return [];
-  const realMembers = members ?? [];
+  const realMembers = filterActiveMembers(members);
   return [
     ...realMembers,
     ...pendingInviteeProfiles,
@@ -935,7 +983,7 @@ async function serializeConversationChannelWithPreview(
     latestMessage?.speakerAvatarIndex,
     undefined,
     undefined,
-    resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, pendingInviteeProfiles),
+    resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, pendingInviteeProfiles, record.userEditedTitleAt),
     resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -1003,7 +1051,7 @@ async function listConversationChannelsForMember(
       undefined,
       undefined,
       undefined,
-      resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record)),
+      resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record), record.userEditedTitleAt),
       resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
       resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -1045,7 +1093,7 @@ async function listConversationChannelsForMember(
         latestMessage?.speakerAvatarIndex,
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
         unreadMessageCountByChannelId.get(record.id) ?? 0,
-        resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record)),
+        resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record), record.userEditedTitleAt),
         resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
@@ -1257,19 +1305,23 @@ export async function findOrCreateDirectConversation(args: {
   await assertNoBlockAmong(args.userId, [targetUserId]);
 
   if (!args.force) {
+    // Every membership condition below is scoped to leftAt: null (active
+    // members only) — see findExistingConversationWithExactMembers's doc
+    // comment for why: once either side has left, the room must stop being
+    // offered as "the" 1:1 room, for both of them.
     const existingCandidates = await prisma.appConversationChannel.findMany({
       where: {
-        members: { some: { userId: args.userId } },
+        members: { some: { userId: args.userId, leftAt: null } },
         AND: [
           buildVisibleConversationWhere(),
           {
             OR: [
               {
                 AND: [
-                  { members: { some: { userId: targetUserId } } },
+                  { members: { some: { userId: targetUserId, leftAt: null } } },
                   // Exactly these two — a channel where either has picked up extra
                   // members (a future group chat) is not "the" 1:1 room anymore.
-                  { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
+                  { members: { none: { userId: { notIn: [args.userId, targetUserId] }, leftAt: null } } },
                 ],
               },
               // The target hasn't received a first message yet (no membership row
@@ -1335,13 +1387,25 @@ export async function findExistingConversationWithExactMembers(args: {
   // this check existed, or via the "create new anyway" force path). Resolve
   // them by the latest persisted app message, not channel.updatedAt, so
   // "continue in previous room" lands on the room that was actually used last.
+  //
+  // Every membership condition below is scoped to leftAt: null (active
+  // members only): once anyone in a room has left (see
+  // leaveConversationChannel), that room's active member set no longer
+  // matches the original group, so it must stop being offered as a "use the
+  // existing room" candidate — both to the person who left (starting a new
+  // conversation with the same people should never resurface a room they've
+  // left) and to the remaining members (inviting the same group again should
+  // create a fresh room, not silently reuse the now-short-handed one). A
+  // departed member's still-present-but-left row must NOT disqualify an
+  // otherwise-exact match, which is why the "no extra member" guard also
+  // filters to leftAt: null rather than matching on userId alone.
   const materializedCandidates = await prisma.appConversationChannel.findMany({
     where: {
       ...buildVisibleConversationWhere(),
-      members: { some: { userId: args.userId } },
+      members: { some: { userId: args.userId, leftAt: null } },
       AND: [
-        ...otherUserIds.map((otherUserId) => ({ members: { some: { userId: otherUserId } } })),
-        { members: { none: { userId: { notIn: allUserIds } } } },
+        ...otherUserIds.map((otherUserId) => ({ members: { some: { userId: otherUserId, leftAt: null } } })),
+        { members: { none: { userId: { notIn: allUserIds }, leftAt: null } } },
       ],
     },
     select: conversationChannelSelect,
@@ -1471,8 +1535,11 @@ export async function listChannelMemberUserIdsBySessionKey(sessionKey: string): 
 // Defense in depth behind the client's own composer/mic gating (see
 // isBlockedCounterpart) — even a stale client that still posts a
 // stt_turn_finalized event for a now-blocked room must not have it persist.
-// A caller must also be a real member of the channel. Returning true for an
-// unknown channel or a non-member deliberately fails closed at the message
+// A caller must also be a real, still-active member of the channel — a
+// caller who has left (see leaveConversationChannel) is fails-closed the
+// same as a non-member, since their own membership row's leftAt marks them
+// as no longer allowed to post here. Returning true for an unknown channel,
+// non-member, or departed member deliberately fails closed at the message
 // persistence call site, without revealing which part of the check failed.
 // Only meaningful for a 2-real-member room; a block against one member of a
 // 3+ person room doesn't stop the whole room from messaging.
@@ -1488,7 +1555,7 @@ export async function isMessageSenderBlockedInConversation(args: {
 
   const membersByChannelId = await listChannelMembersByChannelId([channel.id]);
   const members = membersByChannelId.get(channel.id) ?? [];
-  if (!members.some((member) => member.userId === args.userId)) return true;
+  if (!members.some((member) => member.userId === args.userId && !member.leftAt)) return true;
   if (members.length !== 2) return false;
   const other = members.find((member) => member.userId !== args.userId);
   if (!other) return false;
@@ -1900,6 +1967,12 @@ export type ConversationMemberSummary = {
   // the client never has real identity to accidentally render — it should
   // substitute its own generic placeholder and refuse to open the profile.
   blocked: boolean;
+  // True when this member has left the room (see leaveConversationChannel).
+  // Unlike `blocked`, nothing about their identity is hidden — leaving isn't
+  // blocking, so name/handle/image stay real and the client should still
+  // allow opening their profile. Always false for a pending invitee (they
+  // can't have left something they never joined).
+  left: boolean;
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -1953,6 +2026,7 @@ export async function listConversationMembersForUser(args: {
       imageCropY: blocked ? null : member.imageCropY,
       selectedLanguages: member.selectedLanguages,
       blocked,
+      left: Boolean(member.leftAt),
     };
   });
 
@@ -1966,6 +2040,7 @@ export async function listConversationMembersForUser(args: {
     imageCropY: profile.imageCropY,
     selectedLanguages: profile.defaultConversationLanguages,
     blocked: false,
+    left: false,
   }));
 
   return [...realMemberSummaries, ...pendingMemberSummaries];
@@ -2153,6 +2228,7 @@ export async function getConversationHydrationStateForUser(args: {
         membersByChannelId.get(conversationRecord.id),
         args.userId,
         pendingInviteeProfiles,
+        conversationRecord.userEditedTitleAt,
       ),
       resolveViewerFacingDisplayLanguage(
         conversationRecord.defaultDisplayLanguage,
@@ -2204,6 +2280,14 @@ export async function getConversationHydrationStateForUser(args: {
           messageId: oldestMessage.id,
         }
       : null,
+    leaveNotices: (members ?? [])
+      .filter((member) => Boolean(member.leftAt))
+      .map((member) => ({
+        userId: member.userId,
+        name: member.name,
+        handle: member.handle,
+        leftAtMs: (member.leftAt as Date).getTime(),
+      })),
   };
 }
 
@@ -2213,13 +2297,16 @@ export async function deleteConversationChannel(args: {
 }): Promise<ConversationChannelSummary | null> {
   // Delete-for-everyone stays owner-only, unlike every other operation above —
   // an arbitrary invited member shouldn't be able to remove the room for the
-  // rest of the group. A "leave conversation" mutation (remove just the
-  // caller's own membership row) would be the member-level equivalent; not
-  // needed yet, nothing has asked for it.
+  // rest of the group. It also requires the owner to still be an ACTIVE
+  // member (leftAt: null): once the owner leaves their own shared room via
+  // leaveConversationChannel below, nobody inherits delete-for-everyone —
+  // ownership is not reassigned, so the room can only be dissolved one
+  // individual leave at a time from then on.
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
+      members: { some: { userId: args.userId, leftAt: null } },
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -2264,4 +2351,108 @@ export async function deleteConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_delete_conflict");
+}
+
+// Member-level equivalent of deleteConversationChannel above, for a shared
+// (2+-member) room: removes only the caller's own presence, never the whole
+// room. The membership row is kept with leftAt set (not deleted) — see the
+// leftAt doc comment on AppConversationChannelMember — so the remaining
+// members' room title/avatar/message history stay intact
+// (resolveViewerFacingTitle and friends deliberately read the FULL member
+// list, not just active ones) while buildVisibleMembershipWhere makes the
+// room behave as if it doesn't exist for the caller from now on.
+export async function leaveConversationChannel(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true, ownerUserId: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const activeMemberCount = await prisma.appConversationChannelMember.count({
+    where: { channelId: args.conversationId, leftAt: null },
+  });
+  // The caller is guaranteed active (buildVisibleMembershipWhere above), so
+  // a count of 1 means they're the last one left.
+  const isLastActiveMember = activeMemberCount <= 1;
+  const isOwner = existing.ownerUserId === args.userId;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await prisma.$transaction(async (tx) => {
+        await tx.appConversationChannelMember.update({
+          where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
+          data: { leftAt: new Date() },
+        });
+
+        if (isLastActiveMember) {
+          // Nobody's left to see the room — same end state as
+          // deleteConversationChannel's owner-only full delete, including
+          // freeing the channel's own owner's room-count slot (which may or
+          // may not be the person leaving right now, if the owner already
+          // left earlier).
+          const lowestChannel = await tx.appConversationChannel.findFirst({
+            where: { ownerUserId: existing.ownerUserId },
+            orderBy: { sequenceNumber: "asc" },
+            select: { sequenceNumber: true },
+          });
+          const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, 0) - 1;
+
+          return tx.appConversationChannel.update({
+            where: { id: args.conversationId },
+            data: {
+              isDeleted: true,
+              status: APP_CONVERSATION_STATUS_PAUSED,
+              pausedAt: new Date(),
+              sequenceNumber: vacatedSequenceNumber,
+            },
+            select: conversationChannelSelect,
+          });
+        }
+
+        if (isOwner) {
+          // The room stays alive for the remaining members (nobody inherits
+          // delete-for-everyone — see deleteConversationChannel), but the
+          // owner relinquishing their own room fully frees their room-count
+          // slot just like a full delete would.
+          const lowestChannel = await tx.appConversationChannel.findFirst({
+            where: { ownerUserId: args.userId },
+            orderBy: { sequenceNumber: "asc" },
+            select: { sequenceNumber: true },
+          });
+          const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, 0) - 1;
+          await tx.appConversationChannel.update({
+            where: { id: args.conversationId },
+            data: { sequenceNumber: vacatedSequenceNumber },
+          });
+        }
+
+        return tx.appConversationChannel.findUniqueOrThrow({
+          where: { id: args.conversationId },
+          select: conversationChannelSelect,
+        });
+      });
+
+      return serializeConversationChannel(record);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("conversation_channel_leave_conflict");
 }

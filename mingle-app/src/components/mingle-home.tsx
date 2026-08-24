@@ -83,6 +83,7 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  isMultiMember?: boolean;
 };
 
 export type MingleHomeRef = {
@@ -1917,6 +1918,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          isMultiMember={props.isMultiMember}
         />
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
