@@ -2,10 +2,10 @@
 
 import { memo, useEffect, useState } from 'react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
-import { ChevronRight, UserRound } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { UserRound } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
-import { getSttLanguageFlag } from '@/lib/stt-languages'
+import { getSttLanguageDisplayName, getSttLanguageFlag } from '@/lib/stt-languages'
 import LanguageFlag from '@/components/language-flag'
 import {
   hasRenderableChatBubbleTimestamp,
@@ -339,6 +339,7 @@ function ChatLanguageBadge({
   lang,
   isOriginal = false,
   isSelected = false,
+  uiLocale,
   originalLanguageLabel,
   translationLanguageLabel,
   onSelect,
@@ -346,13 +347,13 @@ function ChatLanguageBadge({
   lang: string
   isOriginal?: boolean
   isSelected?: boolean
+  uiLocale: string
   originalLanguageLabel: string
   translationLanguageLabel: string
   onSelect?: () => void
 }) {
-  const languageLabel = isOriginal
-    ? getOriginalLanguageBadgeLabel(lang)
-    : lang
+  const languageLabel = getSttLanguageDisplayName(lang, uiLocale)
+    || (isOriginal ? getOriginalLanguageBadgeLabel(lang) : lang)
 
   return (
     <button
@@ -406,16 +407,6 @@ function ChatLanguageBadge({
   )
 }
 
-function formatBubbleLanguageLabel(rawLanguage: string, isOriginal: boolean): string {
-  if (isOriginal) {
-    const originalLabel = getOriginalLanguageBadgeLabel(rawLanguage)
-    if (originalLabel === '❓') return originalLabel
-    return originalLabel.replace(/_/g, '-').toUpperCase()
-  }
-
-  return rawLanguage.trim().replace(/_/g, '-').toUpperCase()
-}
-
 interface ExpandedChatBubbleRowProps {
   utterance: Utterance
   lang: string
@@ -428,9 +419,15 @@ interface ExpandedChatBubbleRowProps {
   ttsActionCopy: ReturnType<typeof resolveLivePhoneDemoTtsActionCopy>
   allText: string
   isOwnMessage: boolean
+  uiLocale: string
+  originalLanguageLabel: string
+  translationLanguageLabel: string
+  isSelected: boolean
+  showDivider: boolean
   speakingPlaybackKey?: string
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
+  onSelectLanguage?: (language: string) => void
 }
 
 function ExpandedChatBubbleRow({
@@ -445,9 +442,15 @@ function ExpandedChatBubbleRow({
   ttsActionCopy,
   allText,
   isOwnMessage,
+  uiLocale,
+  originalLanguageLabel,
+  translationLanguageLabel,
+  isSelected,
+  showDivider,
   speakingPlaybackKey,
   onPlayOriginal,
   onPlayTranslation,
+  onSelectLanguage,
 }: ExpandedChatBubbleRowProps) {
   const hasText = Boolean(text.trim())
   const isSpeaking = Boolean(
@@ -461,21 +464,12 @@ function ExpandedChatBubbleRow({
   const textClassName = isOriginal
     ? `${bubbleTextClassName} ${isDraft ? 'text-gray-400' : 'text-gray-900'}`
     : `${bubbleTextClassName} ${translationState === 'interim' ? 'text-gray-500' : 'text-gray-700'}`
-  const metaClassName = isOriginal ? 'text-gray-400' : 'text-amber-500'
-  const languageLabel = formatBubbleLanguageLabel(lang, isOriginal)
   const bubbleBody = (
     <p
       data-expanded-bubble-content
       style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
       className={`${textClassName} min-w-0 whitespace-pre-wrap break-words`}
     >
-      <span
-        data-expanded-bubble-meta
-        className={`mr-2 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 ${metaClassName}`}
-      >
-        <LanguageFlag language={lang} className="text-base leading-none" />
-        <span className="text-[11px] font-semibold uppercase leading-none">{languageLabel}</span>
-      </span>
       {hasText ? (
         <span data-expanded-bubble-text className="align-middle">
           {text}
@@ -496,12 +490,7 @@ function ExpandedChatBubbleRow({
       )}
     </p>
   )
-  const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
-  const bubbleSurfaceClassName = `inline-block w-fit max-w-full rounded-2xl border px-3.5 py-2 align-top shadow-sm ${
-    isOriginal
-      ? `border-gray-200 ${bubbleBackgroundClassName}`
-      : `border-amber-100 ${bubbleBackgroundClassName}`
-  }`
+  const bubbleSurfaceClassName = 'min-w-0 flex-1 rounded-xl bg-transparent px-0 py-0 shadow-none'
   const bubble = hasText ? (
     <CopyableBubbleSurface
       {...(isOriginal ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
@@ -528,20 +517,40 @@ function ExpandedChatBubbleRow({
   )
 
   return (
-    <div
-      data-expanded-chat-bubble-row
-      data-translation-state={translationState}
-      className={`flex w-full min-w-0 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
-    >
+    <>
+      {showDivider && (
+        <div
+          data-expanded-bubble-divider
+          aria-hidden="true"
+          className="my-1.5 h-px w-full bg-gray-200/60"
+        />
+      )}
       <div
-        data-chat-message-bubble
-        data-display-language={lang}
-        data-translation-state={isOriginal ? undefined : translationState}
-        className="min-w-0 max-w-full w-fit"
+        data-expanded-chat-bubble-row
+        data-translation-state={translationState}
+        className={`flex w-full min-w-0 items-start gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
       >
-        {bubble}
+        <div data-expanded-bubble-meta className="shrink-0 pt-0.5">
+          <ChatLanguageBadge
+            lang={lang}
+            isOriginal={isOriginal}
+            isSelected={isSelected}
+            uiLocale={uiLocale}
+            originalLanguageLabel={originalLanguageLabel}
+            translationLanguageLabel={translationLanguageLabel}
+            onSelect={() => onSelectLanguage?.(lang)}
+          />
+        </div>
+        <div
+          data-expanded-bubble-content-wrapper
+          data-display-language={lang}
+          data-translation-state={isOriginal ? undefined : translationState}
+          className="min-w-0 flex-1"
+        >
+          {bubble}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -706,6 +715,7 @@ function ChatBubble({
                 lang={lang}
                 isOriginal={isOriginal}
                 isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                uiLocale={uiLocale}
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                 translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                 onSelect={() => {
@@ -780,14 +790,9 @@ function ChatBubble({
           event.stopPropagation()
           setIsBubbleExpanded((expanded) => !expanded)
         }}
-        className="inline-flex h-6 w-7 touch-manipulation items-center justify-center rounded-md text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
+        className="inline-flex h-7 min-w-[3.25rem] touch-manipulation items-center justify-center rounded-md px-1.5 text-xs font-medium text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
       >
-        <ChevronRight
-          size={16}
-          strokeWidth={2.4}
-          aria-hidden="true"
-          className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isBubbleExpanded ? 'rotate-90' : 'rotate-0'}`}
-        />
+        {isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
       </button>
     </div>
   )
@@ -852,63 +857,101 @@ function ChatBubble({
     </div>
   )
 
-  const messageColumn = isBubbleExpanded ? (
-    <div
+  const messageColumn = (
+    <motion.div
       key="message"
+      layout
+      transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
       className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
     >
-      <div
-        data-chat-message-bubble-stack
-        style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
-        className={`flex min-w-0 w-fit flex-col gap-1.5 ${isOwnMessage ? 'items-end' : 'items-start'}`}
-      >
-        {expandedBubbleEntries.map((entry) => (
-          <ExpandedChatBubbleRow
-            key={entry.key}
-            utterance={utterance}
-            lang={entry.lang}
-            text={entry.text}
-            isOriginal={entry.isOriginal}
-            isDraft={entry.isDraft}
-            translationState={entry.translationState}
-            bubbleTextClassName={bubbleTextClassName}
-            copyActionCopy={copyActionCopy}
-            ttsActionCopy={ttsActionCopy}
-            allText={combinedUtteranceCopyText}
-            isOwnMessage={isOwnMessage}
-            speakingPlaybackKey={speakingPlaybackKey}
-            onPlayOriginal={onPlayOriginal}
-            onPlayTranslation={onPlayTranslation}
-          />
-        ))}
-      </div>
-      {bubbleControls}
-    </div>
-  ) : (
-    <div key="message" className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
-      <div
-        data-chat-message-bubble-stack
-        style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
-        className="min-w-0 w-fit"
-      >
-        <div
-          data-chat-message-bubble
-          data-display-language={activeLanguage}
-          data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
-          className={`w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-3.5 py-2 shadow-sm`}
-        >
-          <div
-            data-original-bubble-row
-            data-translation-bubble-row
-            className="w-full"
+      <AnimatePresence initial={false} mode="popLayout">
+        {isBubbleExpanded ? (
+          <motion.div
+            key="expanded"
+            data-chat-bubble-content-switch="expanded"
+            layout="position"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="min-w-0 w-fit"
           >
-            {activeBubbleBody}
-          </div>
-        </div>
-      </div>
+            <div
+              data-chat-message-bubble-stack
+              style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
+              className="min-w-0 w-fit"
+            >
+              <div
+                data-chat-message-bubble
+                data-expanded-bubble-container
+                data-display-language={originalDisplayLanguage}
+                className={`inline-block w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-3.5 py-2.5 shadow-sm`}
+              >
+                {expandedBubbleEntries.map((entry, index) => (
+                  <ExpandedChatBubbleRow
+                    key={entry.key}
+                    utterance={utterance}
+                    lang={entry.lang}
+                    text={entry.text}
+                    isOriginal={entry.isOriginal}
+                    isDraft={entry.isDraft}
+                    translationState={entry.translationState}
+                    bubbleTextClassName={bubbleTextClassName}
+                    copyActionCopy={copyActionCopy}
+                    ttsActionCopy={ttsActionCopy}
+                    allText={combinedUtteranceCopyText}
+                    isOwnMessage={isOwnMessage}
+                    uiLocale={uiLocale}
+                    originalLanguageLabel={copyActionCopy.originalLanguageLabel}
+                    translationLanguageLabel={copyActionCopy.translationLanguageLabel}
+                    isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(entry.lang)}
+                    showDivider={index > 0}
+                    speakingPlaybackKey={speakingPlaybackKey}
+                    onPlayOriginal={onPlayOriginal}
+                    onPlayTranslation={onPlayTranslation}
+                    onSelectLanguage={setDisplayLanguage}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="collapsed"
+            data-chat-bubble-content-switch="collapsed"
+            layout="position"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="min-w-0 w-fit"
+          >
+            <div
+              data-chat-message-bubble-stack
+              style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
+              className="min-w-0 w-fit"
+            >
+              <div
+                data-chat-message-bubble
+                data-display-language={activeLanguage}
+                data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
+                className={`w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-3.5 py-2 shadow-sm`}
+              >
+                <div
+                  data-original-bubble-row
+                  data-translation-bubble-row
+                  className="w-full"
+                >
+                  {activeBubbleBody}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {bubbleControls}
-    </div>
+    </motion.div>
   )
 
   const bubbleContent = isOwnMessage

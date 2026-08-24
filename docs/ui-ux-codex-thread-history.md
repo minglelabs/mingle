@@ -1,5 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Stack original and translated text inside one animated bubble
+
+- Surface: The conversation-room message bubble when the user's bubble display preference is set to the expanded mode.
+- Issue: Expanded mode rendered the original utterance and each translation as separate bordered bubbles. The rows consumed too much vertical space, showed language codes beside the flags, and switched instantly when the user opened or closed the message.
+- User impact: One utterance could look like several unrelated messages, and the expanded state did not preserve the compact circular language-control treatment used by the collapsed state.
+- Resolution:
+  - Keep one outer speaker-colored bubble for the entire utterance and stack the original plus translations inside it.
+  - Separate adjacent language rows with a one-pixel, low-contrast horizontal divider and a small vertical gap.
+  - Reuse the same 30px circular language badges and 42px touch areas in both modes. The original-language badge keeps the quote mark; visible language-code text is removed.
+  - Animate the expanded/collapsed content switch and the outer bubble's layout height with a short ease-out transition.
+  - Replace the chevron-only control with localized `Expand`/`Collapse` labels, including Korean `펼치기`/`접기`, for all 15 primary UI locales.
+- Data change: None. This is a presentation-only change; the persisted `demo_bubble_display_mode` preference and message/copy/playback behavior remain unchanged.
+- Testing notes: ChatBubble rendering tests cover the single outer container, circular badges, quote badge, divider count, absence of visible language codes, and localized control labels. Verify long original/translation text, interim translations, three-or-more languages, and rapid expand/collapse taps on narrow iOS and Android layouts.
+
 ## 2026-08-24 - Stabilize new shared-room navigation and first-message delivery
 
 - Surface: Native conversation-list → invite-friends → shared conversation navigation, the conversation-room overlay route, and first-message realtime/push delivery.
