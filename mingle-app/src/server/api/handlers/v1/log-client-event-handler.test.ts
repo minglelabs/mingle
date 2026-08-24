@@ -201,6 +201,53 @@ describe("handleLogClientEventV1", () => {
     });
   });
 
+  it("records hydration order diagnostics without creating another conversation message", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const metadata = {
+      conversationId: "conversation_123",
+      trigger: "push",
+      utteranceId: "u-1700000000004-4",
+      localCreatedAtMs: 1700000000004,
+      serverCreatedAtMs: 1700000001000,
+      timestampDeltaMs: 996,
+      crossedUtteranceCount: 1,
+      crossedUtteranceIds: ["u-1700000000005-5"],
+      crossedLiveUtteranceIds: ["u-1700000000005-5"],
+      localTimestampPreserved: true,
+    };
+    const request = new NextRequest("https://example.com/api/ios/v2.0.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "conversation_hydration_order_preserved",
+        sessionKey: "sess_123",
+        metadata,
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageContentUpsert).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "conversation_hydration_order_preserved",
+      messageId: null,
+      metadata: {
+        clientMetadata: metadata,
+      },
+    }));
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[conversation-order] hydration timestamp drift preserved",
+      expect.objectContaining({
+        sessionKey: "sess_123",
+        userId: "user_123",
+        metadata,
+      }),
+    );
+    warnSpy.mockRestore();
+  });
+
   it("notifies every real member's list topic, not just the room's own sessionKey", async () => {
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
 
