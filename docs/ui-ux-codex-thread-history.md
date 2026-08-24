@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-25 - Tighten bubble text leading and expanded language markers
+
+- **Surface:** Collapsed and expanded translated message bubbles.
+- **Issue:** Wrapped lines in collapsed bubbles kept more vertical leading than the message content needed. Expanded rows also used circular language controls, which made each row taller and consumed extra horizontal space.
+- **Resolution:** Reduce the shared bubble text line-height from 1.25 to 1.15, keep the first wrapped line's larger height only where the collapsed inline flag requires it, and render expanded language selectors as compact flag icons without circular backgrounds. Reduce expanded row dividers to a 2px vertical inset and the outer bubble padding to 8px horizontally and 4px vertically.
+- **Interaction:** Expanded language icons remain selectable and retain the original-language quote marker; collapsed bubbles keep their circular flags and existing touch target.
+- **Data change:** None.
+
 ## 2026-08-24 - Attach Expand and Collapse to the bubble bottom edge
 
 - **Surface:** Collapsed and expanded message bubbles for both the viewer and other speakers.

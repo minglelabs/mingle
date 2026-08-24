@@ -21,7 +21,7 @@ import {
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
 
-const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.15
 const MESSAGE_BUBBLE_MAX_WIDTH = '100%'
 
 // 재생키 빌더 (LivePhoneDemo의 것과 동일 규칙)
@@ -339,6 +339,7 @@ function ChatLanguageBadge({
   lang,
   isOriginal = false,
   isSelected = false,
+  variant = 'circle',
   uiLocale,
   originalLanguageLabel,
   translationLanguageLabel,
@@ -347,6 +348,7 @@ function ChatLanguageBadge({
   lang: string
   isOriginal?: boolean
   isSelected?: boolean
+  variant?: 'circle' | 'icon'
   uiLocale: string
   originalLanguageLabel: string
   translationLanguageLabel: string
@@ -354,6 +356,7 @@ function ChatLanguageBadge({
 }) {
   const languageLabel = getSttLanguageDisplayName(lang, uiLocale)
     || (isOriginal ? getOriginalLanguageBadgeLabel(lang) : lang)
+  const isIconVariant = variant === 'icon'
 
   return (
     <button
@@ -361,6 +364,7 @@ function ChatLanguageBadge({
       data-chat-language-badge
       data-chat-language={lang}
       data-chat-language-role={isOriginal ? 'original' : 'translation'}
+      data-chat-language-badge-variant={variant}
       aria-label={`${isOriginal ? originalLanguageLabel : translationLanguageLabel}: ${languageLabel}`}
       aria-pressed={isSelected}
       title={languageLabel}
@@ -372,32 +376,36 @@ function ChatLanguageBadge({
         event.stopPropagation()
         onSelect?.()
       }}
-      className="relative inline-flex h-[30px] w-[42px] shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1"
+      className={isIconVariant
+        ? 'relative inline-flex h-5 w-6 shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'
+        : 'relative inline-flex h-[30px] w-[42px] shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'}
     >
       <span
         data-chat-language-badge-visual
         aria-hidden="true"
-        className={`pointer-events-none relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
-        isSelected
-          ? 'border-amber-400 ring-1 ring-amber-200/80'
-          : 'border-gray-200/80'
-      }`}
+        className={isIconVariant
+          ? 'pointer-events-none relative inline-flex h-[18px] w-[18px] items-center justify-center bg-transparent text-[17px] leading-none transition-transform active:scale-95'
+          : `pointer-events-none relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
+            isSelected
+              ? 'border-amber-400 ring-1 ring-amber-200/80'
+              : 'border-gray-200/80'
+          }`}
       >
         <LanguageFlag language={lang} className="text-[17px] leading-none" />
         {isOriginal && (
           <span
             data-original-language-quote-badge
             aria-hidden="true"
-            className="absolute -right-1 -top-1 inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+            className={`absolute ${isIconVariant ? '-right-1 -top-1 h-[10px] w-[10px]' : '-right-1 -top-1 h-[12px] w-[12px]'} inline-flex items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]`}
           >
             <Image
               data-original-language-quote-icon
               aria-hidden="true"
               src="/chat/original-language-quote.png"
               alt=""
-              width={12}
-              height={12}
-              className="h-[11px] w-[11px] object-contain"
+              width={isIconVariant ? 10 : 12}
+              height={isIconVariant ? 10 : 12}
+              className={isIconVariant ? 'h-[9px] w-[9px] object-contain' : 'h-[11px] w-[11px] object-contain'}
               unoptimized
             />
           </span>
@@ -470,12 +478,13 @@ function ExpandedChatBubbleRow({
     >
       <span
         data-expanded-bubble-meta
-        className="mr-0.5 inline-flex align-middle whitespace-nowrap"
+        className="mr-0 inline-flex align-middle whitespace-nowrap"
       >
         <ChatLanguageBadge
           lang={lang}
           isOriginal={isOriginal}
           isSelected={isSelected}
+          variant="icon"
           uiLocale={uiLocale}
           originalLanguageLabel={originalLanguageLabel}
           translationLanguageLabel={translationLanguageLabel}
@@ -534,7 +543,7 @@ function ExpandedChatBubbleRow({
         <div
           data-expanded-bubble-divider
           aria-hidden="true"
-          className="my-1 h-px w-full bg-gray-200/60"
+          className="my-0.5 h-px w-full bg-gray-200/60"
         />
       )}
       <div
@@ -888,7 +897,7 @@ function ChatBubble({
                 data-chat-message-bubble
                 data-expanded-bubble-container
                 data-display-language={originalDisplayLanguage}
-                className={`inline-block w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-2.5 py-1.5 shadow-sm`}
+                className={`inline-block w-fit max-w-full rounded-2xl border border-gray-200 ${bubbleBackgroundClassName} px-2 py-1 shadow-sm`}
               >
                 {expandedBubbleEntries.map((entry, index) => (
                   <ExpandedChatBubbleRow
