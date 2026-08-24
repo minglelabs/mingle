@@ -91,7 +91,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    completionHandler([.banner, .badge, .sound])
+    // Keep APNs delivery and background notifications intact, but do not show
+    // a banner, sound, or badge update while the conversation is already open.
+    completionHandler([])
   }
 
   func userNotificationCenter(

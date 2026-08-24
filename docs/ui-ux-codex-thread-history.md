@@ -1500,3 +1500,12 @@
 - Issue: The admin conversation review flow had an unnecessary dashboard entry point, and the initial external-user lookup could remain in browser history. Pressing Back from a room could therefore return to the pre-lookup screen instead of the room list.
 - User impact: Operators could lose the loaded room list while navigating through a user’s history and had to repeat the lookup before continuing their review.
 - Resolution: Removed the dashboard conversation button, changed external-user lookup navigation to replace the pre-lookup URL, and kept room selection as an explicit history push. Browser Back now moves from a room to its room list while preserving the loaded user context.
+
+## 2026-08-24 — Suppress iOS foreground message alerts
+
+- Surface: iOS native push notification presentation in `mingle-app/rn/ios/mingle/AppDelegate.swift`.
+- Issue: APNs message payloads intentionally include alert, sound, and badge data for background delivery, but iOS was also presenting those options while Mingle was already in the foreground. Android did not show the same foreground alert.
+- User impact: A user actively reading a Mingle conversation could receive an unnecessary banner, sound, and badge update for the message already visible in the open room.
+- Resolution: Keep the notification center delegate and background/tap handling unchanged, but return an empty presentation option set from `willPresent`. APNs delivery continues, while foreground iOS messages no longer show a banner, play a sound, or update the badge.
+- Data contract: None. No Prisma migration, API namespace, or server payload change is required.
+- Testing notes: Install the new iOS TestFlight build on a device, keep Mingle in the foreground, send a message from a second account, and confirm there is no banner, sound, or badge change. Background and notification-tap behavior must still work.
