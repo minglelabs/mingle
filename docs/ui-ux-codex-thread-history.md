@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-24 - Live Demo Preference i18n Coverage
+
+- Surface: `mingle-app/src/i18n/dictionaries/*.ts`, `mingle-app/src/i18n/dictionaries/generated.ts`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
+- Issue: The newly added live-demo preference labels for segmentation mode, silence duration, endpoint tuning, and ad position were fully localized only in the Korean and English dictionaries. Other primary UI locales inherited the default dictionary for part of the controls.
+- User impact: Users who selected one of the other primary UI languages could see English or fallback-language labels for the speech-splitting controls, making the new settings inconsistent with the rest of the interface.
+- Resolution: Added localized labels for all live-demo preference controls to the seven generated primary dictionaries and the six dedicated locale dictionaries, preserving the existing dictionary merge architecture. Added a source-level coverage test for all 15 primary UI locales so future preference controls cannot silently fall back.
+- Verification: Run the i18n dictionary tests and the existing live-demo preference tests; verify the mode selector, silence-duration control, endpoint tuning control, and ad-position selector in each primary UI locale.
+
 ## 2026-08-24 - STT Mode Selection Emphasis
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
