@@ -3720,7 +3720,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {shouldShowManualSilenceControl() && (
+                            {shouldShowManualSilenceControl(selectedSttSegmentationMode) && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
@@ -3799,7 +3799,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </label>
                             )}
 
-                            {shouldShowEndpointTuningControl() && (
+                            {shouldShowEndpointTuningControl(selectedSttSegmentationMode) && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${

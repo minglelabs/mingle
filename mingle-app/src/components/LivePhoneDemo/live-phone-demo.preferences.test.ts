@@ -21,9 +21,14 @@ import {
 } from './live-phone-demo.preferences'
 
 describe('Soniox endpoint UI strategy', () => {
-  it('shows only the endpoint tuning control', () => {
-    expect(shouldShowEndpointTuningControl()).toBe(true)
-    expect(shouldShowManualSilenceControl()).toBe(false)
+  it('shows the silence-duration control only for silence-based splitting', () => {
+    expect(shouldShowManualSilenceControl('fin')).toBe(true)
+    expect(shouldShowManualSilenceControl('end')).toBe(false)
+  })
+
+  it('shows the endpoint tuning control only for automatic endpoint detection', () => {
+    expect(shouldShowEndpointTuningControl('end')).toBe(true)
+    expect(shouldShowEndpointTuningControl('fin')).toBe(false)
   })
 })
 
