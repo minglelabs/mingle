@@ -167,6 +167,22 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function assertFirebaseClientConfigForBuild() {
+  const requiredKeys = [
+    "MINGLE_FIREBASE_PROJECT_ID",
+    "MINGLE_FIREBASE_APPLICATION_ID",
+    "MINGLE_FIREBASE_API_KEY",
+    "MINGLE_FIREBASE_MESSAGING_SENDER_ID",
+  ];
+  const missing = requiredKeys.filter((key) => !isNonEmptyString(process.env[key]));
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing Firebase Android client config for AAB build: ${missing.join(", ")}. `
+      + "Export these build-time values before running --build; server FCM credentials are not a substitute.",
+    );
+  }
+}
+
 function parseSemver3(value) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(
     typeof value === "string" ? value.trim() : "",
@@ -616,6 +632,7 @@ async function main() {
 
   if (options.build) {
     assertUploadSigningConfigured(DEFAULT_ANDROID_DIR);
+    assertFirebaseClientConfigForBuild();
   }
 
   printPlan(plan, options);

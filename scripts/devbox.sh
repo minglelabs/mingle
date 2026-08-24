@@ -1044,6 +1044,14 @@ resolve_devbox_admob_banner_unit_id_android() {
   printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID"
 }
 
+resolve_devbox_firebase_client_value() {
+  local key="$1"
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value "$key" || true)")"
+  [[ -n "$value" ]] || die "missing $key for Android push-enabled build. Add the Firebase Android client value to the configured Vault path or export $key."
+  printf '%s' "$value"
+}
+
 derive_worktree_name() {
   local fallback hash
   # Keep this stable per worktree path (independent of current git branch).
@@ -3034,6 +3042,10 @@ run_android_mobile_install() {
   local runtime_admob_app_id_android=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_banner_unit_id_android=""
+  local runtime_firebase_project_id=""
+  local runtime_firebase_application_id=""
+  local runtime_firebase_api_key=""
+  local runtime_firebase_messaging_sender_id=""
   local runtime_qa_bridge_enabled=""
 
   if [[ -z "$serial" ]]; then
@@ -3060,6 +3072,10 @@ run_android_mobile_install() {
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
+  runtime_firebase_project_id="$(resolve_devbox_firebase_client_value MINGLE_FIREBASE_PROJECT_ID)"
+  runtime_firebase_application_id="$(resolve_devbox_firebase_client_value MINGLE_FIREBASE_APPLICATION_ID)"
+  runtime_firebase_api_key="$(resolve_devbox_firebase_client_value MINGLE_FIREBASE_API_KEY)"
+  runtime_firebase_messaging_sender_id="$(resolve_devbox_firebase_client_value MINGLE_FIREBASE_MESSAGING_SENDER_ID)"
   runtime_qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
 
   log "building Android app ($variant) for device: $serial"
@@ -3089,6 +3105,10 @@ run_android_mobile_install() {
     RN_AD_BANNER_HEIGHT_PX="$runtime_ad_banner_height_px" \
     RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
     RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
+    MINGLE_FIREBASE_PROJECT_ID="$runtime_firebase_project_id" \
+    MINGLE_FIREBASE_APPLICATION_ID="$runtime_firebase_application_id" \
+    MINGLE_FIREBASE_API_KEY="$runtime_firebase_api_key" \
+    MINGLE_FIREBASE_MESSAGING_SENDER_ID="$runtime_firebase_messaging_sender_id" \
     RN_QA_BRIDGE_ENABLED="$runtime_qa_bridge_enabled" \
       ./gradlew "$gradle_task"
   )
