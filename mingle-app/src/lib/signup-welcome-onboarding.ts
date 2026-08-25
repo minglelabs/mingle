@@ -4,6 +4,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   materializePendingConversationInvitees,
 } from "@/lib/app-conversations";
+import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationMessage, sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
@@ -106,12 +107,18 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         sourceLanguage: "en",
         metadata: {
           source: "signup_welcome",
-          welcomeVersion: 1,
+          welcomeVersion: 2,
+          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
         },
       },
       update: {
         userId: ROYCE_USER_ID,
         isDeleted: false,
+        metadata: {
+          source: "signup_welcome",
+          welcomeVersion: 2,
+          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+        },
       },
       select: { id: true },
     });
@@ -136,6 +143,33 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         text: ROYCE_WELCOME_MESSAGE,
       },
     });
+
+    for (const [language, translatedText] of Object.entries(ROYCE_WELCOME_TRANSLATIONS)) {
+      await tx.appMessageContent.upsert({
+        where: {
+          messageId_contentType_language: {
+            messageId: createdMessage.id,
+            contentType: "TRANSLATION_FINAL",
+            language,
+          },
+        },
+        create: {
+          messageId: createdMessage.id,
+          contentType: "TRANSLATION_FINAL",
+          language,
+          isDeleted: false,
+          text: translatedText,
+          provider: "hardcoded",
+          model: "royce-welcome-v2",
+        },
+        update: {
+          isDeleted: false,
+          text: translatedText,
+          provider: "hardcoded",
+          model: "royce-welcome-v2",
+        },
+      });
+    }
 
     // The account is new and this message must be unread when its first
     // conversation list is hydrated. This is idempotent and does not create

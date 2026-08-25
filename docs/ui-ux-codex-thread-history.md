@@ -1582,3 +1582,11 @@
 - Issue: The profile PATCH response updated the handle and bio in local state but omitted the saved display name, so a successful name edit could appear to revert. Duplicate handles also needed a clear save-time explanation.
 - Resolution: Apply the API response's name and nullable bio to local profile state, preserve the unique-handle conflict response, and distinguish handle conflicts from unrelated profile-save failures.
 - Testing notes: Verify name-only edits, clearing name or bio, and saving a handle already used by another account.
+
+## 2026-08-25 — Localized Royce signup welcome message
+
+- Surface: The automatic Royce follow-back and first-message onboarding flow for newly created accounts.
+- Issue: New users received Royce's English source message, but the message had no stored translation content for the user's conversation languages. The room therefore could not show the welcome message in the same language-aware bubble flow as ordinary messages.
+- Resolution: Keep the English text as the `SOURCE` content and persist deterministic hardcoded `TRANSLATION_FINAL` contents for every current non-English app locale, including both Chinese script variants. The existing per-room client message ID remains idempotent, so retries update the source and translations without creating another welcome message or changing the unread behavior.
+- Data contract: No Prisma migration or API namespace change is required. The message metadata records the welcome-message version and the languages included in the precomputed translation set.
+- Testing notes: Verify a fresh signup receives one unread Royce message, the source remains English, all 60 current non-English locale entries are present, and selecting the user's default conversation language displays the corresponding translation.

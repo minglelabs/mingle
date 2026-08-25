@@ -70,6 +70,7 @@ import {
   ROYCE_USER_ID,
   ROYCE_WELCOME_MESSAGE,
 } from "@/lib/signup-welcome-onboarding";
+import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
 
 describe("signup welcome onboarding", () => {
   beforeEach(() => {
@@ -155,6 +156,22 @@ describe("signup welcome onboarding", () => {
         contentType: "SOURCE",
         language: "en",
         text: ROYCE_WELCOME_MESSAGE,
+      }),
+    }));
+    const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
+      ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
+    );
+    expect(translationCalls).toHaveLength(Object.keys(ROYCE_WELCOME_TRANSLATIONS).length);
+    expect(new Set(translationCalls.map(([args]) => args.create.language))).toEqual(
+      new Set(Object.keys(ROYCE_WELCOME_TRANSLATIONS)),
+    );
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        contentType: "TRANSLATION_FINAL",
+        language: "ko",
+        text: ROYCE_WELCOME_TRANSLATIONS.ko,
+        provider: "hardcoded",
+        model: "royce-welcome-v2",
       }),
     }));
     expect(mockMemberUpdateMany).toHaveBeenCalledWith({
