@@ -32,6 +32,7 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
+import { resetMinglePostHogIdentity } from "@/lib/posthog-client";
 import SlideSurface from "@/components/slide-surface";
 import {
   consumeSlideSurfaceHistoryForScope,
@@ -822,6 +823,7 @@ function ProfileSettingsPanel({
         throw new Error("Failed to deactivate account");
       }
       await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -844,6 +846,7 @@ function ProfileSettingsPanel({
         throw new Error("Failed to withdraw account");
       }
       await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -2111,6 +2114,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
   const handleSignOut = useCallback(() => {
     void unregisterNativePushToken().finally(() => {
+      resetMinglePostHogIdentity();
       void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
         if (typeof window !== "undefined") {
           window.location.replace(signOutCallbackUrl);

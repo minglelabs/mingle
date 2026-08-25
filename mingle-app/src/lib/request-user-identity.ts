@@ -51,6 +51,7 @@ function readCookieValue(request: Request, cookieName: string): string {
 export function resolveTrackingExternalUserId(request: Request): string {
   return sanitizeRequestIdentityValue(
     request.headers.get("x-mingle-user-id")
+    || request.headers.get("x-posthog-distinct-id")
     || readCookieValue(request, "mingle_uid")
     || null,
   );

@@ -40,6 +40,10 @@ import {
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
+import {
+  captureMingleClientEvent,
+  resetMinglePostHogIdentity,
+} from "@/lib/posthog-client";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -1034,6 +1038,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
         return;
       }
+      if (signupResponse.status === 201) {
+        captureMingleClientEvent("mingle_signup_completed", { method: "email" });
+      }
 
       const signInResponse = await signIn("email-password", {
         email,
@@ -1234,6 +1241,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
+    resetMinglePostHogIdentity();
     void signOut({ callbackUrl: signedOutCallbackUrl });
   }, [isDeletingAccount, signedOutCallbackUrl]);
 
@@ -1247,6 +1255,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);

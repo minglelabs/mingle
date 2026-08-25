@@ -9,6 +9,10 @@ import LivePhoneDemoLegacy from "@/components/LivePhoneDemo/LivePhoneDemoLegacy"
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 import { unregisterNativePushToken } from "@/lib/native-push";
+import {
+  captureMingleClientEvent,
+  resetMinglePostHogIdentity,
+} from "@/lib/posthog-client";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -823,6 +827,9 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
         window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
         return;
       }
+      if (signupResponse.status === 201) {
+        captureMingleClientEvent("mingle_signup_completed", { method: "email" });
+      }
 
       const signInResponse = await signIn("email-password", {
         email,
@@ -941,6 +948,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
     void unregisterNativePushToken().finally(() => {
+      resetMinglePostHogIdentity();
       void signOut({ callbackUrl: signedOutCallbackUrl });
     });
   }, [isDeletingAccount, signedOutCallbackUrl]);
@@ -956,6 +964,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
         throw new Error("account_delete_failed");
       }
       await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);

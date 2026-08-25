@@ -21,8 +21,47 @@ import {
 } from "@/lib/request-user-identity";
 import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
+import { captureMingleEvent } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
+
+function captureConversationProductEvent(args: {
+  request: NextRequest;
+  distinctId: string;
+  event: "mingle_conversation_created" | "mingle_conversation_reused";
+  memberCount: number;
+  roomType: "direct" | "group" | "solo";
+}) {
+  if (!args.distinctId) return;
+  const pathNamespace = args.request.nextUrl.pathname.match(
+    /^\/api\/((?:android|ios)\/v\d+\.\d+\.\d+)\//,
+  )?.[1] ?? "";
+  const apiNamespace = sanitizeRequestIdentityValue(
+    args.request.headers.get("x-mingle-api-namespace") || pathNamespace || "",
+  );
+  const appVersion = sanitizeRequestIdentityValue(
+    args.request.headers.get("x-mingle-app-version")
+      || apiNamespace.match(/\/v(\d+\.\d+\.\d+)$/)?.[1]
+      || "",
+  );
+  const clientPlatform = sanitizeRequestIdentityValue(
+    args.request.headers.get("x-mingle-client-platform")
+      || (apiNamespace.startsWith("ios/")
+        ? "ios"
+        : apiNamespace.startsWith("android/") ? "android" : "web"),
+  );
+  captureMingleEvent({
+    distinctId: args.distinctId,
+    event: args.event,
+    properties: {
+      member_count: args.memberCount,
+      room_type: args.roomType,
+      api_namespace: apiNamespace || null,
+      app_version: appVersion || null,
+      client_platform: clientPlatform,
+    },
+  });
+}
 
 function applyTrackingCookies(
   request: NextRequest,
@@ -172,6 +211,13 @@ export async function postConversationResponse(request: NextRequest) {
       otherUserIds: inviteeUserIds,
     });
     if (existing) {
+      captureConversationProductEvent({
+        request,
+        distinctId: trackingHints.externalUserId,
+        event: "mingle_conversation_reused",
+        memberCount: inviteeUserIds.length + 1,
+        roomType: inviteeUserIds.length === 1 ? "direct" : "group",
+      });
       const response = NextResponse.json({ conversation: existing, reused: true }, { status: 200 });
       applyTrackingCookies(request, response, trackingHints);
       return response;
@@ -195,6 +241,13 @@ export async function postConversationResponse(request: NextRequest) {
     console.error("[conversations] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
+  captureConversationProductEvent({
+    request,
+    distinctId: trackingHints.externalUserId,
+    event: "mingle_conversation_created",
+    memberCount: inviteeUserIds.length + 1,
+    roomType: inviteeUserIds.length > 0 ? "group" : "solo",
+  });
   const response = NextResponse.json({ conversation, reused: false }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);
   return response;
@@ -256,6 +309,15 @@ export async function postDirectConversationResponse(request: NextRequest) {
     console.error("[conversations/direct] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
+  captureConversationProductEvent({
+    request,
+    distinctId: trackingHints.externalUserId,
+    event: conversationResult.reused
+      ? "mingle_conversation_reused"
+      : "mingle_conversation_created",
+    memberCount: 2,
+    roomType: "direct",
+  });
   const response = NextResponse.json({
     conversation: conversationResult.conversation,
     reused: conversationResult.reused,

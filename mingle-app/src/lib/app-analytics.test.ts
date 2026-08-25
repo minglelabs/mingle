@@ -168,7 +168,11 @@ describe("createTrackedEventLog", () => {
         translations: { en: "Private translation" },
         translationLanguages: ["en", "ja"],
         model: "model-id",
-        clientMetadata: { speaker: "self", sourceText: "또 다른 비공개 원문" },
+        clientMetadata: {
+          speaker: "self",
+          reason: "manual_text_input",
+          sourceText: "또 다른 비공개 원문",
+        },
       },
     });
 
@@ -181,6 +185,16 @@ describe("createTrackedEventLog", () => {
         client_platform: "android",
         translation_language_count: 2,
         speaker: "self",
+        message_input_mode: "keyboard",
+        has_message: true,
+      }),
+    });
+
+    expect(mockCaptureMingleEvent).toHaveBeenCalledWith({
+      distinctId: "anon_1",
+      event: "mingle_message_sent",
+      properties: expect.objectContaining({
+        message_input_mode: "keyboard",
         has_message: true,
       }),
     });

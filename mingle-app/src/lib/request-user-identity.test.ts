@@ -18,7 +18,10 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { resolveSessionAwareUserId } from "@/lib/request-user-identity";
+import {
+  resolveSessionAwareUserId,
+  resolveTrackingExternalUserId,
+} from "@/lib/request-user-identity";
 
 describe("resolveSessionAwareUserId", () => {
   beforeEach(() => {
@@ -55,5 +58,13 @@ describe("resolveSessionAwareUserId", () => {
     });
 
     expect(userId).toBe("user_tracked");
+  });
+
+  it("uses the PostHog tracing distinct ID when the Mingle header is absent", () => {
+    const request = new Request("https://mingle.example/api/conversations", {
+      headers: { "x-posthog-distinct-id": "anon_posthog" },
+    });
+
+    expect(resolveTrackingExternalUserId(request)).toBe("anon_posthog");
   });
 });

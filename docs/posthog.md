@@ -1,15 +1,18 @@
 # PostHog analytics
 
-Mingle uses the official `posthog-node` SDK on the server. The integration
-forwards the existing server-side app event log after it is persisted, so the
-2.0.0 clients can be measured without putting a PostHog credential in the
-WebView or native app.
+Mingle uses the official `posthog-node` SDK on the server and `posthog-js` in
+the WebView. Server events are forwarded only after the existing app event log
+is persisted. The browser SDK captures navigation and interaction behavior
+without requiring a native iOS or Android SDK.
 
 ## Configuration
 
-`POSTHOG_TOKEN` must be the PostHog project token from Project Settings. It is
-not a personal API key. `POSTHOG_HOST` is optional and defaults to the US cloud
-endpoint. Set it to `https://eu.i.posthog.com` for an EU project.
+`POSTHOG_TOKEN` must be the public PostHog project token from Project Settings.
+It is not a personal API key. PostHog Cloud project tokens with the `phc_`
+prefix are also passed to the browser SDK. A self-hosted project with another
+token format must set `POSTHOG_PUBLIC_TOKEN` explicitly. `POSTHOG_HOST` is
+optional and defaults to the US cloud endpoint. Set it to
+`https://eu.i.posthog.com` for an EU project.
 
 For local Devbox, patch the existing Vault record instead of replacing it:
 
@@ -22,31 +25,36 @@ vault kv patch secret/mingle/dev POSTHOG_HOST='https://us.i.posthog.com'
 ```
 
 The token is read into the app runtime by `scripts/devbox up`. Do not commit it
-to `.env.local`, print it in logs, or expose it as a `NEXT_PUBLIC_*` variable.
+to `.env.local`, print it in logs, or use a personal API key. The public project
+token is expected to be visible to browsers; account and personal API keys are
+not.
 
 ## Event scope and privacy
 
-Events are sent only after the corresponding `AppEventLog` write succeeds.
-The initial integration captures the existing tracked STT/TTS and hydration
-events. It includes release metadata such as app version, API namespace,
-platform, locale, pathname, provider/model, duration, and translation counts.
+Server events are sent only after the corresponding `AppEventLog` write
+succeeds. They include existing STT/TTS and hydration events plus explicit
+message-sent and conversation-created/reused product events. Browser events
+include app open, safe screen names, email signup completion, pageview,
+pageleave, click/change/submit autocapture, heatmaps, rage/dead clicks, Web
+Vitals, and session replay.
 
 It deliberately excludes source text, translated text, full URLs and query
 parameters, IP addresses, user-agent strings, session keys, access tokens, and
-arbitrary client metadata. GeoIP enrichment is disabled in the SDK.
+arbitrary client metadata. Server GeoIP enrichment is disabled. Browser
+autocapture masks all text and element attributes. Session replay masks all
+text, inputs, and element attributes; disables console, request/response body,
+header, and canvas capture; and strips query strings and URL fragments before
+data leaves the device.
 
 The PostHog distinct ID is the existing pseudonymous Mingle tracking ID. No
 name, handle, email, or message text is sent to PostHog by this integration.
 
 ## Release impact
 
-This server-side integration does not require a new iOS or Android binary. A
-Railway app deployment with `POSTHOG_TOKEN` set is required before events are
-sent. The app version and API namespace reported by existing 2.0.0 clients are
-used as event properties, so the first collected release can be filtered to
-2.0.0.
+This integration does not require a new iOS or Android binary because the
+existing native apps load the deployed WebView application. A Railway web
+deployment with the project token set is required. The app version and API
+namespace reported by 2.0.0 clients are attached as event properties.
 
-If client-side PostHog JS or the React Native SDK is added later for automatic
-screen/session capture, that is a separate integration. A WebView web bundle
-redeploy is required for PostHog JS; a React Native SDK would require a new
-native build. The server token must never be used in either client bundle.
+A future React Native SDK integration would be separate and would require a
+new native build.

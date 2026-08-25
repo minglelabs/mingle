@@ -128,6 +128,7 @@ function buildPostHogProperties(args: {
   const clientMetadata = readMetadataRecord(
     metadata.clientMetadata as Prisma.InputJsonValue | undefined,
   );
+  const finalizeReason = readMetadataString(clientMetadata, "reason");
   const locale = args.clientContext.pageLanguage
     ?? args.clientContext.language
     ?? args.tracking.requestLocale;
@@ -150,6 +151,9 @@ function buildPostHogProperties(args: {
     total_duration_ms: readMetadataNumber(metadata, "totalDurationMs"),
     duration_anomaly: readMetadataBoolean(metadata, "durationAnomaly"),
     speaker: readMetadataString(clientMetadata, "speaker"),
+    message_input_mode: args.eventType === "stt_turn_finalized"
+      ? finalizeReason === "manual_text_input" ? "keyboard" : "voice"
+      : undefined,
     has_message: Boolean(args.messageId),
   };
 }
@@ -232,11 +236,13 @@ export function ensureTrackingContext(
   const cookieUserId = sanitizeText(request.cookies.get(USER_COOKIE_KEY)?.value, 128);
   const cookieSessionKey = sanitizeText(request.cookies.get(SESSION_COOKIE_KEY)?.value, 128);
   const headerUserId = sanitizeText(request.headers.get("x-mingle-user-id"), 128);
+  const postHogDistinctId = sanitizeText(request.headers.get("x-posthog-distinct-id"), 128);
   const headerSessionKey = sanitizeText(request.headers.get("x-mingle-session-key"), 128);
 
   const externalUserId = (
     sanitizeText(args?.externalUserIdHint, 128)
     || headerUserId
+    || postHogDistinctId
     || cookieUserId
     || generateStableId("anon")
   );
@@ -421,16 +427,26 @@ export async function createTrackedEventLog(args: {
     await prisma.appEventLog.create({ data });
   }
 
+  const postHogProperties = buildPostHogProperties({
+    tracking,
+    clientContext,
+    eventType: args.eventType,
+    messageId: args.messageId,
+    usageSec,
+    metadata: args.metadata,
+  });
+
   captureMingleEvent({
     distinctId: tracking.externalUserId,
     event: `mingle_${args.eventType}`,
-    properties: buildPostHogProperties({
-      tracking,
-      clientContext,
-      eventType: args.eventType,
-      messageId: args.messageId,
-      usageSec,
-      metadata: args.metadata,
-    }),
+    properties: postHogProperties,
   });
+
+  if (args.eventType === "stt_turn_finalized" && args.messageId) {
+    captureMingleEvent({
+      distinctId: tracking.externalUserId,
+      event: "mingle_message_sent",
+      properties: postHogProperties,
+    });
+  }
 }
