@@ -298,21 +298,11 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       setResults(snapshot.results);
       setResultsQuery(snapshot.query);
     }
-    focusSearchInput();
-    const focusAnimationFrameId = window.requestAnimationFrame(() => {
-      focusSearchInput();
-    });
-    const focusTimeoutIds = [
-      window.setTimeout(focusSearchInput, 120),
-      window.setTimeout(focusSearchInput, 300),
-    ];
 
     return () => {
       isMountedRef.current = false;
-      window.cancelAnimationFrame(focusAnimationFrameId);
-      focusTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
-  }, [focusSearchInput]);
+  }, []);
 
   useEffect(() => {
     if (
@@ -441,7 +431,6 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             placeholder={copy.placeholder}
             autoComplete="off"
             autoCorrect="off"
-            autoFocus
             spellCheck={false}
             aria-label={copy.placeholder}
             className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-10 text-[15px] text-slate-900 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-2 focus:ring-amber-100"

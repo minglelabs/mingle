@@ -1590,3 +1590,12 @@
 - Resolution: Keep the English text as the `SOURCE` content and persist deterministic hardcoded `TRANSLATION_FINAL` contents for every current non-English app locale, including both Chinese script variants. The existing per-room client message ID remains idempotent, so retries update the source and translations without creating another welcome message or changing the unread behavior.
 - Data contract: No Prisma migration or API namespace change is required. The message metadata records the welcome-message version and the languages included in the precomputed translation set.
 - Testing notes: Verify a fresh signup receives one unread Royce message, the source remains English, all 60 current non-English locale entries are present, and selecting the user's default conversation language displays the corresponding translation.
+
+## 2026-08-25 — Keep Explore tab entry keyboard-free
+
+- Surface: The Explore/search tab and its search field in `mingle-app/src/components/connect-page.tsx`.
+- Issue: Opening the Explore tab automatically focused the search field through both the input's `autoFocus` attribute and delayed focus calls. On mobile WebViews this also opened the keyboard, including when the user returned to or tapped the already-selected tab.
+- User impact: Users saw the keyboard and a focused search field before choosing to search, reducing the visible Explore surface and adding an unwanted interaction step.
+- Resolution: Removed the tab-entry focus attribute and the animation-frame/timer focus sequence. The search field remains fully available and still receives focus when the user explicitly taps it or clears an active query.
+- Data contract: None. No Prisma migration, API namespace, or native rebuild is required.
+- Testing notes: Verify that entering Explore leaves the keyboard hidden and the search field unfocused on iOS and Android WebViews. Tapping the field must still open the keyboard, and clearing a query must still return focus to the field.
