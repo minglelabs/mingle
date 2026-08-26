@@ -430,6 +430,7 @@ async function createAndroidSession(options) {
       'appium:chromedriverChromeMappingFile': CHROMEDRIVER_MAPPING_FILE,
     },
   });
+  await driver.setTimeout({ script: 60_000 });
 
   return { driver, deviceLabel: `android:${serial}` };
 }
@@ -484,6 +485,7 @@ async function createIosSession(options) {
     path: '/',
     capabilities,
   });
+  await driver.setTimeout({ script: 60_000 });
 
   return { driver, deviceLabel: `ios:${options.iosUdid}` };
 }

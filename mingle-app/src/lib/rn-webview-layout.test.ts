@@ -106,13 +106,20 @@ describe('RN WebView layout helpers', () => {
     })).toBe(false)
   })
 
-  it('enables native WebView debugging only in debug builds', () => {
+  it('enables native WebView debugging for debug and explicit QA builds', () => {
     expect(shouldEnableNativeWebViewDebugging({
       isDebugBuild: true,
+      isQaBridgeEnabled: false,
     })).toBe(true)
 
     expect(shouldEnableNativeWebViewDebugging({
       isDebugBuild: false,
+      isQaBridgeEnabled: true,
+    })).toBe(true)
+
+    expect(shouldEnableNativeWebViewDebugging({
+      isDebugBuild: false,
+      isQaBridgeEnabled: false,
     })).toBe(false)
   })
 
