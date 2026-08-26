@@ -1599,3 +1599,12 @@
 - Resolution: Removed the tab-entry focus attribute and the animation-frame/timer focus sequence. The search field remains fully available and still receives focus when the user explicitly taps it or clears an active query.
 - Data contract: None. No Prisma migration, API namespace, or native rebuild is required.
 - Testing notes: Verify that entering Explore leaves the keyboard hidden and the search field unfocused on iOS and Android WebViews. Tapping the field must still open the keyboard, and clearing a query must still return focus to the field.
+
+## 2026-08-26 — Show account status in admin conversation review
+
+- Surface: The admin conversation lookup header shared by the conversation list and message detail views.
+- Issue: Operators could inspect a user's conversation rooms and stored messages, but could not tell whether the account was currently active, deactivated, pending withdrawal, or already deleted without running a separate database query.
+- Resolution: Extend the protected conversation lookup response with the account lifecycle fields and render a compact account-status card in the shared user header. The card shows the current status, handle, client platform/version, API namespace, signup time, last-seen time, deactivation or withdrawal time, and scheduled deletion time when available.
+- Status rules: An anonymized/deleted record is shown as `삭제됨`, an account with `withdrawn_at` is shown as `탈퇴 유예 중`, an inactive account without a withdrawal request is shown as `비활성화`, and all other accounts are shown as `활성`.
+- Data contract: No migration or API namespace change. The admin-only conversation data response now includes existing account lifecycle and client-version fields.
+- Testing notes: Verify the shared status card appears on both the room list and room message views, handles cached-to-fresh data updates, and displays the correct status and relevant dates for active, deactivated, withdrawal-pending, and anonymized records.
