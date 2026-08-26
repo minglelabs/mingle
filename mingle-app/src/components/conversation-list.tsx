@@ -21,6 +21,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -100,6 +101,7 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveMountedConversationIds,
   resolveConversationDisplayMessageCount,
   resolveConversationHistoryNavigationDirection,
   resolveConversationHistoryRoute,
@@ -187,6 +189,7 @@ type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
+let resolvedLanguageOnboardingPhase: Exclude<LanguageOnboardingPhase, "resolving" | "locale-switching"> | null = null;
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
 };
@@ -1546,16 +1549,30 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   useImperativeHandle(ref, () => ({ focusInput }), [focusInput]);
 
   useEffect(() => {
+    let cancelled = false;
+    const scheduleCaretHidden = (nextCaretHidden: boolean) => {
+      const apply = () => {
+        if (!cancelled) setCaretHidden(nextCaretHidden);
+      };
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(apply);
+      } else {
+        void Promise.resolve().then(apply);
+      }
+    };
+
     if (!open) {
       blurInput();
-      setCaretHidden(false);
-      return;
+      scheduleCaretHidden(false);
+      return () => {
+        cancelled = true;
+      };
     }
 
     // transitionMode "instant" means the panel is already in its resting
     // position (no slide to hide the caret from).
     const shouldHideCaret = transitionMode !== "instant";
-    setCaretHidden(shouldHideCaret);
+    scheduleCaretHidden(shouldHideCaret);
 
     focusInput();
     const animationFrameId = window.requestAnimationFrame(() => {
@@ -1569,6 +1586,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
     }, shouldHideCaret ? 340 : 220);
 
     return () => {
+      cancelled = true;
       window.cancelAnimationFrame(animationFrameId);
       window.clearTimeout(timeoutId);
     };
@@ -1952,13 +1970,19 @@ export default function ConversationList({
   const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>(
     initialListState.localStats,
   );
+  const conversationLocalStatsRef = useRef(conversationLocalStats);
+  conversationLocalStatsRef.current = conversationLocalStats;
+  const conversationCacheIdentityRef = useRef(conversationCacheIdentity);
+  conversationCacheIdentityRef.current = conversationCacheIdentity;
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
-  const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>("resolving");
+  const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>(() => (
+    resolvedLanguageOnboardingPhase ?? "resolving"
+  ));
   const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
@@ -2039,6 +2063,9 @@ export default function ConversationList({
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
   const routeConversationHydrationRef = useRef<string | null>(null);
+  const conversationListRefreshInFlightRef = useRef<Promise<ConversationChannelSummary[]> | null>(null);
+  const queuedConversationListRefreshOptionsRef = useRef<{ replaceCurrent?: boolean } | null>(null);
+  const conversationListCacheWriteTimerRef = useRef<number | null>(null);
   const pullRefreshStartYRef = useRef<number | null>(null);
   const pullRefreshTrackingRef = useRef(false);
   const viewportWidthPx = useViewportWidthPx();
@@ -2192,14 +2219,7 @@ export default function ConversationList({
     [conversations],
   );
   const mountedConversationIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (activeConversation?.id) {
-      ids.add(activeConversation.id);
-    }
-    if (liveConversationId) {
-      ids.add(liveConversationId);
-    }
-    return [...ids];
+    return resolveMountedConversationIds(activeConversation?.id, liveConversationId);
   }, [activeConversation?.id, liveConversationId]);
   const mountedConversations = useMemo(() => (
     mountedConversationIds
@@ -2301,7 +2321,7 @@ export default function ConversationList({
     }, 180);
   }, [setSearchOverlayVisible]);
 
-  const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
+  const performConversationListRefresh = useCallback(async (options?: { replaceCurrent?: boolean }) => {
     const response = await fetch(
       initialNativeUi
         ? buildConversationApiPath("?view=native-list")
@@ -2331,6 +2351,43 @@ export default function ConversationList({
     ));
     return nextConversations;
   }, [conversationCacheIdentity, initialNativeUi]);
+
+  const refreshConversationList = useCallback((options?: { replaceCurrent?: boolean }) => {
+    const inFlight = conversationListRefreshInFlightRef.current;
+    if (inFlight) {
+      queuedConversationListRefreshOptionsRef.current = {
+        replaceCurrent:
+          queuedConversationListRefreshOptionsRef.current?.replaceCurrent === true
+          || options?.replaceCurrent === true,
+      };
+      return inFlight;
+    }
+
+    const refreshPromise = (async () => {
+      let nextOptions: { replaceCurrent?: boolean } | null = options ?? {};
+      let latestResult: ConversationChannelSummary[] = conversationsRef.current;
+      let latestError: unknown = null;
+
+      while (nextOptions) {
+        queuedConversationListRefreshOptionsRef.current = null;
+        try {
+          latestResult = await performConversationListRefresh(nextOptions);
+          latestError = null;
+        } catch (error) {
+          latestError = error;
+        }
+        nextOptions = queuedConversationListRefreshOptionsRef.current;
+      }
+
+      if (latestError) throw latestError;
+      return latestResult;
+    })().finally(() => {
+      conversationListRefreshInFlightRef.current = null;
+    });
+
+    conversationListRefreshInFlightRef.current = refreshPromise;
+    return refreshPromise;
+  }, [performConversationListRefresh]);
 
   const hydrateConversationSummary = useCallback(async (conversationId: string) => {
     const normalizedConversationId = conversationId.trim();
@@ -3297,7 +3354,7 @@ export default function ConversationList({
     setIsNativeRuntime(isNativeAppRuntime());
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
 
     // Give every conversation-list history entry an explicit screen marker.
@@ -3318,11 +3375,11 @@ export default function ConversationList({
       hasConfirmedLanguageOnboarding = false;
     }
 
-    setLanguageOnboardingPhase(
-      shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
-        ? "selection"
-        : "ready",
-    );
+    const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
+      ? "selection"
+      : "ready";
+    resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
+    setLanguageOnboardingPhase(nextLanguageOnboardingPhase);
   }, []);
 
   useEffect(() => {
@@ -3729,6 +3786,8 @@ export default function ConversationList({
   ]);
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+
     let cancelled = false;
     let timeoutId: number | null = null;
 
@@ -3792,6 +3851,7 @@ export default function ConversationList({
   // for whenever the socket is down or push is unconfigured.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (sessionStatus !== "authenticated") return;
 
     let cancelled = false;
     let socket: WebSocket | null = null;
@@ -3803,6 +3863,13 @@ export default function ConversationList({
         reconnectTimer = null;
       }
     };
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      clearReconnectTimer();
+      reconnectTimer = window.setTimeout(() => {
+        void openSocket();
+      }, 5_000);
+    };
 
     const openSocket = async () => {
       if (cancelled) return;
@@ -3811,23 +3878,32 @@ export default function ConversationList({
           cache: "no-store",
           headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
         });
-        if (!response.ok || cancelled) return;
+        if (!response.ok || cancelled) {
+          if (response.status >= 500) scheduleReconnect();
+          return;
+        }
         const payload = await response.json() as { token?: string | null };
         const token = payload.token;
         const wsBase = getConversationEventsWsUrl();
-        if (!token || !wsBase || cancelled) return;
+        if (!token || !wsBase || cancelled) {
+          scheduleReconnect();
+          return;
+        }
 
         socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
         socket.onmessage = () => {
-          void refreshConversationList();
+          void refreshConversationList().catch(() => {
+            // Keep the current local snapshot; a later push or fallback poll retries.
+          });
         };
         socket.onclose = () => {
           if (cancelled) return;
-          clearReconnectTimer();
-          reconnectTimer = window.setTimeout(openSocket, 5_000);
+          socket = null;
+          scheduleReconnect();
         };
       } catch {
         // Realtime push failed to set up — the poll fallback below still runs.
+        scheduleReconnect();
       }
     };
 
@@ -3836,7 +3912,10 @@ export default function ConversationList({
     const pollIntervalMs = 20_000;
     const pollTimer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      void refreshConversationList();
+      if (socket?.readyState === WebSocket.OPEN) return;
+      void refreshConversationList().catch(() => {
+        // Keep the current local snapshot while realtime recovery is unavailable.
+      });
     }, pollIntervalMs);
 
     return () => {
@@ -3848,7 +3927,7 @@ export default function ConversationList({
         socket.close();
       }
     };
-  }, [refreshConversationList]);
+  }, [refreshConversationList, sessionStatus]);
 
   useEffect(() => {
     if (
@@ -3859,11 +3938,15 @@ export default function ConversationList({
       return;
     }
 
-    writeConversationListCache(
-      conversationCacheIdentity,
-      conversations,
-      conversationLocalStats,
-    );
+    if (conversationListCacheWriteTimerRef.current !== null) return;
+    conversationListCacheWriteTimerRef.current = window.setTimeout(() => {
+      conversationListCacheWriteTimerRef.current = null;
+      writeConversationListCache(
+        conversationCacheIdentityRef.current,
+        conversationsRef.current,
+        conversationLocalStatsRef.current,
+      );
+    }, 1_000);
   }, [
     conversationCacheIdentity,
     conversationLocalStats,
@@ -3872,6 +3955,17 @@ export default function ConversationList({
     isHydratingConversations,
     sessionStatus,
   ]);
+
+  useEffect(() => () => {
+    if (conversationListCacheWriteTimerRef.current === null) return;
+    window.clearTimeout(conversationListCacheWriteTimerRef.current);
+    conversationListCacheWriteTimerRef.current = null;
+    writeConversationListCache(
+      conversationCacheIdentityRef.current,
+      conversationsRef.current,
+      conversationLocalStatsRef.current,
+    );
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5007,6 +5101,7 @@ export default function ConversationList({
       return;
     }
 
+    resolvedLanguageOnboardingPhase = "ready";
     setLanguageOnboardingPhase("ready");
   }, [locale, sessionStatus]);
 
@@ -5018,8 +5113,8 @@ export default function ConversationList({
     // earlier confirm (without a full page reload) reflects the latest saved choice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
-  const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "resolving"
-    || languageOnboardingPhase === "locale-switching"
+  const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "locale-switching";
+  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "resolving"
     || (languageOnboardingPhase === "ready" && sessionStatus === "loading");
 
   return (
@@ -5039,6 +5134,17 @@ export default function ConversationList({
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
           </div>
         </div>
+      ) : null}
+
+      {shouldBlockBootstrapInteraction ? (
+        <div
+          className="absolute inset-0 z-[199] bg-transparent"
+          role="status"
+          aria-live="polite"
+          aria-label={languageOnboardingPhase === "resolving"
+            ? (locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle")
+            : (locale === "ko" ? "계정 확인 중" : "Checking account")}
+        />
       ) : null}
 
       {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
@@ -5362,6 +5468,12 @@ export default function ConversationList({
                     ariaLabel={conversation.title}
                     role="main"
                     nativeBackPriority={4}
+                    transitionMode={isVisible
+                      ? overlayEnterMode
+                      : activeConversation
+                        ? "instant"
+                        : overlayExitMode}
+                    zIndex={isVisible ? 101 : 100}
                     className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
                       isVisible ? "" : "pointer-events-none"
                     }`}

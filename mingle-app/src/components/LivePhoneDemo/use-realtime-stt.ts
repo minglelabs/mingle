@@ -37,6 +37,12 @@ import {
   splitNativeSttMessagesForConversation,
   type NativeSttQueuedMessage,
 } from '@/lib/native-stt-event-queue'
+import {
+  buildClientMessageOutboxId,
+  buildClientMessageOutboxOwnerIdentity,
+  enqueueClientMessageOutboxRecord,
+  flushClientMessageOutbox,
+} from './client-message-outbox'
 
 export {
   buildStorageKey,
@@ -741,6 +747,22 @@ function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): Conver
     })
   }
   return result
+}
+
+function areConversationLeaveNoticesEqual(
+  left: ConversationLeaveNotice[],
+  right: ConversationLeaveNotice[],
+): boolean {
+  return left === right || (
+    left.length === right.length
+    && left.every((notice, index) => {
+      const candidate = right[index]
+      return notice.userId === candidate.userId
+        && notice.name === candidate.name
+        && notice.handle === candidate.handle
+        && notice.leftAtMs === candidate.leftAtMs
+    })
+  )
 }
 
 function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationHydrationCursor | null {
@@ -1859,6 +1881,50 @@ function applyPendingTranslationUpdateToUtteranceState(input: {
   }
 }
 
+function areOptionalStringArraysEqual(
+  left: string[] | undefined,
+  right: string[] | undefined,
+): boolean {
+  if (left === right) return true
+  if (!left || !right || left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+function areOptionalRecordsEqual<T extends string | boolean>(
+  left: Record<string, T> | undefined,
+  right: Record<string, T> | undefined,
+): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => (
+    Object.prototype.hasOwnProperty.call(right, key)
+    && left[key] === right[key]
+  ))
+}
+
+function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
+  return (
+    left.id === right.id
+    && left.speaker === right.speaker
+    && left.speakerAvatarSeed === right.speakerAvatarSeed
+    && left.speakerAvatarIndex === right.speakerAvatarIndex
+    && left.speakerName === right.speakerName
+    && left.speakerUserId === right.speakerUserId
+    && left.speakerImage === right.speakerImage
+    && left.originalText === right.originalText
+    && left.originalLang === right.originalLang
+    && left.sourceLanguagesMixed === right.sourceLanguagesMixed
+    && left.sourceTextHasForeignScript === right.sourceTextHasForeignScript
+    && areOptionalStringArraysEqual(left.targetLanguages, right.targetLanguages)
+    && areOptionalRecordsEqual(left.translations, right.translations)
+    && areOptionalRecordsEqual(left.translationFinalized, right.translationFinalized)
+    && left.createdAtMs === right.createdAtMs
+  )
+}
+
 function appendOrReplaceUtterance(
   utterances: Utterance[],
   nextUtterance: Utterance,
@@ -1866,7 +1932,15 @@ function appendOrReplaceUtterance(
   const existingIndex = utterances.findIndex((utterance) => utterance.id === nextUtterance.id)
   const normalizedNextUtterance = normalizeStoredUtterance(nextUtterance)
   const existingUtterance = existingIndex >= 0 ? utterances[existingIndex] : null
-  if (existingUtterance === normalizedNextUtterance) return utterances
+  if (
+    existingUtterance
+    && (
+      existingUtterance === normalizedNextUtterance
+      || areUtterancesEqual(existingUtterance, normalizedNextUtterance)
+    )
+  ) {
+    return utterances
+  }
 
   const withoutExisting = existingIndex >= 0
     ? [
@@ -2087,6 +2161,12 @@ export function mergeServerHydrationUtteranceIntoStoreState(
   const nextUtterances = appendOrReplaceUtterance(store.utterances, nextUtterance)
 
   if (!pendingUpdate) {
+    if (
+      nextUtterances === store.utterances
+      && basePriorities === store.translationPriorities
+    ) {
+      return store
+    }
     return {
       ...store,
       utterances: nextUtterances,
@@ -2498,6 +2578,11 @@ export default function useRealtimeSTT({
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
+  const outboxTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
+  const clientMessageOutboxOwnerIdentity = useMemo(() => buildClientMessageOutboxOwnerIdentity({
+    userId: viewerUserId,
+    trackingUserId: outboxTrackingUserId,
+  }), [outboxTrackingUserId, viewerUserId])
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -2740,6 +2825,8 @@ export default function useRealtimeSTT({
   const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
   const nativeShellSupportsOpenAppSettingsRef = useRef(false)
   const serverHydrationKeyRef = useRef('')
+  const serverHydrationInFlightRef = useRef<Promise<void> | null>(null)
+  const queuedServerHydrationTriggerRef = useRef<ConversationHydrationRefreshTrigger | null>(null)
   const nativeSttOwnerKeyRef = useRef('')
   if (!nativeSttOwnerKeyRef.current) {
     nativeSttOwnerKeyRef.current = [
@@ -3073,7 +3160,10 @@ export default function useRealtimeSTT({
       if (payload.conversation) {
         setIsSharedRoom(payload.conversation.isMultiMember === true)
       }
-      setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
+      const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
+      setLeaveNotices((current) => (
+        areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+      ))
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3167,7 +3257,7 @@ export default function useRealtimeSTT({
   // Shared by the one-shot mount hydration below and by conversation-events
   // push/poll (a second real member's messages otherwise never appear in an
   // already-open room, since nothing else here re-fetches after mount).
-  const refreshFromServerHydration = useCallback((
+  const performServerHydrationRefresh = useCallback((
     trigger: ConversationHydrationRefreshTrigger,
   ): Promise<void> => {
     if (!conversationId) return Promise.resolve()
@@ -3186,7 +3276,10 @@ export default function useRealtimeSTT({
         if (payload.conversation) {
           setIsSharedRoom(payload.conversation.isMultiMember === true)
         }
-        setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
+        const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
+        setLeaveNotices((current) => (
+          areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+        ))
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3219,6 +3312,7 @@ export default function useRealtimeSTT({
 
         setUtteranceStore((current) => {
           const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
+          if (nextStore === current) return current
           const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
           storedUtterancesRef.current = nextStoredUtterances
           storageLoadedCountRef.current = nextStore.utterances.length
@@ -3240,6 +3334,30 @@ export default function useRealtimeSTT({
     queueHasOlderUtterancesRefresh,
     reportConversationHydrationOrderConflicts,
   ])
+
+  const refreshFromServerHydration = useCallback((
+    trigger: ConversationHydrationRefreshTrigger,
+  ): Promise<void> => {
+    const inFlight = serverHydrationInFlightRef.current
+    if (inFlight) {
+      queuedServerHydrationTriggerRef.current = trigger
+      return inFlight
+    }
+
+    const hydrationPromise = (async () => {
+      let nextTrigger: ConversationHydrationRefreshTrigger | null = trigger
+      while (nextTrigger) {
+        queuedServerHydrationTriggerRef.current = null
+        await performServerHydrationRefresh(nextTrigger)
+        nextTrigger = queuedServerHydrationTriggerRef.current
+      }
+    })().finally(() => {
+      serverHydrationInFlightRef.current = null
+    })
+
+    serverHydrationInFlightRef.current = hydrationPromise
+    return hydrationPromise
+  }, [performServerHydrationRefresh])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3274,6 +3392,13 @@ export default function useRealtimeSTT({
         reconnectTimer = null
       }
     }
+    const scheduleReconnect = () => {
+      if (cancelled) return
+      clearReconnectTimer()
+      reconnectTimer = window.setTimeout(() => {
+        void openSocket()
+      }, 5_000)
+    }
 
     const openSocket = async () => {
       if (cancelled) return
@@ -3282,11 +3407,17 @@ export default function useRealtimeSTT({
           buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/realtime-token` as `/${string}`),
           { cache: 'no-store', headers: buildConversationHydrationHeaders() },
         )
-        if (!response.ok || cancelled) return
+        if (!response.ok || cancelled) {
+          if (response.status >= 500) scheduleReconnect()
+          return
+        }
         const payload = await response.json() as { token?: string | null }
         const token = payload.token
         const wsBase = getConversationEventsWsUrl()
-        if (!token || !wsBase || cancelled) return
+        if (!token || !wsBase || cancelled) {
+          scheduleReconnect()
+          return
+        }
 
         socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
         socket.onmessage = () => {
@@ -3294,11 +3425,12 @@ export default function useRealtimeSTT({
         }
         socket.onclose = () => {
           if (cancelled) return
-          clearReconnectTimer()
-          reconnectTimer = window.setTimeout(openSocket, 5_000)
+          socket = null
+          scheduleReconnect()
         }
       } catch {
         // Realtime push failed to set up — the poll fallback below still runs.
+        scheduleReconnect()
       }
     }
 
@@ -3307,6 +3439,7 @@ export default function useRealtimeSTT({
     const pollIntervalMs = 20_000
     const pollTimer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return
+      if (socket?.readyState === WebSocket.OPEN) return
       void refreshFromServerHydration('poll')
     }, pollIntervalMs)
 
@@ -3657,9 +3790,10 @@ export default function useRealtimeSTT({
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
+      const resolvedSessionKey = ensureSessionKey()
       const body: Record<string, unknown> = {
         eventType: payload.eventType,
-        sessionKey: ensureSessionKey(),
+        sessionKey: resolvedSessionKey,
         clientContext: buildClientContextPayload(usageSec),
       }
 
@@ -3689,6 +3823,29 @@ export default function useRealtimeSTT({
       }
       if (payload.metadata) body.metadata = payload.metadata
 
+      const endpoint = buildClientApiPath('/log/client-event')
+      if (
+        payload.eventType === 'stt_turn_finalized'
+        && payload.clientMessageId
+        && payload.sourceText?.trim()
+      ) {
+        enqueueClientMessageOutboxRecord({
+          id: buildClientMessageOutboxId({
+            ownerIdentity: clientMessageOutboxOwnerIdentity,
+            sessionKey: resolvedSessionKey,
+            clientMessageId: payload.clientMessageId,
+          }),
+          ownerIdentity: clientMessageOutboxOwnerIdentity,
+          endpoint,
+          body: JSON.stringify(body),
+          trackingUserId: outboxTrackingUserId,
+        })
+        await flushClientMessageOutbox({
+          ownerIdentity: clientMessageOutboxOwnerIdentity,
+        })
+        return
+      }
+
       const requestInit: RequestInit = {
         method: 'POST',
         headers: {
@@ -3703,7 +3860,7 @@ export default function useRealtimeSTT({
       let lastError: unknown = null
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          const res = await fetch(buildClientApiPath('/log/client-event'), requestInit)
+          const res = await fetch(endpoint, requestInit)
           if (res.ok) return
           lastError = new Error(`log/client-event responded with ${res.status}`)
         } catch (error) {
@@ -3719,8 +3876,36 @@ export default function useRealtimeSTT({
     } catch {
       // Logging must not affect UX.
     }
-  }, [ensureSessionKey, usageSec])
+  }, [clientMessageOutboxOwnerIdentity, ensureSessionKey, outboxTrackingUserId, usageSec])
   logClientEventRef.current = logClientEvent
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const flushOutbox = (force = false) => {
+      void flushClientMessageOutbox({
+        ownerIdentity: clientMessageOutboxOwnerIdentity,
+        force,
+      })
+    }
+    const handleOnline = () => flushOutbox(true)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') flushOutbox(true)
+    }
+
+    flushOutbox(true)
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    const retryTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') flushOutbox()
+    }, 15_000)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.clearInterval(retryTimer)
+    }
+  }, [clientMessageOutboxOwnerIdentity])
 
   const synthesizeTtsViaApi = useCallback(async (text: string, language: string): Promise<Blob | null> => {
     const normalizedText = text.trim()

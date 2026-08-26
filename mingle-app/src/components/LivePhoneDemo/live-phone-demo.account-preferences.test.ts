@@ -10,6 +10,7 @@ import {
   normalizeSonioxEndpointMaxDelayPreference,
   normalizeSonioxManualFinalizeSilencePreference,
   serializeAccountPreferencesSyncState,
+  shouldApplyAccountPreferencesHydration,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
   type LivePhoneDemoAccountPreferences,
@@ -211,6 +212,20 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
+    })).toBe(false)
+  })
+})
+
+describe('shouldApplyAccountPreferencesHydration', () => {
+  it('accepts a server snapshot only when no local edit happened after the request began', () => {
+    expect(shouldApplyAccountPreferencesHydration({
+      hydrationStartedAtLocalRevision: 4,
+      currentLocalRevision: 4,
+    })).toBe(true)
+
+    expect(shouldApplyAccountPreferencesHydration({
+      hydrationStartedAtLocalRevision: 4,
+      currentLocalRevision: 5,
     })).toBe(false)
   })
 })

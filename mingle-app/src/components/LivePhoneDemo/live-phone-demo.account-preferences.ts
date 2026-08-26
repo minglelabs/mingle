@@ -77,6 +77,23 @@ export interface AccountPreferencesPatchBody {
   sttSegmentationMode: SttSegmentationMode | null
 }
 
+const ACCOUNT_PREFERENCES_CACHE_KEY_PREFIX = 'mingle:account-preferences:v1'
+const ACCOUNT_PREFERENCES_CACHE_MAX_STALE_AGE_MS = 90 * 24 * 60 * 60 * 1000
+
+export type AccountPreferencesCacheIdentity = {
+  apiNamespace: string
+  userId?: string | null
+  trackingUserId?: string | null
+}
+
+export type AccountPreferencesCacheSnapshot = {
+  savedAt: number
+  preferences: LivePhoneDemoAccountPreferences
+  pendingSync: boolean
+}
+
+const accountPreferencesMemoryCache = new Map<string, AccountPreferencesCacheSnapshot>()
+
 function normalizeIntegerPreference(
   value: unknown,
   fallback: number,
@@ -165,6 +182,122 @@ export function buildHydratedAccountPreferences(
       || DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: normalizeSttSegmentationMode(body?.sttSegmentationMode) ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
   }
+}
+
+function buildAccountPreferencesCacheKey(identity: AccountPreferencesCacheIdentity): string {
+  const namespace = identity.apiNamespace.trim() || 'default'
+  const userId = identity.userId?.trim()
+  const trackingUserId = identity.trackingUserId?.trim()
+  const owner = userId
+    ? `user:${userId}`
+    : `tracking:${trackingUserId || 'anonymous'}`
+
+  return `${ACCOUNT_PREFERENCES_CACHE_KEY_PREFIX}:${encodeURIComponent(namespace)}:${encodeURIComponent(owner)}`
+}
+
+function normalizeAccountPreferencesCacheRecord(
+  value: unknown,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+  now = Date.now(),
+): AccountPreferencesCacheSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const candidate = value as Partial<AccountPreferencesCacheSnapshot>
+  if (
+    typeof candidate.savedAt !== 'number'
+    || !Number.isFinite(candidate.savedAt)
+    || candidate.savedAt > now + 60_000
+    || now - candidate.savedAt > ACCOUNT_PREFERENCES_CACHE_MAX_STALE_AGE_MS
+    || !candidate.preferences
+    || typeof candidate.preferences !== 'object'
+    || Array.isArray(candidate.preferences)
+  ) {
+    return null
+  }
+
+  return {
+    savedAt: candidate.savedAt,
+    pendingSync: candidate.pendingSync === true,
+    preferences: buildHydratedAccountPreferences(
+      candidate.preferences,
+      isLegacySonioxSilenceSliderNamespace,
+    ),
+  }
+}
+
+export function readCachedAccountPreferencesSnapshot(
+  identity: AccountPreferencesCacheIdentity,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+): AccountPreferencesCacheSnapshot | null {
+  if (typeof window === 'undefined') return null
+
+  const storageKey = buildAccountPreferencesCacheKey(identity)
+  const memoryRecord = normalizeAccountPreferencesCacheRecord(
+    accountPreferencesMemoryCache.get(storageKey),
+    isLegacySonioxSilenceSliderNamespace,
+  )
+  if (memoryRecord) return memoryRecord
+
+  accountPreferencesMemoryCache.delete(storageKey)
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKey)
+    if (!rawValue) return null
+
+    const storedRecord = normalizeAccountPreferencesCacheRecord(
+      JSON.parse(rawValue),
+      isLegacySonioxSilenceSliderNamespace,
+    )
+    if (!storedRecord) {
+      window.localStorage.removeItem(storageKey)
+      return null
+    }
+
+    accountPreferencesMemoryCache.set(storageKey, storedRecord)
+    return storedRecord
+  } catch {
+    return null
+  }
+}
+
+export function readCachedAccountPreferences(
+  identity: AccountPreferencesCacheIdentity,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+): LivePhoneDemoAccountPreferences | null {
+  return readCachedAccountPreferencesSnapshot(
+    identity,
+    isLegacySonioxSilenceSliderNamespace,
+  )?.preferences ?? null
+}
+
+export function writeCachedAccountPreferences(
+  identity: AccountPreferencesCacheIdentity,
+  preferences: LivePhoneDemoAccountPreferences,
+  options?: { pendingSync?: boolean },
+): void {
+  if (typeof window === 'undefined') return
+
+  const storageKey = buildAccountPreferencesCacheKey(identity)
+  const previousRecord = accountPreferencesMemoryCache.get(storageKey)
+  const record: AccountPreferencesCacheSnapshot = {
+    savedAt: Date.now(),
+    preferences,
+    pendingSync: options?.pendingSync ?? previousRecord?.pendingSync ?? false,
+  }
+  accountPreferencesMemoryCache.set(storageKey, record)
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(record))
+  } catch {
+    // The process-wide cache still keeps room switches local-first.
+  }
+}
+
+export function shouldApplyAccountPreferencesHydration(args: {
+  hydrationStartedAtLocalRevision: number
+  currentLocalRevision: number
+}): boolean {
+  return args.hydrationStartedAtLocalRevision === args.currentLocalRevision
 }
 
 export function buildAccountPreferencesPatchBody(

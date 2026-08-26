@@ -405,6 +405,26 @@ describe('use-realtime-stt pure logic', () => {
     ])
   })
 
+  it('preserves the room store reference when server hydration is unchanged', () => {
+    const utterance = {
+      id: 'u-server',
+      originalText: 'same source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'same translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 2,
+    }
+    const store = createUtteranceStoreState([utterance])
+
+    expect(mergeServerHydrationUtteranceIntoStoreState(store, {
+      ...utterance,
+      targetLanguages: [...utterance.targetLanguages],
+      translations: { ...utterance.translations },
+      translationFinalized: { ...utterance.translationFinalized },
+    })).toBe(store)
+  })
+
   it('preserves local speech order when server persistence time would move a finalized turn', () => {
     const localCreatedAtMs = 1700000000004
     const liveCreatedAtMs = 1700000000005

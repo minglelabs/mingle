@@ -1,0 +1,148 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+type OutboxModule = typeof import('./client-message-outbox')
+
+function createStorage(): Storage {
+  const values = new Map<string, string>()
+  return {
+    get length() {
+      return values.size
+    },
+    clear() {
+      values.clear()
+    },
+    getItem(key: string) {
+      return values.get(key) ?? null
+    },
+    key(index: number) {
+      return [...values.keys()][index] ?? null
+    },
+    removeItem(key: string) {
+      values.delete(key)
+    },
+    setItem(key: string, value: string) {
+      values.set(key, value)
+    },
+  }
+}
+
+describe('client message outbox', () => {
+  let outbox: OutboxModule
+  let localStorage: Storage
+
+  beforeEach(async () => {
+    localStorage = createStorage()
+    vi.stubGlobal('window', {
+      localStorage,
+      fetch: vi.fn(),
+    })
+    vi.resetModules()
+    outbox = await import('./client-message-outbox')
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('deduplicates the same idempotent message while retaining the latest payload', () => {
+    const ownerIdentity = outbox.buildClientMessageOutboxOwnerIdentity({
+      userId: 'user-1',
+      trackingUserId: 'tracking-1',
+    })
+    const id = outbox.buildClientMessageOutboxId({
+      ownerIdentity,
+      sessionKey: 'session-1',
+      clientMessageId: 'message-1',
+    })
+
+    outbox.enqueueClientMessageOutboxRecord({
+      id,
+      ownerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      body: '{"sourceText":"first"}',
+      trackingUserId: 'tracking-1',
+      now: 1_000,
+    })
+    outbox.enqueueClientMessageOutboxRecord({
+      id,
+      ownerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      body: '{"sourceText":"latest"}',
+      trackingUserId: 'tracking-1',
+      now: 2_000,
+    })
+
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_000)).toEqual([
+      expect.objectContaining({
+        id,
+        body: '{"sourceText":"latest"}',
+        createdAt: 1_000,
+      }),
+    ])
+    expect(localStorage.length).toBe(1)
+  })
+
+  it('retains failed sends and removes them only after the server acknowledges delivery', async () => {
+    const ownerIdentity = 'user:user-1'
+    outbox.enqueueClientMessageOutboxRecord({
+      id: 'outbox-1',
+      ownerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      body: '{"eventType":"stt_turn_finalized"}',
+      trackingUserId: 'tracking-1',
+      now: 1_000,
+    })
+
+    const failedFetch = vi.fn(async () => new Response(null, { status: 503 }))
+    expect(await outbox.flushClientMessageOutbox({
+      ownerIdentity,
+      fetchImpl: failedFetch,
+      force: true,
+      now: () => 2_000,
+    })).toEqual({ delivered: 0, retained: 1 })
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_000)[0]).toEqual(
+      expect.objectContaining({ attemptCount: 1, nextAttemptAt: 4_000 }),
+    )
+
+    const successfulFetch = vi.fn(async () => new Response(null, { status: 204 }))
+    expect(await outbox.flushClientMessageOutbox({
+      ownerIdentity,
+      fetchImpl: successfulFetch,
+      force: true,
+      now: () => 2_500,
+    })).toEqual({ delivered: 1, retained: 0 })
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_500)).toEqual([])
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('never flushes another account\'s queued message', async () => {
+    outbox.enqueueClientMessageOutboxRecord({
+      id: 'outbox-user-a',
+      ownerIdentity: 'user:user-a',
+      endpoint: '/api/android/v2.0.0/log/client-event',
+      body: '{"eventType":"stt_turn_finalized"}',
+      trackingUserId: 'tracking-a',
+      now: 1_000,
+    })
+    outbox.enqueueClientMessageOutboxRecord({
+      id: 'outbox-user-b',
+      ownerIdentity: 'user:user-b',
+      endpoint: '/api/android/v2.0.0/log/client-event',
+      body: '{"eventType":"stt_turn_finalized"}',
+      trackingUserId: 'tracking-b',
+      now: 1_001,
+    })
+
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }))
+    await outbox.flushClientMessageOutbox({
+      ownerIdentity: 'user:user-a',
+      fetchImpl,
+      force: true,
+      now: () => 2_000,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(outbox.readClientMessageOutboxRecords('user:user-a', 2_000)).toEqual([])
+    expect(outbox.readClientMessageOutboxRecords('user:user-b', 2_000)).toHaveLength(1)
+  })
+})
