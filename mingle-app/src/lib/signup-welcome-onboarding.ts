@@ -86,6 +86,17 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
   });
   const sessionKey = conversationResult.conversation.sessionKey;
 
+  // Only translate into languages actually selected for this room (the same
+  // set shown in the room's "번역 언어 선택" picker) — not every language the
+  // hardcoded welcome copy happens to exist in. "en" is excluded since it's
+  // already written as the SOURCE row below.
+  const roomSelectedLanguages = conversationResult.conversation.selectedLanguages ?? [];
+  const welcomeTranslationLanguages = roomSelectedLanguages.filter(
+    (language): language is keyof typeof ROYCE_WELCOME_TRANSLATIONS => (
+      language !== "en" && language in ROYCE_WELCOME_TRANSLATIONS
+    ),
+  );
+
   // A newly created direct room keeps the target as a pending invitee until
   // its first message. Materialize both accounts before inserting Royce's
   // server-authored welcome message so the recipient has a real read cursor.
@@ -108,7 +119,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeTranslationLanguages,
         },
       },
       update: {
@@ -117,7 +128,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeTranslationLanguages,
         },
       },
       select: { id: true },
@@ -144,7 +155,8 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
       },
     });
 
-    for (const [language, translatedText] of Object.entries(ROYCE_WELCOME_TRANSLATIONS)) {
+    for (const language of welcomeTranslationLanguages) {
+      const translatedText = ROYCE_WELCOME_TRANSLATIONS[language];
       await tx.appMessageContent.upsert({
         where: {
           messageId_contentType_language: {

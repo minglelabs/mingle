@@ -87,6 +87,7 @@ describe("signup welcome onboarding", () => {
     mockFindOrCreateDirectConversation.mockResolvedValue({
       conversation: {
         sessionKey: "session-welcome",
+        selectedLanguages: ["ko", "en"],
       },
       reused: false,
     });
@@ -158,13 +159,14 @@ describe("signup welcome onboarding", () => {
         text: ROYCE_WELCOME_MESSAGE,
       }),
     }));
+    // Only the room's own selected languages get a translation row — not
+    // every language the hardcoded welcome copy has canned text for. "en" is
+    // excluded since it's already the SOURCE row.
     const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
       ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
     );
-    expect(translationCalls).toHaveLength(Object.keys(ROYCE_WELCOME_TRANSLATIONS).length);
-    expect(new Set(translationCalls.map(([args]) => args.create.language))).toEqual(
-      new Set(Object.keys(ROYCE_WELCOME_TRANSLATIONS)),
-    );
+    expect(translationCalls).toHaveLength(1);
+    expect(translationCalls.map(([args]) => args.create.language)).toEqual(["ko"]);
     expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({
         contentType: "TRANSLATION_FINAL",
@@ -201,5 +203,22 @@ describe("signup welcome onboarding", () => {
     await ensureSignupWelcomeOnboarding({ userId: "new_user" });
     expect(mockUserFollowUpsert).not.toHaveBeenCalled();
     expect(mockFindOrCreateDirectConversation).not.toHaveBeenCalled();
+  });
+
+  it("skips translation rows when the room has no selected languages beyond the source", async () => {
+    mockFindOrCreateDirectConversation.mockResolvedValueOnce({
+      conversation: {
+        sessionKey: "session-welcome",
+        selectedLanguages: ["en"],
+      },
+      reused: false,
+    });
+
+    await ensureSignupWelcomeOnboarding({ userId: "new_user", locale: "en" });
+
+    const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
+      ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
+    );
+    expect(translationCalls).toHaveLength(0);
   });
 });
