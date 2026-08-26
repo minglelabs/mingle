@@ -23,6 +23,7 @@ import {
   userProfileSelect,
   type UserProfile,
 } from "@/server/user-profile";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 export const runtime = "nodejs";
 
@@ -433,13 +434,26 @@ export async function PATCH(request: NextRequest) {
   // onboarding PATCH rather than the email signup request. Initialize the
   // display preference only when it has never been chosen, so later profile
   // edits do not overwrite an explicit display-language choice.
-  if (initialDisplayLanguageCandidate !== undefined) {
+  let shouldRefreshWelcomeMessage = false;
+  if (initialDisplayLanguageCandidate !== undefined || data.defaultConversationLanguages) {
     const existingPreference = await prisma.user.findUnique({
       where: { id: userId },
-      select: { defaultDisplayLanguage: true },
+      select: { defaultDisplayLanguage: true, defaultConversationLanguages: true },
     });
-    if (existingPreference?.defaultDisplayLanguage === null) {
+    if (existingPreference?.defaultDisplayLanguage === null && initialDisplayLanguageCandidate !== undefined) {
       data.defaultDisplayLanguage = initialDisplayLanguageCandidate;
+    }
+    // OAuth signup (events.createUser in auth-options.ts) creates Royce's
+    // welcome message before this route ever runs, using a hardcoded "en"
+    // locale because the language picked in the pre-login onboarding screen
+    // only reaches the server here, via this same reconciliation PATCH. The
+    // very first time this account gets a real defaultConversationLanguages
+    // value, redo the welcome message so its translation matches what was
+    // actually picked instead of staying stuck on the OAuth-time default.
+    // Scoped to the empty -> non-empty transition so later language changes
+    // from settings never resend it.
+    if ((existingPreference?.defaultConversationLanguages?.length ?? 0) === 0) {
+      shouldRefreshWelcomeMessage = true;
     }
   }
 
@@ -453,6 +467,18 @@ export async function PATCH(request: NextRequest) {
       where: { id: userId },
       select: { birthDate: true },
     });
+
+    if (shouldRefreshWelcomeMessage) {
+      try {
+        await ensureSignupWelcomeOnboarding({
+          userId,
+          locale: data.defaultConversationLanguages?.[0] ?? data.primaryLanguages?.[0] ?? undefined,
+        });
+      } catch (error) {
+        console.error("[signup-welcome] profile-triggered onboarding refresh failed", error);
+      }
+    }
+
     return profileResponse({
       ...serializeUserProfile(updated),
       birthDate: serializePrivateBirthDate(privateFields?.birthDate),
