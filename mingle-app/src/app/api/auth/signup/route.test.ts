@@ -165,6 +165,7 @@ describe("/api/auth/signup route", () => {
         passwordHash: string;
         nationality: string;
         primaryLanguages: string[];
+        defaultConversationLanguages: string[];
         birthDate: Date;
         firstSeenAt: Date;
         lastSeenAt: Date;
@@ -175,10 +176,30 @@ describe("/api/auth/signup route", () => {
     expect(createCall.data.passwordHash.startsWith("pbkdf2_sha256$")).toBe(true);
     expect(createCall.data.nationality).toBe("ko");
     expect(createCall.data.primaryLanguages).toEqual(["ko"]);
+    expect(createCall.data.defaultConversationLanguages).toEqual(["ko", "en", "ja"]);
     expect((createCall.data as { defaultDisplayLanguage?: string | null }).defaultDisplayLanguage).toBe("ko");
     expect(createCall.data.birthDate).toEqual(new Date("2000-01-01T00:00:00.000Z"));
     expect(createCall.data.firstSeenAt).toBeInstanceOf(Date);
     expect(createCall.data.lastSeenAt).toBeInstanceOf(Date);
+  });
+
+  it("seeds defaultConversationLanguages from a non-default primary language (e.g. Portuguese)", async () => {
+    mockUserFindUnique.mockResolvedValue(null);
+    mockUserCreate.mockResolvedValue({ id: "user_pt" });
+
+    await POST(makeJsonRequest({
+      email: "pessoa@example.com",
+      name: "Pessoa",
+      password: "password123",
+      primaryLanguages: ["pt"],
+      birthDate: "2000-01-01",
+    }));
+
+    const createCall = mockUserCreate.mock.calls[0]?.[0] as {
+      data: { defaultConversationLanguages: string[] };
+    };
+    expect(createCall.data.defaultConversationLanguages).toContain("pt");
+    expect(createCall.data.defaultConversationLanguages[0]).toBe("pt");
   });
 
   it("returns 409 when create hits email unique constraint race", async () => {

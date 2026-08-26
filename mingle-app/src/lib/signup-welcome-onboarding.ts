@@ -4,6 +4,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   materializePendingConversationInvitees,
 } from "@/lib/app-conversations";
+import { canonicalizeTranslationLanguageCode } from "@/lib/translation-languages";
 import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationMessage, sendPushNotificationForUserNotification } from "@/server/push-notifications";
@@ -91,6 +92,17 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
   // server-authored welcome message so the recipient has a real read cursor.
   await materializePendingConversationInvitees(sessionKey);
 
+  // Only the language actually selected for this conversation gets a
+  // translation row — not every language Royce's welcome message happens to
+  // have a canned copy for. Looping over all of them here previously both
+  // flooded the room with every language and, run sequentially inside one
+  // transaction, risked tripping Prisma's interactive transaction timeout
+  // and rolling back the whole welcome message.
+  const canonicalLocale = canonicalizeTranslationLanguageCode(locale || "en");
+  const welcomeLanguage = canonicalLocale && canonicalLocale !== "en" && canonicalLocale in ROYCE_WELCOME_TRANSLATIONS
+    ? canonicalLocale as keyof typeof ROYCE_WELCOME_TRANSLATIONS
+    : null;
+
   const message = await prisma.$transaction(async (tx) => {
     const createdMessage = await tx.appMessage.upsert({
       where: {
@@ -108,7 +120,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeLanguage ? [welcomeLanguage] : [],
         },
       },
       update: {
@@ -117,7 +129,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeLanguage ? [welcomeLanguage] : [],
         },
       },
       select: { id: true },
@@ -144,27 +156,27 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
       },
     });
 
-    for (const [language, translatedText] of Object.entries(ROYCE_WELCOME_TRANSLATIONS)) {
+    if (welcomeLanguage) {
       await tx.appMessageContent.upsert({
         where: {
           messageId_contentType_language: {
             messageId: createdMessage.id,
             contentType: "TRANSLATION_FINAL",
-            language,
+            language: welcomeLanguage,
           },
         },
         create: {
           messageId: createdMessage.id,
           contentType: "TRANSLATION_FINAL",
-          language,
+          language: welcomeLanguage,
           isDeleted: false,
-          text: translatedText,
+          text: ROYCE_WELCOME_TRANSLATIONS[welcomeLanguage],
           provider: "hardcoded",
           model: "royce-welcome-v2",
         },
         update: {
           isDeleted: false,
-          text: translatedText,
+          text: ROYCE_WELCOME_TRANSLATIONS[welcomeLanguage],
           provider: "hardcoded",
           model: "royce-welcome-v2",
         },

@@ -8,6 +8,7 @@ import {
 } from "@/lib/birth-date";
 import {
   MAX_STT_LANGUAGE_SELECTION,
+  deriveDefaultConversationLanguages,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
@@ -100,6 +101,13 @@ export async function POST(request: Request) {
         passwordHash,
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
+        // Without this, every fresh signup starts with an empty
+        // defaultConversationLanguages, and new-conversation language
+        // auto-selection (listUserDefaultConversationLanguagesById) falls
+        // back to the generic en/ko/ja triple instead of the language the
+        // user just picked here — e.g. a Portuguese signup would never see
+        // Portuguese in a newly created room's selected languages.
+        defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),
         defaultDisplayLanguage: primaryLanguages[0] ?? null,
         birthDate,
         firstSeenAt: now,

@@ -161,10 +161,7 @@ describe("signup welcome onboarding", () => {
     const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
       ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
     );
-    expect(translationCalls).toHaveLength(Object.keys(ROYCE_WELCOME_TRANSLATIONS).length);
-    expect(new Set(translationCalls.map(([args]) => args.create.language))).toEqual(
-      new Set(Object.keys(ROYCE_WELCOME_TRANSLATIONS)),
-    );
+    expect(translationCalls).toHaveLength(1);
     expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({
         contentType: "TRANSLATION_FINAL",
@@ -191,6 +188,15 @@ describe("signup welcome onboarding", () => {
       senderUserId: ROYCE_USER_ID,
       sourceText: ROYCE_WELCOME_MESSAGE,
     }));
+  });
+
+  it("skips the translation row when the account has no locale or an unsupported one", async () => {
+    await ensureSignupWelcomeOnboarding({ userId: "new_user" });
+
+    const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
+      ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
+    );
+    expect(translationCalls).toHaveLength(0);
   });
 
   it("does nothing for Royce himself or when the configured account is unavailable", async () => {
