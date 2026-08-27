@@ -1,7 +1,7 @@
--- Read-only diagnostic for completed OAuth or email/password signup accounts
--- that should have received Royce's deterministic welcome conversation.
--- Anonymous tracking records are intentionally excluded. Adjust signup_cutoff
--- when investigating a different deployment window.
+-- Read-only diagnostic for completed signup accounts that should have received
+-- Royce's deterministic welcome conversation. Anonymous tracking records are
+-- intentionally excluded. Adjust signup_cutoff when investigating a different
+-- deployment window.
 WITH params AS (
   SELECT
     TIMESTAMPTZ '2026-08-27 15:07:00+09' AS signup_cutoff,
@@ -33,9 +33,15 @@ eligible_users AS (
   CROSS JOIN params
   WHERE u.id <> params.royce_user_id
     AND u.created_at >= params.signup_cutoff
+    AND u.is_active
     AND u.is_deleted IS NOT TRUE
     AND (
       u.password_hash IS NOT NULL
+      OR u.email IS NOT NULL
+      OR (
+        u.external_user_id IS NOT NULL
+        AND u.external_user_id !~* '^anon_'
+      )
       OR EXISTS (
         SELECT 1
         FROM app.auth_accounts AS account

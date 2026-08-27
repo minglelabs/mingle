@@ -1,7 +1,8 @@
 -- Idempotently repairs Royce's signup welcome room, message, translations,
--- and unread cursor for completed OAuth or email/password signup accounts
--- created after the affected deployment. Anonymous tracking records are
--- intentionally excluded.
+-- and unread cursor for completed signup accounts created after the affected
+-- deployment. Anonymous tracking records are intentionally excluded. Native
+-- OAuth bridge accounts may not have an auth_accounts or password row, so the
+-- registered-user check also accepts non-anonymous external user IDs/emails.
 --
 -- Review royce-welcome-diagnostic.sql first. This script does not send
 -- WebSocket or push notifications; clients will see repaired data on their
@@ -136,6 +137,11 @@ BEGIN
       AND u.is_deleted IS NOT TRUE
       AND (
         u.password_hash IS NOT NULL
+        OR u.email IS NOT NULL
+        OR (
+          u.external_user_id IS NOT NULL
+          AND u.external_user_id !~* '^anon_'
+        )
         OR EXISTS (
           SELECT 1
           FROM app.auth_accounts AS account
