@@ -3475,12 +3475,25 @@ export default function ConversationList({
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
 
+    const cachedNativeSttConversationId = readCachedNativeSttConversationId();
     const hiddenNativeSttConversation = isNativeSttStatusLive(cachedNativeSttStatus)
       ? findNativeSttRestoreConversation(
           conversations,
           deletingConversationIdsRef.current,
+          cachedNativeSttConversationId,
         )
       : null;
+
+    // A live native session is authoritative for one specific room. The list
+    // can briefly render without that room while hydration is catching up;
+    // never infer that every other active room is stale in that window.
+    if (
+      isNativeSttStatusLive(cachedNativeSttStatus)
+      && cachedNativeSttConversationId
+      && !hiddenNativeSttConversation
+    ) {
+      return;
+    }
 
     const shouldStayOnConversationList = (() => {
       const currentUrl = new URL(window.location.href);
@@ -3569,6 +3582,7 @@ export default function ConversationList({
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
+        cachedNativeSttConversationId,
       );
       if (
         restoreConversation

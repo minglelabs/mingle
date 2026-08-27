@@ -18,6 +18,16 @@ const nextConfig = {
         source: "/.well-known/assetlinks.json",
         destination: "/api/well-known/assetlinks",
       },
+      // Android 2.0.1 keeps the v2.0.0 server contract while using its own
+      // versioned namespace, so existing production API behavior is preserved.
+      {
+        source: "/api/android/v2.0.1",
+        destination: "/api/android/v2.0.0",
+      },
+      {
+        source: "/api/android/v2.0.1/:path*",
+        destination: "/api/android/v2.0.0/:path*",
+      },
     ];
   },
   turbopack: {
