@@ -10,6 +10,7 @@ const URL_PROPERTY_KEYS = [
 
 export type MingleAnalyticsScreen =
   | "account"
+  | "add_members"
   | "connect"
   | "conversation_list"
   | "conversation_room"
@@ -40,6 +41,10 @@ export function resolveMingleAnalyticsScreen(
   searchParams?: URLSearchParams,
 ): MingleAnalyticsScreen {
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+  // Checked before the conversation-room fallback below: unlike opening a
+  // room, this screen always carries a ?conversation= id (the room being
+  // invited into), so the generic check would otherwise misclassify it.
+  if (/\/conversations\/add-members$/.test(normalizedPath)) return "add_members";
   if (searchParams?.get("conversation")) return "conversation_room";
   if (/\/conversations\/new-group$/.test(normalizedPath)) return "new_group";
   if (/\/conversations$/.test(normalizedPath)) return "conversation_list";

@@ -38,6 +38,7 @@ import {
   type NativeSttQueuedMessage,
 } from '@/lib/native-stt-event-queue'
 import {
+  adoptClientMessageOutboxRecords,
   buildClientMessageOutboxId,
   buildClientMessageOutboxOwnerIdentity,
   enqueueClientMessageOutboxRecord,
@@ -152,8 +153,14 @@ function isNativeSttOwner(ownerKey: string): boolean {
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
+  __MINGLE_LAST_NATIVE_STT_CONVERSATION_ID?: unknown
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown
   __MINGLE_NATIVE_STT_MESSAGE_QUEUE?: unknown
+}
+
+function readCachedNativeSttConversationId(cachedWindow: NativeAppUpdateWindow): string | null {
+  const cached = cachedWindow.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID
+  return typeof cached === 'string' && cached.trim() ? cached.trim() : null
 }
 
 function resolveRuntimeApiNamespace(): string {
@@ -364,6 +371,7 @@ type NativeSttStartCommand = {
 type NativeSttStopCommand = {
   type: 'native_stt_stop'
   payload: {
+    conversationId: string
     pendingText: string
     pendingLanguage: string
   }
@@ -390,12 +398,12 @@ type NativeSttBridgeCommand =
 export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
 
 type NativeSttBridgeEvent =
-  | { type: 'status', status: string }
+  | { type: 'status', status: string, conversationId?: string }
   | { type: 'message', raw: string, conversationId?: string, queueId?: string }
-  | { type: 'error', message: string, code?: string, platform?: string }
+  | { type: 'error', message: string, code?: string, platform?: string, conversationId?: string }
   | { type: 'permission', permission: string, platform?: string }
   | { type: 'capabilities', openAppSettings: boolean }
-  | { type: 'close', reason: string }
+  | { type: 'close', reason: string, conversationId?: string }
 
 type NativeSttBridgeMessageEvent = Extract<NativeSttBridgeEvent, { type: 'message' }>
 
@@ -704,6 +712,16 @@ type ConversationHydrationLeaveNoticePayload = {
   leftAtMs?: number
 }
 
+type ConversationHydrationInviteNoticePayload = {
+  inviteeUserId?: string
+  inviteeName?: string | null
+  inviteeHandle?: string | null
+  invitedByUserId?: string
+  invitedByName?: string | null
+  invitedByHandle?: string | null
+  invitedAtMs?: number
+}
+
 type ConversationHydrationPayload = {
   usageSec?: number
   messageCount?: number
@@ -714,6 +732,7 @@ type ConversationHydrationPayload = {
     isMultiMember?: boolean
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+  inviteNotices?: ConversationHydrationInviteNoticePayload[]
 }
 
 // One member's departure (see leaveConversationChannel on the server), for
@@ -761,6 +780,64 @@ function areConversationLeaveNoticesEqual(
         && notice.name === candidate.name
         && notice.handle === candidate.handle
         && notice.leftAtMs === candidate.leftAtMs
+    })
+  )
+}
+
+// One AppConversationChannelInvite row (see its doc comment on the server),
+// for rendering an in-room "{inviter} invited {invitee}" notice — same
+// KakaoTalk-style timeline chrome as ConversationLeaveNotice above, written
+// the moment the invite happens rather than deferred to the invitee's first
+// message. Not paginated, same reasoning as leave notices.
+export type ConversationInviteNotice = {
+  inviteeUserId: string
+  inviteeName: string | null
+  inviteeHandle: string | null
+  invitedByUserId: string
+  invitedByName: string | null
+  invitedByHandle: string | null
+  invitedAtMs: number
+}
+
+function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
+  if (!Array.isArray(rawNotices)) return []
+
+  const result: ConversationInviteNotice[] = []
+  for (const raw of rawNotices) {
+    if (!raw || typeof raw !== 'object') continue
+    const record = raw as ConversationHydrationInviteNoticePayload
+    const inviteeUserId = typeof record.inviteeUserId === 'string' ? record.inviteeUserId.trim() : ''
+    const invitedByUserId = typeof record.invitedByUserId === 'string' ? record.invitedByUserId.trim() : ''
+    const invitedAtMs = typeof record.invitedAtMs === 'number' ? record.invitedAtMs : Number(record.invitedAtMs)
+    if (!inviteeUserId || !invitedByUserId || !Number.isFinite(invitedAtMs) || invitedAtMs <= 0) continue
+    result.push({
+      inviteeUserId,
+      inviteeName: typeof record.inviteeName === 'string' ? record.inviteeName : null,
+      inviteeHandle: typeof record.inviteeHandle === 'string' ? record.inviteeHandle : null,
+      invitedByUserId,
+      invitedByName: typeof record.invitedByName === 'string' ? record.invitedByName : null,
+      invitedByHandle: typeof record.invitedByHandle === 'string' ? record.invitedByHandle : null,
+      invitedAtMs: Math.floor(invitedAtMs),
+    })
+  }
+  return result
+}
+
+function areConversationInviteNoticesEqual(
+  left: ConversationInviteNotice[],
+  right: ConversationInviteNotice[],
+): boolean {
+  return left === right || (
+    left.length === right.length
+    && left.every((notice, index) => {
+      const candidate = right[index]
+      return notice.inviteeUserId === candidate.inviteeUserId
+        && notice.inviteeName === candidate.inviteeName
+        && notice.inviteeHandle === candidate.inviteeHandle
+        && notice.invitedByUserId === candidate.invitedByUserId
+        && notice.invitedByName === candidate.invitedByName
+        && notice.invitedByHandle === candidate.invitedByHandle
+        && notice.invitedAtMs === candidate.invitedAtMs
     })
   )
 }
@@ -2576,9 +2653,13 @@ export default function useRealtimeSTT({
   // "speaker" turns must never be treated as the viewer's own account.
   const [isSharedRoom, setIsSharedRoom] = useState(false)
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
+  const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const outboxTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
+  const trackingClientMessageOutboxOwnerIdentity = useMemo(() => buildClientMessageOutboxOwnerIdentity({
+    trackingUserId: outboxTrackingUserId,
+  }), [outboxTrackingUserId])
   const clientMessageOutboxOwnerIdentity = useMemo(() => buildClientMessageOutboxOwnerIdentity({
     userId: viewerUserId,
     trackingUserId: outboxTrackingUserId,
@@ -2905,6 +2986,8 @@ export default function useRealtimeSTT({
     const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
       ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
       : null
+    const cachedConversationId = readCachedNativeSttConversationId(cachedWindow)
+    if (cachedConversationId && cachedConversationId !== (conversationId || '').trim()) return
     const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: cachedNativeStatus,
       previousConnectionStatus: connectionStatusRef.current,
@@ -2923,7 +3006,7 @@ export default function useRealtimeSTT({
       nativeMicPermissionRecoveryActionRef.current = 'none'
     }
     setConnectionStatus(nextConnectionStatus)
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, isCurrentNativeSttOwner])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isCurrentNativeSttOwner])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2939,6 +3022,8 @@ export default function useRealtimeSTT({
       const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
         ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
         : null
+      const cachedConversationId = readCachedNativeSttConversationId(cachedWindow)
+      if (cachedConversationId && cachedConversationId !== (conversationId || '').trim()) return
       const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
         nativeStatus: cachedNativeStatus,
         previousConnectionStatus: connectionStatusRef.current,
@@ -2973,7 +3058,7 @@ export default function useRealtimeSTT({
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, connectionStatus, isCurrentNativeSttOwner])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, connectionStatus, conversationId, isCurrentNativeSttOwner])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3164,6 +3249,10 @@ export default function useRealtimeSTT({
       setLeaveNotices((current) => (
         areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
       ))
+      const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
+      setInviteNotices((current) => (
+        areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
+      ))
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3279,6 +3368,10 @@ export default function useRealtimeSTT({
         const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
         setLeaveNotices((current) => (
           areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+        ))
+        const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
+        setInviteNotices((current) => (
+          areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
         ))
 
         const nextUsageSec = (
@@ -3415,7 +3508,9 @@ export default function useRealtimeSTT({
         const token = payload.token
         const wsBase = getConversationEventsWsUrl()
         if (!token || !wsBase || cancelled) {
-          scheduleReconnect()
+          // A missing token/URL means realtime is intentionally unavailable in
+          // this deployment. The 20-second poll below is the fallback; retrying
+          // token setup every five seconds would add more load than the poll.
           return
         }
 
@@ -3878,6 +3973,26 @@ export default function useRealtimeSTT({
     }
   }, [clientMessageOutboxOwnerIdentity, ensureSessionKey, outboxTrackingUserId, usageSec])
   logClientEventRef.current = logClientEvent
+
+  useEffect(() => {
+    if (!viewerUserId || typeof window === 'undefined') return
+
+    let cancelled = false
+    void adoptClientMessageOutboxRecords({
+      fromOwnerIdentity: trackingClientMessageOutboxOwnerIdentity,
+      toOwnerIdentity: clientMessageOutboxOwnerIdentity,
+    }).then(() => {
+      if (cancelled) return
+      return flushClientMessageOutbox({
+        ownerIdentity: clientMessageOutboxOwnerIdentity,
+        force: true,
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [clientMessageOutboxOwnerIdentity, trackingClientMessageOutboxOwnerIdentity, viewerUserId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -4355,6 +4470,7 @@ export default function useRealtimeSTT({
       void sendNativeSttCommand({
         type: 'native_stt_stop',
         payload: {
+          conversationId: conversationId || '',
           pendingText: '',
           pendingLanguage: '',
         },
@@ -4389,6 +4505,7 @@ export default function useRealtimeSTT({
     clearConnectionErrorResetTimer,
     clearUtterancePersistTimer,
     clearPartialBuffers,
+    conversationId,
     logClientEvent,
     persistLocalUtterancesSnapshot,
     resetToIdle,
@@ -4475,6 +4592,7 @@ export default function useRealtimeSTT({
       const posted = sendNativeSttCommand({
         type: 'native_stt_stop',
         payload: {
+          conversationId: conversationId || '',
           pendingText,
           pendingLanguage: pendingLang,
         },
@@ -4596,6 +4714,7 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
     clearPendingNativeStopAckTimeout,
     clearSpeakerAvatarSession,
+    conversationId,
     releaseCurrentNativeSttOwner,
     stopAudioPipeline,
   ])
@@ -5286,6 +5405,23 @@ export default function useRealtimeSTT({
       const detail = (event as CustomEvent<NativeSttBridgeEvent>).detail
       if (!detail || typeof detail !== 'object') return
 
+      const eventConversationId = 'conversationId' in detail
+        && typeof detail.conversationId === 'string'
+        ? detail.conversationId.trim()
+        : ''
+      if (
+        eventConversationId
+        && eventConversationId !== (conversationId || '').trim()
+        && (detail.type === 'status' || detail.type === 'error' || detail.type === 'close')
+      ) {
+        logSttDebug('native.event.conversation_blocked', {
+          conversationId: conversationId || null,
+          eventConversationId,
+          eventType: detail.type,
+        })
+        return
+      }
+
       if (detail.type === 'capabilities') {
         nativeShellSupportsOpenAppSettingsRef.current = detail.openAppSettings === true
         return
@@ -5440,7 +5576,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, logSttDebug, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -5752,6 +5888,7 @@ export default function useRealtimeSTT({
         void sendNativeSttCommand({
           type: 'native_stt_stop',
           payload: {
+            conversationId: conversationId || '',
             pendingText: '',
             pendingLanguage: 'unknown',
           },
@@ -5869,6 +6006,7 @@ export default function useRealtimeSTT({
     isStorageHydrated,
     persistedUtteranceCount,
     leaveNotices,
+    inviteNotices,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,

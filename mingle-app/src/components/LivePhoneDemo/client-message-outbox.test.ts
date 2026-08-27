@@ -145,4 +145,47 @@ describe('client message outbox', () => {
     expect(outbox.readClientMessageOutboxRecords('user:user-a', 2_000)).toEqual([])
     expect(outbox.readClientMessageOutboxRecords('user:user-b', 2_000)).toHaveLength(1)
   })
+
+  it('adopts a pre-session tracking record when the authenticated user id becomes available', async () => {
+    const trackingOwnerIdentity = outbox.buildClientMessageOutboxOwnerIdentity({
+      trackingUserId: 'tracking-1',
+    })
+    const userOwnerIdentity = outbox.buildClientMessageOutboxOwnerIdentity({
+      userId: 'user-1',
+      trackingUserId: 'tracking-1',
+    })
+    const trackingRecordId = outbox.buildClientMessageOutboxId({
+      ownerIdentity: trackingOwnerIdentity,
+      sessionKey: 'session-1',
+      clientMessageId: 'message-1',
+    })
+
+    outbox.enqueueClientMessageOutboxRecord({
+      id: trackingRecordId,
+      ownerIdentity: trackingOwnerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      body: '{"eventType":"stt_turn_finalized"}',
+      trackingUserId: 'tracking-1',
+      now: 1_000,
+    })
+
+    await expect(outbox.adoptClientMessageOutboxRecords({
+      fromOwnerIdentity: trackingOwnerIdentity,
+      toOwnerIdentity: userOwnerIdentity,
+      now: 2_000,
+    })).resolves.toBe(1)
+
+    expect(outbox.readClientMessageOutboxRecords(trackingOwnerIdentity, 2_000)).toEqual([])
+    expect(outbox.readClientMessageOutboxRecords(userOwnerIdentity, 2_000)).toEqual([
+      expect.objectContaining({
+        id: outbox.buildClientMessageOutboxId({
+          ownerIdentity: userOwnerIdentity,
+          sessionKey: 'session-1',
+          clientMessageId: 'message-1',
+        }),
+        ownerIdentity: userOwnerIdentity,
+        nextAttemptAt: 0,
+      }),
+    ])
+  })
 })

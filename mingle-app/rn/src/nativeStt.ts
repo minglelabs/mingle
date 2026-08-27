@@ -1,6 +1,7 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 type NativeSttStartOptions = {
+  conversationId?: string;
   wsUrl: string;
   sttModel?: string;
   aecEnabled?: boolean;
@@ -11,6 +12,7 @@ type NativeSttStartOptions = {
 };
 
 type NativeSttStopOptions = {
+  conversationId?: string;
   pendingText?: string;
   pendingLanguage?: string;
 };
@@ -28,10 +30,10 @@ type NativeSttModuleType = {
 };
 
 type NativeSttEventMap = {
-  status: { status: string };
-  message: { raw: string };
-  error: { message: string; code?: string; platform?: string };
-  close: { reason: string };
+  status: { status: string; conversationId?: string };
+  message: { raw: string; conversationId?: string };
+  error: { message: string; code?: string; platform?: string; conversationId?: string };
+  close: { reason: string; conversationId?: string };
 };
 
 const nativeModule = NativeModules.NativeSTTModule as NativeSttModuleType | undefined;

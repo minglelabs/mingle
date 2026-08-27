@@ -96,7 +96,7 @@ describe("handleLogClientEventV1", () => {
     });
     mockGetServerSession.mockResolvedValue(null);
     mockResolveUserIdForTrackedWrite.mockResolvedValue("user_123");
-    mockAppMessageUpsert.mockResolvedValue({ id: "message_123" });
+    mockAppMessageUpsert.mockResolvedValue({ id: "message_123", createdAt: new Date("2026-04-12T09:00:00.000Z") });
     mockAppMessageContentUpsert.mockResolvedValue({});
     mockAppEventLogFindFirst.mockResolvedValue(null);
     mockCreateTrackedEventLog.mockResolvedValue(undefined);
@@ -186,8 +186,14 @@ describe("handleLogClientEventV1", () => {
     });
     // Materializes any pending invitee into a real member before the
     // realtime notify, so a freshly-materialized member's own push actually
-    // reaches them for this first message.
-    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledWith("sess_123");
+    // reaches them for this first message. Passes the message's own
+    // createdAt through so that very message is already bubble-attributed
+    // as multi-member (see materializePendingConversationInvitees's
+    // joinedAt doc comment).
+    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledWith(
+      "sess_123",
+      new Date("2026-04-12T09:00:00.000Z"),
+    );
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123"]);
     expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
       messageId: "message_123",

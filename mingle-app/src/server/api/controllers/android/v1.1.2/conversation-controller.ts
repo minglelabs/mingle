@@ -10,4 +10,6 @@ export {
   getConversationRealtimeTokenRouteForAndroidV1_1_0 as getConversationRealtimeTokenRouteForAndroidV1_1_2,
   getConversationMembersForAndroidV1_1_0 as getConversationMembersForAndroidV1_1_2,
   getConversationMembersRouteForAndroidV1_1_0 as getConversationMembersRouteForAndroidV1_1_2,
+  postConversationMembersForAndroidV1_1_0 as postConversationMembersForAndroidV1_1_2,
+  postConversationMembersRouteForAndroidV1_1_0 as postConversationMembersRouteForAndroidV1_1_2,
 } from "@/server/api/controllers/android/v1.1.0/conversation-controller";

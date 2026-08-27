@@ -233,7 +233,6 @@ describe("/api/messages route", () => {
           {
             OR: [
               { userId: { in: ["auth_user_123"] } },
-              { sessionKey: "sess_123" },
             ],
           },
           {
@@ -274,6 +273,25 @@ describe("/api/messages route", () => {
     }));
 
     expect(response.status).toBe(401);
+    expect(mockAppMessageFindMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale authenticated session instead of deleting by tracking session", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "missing_user",
+        email: "missing@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue(null);
+
+    const response = await DELETE(new NextRequest("https://example.com/api/messages", {
+      method: "DELETE",
+      headers: { "x-mingle-session-key": "sess_123" },
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mockAppEventLogCreate).not.toHaveBeenCalled();
     expect(mockAppMessageFindMany).not.toHaveBeenCalled();
   });
 });

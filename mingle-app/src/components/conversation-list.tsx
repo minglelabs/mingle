@@ -1186,6 +1186,14 @@ function readCachedNativeSttStatus(): string | null {
   return typeof cached === "string" ? cached.trim().toLowerCase() : null;
 }
 
+function readCachedNativeSttConversationId(): string | null {
+  if (typeof window === "undefined") return null;
+  const cached = (window as Window & {
+    __MINGLE_LAST_NATIVE_STT_CONVERSATION_ID?: unknown;
+  }).__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID;
+  return typeof cached === "string" && cached.trim() ? cached.trim() : null;
+}
+
 function isNativeSttStatusLive(status: string | null): boolean {
   return status === "running"
     || status === "ready"
@@ -2695,6 +2703,14 @@ export default function ConversationList({
 
     const previousRunning = getDerivedConversationRunningState(conversationId);
     if (previousRunning === isRunning) {
+      conversationRunningStateRef.current.set(conversationId, isRunning);
+      if (isRunning) {
+        setLiveConversationId(conversationId);
+      } else {
+        setLiveConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+      }
       return;
     }
     conversationRunningStateRef.current.set(conversationId, isRunning);
@@ -3349,6 +3365,18 @@ export default function ConversationList({
     openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
   }, [openConversationSurface]);
 
+  // Reuses invite-friends-screen.tsx's picker (see its conversationId prop)
+  // in "add to this room" mode instead of a bespoke invite UI.
+  const openInviteMembers = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId || typeof window === "undefined") return;
+
+    const path = buildPathWithCurrentSearchParams(`/${locale}/conversations/add-members`);
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("conversation", normalizedConversationId);
+    router.push(`${url.pathname}${url.search}`);
+  }, [locale, router]);
+
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
@@ -3504,12 +3532,25 @@ export default function ConversationList({
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
 
+    const cachedNativeSttConversationId = readCachedNativeSttConversationId();
     const hiddenNativeSttConversation = isNativeSttStatusLive(cachedNativeSttStatus)
       ? findNativeSttRestoreConversation(
           conversations,
           deletingConversationIdsRef.current,
+          cachedNativeSttConversationId,
         )
       : null;
+
+    // A live native session is authoritative for one specific room. The list
+    // can briefly render without that room while hydration is catching up;
+    // never infer that every other active room is stale in that window.
+    if (
+      isNativeSttStatusLive(cachedNativeSttStatus)
+      && cachedNativeSttConversationId
+      && !hiddenNativeSttConversation
+    ) {
+      return;
+    }
 
     const shouldStayOnConversationList = (() => {
       const currentUrl = new URL(window.location.href);
@@ -3598,6 +3639,7 @@ export default function ConversationList({
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
+        cachedNativeSttConversationId,
       );
       if (
         restoreConversation
@@ -3886,7 +3928,9 @@ export default function ConversationList({
         const token = payload.token;
         const wsBase = getConversationEventsWsUrl();
         if (!token || !wsBase || cancelled) {
-          scheduleReconnect();
+          // A missing token/URL means realtime is intentionally unavailable in
+          // this deployment. The 20-second poll below is the fallback; retrying
+          // token setup every five seconds would add more load than the poll.
           return;
         }
 
@@ -4508,9 +4552,19 @@ export default function ConversationList({
 
     const closingConversation = activeConversation;
     const roomRef = conversationRoomRefs.current.get(closingConversation.id);
-    if (roomRef?.isSttSessionRunning()) {
+    const roomIsSttSessionRunning = roomRef?.isSttSessionRunning() === true;
+    const cachedNativeStatus = readCachedNativeSttStatus();
+    const cachedNativeConversationId = readCachedNativeSttConversationId();
+    const nativeSessionBelongsToClosingRoom = (
+      isNativeSttStatusLive(cachedNativeStatus)
+      && cachedNativeConversationId === closingConversation.id
+    );
+    if (roomRef && (roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom)) {
       try {
-        await roomRef.stopRecording({ deferRunningStateChange: true });
+        await roomRef.stopRecording({
+          deferRunningStateChange: true,
+          ...(roomIsSttSessionRunning ? {} : { forceNativeStop: true }),
+        });
       } catch {
         // The room unmount cleanup still sends an idempotent native stop fallback.
       }
@@ -4669,6 +4723,19 @@ export default function ConversationList({
       ) {
         conversationHistoryPopStateTargetRef.current = null;
         conversationHistoryPopStateTransitionRef.current = null;
+      }
+      routeSyncConversationIdRef.current = null;
+      return;
+    }
+
+    // The room was just deleted/left by this client (see handleConversationDeleted)
+    // — the URL racing back to it (e.g. the leave flow's requestCloseMenuPanel
+    // doing a multi-step history.go() that lands on an older history entry
+    // which still has this room's ?conversation= id) is stale history, not a
+    // real "failed to open." Clear it instead of hydrating/alerting.
+    if (routeConversationId && deletingConversationIdsRef.current.has(routeConversationId)) {
+      if (readConversationIdFromLocation() === routeConversationId) {
+        replaceConversationOverlayUrl(null, "route-sync-deleting-conversation");
       }
       routeSyncConversationIdRef.current = null;
       return;
@@ -5499,6 +5566,7 @@ export default function ConversationList({
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
                         onOpenProfile={openConversationProfile}
+                        onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}

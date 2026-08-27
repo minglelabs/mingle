@@ -298,6 +298,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           },
           select: {
             id: true,
+            createdAt: true,
           },
         })
         messageId = message.id
@@ -366,10 +367,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // this, the owner's first real message — see
         // pendingInviteeUserIds' doc comment. Must run before the
         // notify below, so a freshly-materialized member's push actually
-        // reaches them.
+        // reaches them. Passing this message's own createdAt keeps THIS
+        // message itself already bubble-attributed as multi-member — see
+        // materializePendingConversationInvitees's joinedAt doc comment.
         let committedMemberUserIds: string[] | null = null
         try {
-          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey)
+          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
           if (Array.isArray(committedMemberUserIds)) {
             console.info('[conversation-message] membership-ready', {
               messageId,

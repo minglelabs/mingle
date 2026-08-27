@@ -34,6 +34,7 @@ export type LivePhoneDemoRoomManagementCopy = {
   participantsLoadingLabel: string
   participantsErrorLabel: string
   participantsRetryLabel: string
+  participantsInviteButtonLabel: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
@@ -66,6 +67,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: '불러오는 중...',
     participantsErrorLabel: '참여자 정보를 불러오지 못했습니다.',
     participantsRetryLabel: '다시 시도',
+    participantsInviteButtonLabel: '초대',
   },
   en: {
     menuItemLabel: 'Conversation management',
@@ -96,6 +98,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Loading...',
     participantsErrorLabel: 'Could not load participants.',
     participantsRetryLabel: 'Try again',
+    participantsInviteButtonLabel: 'Invite',
   },
   ja: {
     menuItemLabel: '会話ルーム管理',
@@ -126,6 +129,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: '読み込み中...',
     participantsErrorLabel: '参加者情報を読み込めませんでした。',
     participantsRetryLabel: '再試行',
+    participantsInviteButtonLabel: '招待',
   },
   'zh-CN': {
     menuItemLabel: '会话房间管理',
@@ -156,6 +160,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: '加载中...',
     participantsErrorLabel: '无法加载参与者信息。',
     participantsRetryLabel: '重试',
+    participantsInviteButtonLabel: '邀请',
   },
   'zh-TW': {
     menuItemLabel: '對話房間管理',
@@ -186,6 +191,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: '載入中...',
     participantsErrorLabel: '無法載入參與者資訊。',
     participantsRetryLabel: '重試',
+    participantsInviteButtonLabel: '邀請',
   },
   fr: {
     menuItemLabel: 'Gestion de la conversation',
@@ -216,6 +222,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Chargement...',
     participantsErrorLabel: 'Impossible de charger les participants.',
     participantsRetryLabel: 'Réessayer',
+    participantsInviteButtonLabel: 'Inviter',
   },
   de: {
     menuItemLabel: 'Verwaltung des Gesprächs',
@@ -246,6 +253,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Wird geladen...',
     participantsErrorLabel: 'Teilnehmer konnten nicht geladen werden.',
     participantsRetryLabel: 'Erneut versuchen',
+    participantsInviteButtonLabel: 'Einladen',
   },
   es: {
     menuItemLabel: 'Gestion de la conversacion',
@@ -276,6 +284,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Cargando...',
     participantsErrorLabel: 'No se pudieron cargar los participantes.',
     participantsRetryLabel: 'Intentar de nuevo',
+    participantsInviteButtonLabel: 'Invitar',
   },
   pt: {
     menuItemLabel: 'Gerenciamento da conversa',
@@ -306,6 +315,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Carregando...',
     participantsErrorLabel: 'Não foi possível carregar os participantes.',
     participantsRetryLabel: 'Tentar novamente',
+    participantsInviteButtonLabel: 'Convidar',
   },
   it: {
     menuItemLabel: 'Gestione della conversazione',
@@ -336,6 +346,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Caricamento...',
     participantsErrorLabel: 'Impossibile caricare i partecipanti.',
     participantsRetryLabel: 'Riprova',
+    participantsInviteButtonLabel: 'Invita',
   },
   ru: {
     menuItemLabel: 'Управление разговором',
@@ -366,6 +377,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Загрузка...',
     participantsErrorLabel: 'Не удалось загрузить участников.',
     participantsRetryLabel: 'Повторить',
+    participantsInviteButtonLabel: 'Пригласить',
   },
   ar: {
     menuItemLabel: 'إدارة المحادثة',
@@ -396,6 +408,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'جارٍ التحميل...',
     participantsErrorLabel: 'تعذر تحميل المشاركين.',
     participantsRetryLabel: 'إعادة المحاولة',
+    participantsInviteButtonLabel: 'دعوة',
   },
   hi: {
     menuItemLabel: 'बातचीत प्रबंधन',
@@ -426,6 +439,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'लोड हो रहा है...',
     participantsErrorLabel: 'प्रतिभागियों को लोड नहीं किया जा सका।',
     participantsRetryLabel: 'फिर से कोशिश करें',
+    participantsInviteButtonLabel: 'आमंत्रित करें',
   },
   th: {
     menuItemLabel: 'จัดการห้องสนทนา',
@@ -456,6 +470,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'กำลังโหลด...',
     participantsErrorLabel: 'ไม่สามารถโหลดข้อมูลผู้เข้าร่วมได้',
     participantsRetryLabel: 'ลองอีกครั้ง',
+    participantsInviteButtonLabel: 'เชิญ',
   },
   vi: {
     menuItemLabel: 'Quan ly cuoc tro chuyen',
@@ -486,6 +501,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsLoadingLabel: 'Đang tải...',
     participantsErrorLabel: 'Không thể tải danh sách người tham gia.',
     participantsRetryLabel: 'Thử lại',
+    participantsInviteButtonLabel: 'Mời',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoRoomManagementCopy>
 

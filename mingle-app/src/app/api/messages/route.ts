@@ -167,16 +167,23 @@ export async function DELETE(request: Request) {
       const response = NextResponse.json({ error: "unauthorized" }, { status: 401 });
       return withTrackingCookies(nextRequest, response, tracking);
     }
+    const trackingSessionKey = resolveTrackingSessionKey(request) || tracking.sessionKey;
     const identity = {
       ...sessionIdentity,
       externalUserId: !hasAuthenticatedIdentity && allowLegacyAnonymousUser
         ? resolveTrackingExternalUserId(request) || tracking.externalUserId
         : "",
-      sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+      sessionKey: !hasAuthenticatedIdentity && allowLegacyAnonymousUser
+        ? trackingSessionKey
+        : "",
     };
     const userIds = await resolveMessageOwnerUserIds(identity);
+    if (hasAuthenticatedIdentity && userIds.length === 0) {
+      const response = NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
+      return withTrackingCookies(nextRequest, response, tracking);
+    }
     const clearEventUserId = userIds[0] ?? undefined;
-    const clearEventSessionKey = identity.sessionKey || tracking.sessionKey || undefined;
+    const clearEventSessionKey = trackingSessionKey || undefined;
     const ownerFilters = [
       ...(userIds.length > 0 ? [{ userId: { in: userIds } }] : []),
       ...(identity.sessionKey ? [{ sessionKey: identity.sessionKey }] : []),

@@ -46,6 +46,7 @@ class NativeSTTModule(
 ) : ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
   private data class StartOptions(
+    val conversationId: String,
     val wsUrl: String,
     val sttModel: String,
     val aecEnabled: Boolean,
@@ -95,6 +96,9 @@ class NativeSTTModule(
   @Volatile private var foregroundServiceActive = false
   @Volatile private var lastAudioChunkAtMs: Long = 0L
   @Volatile private var lastAudioRecoveryAtMs: Long = 0L
+  @Volatile private var activeConversationId: String? = null
+  @Volatile private var audioChunkCount: Long = 0L
+  @Volatile private var wsMessageCount: Long = 0L
   @Volatile private var gracefulStopPending = false
   private val gracefulStopHandler = Handler(Looper.getMainLooper())
   private var gracefulStopTimeoutRunnable: Runnable? = null
@@ -131,6 +135,15 @@ class NativeSTTModule(
     promise: Promise,
   ) {
     if (isRunning.get()) {
+      val requestedConversationId = options.getString("conversationId")?.trim().orEmpty()
+      if (requestedConversationId.isNotEmpty() && requestedConversationId == activeConversationId) {
+        Log.i(TAG, "start reused active session conversation=$requestedConversationId serverReady=$serverReady")
+        emitStatus(if (serverReady) "ready" else "running")
+        promise.resolve(Arguments.createMap().apply {
+          putInt("sampleRate", currentSampleRate)
+        })
+        return
+      }
       promise.reject("already_running", "native_stt_already_running")
       return
     }
@@ -142,6 +155,7 @@ class NativeSTTModule(
     }
 
     val startOptions = StartOptions(
+      conversationId = options.getString("conversationId")?.trim().orEmpty(),
       wsUrl = wsUrl,
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
@@ -200,6 +214,19 @@ class NativeSTTModule(
     options: ReadableMap?,
     promise: Promise,
   ) {
+    val requestedConversationId = options?.getString("conversationId")?.trim().orEmpty()
+    val currentConversationId = activeConversationId.orEmpty()
+    if (requestedConversationId.isNotEmpty()
+      && currentConversationId.isNotEmpty()
+      && requestedConversationId != currentConversationId
+    ) {
+      Log.w(
+        TAG,
+        "ignored stale stop conversation=$requestedConversationId active=$currentConversationId",
+      )
+      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      return
+    }
     val pendingText = options?.getString("pendingText")?.takeIf { it.isNotBlank() } ?: ""
     val pendingLanguage = options?.getString("pendingLanguage")?.takeIf { it.isNotBlank() } ?: "unknown"
 
@@ -305,11 +332,19 @@ class NativeSTTModule(
       webSocketReady = false
       serverReady = false
       lastClientSilenced = null
+      activeConversationId = options.conversationId.ifEmpty { null }
+      audioChunkCount = 0L
+      wsMessageCount = 0L
 
       val request = Request.Builder()
         .url(options.wsUrl)
         .build()
 
+      Log.i(
+        TAG,
+        "start session conversation=${activeConversationId ?: "unknown"} ws=${options.wsUrl} " +
+          "sampleRate=$currentSampleRate profile=${profile.label}",
+      )
       emitStatus("connecting")
       isRunning.set(true)
 
@@ -345,10 +380,14 @@ class NativeSTTModule(
           options.sttSegmentationMode?.let {
             config.put("stt_segmentation_mode", it)
           }
-          webSocket.send(config.toString())
+          val configAccepted = webSocket.send(config.toString())
           Log.i(
             TAG,
-            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"} endpointMaxDelayMs=${options.sonioxEndpointMaxDelayMs?.toString() ?: "server-default"} endpointTuningStep=${options.sonioxEndpointTuningStep?.toString() ?: "server-default"}",
+            "ws opened conversation=${activeConversationId ?: "unknown"} accepted=$configAccepted " +
+              "sampleRate=$currentSampleRate profile=${profile.label} " +
+              "silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"} " +
+              "endpointMaxDelayMs=${options.sonioxEndpointMaxDelayMs?.toString() ?: "server-default"} " +
+              "endpointTuningStep=${options.sonioxEndpointTuningStep?.toString() ?: "server-default"}",
           )
         }
 
@@ -356,8 +395,14 @@ class NativeSTTModule(
           if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
             return
           }
+          wsMessageCount += 1
+          val messageNumber = wsMessageCount
+          if (messageNumber <= 5 || messageNumber % 50L == 0L) {
+            Log.i(TAG, "ws message #$messageNumber ${describeServerMessage(text)}")
+          }
           if (isServerReadyMessage(text)) {
             serverReady = true
+            Log.i(TAG, "server ready conversation=${activeConversationId ?: "unknown"}")
             emitStatus("ready")
           }
           emitMessage(text)
@@ -395,7 +440,12 @@ class NativeSTTModule(
       registerAudioDeviceCallback()
       startStallMonitor()
       setForegroundServiceEnabled(profile.foregroundServiceEnabled)
-      emitStatus("running")
+      // The WebSocket callbacks run concurrently with setup. A very fast
+      // server can deliver `ready` before setup reaches this point; do not
+      // overwrite that terminal connection state with the earlier lifecycle
+      // state, or the WebView can remain stuck on its connecting UI.
+      emitStatus(if (serverReady) "ready" else "running")
+      Log.i(TAG, "audio capture started conversation=${activeConversationId ?: "unknown"} sampleRate=$currentSampleRate")
       promise.resolve(Arguments.createMap().apply {
         putInt("sampleRate", currentSampleRate)
       })
@@ -571,8 +621,17 @@ class NativeSTTModule(
         }
 
         lastAudioChunkAtMs = SystemClock.elapsedRealtime()
+        audioChunkCount += 1
+        val chunkNumber = audioChunkCount
 
         val socket = webSocket
+        if (chunkNumber <= 3 || chunkNumber % 100L == 0L) {
+          Log.i(
+            TAG,
+            "audio chunk #$chunkNumber bytes=$bytesRead wsReady=$webSocketReady " +
+              "serverReady=$serverReady recordingState=${record.recordingState}",
+          )
+        }
         if (!webSocketReady || socket == null) {
           continue
         }
@@ -584,7 +643,12 @@ class NativeSTTModule(
             "data",
             JSONObject().put("chunk", encoded),
           )
-        socket.send(payload.toString())
+        if (!socket.send(payload.toString())) {
+          Log.w(
+            TAG,
+            "audio chunk send rejected #$chunkNumber conversation=${activeConversationId ?: "unknown"}",
+          )
+        }
       }
     }, "NativeSTT-Audio")
     thread.isDaemon = true
@@ -835,6 +899,19 @@ class NativeSTTModule(
       false
     }
 
+  private fun describeServerMessage(raw: String): String {
+    return try {
+      val json = JSONObject(raw)
+      val type = json.optString("type").trim().ifEmpty { "none" }
+      val status = json.optString("status").trim().ifEmpty { "none" }
+      val data = json.optJSONObject("data")
+      val isFinal = if (data?.has("is_final") == true) data.optBoolean("is_final") else null
+      "type=$type status=$status isFinal=${isFinal ?: "none"}"
+    } catch (_: Throwable) {
+      "invalid_json"
+    }
+  }
+
   private fun cleanup(
     reason: String?,
     emitClose: Boolean,
@@ -875,13 +952,16 @@ class NativeSTTModule(
     if (emitClose && wasRunning && reason != null) {
       emitClose(reason)
     }
+    activeConversationId = null
   }
 
   private fun emitStatus(status: String) {
+    Log.i(TAG, "status=$status conversation=${activeConversationId ?: "unknown"}")
     emitEvent(
       "status",
       Arguments.createMap().apply {
         putString("status", status)
+        activeConversationId?.let { putString("conversationId", it) }
       },
     )
   }
@@ -891,6 +971,7 @@ class NativeSTTModule(
       "message",
       Arguments.createMap().apply {
         putString("raw", raw)
+        activeConversationId?.let { putString("conversationId", it) }
       },
     )
   }
@@ -901,15 +982,18 @@ class NativeSTTModule(
       "error",
       Arguments.createMap().apply {
         putString("message", message)
+        activeConversationId?.let { putString("conversationId", it) }
       },
     )
   }
 
   private fun emitClose(reason: String) {
+    Log.i(TAG, "close reason=$reason conversation=${activeConversationId ?: "unknown"}")
     emitEvent(
       "close",
       Arguments.createMap().apply {
         putString("reason", reason)
+        activeConversationId?.let { putString("conversationId", it) }
       },
     )
   }

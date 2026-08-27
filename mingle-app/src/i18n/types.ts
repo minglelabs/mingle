@@ -41,6 +41,9 @@ export type BaseAppDictionarySource = {
     inviteFriendsExistingConversationMessage?: string;
     inviteFriendsCreateNewAction?: string;
     inviteFriendsContinuePreviousAction?: string;
+    inviteFriendsAddMembersPageTitle?: string;
+    inviteFriendsAddButtonLabel?: string;
+    inviteFriendsAddErrorMessage?: string;
   };
   demo: {
     tapPlayToStart: string;

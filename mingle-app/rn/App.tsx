@@ -632,6 +632,7 @@ type NativeSttStartPayload = {
 };
 
 type NativeSttStopPayload = {
+  conversationId?: string;
   pendingText?: string;
   pendingLanguage?: string;
 };
@@ -816,12 +817,12 @@ type WebViewCommand =
   | NativeQaSetSttStatusCommand;
 
 type NativeSttEvent =
-  | { type: 'status'; status: string }
+  | { type: 'status'; status: string; conversationId?: string }
   | { type: 'message'; raw: string; conversationId?: string; queueId?: string }
-  | { type: 'error'; message: string; code?: string; platform?: string }
+  | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string }
   | { type: 'permission'; permission: string; platform?: string }
   | { type: 'capabilities'; openAppSettings: boolean }
-  | { type: 'close'; reason: string };
+  | { type: 'close'; reason: string; conversationId?: string };
 
 type NativeLocationPermission = 'granted' | 'denied' | 'blocked' | 'not_determined' | 'unavailable' | 'unknown';
 type NativeLocationEvent =
@@ -2441,15 +2442,21 @@ function AppInner(): React.JSX.Element {
     const queueId = payload.type === 'message' && !payload.queueId
       ? `native-stt-${Date.now()}-${++nativeSttMessageSequenceRef.current}`
       : undefined;
+    const scopedConversationId = 'conversationId' in payload
+      ? payload.conversationId || nativeSttConversationIdRef.current || undefined
+      : nativeSttConversationIdRef.current || undefined;
     const nextPayload: NativeSttEvent = payload.type === 'message'
       ? {
           ...payload,
           ...(payload.queueId || queueId ? { queueId: payload.queueId || queueId } : {}),
-          ...(payload.conversationId || nativeSttConversationIdRef.current
-            ? { conversationId: payload.conversationId || nativeSttConversationIdRef.current || undefined }
-            : {}),
+          ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
         }
-      : payload;
+      : payload.type === 'status' || payload.type === 'error' || payload.type === 'close'
+        ? {
+            ...payload,
+            ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+          }
+        : payload;
 
     if (!isPageReadyRef.current) {
       if (nextPayload.type === 'message') {
@@ -2472,7 +2479,7 @@ function AppInner(): React.JSX.Element {
       console.log(`[NativeSTT→Web] ${preview}`);
     }
     const cacheStatusScript = nextPayload.type === 'status'
-      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; `
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; window.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID = ${JSON.stringify(nextPayload.conversationId || null)}; `
       : '';
     const cachePermissionScript = nextPayload.type === 'permission'
       ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(nextPayload.permission)}; `
@@ -2761,8 +2768,10 @@ function AppInner(): React.JSX.Element {
     const sonioxEndpointTuningStep = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxEndpointTuningStep,
     );
+    const statusBeforeStart = nativeStatusRef.current;
 
     const startPayload = {
+      conversationId,
       sttModel,
       aecEnabled,
       ...(apiNamespace ? { apiNamespace } : {}),
@@ -2791,6 +2800,19 @@ function AppInner(): React.JSX.Element {
       const code = typeof (error as { code?: unknown })?.code === 'string'
         ? (error as { code: string }).code.trim()
         : resolveNativeSttErrorCode(message);
+      const isExistingNativeSessionForSameConversation = code === 'already_running'
+        && Boolean(conversationId)
+        && nativeSttConversationIdRef.current === conversationId
+        && ['starting', 'running', 'ready', 'silenced', 'recovering', 'connecting'].includes(statusBeforeStart);
+      if (isExistingNativeSessionForSameConversation) {
+        nativeStatusRef.current = statusBeforeStart;
+        emitToWeb({
+          type: 'status',
+          status: statusBeforeStart,
+          conversationId,
+        });
+        return;
+      }
       const shouldRetryFallback = Boolean(
         fallbackWsUrl
         && code !== 'mic_permission'
@@ -2811,19 +2833,31 @@ function AppInner(): React.JSX.Element {
           const fallbackCode = typeof (fallbackError as { code?: unknown })?.code === 'string'
             ? (fallbackError as { code: string }).code.trim()
             : resolveNativeSttErrorCode(fallbackMessage);
+          const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
           nativeStatusRef.current = fallbackCode === 'mic_permission' ? 'idle' : 'failed';
+          emitToWeb({
+            type: 'status',
+            status: nativeStatusRef.current,
+            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+          });
           nativeSttConversationIdRef.current = null;
           emitToWeb({
             type: 'error',
             message: fallbackMessage,
             ...(fallbackCode ? { code: fallbackCode } : {}),
             platform: Platform.OS,
+            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
           });
           return;
         }
       }
+      const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
-      nativeSttConversationIdRef.current = null;
+      emitToWeb({
+        type: 'status',
+        status: nativeStatusRef.current,
+        ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+      });
       if (code === 'mic_permission') {
         emitToWeb({
           type: 'permission',
@@ -2836,21 +2870,44 @@ function AppInner(): React.JSX.Element {
         message,
         ...(code ? { code } : {}),
         platform: Platform.OS,
+        ...(failedConversationId ? { conversationId: failedConversationId } : {}),
       });
+      nativeSttConversationIdRef.current = null;
     }
   }, [emitToWeb, nativeAvailable]);
 
   const handleNativeStop = useCallback(async (payload?: NativeSttStopPayload) => {
+    const requestedConversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    const activeConversationId = nativeSttConversationIdRef.current || '';
+    if (requestedConversationId && activeConversationId && requestedConversationId !== activeConversationId) {
+      if (__DEV__) {
+        console.log(`[Web→NativeSTT] ignored stale stop conversation=${requestedConversationId} active=${activeConversationId}`);
+      }
+      return;
+    }
+    const stoppedConversationId = activeConversationId || requestedConversationId || undefined;
     try {
       await stopNativeStt({
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
         pendingText: typeof payload?.pendingText === 'string' ? payload.pendingText : '',
         pendingLanguage: typeof payload?.pendingLanguage === 'string' ? payload.pendingLanguage : 'unknown',
       });
       nativeStatusRef.current = 'stopped';
+      emitToWeb({
+        type: 'status',
+        status: 'stopped',
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+      });
       nativeSttConversationIdRef.current = null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      emitToWeb({ type: 'error', message });
+      emitToWeb({
+        type: 'error',
+        message,
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+      });
     }
   }, [emitToWeb]);
 
@@ -3271,26 +3328,52 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     const statusSub = addNativeSttListener('status', event => {
       if (__DEV__) console.log(`[NativeSTT] status: ${event.status}`);
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
       nativeStatusRef.current = event.status;
-      emitToWeb({ type: 'status', status: event.status });
+      emitToWeb({
+        type: 'status',
+        status: event.status,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+      });
     });
 
     const messageSub = addNativeSttListener('message', event => {
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
       if (isNativeSttServerReadyMessage(event.raw)) {
         nativeStatusRef.current = 'ready';
       }
       if (nativeStatusRef.current) {
-        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+        emitToWeb({
+          type: 'status',
+          status: nativeStatusRef.current,
+          ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        });
       }
-      emitToWeb({ type: 'message', raw: event.raw });
+      emitToWeb({
+        type: 'message',
+        raw: event.raw,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+      });
     });
 
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
       const code = typeof event.code === 'string' && event.code.trim()
         ? event.code.trim()
         : resolveNativeSttErrorCode(event.message);
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'error';
+      emitToWeb({
+        type: 'status',
+        status: nativeStatusRef.current,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+      });
       if (code === 'mic_permission') {
         emitToWeb({
           type: 'permission',
@@ -3303,13 +3386,26 @@ function AppInner(): React.JSX.Element {
         message: event.message,
         ...(code ? { code } : {}),
         platform: Platform.OS,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
       });
     });
 
     const closeSub = addNativeSttListener('close', event => {
       if (__DEV__) console.log(`[NativeSTT] close: ${event.reason}`);
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
       nativeStatusRef.current = 'closed';
-      emitToWeb({ type: 'close', reason: event.reason });
+      emitToWeb({
+        type: 'status',
+        status: 'closed',
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+      });
+      emitToWeb({
+        type: 'close',
+        reason: event.reason,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+      });
     });
 
     return () => {

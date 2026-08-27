@@ -1,6 +1,6 @@
 export const EXPECTED_RN_API_NAMESPACE_BY_OS = {
   ios: 'ios/v2.0.0',
-  android: 'android/v2.0.0',
+  android: 'android/v2.0.1',
 }
 
 export function normalizeNamespace(raw) {

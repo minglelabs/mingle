@@ -54,7 +54,9 @@ describe("upsertNativeAppleUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccountFindUnique.mockResolvedValue(null);
-    mockAccountUpsert.mockResolvedValue({});
+    mockAccountUpsert.mockImplementation(async ({ create }: { create: { userId: string } }) => ({
+      userId: create.userId,
+    }));
     mockCreateWithDefaultHandle.mockImplementation(
       async (_input: unknown, create: (handle: string) => Promise<unknown>) => create("apple-user"),
     );
@@ -125,6 +127,7 @@ describe("upsertNativeAppleUser", () => {
         providerAccountId: "apple_subject_2",
       },
       update: {},
+      select: { userId: true },
     });
   });
 
@@ -161,6 +164,44 @@ describe("upsertNativeAppleUser", () => {
         provider: "apple",
         providerAccountId: "apple_subject_3",
       }),
+    }));
+  });
+
+  it("uses the Account owner when a concurrent Apple exchange wins the link race", async () => {
+    mockUserFindUnique.mockResolvedValueOnce({
+      id: "candidate_user",
+      email: "relay@example.com",
+      name: "Candidate User",
+    });
+    mockUserUpdate
+      .mockResolvedValueOnce({
+        id: "candidate_user",
+        email: "relay@example.com",
+        name: "Candidate User",
+      })
+      .mockResolvedValueOnce({
+        id: "canonical_user",
+        email: "relay@example.com",
+        name: "Canonical User",
+      });
+    mockAccountUpsert.mockResolvedValue({ userId: "canonical_user" });
+
+    const result = await upsertNativeAppleUser({
+      appleSubject: "apple_subject_race",
+      email: "relay@example.com",
+      name: "Apple User",
+    });
+
+    expect(result).toEqual({
+      user: {
+        id: "canonical_user",
+        email: "relay@example.com",
+        name: "Canonical User",
+      },
+      created: false,
+    });
+    expect(mockUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: "canonical_user" },
     }));
   });
 });

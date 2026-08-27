@@ -6,6 +6,7 @@ const CLIENT_MESSAGE_OUTBOX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const CLIENT_MESSAGE_OUTBOX_MAX_FLUSH_BATCH = 20
 const CLIENT_MESSAGE_OUTBOX_RETRY_BASE_MS = 2_000
 const CLIENT_MESSAGE_OUTBOX_RETRY_MAX_MS = 60_000
+const CLIENT_MESSAGE_OUTBOX_ID_SEPARATOR = '\u001f'
 
 export type ClientMessageOutboxRecord = {
   id: string
@@ -147,7 +148,55 @@ export function buildClientMessageOutboxId(input: {
     input.ownerIdentity.trim(),
     input.sessionKey.trim(),
     input.clientMessageId.trim(),
-  ].join('\u001f')
+  ].join(CLIENT_MESSAGE_OUTBOX_ID_SEPARATOR)
+}
+
+// A restored native STT session can finalize a turn before useSession has
+// exposed the authenticated user id. If that first delivery fails, move the
+// tracking-scoped record to the canonical account as soon as the id arrives;
+// otherwise later account-scoped flushes would never see it.
+export async function adoptClientMessageOutboxRecords(input: {
+  fromOwnerIdentity: string
+  toOwnerIdentity: string
+  now?: number
+}): Promise<number> {
+  const fromOwnerIdentity = input.fromOwnerIdentity.trim()
+  const toOwnerIdentity = input.toOwnerIdentity.trim()
+  if (!fromOwnerIdentity || !toOwnerIdentity || fromOwnerIdentity === toOwnerIdentity) return 0
+
+  const activeSourceFlush = activeFlushes.get(fromOwnerIdentity)
+  if (activeSourceFlush) {
+    await activeSourceFlush.catch(() => ({ delivered: 0, retained: 0 }))
+  }
+
+  const now = input.now ?? Date.now()
+  ensureStoredOutboxLoaded(now)
+  const idPrefix = `${fromOwnerIdentity}${CLIENT_MESSAGE_OUTBOX_ID_SEPARATOR}`
+  let adopted = 0
+
+  for (const [recordId, record] of outboxMemory.entries()) {
+    if (record.ownerIdentity !== fromOwnerIdentity || !recordId.startsWith(idPrefix)) continue
+
+    const idSuffix = recordId.slice(idPrefix.length)
+    if (!idSuffix) continue
+    const nextId = `${toOwnerIdentity}${CLIENT_MESSAGE_OUTBOX_ID_SEPARATOR}${idSuffix}`
+    const existing = outboxMemory.get(nextId)
+    const latest = !existing || record.updatedAt >= existing.updatedAt ? record : existing
+
+    outboxMemory.delete(recordId)
+    outboxMemory.set(nextId, {
+      ...latest,
+      id: nextId,
+      ownerIdentity: toOwnerIdentity,
+      createdAt: Math.min(record.createdAt, existing?.createdAt ?? record.createdAt),
+      updatedAt: now,
+      nextAttemptAt: 0,
+    })
+    adopted += 1
+  }
+
+  if (adopted > 0) persistOutbox()
+  return adopted
 }
 
 export function enqueueClientMessageOutboxRecord(input: {

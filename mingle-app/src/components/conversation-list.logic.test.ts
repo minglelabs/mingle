@@ -390,6 +390,36 @@ describe("conversation-list logic", () => {
     ], new Set(["conv-deleting"]))).toBe(live);
   });
 
+  it("restores the cached native STT conversation instead of the first active room", () => {
+    const firstActive = buildConversationSummary({
+      id: "conv-first",
+      status: "active",
+      pausedAt: null,
+    });
+    const cachedActive = buildConversationSummary({
+      id: "conv-cached",
+      status: "active",
+      pausedAt: null,
+    });
+
+    expect(findNativeSttRestoreConversation([
+      firstActive,
+      cachedActive,
+    ], new Set(), "conv-cached")).toBe(cachedActive);
+  });
+
+  it("does not restore an unrelated active room when the cached owner is missing", () => {
+    const active = buildConversationSummary({
+      id: "conv-active",
+      status: "active",
+      pausedAt: null,
+    });
+
+    expect(findNativeSttRestoreConversation([
+      active,
+    ], new Set(), "conv-missing")).toBeNull();
+  });
+
   it("keeps row actions touch-safe and avatar long-press safe", () => {
     expect(CONVERSATION_ROW_TOUCH_SAFE_STYLE).toEqual({
       WebkitTouchCallout: "none",
