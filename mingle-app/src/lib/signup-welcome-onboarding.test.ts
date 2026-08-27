@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockUserFindFirst,
+  mockUserFindUnique,
   mockUserFollowUpsert,
   mockUserNotificationFindFirst,
   mockUserNotificationCreate,
   mockAppMessageUpsert,
   mockAppMessageContentUpsert,
+  mockAppMessageContentUpdateMany,
   mockMemberUpdateMany,
   mockTransaction,
   mockFindOrCreateDirectConversation,
@@ -17,11 +19,13 @@ const {
   mockSendPushNotificationForConversationMessage,
 } = vi.hoisted(() => ({
   mockUserFindFirst: vi.fn(),
+  mockUserFindUnique: vi.fn(),
   mockUserFollowUpsert: vi.fn(),
   mockUserNotificationFindFirst: vi.fn(),
   mockUserNotificationCreate: vi.fn(),
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
+  mockAppMessageContentUpdateMany: vi.fn(),
   mockMemberUpdateMany: vi.fn(),
   mockTransaction: vi.fn(),
   mockFindOrCreateDirectConversation: vi.fn(),
@@ -39,13 +43,13 @@ const transactionClient = {
     create: mockUserNotificationCreate,
   },
   appMessage: { upsert: mockAppMessageUpsert },
-  appMessageContent: { upsert: mockAppMessageContentUpsert },
+  appMessageContent: { upsert: mockAppMessageContentUpsert, updateMany: mockAppMessageContentUpdateMany },
   appConversationChannelMember: { updateMany: mockMemberUpdateMany },
 };
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { findFirst: mockUserFindFirst },
+    user: { findFirst: mockUserFindFirst, findUnique: mockUserFindUnique },
     $transaction: mockTransaction,
   },
 }));
@@ -76,6 +80,7 @@ describe("signup welcome onboarding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUserFindFirst.mockResolvedValue({ id: ROYCE_USER_ID });
+    mockUserFindUnique.mockResolvedValue({ defaultConversationLanguages: ["ko", "en"] });
     mockTransaction.mockImplementation(async (callback: (tx: typeof transactionClient) => unknown) => (
       callback(transactionClient)
     ));
@@ -101,6 +106,7 @@ describe("signup welcome onboarding", () => {
     mockAppMessageUpsert.mockResolvedValue({ id: "message_welcome" });
     mockAppMessageContentUpsert.mockResolvedValue({ id: "content_welcome" });
     mockMemberUpdateMany.mockResolvedValue({ count: 1 });
+    mockAppMessageContentUpdateMany.mockResolvedValue({ count: 0 });
   });
 
   it("creates reciprocal follows, both follow notifications, and one unread welcome message", async () => {
@@ -158,13 +164,14 @@ describe("signup welcome onboarding", () => {
         text: ROYCE_WELCOME_MESSAGE,
       }),
     }));
+    // Only the room's own selected languages get a translation row — not
+    // every language the hardcoded welcome copy has canned text for. "en" is
+    // excluded since it's already the SOURCE row.
     const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
       ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
     );
-    expect(translationCalls).toHaveLength(Object.keys(ROYCE_WELCOME_TRANSLATIONS).length);
-    expect(new Set(translationCalls.map(([args]) => args.create.language))).toEqual(
-      new Set(Object.keys(ROYCE_WELCOME_TRANSLATIONS)),
-    );
+    expect(translationCalls).toHaveLength(1);
+    expect(translationCalls.map(([args]) => args.create.language)).toEqual(["ko"]);
     expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({
         contentType: "TRANSLATION_FINAL",
@@ -201,5 +208,52 @@ describe("signup welcome onboarding", () => {
     await ensureSignupWelcomeOnboarding({ userId: "new_user" });
     expect(mockUserFollowUpsert).not.toHaveBeenCalled();
     expect(mockFindOrCreateDirectConversation).not.toHaveBeenCalled();
+  });
+
+  it("skips translation rows when the new user has no languages beyond the source", async () => {
+    mockUserFindUnique.mockResolvedValueOnce({ defaultConversationLanguages: ["en"] });
+
+    await ensureSignupWelcomeOnboarding({ userId: "new_user", locale: "en" });
+
+    const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
+      ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
+    );
+    expect(translationCalls).toHaveLength(0);
+  });
+
+  it("ignores Royce's own account preference and only translates into the new user's own languages", async () => {
+    // Royce's mutual-follow lookup uses findFirst; this asserts the welcome
+    // message's own findUnique call is keyed on the new user, not Royce, so
+    // a real Royce-standin account's own defaultConversationLanguages (e.g.
+    // during local testing) never leaks into someone else's welcome message.
+    mockUserFindUnique.mockResolvedValueOnce({ defaultConversationLanguages: ["ko", "en"] });
+
+    await ensureSignupWelcomeOnboarding({ userId: "new_user", locale: "ko" });
+
+    expect(mockUserFindUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "new_user" },
+    }));
+    const translationCalls = mockAppMessageContentUpsert.mock.calls.filter(
+      ([args]) => args?.create?.contentType === "TRANSLATION_FINAL",
+    );
+    expect(translationCalls.map(([args]) => args.create.language)).toEqual(["ko"]);
+  });
+
+  it("retires a translation row for a language that's no longer selected (e.g. re-run after the user's language changes)", async () => {
+    // Mirrors OAuth: the message already exists with a "ja" translation from
+    // an earlier run; this run's target set no longer includes it.
+    mockUserFindUnique.mockResolvedValueOnce({ defaultConversationLanguages: ["it", "en"] });
+
+    await ensureSignupWelcomeOnboarding({ userId: "new_user", locale: "it" });
+
+    expect(mockAppMessageContentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        messageId: "message_welcome",
+        contentType: "TRANSLATION_FINAL",
+        isDeleted: false,
+        language: { notIn: ["it"] },
+      },
+      data: { isDeleted: true },
+    });
   });
 });

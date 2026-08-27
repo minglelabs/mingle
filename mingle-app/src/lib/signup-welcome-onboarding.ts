@@ -4,6 +4,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   materializePendingConversationInvitees,
 } from "@/lib/app-conversations";
+import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationMessage, sendPushNotificationForUserNotification } from "@/server/push-notifications";
@@ -86,6 +87,28 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
   });
   const sessionKey = conversationResult.conversation.sessionKey;
 
+  // Translate only into the languages the NEW USER actually wants — read
+  // their own persisted defaultConversationLanguages directly rather than
+  // conversationResult.conversation.selectedLanguages: since Royce is a
+  // pending invitee at this point, that room-level value is a UNION that
+  // also pulls in Royce's own account's defaultConversationLanguages (see
+  // resolveRoomLanguageUnion in app-conversations.ts), which would leak an
+  // unrelated language into every new user's welcome message. "en" is
+  // excluded since it's already written as the SOURCE row below.
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { defaultConversationLanguages: true },
+  });
+  const ownSelectedLanguages = sanitizeSttLanguageSelection(
+    targetUser?.defaultConversationLanguages,
+    deriveDefaultSttLanguagesForLocale(locale),
+  );
+  const welcomeTranslationLanguages = ownSelectedLanguages.filter(
+    (language): language is keyof typeof ROYCE_WELCOME_TRANSLATIONS => (
+      language !== "en" && language in ROYCE_WELCOME_TRANSLATIONS
+    ),
+  );
+
   // A newly created direct room keeps the target as a pending invitee until
   // its first message. Materialize both accounts before inserting Royce's
   // server-authored welcome message so the recipient has a real read cursor.
@@ -108,7 +131,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeTranslationLanguages,
         },
       },
       update: {
@@ -117,7 +140,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         metadata: {
           source: "signup_welcome",
           welcomeVersion: 2,
-          translationLanguages: Object.keys(ROYCE_WELCOME_TRANSLATIONS),
+          translationLanguages: welcomeTranslationLanguages,
         },
       },
       select: { id: true },
@@ -144,7 +167,8 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
       },
     });
 
-    for (const [language, translatedText] of Object.entries(ROYCE_WELCOME_TRANSLATIONS)) {
+    for (const language of welcomeTranslationLanguages) {
+      const translatedText = ROYCE_WELCOME_TRANSLATIONS[language];
       await tx.appMessageContent.upsert({
         where: {
           messageId_contentType_language: {
@@ -170,6 +194,23 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         },
       });
     }
+
+    // This runs again whenever the user's own language changes after the
+    // welcome message already exists — e.g. OAuth signup writes it once with
+    // a generic locale, then the post-login profile sync (see
+    // /api/profile's PATCH handler) calls back in with the real one. Retire
+    // any translation row left over from an earlier run that's no longer in
+    // the current target set, so a stale language doesn't linger forever
+    // (upserting the current set alone never removes what it doesn't cover).
+    await tx.appMessageContent.updateMany({
+      where: {
+        messageId: createdMessage.id,
+        contentType: "TRANSLATION_FINAL",
+        isDeleted: false,
+        language: { notIn: welcomeTranslationLanguages },
+      },
+      data: { isDeleted: true },
+    });
 
     // The account is new and this message must be unread when its first
     // conversation list is hydrated. This is idempotent and does not create

@@ -5,10 +5,12 @@ const {
   mockGetServerSession,
   mockUserFindUnique,
   mockUserUpdate,
+  mockEnsureSignupWelcomeOnboarding,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserUpdate: vi.fn(),
+  mockEnsureSignupWelcomeOnboarding: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -28,12 +30,25 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/signup-welcome-onboarding", () => ({
+  ensureSignupWelcomeOnboarding: mockEnsureSignupWelcomeOnboarding,
+}));
+
 import { GET, PATCH } from "@/app/api/profile/route";
 
 describe("/api/profile route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
+    // Fresh account with no persisted language preference yet — the
+    // baseline most tests want for the existingPreference/privateFields
+    // lookups; tests that care about a different prior state override this
+    // explicitly.
+    mockUserFindUnique.mockResolvedValue({
+      defaultDisplayLanguage: null,
+      defaultConversationLanguages: [],
+      birthDate: null,
+    });
   });
 
   it("returns unauthorized for unauthenticated profile reads", async () => {
@@ -150,6 +165,7 @@ describe("/api/profile route", () => {
         bio: "New bio",
         nationality: "ja",
         primaryLanguages: ["ja"],
+        defaultDisplayLanguage: "ja",
       },
       select: {
         id: true,
@@ -238,7 +254,7 @@ describe("/api/profile route", () => {
 
     expect(response.status).toBe(200);
     expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      data: { nationality: "cy", primaryLanguages: ["cy"] },
+      data: { nationality: "cy", primaryLanguages: ["cy"], defaultDisplayLanguage: "cy" },
     }));
   });
 
@@ -275,8 +291,79 @@ describe("/api/profile route", () => {
         primaryLanguages: ["ja", "en", "ko", "fr"],
         nationality: "ja",
         defaultConversationLanguages: ["ja", "en", "ko"],
+        defaultDisplayLanguage: "ja",
       },
     }));
+  });
+
+  it("refreshes Royce's welcome message the first time defaultConversationLanguages is set (OAuth's post-login sync)", async () => {
+    // OAuth signup creates the welcome message with a hardcoded "en" locale
+    // before this route ever runs (see auth-options.ts). The client's
+    // post-login reconciliation is what first PATCHes the language the user
+    // actually picked in the pre-login onboarding screen, so this empty ->
+    // non-empty transition is the one moment that should redo it.
+    mockUserFindUnique.mockResolvedValue({
+      defaultDisplayLanguage: null,
+      defaultConversationLanguages: [],
+      birthDate: null,
+    });
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: null,
+      bio: null,
+      nationality: "it",
+      primaryLanguages: ["it"],
+      defaultConversationLanguages: ["it", "en", "ko"],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        primaryLanguages: ["it"],
+        defaultConversationLanguages: ["it", "en", "ko"],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockEnsureSignupWelcomeOnboarding).toHaveBeenCalledWith({
+      userId: "user_123",
+      locale: "it",
+    });
+  });
+
+  it("does not resend the welcome message when the language is merely changed later", async () => {
+    mockUserFindUnique.mockResolvedValue({
+      defaultDisplayLanguage: "it",
+      defaultConversationLanguages: ["it", "en", "ko"],
+      birthDate: null,
+    });
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: null,
+      bio: null,
+      nationality: "fr",
+      primaryLanguages: ["fr"],
+      defaultConversationLanguages: ["fr", "en", "ko"],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        primaryLanguages: ["fr"],
+        defaultConversationLanguages: ["fr", "en", "ko"],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockEnsureSignupWelcomeOnboarding).not.toHaveBeenCalled();
   });
 
   it("updates birthDate when valid and old enough", async () => {

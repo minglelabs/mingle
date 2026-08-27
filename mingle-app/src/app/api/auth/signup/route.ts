@@ -8,6 +8,7 @@ import {
 } from "@/lib/birth-date";
 import {
   MAX_STT_LANGUAGE_SELECTION,
+  deriveDefaultConversationLanguages,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
         passwordHash,
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
+        defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),
         defaultDisplayLanguage: primaryLanguages[0] ?? null,
         birthDate,
         firstSeenAt: now,
