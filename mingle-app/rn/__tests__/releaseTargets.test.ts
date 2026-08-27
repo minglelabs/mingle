@@ -40,6 +40,7 @@ describe('releaseTargets', () => {
   it('maps the 2.0.0 namespaces to the 2.0.0 release target', () => {
     expect(resolveMingleReleaseTarget('ios/v2.0.0')).toBe('v2_0_0');
     expect(resolveMingleReleaseTarget('android/v2.0.0')).toBe('v2_0_0');
+    expect(resolveMingleReleaseTarget('android/v2.0.1')).toBe('v2_0_0');
   });
 
   it('rejects the legacy production web host for a 1.1.0 release target', () => {

@@ -1,5 +1,5 @@
 export const EXPECTED_API_NAMESPACE_BY_OS = {
-  android: 'android/v2.0.0',
+  android: 'android/v2.0.1',
   ios: 'ios/v2.0.0',
 } as const
 

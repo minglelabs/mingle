@@ -30,6 +30,7 @@ const DEFAULT_AAB_PATH = path.join(
   DEFAULT_ANDROID_DIR,
   "app/build/outputs/bundle/release/app-release.aab",
 );
+const RESUMABLE_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
 const DEFAULT_SYNC_SCRIPT = path.join(REPO_ROOT, "scripts/google-play-console-sync.mjs");
 const LEGACY_PRODUCTION_WEB_APP_BASE_URL = "https://mingle-app-xi.vercel.app";
 const LEGACY_PRODUCTION_WS_URL = "wss://mingle-stt.fly.dev";
@@ -552,18 +553,95 @@ async function createEdit(accessToken, packageName) {
 
 async function uploadBundle(accessToken, packageName, editId, aabPath) {
   const data = fs.readFileSync(aabPath);
-  const payload = await googleApiRequest(
-    accessToken,
-    "POST",
-    `${ANDROID_PUBLISHER_UPLOAD_BASE}/applications/${encodeURIComponent(packageName)}/edits/${encodeURIComponent(editId)}/bundles?uploadType=media`,
-    data,
-    {
-      "Content-Type": "application/octet-stream",
-      "Content-Length": String(data.byteLength),
+  const uploadEndpoint =
+    `${ANDROID_PUBLISHER_UPLOAD_BASE}/applications/${encodeURIComponent(packageName)}`
+    + `/edits/${encodeURIComponent(editId)}/bundles?uploadType=resumable`;
+  const sessionResponse = await fetch(uploadEndpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "Content-Length": "2",
+      "X-Upload-Content-Type": "application/octet-stream",
+      "X-Upload-Content-Length": String(data.byteLength),
     },
+    body: "{}",
+  });
+  const sessionBody = await sessionResponse.text();
+  if (!sessionResponse.ok) {
+    throw new Error(
+      `Failed to start resumable bundle upload (${sessionResponse.status}): ${sessionBody}`,
+    );
+  }
+
+  const sessionUrl = sessionResponse.headers.get("location");
+  if (!isNonEmptyString(sessionUrl)) {
+    throw new Error("Google Play did not return a resumable bundle upload location.");
+  }
+
+  const totalBytes = data.byteLength;
+  let offset = 0;
+  let payload = null;
+  const totalChunks = Math.ceil(totalBytes / RESUMABLE_UPLOAD_CHUNK_SIZE);
+  console.log(
+    `Uploading AAB with resumable chunks (${totalChunks} chunks, ${Math.ceil(totalBytes / (1024 * 1024))} MiB).`,
   );
 
-  if (!payload.versionCode) {
+  while (offset < totalBytes) {
+    const end = Math.min(offset + RESUMABLE_UPLOAD_CHUNK_SIZE, totalBytes) - 1;
+    const chunk = data.subarray(offset, end + 1);
+    let chunkResponse;
+    let lastError;
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        chunkResponse = await fetch(sessionUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/octet-stream",
+            "Content-Length": String(chunk.byteLength),
+            "Content-Range": `bytes ${offset}-${end}/${totalBytes}`,
+          },
+          body: chunk,
+          signal: AbortSignal.timeout(120_000),
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+
+    if (!chunkResponse) {
+      throw new Error(
+        `Resumable bundle upload failed at byte ${offset}: ${lastError?.message || "request failed"}`,
+      );
+    }
+
+    const responseText = await chunkResponse.text();
+    if (chunkResponse.status === 308) {
+      const range = chunkResponse.headers.get("range") || "";
+      const rangeMatch = /bytes=0-(\d+)/i.exec(range);
+      offset = rangeMatch ? Number(rangeMatch[1]) + 1 : end + 1;
+      console.log(`Uploaded chunk ${Math.ceil(offset / totalBytes * totalChunks)}/${totalChunks}.`);
+      continue;
+    }
+
+    if (!chunkResponse.ok) {
+      throw new Error(
+        `Resumable bundle upload failed (${chunkResponse.status}) at byte ${offset}: ${responseText}`,
+      );
+    }
+
+    payload = responseText ? JSON.parse(responseText) : null;
+    offset = totalBytes;
+    console.log(`Uploaded chunk ${totalChunks}/${totalChunks}.`);
+  }
+
+  if (!payload?.versionCode) {
     throw new Error("Bundle upload succeeded but no versionCode was returned.");
   }
 
