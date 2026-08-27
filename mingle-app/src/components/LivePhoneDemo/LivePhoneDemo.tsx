@@ -23,7 +23,7 @@ import {
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
-import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationLeaveNotice } from './use-realtime-stt'
+import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
@@ -156,6 +156,7 @@ import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { formatLivePhoneDemoLeaveNoticeText, resolveLivePhoneDemoConversationLeaveCopy } from './live-phone-demo.leave-copy'
+import { formatLivePhoneDemoInviteNoticeText } from './live-phone-demo.invite-copy'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import {
@@ -1117,6 +1118,11 @@ interface LivePhoneDemoProps {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
   onOpenProfile?: (userId: string) => void
+  // Invoked when the participants panel's invite button is tapped — the
+  // panel itself has no router, so navigating to the invite-picker screen
+  // (see invite-friends-screen.tsx, reused in "add to this room" mode) is
+  // the caller's job, same as onConversationDeleted above.
+  onInvite?: () => void
   // True when this is a 2-real-member room and a block exists between the
   // viewer and the other member (either direction) — see
   // ConversationChannelSummary.isBlockedCounterpart. KakaoTalk-style: the
@@ -1358,9 +1364,41 @@ function LivePhoneDemoLeaveNoticeRow({
 
 const MemoizedLivePhoneDemoLeaveNoticeRow = memo(LivePhoneDemoLeaveNoticeRow)
 
+// Renders "{inviter} invited {invitee}" in the message timeline — same
+// KakaoTalk-style plain centered text as LivePhoneDemoLeaveNoticeRow above,
+// shown the moment the invite happens (see ConversationInviteNotice /
+// inviteMembersToConversationChannel), not deferred to the invitee's first
+// message.
+function LivePhoneDemoInviteNoticeRow({
+  notice,
+  uiLocale,
+}: {
+  notice: ConversationInviteNotice
+  uiLocale: string
+}) {
+  const inviterName = notice.invitedByName?.trim() || (notice.invitedByHandle ? `@${notice.invitedByHandle.trim()}` : '')
+  const inviteeName = notice.inviteeName?.trim() || (notice.inviteeHandle ? `@${notice.inviteeHandle.trim()}` : '')
+  if (!inviterName || !inviteeName) return null
+
+  return (
+    <div
+      data-invite-notice-invitee-user-id={notice.inviteeUserId}
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex justify-center py-1"
+    >
+      <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
+        {formatLivePhoneDemoInviteNoticeText(uiLocale, inviterName, inviteeName)}
+      </span>
+    </div>
+  )
+}
+
+const MemoizedLivePhoneDemoInviteNoticeRow = memo(LivePhoneDemoInviteNoticeRow)
+
 type LivePhoneDemoTimelineItem =
   | { kind: 'message'; timestampMs: number; utterance: Utterance }
   | { kind: 'leave-notice'; timestampMs: number; notice: ConversationLeaveNotice }
+  | { kind: 'invite-notice'; timestampMs: number; notice: ConversationInviteNotice }
 
 function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
   if (typeof window === 'undefined') return false
@@ -1472,6 +1510,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSpeechLanguagesChange,
   onDefaultDisplayLanguageChange,
   onOpenProfile,
+  onInvite,
   isBlockedCounterpart = false,
   isMultiMember = false,
 }, ref) {
@@ -1573,6 +1612,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       loadingLabel: roomManagementCopy.participantsLoadingLabel,
       errorLabel: roomManagementCopy.participantsErrorLabel,
       retryLabel: roomManagementCopy.participantsRetryLabel,
+      inviteButtonLabel: roomManagementCopy.participantsInviteButtonLabel,
     }
   }, [roomManagementCopy])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
@@ -3822,6 +3862,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isStorageHydrated,
     persistedUtteranceCount,
     leaveNotices,
+    inviteNotices,
     replaceConversationHistoryForQa,
     // Demo animation states
     isDemoAnimating,
@@ -5348,10 +5389,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }),
     [displayUtteranceIds],
   )
-  // Interleaves "{name} left" notices into the message timeline by
-  // timestamp — display-only merge, kept separate from displayUtterances so
-  // every existing scroll/animation/draft-tracking consumer above keeps
-  // reading message-only data untouched.
+  // Interleaves "{name} left" and "{inviter} invited {invitee}" notices into
+  // the message timeline by timestamp — display-only merge, kept separate
+  // from displayUtterances so every existing scroll/animation/draft-tracking
+  // consumer above keeps reading message-only data untouched.
   const timelineItems = useMemo<LivePhoneDemoTimelineItem[]>(() => {
     const items: LivePhoneDemoTimelineItem[] = displayUtterances.map((utterance) => ({
       kind: 'message',
@@ -5363,9 +5404,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     for (const notice of leaveNotices) {
       items.push({ kind: 'leave-notice', timestampMs: notice.leftAtMs, notice })
     }
+    for (const notice of inviteNotices) {
+      items.push({ kind: 'invite-notice', timestampMs: notice.invitedAtMs, notice })
+    }
     items.sort((a, b) => a.timestampMs - b.timestampMs)
     return items
-  }, [displayUtterances, leaveNotices])
+  }, [displayUtterances, leaveNotices, inviteNotices])
 
   useEffect(() => {
     previousDisplayUtteranceIdsRef.current = displayUtteranceIds
@@ -6889,7 +6933,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
                         conversationId={conversationId}
-                        leftBadgeLabel={leaveConversationCopy.leftBadgeLabel}
+                        inviteButtonLabel={participantsCopy.inviteButtonLabel}
+                        onInvite={onInvite}
                       />
                     </motion.section>
 
@@ -6998,12 +7043,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div
                     key={item.kind === 'leave-notice'
                       ? `leave:${item.notice.userId}:${item.notice.leftAtMs}`
-                      : `${item.utterance.id}:${displayLanguageSelectionKey}`
+                      : item.kind === 'invite-notice'
+                        ? `invite:${item.notice.inviteeUserId}:${item.notice.invitedAtMs}`
+                        : `${item.utterance.id}:${displayLanguageSelectionKey}`
                     }
                     className={spacingClass}
                   >
                     {item.kind === 'leave-notice' ? (
                       <MemoizedLivePhoneDemoLeaveNoticeRow
+                        notice={item.notice}
+                        uiLocale={uiLocale}
+                      />
+                    ) : item.kind === 'invite-notice' ? (
+                      <MemoizedLivePhoneDemoInviteNoticeRow
                         notice={item.notice}
                         uiLocale={uiLocale}
                       />

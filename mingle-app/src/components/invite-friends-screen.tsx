@@ -20,6 +20,11 @@ type InviteFriendsTab = "followers" | "following";
 type InviteFriendsScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
+  // When set, the picker adds people to this ALREADY-EXISTING room instead
+  // of starting a new one — e.g. inviting someone into a solo room the
+  // owner had been using alone. Reuses the exact same follower/following
+  // picker; only the submit target, copy, and success navigation differ.
+  conversationId?: string;
 };
 
 type InviteFriendsUser = {
@@ -54,7 +59,7 @@ function AvatarCircle({ image, size }: { image: string | null; size: number }) {
   );
 }
 
-export default function InviteFriendsScreen({ dictionary, locale }: InviteFriendsScreenProps) {
+export default function InviteFriendsScreen({ dictionary, locale, conversationId }: InviteFriendsScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -63,6 +68,8 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
   const requestSequenceRef = useRef(0);
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
+  const normalizedConversationId = conversationId?.trim() || null;
+  const isAddingToExistingConversation = Boolean(normalizedConversationId);
 
   const [activeTab, setActiveTab] = useState<InviteFriendsTab>("followers");
   const [query, setQuery] = useState("");
@@ -74,6 +81,9 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
   const [startError, setStartError] = useState<string | null>(null);
   const [capMessageVisible, setCapMessageVisible] = useState(false);
   const [existingConversationId, setExistingConversationId] = useState<string | null>(null);
+  // Already-in-the-room people, hidden from the picker when adding to an
+  // existing conversation — inviting them again would just 400.
+  const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
 
   const copy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
   const labels = useMemo(() => ({
@@ -92,6 +102,16 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
       : (dictionary.profile.noFollowingLabel ?? "No following yet."),
   }), [activeTab, dictionary, locale]);
 
+  const pageTitle = isAddingToExistingConversation
+    ? copy.inviteFriendsAddMembersPageTitle
+    : copy.inviteFriendsPageTitle;
+  const submitButtonLabel = isAddingToExistingConversation
+    ? copy.inviteFriendsAddButtonLabel
+    : copy.inviteFriendsStartButtonLabel;
+  const submitErrorMessage = isAddingToExistingConversation
+    ? copy.inviteFriendsAddErrorMessage
+    : copy.inviteFriendsCreateErrorMessage;
+
   const viewerName = session?.user?.name?.trim()
     || dictionary.profile.selfLabel
     || "You";
@@ -99,6 +119,10 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
 
   const normalizedQuery = query.trim();
   const selectedIds = useMemo(() => new Set(selectedUsers.map((user) => user.id)), [selectedUsers]);
+  const visibleUsers = useMemo(
+    () => (existingMemberIds.size === 0 ? users : users.filter((user) => !existingMemberIds.has(user.id))),
+    [existingMemberIds, users],
+  );
 
   const navigateBack = useCallback(() => {
     if (window.history.length > 1) {
@@ -155,18 +179,71 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
     await replaceWithConversationListThenPush(router, conversationListHref, conversationId);
   }, [locale, router, searchParams]);
 
+  // Adds the picked people to the room we were opened from, instead of
+  // creating a new one — see inviteMembersToConversationChannel.
+  const requestMemberInvite = useCallback(async () => {
+    if (!normalizedConversationId) throw new Error("missing_conversation_id");
+    const response = await fetch(
+      buildClientApiPath(`/conversations/${normalizedConversationId}/members`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteeUserIds: selectedUsers.map((user) => user.id) }),
+      },
+    );
+    if (!response.ok) throw new Error("conversation_member_invite_failed");
+  }, [normalizedConversationId, selectedUsers]);
+
   useEffect(() => {
     postNativeBannerZone("hidden");
   }, []);
 
+  // Solo/shared rooms both expose the same members endpoint — fetch it only
+  // in "add to existing room" mode, to hide already-in-the-room people from
+  // the picker below.
+  useEffect(() => {
+    if (!normalizedConversationId) {
+      setExistingMemberIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    void fetch(buildClientApiPath(`/conversations/${normalizedConversationId}/members`), {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("conversation_members_load_failed");
+        return response.json() as Promise<{ members?: { userId?: string }[] }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const memberIds = (payload.members ?? [])
+          .map((member) => member.userId)
+          .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+        setExistingMemberIds(new Set(memberIds));
+      })
+      .catch(() => {
+        if (!cancelled) setExistingMemberIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedConversationId]);
+
   // Same set of people already has a room together — offer a choice instead
   // of silently reusing it (which would be confusing for a group, unlike
   // the 1:1 "message this person" flow) or silently spawning a duplicate.
+  // Not applicable when adding to an already-existing room: there's only one
+  // target room, so it's a straight invite-and-return.
   const handleStartConversation = useCallback(async () => {
     if (isStarting || selectedUsers.length === 0) return;
     setIsStarting(true);
     setStartError(null);
     try {
+      if (isAddingToExistingConversation) {
+        await requestMemberInvite();
+        await handleBack();
+        return;
+      }
       const { conversationId, reused } = await requestConversationStart(false);
       if (reused) {
         setExistingConversationId(conversationId);
@@ -174,11 +251,20 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
       }
       await navigateToConversation(conversationId);
     } catch {
-      setStartError(copy.inviteFriendsCreateErrorMessage ?? null);
+      setStartError(submitErrorMessage ?? null);
     } finally {
       setIsStarting(false);
     }
-  }, [copy.inviteFriendsCreateErrorMessage, isStarting, navigateToConversation, requestConversationStart, selectedUsers]);
+  }, [
+    handleBack,
+    isAddingToExistingConversation,
+    isStarting,
+    navigateToConversation,
+    requestConversationStart,
+    requestMemberInvite,
+    selectedUsers,
+    submitErrorMessage,
+  ]);
 
   const handleContinuePreviousConversation = useCallback(async () => {
     if (!existingConversationId) return;
@@ -261,7 +347,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
             <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
           </button>
           <h1 className="truncate text-center text-[17px] font-bold">
-            {copy.inviteFriendsPageTitle}
+            {pageTitle}
           </h1>
           <div aria-hidden="true" />
         </header>
@@ -374,13 +460,13 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
             </div>
           ) : loadError ? (
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500" role="alert">{labels.error}</p>
-          ) : users.length === 0 ? (
+          ) : visibleUsers.length === 0 ? (
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500">
               {labels.empty}
             </p>
           ) : (
             <ul className="border-t border-gray-100">
-              {users.map((user) => {
+              {visibleUsers.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
                 const isSelected = selectedIds.has(user.id);
                 return (
@@ -426,7 +512,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
             className="flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
           >
-            {isStarting ? <Loader2 size={20} className="animate-spin" /> : copy.inviteFriendsStartButtonLabel}
+            {isStarting ? <Loader2 size={20} className="animate-spin" /> : submitButtonLabel}
           </button>
         </div>
       </motion.main>

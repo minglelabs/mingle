@@ -19,10 +19,6 @@ export type LivePhoneDemoConversationLeaveCopy = {
   // placeholder — use formatLivePhoneDemoLeaveNoticeText below instead of
   // interpolating it directly.
   noticeTemplate: string
-  // Short badge shown next to a departed member's name in the participants
-  // list — e.g. "나감" / "Left" — distinct from the full noticeTemplate
-  // sentence rendered in the message timeline.
-  leftBadgeLabel: string
 }
 
 const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
@@ -36,7 +32,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: '대화방에서 나갔습니다.',
     errorToastLabel: '대화방 나가기에 실패했습니다. 잠시 후 다시 시도해 주세요.',
     noticeTemplate: '{name}님이 나가셨습니다.',
-    leftBadgeLabel: '나감',
   },
   en: {
     menuItemLabel: 'Leave',
@@ -48,7 +43,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'You left the conversation room.',
     errorToastLabel: 'Failed to leave the conversation room. Please try again.',
     noticeTemplate: '{name} left the conversation.',
-    leftBadgeLabel: 'Left',
   },
   ja: {
     menuItemLabel: '会話ルームを退出',
@@ -60,7 +54,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: '会話ルームから退出しました。',
     errorToastLabel: '会話ルームを退出できませんでした。しばらくしてからもう一度お試しください。',
     noticeTemplate: '{name}さんが退出しました。',
-    leftBadgeLabel: '退出済み',
   },
   'zh-CN': {
     menuItemLabel: '退出对话房间',
@@ -72,7 +65,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: '已退出对话房间。',
     errorToastLabel: '退出对话房间失败。请稍后再试。',
     noticeTemplate: '{name}已退出对话。',
-    leftBadgeLabel: '已退出',
   },
   'zh-TW': {
     menuItemLabel: '退出對話房間',
@@ -84,7 +76,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: '已退出對話房間。',
     errorToastLabel: '退出對話房間失敗。請稍後再試。',
     noticeTemplate: '{name}已退出對話。',
-    leftBadgeLabel: '已退出',
   },
   fr: {
     menuItemLabel: 'Quitter',
@@ -96,7 +87,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Vous avez quitte la salle de conversation.',
     errorToastLabel: 'Impossible de quitter la salle de conversation. Veuillez reessayer plus tard.',
     noticeTemplate: '{name} a quitte la conversation.',
-    leftBadgeLabel: 'Parti(e)',
   },
   de: {
     menuItemLabel: 'Verlassen',
@@ -108,7 +98,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Sie haben den Gesprächsraum verlassen.',
     errorToastLabel: 'Der Gesprächsraum konnte nicht verlassen werden. Bitte versuchen Sie es später erneut.',
     noticeTemplate: '{name} hat die Unterhaltung verlassen.',
-    leftBadgeLabel: 'Verlassen',
   },
   es: {
     menuItemLabel: 'Salir',
@@ -120,7 +109,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Saliste de la sala de conversacion.',
     errorToastLabel: 'No se pudo salir de la sala de conversacion. Intentalo de nuevo mas tarde.',
     noticeTemplate: '{name} salio de la conversacion.',
-    leftBadgeLabel: 'Salio',
   },
   pt: {
     menuItemLabel: 'Sair',
@@ -132,7 +120,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Voce saiu da sala de conversa.',
     errorToastLabel: 'Nao foi possivel sair da sala de conversa. Tente novamente mais tarde.',
     noticeTemplate: '{name} saiu da conversa.',
-    leftBadgeLabel: 'Saiu',
   },
   it: {
     menuItemLabel: 'Esci',
@@ -144,7 +131,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Hai lasciato la stanza della conversazione.',
     errorToastLabel: 'Impossibile uscire dalla stanza della conversazione. Riprova piu tardi.',
     noticeTemplate: '{name} ha lasciato la conversazione.',
-    leftBadgeLabel: 'Uscito/a',
   },
   ru: {
     menuItemLabel: 'Покинуть',
@@ -156,7 +142,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Вы покинули комнату разговора.',
     errorToastLabel: 'Не удалось покинуть комнату разговора. Повторите попытку позже.',
     noticeTemplate: '{name} покинул(а) разговор.',
-    leftBadgeLabel: 'Покинул(а)',
   },
   ar: {
     menuItemLabel: 'مغادرة',
@@ -168,7 +153,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'لقد غادرت غرفة المحادثة.',
     errorToastLabel: 'تعذرت مغادرة غرفة المحادثة. يرجى المحاولة مرة أخرى لاحقًا.',
     noticeTemplate: 'غادر {name} المحادثة.',
-    leftBadgeLabel: 'غادر',
   },
   hi: {
     menuItemLabel: 'छोड़ें',
@@ -180,7 +164,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'आपने बातचीत कक्ष छोड़ दिया।',
     errorToastLabel: 'बातचीत कक्ष नहीं छोड़ा जा सका। कृपया थोड़ी देर बाद फिर कोशिश करें।',
     noticeTemplate: '{name} ने बातचीत छोड़ दी।',
-    leftBadgeLabel: 'छोड़ चुके',
   },
   th: {
     menuItemLabel: 'ออกจากห้องสนทนา',
@@ -192,7 +175,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'คุณออกจากห้องสนทนาแล้ว',
     errorToastLabel: 'ไม่สามารถออกจากห้องสนทนาได้ โปรดลองอีกครั้งภายหลัง',
     noticeTemplate: '{name} ออกจากการสนทนาแล้ว',
-    leftBadgeLabel: 'ออกแล้ว',
   },
   vi: {
     menuItemLabel: 'Roi khoi',
@@ -204,7 +186,6 @@ const LEAVE_CONVERSATION_COPY_BY_LOCALE = {
     successToastLabel: 'Ban da roi khoi phong tro chuyen.',
     errorToastLabel: 'Khong the roi khoi phong tro chuyen. Vui long thu lai sau.',
     noticeTemplate: '{name} da roi khoi cuoc tro chuyen.',
-    leftBadgeLabel: 'Da roi',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoConversationLeaveCopy>
 

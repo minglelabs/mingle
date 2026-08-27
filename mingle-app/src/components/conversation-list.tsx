@@ -3308,6 +3308,18 @@ export default function ConversationList({
     openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
   }, [openConversationSurface]);
 
+  // Reuses invite-friends-screen.tsx's picker (see its conversationId prop)
+  // in "add to this room" mode instead of a bespoke invite UI.
+  const openInviteMembers = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId || typeof window === "undefined") return;
+
+    const path = buildPathWithCurrentSearchParams(`/${locale}/conversations/add-members`);
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("conversation", normalizedConversationId);
+    router.push(`${url.pathname}${url.search}`);
+  }, [locale, router]);
+
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
@@ -4606,6 +4618,19 @@ export default function ConversationList({
       return;
     }
 
+    // The room was just deleted/left by this client (see handleConversationDeleted)
+    // — the URL racing back to it (e.g. the leave flow's requestCloseMenuPanel
+    // doing a multi-step history.go() that lands on an older history entry
+    // which still has this room's ?conversation= id) is stale history, not a
+    // real "failed to open." Clear it instead of hydrating/alerting.
+    if (routeConversationId && deletingConversationIdsRef.current.has(routeConversationId)) {
+      if (readConversationIdFromLocation() === routeConversationId) {
+        replaceConversationOverlayUrl(null, "route-sync-deleting-conversation");
+      }
+      routeSyncConversationIdRef.current = null;
+      return;
+    }
+
     const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
     if (!routeConversationId) {
       // A native gesture can deliver the popstate target before the URL store
@@ -5412,6 +5437,7 @@ export default function ConversationList({
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
                         onOpenProfile={openConversationProfile}
+                        onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}

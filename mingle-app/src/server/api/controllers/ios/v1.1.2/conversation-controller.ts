@@ -10,4 +10,6 @@ export {
   getConversationRealtimeTokenRouteForIosV1_1_0 as getConversationRealtimeTokenRouteForIosV1_1_2,
   getConversationMembersForIosV1_1_0 as getConversationMembersForIosV1_1_2,
   getConversationMembersRouteForIosV1_1_0 as getConversationMembersRouteForIosV1_1_2,
+  postConversationMembersForIosV1_1_0 as postConversationMembersForIosV1_1_2,
+  postConversationMembersRouteForIosV1_1_0 as postConversationMembersRouteForIosV1_1_2,
 } from "@/server/api/controllers/ios/v1.1.0/conversation-controller";

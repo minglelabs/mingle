@@ -116,6 +116,20 @@ export type ConversationHydrationLeaveNotice = {
   leftAtMs: number;
 };
 
+// One AppConversationChannelInvite row (see its doc comment), for the client
+// to render as an in-timeline "{inviter} invited {invitee}" notice, written
+// the moment the invite happens rather than deferred to materialization —
+// same "UI chrome, not a translated message" treatment as leave notices.
+export type ConversationHydrationInviteNotice = {
+  inviteeUserId: string;
+  inviteeName: string | null;
+  inviteeHandle: string | null;
+  invitedByUserId: string;
+  invitedByName: string | null;
+  invitedByHandle: string | null;
+  invitedAtMs: number;
+};
+
 export type ConversationHydrationState = {
   conversation: ConversationChannelSummary;
   usageSec: number;
@@ -124,6 +138,7 @@ export type ConversationHydrationState = {
   hasMoreUtterances: boolean;
   oldestMessageCursor: ConversationHydrationCursor | null;
   leaveNotices: ConversationHydrationLeaveNotice[];
+  inviteNotices: ConversationHydrationInviteNotice[];
 };
 
 type ConversationChannelRecord = {
@@ -234,6 +249,7 @@ type ChannelMemberProfile = {
   status: string;
   pausedAt: Date | null;
   lastReadAt: Date | null;
+  joinedAt: Date;
   // Set once this member leaves the room (see leaveConversationChannel). Most
   // resolvers below should filter to active (leftAt: null) members — see
   // filterActiveMembers — except the ones that intentionally preserve a
@@ -248,6 +264,26 @@ type ChannelMemberProfile = {
 // isMultiMember) intentionally pass the unfiltered member list.
 function filterActiveMembers(members: ChannelMemberProfile[] | undefined): ChannelMemberProfile[] {
   return (members ?? []).filter((member) => !member.leftAt);
+}
+
+// Point-in-time membership count, for per-message bubble attribution (see
+// its use in getConversationHydrationStateForUser): a message's
+// speakerUserId/speakerImage should reflect whether the room WAS
+// multi-member (2+ real members) at the moment THAT message was sent, not
+// the room's current membership. This is what keeps a room's bubble
+// history stable across membership changes — a message sent while the room
+// had 2 real members keeps its right-aligned/real-photo attribution
+// forever, even after that second member later leaves and the room reverts
+// to solo-style rendering for NEW messages. Confirmed with the user.
+function countActiveRealMembersAt(members: ChannelMemberProfile[], atMs: number): number {
+  return members.filter((member) => {
+    // joinedAt is NOT NULL in the schema — the instanceof guard only covers
+    // test doubles that omit it, defaulting a member with no known join
+    // time to "has always been here" rather than throwing.
+    const joinedAtMs = member.joinedAt instanceof Date ? member.joinedAt.getTime() : 0;
+    const leftAtMs = member.leftAt instanceof Date ? member.leftAt.getTime() : null;
+    return joinedAtMs <= atMs && (leftAtMs === null || leftAtMs > atMs);
+  }).length;
 }
 
 type PendingInviteeProfile = {
@@ -370,6 +406,7 @@ async function listChannelMembersByChannelId(
       status: true,
       pausedAt: true,
       lastReadAt: true,
+      joinedAt: true,
       leftAt: true,
       user: {
         select: {
@@ -412,6 +449,7 @@ async function listChannelMembersByChannelId(
       status: row.status,
       pausedAt: row.pausedAt,
       lastReadAt: row.lastReadAt,
+      joinedAt: row.joinedAt,
       leftAt: row.leftAt,
     });
     membersByChannelId.set(row.channelId, members);
@@ -1310,6 +1348,21 @@ export async function createConversationChannelForUser(
           skipDuplicates: true,
         });
 
+        if (inviteeUserIds.length > 0) {
+          // Same event-log row a later inviteMembersToConversationChannel
+          // call writes — drives the "{owner} invited {invitee}" notice from
+          // the very start of a fresh group room, not just for invites added
+          // afterward.
+          await tx.appConversationChannelInvite.createMany({
+            data: inviteeUserIds.map((inviteeUserId) => ({
+              channelId: created.id,
+              inviteeUserId,
+              invitedByUserId: userId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
         return created;
       });
 
@@ -1494,7 +1547,17 @@ export async function findExistingConversationWithExactMembers(args: {
 // and rooms that have already been materialized. When materialization occurs,
 // return the member IDs read inside the same committed transaction so the
 // message fan-out cannot race a second, stale membership query.
-export async function materializePendingConversationInvitees(sessionKey: string): Promise<string[] | null> {
+export async function materializePendingConversationInvitees(
+  sessionKey: string,
+  // The triggering message's own createdAt, when known (see the caller in
+  // log-client-event-handler.ts). Without this, the new member row's
+  // joinedAt defaults to now() — written a moment AFTER the message that
+  // triggered materialization was already inserted, which made
+  // countActiveRealMembersAt's point-in-time check treat that very message
+  // as still solo (invitee "joined" after it). Passing the message's own
+  // timestamp here keeps the triggering message itself already attributed.
+  joinedAt?: Date,
+): Promise<string[] | null> {
   const channel = await prisma.appConversationChannel.findUnique({
     where: { sessionKey },
     select: {
@@ -1565,6 +1628,7 @@ export async function materializePendingConversationInvitees(sessionKey: string)
             status: channel.status,
             pausedAt: channel.pausedAt,
             selectedLanguages,
+            ...(joinedAt ? { joinedAt } : {}),
             ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
               ? { displayLanguage: defaultDisplayLanguage }
               : {}),
@@ -2042,12 +2106,6 @@ export type ConversationMemberSummary = {
   // the client never has real identity to accidentally render — it should
   // substitute its own generic placeholder and refuse to open the profile.
   blocked: boolean;
-  // True when this member has left the room (see leaveConversationChannel).
-  // Unlike `blocked`, nothing about their identity is hidden — leaving isn't
-  // blocking, so name/handle/image stay real and the client should still
-  // allow opening their profile. Always false for a pending invitee (they
-  // can't have left something they never joined).
-  left: boolean;
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -2086,7 +2144,12 @@ export async function listConversationMembersForUser(args: {
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
 
-  const realMemberSummaries = members.map((member) => {
+  // A departed member drops off this list entirely — see filterActiveMembers.
+  // Unlike blocking, there's no "left" flag to show instead: the room's
+  // title/avatar/message history still reference them (those intentionally
+  // read the full membership history), but the CURRENT participant list is
+  // about who's in the room right now.
+  const realMemberSummaries = filterActiveMembers(members).map((member) => {
     const blocked = member.userId === blockedCounterpartUserId;
     return {
       userId: member.userId,
@@ -2101,7 +2164,6 @@ export async function listConversationMembersForUser(args: {
       imageCropY: blocked ? null : member.imageCropY,
       selectedLanguages: member.selectedLanguages,
       blocked,
-      left: Boolean(member.leftAt),
     };
   });
 
@@ -2115,10 +2177,96 @@ export async function listConversationMembersForUser(args: {
     imageCropY: profile.imageCropY,
     selectedLanguages: profile.defaultConversationLanguages,
     blocked: false,
-    left: false,
   }));
 
   return [...realMemberSummaries, ...pendingMemberSummaries];
+}
+
+// Adds people to an ALREADY-CREATED room — the missing counterpart to
+// createConversationChannelForUser's invitee list, which only ever runs at
+// creation time. Any active member (not just the owner) may invite: a solo
+// room going multi-member this way needs no other change anywhere else,
+// since every viewer-facing resolver above already branches on
+// resolveEffectiveMemberCount/pendingInviteeUserIds, and AppMessage rows are
+// keyed by sessionKey (not by member list), so the room's pre-invite history
+// stays exactly as it was.
+export async function inviteMembersToConversationChannel(args: {
+  conversationId: string;
+  userId: string;
+  inviteeUserIds: string[];
+}): Promise<ConversationChannelSummary | null> {
+  const requestedInviteeUserIds = [
+    ...new Set(args.inviteeUserIds.filter((id) => id && id !== args.userId)),
+  ];
+  if (requestedInviteeUserIds.length === 0) {
+    throw new Error("invalid_invitees");
+  }
+
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true, pendingInviteeUserIds: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
+  const activeMembers = filterActiveMembers(membersByChannelId.get(args.conversationId));
+  const existingUserIds = new Set([
+    ...activeMembers.map((member) => member.userId),
+    ...existing.pendingInviteeUserIds,
+  ]);
+  const newInviteeUserIds = requestedInviteeUserIds.filter((id) => !existingUserIds.has(id));
+  if (newInviteeUserIds.length === 0) {
+    throw new Error("already_members");
+  }
+  if (existingUserIds.size + newInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+    throw new Error("too_many_invitees");
+  }
+
+  await assertNoBlockAmong(args.userId, newInviteeUserIds);
+
+  const targetUsers = await prisma.user.findMany({
+    where: { id: { in: newInviteeUserIds } },
+    select: { id: true },
+  });
+  if (targetUsers.length !== newInviteeUserIds.length) {
+    throw new Error("target_user_not_found");
+  }
+
+  const record = await prisma.$transaction(async (tx) => {
+    const updated = await tx.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
+        // Same "no membership row until they send/receive via materialization"
+        // treatment as a fresh room's invitees — see the field's doc comment
+        // and materializePendingConversationInvitees.
+        pendingInviteeUserIds: [...existing.pendingInviteeUserIds, ...newInviteeUserIds],
+      },
+      select: conversationChannelSelect,
+    });
+
+    // Written now, independent of materialization, so the "{inviter} invited
+    // {invitee}" notice (see getConversationHydrationStateForUser) shows up
+    // immediately instead of waiting for the invitee's first message.
+    await tx.appConversationChannelInvite.createMany({
+      data: newInviteeUserIds.map((inviteeUserId) => ({
+        channelId: args.conversationId,
+        inviteeUserId,
+        invitedByUserId: args.userId,
+      })),
+      skipDuplicates: true,
+    });
+
+    return updated;
+  });
+
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function getConversationHydrationStateForUser(args: {
@@ -2165,7 +2313,7 @@ export async function getConversationHydrationStateForUser(args: {
       : {}),
   };
 
-  const [latestUsageEvent, totalMessageCount, messagesWithLookahead] = await prisma.$transaction([
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords] = await prisma.$transaction([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -2205,6 +2353,10 @@ export async function getConversationHydrationStateForUser(args: {
         },
       },
     }),
+    prisma.appConversationChannelInvite.findMany({
+      where: { channelId: conversationRecord.id },
+      select: { inviteeUserId: true, invitedByUserId: true, createdAt: true },
+    }),
   ]);
 
   const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
@@ -2220,17 +2372,23 @@ export async function getConversationHydrationStateForUser(args: {
   const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
     .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
-  // A real photo only makes sense once there's more than one real account in
-  // the room — a solo session's diarized "speaker" turns aren't a second
-  // real identity, so they keep the generated animal avatar unchanged. Real
-  // per-message speakerUserId/speakerImage below stays gated on REAL members
-  // only (a pending invitee has no messages of their own yet), but the
-  // room-level isMultiMember/title/language-union fields below also count
-  // pending invitees — see resolveEffectiveMemberCount.
-  const isMultiMemberByRealMembers = (members?.length ?? 0) >= 2;
-  const isMultiMember = resolveEffectiveMemberCount(members, conversationRecord.pendingInviteeUserIds) >= 2;
+  // ACTIVE members only (unlike resolveViewerFacingTitle/resolveOtherMemberAvatars
+  // below, which intentionally read the full membership history so the room
+  // keeps showing a departed member's name/photo) — the conversation's own
+  // isMultiMember flag is about the room's CURRENT state: once the only
+  // other member leaves, the leave/delete menu action should revert to
+  // delete, exactly like a room that never had a second member. Still
+  // counts pending invitees, so the room already shows as multi-member
+  // (title, participant list, avatar cluster) the moment someone is
+  // invited, without waiting for their first-message materialization.
+  const isMultiMember = resolveEffectiveMemberCount(
+    filterActiveMembers(members),
+    conversationRecord.pendingInviteeUserIds,
+  ) >= 2;
+  const realMembers = members ?? [];
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
+  const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.userId,
     membersByChannelId,
@@ -2257,6 +2415,14 @@ export async function getConversationHydrationStateForUser(args: {
     const targetLanguages = Object.keys(translations);
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
+    // Point-in-time, not the room's current membership — see
+    // countActiveRealMembersAt's doc comment. Also intentionally excludes
+    // pending invitees (real members only): inviting someone shouldn't, by
+    // itself, flip the inviter's own messages away from the
+    // animal-avatar/diarized-speaker rendering solo sessions rely on to
+    // distinguish detected voices — that switch happens only once the
+    // invitee actually materializes into a real member.
+    const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
@@ -2271,7 +2437,7 @@ export async function getConversationHydrationStateForUser(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: isMultiMemberByRealMembers && message.userId
+      speakerName: isMultiMemberAtMessage && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -2280,17 +2446,35 @@ export async function getConversationHydrationStateForUser(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: isMultiMemberByRealMembers ? message.userId : null,
+      speakerUserId: isMultiMemberAtMessage ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: isMultiMemberByRealMembers && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: isMultiMemberAtMessage && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
     };
   }).filter((utterance) => utterance.originalText.length > 0);
+
+  // Every inviter is (or was) a real member — only active members can invite
+  // (see inviteMembersToConversationChannel) — so their name/handle always
+  // resolve via the member map. An invitee resolves the same way once
+  // materialized, or via pendingInviteeProfileById before that.
+  const inviteNotices: ConversationHydrationInviteNotice[] = inviteRecords.map((invite) => ({
+    inviteeUserId: invite.inviteeUserId,
+    inviteeName: nameByUserId.get(invite.inviteeUserId)
+      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
+      ?? null,
+    inviteeHandle: handleByUserId.get(invite.inviteeUserId)
+      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.handle
+      ?? null,
+    invitedByUserId: invite.invitedByUserId,
+    invitedByName: nameByUserId.get(invite.invitedByUserId) ?? null,
+    invitedByHandle: handleByUserId.get(invite.invitedByUserId) ?? null,
+    invitedAtMs: invite.createdAt.getTime(),
+  }));
 
   return {
     conversation: serializeConversationChannel(
@@ -2368,6 +2552,7 @@ export async function getConversationHydrationStateForUser(args: {
         handle: member.handle,
         leftAtMs: (member.leftAt as Date).getTime(),
       })),
+    inviteNotices,
   };
 }
 

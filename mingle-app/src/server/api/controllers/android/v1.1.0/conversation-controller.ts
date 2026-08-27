@@ -7,6 +7,7 @@ import {
   getConversationRealtimeTokenResponse,
   getConversationResponse,
   patchConversationResponse,
+  postConversationMembersResponse,
 } from "@/server/api/controllers/shared/conversation-controller";
 
 export { deleteConversationResponse as deleteConversationForAndroidV1_1_0 };
@@ -14,6 +15,7 @@ export { getConversationResponse as getConversationForAndroidV1_1_0 };
 export { patchConversationResponse as patchConversationForAndroidV1_1_0 };
 export { getConversationRealtimeTokenResponse as getConversationRealtimeTokenForAndroidV1_1_0 };
 export { getConversationMembersResponse as getConversationMembersForAndroidV1_1_0 };
+export { postConversationMembersResponse as postConversationMembersForAndroidV1_1_0 };
 
 export async function getConversationMembersRouteForAndroidV1_1_0(
   request: NextRequest,
@@ -21,6 +23,14 @@ export async function getConversationMembersRouteForAndroidV1_1_0(
 ) {
   const { conversationId } = await context.params;
   return getConversationMembersResponse(request, conversationId);
+}
+
+export async function postConversationMembersRouteForAndroidV1_1_0(
+  request: NextRequest,
+  context: { params: Promise<{ conversationId: string }> },
+) {
+  const { conversationId } = await context.params;
+  return postConversationMembersResponse(request, conversationId);
 }
 
 export async function getConversationRealtimeTokenRouteForAndroidV1_1_0(

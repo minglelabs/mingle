@@ -705,6 +705,16 @@ type ConversationHydrationLeaveNoticePayload = {
   leftAtMs?: number
 }
 
+type ConversationHydrationInviteNoticePayload = {
+  inviteeUserId?: string
+  inviteeName?: string | null
+  inviteeHandle?: string | null
+  invitedByUserId?: string
+  invitedByName?: string | null
+  invitedByHandle?: string | null
+  invitedAtMs?: number
+}
+
 type ConversationHydrationPayload = {
   usageSec?: number
   messageCount?: number
@@ -715,6 +725,7 @@ type ConversationHydrationPayload = {
     isMultiMember?: boolean
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+  inviteNotices?: ConversationHydrationInviteNoticePayload[]
 }
 
 // One member's departure (see leaveConversationChannel on the server), for
@@ -745,6 +756,45 @@ function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): Conver
       name: typeof record.name === 'string' ? record.name : null,
       handle: typeof record.handle === 'string' ? record.handle : null,
       leftAtMs: Math.floor(leftAtMs),
+    })
+  }
+  return result
+}
+
+// One AppConversationChannelInvite row (see its doc comment on the server),
+// for rendering an in-room "{inviter} invited {invitee}" notice — same
+// KakaoTalk-style timeline chrome as ConversationLeaveNotice above, written
+// the moment the invite happens rather than deferred to the invitee's first
+// message. Not paginated, same reasoning as leave notices.
+export type ConversationInviteNotice = {
+  inviteeUserId: string
+  inviteeName: string | null
+  inviteeHandle: string | null
+  invitedByUserId: string
+  invitedByName: string | null
+  invitedByHandle: string | null
+  invitedAtMs: number
+}
+
+function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
+  if (!Array.isArray(rawNotices)) return []
+
+  const result: ConversationInviteNotice[] = []
+  for (const raw of rawNotices) {
+    if (!raw || typeof raw !== 'object') continue
+    const record = raw as ConversationHydrationInviteNoticePayload
+    const inviteeUserId = typeof record.inviteeUserId === 'string' ? record.inviteeUserId.trim() : ''
+    const invitedByUserId = typeof record.invitedByUserId === 'string' ? record.invitedByUserId.trim() : ''
+    const invitedAtMs = typeof record.invitedAtMs === 'number' ? record.invitedAtMs : Number(record.invitedAtMs)
+    if (!inviteeUserId || !invitedByUserId || !Number.isFinite(invitedAtMs) || invitedAtMs <= 0) continue
+    result.push({
+      inviteeUserId,
+      inviteeName: typeof record.inviteeName === 'string' ? record.inviteeName : null,
+      inviteeHandle: typeof record.inviteeHandle === 'string' ? record.inviteeHandle : null,
+      invitedByUserId,
+      invitedByName: typeof record.invitedByName === 'string' ? record.invitedByName : null,
+      invitedByHandle: typeof record.invitedByHandle === 'string' ? record.invitedByHandle : null,
+      invitedAtMs: Math.floor(invitedAtMs),
     })
   }
   return result
@@ -2503,6 +2553,7 @@ export default function useRealtimeSTT({
   // "speaker" turns must never be treated as the viewer's own account.
   const [isSharedRoom, setIsSharedRoom] = useState(false)
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
+  const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -3085,6 +3136,7 @@ export default function useRealtimeSTT({
         setIsSharedRoom(payload.conversation.isMultiMember === true)
       }
       setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
+      setInviteNotices(normalizeConversationHydrationInviteNotices(payload.inviteNotices))
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3198,6 +3250,7 @@ export default function useRealtimeSTT({
           setIsSharedRoom(payload.conversation.isMultiMember === true)
         }
         setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
+        setInviteNotices(normalizeConversationHydrationInviteNotices(payload.inviteNotices))
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -5717,6 +5770,7 @@ export default function useRealtimeSTT({
     isStorageHydrated,
     persistedUtteranceCount,
     leaveNotices,
+    inviteNotices,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,

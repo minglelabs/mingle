@@ -8,6 +8,7 @@ import {
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
+  inviteMembersToConversationChannel,
   leaveConversationChannel,
   listChannelMemberUserIdsBySessionKey,
   listConversationMembersForUser,
@@ -377,6 +378,80 @@ export async function getConversationMembersResponse(
   }
 
   return NextResponse.json({ members });
+}
+
+export async function postConversationMembersResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let body: { inviteeUserIds?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const inviteeUserIds = Array.isArray(body.inviteeUserIds)
+    ? body.inviteeUserIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  if (inviteeUserIds.length === 0) {
+    return NextResponse.json({ error: "invalid_invitees" }, { status: 400 });
+  }
+
+  let conversation;
+  try {
+    conversation = await inviteMembersToConversationChannel({
+      conversationId,
+      userId: resolvedUser.userId,
+      inviteeUserIds,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "too_many_invitees") {
+      return NextResponse.json({ error: "too_many_invitees" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "already_members") {
+      return NextResponse.json({ error: "already_members" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
+    if (error instanceof Error && error.message === "target_user_not_found") {
+      return NextResponse.json({ error: "target_user_not_found" }, { status: 404 });
+    }
+    console.error("[conversations] invite_failed", error);
+    return NextResponse.json({ error: "conversation_channel_invite_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Same best-effort push used for a landed message/leave — lets any
+  // already-open room and conversation-list screen for the existing members
+  // pick up the new member (and the avatar/title switch that comes with
+  // going multi-member) without waiting on their own poll cycle.
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({ conversation });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
 }
 
 export async function deleteConversationResponse(

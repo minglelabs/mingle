@@ -28,7 +28,6 @@ describe('live-phone-demo.leave-copy', () => {
       expect(copy.successToastLabel.trim().length).toBeGreaterThan(0)
       expect(copy.errorToastLabel.trim().length).toBeGreaterThan(0)
       expect(copy.noticeTemplate).toContain('{name}')
-      expect(copy.leftBadgeLabel.trim().length).toBeGreaterThan(0)
     }
   })
 
