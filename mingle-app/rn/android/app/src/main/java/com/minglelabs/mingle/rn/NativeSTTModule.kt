@@ -440,7 +440,11 @@ class NativeSTTModule(
       registerAudioDeviceCallback()
       startStallMonitor()
       setForegroundServiceEnabled(profile.foregroundServiceEnabled)
-      emitStatus("running")
+      // The WebSocket callbacks run concurrently with setup. A very fast
+      // server can deliver `ready` before setup reaches this point; do not
+      // overwrite that terminal connection state with the earlier lifecycle
+      // state, or the WebView can remain stuck on its connecting UI.
+      emitStatus(if (serverReady) "ready" else "running")
       Log.i(TAG, "audio capture started conversation=${activeConversationId ?: "unknown"} sampleRate=$currentSampleRate")
       promise.resolve(Arguments.createMap().apply {
         putInt("sampleRate", currentSampleRate)

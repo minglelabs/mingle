@@ -3472,6 +3472,17 @@ export default function ConversationList({
         )
       : null;
 
+    // A live native session is authoritative for one specific room. The list
+    // can briefly render without that room while hydration is catching up;
+    // never infer that every other active room is stale in that window.
+    if (
+      isNativeSttStatusLive(cachedNativeSttStatus)
+      && cachedNativeSttConversationId
+      && !hiddenNativeSttConversation
+    ) {
+      return;
+    }
+
     const shouldStayOnConversationList = (() => {
       const currentUrl = new URL(window.location.href);
       const isExplicitTabRoot = currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
