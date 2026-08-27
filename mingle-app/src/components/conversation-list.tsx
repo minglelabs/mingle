@@ -3463,10 +3463,12 @@ export default function ConversationList({
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
 
+    const cachedNativeSttConversationId = readCachedNativeSttConversationId();
     const hiddenNativeSttConversation = isNativeSttStatusLive(cachedNativeSttStatus)
       ? findNativeSttRestoreConversation(
           conversations,
           deletingConversationIdsRef.current,
+          cachedNativeSttConversationId,
         )
       : null;
 
@@ -3557,6 +3559,7 @@ export default function ConversationList({
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
+        cachedNativeSttConversationId,
       );
       if (
         restoreConversation

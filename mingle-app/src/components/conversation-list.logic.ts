@@ -244,7 +244,17 @@ export function updateConversationSummaryStatus(
 export function findNativeSttRestoreConversation(
   conversations: ConversationChannelSummary[],
   deletingConversationIds: ReadonlySet<string>,
+  preferredConversationId?: string | null,
 ): ConversationChannelSummary | null {
+  const normalizedPreferredConversationId = preferredConversationId?.trim() || null;
+  if (normalizedPreferredConversationId) {
+    return conversations.find((conversation) => (
+      conversation.id === normalizedPreferredConversationId
+      && conversation.status === "active"
+      && !deletingConversationIds.has(conversation.id)
+    )) ?? null;
+  }
+
   return conversations.find((conversation) => (
     conversation.status === "active"
     && !deletingConversationIds.has(conversation.id)
