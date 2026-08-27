@@ -1227,17 +1227,19 @@ export async function listConversationChannelsForExternalUserId(
   }, options, user?.id);
 }
 
-export async function createConversationChannelForUser(
+type CreateConversationChannelOptions = {
+  locale?: string;
+  preferredSessionKey?: string;
+  selectedLanguages?: string[];
+  speechLanguages?: string[];
+  translationLanguagesLinked?: boolean;
+  inviteeUserIds?: string[];
+};
+
+async function createConversationChannelRecordForUser(
   userId: string,
-  options?: {
-    locale?: string;
-    preferredSessionKey?: string;
-    selectedLanguages?: string[];
-    speechLanguages?: string[];
-    translationLanguagesLinked?: boolean;
-    inviteeUserIds?: string[];
-  },
-): Promise<ConversationChannelSummary> {
+  options?: CreateConversationChannelOptions,
+): Promise<ConversationChannelRecord> {
   const normalizedLocale = (options?.locale || "en").trim() || "en";
   const normalizedPreferredSessionKey = (options?.preferredSessionKey || "").trim();
   const normalizedSelectedLanguages = sanitizeSttLanguageSelection(options?.selectedLanguages);
@@ -1366,7 +1368,7 @@ export async function createConversationChannelForUser(
         return created;
       });
 
-      return serializeConversationChannelWithPreview(record, userId);
+      return record;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError
@@ -1381,17 +1383,25 @@ export async function createConversationChannelForUser(
   throw new Error("conversation_channel_create_conflict");
 }
 
-// The entry point for "message this person": reuses whatever 1:1 room
-// already exists between the two accounts instead of spawning a duplicate
-// every time someone taps the button on a profile they've messaged before.
-export async function findOrCreateDirectConversation(args: {
+export async function createConversationChannelForUser(
+  userId: string,
+  options?: CreateConversationChannelOptions,
+): Promise<ConversationChannelSummary> {
+  const record = await createConversationChannelRecordForUser(userId, options);
+  return serializeConversationChannelWithPreview(record, userId);
+}
+
+type DirectConversationArgs = {
   userId: string;
   targetUserId: string;
   locale?: string;
   force?: boolean;
-}): Promise<{ conversation: ConversationChannelSummary; reused: boolean }> {
-  const targetUserId = args.targetUserId.trim();
-  if (!targetUserId || targetUserId === args.userId) {
+  preferredSessionKey?: string;
+};
+
+async function validateDirectConversationTarget(userId: string, rawTargetUserId: string): Promise<string> {
+  const targetUserId = rawTargetUserId.trim();
+  if (!targetUserId || targetUserId === userId) {
     throw new Error("invalid_target_user");
   }
 
@@ -1403,71 +1413,110 @@ export async function findOrCreateDirectConversation(args: {
     throw new Error("target_user_not_found");
   }
 
-  await assertNoBlockAmong(args.userId, [targetUserId]);
+  await assertNoBlockAmong(userId, [targetUserId]);
+  return targetUserId;
+}
+
+async function findExistingDirectConversationRecord(
+  userId: string,
+  targetUserId: string,
+): Promise<ConversationChannelRecord | null> {
+  // Every membership condition below is scoped to leftAt: null (active
+  // members only) — see findExistingConversationWithExactMembers's doc
+  // comment for why: once either side has left, the room must stop being
+  // offered as "the" 1:1 room, for both of them.
+  const existingCandidates = await prisma.appConversationChannel.findMany({
+    where: {
+      members: { some: { userId, leftAt: null } },
+      AND: [
+        buildVisibleConversationWhere(),
+        {
+          OR: [
+            {
+              AND: [
+                { members: { some: { userId: targetUserId, leftAt: null } } },
+                // Exactly these two — a channel where either has picked up extra
+                // members (a future group chat) is not "the" 1:1 room anymore.
+                { members: { none: { userId: { notIn: [userId, targetUserId] }, leftAt: null } } },
+              ],
+            },
+            // The target hasn't received a first message yet (no membership row
+            // — see pendingInviteeUserIds), so it wouldn't match the branch
+            // above. Reuse this same pending room on a repeat tap instead of
+            // spawning a new one each time.
+            {
+              AND: [
+                { ownerUserId: userId },
+                { pendingInviteeUserIds: { has: targetUserId } },
+                { members: { none: { userId: { not: userId } } } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    select: conversationChannelSelect,
+  });
+  // The pending branch above is intentionally broad enough for the database
+  // query to use an indexed array-membership predicate. Narrow it here so a
+  // pending group [B, C] can never be reused as A's direct room with B.
+  const exactDirectCandidates = existingCandidates.filter((candidate) => (
+    candidate.pendingInviteeUserIds.length === 0
+    || (
+      candidate.pendingInviteeUserIds.length === 1
+      && candidate.pendingInviteeUserIds[0] === targetUserId
+    )
+  ));
+  return selectMostRecentlyMessagedConversation(exactDirectCandidates);
+}
+
+async function findOrCreateDirectConversationRecord(
+  args: DirectConversationArgs,
+): Promise<{ record: ConversationChannelRecord; reused: boolean }> {
+  const targetUserId = await validateDirectConversationTarget(args.userId, args.targetUserId);
 
   if (!args.force) {
-    // Every membership condition below is scoped to leftAt: null (active
-    // members only) — see findExistingConversationWithExactMembers's doc
-    // comment for why: once either side has left, the room must stop being
-    // offered as "the" 1:1 room, for both of them.
-    const existingCandidates = await prisma.appConversationChannel.findMany({
-      where: {
-        members: { some: { userId: args.userId, leftAt: null } },
-        AND: [
-          buildVisibleConversationWhere(),
-          {
-            OR: [
-              {
-                AND: [
-                  { members: { some: { userId: targetUserId, leftAt: null } } },
-                  // Exactly these two — a channel where either has picked up extra
-                  // members (a future group chat) is not "the" 1:1 room anymore.
-                  { members: { none: { userId: { notIn: [args.userId, targetUserId] }, leftAt: null } } },
-                ],
-              },
-              // The target hasn't received a first message yet (no membership row
-              // — see pendingInviteeUserIds), so it wouldn't match the branch
-              // above. Reuse this same pending room on a repeat tap instead of
-              // spawning a new one each time.
-              {
-                AND: [
-                  { ownerUserId: args.userId },
-                  { pendingInviteeUserIds: { has: targetUserId } },
-                  { members: { none: { userId: { not: args.userId } } } },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      select: conversationChannelSelect,
-    });
-    // The pending branch above is intentionally broad enough for the database
-    // query to use an indexed array-membership predicate. Narrow it here so a
-    // pending group [B, C] can never be reused as A's direct room with B.
-    const exactDirectCandidates = existingCandidates.filter((candidate) => (
-      candidate.pendingInviteeUserIds.length === 0
-      || (
-        candidate.pendingInviteeUserIds.length === 1
-        && candidate.pendingInviteeUserIds[0] === targetUserId
-      )
-    ));
-    const existing = await selectMostRecentlyMessagedConversation(exactDirectCandidates);
-
+    const existing = await findExistingDirectConversationRecord(args.userId, targetUserId);
     if (existing) {
-      return {
-        conversation: await serializeConversationChannelWithPreview(existing, args.userId),
-        reused: true,
-      };
+      return { record: existing, reused: true };
     }
   }
 
   return {
-    conversation: await createConversationChannelForUser(args.userId, {
+    record: await createConversationChannelRecordForUser(args.userId, {
       locale: args.locale,
+      preferredSessionKey: args.preferredSessionKey,
       inviteeUserIds: [targetUserId],
     }),
     reused: false,
+  };
+}
+
+// Signup onboarding only needs a durable session key. It deliberately avoids
+// serializing the full room preview, because a preview/profile lookup failure
+// must not prevent the welcome message transaction from being written.
+export async function findOrCreateDirectConversationSession(args: DirectConversationArgs): Promise<{
+  sessionKey: string;
+  reused: boolean;
+}> {
+  const result = await findOrCreateDirectConversationRecord(args);
+  return {
+    sessionKey: result.record.sessionKey,
+    reused: result.reused,
+  };
+}
+
+// The entry point for "message this person": reuses whatever 1:1 room
+// already exists between the two accounts instead of spawning a duplicate
+// every time someone taps the button on a profile they've messaged before.
+export async function findOrCreateDirectConversation(args: DirectConversationArgs): Promise<{
+  conversation: ConversationChannelSummary;
+  reused: boolean;
+}> {
+  const result = await findOrCreateDirectConversationRecord(args);
+  return {
+    conversation: await serializeConversationChannelWithPreview(result.record, args.userId),
+    reused: result.reused,
   };
 }
 

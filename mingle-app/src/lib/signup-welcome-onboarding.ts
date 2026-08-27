@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
-  findOrCreateDirectConversation,
+  findOrCreateDirectConversationSession,
   listChannelMemberUserIdsBySessionKey,
   materializePendingConversationInvitees,
 } from "@/lib/app-conversations";
@@ -13,6 +13,7 @@ export const ROYCE_USER_ID = "cmsrqesom0000mx1hn62ce6r9";
 export const ROYCE_WELCOME_MESSAGE = "Welcome! My name is Royce. I'm developer of Mingle. If you have any feedback or questions, feel free to message me anytime on Mingle. The cat in the photo is Somi, my cat.";
 
 const ROYCE_WELCOME_CLIENT_MESSAGE_ID = "mingle-welcome-royce-v1";
+const ROYCE_WELCOME_RETRY_DELAYS_MS = [0, 250, 1_000] as const;
 
 type NewNotification = {
   id: string;
@@ -80,163 +81,199 @@ async function ensureMutualFollow(userId: string): Promise<NewNotification[]> {
 }
 
 async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promise<void> {
-  const conversationResult = await findOrCreateDirectConversation({
-    userId,
-    targetUserId: ROYCE_USER_ID,
-    locale: locale || "en",
-  });
-  const sessionKey = conversationResult.conversation.sessionKey;
+  let sessionKey = "";
+  let messageId = "";
+  let lastError: unknown;
 
-  // Translate only into the languages the NEW USER actually wants — read
-  // their own persisted defaultConversationLanguages directly rather than
-  // conversationResult.conversation.selectedLanguages: since Royce is a
-  // pending invitee at this point, that room-level value is a UNION that
-  // also pulls in Royce's own account's defaultConversationLanguages (see
-  // resolveRoomLanguageUnion in app-conversations.ts), which would leak an
-  // unrelated language into every new user's welcome message. "en" is
-  // excluded since it's already written as the SOURCE row below.
-  const targetUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { defaultConversationLanguages: true },
-  });
-  const ownSelectedLanguages = sanitizeSttLanguageSelection(
-    targetUser?.defaultConversationLanguages,
-    deriveDefaultSttLanguagesForLocale(locale),
-  );
-  const welcomeTranslationLanguages = ownSelectedLanguages.filter(
-    (language): language is keyof typeof ROYCE_WELCOME_TRANSLATIONS => (
-      language !== "en" && language in ROYCE_WELCOME_TRANSLATIONS
-    ),
-  );
-
-  // A newly created direct room keeps the target as a pending invitee until
-  // its first message. Materialize both accounts before inserting Royce's
-  // server-authored welcome message so the recipient has a real read cursor.
-  await materializePendingConversationInvitees(sessionKey);
-
-  const message = await prisma.$transaction(async (tx) => {
-    const createdMessage = await tx.appMessage.upsert({
-      where: {
-        sessionKey_clientMessageId: {
-          sessionKey,
-          clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
-        },
-      },
-      create: {
-        userId: ROYCE_USER_ID,
-        sessionKey,
-        clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
-        isDeleted: false,
-        sourceLanguage: "en",
-        metadata: {
-          source: "signup_welcome",
-          welcomeVersion: 2,
-          translationLanguages: welcomeTranslationLanguages,
-        },
-      },
-      update: {
-        userId: ROYCE_USER_ID,
-        isDeleted: false,
-        metadata: {
-          source: "signup_welcome",
-          welcomeVersion: 2,
-          translationLanguages: welcomeTranslationLanguages,
-        },
-      },
-      select: { id: true },
-    });
-
-    await tx.appMessageContent.upsert({
-      where: {
-        messageId_contentType_language: {
-          messageId: createdMessage.id,
-          contentType: "SOURCE",
-          language: "en",
-        },
-      },
-      create: {
-        messageId: createdMessage.id,
-        contentType: "SOURCE",
-        language: "en",
-        isDeleted: false,
-        text: ROYCE_WELCOME_MESSAGE,
-      },
-      update: {
-        isDeleted: false,
-        text: ROYCE_WELCOME_MESSAGE,
-      },
-    });
-
-    for (const language of welcomeTranslationLanguages) {
-      const translatedText = ROYCE_WELCOME_TRANSLATIONS[language];
-      await tx.appMessageContent.upsert({
-        where: {
-          messageId_contentType_language: {
-            messageId: createdMessage.id,
-            contentType: "TRANSLATION_FINAL",
-            language,
-          },
-        },
-        create: {
-          messageId: createdMessage.id,
-          contentType: "TRANSLATION_FINAL",
-          language,
-          isDeleted: false,
-          text: translatedText,
-          provider: "hardcoded",
-          model: "royce-welcome-v2",
-        },
-        update: {
-          isDeleted: false,
-          text: translatedText,
-          provider: "hardcoded",
-          model: "royce-welcome-v2",
-        },
-      });
+  for (let attempt = 0; attempt < ROYCE_WELCOME_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, ROYCE_WELCOME_RETRY_DELAYS_MS[attempt]));
     }
 
-    // This runs again whenever the user's own language changes after the
-    // welcome message already exists — e.g. OAuth signup writes it once with
-    // a generic locale, then the post-login profile sync (see
-    // /api/profile's PATCH handler) calls back in with the real one. Retire
-    // any translation row left over from an earlier run that's no longer in
-    // the current target set, so a stale language doesn't linger forever
-    // (upserting the current set alone never removes what it doesn't cover).
-    await tx.appMessageContent.updateMany({
-      where: {
-        messageId: createdMessage.id,
-        contentType: "TRANSLATION_FINAL",
-        isDeleted: false,
-        language: { notIn: welcomeTranslationLanguages },
-      },
-      data: { isDeleted: true },
-    });
-
-    // The account is new and this message must be unread when its first
-    // conversation list is hydrated. This is idempotent and does not create
-    // another message because the deterministic clientMessageId is unique per
-    // conversation.
-    await tx.appConversationChannelMember.updateMany({
-      where: {
-        channel: { sessionKey },
+    try {
+      // Signup only needs the durable session key. Full preview serialization
+      // performs profile/message reads that are unrelated to writing the
+      // welcome message and can fail after a newly-created room is committed.
+      const conversationResult = await findOrCreateDirectConversationSession({
         userId,
-        leftAt: null,
-      },
-      data: { lastReadAt: null },
+        targetUserId: ROYCE_USER_ID,
+        locale: locale || "en",
+        preferredSessionKey: `mingle-welcome-royce-${userId}`,
+      });
+      sessionKey = conversationResult.sessionKey;
+
+      // Translate only into the languages the NEW USER actually wants — read
+      // their own persisted defaultConversationLanguages directly rather than
+      // the room union, which also includes Royce's preferences.
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { defaultConversationLanguages: true },
+      });
+      const ownSelectedLanguages = sanitizeSttLanguageSelection(
+        targetUser?.defaultConversationLanguages,
+        deriveDefaultSttLanguagesForLocale(locale),
+      );
+      const welcomeTranslationLanguages = ownSelectedLanguages.filter(
+        (language): language is keyof typeof ROYCE_WELCOME_TRANSLATIONS => (
+          language !== "en" && language in ROYCE_WELCOME_TRANSLATIONS
+        ),
+      );
+
+      // A newly created direct room keeps Royce as a pending invitee until
+      // the first message. Materialize both accounts before inserting the
+      // server-authored welcome message so the recipient has a real cursor.
+      await materializePendingConversationInvitees(sessionKey);
+
+      const message = await prisma.$transaction(async (tx) => {
+        const createdMessage = await tx.appMessage.upsert({
+          where: {
+            sessionKey_clientMessageId: {
+              sessionKey,
+              clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
+            },
+          },
+          create: {
+            userId: ROYCE_USER_ID,
+            sessionKey,
+            clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
+            isDeleted: false,
+            sourceLanguage: "en",
+            metadata: {
+              source: "signup_welcome",
+              welcomeVersion: 2,
+              translationLanguages: welcomeTranslationLanguages,
+            },
+          },
+          update: {
+            userId: ROYCE_USER_ID,
+            isDeleted: false,
+            metadata: {
+              source: "signup_welcome",
+              welcomeVersion: 2,
+              translationLanguages: welcomeTranslationLanguages,
+            },
+          },
+          select: { id: true },
+        });
+
+        await tx.appMessageContent.upsert({
+          where: {
+            messageId_contentType_language: {
+              messageId: createdMessage.id,
+              contentType: "SOURCE",
+              language: "en",
+            },
+          },
+          create: {
+            messageId: createdMessage.id,
+            contentType: "SOURCE",
+            language: "en",
+            isDeleted: false,
+            text: ROYCE_WELCOME_MESSAGE,
+          },
+          update: {
+            isDeleted: false,
+            text: ROYCE_WELCOME_MESSAGE,
+          },
+        });
+
+        for (const language of welcomeTranslationLanguages) {
+          const translatedText = ROYCE_WELCOME_TRANSLATIONS[language];
+          await tx.appMessageContent.upsert({
+            where: {
+              messageId_contentType_language: {
+                messageId: createdMessage.id,
+                contentType: "TRANSLATION_FINAL",
+                language,
+              },
+            },
+            create: {
+              messageId: createdMessage.id,
+              contentType: "TRANSLATION_FINAL",
+              language,
+              isDeleted: false,
+              text: translatedText,
+              provider: "hardcoded",
+              model: "royce-welcome-v2",
+            },
+            update: {
+              isDeleted: false,
+              text: translatedText,
+              provider: "hardcoded",
+              model: "royce-welcome-v2",
+            },
+          });
+        }
+
+        // Re-running onboarding after a language change must retire stale
+        // rows left by the earlier run.
+        await tx.appMessageContent.updateMany({
+          where: {
+            messageId: createdMessage.id,
+            contentType: "TRANSLATION_FINAL",
+            isDeleted: false,
+            language: { notIn: welcomeTranslationLanguages },
+          },
+          data: { isDeleted: true },
+        });
+
+        // Keep the welcome unread for the new recipient. The deterministic
+        // clientMessageId makes the whole operation idempotent.
+        await tx.appConversationChannelMember.updateMany({
+          where: {
+            channel: { sessionKey },
+            userId,
+            leftAt: null,
+          },
+          data: { lastReadAt: null },
+        });
+
+        return createdMessage;
+      });
+
+      messageId = message.id;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === ROYCE_WELCOME_RETRY_DELAYS_MS.length - 1) {
+        throw error;
+      }
+      console.warn("[signup-welcome] database attempt failed; retrying", {
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  if (!sessionKey || !messageId) {
+    throw lastError instanceof Error ? lastError : new Error("signup_welcome_message_failed");
+  }
+
+  // Realtime and push are latency enhancements. They must never turn a
+  // successfully committed welcome message into a failed onboarding attempt.
+  let memberUserIds: string[] = [];
+  try {
+    memberUserIds = await listChannelMemberUserIdsBySessionKey(sessionKey);
+    await notifyConversationMessage(sessionKey, memberUserIds);
+  } catch (error) {
+    console.warn("[signup-welcome] realtime notification failed", {
+      error: error instanceof Error ? error.message : String(error),
     });
+  }
 
-    return createdMessage;
-  });
-
-  const memberUserIds = await listChannelMemberUserIdsBySessionKey(sessionKey);
-  await notifyConversationMessage(sessionKey, memberUserIds);
-  await sendPushNotificationForConversationMessage({
-    messageId: message.id,
-    sessionKey,
-    sourceText: ROYCE_WELCOME_MESSAGE,
-    senderUserId: ROYCE_USER_ID,
-    memberUserIds,
-  });
+  try {
+    await sendPushNotificationForConversationMessage({
+      messageId,
+      sessionKey,
+      sourceText: ROYCE_WELCOME_MESSAGE,
+      senderUserId: ROYCE_USER_ID,
+      memberUserIds,
+    });
+  } catch (error) {
+    console.warn("[signup-welcome] welcome push failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export async function ensureSignupWelcomeOnboarding(args: {

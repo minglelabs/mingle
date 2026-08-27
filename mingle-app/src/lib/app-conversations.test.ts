@@ -117,6 +117,7 @@ import {
   deleteConversationChannel,
   findExistingConversationWithExactMembers,
   findOrCreateDirectConversation,
+  findOrCreateDirectConversationSession,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
   inviteMembersToConversationChannel,
@@ -2480,6 +2481,33 @@ describe("app-conversations", () => {
   });
 
   describe("findOrCreateDirectConversation", () => {
+    it("resolves a durable session without loading the room preview", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationMany.mockResolvedValue([{
+        id: "conv-existing",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "session-existing",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+      }]);
+
+      const result = await findOrCreateDirectConversationSession({
+        userId: "user-1",
+        targetUserId: "user-2",
+      });
+
+      expect(result).toEqual({ sessionKey: "session-existing", reused: true });
+      expect(mockFindConversationMany).toHaveBeenCalledTimes(1);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+    });
+
     it("reuses an existing 1:1 room instead of creating a duplicate", async () => {
       mockUserFindUnique.mockResolvedValue({ id: "user-2" });
       mockFindConversationMany.mockResolvedValue([{

@@ -11,7 +11,7 @@ const {
   mockAppMessageContentUpdateMany,
   mockMemberUpdateMany,
   mockTransaction,
-  mockFindOrCreateDirectConversation,
+  mockFindOrCreateDirectConversationSession,
   mockMaterializePendingConversationInvitees,
   mockListChannelMemberUserIdsBySessionKey,
   mockNotifyConversationMessage,
@@ -28,7 +28,7 @@ const {
   mockAppMessageContentUpdateMany: vi.fn(),
   mockMemberUpdateMany: vi.fn(),
   mockTransaction: vi.fn(),
-  mockFindOrCreateDirectConversation: vi.fn(),
+  mockFindOrCreateDirectConversationSession: vi.fn(),
   mockMaterializePendingConversationInvitees: vi.fn(),
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
@@ -55,7 +55,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/app-conversations", () => ({
-  findOrCreateDirectConversation: mockFindOrCreateDirectConversation,
+  findOrCreateDirectConversationSession: mockFindOrCreateDirectConversationSession,
   materializePendingConversationInvitees: mockMaterializePendingConversationInvitees,
   listChannelMemberUserIdsBySessionKey: mockListChannelMemberUserIdsBySessionKey,
 }));
@@ -89,10 +89,8 @@ describe("signup welcome onboarding", () => {
     mockUserNotificationCreate
       .mockResolvedValueOnce({ id: "notification_royce" })
       .mockResolvedValueOnce({ id: "notification_new_user" });
-    mockFindOrCreateDirectConversation.mockResolvedValue({
-      conversation: {
-        sessionKey: "session-welcome",
-      },
+    mockFindOrCreateDirectConversationSession.mockResolvedValue({
+      sessionKey: "session-welcome",
       reused: false,
     });
     mockMaterializePendingConversationInvitees.mockResolvedValue([
@@ -144,10 +142,11 @@ describe("signup welcome onboarding", () => {
       },
     }));
     expect(mockSendPushNotificationForUserNotification).toHaveBeenCalledTimes(2);
-    expect(mockFindOrCreateDirectConversation).toHaveBeenCalledWith({
+    expect(mockFindOrCreateDirectConversationSession).toHaveBeenCalledWith({
       userId: "new_user",
       targetUserId: ROYCE_USER_ID,
       locale: "ko",
+      preferredSessionKey: "mingle-welcome-royce-new_user",
     });
     expect(mockAppMessageUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({
@@ -207,7 +206,7 @@ describe("signup welcome onboarding", () => {
     mockUserFindFirst.mockResolvedValueOnce(null);
     await ensureSignupWelcomeOnboarding({ userId: "new_user" });
     expect(mockUserFollowUpsert).not.toHaveBeenCalled();
-    expect(mockFindOrCreateDirectConversation).not.toHaveBeenCalled();
+    expect(mockFindOrCreateDirectConversationSession).not.toHaveBeenCalled();
   });
 
   it("skips translation rows when the new user has no languages beyond the source", async () => {
