@@ -1,5 +1,7 @@
 -- Idempotently repairs Royce's signup welcome room, message, translations,
--- and unread cursor for accounts created after the affected deployment.
+-- and unread cursor for completed OAuth or email/password signup accounts
+-- created after the affected deployment. Anonymous tracking records are
+-- intentionally excluded.
 --
 -- Review royce-welcome-diagnostic.sql first. This script does not send
 -- WebSocket or push notifications; clients will see repaired data on their
@@ -131,6 +133,14 @@ BEGIN
       AND u.created_at >= v_signup_cutoff
       AND u.is_active
       AND u.is_deleted IS NOT TRUE
+      AND (
+        u.password_hash IS NOT NULL
+        OR EXISTS (
+          SELECT 1
+          FROM app.auth_accounts AS account
+          WHERE account.user_id = u.id
+        )
+      )
     ORDER BY u.created_at, u.id
   LOOP
     PERFORM pg_advisory_xact_lock(

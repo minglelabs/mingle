@@ -1,6 +1,7 @@
--- Read-only diagnostic for signup accounts that should have received Royce's
--- deterministic welcome conversation. Adjust signup_cutoff when investigating
--- a different deployment window.
+-- Read-only diagnostic for completed OAuth or email/password signup accounts
+-- that should have received Royce's deterministic welcome conversation.
+-- Anonymous tracking records are intentionally excluded. Adjust signup_cutoff
+-- when investigating a different deployment window.
 WITH params AS (
   SELECT
     TIMESTAMPTZ '2026-08-27 15:07:00+09' AS signup_cutoff,
@@ -17,6 +18,15 @@ eligible_users AS (
     u.created_at,
     u.is_active,
     u.is_deleted,
+    u.password_hash IS NOT NULL AS has_password_auth,
+    COALESCE(
+      (
+        SELECT ARRAY_AGG(DISTINCT account.provider ORDER BY account.provider)
+        FROM app.auth_accounts AS account
+        WHERE account.user_id = u.id
+      ),
+      ARRAY[]::text[]
+    ) AS auth_providers,
     u.default_conversation_languages,
     u.default_display_language
   FROM app.app_users AS u
@@ -24,6 +34,14 @@ eligible_users AS (
   WHERE u.id <> params.royce_user_id
     AND u.created_at >= params.signup_cutoff
     AND u.is_deleted IS NOT TRUE
+    AND (
+      u.password_hash IS NOT NULL
+      OR EXISTS (
+        SELECT 1
+        FROM app.auth_accounts AS account
+        WHERE account.user_id = u.id
+      )
+    )
 ),
 channel_state AS (
   SELECT
@@ -186,6 +204,8 @@ SELECT
   eu.created_at AS user_created_at,
   eu.is_active,
   eu.is_deleted,
+  eu.has_password_auth,
+  eu.auth_providers,
   eu.default_conversation_languages,
   eu.default_display_language,
   COALESCE(rrc.related_room_count, 0) AS related_room_count,
