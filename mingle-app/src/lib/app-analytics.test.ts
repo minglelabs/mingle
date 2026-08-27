@@ -4,14 +4,19 @@ const {
   mockAppEventLogCreate,
   mockAppEventLogUpsert,
   mockCaptureMingleEvent,
+  mockUserUpdate,
 } = vi.hoisted(() => ({
   mockAppEventLogCreate: vi.fn(),
   mockAppEventLogUpsert: vi.fn(),
   mockCaptureMingleEvent: vi.fn(),
+  mockUserUpdate: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: {
+      update: mockUserUpdate,
+    },
     appEventLog: {
       create: mockAppEventLogCreate,
       upsert: mockAppEventLogUpsert,
@@ -23,7 +28,12 @@ vi.mock("@/lib/posthog-server", () => ({
   captureMingleEvent: mockCaptureMingleEvent,
 }));
 
-import { createTrackedEventLog, type ClientContext, type TrackingContext } from "@/lib/app-analytics";
+import {
+  createTrackedEventLog,
+  recordTrackedUserActivity,
+  type ClientContext,
+  type TrackingContext,
+} from "@/lib/app-analytics";
 
 const tracking: TrackingContext = {
   externalUserId: "anon_1",
@@ -202,5 +212,52 @@ describe("createTrackedEventLog", () => {
     const capturedProperties = mockCaptureMingleEvent.mock.calls.at(-1)?.[0]?.properties;
     expect(capturedProperties).not.toHaveProperty("sourceText");
     expect(capturedProperties).not.toHaveProperty("translations");
+  });
+});
+
+describe("recordTrackedUserActivity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUserUpdate.mockResolvedValue({
+      id: "account-user-1",
+      totalUsageSec: 0,
+      appVersionHistory: [],
+      apiNamespaceHistory: [],
+    });
+  });
+
+  it("enriches the canonical account by id without adopting the device tracking id", async () => {
+    await recordTrackedUserActivity({
+      userId: "account-user-1",
+      tracking: {
+        ...tracking,
+        externalUserId: "anon_device_that_must_not_become_the_owner",
+        ipAddress: "127.0.0.1",
+      },
+      clientContext: {
+        ...clientContext,
+        apiNamespace: "ios/v2.0.0",
+        appVersion: "2.0.0",
+        usageSec: 12,
+      },
+    });
+
+    expect(mockUserUpdate).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: { id: "account-user-1" },
+      data: expect.objectContaining({
+        latestIpAddress: "127.0.0.1",
+        latestApiNamespace: "ios/v2.0.0",
+        latestAppVersion: "2.0.0",
+      }),
+    }));
+    expect(mockUserUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty("externalUserId");
+    expect(mockUserUpdate).toHaveBeenNthCalledWith(2, {
+      where: { id: "account-user-1" },
+      data: {
+        totalUsageSec: 12,
+        appVersionHistory: ["2.0.0"],
+        apiNamespaceHistory: ["ios/v2.0.0"],
+      },
+    });
   });
 });

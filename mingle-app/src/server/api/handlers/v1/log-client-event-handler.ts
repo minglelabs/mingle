@@ -8,9 +8,8 @@ import {
   ensureTrackingContext,
   parseClientContext,
   sanitizeNonNegativeInt,
-  upsertTrackedUser,
 } from '@/lib/app-analytics'
-import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
+import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -199,9 +198,24 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
     const session = await getServerSession(getAuthOptions())
-    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
+    const userId = await resolveUserIdForTrackedWrite({
+      request,
+      session,
+      tracking,
+      clientContext,
+    })
+    if (!userId) {
+      const unauthorizedResponse = NextResponse.json(
+        { error: 'authenticated_user_required' },
+        { status: 401 },
+      )
+      ensureTrackingContext(request, unauthorizedResponse, {
+        externalUserIdHint: tracking.externalUserId,
+        sessionKeyHint: tracking.sessionKey,
+      })
+      return unauthorizedResponse
+    }
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {

@@ -372,6 +372,70 @@ export async function upsertTrackedUser(args: {
   return user.id;
 }
 
+// Authenticated clients already have a canonical NextAuth User row. Tracking
+// data may enrich that row, but it must never select or create a second User
+// through a browser/device tracking id.
+export async function recordTrackedUserActivity(args: {
+  userId: string;
+  tracking: TrackingContext;
+  clientContext: ClientContext;
+}): Promise<string> {
+  const { userId, tracking, clientContext } = args;
+  const now = new Date();
+  const usageSec = clientContext.usageSec;
+  const language = clientContext.language ?? tracking.requestLocale;
+  const fullUrl = clientContext.fullUrl ?? tracking.requestFullUrl;
+  const pathname = clientContext.pathname ?? tracking.requestPathname;
+  const apiNamespace = normalizeApiNamespace(clientContext.apiNamespace);
+  const latestAppVersion = normalizeAppVersion(clientContext.appVersion, apiNamespace);
+  const latestClientPlatform = normalizeClientPlatform(clientContext.clientPlatform, apiNamespace);
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      latestIpAddress: tracking.ipAddress ?? undefined,
+      latestUserAgent: tracking.userAgent ?? undefined,
+      language: language ?? undefined,
+      pageLanguage: clientContext.pageLanguage ?? undefined,
+      referrer: clientContext.referrer ?? undefined,
+      fullUrl: fullUrl ?? undefined,
+      queryParams: clientContext.queryParams ?? undefined,
+      screenWidth: clientContext.screenWidth ?? undefined,
+      screenHeight: clientContext.screenHeight ?? undefined,
+      timezone: clientContext.timezone ?? undefined,
+      platform: clientContext.platform ?? undefined,
+      latestClientPlatform: latestClientPlatform ?? undefined,
+      latestAppVersion: latestAppVersion ?? undefined,
+      latestApiNamespace: apiNamespace ?? undefined,
+      pathname: pathname ?? undefined,
+      lastSeenAt: now,
+    },
+    select: {
+      id: true,
+      totalUsageSec: true,
+      appVersionHistory: true,
+      apiNamespaceHistory: true,
+    },
+  });
+
+  const nextAppVersionHistory = appendUniqueHistory(user.appVersionHistory, latestAppVersion);
+  const nextApiNamespaceHistory = appendUniqueHistory(user.apiNamespaceHistory, apiNamespace);
+  const data = {
+    ...(usageSec !== null && usageSec > user.totalUsageSec ? { totalUsageSec: usageSec } : {}),
+    ...(nextAppVersionHistory ? { appVersionHistory: nextAppVersionHistory } : {}),
+    ...(nextApiNamespaceHistory ? { apiNamespaceHistory: nextApiNamespaceHistory } : {}),
+  };
+
+  if (Object.keys(data).length > 0) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data,
+    });
+  }
+
+  return user.id;
+}
+
 export async function createTrackedEventLog(args: {
   userId: string;
   tracking: TrackingContext;

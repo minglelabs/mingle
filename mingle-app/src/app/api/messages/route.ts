@@ -9,6 +9,7 @@ import {
   sanitizeConversationClearCutoffMs,
 } from "@/lib/conversation-history-clear";
 import { prisma } from "@/lib/prisma";
+import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
 
 export const runtime = "nodejs";
 
@@ -159,9 +160,18 @@ export async function DELETE(request: Request) {
 
   try {
     const session = await getServerSession(getAuthOptions());
+    const sessionIdentity = normalizeSessionUserIdentity(session);
+    const hasAuthenticatedIdentity = Boolean(sessionIdentity.id || sessionIdentity.email);
+    const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
+    if (!hasAuthenticatedIdentity && !allowLegacyAnonymousUser) {
+      const response = NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      return withTrackingCookies(nextRequest, response, tracking);
+    }
     const identity = {
-      ...normalizeSessionUserIdentity(session),
-      externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
+      ...sessionIdentity,
+      externalUserId: !hasAuthenticatedIdentity && allowLegacyAnonymousUser
+        ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+        : "",
       sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
     };
     const userIds = await resolveMessageOwnerUserIds(identity);

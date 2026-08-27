@@ -10,6 +10,7 @@ const {
   mockAppEventLogCreate,
   mockPrismaTransaction,
   mockEnsureTrackingContext,
+  mockRequestAllowsLegacyAnonymousUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
@@ -19,6 +20,7 @@ const {
   mockAppEventLogCreate: vi.fn(),
   mockPrismaTransaction: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
+  mockRequestAllowsLegacyAnonymousUser: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -52,6 +54,10 @@ vi.mock("@/lib/app-analytics", () => ({
   ensureTrackingContext: mockEnsureTrackingContext,
 }));
 
+vi.mock("@/lib/request-user-identity", () => ({
+  requestAllowsLegacyAnonymousUser: mockRequestAllowsLegacyAnonymousUser,
+}));
+
 import { DELETE } from "@/app/api/messages/route";
 
 describe("/api/messages route", () => {
@@ -71,6 +77,7 @@ describe("/api/messages route", () => {
       userAgent: "vitest",
       requestLocale: "ko-KR",
     }));
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(true);
   });
 
   it("returns zero counts when the current user has no stored messages", async () => {
@@ -190,7 +197,7 @@ describe("/api/messages route", () => {
     );
   });
 
-  it("soft deletes both authenticated and anonymous device messages in one request", async () => {
+  it("does not mix anonymous device ownership into an authenticated delete", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "auth_user_123",
@@ -225,7 +232,7 @@ describe("/api/messages route", () => {
         AND: [
           {
             OR: [
-              { userId: { in: ["auth_user_123", "anon_user_row"] } },
+              { userId: { in: ["auth_user_123"] } },
               { sessionKey: "sess_123" },
             ],
           },
@@ -256,5 +263,17 @@ describe("/api/messages route", () => {
     expect(mockAppEventLogCreate.mock.invocationCallOrder[0]).toBeLessThan(
       mockAppMessageFindMany.mock.invocationCallOrder[0],
     );
+  });
+
+  it("rejects a current anonymous delete", async () => {
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(false);
+
+    const response = await DELETE(new NextRequest("https://example.com/api/messages", {
+      method: "DELETE",
+      headers: { "x-mingle-user-id": "anon_user_123" },
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mockAppMessageFindMany).not.toHaveBeenCalled();
   });
 });

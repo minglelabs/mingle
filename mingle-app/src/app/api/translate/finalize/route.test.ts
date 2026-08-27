@@ -1013,7 +1013,7 @@ describe('/api/translate/finalize route', () => {
       isFinal: false,
     }, {
       'x-mingle-user-id': 'anon_test_user',
-    }) as never)
+    }, 'http://localhost:3000/api/ios/v1.1.4/translate/finalize') as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)
@@ -1068,7 +1068,7 @@ describe('/api/translate/finalize route', () => {
       sessionKey: 'sess_test_user',
     }, {
       'x-mingle-session-key': 'sess_test_user',
-    }) as never)
+    }, 'http://localhost:3000/api/ios/v1.1.4/translate/finalize') as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)

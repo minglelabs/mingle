@@ -6,6 +6,7 @@ import {
   sanitizeNonNegativeInt,
 } from '@/lib/app-analytics'
 import { getAuthOptions } from '@/lib/auth-options'
+import { requestAllowsLegacyAnonymousUser } from '@/lib/request-user-identity'
 import { prisma } from '@/lib/prisma'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
@@ -387,12 +388,16 @@ async function resolveSelectedTranslationModel(
   const sessionKey = resolveTrackingSessionKey(request, sessionKeyHint)
   try {
     const session = await getServerSession(getAuthOptions())
-    const selectedModel = await findUserSelectedTranslationModel(
-      normalizeSessionUserIdentity(session, externalUserId, sessionKey),
-    )
+    const sessionIdentity = normalizeSessionUserIdentity(session)
+    const hasAuthenticatedIdentity = Boolean(sessionIdentity.id || sessionIdentity.email)
+    const selectedModel = await findUserSelectedTranslationModel(hasAuthenticatedIdentity
+      ? sessionIdentity
+      : requestAllowsLegacyAnonymousUser(request)
+        ? normalizeSessionUserIdentity(null, externalUserId, sessionKey)
+        : sessionIdentity)
     if (selectedModel) return selectedModel
   } catch {
-    if (externalUserId || sessionKey) {
+    if (requestAllowsLegacyAnonymousUser(request) && (externalUserId || sessionKey)) {
       const selectedModel = await findUserSelectedTranslationModel({
         id: '',
         email: '',
