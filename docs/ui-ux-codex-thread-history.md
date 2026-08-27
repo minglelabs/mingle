@@ -1608,3 +1608,18 @@
 - Status rules: An anonymized/deleted record is shown as `삭제됨`, an account with `withdrawn_at` is shown as `탈퇴 유예 중`, an inactive account without a withdrawal request is shown as `비활성화`, and all other accounts are shown as `활성`.
 - Data contract: No migration or API namespace change. The admin-only conversation data response now includes existing account lifecycle and client-version fields.
 - Testing notes: Verify the shared status card appears on both the room list and room message views, handles cached-to-fresh data updates, and displays the correct status and relevant dates for active, deactivated, withdrawal-pending, and anonymized records.
+
+## 2026-08-27 — Scope native STT lifecycle to its conversation
+
+- Surface: Android and iOS native STT modules, the React Native-to-WebView bridge, and conversation-room teardown/re-entry.
+- Issue: Native status, error, close, and transcript events did not carry the conversation that owned the native session. A WebView remount or a hidden room listener could therefore miss the active session, while a delayed stop from the old room could stop a newly opened room. The React Native status cache also remained `ready` after some close/error paths, so re-entry could restore a stale microphone state.
+- User impact: Android could show an apparently inactive Start control while native capture was already running, or show Stop after re-entry without receiving transcripts. Leaving and re-entering the room could make the state change again and make recognition appear broken.
+- Resolution:
+  - Carry the owning conversation ID through native start/stop options and all native STT lifecycle events on Android and iOS.
+  - Ignore stale stop commands when their conversation ID no longer owns the active native session.
+  - Cache terminal native status updates so a closed or failed session cannot be restored as live after WebView navigation.
+  - Allow a same-conversation start request to reuse an already-running Android native session instead of reporting a misleading duplicate-session failure.
+  - Add Android metadata-only logs for server readiness, WebSocket message type, audio chunk delivery, rejected sends, and cleanup; no audio content or transcript text is logged.
+  - Stop a native session during conversation close even when the room's React state missed the latest native status, provided the cached owner matches the closing room.
+- Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
+- Testing notes: Verify first-start `connecting → ready`, Android transcript delivery, rapid stop/start, close/re-entry while connecting and ready, WebView remount, stale stop isolation between rooms, audio-route recovery, and iOS/Android native log continuity.

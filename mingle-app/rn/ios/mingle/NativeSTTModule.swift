@@ -238,6 +238,7 @@ class NativeSTTModule: RCTEventEmitter {
     private var wsPingTimer: DispatchSourceTimer?
     private var healthCheckTimer: DispatchSourceTimer?
     private var lastChunkCountSnapshot: Int64 = 0
+    private var activeConversationId: String?
     private var gracefulStopWorkItem: DispatchWorkItem?
     private var gracefulStopPending = false
     private let gracefulStopTimeoutMs = 5_000
@@ -454,19 +455,37 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func emitError(_ message: String) {
         NSLog("[NativeSTTModule] error=%@", message)
-        emit("error", payload: ["message": message])
+        var payload: [String: Any] = ["message": message]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("error", payload: payload)
     }
 
     private func emitStatus(_ status: String) {
-        emit("status", payload: ["status": status])
+        NSLog("[NativeSTTModule] status=%@ conversation=%@", status, activeConversationId ?? "unknown")
+        var payload: [String: Any] = ["status": status]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("status", payload: payload)
     }
 
     private func emitMessage(raw: String) {
-        emit("message", payload: ["raw": raw])
+        var payload: [String: Any] = ["raw": raw]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("message", payload: payload)
     }
 
     private func emitClose(_ reason: String) {
-        emit("close", payload: ["reason": reason])
+        NSLog("[NativeSTTModule] close reason=%@ conversation=%@", reason, activeConversationId ?? "unknown")
+        var payload: [String: Any] = ["reason": reason]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("close", payload: payload)
     }
 
     private func resolveMicrophonePermissionStatus() -> String {
@@ -651,6 +670,7 @@ class NativeSTTModule: RCTEventEmitter {
         if let reason {
             emitClose(reason)
         }
+        activeConversationId = nil
     }
 
     private func beginGracefulStop() {
@@ -841,6 +861,7 @@ class NativeSTTModule: RCTEventEmitter {
     private func startSession(
         wsUrl: URL,
         wsUrlString: String,
+        conversationId: String,
         sttModel: String,
         aecEnabled: Bool,
         apiNamespace: String,
@@ -854,10 +875,11 @@ class NativeSTTModule: RCTEventEmitter {
         reject: @escaping RCTPromiseRejectBlock
     ) {
         isAecEnabled = aecEnabled
+        activeConversationId = conversationId.isEmpty ? nil : conversationId
         audioChunkCount = 0
         wsMessageCount = 0
-        NSLog("[NativeSTTModule] startSession ws=%@ model=%@ aec=%d",
-              wsUrlString, sttModel, aecEnabled ? 1 : 0)
+        NSLog("[NativeSTTModule] startSession conversation=%@ ws=%@ model=%@ aec=%d",
+              activeConversationId ?? "unknown", wsUrlString, sttModel, aecEnabled ? 1 : 0)
 
         do {
             try configureAudioSession(aecEnabled: aecEnabled)
@@ -985,6 +1007,7 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let conversationId = (options["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1011,6 +1034,7 @@ class NativeSTTModule: RCTEventEmitter {
             startSession(
                 wsUrl: wsUrl,
                 wsUrlString: wsUrlString,
+                conversationId: conversationId,
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
                 apiNamespace: apiNamespace,
@@ -1034,6 +1058,7 @@ class NativeSTTModule: RCTEventEmitter {
                         self.startSession(
                             wsUrl: wsUrl,
                             wsUrlString: wsUrlString,
+                            conversationId: conversationId,
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
                             apiNamespace: apiNamespace,
@@ -1078,6 +1103,14 @@ class NativeSTTModule: RCTEventEmitter {
     ) {
         let pendingText = options?["pendingText"] as? String ?? ""
         let pendingLanguage = options?["pendingLanguage"] as? String ?? "unknown"
+        let requestedConversationId = (options?["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !requestedConversationId.isEmpty,
+           let activeConversationId,
+           requestedConversationId != activeConversationId {
+            NSLog("[NativeSTTModule] ignored stale stop conversation=%@ active=%@", requestedConversationId, activeConversationId)
+            resolve(["ok": true])
+            return
+        }
 
         if isRunning {
             sendJson([

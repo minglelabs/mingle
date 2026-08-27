@@ -146,8 +146,14 @@ function isNativeSttOwner(ownerKey: string): boolean {
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
+  __MINGLE_LAST_NATIVE_STT_CONVERSATION_ID?: unknown
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown
   __MINGLE_NATIVE_STT_MESSAGE_QUEUE?: unknown
+}
+
+function readCachedNativeSttConversationId(cachedWindow: NativeAppUpdateWindow): string | null {
+  const cached = cachedWindow.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID
+  return typeof cached === 'string' && cached.trim() ? cached.trim() : null
 }
 
 function resolveRuntimeApiNamespace(): string {
@@ -358,6 +364,7 @@ type NativeSttStartCommand = {
 type NativeSttStopCommand = {
   type: 'native_stt_stop'
   payload: {
+    conversationId: string
     pendingText: string
     pendingLanguage: string
   }
@@ -384,12 +391,12 @@ type NativeSttBridgeCommand =
 export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
 
 type NativeSttBridgeEvent =
-  | { type: 'status', status: string }
+  | { type: 'status', status: string, conversationId?: string }
   | { type: 'message', raw: string, conversationId?: string, queueId?: string }
-  | { type: 'error', message: string, code?: string, platform?: string }
+  | { type: 'error', message: string, code?: string, platform?: string, conversationId?: string }
   | { type: 'permission', permission: string, platform?: string }
   | { type: 'capabilities', openAppSettings: boolean }
-  | { type: 'close', reason: string }
+  | { type: 'close', reason: string, conversationId?: string }
 
 type NativeSttBridgeMessageEvent = Extract<NativeSttBridgeEvent, { type: 'message' }>
 
@@ -2818,6 +2825,8 @@ export default function useRealtimeSTT({
     const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
       ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
       : null
+    const cachedConversationId = readCachedNativeSttConversationId(cachedWindow)
+    if (cachedConversationId && cachedConversationId !== (conversationId || '').trim()) return
     const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: cachedNativeStatus,
       previousConnectionStatus: connectionStatusRef.current,
@@ -2836,7 +2845,7 @@ export default function useRealtimeSTT({
       nativeMicPermissionRecoveryActionRef.current = 'none'
     }
     setConnectionStatus(nextConnectionStatus)
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, isCurrentNativeSttOwner])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isCurrentNativeSttOwner])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2852,6 +2861,8 @@ export default function useRealtimeSTT({
       const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
         ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
         : null
+      const cachedConversationId = readCachedNativeSttConversationId(cachedWindow)
+      if (cachedConversationId && cachedConversationId !== (conversationId || '').trim()) return
       const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
         nativeStatus: cachedNativeStatus,
         previousConnectionStatus: connectionStatusRef.current,
@@ -2886,7 +2897,7 @@ export default function useRealtimeSTT({
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, connectionStatus, isCurrentNativeSttOwner])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, connectionStatus, conversationId, isCurrentNativeSttOwner])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -4170,6 +4181,7 @@ export default function useRealtimeSTT({
       void sendNativeSttCommand({
         type: 'native_stt_stop',
         payload: {
+          conversationId: conversationId || '',
           pendingText: '',
           pendingLanguage: '',
         },
@@ -4204,6 +4216,7 @@ export default function useRealtimeSTT({
     clearConnectionErrorResetTimer,
     clearUtterancePersistTimer,
     clearPartialBuffers,
+    conversationId,
     logClientEvent,
     persistLocalUtterancesSnapshot,
     resetToIdle,
@@ -4290,6 +4303,7 @@ export default function useRealtimeSTT({
       const posted = sendNativeSttCommand({
         type: 'native_stt_stop',
         payload: {
+          conversationId: conversationId || '',
           pendingText,
           pendingLanguage: pendingLang,
         },
@@ -4411,6 +4425,7 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
     clearPendingNativeStopAckTimeout,
     clearSpeakerAvatarSession,
+    conversationId,
     releaseCurrentNativeSttOwner,
     stopAudioPipeline,
   ])
@@ -5101,6 +5116,23 @@ export default function useRealtimeSTT({
       const detail = (event as CustomEvent<NativeSttBridgeEvent>).detail
       if (!detail || typeof detail !== 'object') return
 
+      const eventConversationId = 'conversationId' in detail
+        && typeof detail.conversationId === 'string'
+        ? detail.conversationId.trim()
+        : ''
+      if (
+        eventConversationId
+        && eventConversationId !== (conversationId || '').trim()
+        && (detail.type === 'status' || detail.type === 'error' || detail.type === 'close')
+      ) {
+        logSttDebug('native.event.conversation_blocked', {
+          conversationId: conversationId || null,
+          eventConversationId,
+          eventType: detail.type,
+        })
+        return
+      }
+
       if (detail.type === 'capabilities') {
         nativeShellSupportsOpenAppSettingsRef.current = detail.openAppSettings === true
         return
@@ -5255,7 +5287,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, logSttDebug, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -5567,6 +5599,7 @@ export default function useRealtimeSTT({
         void sendNativeSttCommand({
           type: 'native_stt_stop',
           payload: {
+            conversationId: conversationId || '',
             pendingText: '',
             pendingLanguage: 'unknown',
           },

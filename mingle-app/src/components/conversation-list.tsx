@@ -1183,6 +1183,14 @@ function readCachedNativeSttStatus(): string | null {
   return typeof cached === "string" ? cached.trim().toLowerCase() : null;
 }
 
+function readCachedNativeSttConversationId(): string | null {
+  if (typeof window === "undefined") return null;
+  const cached = (window as Window & {
+    __MINGLE_LAST_NATIVE_STT_CONVERSATION_ID?: unknown;
+  }).__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID;
+  return typeof cached === "string" && cached.trim() ? cached.trim() : null;
+}
+
 function isNativeSttStatusLive(status: string | null): boolean {
   return status === "running"
     || status === "ready"
@@ -2638,6 +2646,14 @@ export default function ConversationList({
 
     const previousRunning = getDerivedConversationRunningState(conversationId);
     if (previousRunning === isRunning) {
+      conversationRunningStateRef.current.set(conversationId, isRunning);
+      if (isRunning) {
+        setLiveConversationId(conversationId);
+      } else {
+        setLiveConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+      }
       return;
     }
     conversationRunningStateRef.current.set(conversationId, isRunning);
@@ -4414,9 +4430,19 @@ export default function ConversationList({
 
     const closingConversation = activeConversation;
     const roomRef = conversationRoomRefs.current.get(closingConversation.id);
-    if (roomRef?.isSttSessionRunning()) {
+    const roomIsSttSessionRunning = roomRef?.isSttSessionRunning() === true;
+    const cachedNativeStatus = readCachedNativeSttStatus();
+    const cachedNativeConversationId = readCachedNativeSttConversationId();
+    const nativeSessionBelongsToClosingRoom = (
+      isNativeSttStatusLive(cachedNativeStatus)
+      && cachedNativeConversationId === closingConversation.id
+    );
+    if (roomRef && (roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom)) {
       try {
-        await roomRef.stopRecording({ deferRunningStateChange: true });
+        await roomRef.stopRecording({
+          deferRunningStateChange: true,
+          ...(roomIsSttSessionRunning ? {} : { forceNativeStop: true }),
+        });
       } catch {
         // The room unmount cleanup still sends an idempotent native stop fallback.
       }

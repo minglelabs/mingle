@@ -1023,7 +1023,7 @@ function resolveMenuContentTransition(
 
 export interface LivePhoneDemoRef {
   startRecording: () => Promise<void>
-  stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => Promise<void>
+  stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean }) => Promise<void>
   prepareForDeletion: () => void
   isSttSessionRunning: () => boolean
   requestCloseTopmostOverlay: () => boolean
@@ -4520,8 +4520,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     switchLiveRoomToastLabel,
   ])
 
-  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => {
-    if (!isSttSessionRunning) return
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean }) => {
+    if (!isSttSessionRunning && options?.forceNativeStop !== true) return
     if (options?.deferRunningStateChange !== true) {
       onSttSessionRunningChange?.(false)
     }
