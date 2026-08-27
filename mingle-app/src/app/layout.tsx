@@ -11,6 +11,7 @@ import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { TtsSettingsProvider } from "@/context/tts-settings";
 import { getAuthOptions } from "@/lib/auth-options";
+import { MOBILE_CANVAS_BOOTSTRAP_SCRIPT } from "@/lib/mobile-canvas-bootstrap";
 import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
 import "./globals.css";
@@ -80,8 +81,12 @@ export default async function RootLayout({
   const postHogConfig = resolvePostHogBrowserConfig();
 
   return (
-    <html lang={DEFAULT_LOCALE}>
+    <html lang={DEFAULT_LOCALE} suppressHydrationWarning>
       <body className="antialiased">
+        <script
+          id="mingle-mobile-canvas-bootstrap"
+          dangerouslySetInnerHTML={{ __html: MOBILE_CANVAS_BOOTSTRAP_SCRIPT }}
+        />
         <AppLocalePreferenceSync />
         <TtsSettingsProvider>
           <AuthSessionProvider session={session}>

@@ -1631,3 +1631,30 @@
   - Prioritize a room immediately when the user opens it, lazy-load older history on upward scroll, and keep the UI usable while background warming continues. A small progress banner may explain the first upgrade, but it should not require the user to wait.
   - Use IndexedDB or a native database if broad transcript caching becomes a product requirement; retain the server as the durable authority and continue incremental synchronization after the initial seed.
 - Status: Diagnosis and architecture recommendation only. No behavior change has been implemented in this entry.
+
+## 2026-08-27 — Fit the mobile canvas before hydration and preserve native scrolling
+
+- Surface: Initial render of every non-admin mobile WebView route, with the most visible impact on the conversation list.
+- Issue: The server emitted a 400px canvas at scale `1`, then `MobileCanvasShell` measured `window.innerWidth` in a React effect and replaced the DOM after hydration. `ConversationList` also rendered a transparent full-screen interaction layer while its persisted language marker was resolving. Users could therefore see a misfitted static list that neither scrolled nor accepted actions, followed by a visible fit correction and interaction unlock.
+- Resolution:
+  - Run a small synchronous canvas bootstrap before the application markup is parsed. It calculates the fixed-canvas scale from the already-applied device viewport and publishes scaled width, inverse frame height, transform, and compositing values through CSS custom properties.
+  - Keep one stable mobile-canvas DOM shape on the server and client. React no longer owns initial scale state or replaces the unscaled tree after hydration, while resize and orientation changes continue to update the same CSS properties.
+  - Do not render the transparent language-resolution interaction layer over server-rendered content. Native CSS scrolling remains available before React hydration; the interaction guard is reserved for a real client-side session check, and the existing opaque locale-switch shell remains unchanged.
+- Data contract: No Prisma migration, API namespace change, native-code change, or mobile rebuild is required. This is a remotely delivered WebView fix for the installed 2.0.0 application.
+- Testing notes: On narrow iPhone and Android viewports, cold-load the conversation list with a throttled network and confirm the first visible frame is already fitted, the list can scroll before full hydration, and no later width snap occurs. Repeat at widths below, equal to, and above 400px, rotate the device, verify admin routes remain unscaled, and confirm authenticated, unauthenticated, first-language-onboarding, and locale-switch states retain their intended gates.
+
+## 2026-08-27 — Diagnose legacy WebView-origin identity discontinuity after the 2.0.0 upgrade
+
+- Surface: Users who created conversations on the 1.1.4 Railway origin and then updated the same installed app to 2.0.0, whose WebView loads a different Railway origin and asks them to sign in again.
+- Issue: The browser tracking identity is stored in the host-scoped, HTTP-only `mingle_uid` and `mingle_sid` cookies. An application update preserves the WebView data store but does not make the old host's cookies available to the new host. The 2.0.0 origin therefore creates a new tracking identity, while a newly authenticated account has no automatic claim over conversations owned by the old anonymous user. The data appears deleted even though its rows remain in the production database.
+- Production evidence: A read-only Railway configuration comparison confirmed that the 1.1.4 and 2.0.0 services use the same `DATABASE_URL`, `AUTH_SECRET`, Google client ID, and Apple client ID. A privacy-safe aggregate query found 1,029 active conversation channels used by 1.1.x clients and owned by anonymous users, no matching legacy channels owned by registered users, and no channel with both legacy and 2.0.0 activity. No production records were changed during the diagnosis.
+- Fast recovery direction:
+  - Tell the affected user not to delete or reinstall the app; the legacy-origin cookies are the strongest deterministic recovery proof and should still exist on the upgraded installation.
+  - Add a top-level legacy-host recovery hop. The legacy host reads its own HTTP-only cookies, creates a short-lived single-use opaque claim, and redirects to the authenticated 2.0.0 host. The current host verifies and consumes the claim, shows a dry-run summary, and transactionally moves the legacy conversations and message ownership to the signed-in account.
+  - For an urgent one-off recovery before the self-service flow ships, identify the current account by its login email, identify the legacy owner from the old cookie or a tightly reviewed device/session match, verify room count and recent room titles with the user, then run the same merge transaction in dry-run and commit modes. Never merge solely by IP address, display name, or approximate timing.
+- Recurrence prevention:
+  - Use one stable first-party WebView domain across app versions and keep versioning in the API namespace rather than the browser origin.
+  - Claim the current anonymous identity into the authenticated account during every first login, with an idempotent audited merge record and conflict-safe handling for channel sequence numbers, memberships, messages, preferences, and social relations.
+  - Persist a native installation identity in Keychain/Keystore and inject it into WebView requests as a future recovery signal; it must supplement authenticated identity rather than authorize a merge on its own.
+  - Monitor upgraded accounts that suddenly have only the signup room while a recoverable legacy identity exists, and offer recovery instead of presenting an empty list.
+- Status: Diagnosis and recovery architecture only. No identity merge, production data mutation, or Prisma migration has been implemented in this entry.

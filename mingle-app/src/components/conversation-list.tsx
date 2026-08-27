@@ -5114,8 +5114,11 @@ export default function ConversationList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
   const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "locale-switching";
-  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "resolving"
-    || (languageOnboardingPhase === "ready" && sessionStatus === "loading");
+  // The server-rendered list remains natively scrollable while React hydrates.
+  // Only an actual client-side session check blocks actions; the pre-hydration
+  // language marker is resolved in a layout effect and must not capture touches.
+  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "ready"
+    && sessionStatus === "loading";
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -5141,9 +5144,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[199] bg-transparent"
           role="status"
           aria-live="polite"
-          aria-label={languageOnboardingPhase === "resolving"
-            ? (locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle")
-            : (locale === "ko" ? "계정 확인 중" : "Checking account")}
+          aria-label={locale === "ko" ? "계정 확인 중" : "Checking account"}
         />
       ) : null}
 
