@@ -6,14 +6,32 @@
 -- Review royce-welcome-diagnostic.sql first. This script does not send
 -- WebSocket or push notifications; clients will see repaired data on their
 -- next hydration. Adjust signup_cutoff before another repair window.
-BEGIN;
-
-CREATE TEMP TABLE royce_welcome_repair_translations (
-  language text PRIMARY KEY,
-  text text NOT NULL
-) ON COMMIT DROP;
-
-INSERT INTO royce_welcome_repair_translations (language, text) VALUES
+DO $$
+DECLARE
+  v_translation_catalog jsonb;
+  v_royce_user_id CONSTANT text := 'cmsrqesom0000mx1hn62ce6r9';
+  v_signup_cutoff CONSTANT timestamptz := TIMESTAMPTZ '2026-08-27 15:07:00+09';
+  v_welcome_client_message_id CONSTANT text := 'mingle-welcome-royce-v1';
+  v_welcome_source_text CONSTANT text := 'Welcome! My name is Royce. I''m developer of Mingle. If you have any feedback or questions, feel free to message me anytime on Mingle. The cat in the photo is Somi, my cat.';
+  v_candidate record;
+  v_room record;
+  v_royce_user record;
+  v_message_id text;
+  v_channel_id text;
+  v_session_key text;
+  v_sequence_number integer;
+  v_selected_languages text[];
+  v_royce_selected_languages text[];
+  v_translation_languages text[];
+  v_display_language text;
+  v_royce_display_language text;
+  v_source_exists boolean;
+  v_needs_repair boolean;
+  v_raw_language text;
+  v_translated_text text;
+BEGIN
+  WITH translation_catalog(language, text) AS (
+    VALUES
     ('ko', '환영합니다! 제 이름은 Royce입니다. 저는 Mingle의 개발자입니다. 의견이나 질문이 있으면 언제든지 Mingle에서 편하게 메시지를 보내 주세요. 사진 속 고양이는 제 고양이 Somi입니다.'),
     ('ja', 'ようこそ！私の名前はRoyceです。Mingleの開発者です。ご意見やご質問があれば、いつでもMingleで気軽にメッセージを送ってください。写真の猫はSomi、私の猫です。'),
     ('zh-CN', '欢迎！我叫 Royce，是 Mingle 的开发者。如果你有任何反馈或问题，欢迎随时在 Mingle 上给我发消息。照片里的猫是 Somi，我的猫。'),
@@ -74,31 +92,14 @@ INSERT INTO royce_welcome_repair_translations (language, text) VALUES
     ('ur', 'خوش آمدید! میرا نام روئس ہے۔ میں Mingle کا ڈویلپر ہوں۔ اگر آپ کے پاس کوئی رائے یا سوال ہو تو بلا جھجھک کسی بھی وقت Mingle پر مجھے پیغام بھیجیں۔ تصویر میں موجود بلی سومِی ہے، میری بلی۔'),
     ('vi', 'Chào mừng bạn! Tôi tên là Royce. Tôi là nhà phát triển của Mingle. Nếu bạn có bất kỳ phản hồi hoặc câu hỏi nào, hãy cứ nhắn tin cho tôi bất cứ lúc nào trên Mingle. Chú mèo trong ảnh là Somi, mèo của tôi.'),
     ('cy', 'Croeso! Royce yw fy enw i. Fi yw datblygwr Mingle. Os oes gennych unrhyw adborth neu gwestiynau, mae croeso i chi anfon neges ataf unrhyw bryd ar Mingle. Somi yw’r gath yn y llun, fy nghath i.')
-;
+  )
+  SELECT jsonb_object_agg(language, text)
+  INTO v_translation_catalog
+  FROM translation_catalog;
 
-DO $$
-DECLARE
-  v_royce_user_id CONSTANT text := 'cmsrqesom0000mx1hn62ce6r9';
-  v_signup_cutoff CONSTANT timestamptz := TIMESTAMPTZ '2026-08-27 15:07:00+09';
-  v_welcome_client_message_id CONSTANT text := 'mingle-welcome-royce-v1';
-  v_welcome_source_text CONSTANT text := 'Welcome! My name is Royce. I''m developer of Mingle. If you have any feedback or questions, feel free to message me anytime on Mingle. The cat in the photo is Somi, my cat.';
-  v_candidate record;
-  v_room record;
-  v_royce_user record;
-  v_message_id text;
-  v_channel_id text;
-  v_session_key text;
-  v_sequence_number integer;
-  v_selected_languages text[];
-  v_royce_selected_languages text[];
-  v_translation_languages text[];
-  v_display_language text;
-  v_royce_display_language text;
-  v_source_exists boolean;
-  v_needs_repair boolean;
-  v_raw_language text;
-  v_translated_text text;
-BEGIN
+  -- The catalog is kept in this anonymous block's memory instead of a
+  -- temporary table, so SQL consoles that use a new session per statement
+  -- cannot lose it between queries.
   SELECT
     u.default_conversation_languages,
     u.default_display_language
@@ -165,6 +166,10 @@ BEGIN
     -- Normalize the legacy zh code and discard values outside the supported
     -- hard-coded translation catalog while preserving the user's order.
     v_selected_languages := ARRAY(
+      WITH translation_catalog AS (
+        SELECT key AS language, value AS text
+        FROM jsonb_each_text(v_translation_catalog)
+      )
       SELECT normalized
       FROM (
         SELECT DISTINCT ON (normalized) normalized, ordinal
@@ -180,7 +185,7 @@ BEGIN
         WHERE normalized = 'en'
            OR EXISTS (
              SELECT 1
-             FROM royce_welcome_repair_translations AS t
+             FROM translation_catalog AS t
              WHERE t.language = normalized
            )
         ORDER BY normalized, ordinal
@@ -192,8 +197,12 @@ BEGIN
     END IF;
 
     v_translation_languages := ARRAY(
+      WITH translation_catalog AS (
+        SELECT key AS language, value AS text
+        FROM jsonb_each_text(v_translation_catalog)
+      )
       SELECT t.language
-      FROM royce_welcome_repair_translations AS t
+      FROM translation_catalog AS t
       WHERE t.language = ANY(v_selected_languages)
       ORDER BY array_position(v_selected_languages, t.language)
     );
@@ -606,9 +615,13 @@ BEGIN
 
     FOREACH v_raw_language IN ARRAY v_translation_languages
     LOOP
+      WITH translation_catalog AS (
+        SELECT key AS language, value AS text
+        FROM jsonb_each_text(v_translation_catalog)
+      )
       SELECT t.text
       INTO v_translated_text
-      FROM royce_welcome_repair_translations AS t
+      FROM translation_catalog AS t
       WHERE t.language = v_raw_language;
 
       INSERT INTO app.app_message_contents (
@@ -660,5 +673,3 @@ BEGIN
     RAISE NOTICE 'Repaired Royce welcome for % (%) in %', v_candidate.id, v_candidate.name, v_session_key;
   END LOOP;
 END $$;
-
-COMMIT;
