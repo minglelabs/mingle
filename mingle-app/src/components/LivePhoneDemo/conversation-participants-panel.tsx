@@ -86,6 +86,12 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
 function parseConversationMemberProfile(value: unknown): ParticipantProfile | null {
   if (!isRecord(value) || typeof value.userId !== "string" || !value.userId.trim()) return null;
 
+  const nationality = nullableString(value.nationality);
+  const primaryLanguages = sanitizeSttLanguageSelection(
+    Array.isArray(value.primaryLanguages) ? value.primaryLanguages : [],
+    nationality ? [nationality] : [],
+  );
+
   return {
     id: value.userId.trim(),
     name: nullableString(value.name),
@@ -94,11 +100,8 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     imageCropX: finiteNumberOrNull(value.imageCropX),
     imageCropY: finiteNumberOrNull(value.imageCropY),
     handle: nullableString(value.handle),
-    // The members endpoint doesn't return another member's STT language
-    // selection (that's account-private data this room's membership row
-    // doesn't carry) — other members' rows render without language flags.
-    nationality: null,
-    primaryLanguages: [],
+    nationality: primaryLanguages[0] ?? nationality,
+    primaryLanguages,
     blocked: value.blocked === true,
   };
 }
