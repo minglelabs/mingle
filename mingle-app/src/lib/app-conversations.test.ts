@@ -279,6 +279,8 @@ describe("app-conversations", () => {
         imageCropY: true,
         defaultConversationLanguages: true,
         defaultDisplayLanguage: true,
+        nationality: true,
+        primaryLanguages: true,
       },
     });
     expect(state?.conversation.title).toBe("Bob");
@@ -2279,8 +2281,8 @@ describe("app-conversations", () => {
       });
 
       expect(members).toEqual([
-        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko", "en"], blocked: false },
-        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2, selectedLanguages: ["ja"], blocked: false },
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko", "en"], nationality: null, primaryLanguages: [], blocked: false },
+        { userId: "user-2", name: "Bob", handle: "bob", image: "https://img/bob.jpg", imageCropScale: 1.2, imageCropX: 0.1, imageCropY: 0.2, selectedLanguages: ["ja"], nationality: null, primaryLanguages: [], blocked: false },
       ]);
       expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
@@ -2288,6 +2290,43 @@ describe("app-conversations", () => {
           members: { some: { userId: "user-1", leftAt: null } },
         }),
       }));
+    });
+
+    it("returns another member's own primary/profile languages, not just the caller's", async () => {
+      mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+      mockChannelMemberFindMany.mockResolvedValue([
+        {
+          channelId: "conv-a",
+          userId: "user-1",
+          displayLanguage: null,
+          selectedLanguages: ["en"],
+          status: "active",
+          pausedAt: null,
+          user: { name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, nationality: null, primaryLanguages: [] },
+        },
+        {
+          channelId: "conv-a",
+          userId: "user-2",
+          displayLanguage: null,
+          selectedLanguages: ["ja"],
+          status: "active",
+          pausedAt: null,
+          user: { name: "Bob", handle: "bob", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, nationality: "ko", primaryLanguages: ["ko", "en"] },
+        },
+      ]);
+
+      const members = await listConversationMembersForUser({
+        conversationId: "conv-a",
+        userId: "user-1",
+      });
+
+      expect(members).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          userId: "user-2",
+          nationality: "ko",
+          primaryLanguages: ["ko", "en"],
+        }),
+      ]));
     });
 
     it("includes a pending invitee's default language and profile for attribution before materialization", async () => {
@@ -2313,6 +2352,8 @@ describe("app-conversations", () => {
           imageCropX: 0,
           imageCropY: 0,
           defaultConversationLanguages: ["ja"],
+          nationality: "ja",
+          primaryLanguages: ["ja", "en"],
         },
       ]);
 
@@ -2326,6 +2367,8 @@ describe("app-conversations", () => {
           userId: "user-2",
           image: "https://img/bob.jpg",
           selectedLanguages: ["ja"],
+          nationality: "ja",
+          primaryLanguages: ["ja", "en"],
           blocked: false,
         }),
       ]));
@@ -2373,8 +2416,8 @@ describe("app-conversations", () => {
       });
 
       expect(members).toEqual([
-        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko"], blocked: false },
-        { userId: "user-2", name: "Bob", handle: "bob", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ja"], blocked: true },
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko"], nationality: null, primaryLanguages: [], blocked: false },
+        { userId: "user-2", name: "Bob", handle: "bob", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ja"], nationality: null, primaryLanguages: [], blocked: true },
       ]);
     });
 
@@ -2409,7 +2452,7 @@ describe("app-conversations", () => {
       });
 
       expect(members).toEqual([
-        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko"], blocked: false },
+        { userId: "user-1", name: "Alice", handle: "alice", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, selectedLanguages: ["ko"], nationality: null, primaryLanguages: [], blocked: false },
       ]);
     });
   });

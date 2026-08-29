@@ -246,6 +246,8 @@ type ChannelMemberProfile = {
   displayLanguage: string | null;
   defaultDisplayLanguage: string | null;
   selectedLanguages: string[];
+  nationality: string | null;
+  primaryLanguages: string[];
   status: string;
   pausedAt: Date | null;
   lastReadAt: Date | null;
@@ -296,6 +298,8 @@ type PendingInviteeProfile = {
   imageCropY: number | null;
   defaultConversationLanguages: string[];
   defaultDisplayLanguage: string | null;
+  nationality: string | null;
+  primaryLanguages: string[];
 };
 
 function resolveDefaultConversationLanguages(
@@ -373,19 +377,32 @@ async function listPendingInviteeProfilesByUserIds(
       imageCropY: true,
       defaultConversationLanguages: true,
       defaultDisplayLanguage: true,
+      nationality: true,
+      primaryLanguages: true,
     },
   });
-  return new Map(rows.map((row) => [row.id, {
-    userId: row.id,
-    name: row.name,
-    handle: row.handle,
-    image: row.image,
-    imageCropScale: row.imageCropScale,
-    imageCropX: row.imageCropX,
-    imageCropY: row.imageCropY,
-    defaultConversationLanguages: resolveDefaultConversationLanguages(row.defaultConversationLanguages),
-    defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
-  }]));
+  return new Map(rows.map((row) => {
+    const normalizedNationality = row.nationality
+      ? sanitizeSttLanguageSelection([row.nationality])[0] ?? null
+      : null;
+    const primaryLanguages = sanitizeSttLanguageSelection(
+      row.primaryLanguages,
+      normalizedNationality ? [normalizedNationality] : [],
+    );
+    return [row.id, {
+      userId: row.id,
+      name: row.name,
+      handle: row.handle,
+      image: row.image,
+      imageCropScale: row.imageCropScale,
+      imageCropX: row.imageCropX,
+      imageCropY: row.imageCropY,
+      defaultConversationLanguages: resolveDefaultConversationLanguages(row.defaultConversationLanguages),
+      defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
+      nationality: primaryLanguages[0] ?? normalizedNationality,
+      primaryLanguages,
+    }];
+  }));
 }
 
 async function listChannelMembersByChannelId(
@@ -418,6 +435,8 @@ async function listChannelMembersByChannelId(
           imageCropY: true,
           defaultConversationLanguages: true,
           defaultDisplayLanguage: true,
+          nationality: true,
+          primaryLanguages: true,
         },
       },
     },
@@ -430,6 +449,13 @@ async function listChannelMembersByChannelId(
     const selectedLanguages = persistedSelectedLanguages.length > 0
       ? persistedSelectedLanguages
       : resolveDefaultConversationLanguages(row.user.defaultConversationLanguages);
+    const normalizedNationality = row.user.nationality
+      ? sanitizeSttLanguageSelection([row.user.nationality])[0] ?? null
+      : null;
+    const primaryLanguages = sanitizeSttLanguageSelection(
+      row.user.primaryLanguages,
+      normalizedNationality ? [normalizedNationality] : [],
+    );
     members.push({
       userId: row.userId,
       name: row.user.name,
@@ -446,6 +472,11 @@ async function listChannelMembersByChannelId(
       // both members' real preferences instead of making the counterpart
       // disappear from the union.
       selectedLanguages,
+      // Account-level "주 사용 언어" profile badge — public the same way
+      // name/handle are (see GET /api/users/[userId], which already exposes
+      // this to other users), not the per-room STT selection above.
+      nationality: primaryLanguages[0] ?? normalizedNationality,
+      primaryLanguages,
       status: row.status,
       pausedAt: row.pausedAt,
       lastReadAt: row.lastReadAt,
@@ -2150,6 +2181,10 @@ export type ConversationMemberSummary = {
   // client derives the union + per-language attribution shown in the picker
   // from these per-member lists, avoiding a second endpoint for the same data.
   selectedLanguages: string[];
+  // Account-level "주 사용 언어" profile badge, distinct from selectedLanguages
+  // above (that's this room's STT config). Public the same way name/handle are.
+  nationality: string | null;
+  primaryLanguages: string[];
   // True when a block exists between the caller and this member (either
   // direction). name/handle/image are nulled out for a blocked member so
   // the client never has real identity to accidentally render — it should
@@ -2212,6 +2247,8 @@ export async function listConversationMembersForUser(args: {
       imageCropX: blocked ? null : member.imageCropX,
       imageCropY: blocked ? null : member.imageCropY,
       selectedLanguages: member.selectedLanguages,
+      nationality: member.nationality,
+      primaryLanguages: member.primaryLanguages,
       blocked,
     };
   });
@@ -2225,6 +2262,8 @@ export async function listConversationMembersForUser(args: {
     imageCropX: profile.imageCropX,
     imageCropY: profile.imageCropY,
     selectedLanguages: profile.defaultConversationLanguages,
+    nationality: profile.nationality,
+    primaryLanguages: profile.primaryLanguages,
     blocked: false,
   }));
 
