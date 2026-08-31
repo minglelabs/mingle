@@ -125,6 +125,45 @@ export function resolveLanguageSelectorOwnSelectedLanguages(
   );
 }
 
+// Optimistically recomputes the room's displayed language union after the
+// caller's OWN picks change, without waiting for the server's recomputed
+// union: adding a code always adds it to the union; removing one only drops
+// it if no OTHER member's prior attribution still holds it. Leaving a
+// just-removed code in the union until the server responds is what makes it
+// flash as "someone else picked this" for an instant, even when nobody else
+// actually did — see handleToggleSelectedLanguage / handleConversationSelectedLanguagesChange.
+export function resolveLanguageSelectorUnionAfterOwnLanguagesChange(args: {
+  previousUnion: readonly string[];
+  previousAttribution?: Record<string, readonly string[]>;
+  viewerUserId?: string | null;
+  previousOwnSelectedLanguages: readonly string[];
+  nextOwnSelectedLanguages: readonly string[];
+}): string[] {
+  const removedCodes = args.previousOwnSelectedLanguages.filter(
+    (code) => !args.nextOwnSelectedLanguages.includes(code),
+  );
+  const addedCodes = args.nextOwnSelectedLanguages.filter(
+    (code) => !args.previousOwnSelectedLanguages.includes(code),
+  );
+  const nextUnion = new Set(args.previousUnion);
+  addedCodes.forEach((code) => nextUnion.add(code));
+  removedCodes.forEach((code) => {
+    // If the server did not include member attribution, keep the union
+    // conservative until the next canonical response. Dropping an unknown
+    // member's code locally would make a shared room flicker or hide a
+    // language that another participant still owns.
+    if (args.previousAttribution === undefined) return;
+    const holders = args.previousAttribution[code];
+    if (!holders || holders.length === 0) return;
+    const otherHolders = holders
+      .filter((memberId) => memberId !== args.viewerUserId);
+    if (otherHolders.length === 0) {
+      nextUnion.delete(code);
+    }
+  });
+  return [...nextUnion];
+}
+
 export function shouldDisableLanguageSelectorOption(args: {
   disabled?: boolean;
   isOwnSelected: boolean;

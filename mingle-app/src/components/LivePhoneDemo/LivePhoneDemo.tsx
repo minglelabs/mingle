@@ -19,6 +19,7 @@ import {
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
   resolveLanguageSelectorOwnSelectedLanguages,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
@@ -4698,11 +4699,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const currentUnion = selectedLanguagesRef.current
     const otherHolders = (selectedLanguagesAttributionRef.current[normalizedCode] ?? [])
       .filter((memberId) => memberId !== viewerUserId)
-    const nextUnion = !isOwnSelected
-      ? (currentUnion.includes(normalizedCode) ? currentUnion : [...currentUnion, normalizedCode])
-      : (otherHolders.length > 0
-          ? currentUnion
-          : currentUnion.filter(c => c !== normalizedCode))
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: currentUnion,
+      previousAttribution: selectedLanguagesAttributionRef.current,
+      viewerUserId,
+      previousOwnSelectedLanguages: currentOwnLanguages,
+      nextOwnSelectedLanguages: nextOwnLanguages,
+    })
     selectedLanguagesRef.current = nextUnion
     setSelectedLanguages(nextUnion)
 

@@ -62,7 +62,10 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
-import { resolveLanguageSelectorOwnSelectedLanguages } from "@/components/LivePhoneDemo/language-selector.logic";
+import {
+  resolveLanguageSelectorOwnSelectedLanguages,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
+} from "@/components/LivePhoneDemo/language-selector.logic";
 import {
   formatBirthDate,
 } from "@/lib/birth-date";
@@ -3025,16 +3028,13 @@ export default function ConversationList({
     const hasLanguageAttribution = previousConversation.selectedLanguagesAttribution !== undefined;
     const nextUnion = previousConversation.isMultiMember
       ? sanitizeSttLanguageUnion(
-          [
-            ...currentUnion.filter((language) => (
-              normalizedSelectedLanguages.includes(language)
-              || !hasLanguageAttribution
-              || (previousConversation.selectedLanguagesAttribution?.[language] ?? []).length === 0
-              || (previousConversation.selectedLanguagesAttribution?.[language] ?? [])
-                .some((memberId) => memberId !== authenticatedUserId)
-            )),
-            ...normalizedSelectedLanguages,
-          ],
+          resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+            previousUnion: currentUnion,
+            previousAttribution: previousConversation.selectedLanguagesAttribution,
+            viewerUserId: authenticatedUserId,
+            previousOwnSelectedLanguages: previousViewerSelectedLanguages,
+            nextOwnSelectedLanguages: normalizedSelectedLanguages,
+          }),
           normalizedSelectedLanguages,
         )
       : [...normalizedSelectedLanguages];

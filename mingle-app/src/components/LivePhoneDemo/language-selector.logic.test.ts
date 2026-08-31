@@ -17,6 +17,7 @@ import {
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorShowsSortToggle,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
   sanitizeRecentLanguageCodes,
   shouldDisableLanguageSelectorOption,
   syncDeselectedLanguageCodes,
@@ -175,6 +176,45 @@ describe("language-selector.logic", () => {
   it("preserves an explicitly empty viewer selection instead of replacing it with the room union", () => {
     expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], [])).toEqual([]);
     expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], undefined)).toEqual(["en", "ko"]);
+  });
+
+  it("drops a code the caller unchecked from the union when no other member holds it", () => {
+    // Regression: leaving the union untouched until the server responds made
+    // a solo-picked language flash as "someone else picked this" (blue) for
+    // an instant before finally disappearing.
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["en", "ko"],
+      previousAttribution: { en: ["viewer-1"], ko: ["viewer-1"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: ["en", "ko"],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion).toEqual(["en"]);
+  });
+
+  it("keeps a code the caller unchecked in the union when another member still holds it", () => {
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["en", "ko"],
+      previousAttribution: { en: ["viewer-1"], ko: ["viewer-1", "friend-2"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: ["en", "ko"],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion).toEqual(["en", "ko"]);
+  });
+
+  it("adds a newly checked code to the union without touching untouched codes", () => {
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["ko"],
+      previousAttribution: { ko: ["friend-2"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: [],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion.sort()).toEqual(["en", "ko"]);
   });
 
   it("applies language limits to the viewer's own picks rather than the room union", () => {
