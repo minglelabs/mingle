@@ -1278,6 +1278,7 @@ function AppInner(): React.JSX.Element {
   const pendingRecommendPromptRef = useRef<RecommendUpdatePrompt | null>(null);
   const nativeStatusRef = useRef('idle');
   const nativeSttConversationIdRef = useRef<string | null>(null);
+  const nativeSttCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const nativeSttMessageSequenceRef = useRef(0);
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
@@ -2754,7 +2755,6 @@ function AppInner(): React.JSX.Element {
     const conversationId = typeof payload?.conversationId === 'string'
       ? payload.conversationId.trim()
       : '';
-    nativeSttConversationIdRef.current = conversationId || null;
     const normalizedSttSegmentationMode = typeof payload?.sttSegmentationMode === 'string'
       ? payload.sttSegmentationMode.trim().toLowerCase()
       : '';
@@ -2769,6 +2769,7 @@ function AppInner(): React.JSX.Element {
       payload?.sonioxEndpointTuningStep,
     );
     const statusBeforeStart = nativeStatusRef.current;
+    const activeNativeConversationIdBeforeStart = nativeSttConversationIdRef.current;
 
     const startPayload = {
       conversationId,
@@ -2790,6 +2791,10 @@ function AppInner(): React.JSX.Element {
 
     try {
       nativeStatusRef.current = 'starting';
+      // The native module is the source of truth for the active conversation.
+      // Do not overwrite its cached owner before start resolves: doing so can
+      // make an `already_running` session from another room look like this
+      // room's existing session.
       await startNativeStt({
         wsUrl,
         ...startPayload,
@@ -2802,16 +2807,54 @@ function AppInner(): React.JSX.Element {
         : resolveNativeSttErrorCode(message);
       const isExistingNativeSessionForSameConversation = code === 'already_running'
         && Boolean(conversationId)
-        && nativeSttConversationIdRef.current === conversationId
-        && ['starting', 'running', 'ready', 'silenced', 'recovering', 'connecting'].includes(statusBeforeStart);
+        && nativeSttConversationIdRef.current === conversationId;
       if (isExistingNativeSessionForSameConversation) {
-        nativeStatusRef.current = statusBeforeStart;
+        nativeStatusRef.current = ['starting', 'running', 'ready', 'silenced', 'recovering', 'connecting']
+          .includes(statusBeforeStart)
+          ? statusBeforeStart
+          : 'running';
         emitToWeb({
           type: 'status',
-          status: statusBeforeStart,
+          status: nativeStatusRef.current,
           conversationId,
         });
         return;
+      }
+      if (code === 'already_running') {
+        // A previous room can outlive its WebView listener. Recover the
+        // process-wide native singleton instead of leaving the new room in a
+        // false connecting state. An empty conversation ID intentionally asks
+        // the native module to stop whichever session actually owns capture.
+        try {
+          await stopNativeStt({
+            pendingText: '',
+            pendingLanguage: 'unknown',
+          });
+          const stoppedConversationId = nativeSttConversationIdRef.current
+            || activeNativeConversationIdBeforeStart
+            || undefined;
+          nativeStatusRef.current = 'stopped';
+          emitToWeb({
+            type: 'status',
+            status: 'stopped',
+            ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+          });
+          nativeSttConversationIdRef.current = null;
+          nativeStatusRef.current = 'starting';
+          await startNativeStt({
+            wsUrl,
+            ...startPayload,
+          });
+          nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
+          return;
+        } catch (recoveryError: unknown) {
+          if (__DEV__) {
+            const recoveryMessage = recoveryError instanceof Error
+              ? recoveryError.message
+              : String(recoveryError);
+            console.warn(`[NativeSTT] stale-session recovery failed: ${recoveryMessage}`);
+          }
+        }
       }
       const shouldRetryFallback = Boolean(
         fallbackWsUrl
@@ -2910,6 +2953,14 @@ function AppInner(): React.JSX.Element {
       });
     }
   }, [emitToWeb]);
+
+  const enqueueNativeSttCommand = useCallback((task: () => Promise<void>) => {
+    const queuedTask = nativeSttCommandQueueRef.current.then(task, task);
+    nativeSttCommandQueueRef.current = queuedTask.then(
+      () => undefined,
+      () => undefined,
+    );
+  }, []);
 
   const handleNativeAuthStart = useCallback(async (payload?: {
     provider?: NativeAuthProvider;
@@ -3221,7 +3272,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
       }
-      void handleNativeStart(parsed.payload);
+      enqueueNativeSttCommand(() => handleNativeStart(parsed.payload));
       return;
     }
 
@@ -3229,7 +3280,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
       }
-      void handleNativeStop(parsed.payload);
+      enqueueNativeSttCommand(() => handleNativeStop(parsed.payload));
       return;
     }
 
@@ -3300,6 +3351,7 @@ function AppInner(): React.JSX.Element {
     handleNativeQrSave,
     handleNativeStart,
     handleNativeStop,
+    enqueueNativeSttCommand,
     rememberCurrentWebUrl,
     updateSafeAreaPalette,
   ]);

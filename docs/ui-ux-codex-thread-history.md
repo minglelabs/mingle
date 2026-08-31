@@ -1623,3 +1623,17 @@
   - Stop a native session during conversation close even when the room's React state missed the latest native status, provided the cached owner matches the closing room.
 - Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
 - Testing notes: Verify first-start `connecting → ready`, Android transcript delivery, rapid stop/start, close/re-entry while connecting and ready, WebView remount, stale stop isolation between rooms, audio-route recovery, and iOS/Android native log continuity.
+
+## 2026-08-31 — Make Android native STT start and room re-entry recoverable
+
+- Surface: Android native STT capture, the React Native-to-WebView command bridge, conversation-room switching, and the room microphone buttons.
+- Issue: Intermittent Android failures could leave the control in `connecting` until the timeout, silently ignore a start while the previous room was still stopping, or leave a stale process-wide native session after returning to the conversation list. Android WebView compatibility clicks could also be lost when `pointerdown` prevented textarea focus changes.
+- User impact: Tapping Start sometimes did nothing, a later tap could repeat the same failed state, and reopening a room could show a non-actionable microphone control even though the native recorder was still running.
+- Resolution:
+  - Serialize native STT start and stop commands in the React Native bridge so a new room never starts before the previous native stop has completed.
+  - Keep the native conversation cache owned by native lifecycle events, recover an `already_running` stale singleton by stopping it before retrying the requested room, and stop the previous room explicitly during room switching and close.
+  - Let the microphone cancel an unresolved `connecting` session and use pointer-up activation as a fallback when Android suppresses the compatibility click. Duplicate pointer/click activation is deduplicated.
+  - Do not let terminal `stopped`, `closed`, or error status events claim an otherwise unowned room's native STT owner, preventing stale terminal events from blocking later starts.
+  - Resolve native stop completion from the terminal bridge status as well as close/error events, while retaining a bounded timeout fallback.
+- Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
+- Testing notes: Verify repeated Android start/stop taps, start while a prior stop is pending, room switch during `connecting`, close and re-entry with missed status events, stale `already_running` recovery, and both pointer and keyboard activation paths. Confirm iOS behavior remains unchanged.

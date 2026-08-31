@@ -95,7 +95,11 @@ type MingleHomeProps = {
 
 export type MingleHomeRef = {
   startRecording: () => Promise<void>;
-  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  stopRecording: (options?: {
+    deferRunningStateChange?: boolean;
+    discardPendingFinalization?: boolean;
+    forceNativeStop?: boolean;
+  }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
   requestCloseTopmostOverlay: () => boolean;

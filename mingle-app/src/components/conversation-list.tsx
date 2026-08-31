@@ -2626,7 +2626,10 @@ export default function ConversationList({
     }
 
     const currentLiveRoom = conversationRoomRefs.current.get(currentLiveConversationId);
-    await currentLiveRoom?.stopRecording({ deferRunningStateChange: true });
+    await currentLiveRoom?.stopRecording({
+      deferRunningStateChange: true,
+      forceNativeStop: isNativeAppRuntime(),
+    });
     return { switchedFromLiveConversation: true };
   }, []);
 
@@ -4463,11 +4466,18 @@ export default function ConversationList({
       isNativeSttStatusLive(cachedNativeStatus)
       && cachedNativeConversationId === closingConversation.id
     );
-    if (roomRef && (roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom)) {
+    // Native STT is a process-wide singleton. Always send an idempotent,
+    // conversation-scoped stop when leaving a mounted room so a stale WebView
+    // state cannot leave the Android recorder running after navigation.
+    const shouldForceStopNativeStt = isNativeAppRuntime()
+      && (!cachedNativeConversationId || cachedNativeConversationId === closingConversation.id);
+    if (roomRef && (roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom || shouldForceStopNativeStt)) {
       try {
         await roomRef.stopRecording({
           deferRunningStateChange: true,
-          ...(roomIsSttSessionRunning ? {} : { forceNativeStop: true }),
+          ...(roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom || shouldForceStopNativeStt
+            ? { forceNativeStop: true }
+            : {}),
         });
       } catch {
         // The room unmount cleanup still sends an idempotent native stop fallback.
