@@ -99,6 +99,7 @@ class NativeSTTModule(
   @Volatile private var foregroundServiceActive = false
   @Volatile private var lastAudioChunkAtMs: Long = 0L
   @Volatile private var lastAudioRecoveryAtMs: Long = 0L
+  @Volatile private var sessionStartedAtMs: Long = 0L
   @Volatile private var activeConversationId: String? = null
   @Volatile private var activeSessionId: String? = null
   @Volatile private var gracefulStopPromise: Promise? = null
@@ -417,6 +418,7 @@ class NativeSTTModule(
       activeSessionId = options.sessionId.ifEmpty {
         "android-native-${SystemClock.elapsedRealtime()}-${UUID.randomUUID()}"
       }
+      sessionStartedAtMs = SystemClock.elapsedRealtime()
       audioChunkCount = 0L
       wsMessageCount = 0L
 
@@ -552,7 +554,11 @@ class NativeSTTModule(
   private fun recreateAudioCapture(
     aecEnabled: Boolean,
     reason: String,
+    expectedSessionId: String? = null,
   ) {
+    if (expectedSessionId != null && (!isActiveSocket(expectedSessionId) || gracefulStopPending)) {
+      return
+    }
     val previousRecord = audioRecord ?: throw IllegalStateException("audio_record_unavailable")
     val preferredSampleRate = currentSampleRate
     val previousProfile = currentProfile ?: NativeSttCapturePolicy.resolve(requestedAecEnabled)
@@ -567,6 +573,12 @@ class NativeSTTModule(
     } catch (error: Throwable) {
       prepareAudioMode(previousProfile)
       throw error
+    }
+
+    if (expectedSessionId != null && (!isActiveSocket(expectedSessionId) || gracefulStopPending)) {
+      nextCapture.record.stopSafely()
+      nextCapture.record.release()
+      return
     }
 
     stopAudioThread()
@@ -883,13 +895,22 @@ class NativeSTTModule(
   }
 
   private fun scheduleAudioRecovery(reason: String) {
-    if (!isRunning.get() || audioRecord == null) {
+    if (!isRunning.get() || gracefulStopPending || audioRecord == null) {
       return
     }
     val now = SystemClock.elapsedRealtime()
+    if (
+      reason.startsWith("route_change_")
+      && sessionStartedAtMs > 0L
+      && now - sessionStartedAtMs < AUDIO_ROUTE_RECOVERY_STARTUP_GRACE_MS
+    ) {
+      Log.i(TAG, "ignored initial audio route callback reason=$reason")
+      return
+    }
     if (now - lastAudioRecoveryAtMs < AUDIO_RECOVERY_COOLDOWN_MS) {
       return
     }
+    val recoverySessionId = activeSessionId ?: return
     if (!isRecoveringAudio.compareAndSet(false, true)) {
       return
     }
@@ -898,12 +919,13 @@ class NativeSTTModule(
     Thread(
       {
         try {
-          if (!isRunning.get()) {
+          if (!isActiveSocket(recoverySessionId) || gracefulStopPending) {
             return@Thread
           }
           recreateAudioCapture(
             aecEnabled = requestedAecEnabled,
             reason = reason,
+            expectedSessionId = recoverySessionId,
           )
         } catch (error: Throwable) {
           emitError("audio_recovery_failed($reason): ${error.message ?: "unknown"}")
@@ -936,6 +958,7 @@ class NativeSTTModule(
     gracefulStopPending = true
     webSocketReady = false
     serverReady = false
+    sessionStartedAtMs = 0L
 
     stopAudioThread()
     stopStallMonitor()
@@ -1167,6 +1190,7 @@ class NativeSTTModule(
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L
+    private const val AUDIO_ROUTE_RECOVERY_STARTUP_GRACE_MS = 1_500L
     private const val GRACEFUL_STOP_TIMEOUT_MS = 5_000L
   }
 }

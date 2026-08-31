@@ -2069,6 +2069,7 @@ export default function ConversationList({
   // Keep route-sync from rewriting that still-current room entry into a list
   // entry before the browser finishes the history navigation.
   const pendingConversationHistoryBackRef = useRef(false);
+  const pendingConversationOpenAfterHistoryBackRef = useRef<string | null>(null);
   // Direct-message navigation starts on a profile surface but must preserve
   // the participant/menu history underneath it. Keep this guard alive through
   // the iOS history-settle window so a delayed replay cannot reopen the profile.
@@ -4482,6 +4483,19 @@ export default function ConversationList({
     setRowActionMenu(null);
     suppressRowActionMenuUntilRef.current = Date.now() + ROW_ACTION_LONG_PRESS_DELAY_MS + 120;
 
+    // The overlay is hidden before history.back() settles. Android WebView can
+    // therefore deliver a row tap while the old room entry is still current;
+    // the delayed popstate would immediately close that newly opened room and
+    // make the first tap look ignored. Preserve the tap and replay it after
+    // the history transition commits.
+    if (pendingConversationHistoryBackRef.current) {
+      pendingConversationOpenAfterHistoryBackRef.current = matchedConversation.id;
+      postConversationHistoryDebug("queue-conversation-open-after-back", {
+        conversationId: matchedConversation.id,
+      });
+      return;
+    }
+
     try {
       await openConversationSummary(matchedConversation);
     } catch (error) {
@@ -4554,31 +4568,12 @@ export default function ConversationList({
     if (!activeConversation || isCreatingConversation) return;
 
     const closingConversation = activeConversation;
-    const roomRef = conversationRoomRefs.current.get(closingConversation.id);
-    const roomIsSttSessionRunning = roomRef?.isSttSessionRunning() === true;
-    const cachedNativeStatus = readCachedNativeSttStatus();
-    const cachedNativeConversationId = readCachedNativeSttConversationId();
-    const nativeSessionBelongsToClosingRoom = (
-      isNativeSttStatusLive(cachedNativeStatus)
-      && cachedNativeConversationId === closingConversation.id
-    );
-    // Native STT is a process-wide singleton. Always send an idempotent,
-    // conversation-scoped stop when leaving a mounted room so a stale WebView
-    // state cannot leave the Android recorder running after navigation.
-    const shouldForceStopNativeStt = isNativeAppRuntime()
-      && (!cachedNativeConversationId || cachedNativeConversationId === closingConversation.id);
-    if (roomRef && (roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom || shouldForceStopNativeStt)) {
-      try {
-        await roomRef.stopRecording({
-          deferRunningStateChange: true,
-          ...(roomIsSttSessionRunning || nativeSessionBelongsToClosingRoom || shouldForceStopNativeStt
-            ? { forceNativeStop: true }
-            : {}),
-        });
-      } catch {
-        // The room unmount cleanup still sends an idempotent native stop fallback.
-      }
-    }
+
+    // Closing the room is only a visual navigation action. A running room is
+    // retained in mountedConversations through liveConversationId, so its STT
+    // hook, native owner, message queue, and translations continue while the
+    // conversation list is visible. Explicit Stop, room deletion/leave, room
+    // switching, sign-out, and app teardown remain the session boundaries.
 
     const currentConversationId = readConversationIdFromLocation();
     if (
@@ -4768,6 +4763,31 @@ export default function ConversationList({
       conversationHistoryPopStateTargetRef.current = null;
       conversationHistoryPopStateTransitionRef.current = null;
       pendingConversationHistoryBackRef.current = false;
+
+      const queuedConversationId = pendingConversationOpenAfterHistoryBackRef.current;
+      pendingConversationOpenAfterHistoryBackRef.current = null;
+      if (queuedConversationId) {
+        const queuedConversation = conversationsRef.current.find(
+          (conversation) => conversation.id === queuedConversationId,
+        );
+        if (queuedConversation) {
+          window.setTimeout(() => {
+            void openConversationSummary(queuedConversation, {
+              enterMode: "animate",
+              syncHistory: "push",
+            }).catch((error: unknown) => {
+              const aborted = isAbortLikeMutationError(error);
+              logConversationMutationFailure({
+                label: "queued-route-open",
+                conversationId: queuedConversation.id,
+                error,
+                aborted,
+              });
+              if (!aborted) window.alert(copy.openErrorMessage);
+            });
+          }, 0);
+        }
+      }
       return;
     }
     // If the URL still describes the previous screen, wait for the browser's
@@ -4969,7 +4989,7 @@ export default function ConversationList({
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [closeConversationOverlay]);
+  }, [closeConversationOverlay, copy.openErrorMessage, openConversationSummary]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
