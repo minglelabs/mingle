@@ -4778,7 +4778,7 @@ export default function ConversationList({
             }).catch((error: unknown) => {
               const aborted = isAbortLikeMutationError(error);
               logConversationMutationFailure({
-                label: "queued-route-open",
+                label: "route-open",
                 conversationId: queuedConversation.id,
                 error,
                 aborted,
