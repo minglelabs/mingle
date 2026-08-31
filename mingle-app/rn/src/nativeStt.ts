@@ -25,11 +25,20 @@ type NativeSttMicrophonePermissionStatus = {
   platform?: string;
 };
 
+type NativeSttStatus = {
+  status: string;
+  conversationId?: string;
+  sessionId?: string;
+  serverReady?: boolean;
+  running?: boolean;
+};
+
 type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
+  getStatus?: () => Promise<NativeSttStatus>;
 };
 
 type NativeSttEventMap = {
@@ -72,6 +81,13 @@ export async function getNativeSttMicrophonePermissionStatus(): Promise<NativeSt
     return { permission: 'unknown', platform: Platform.OS };
   }
   return nativeModule.getMicrophonePermissionStatus();
+}
+
+export async function getNativeSttStatus(): Promise<NativeSttStatus> {
+  if (!nativeModule?.getStatus) {
+    return { status: 'idle', running: false, serverReady: false };
+  }
+  return nativeModule.getStatus();
 }
 
 export function addNativeSttListener<T extends keyof NativeSttEventMap>(
