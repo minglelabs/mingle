@@ -35,9 +35,10 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
@@ -47,6 +48,7 @@ class NativeSTTModule(
 
   private data class StartOptions(
     val conversationId: String,
+    val sessionId: String,
     val wsUrl: String,
     val sttModel: String,
     val aecEnabled: Boolean,
@@ -97,6 +99,7 @@ class NativeSTTModule(
   @Volatile private var lastAudioChunkAtMs: Long = 0L
   @Volatile private var lastAudioRecoveryAtMs: Long = 0L
   @Volatile private var activeConversationId: String? = null
+  @Volatile private var activeSessionId: String? = null
   @Volatile private var gracefulStopPromise: Promise? = null
   @Volatile private var audioChunkCount: Long = 0L
   @Volatile private var wsMessageCount: Long = 0L
@@ -137,14 +140,30 @@ class NativeSTTModule(
   ) {
     if (isRunning.get()) {
       val requestedConversationId = options.getString("conversationId")?.trim().orEmpty()
-      if (requestedConversationId.isNotEmpty() && requestedConversationId == activeConversationId) {
-        Log.i(TAG, "start reused active session conversation=$requestedConversationId serverReady=$serverReady")
+      val requestedSessionId = options.getString("sessionId")?.trim().orEmpty()
+      val sameConversation = requestedConversationId.isNotEmpty() && requestedConversationId == activeConversationId
+      val sameSession = requestedSessionId.isEmpty()
+        || activeSessionId.isNullOrEmpty()
+        || requestedSessionId == activeSessionId
+      if (sameConversation && sameSession) {
+        Log.i(
+          TAG,
+          "start reused active session conversation=$requestedConversationId " +
+            "session=${activeSessionId ?: "unknown"} serverReady=$serverReady",
+        )
         emitStatus(if (serverReady) "ready" else "running")
         promise.resolve(Arguments.createMap().apply {
           putInt("sampleRate", currentSampleRate)
         })
         return
       }
+      Log.w(
+        TAG,
+        "start rejected already running requestedConversation=${requestedConversationId.ifEmpty { "unknown" }} " +
+          "activeConversation=${activeConversationId ?: "unknown"} " +
+          "requestedSession=${requestedSessionId.ifEmpty { "unknown" }} " +
+          "activeSession=${activeSessionId ?: "unknown"}",
+      )
       promise.reject("already_running", "native_stt_already_running")
       return
     }
@@ -157,6 +176,7 @@ class NativeSTTModule(
 
     val startOptions = StartOptions(
       conversationId = options.getString("conversationId")?.trim().orEmpty(),
+      sessionId = options.getString("sessionId")?.trim().orEmpty(),
       wsUrl = wsUrl,
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
@@ -215,9 +235,12 @@ class NativeSTTModule(
     options: ReadableMap?,
     promise: Promise,
   ) {
+    val force = options?.hasKey("force") == true && options.getBoolean("force")
     val requestedConversationId = options?.getString("conversationId")?.trim().orEmpty()
     val currentConversationId = activeConversationId.orEmpty()
-    if (requestedConversationId.isNotEmpty()
+    val requestedSessionId = options?.getString("sessionId")?.trim().orEmpty()
+    val currentSessionId = activeSessionId.orEmpty()
+    if (!force && requestedConversationId.isNotEmpty()
       && currentConversationId.isNotEmpty()
       && requestedConversationId != currentConversationId
     ) {
@@ -228,12 +251,39 @@ class NativeSTTModule(
       promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
       return
     }
+    if (!force && requestedSessionId.isNotEmpty()
+      && currentSessionId.isNotEmpty()
+      && requestedSessionId != currentSessionId
+    ) {
+      Log.w(
+        TAG,
+        "ignored stale stop session=$requestedSessionId active=$currentSessionId",
+      )
+      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      return
+    }
     val pendingText = options?.getString("pendingText")?.takeIf { it.isNotBlank() } ?: ""
     val pendingLanguage = options?.getString("pendingLanguage")?.takeIf { it.isNotBlank() } ?: "unknown"
 
-    if (gracefulStopPending) {
+    if (gracefulStopPending && !force) {
       // A stop is already draining the current session. The first caller owns
       // the completion promise; later idempotent stops must not tear it down.
+      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      return
+    }
+
+    if (gracefulStopPending && force) {
+      // A recovery stop must not wait for the previous graceful-stop ACK. The
+      // next start is serialized behind this method and needs the native
+      // singleton to be fully released before it can claim the recorder.
+      Log.w(
+        TAG,
+        "forcing pending stop conversation=${currentConversationId.ifEmpty { "unknown" }} " +
+          "session=${currentSessionId.ifEmpty { "unknown" }}",
+      )
+      clearGracefulStopTimeout()
+      gracefulStopPending = false
+      cleanup(reason = "forced_stop", emitClose = true)
       promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
       return
     }
@@ -346,6 +396,9 @@ class NativeSTTModule(
       serverReady = false
       lastClientSilenced = null
       activeConversationId = options.conversationId.ifEmpty { null }
+      activeSessionId = options.sessionId.ifEmpty {
+        "android-native-${SystemClock.elapsedRealtime()}-${UUID.randomUUID()}"
+      }
       audioChunkCount = 0L
       wsMessageCount = 0L
 
@@ -356,14 +409,19 @@ class NativeSTTModule(
       Log.i(
         TAG,
         "start session conversation=${activeConversationId ?: "unknown"} ws=${options.wsUrl} " +
-          "sampleRate=$currentSampleRate profile=${profile.label}",
+          "session=${activeSessionId ?: "unknown"} sampleRate=$currentSampleRate profile=${profile.label}",
       )
-      emitStatus("connecting")
+      // Set the running guard before creating the WebSocket. OkHttp may call
+      // onOpen/onMessage very quickly; if the guard is still false those
+      // callbacks are mistaken for a stale socket and the ready event is lost.
       isRunning.set(true)
+      emitStatus("connecting")
+      val callbackSessionId = activeSessionId
+        ?: throw IllegalStateException("native_stt_session_id_unavailable")
 
       webSocket = socketClient.newWebSocket(request, object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+          if (!isActiveSocket(callbackSessionId)) {
             webSocket.cancel()
             return
           }
@@ -405,7 +463,7 @@ class NativeSTTModule(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+          if (!isActiveSocket(callbackSessionId)) {
             return
           }
           wsMessageCount += 1
@@ -415,7 +473,11 @@ class NativeSTTModule(
           }
           if (isServerReadyMessage(text)) {
             serverReady = true
-            Log.i(TAG, "server ready conversation=${activeConversationId ?: "unknown"}")
+            Log.i(
+              TAG,
+              "server ready conversation=${activeConversationId ?: "unknown"} " +
+                "session=${activeSessionId ?: "unknown"}",
+            )
             emitStatus("ready")
           }
           emitMessage(text)
@@ -425,7 +487,7 @@ class NativeSTTModule(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+          if (!isActiveSocket(callbackSessionId)) {
             return
           }
           emitClose(reason.ifBlank { "socket_closing" })
@@ -433,7 +495,7 @@ class NativeSTTModule(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+          if (!isActiveSocket(callbackSessionId)) {
             return
           }
           emitClose(reason.ifBlank { "socket_closed" })
@@ -441,7 +503,7 @@ class NativeSTTModule(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-          if (webSocket !== this@NativeSTTModule.webSocket || !isRunning.get()) {
+          if (!isActiveSocket(callbackSessionId)) {
             return
           }
           emitError("ws_failure: ${t.message ?: "unknown"}")
@@ -898,6 +960,9 @@ class NativeSTTModule(
     }
   }
 
+  private fun isActiveSocket(sessionId: String): Boolean =
+    isRunning.get() && activeSessionId == sessionId
+
   private fun isStopRecordingAck(raw: String): Boolean =
     try {
       JSONObject(raw).optString("type") == "stop_recording_ack"
@@ -967,6 +1032,7 @@ class NativeSTTModule(
     }
     resolveGracefulStopPromise()
     activeConversationId = null
+    activeSessionId = null
   }
 
   private fun resolveGracefulStopPromise() {
@@ -976,12 +1042,17 @@ class NativeSTTModule(
   }
 
   private fun emitStatus(status: String) {
-    Log.i(TAG, "status=$status conversation=${activeConversationId ?: "unknown"}")
+    Log.i(
+      TAG,
+      "status=$status conversation=${activeConversationId ?: "unknown"} " +
+        "session=${activeSessionId ?: "unknown"}",
+    )
     emitEvent(
       "status",
       Arguments.createMap().apply {
         putString("status", status)
         activeConversationId?.let { putString("conversationId", it) }
+        activeSessionId?.let { putString("sessionId", it) }
       },
     )
   }
@@ -992,6 +1063,7 @@ class NativeSTTModule(
       Arguments.createMap().apply {
         putString("raw", raw)
         activeConversationId?.let { putString("conversationId", it) }
+        activeSessionId?.let { putString("sessionId", it) }
       },
     )
   }
@@ -1003,17 +1075,23 @@ class NativeSTTModule(
       Arguments.createMap().apply {
         putString("message", message)
         activeConversationId?.let { putString("conversationId", it) }
+        activeSessionId?.let { putString("sessionId", it) }
       },
     )
   }
 
   private fun emitClose(reason: String) {
-    Log.i(TAG, "close reason=$reason conversation=${activeConversationId ?: "unknown"}")
+    Log.i(
+      TAG,
+      "close reason=$reason conversation=${activeConversationId ?: "unknown"} " +
+        "session=${activeSessionId ?: "unknown"}",
+    )
     emitEvent(
       "close",
       Arguments.createMap().apply {
         putString("reason", reason)
         activeConversationId?.let { putString("conversationId", it) }
+        activeSessionId?.let { putString("sessionId", it) }
       },
     )
   }
