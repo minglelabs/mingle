@@ -40,6 +40,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 class NativeSTTModule(
@@ -77,7 +78,7 @@ class NativeSTTModule(
     reactContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private val isRunning = AtomicBoolean(false)
 
-  @Volatile private var hasListeners = false
+  private val listenerCount = AtomicInteger(0)
   @Volatile private var webSocketReady = false
   @Volatile private var serverReady = false
   @Volatile private var audioRecord: AudioRecord? = null
@@ -123,14 +124,31 @@ class NativeSTTModule(
 
   @ReactMethod
   fun addListener(eventName: String) {
-    hasListeners = true
+    listenerCount.incrementAndGet()
   }
 
   @ReactMethod
   fun removeListeners(count: Int) {
     if (count > 0) {
-      hasListeners = false
+      listenerCount.updateAndGet { current -> max(0, current - count) }
     }
+  }
+
+  @ReactMethod
+  fun getStatus(promise: Promise) {
+    val running = isRunning.get()
+    val status = when {
+      !running -> "idle"
+      serverReady -> "ready"
+      else -> "connecting"
+    }
+    promise.resolve(Arguments.createMap().apply {
+      putString("status", status)
+      activeConversationId?.let { putString("conversationId", it) }
+      activeSessionId?.let { putString("sessionId", it) }
+      putBoolean("running", running)
+      putBoolean("serverReady", running && serverReady)
+    })
   }
 
   @ReactMethod
@@ -1100,7 +1118,7 @@ class NativeSTTModule(
     eventName: String,
     payload: com.facebook.react.bridge.WritableMap,
   ) {
-    if (!hasListeners) {
+    if (listenerCount.get() <= 0) {
       return
     }
     reactApplicationContext
