@@ -1637,3 +1637,19 @@
   - Resolve native stop completion from the terminal bridge status as well as close/error events, while retaining a bounded timeout fallback.
 - Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
 - Testing notes: Verify repeated Android start/stop taps, start while a prior stop is pending, room switch during `connecting`, close and re-entry with missed status events, stale `already_running` recovery, and both pointer and keyboard activation paths. Confirm iOS behavior remains unchanged.
+
+## 2026-09-01 — Scope Android native STT callbacks to a session generation
+
+- Surface: Android native STT WebSocket/audio startup, the React Native status replay bridge, and room re-entry after a WebView reload or list navigation.
+- Issue: Android could lose the first WebSocket callback when the native running guard or socket reference was not initialized before OkHttp delivered `onOpen`. A previous room's callback could also arrive while a new room was requesting capture. A graceful stop already in progress could make a recovery stop return before the native singleton was actually released.
+- User impact: The microphone could remain in `connecting`, appear to switch between Start and Stop after returning to the room list, or accept a tap without delivering speech recognition. The same symptoms could recur nondeterministically because they depended on callback timing.
+- Resolution:
+  - Assign a unique session generation ID to every WebView/native STT start and carry it through Android lifecycle events and the WebView message buffer.
+  - Initialize Android's running guard before opening the WebSocket and validate callbacks by session generation, avoiding the pre-assignment race on the WebSocket reference.
+  - Require same-room reuse to also match the session generation; otherwise recover the process-wide native singleton before starting the requested room.
+  - Allow a forced recovery stop to supersede an already-pending graceful stop and wait for the native cleanup path before the next start.
+  - Replay native status on WebView load only to the room in the URL, and send an idle replay to a different room instead of inheriting the previous room's status.
+  - Drop session-tagged queued messages from an old generation while retaining untagged messages for older native shells.
+  - Keep the connecting watchdog at 20 seconds to accommodate cold Android audio/WebSocket startup while still recovering a lost handshake.
+- Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `android/v2.0.0`; session IDs are opaque lifecycle metadata and contain no access token or transcript text.
+- Testing notes: Verify cold start, rapid stop/start, room switch during `connecting`, graceful-stop overlap, WebView reload, list-to-room re-entry, stale callback rejection, queued-message filtering, and repeated Android runs. Confirm iOS behavior remains unchanged and install a newly built Android artifact before device validation.

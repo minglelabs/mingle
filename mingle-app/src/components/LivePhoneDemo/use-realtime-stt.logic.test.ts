@@ -37,6 +37,7 @@ import {
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldBlockNativeSttSessionEvent,
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
@@ -856,6 +857,25 @@ describe('use-realtime-stt pure logic', () => {
       nativeStatus: 'legacy_unknown_state',
       previousConnectionStatus: 'connecting',
     })).toBeNull()
+  })
+
+  it('blocks native events from a different session generation', () => {
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-a',
+      activeSessionId: 'session-a',
+    })).toBe(false)
+
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-old',
+      activeSessionId: 'session-a',
+    })).toBe(true)
+
+    // Older native shells do not include a session ID, so conversation
+    // filtering remains the compatibility guard at the event consumer.
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: undefined,
+      activeSessionId: 'session-a',
+    })).toBe(false)
   })
 
   it('does not re-enter running UI state while a native stop is pending', () => {

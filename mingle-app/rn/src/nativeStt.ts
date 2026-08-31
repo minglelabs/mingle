@@ -2,6 +2,7 @@ import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 type NativeSttStartOptions = {
   conversationId?: string;
+  sessionId?: string;
   wsUrl: string;
   sttModel?: string;
   aecEnabled?: boolean;
@@ -13,8 +14,10 @@ type NativeSttStartOptions = {
 
 type NativeSttStopOptions = {
   conversationId?: string;
+  sessionId?: string;
   pendingText?: string;
   pendingLanguage?: string;
+  force?: boolean;
 };
 
 type NativeSttMicrophonePermissionStatus = {
@@ -30,10 +33,10 @@ type NativeSttModuleType = {
 };
 
 type NativeSttEventMap = {
-  status: { status: string; conversationId?: string };
-  message: { raw: string; conversationId?: string };
-  error: { message: string; code?: string; platform?: string; conversationId?: string };
-  close: { reason: string; conversationId?: string };
+  status: { status: string; conversationId?: string; sessionId?: string };
+  message: { raw: string; conversationId?: string; sessionId?: string };
+  error: { message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string };
+  close: { reason: string; conversationId?: string; sessionId?: string };
 };
 
 const nativeModule = NativeModules.NativeSTTModule as NativeSttModuleType | undefined;
