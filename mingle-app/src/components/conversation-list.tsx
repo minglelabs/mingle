@@ -61,7 +61,10 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
-import { resolveLanguageSelectorOwnSelectedLanguages } from "@/components/LivePhoneDemo/language-selector.logic";
+import {
+  resolveLanguageSelectorOwnSelectedLanguages,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
+} from "@/components/LivePhoneDemo/language-selector.logic";
 import {
   formatBirthDate,
 } from "@/lib/birth-date";
@@ -2857,19 +2860,28 @@ export default function ConversationList({
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
+    // For a multi-member room this is the caller's own next pick, not the
+    // room union. Naively leaving the union untouched here (as before) made
+    // a language the caller just unchecked stay in the union until the PATCH
+    // resolved — reading as "someone else picked this" (blue) for an instant
+    // even when nobody else did. Reuse the same optimistic-union recompute
+    // handleToggleSelectedLanguage already does for the in-room toggle, so
+    // this stays correct without duplicating that logic.
+    const optimisticUnion = previousConversation.isMultiMember
+      ? resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+          previousUnion: previousSelectedLanguages,
+          previousAttribution: previousConversation.selectedLanguagesAttribution,
+          viewerUserId: authenticatedUserId,
+          previousOwnSelectedLanguages: previousViewerSelectedLanguages,
+          nextOwnSelectedLanguages: normalizedSelectedLanguages,
+        })
+      : [...normalizedSelectedLanguages];
+
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
         ? {
             ...conversation,
-            // For a multi-member room this is the caller's own next pick,
-            // not the room union — leave the displayed union (selectedLanguages)
-            // untouched here and let the server's response (below) supply the
-            // recomputed union, so it doesn't briefly collapse to just "my"
-            // languages while the PATCH is in flight. Solo rooms have no such
-            // distinction, so updating both together is a no-op behavior change.
-            selectedLanguages: conversation.isMultiMember
-              ? conversation.selectedLanguages
-              : [...normalizedSelectedLanguages],
+            selectedLanguages: optimisticUnion,
             viewerSelectedLanguages: [...normalizedSelectedLanguages],
             translationLanguagesLinked: false,
           }
@@ -2929,7 +2941,7 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [persistUserDefaultConversationLanguages]);
+  }, [authenticatedUserId, persistUserDefaultConversationLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,
