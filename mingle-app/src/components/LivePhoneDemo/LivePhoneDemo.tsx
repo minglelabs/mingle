@@ -4695,8 +4695,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [viewerUserId])
 
+  const micPointerActivationRef = useRef(false)
+  const suppressMicClickUntilRef = useRef(0)
+  const startPreparationInFlightRef = useRef(false)
   const handleMicPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
+    if (event.button === 0) {
+      micPointerActivationRef.current = true
+    }
     if (!enableAutoTTS || isActive) return
     void primeAudioPlayback()
   }, [enableAutoTTS, isActive, primeAudioPlayback])
@@ -4709,8 +4715,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       onLimitReached?.()
       return
     }
-    if (isSttSessionRunning || isPreparingStart) return
+    if (isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current) return
 
+    startPreparationInFlightRef.current = true
     setIsPreparingStart(true)
     try {
       const startPreparation = await onStartRecordingRequested?.()
@@ -4735,6 +4742,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         })
       }
     } finally {
+      startPreparationInFlightRef.current = false
       setIsPreparingStart(false)
     }
   }, [
@@ -4755,20 +4763,52 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (options?.deferRunningStateChange !== true) {
       onSttSessionRunningChange?.(false)
     }
-    await stopRecording({ discardPendingFinalization: options?.discardPendingFinalization })
+    await stopRecording({
+      discardPendingFinalization: options?.discardPendingFinalization,
+      forceNativeStop: options?.forceNativeStop,
+    })
     if (options?.deferRunningStateChange === true) {
       onSttSessionRunningChange?.(false)
     }
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
-  const handleMicClick = useCallback(() => {
-    if (isSttSessionRunning) {
-      void handleStopRecording()
+  const performMicAction = useCallback(() => {
+    const shouldStopConnectingSession = isConnecting
+      && (!isNativeAppRuntime || isNativeSttSessionOwner)
+    if (isSttSessionRunning || shouldStopConnectingSession) {
+      // A missed native `ready` event can leave the hook in connecting while
+      // the native recorder is already active. Keep the control recoverable by
+      // allowing the user to cancel that session instead of disabling it.
+      void handleStopRecording({ forceNativeStop: !isSttSessionRunning })
       return
     }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning])
+
+  const handleMicClick = useCallback(() => {
+    micPointerActivationRef.current = false
+    if (Date.now() < suppressMicClickUntilRef.current) {
+      suppressMicClickUntilRef.current = 0
+      return
+    }
+    performMicAction()
+  }, [performMicAction])
+
+  const handleMicPointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!micPointerActivationRef.current) return
+    micPointerActivationRef.current = false
+    event.preventDefault()
+    // Some Android WebViews still dispatch a compatibility click after the
+    // pointer sequence even though pointerdown prevented focus movement.
+    // Activate on pointerup and suppress only that duplicate click.
+    suppressMicClickUntilRef.current = Date.now() + 500
+    performMicAction()
+  }, [performMicAction])
+
+  const handleMicPointerCancel = useCallback(() => {
+    micPointerActivationRef.current = false
+  }, [])
 
   const handleToggleComposer = useCallback(() => {
     const next = !isComposerOpen
@@ -7648,8 +7688,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       data-qa="live-demo-mic-button"
                       onPointerDown={handleMicPointerDown}
+                      onPointerUp={handleMicPointerUp}
+                      onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={showConnectingOverlay}
+                      disabled={isPreparingStart && !isConnecting}
                       className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
@@ -7816,9 +7858,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       data-qa="live-demo-mic-button"
                       onPointerDown={handleMicPointerDown}
+                      onPointerUp={handleMicPointerUp}
+                      onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={showConnectingOverlay}
-                      aria-label={isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
+                      disabled={isPreparingStart && !isConnecting}
+                      aria-label={isReady || isConnecting ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
                       className="relative flex items-center justify-center px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${VOICE_MODE_STT_BUTTON_WIDTH_PX}px`,

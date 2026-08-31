@@ -505,6 +505,17 @@ export function resolveConnectionStatusFromNativeBridgeStatus(input: {
   return null
 }
 
+function isLiveNativeBridgeStatus(status: unknown): boolean {
+  if (typeof status !== 'string') return false
+  const normalized = status.trim().toLowerCase()
+  return normalized === 'running'
+    || normalized === 'ready'
+    || normalized === 'silenced'
+    || normalized === 'starting'
+    || normalized === 'connecting'
+    || normalized === 'recovering'
+}
+
 export function shouldApplyNativeBridgeConnectionStatus(input: {
   nextConnectionStatus: ConnectionStatus | null
   isStopping?: boolean
@@ -1289,6 +1300,7 @@ interface UseRealtimeSTTOptions {
 
 type StopRecordingOptions = {
   discardPendingFinalization?: boolean
+  forceNativeStop?: boolean
 }
 
 interface SubmitExternalUtteranceInput {
@@ -2887,6 +2899,7 @@ export default function useRealtimeSTT({
   }, [])
   const pendingNativeStopAckResolverRef = useRef<(() => void) | null>(null)
   const pendingNativeStopAckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingNativeStopCompletionRef = useRef<Promise<void> | null>(null)
   const clearPendingNativeStopAckTimeout = useCallback(() => {
     if (!pendingNativeStopAckTimeoutRef.current) return
     clearTimeout(pendingNativeStopAckTimeoutRef.current)
@@ -2896,6 +2909,10 @@ export default function useRealtimeSTT({
     clearPendingNativeStopAckTimeout()
     const resolve = pendingNativeStopAckResolverRef.current
     pendingNativeStopAckResolverRef.current = null
+    // A terminal native event can resolve a stop before the awaiting caller's
+    // finally block runs. Clear the completion marker here as well, otherwise
+    // a later stop could mistake an already-resolved promise for a new stop.
+    pendingNativeStopCompletionRef.current = null
     resolve?.()
   }, [clearPendingNativeStopAckTimeout])
   const clearUtterancePersistTimer = useCallback(() => {
@@ -4555,10 +4572,25 @@ export default function useRealtimeSTT({
     clearPartialBuffers,
   ])
 
-  const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
-    if (isStoppingRef.current) return
+  const stopRecordingGracefully = useCallback(async (
+    notifyLimitReached = false,
+    stopReason?: string,
+    options?: { forceNativeStop?: boolean },
+  ) => {
+    if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
+      const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250
+      const pendingStop = pendingNativeStopCompletionRef.current
+      if (pendingStop) {
+        await pendingStop
+      }
+      while (isStoppingRef.current && Date.now() < deadline) {
+        await sleep(25)
+      }
+      return
+    }
     isStoppingRef.current = true
     const useNativeStt = useNativeSttRef.current
+      || (options?.forceNativeStop === true && shouldUseNativeSttBridge())
     let waitingForNativeStopAck = false
 
     stopAudioPipeline({ closeContext: false })
@@ -4589,6 +4621,19 @@ export default function useRealtimeSTT({
 
     if (useNativeStt) {
       nativeStopRequestedRef.current = true
+      clearPendingNativeStopAckTimeout()
+      const nativeStopAckPromise = new Promise<void>((resolve) => {
+        pendingNativeStopAckResolverRef.current = resolve
+        pendingNativeStopAckTimeoutRef.current = setTimeout(() => {
+          pendingNativeStopAckTimeoutRef.current = null
+          pendingNativeStopAckResolverRef.current = null
+          nativeStopRequestedRef.current = false
+          releaseCurrentNativeSttOwner()
+          setConnectionStatus('idle')
+          resolve()
+        }, NATIVE_STOP_ACK_TIMEOUT_MS)
+      })
+      pendingNativeStopCompletionRef.current = nativeStopAckPromise
       const posted = sendNativeSttCommand({
         type: 'native_stt_stop',
         payload: {
@@ -4601,20 +4646,11 @@ export default function useRealtimeSTT({
         waitingForNativeStopAck = true
       } else {
         nativeStopRequestedRef.current = false
+        pendingNativeStopAckResolverRef.current = null
+        clearPendingNativeStopAckTimeout()
+        pendingNativeStopCompletionRef.current = null
       }
       if (waitingForNativeStopAck) {
-        clearPendingNativeStopAckTimeout()
-        const nativeStopAckPromise = new Promise<void>((resolve) => {
-          pendingNativeStopAckResolverRef.current = resolve
-          pendingNativeStopAckTimeoutRef.current = setTimeout(() => {
-            pendingNativeStopAckTimeoutRef.current = null
-            pendingNativeStopAckResolverRef.current = null
-            nativeStopRequestedRef.current = false
-            releaseCurrentNativeSttOwner()
-            setConnectionStatus('idle')
-            resolve()
-          }, NATIVE_STOP_ACK_TIMEOUT_MS)
-        })
         setConnectionStatus('idle')
         const wasActiveSession = hasActiveSessionRef.current
         hasActiveSessionRef.current = false
@@ -4647,6 +4683,9 @@ export default function useRealtimeSTT({
           await nativeStopAckPromise
         } finally {
           isStoppingRef.current = false
+          if (pendingNativeStopCompletionRef.current === nativeStopAckPromise) {
+            pendingNativeStopCompletionRef.current = null
+          }
         }
         return
       } else {
@@ -4723,7 +4762,9 @@ export default function useRealtimeSTT({
     if (options?.discardPendingFinalization) {
       prepareForDeletion()
     }
-    await stopRecordingGracefully()
+    await stopRecordingGracefully(false, undefined, {
+      forceNativeStop: options?.forceNativeStop,
+    })
   }, [prepareForDeletion, stopRecordingGracefully])
 
   useEffect(() => {
@@ -5225,10 +5266,55 @@ export default function useRealtimeSTT({
   ])
 
   const startRecording = useCallback(async () => {
-    if (isStoppingRef.current) return
+    if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
+      logSttDebug('recording.start.waiting_for_stop')
+      const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250
+      const pendingStop = pendingNativeStopCompletionRef.current
+      if (pendingStop) {
+        await pendingStop
+      }
+      while (isStoppingRef.current && Date.now() < deadline) {
+        await sleep(25)
+      }
+      if (isStoppingRef.current) {
+        logSttDebug('recording.start.blocked_by_stop', {
+          isStopping: isStoppingRef.current,
+        })
+        return
+      }
+    }
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
     useNativeSttRef.current = useNativeStt
+    if (useNativeStt && typeof window !== 'undefined') {
+      const cachedWindow = window as NativeAppUpdateWindow
+      const cachedNativeStatus = cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
+      const cachedConversationId = readCachedNativeSttConversationId(cachedWindow)
+      const currentConversationId = (conversationId || '').trim()
+      if (
+        isLiveNativeBridgeStatus(cachedNativeStatus)
+        && cachedConversationId
+        && currentConversationId
+        && cachedConversationId !== currentConversationId
+      ) {
+        // Native STT is a process-wide singleton. Queue the old-room stop
+        // before this room's start; the React Native bridge serializes both
+        // commands so a stale session cannot make this start look inert.
+        logSttDebug('native.start.stop_previous_session', {
+          conversationId: currentConversationId,
+          previousConversationId: cachedConversationId,
+          previousStatus: cachedNativeStatus,
+        })
+        sendNativeSttCommand({
+          type: 'native_stt_stop',
+          payload: {
+            conversationId: cachedConversationId,
+            pendingText: '',
+            pendingLanguage: 'unknown',
+          },
+        })
+      }
+    }
     if (shouldOpenNativeMicSettingsOnRetry({
       useNativeStt,
       connectionStatus: connectionStatusRef.current,
@@ -5428,18 +5514,23 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'status') {
-        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
+        const previousConnectionStatus = connectionStatusRef.current
+        const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
+          nativeStatus: detail.status,
+          previousConnectionStatus,
+        })
+        const isTerminalStatus = nextConnectionStatus === 'idle' || nextConnectionStatus === 'error'
+        if (
+          isTerminalStatus
+            ? Boolean(activeNativeSttOwnerKey) && !isCurrentNativeSttOwner()
+            : !claimCurrentNativeSttOwnerIfUnclaimed()
+        ) {
           logSttDebug('native.status.owner_blocked', {
             conversationId: conversationId || null,
             nativeStatus: detail.status,
           })
           return
         }
-        const previousConnectionStatus = connectionStatusRef.current
-        const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
-          nativeStatus: detail.status,
-          previousConnectionStatus,
-        })
         logSttDebug('native.status', {
           conversationId: conversationId || null,
           nativeStatus: detail.status,
@@ -5460,6 +5551,11 @@ export default function useRealtimeSTT({
         }
         if (nextConnectionStatus === 'ready') {
           hasActiveSessionRef.current = true
+        }
+        if (nextConnectionStatus === 'idle' && nativeStopRequestedRef.current) {
+          nativeStopRequestedRef.current = false
+          releaseCurrentNativeSttOwner()
+          resolvePendingNativeStopAck()
         }
         if (nextConnectionStatus) {
           setConnectionStatus(nextConnectionStatus)
@@ -5528,7 +5624,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'error') {
-        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
+        if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) {
           return
         }
         logSttDebug('native.error', { message: detail.message })
@@ -5556,7 +5652,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'close') {
-        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
+        if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) {
           return
         }
         logSttDebug('native.close', { reason: detail.reason })
@@ -5576,7 +5672,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, logSttDebug, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerForMessage, claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

@@ -97,6 +97,7 @@ class NativeSTTModule(
   @Volatile private var lastAudioChunkAtMs: Long = 0L
   @Volatile private var lastAudioRecoveryAtMs: Long = 0L
   @Volatile private var activeConversationId: String? = null
+  @Volatile private var gracefulStopPromise: Promise? = null
   @Volatile private var audioChunkCount: Long = 0L
   @Volatile private var wsMessageCount: Long = 0L
   @Volatile private var gracefulStopPending = false
@@ -230,9 +231,16 @@ class NativeSTTModule(
     val pendingText = options?.getString("pendingText")?.takeIf { it.isNotBlank() } ?: ""
     val pendingLanguage = options?.getString("pendingLanguage")?.takeIf { it.isNotBlank() } ?: "unknown"
 
+    if (gracefulStopPending) {
+      // A stop is already draining the current session. The first caller owns
+      // the completion promise; later idempotent stops must not tear it down.
+      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      return
+    }
+
     val currentSocket = webSocket
     if (isRunning.get() && currentSocket != null && webSocketReady) {
-      currentSocket.send(
+      val stopSent = currentSocket.send(
         JSONObject()
           .put("type", "stop_recording")
           .put(
@@ -243,8 +251,13 @@ class NativeSTTModule(
           )
           .toString(),
       )
+      if (!stopSent) {
+        cleanup(reason = "stop_send_failed", emitClose = true)
+        promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+        return
+      }
+      gracefulStopPromise = promise
       beginGracefulStop()
-      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
       return
     }
 
@@ -952,7 +965,14 @@ class NativeSTTModule(
     if (emitClose && wasRunning && reason != null) {
       emitClose(reason)
     }
+    resolveGracefulStopPromise()
     activeConversationId = null
+  }
+
+  private fun resolveGracefulStopPromise() {
+    val promise = gracefulStopPromise ?: return
+    gracefulStopPromise = null
+    promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
   }
 
   private fun emitStatus(status: String) {
