@@ -18,6 +18,7 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveMountedConversationIds,
   resolveConversationHistoryRoute,
   resolveConversationHistoryNavigationDirection,
   readConversationHistoryRouteFromState,
@@ -344,6 +345,15 @@ describe("conversation-list logic", () => {
       deletingActive,
       live,
     ], new Set(["conv-deleting"]))).toBe(live);
+  });
+
+  it("keeps a hidden live room mounted after the visible room closes", () => {
+    expect(resolveMountedConversationIds(null, "conv-live")).toEqual(["conv-live"]);
+    expect(resolveMountedConversationIds("conv-live", "conv-live")).toEqual(["conv-live"]);
+    expect(resolveMountedConversationIds("conv-visible", "conv-live")).toEqual([
+      "conv-visible",
+      "conv-live",
+    ]);
   });
 
   it("restores the cached native STT conversation instead of the first active room", () => {

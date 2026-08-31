@@ -1653,3 +1653,17 @@
   - Keep the connecting watchdog at 20 seconds to accommodate cold Android audio/WebSocket startup while still recovering a lost handshake.
 - Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `android/v2.0.0`; session IDs are opaque lifecycle metadata and contain no access token or transcript text.
 - Testing notes: Verify cold start, rapid stop/start, room switch during `connecting`, graceful-stop overlap, WebView reload, list-to-room re-entry, stale callback rejection, queued-message filtering, and repeated Android runs. Confirm iOS behavior remains unchanged and install a newly built Android artifact before device validation.
+
+## 2026-09-01 — Keep live STT running on the conversation list
+
+- Surface: Conversation room back navigation, the conversation list, hidden live-room rendering, and Android room re-entry.
+- Issue: Closing a room explicitly forced native STT to stop and then removed the live room from the mounted set. The list became visible before `history.back()` had settled, so an immediate Android row tap could reopen the room and then be closed by the delayed popstate. Repeated taps could also issue multiple native Start commands before React rendered the first `connecting` state.
+- User impact: iOS and Android stopped recognition when returning to the list, the list action area flickered while the room changed from active to paused, Android sometimes required two taps to reopen a room, and repeated navigation could leave a phantom Stop control or an unresponsive Start control.
+- Resolution:
+  - Treat room close as visual navigation only. Keep the live room mounted and its STT, translations, and message persistence active while the conversation list is visible.
+  - Preserve explicit Stop, room switching, deletion/leave, sign-out, and app teardown as the operations that actually end a session.
+  - Queue a row tap that arrives before the room-to-list history transition settles, then open that room immediately after popstate completes.
+  - Mirror connection status into the synchronous ref before React renders and suppress duplicate starts while the session is already connecting or ready.
+  - Ignore Android's initial audio-route enumeration callback and scope delayed audio recovery to the session that requested it, preventing a stopped generation from recreating capture.
+- Data contract: No Prisma migration or API namespace change is required.
+- Testing notes: Start STT, return to the list, speak while the list is visible, and confirm the room preview updates without the session stopping. Reopen with one tap, continue speaking, repeat the cycle several times, then explicitly Stop. Repeat on iOS and Android; also verify starting STT in a different room cleanly transfers the singleton session.

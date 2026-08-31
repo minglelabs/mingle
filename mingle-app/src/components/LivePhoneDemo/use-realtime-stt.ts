@@ -2956,6 +2956,7 @@ export default function useRealtimeSTT({
     if (nextConnectionStatus === 'connecting') {
       nativeMicPermissionRecoveryActionRef.current = 'none'
     }
+    connectionStatusRef.current = nextConnectionStatus
     setConnectionStatus(nextConnectionStatus)
   }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isCurrentNativeSttOwner])
 
@@ -2993,12 +2994,14 @@ export default function useRealtimeSTT({
         if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
         hasActiveSessionRef.current = true
         nativeMicPermissionRecoveryActionRef.current = 'none'
+        connectionStatusRef.current = 'ready'
         setConnectionStatus('ready')
         return
       }
 
       if (nextConnectionStatus === 'idle' || nextConnectionStatus === 'error') {
         if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) return
+        connectionStatusRef.current = nextConnectionStatus
         setConnectionStatus(nextConnectionStatus)
       }
     }
@@ -3591,6 +3594,7 @@ export default function useRealtimeSTT({
     clearSpeakerAvatarSession()
     cleanup()
     releaseCurrentNativeSttOwner()
+    connectionStatusRef.current = 'idle'
     setConnectionStatus('idle')
   }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession, releaseCurrentNativeSttOwner, resolvePendingNativeStopAck])
 
@@ -4446,6 +4450,7 @@ export default function useRealtimeSTT({
           nativeStopRequestedRef.current = false
           nativeSttSessionIdRef.current = null
           releaseCurrentNativeSttOwner()
+          connectionStatusRef.current = 'idle'
           setConnectionStatus('idle')
           resolve()
         }, NATIVE_STOP_ACK_TIMEOUT_MS)
@@ -4474,6 +4479,7 @@ export default function useRealtimeSTT({
         pendingNativeStopCompletionRef.current = null
       }
       if (waitingForNativeStopAck) {
+        connectionStatusRef.current = 'idle'
         setConnectionStatus('idle')
         const wasActiveSession = hasActiveSessionRef.current
         hasActiveSessionRef.current = false
@@ -4537,6 +4543,7 @@ export default function useRealtimeSTT({
       }
     }
     if (!waitingForNativeStopAck) {
+      connectionStatusRef.current = 'idle'
       setConnectionStatus('idle')
     }
     isStoppingRef.current = false
@@ -4756,6 +4763,7 @@ export default function useRealtimeSTT({
 
     cleanup()
     clearSpeakerAvatarSession()
+    connectionStatusRef.current = 'error'
     setConnectionStatus('error')
     scheduleConnectionErrorReset()
   }, [
@@ -4824,6 +4832,7 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
+      connectionStatusRef.current = 'ready'
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
       if (!hasActiveSessionRef.current) {
@@ -5108,6 +5117,14 @@ export default function useRealtimeSTT({
         return
       }
     }
+    if (connectionStatusRef.current === 'connecting' || connectionStatusRef.current === 'ready') {
+      logSttDebug('recording.start.duplicate_suppressed', {
+        connectionStatus: connectionStatusRef.current,
+        conversationId: conversationId || null,
+        sessionId: nativeSttSessionIdRef.current,
+      })
+      return
+    }
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
     useNativeSttRef.current = useNativeStt
@@ -5185,6 +5202,7 @@ export default function useRealtimeSTT({
     }
 
     try {
+      connectionStatusRef.current = 'connecting'
       setConnectionStatus('connecting')
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
@@ -5318,6 +5336,7 @@ export default function useRealtimeSTT({
       })
       cleanup()
       releaseCurrentNativeSttOwner()
+      connectionStatusRef.current = 'error'
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
@@ -5429,6 +5448,7 @@ export default function useRealtimeSTT({
           nativeSttSessionIdRef.current = null
         }
         if (nextConnectionStatus) {
+          connectionStatusRef.current = nextConnectionStatus
           setConnectionStatus(nextConnectionStatus)
         }
         return
@@ -5458,6 +5478,7 @@ export default function useRealtimeSTT({
           })
           nativeMicPermissionRecoveryActionRef.current = 'none'
           hasActiveSessionRef.current = true
+          connectionStatusRef.current = 'ready'
           setConnectionStatus('ready')
         }
         try {
@@ -5504,6 +5525,7 @@ export default function useRealtimeSTT({
           nativeStopRequestedRef.current = false
           releaseCurrentNativeSttOwner()
           resolvePendingNativeStopAck()
+          connectionStatusRef.current = 'idle'
           setConnectionStatus('idle')
           return
         }
@@ -5532,6 +5554,7 @@ export default function useRealtimeSTT({
           nativeStopRequestedRef.current = false
           releaseCurrentNativeSttOwner()
           resolvePendingNativeStopAck()
+          connectionStatusRef.current = 'idle'
           setConnectionStatus('idle')
           return
         }
