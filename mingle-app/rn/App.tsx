@@ -641,6 +641,10 @@ type NativeSttStopPayload = {
   force?: boolean;
 };
 
+type NativeSttStatusRequestPayload = {
+  conversationId?: string;
+};
+
 type NativeSttCommand =
   | {
       type: 'native_stt_start';
@@ -649,6 +653,10 @@ type NativeSttCommand =
   | {
       type: 'native_stt_stop';
       payload?: NativeSttStopPayload;
+    }
+  | {
+      type: 'native_stt_status_request';
+      payload?: NativeSttStatusRequestPayload;
     };
 
 type NativeTtsCommand =
@@ -832,6 +840,8 @@ type NativeSttSnapshot = {
   status: string;
   conversationId?: string;
   sessionId?: string;
+  running?: boolean;
+  serverReady?: boolean;
 };
 
 function isTerminalNativeSttStatus(status: string): boolean {
@@ -847,6 +857,22 @@ function isLiveNativeSttStatus(status: string): boolean {
     || normalized === 'ready'
     || normalized === 'silenced'
     || normalized === 'recovering';
+}
+
+function resolveNativeSttStatusFromSnapshot(snapshot: NativeSttSnapshot): string {
+  const rawStatus = typeof snapshot.status === 'string'
+    ? snapshot.status.trim().toLowerCase()
+    : '';
+  if (snapshot.running === false) {
+    return isTerminalNativeSttStatus(rawStatus) ? rawStatus : 'idle';
+  }
+  if (snapshot.serverReady === true || rawStatus === 'ready') {
+    return 'ready';
+  }
+  if (isTerminalNativeSttStatus(rawStatus)) {
+    return rawStatus;
+  }
+  return 'connecting';
 }
 
 function rememberRetiredNativeSttSession(sessionIds: Set<string>, sessionId?: string): void {
@@ -2692,6 +2718,79 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitToWeb, nativeAvailable]);
 
+  const handleNativeStatusRequest = useCallback(async (payload?: NativeSttStatusRequestPayload) => {
+    const requestedConversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    if (!requestedConversationId) return;
+
+    let snapshot: NativeSttSnapshot = nativeSttSnapshotRef.current;
+    if (Platform.OS === 'android' && nativeAvailable) {
+      try {
+        const nativeSnapshot = await getNativeSttStatus();
+        snapshot = {
+          status: nativeSnapshot.status,
+          ...(nativeSnapshot.conversationId ? { conversationId: nativeSnapshot.conversationId } : {}),
+          ...(nativeSnapshot.sessionId ? { sessionId: nativeSnapshot.sessionId } : {}),
+          ...(typeof nativeSnapshot.running === 'boolean' ? { running: nativeSnapshot.running } : {}),
+          ...(typeof nativeSnapshot.serverReady === 'boolean' ? { serverReady: nativeSnapshot.serverReady } : {}),
+        };
+      } catch (error: unknown) {
+        if (__DEV__) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(`[NativeSTT] status request failed: ${message}`);
+        }
+      }
+    }
+
+    const activeConversationId = typeof snapshot.conversationId === 'string'
+      ? snapshot.conversationId.trim()
+      : '';
+    const activeSessionId = typeof snapshot.sessionId === 'string'
+      ? snapshot.sessionId.trim()
+      : '';
+    const activeStatus = resolveNativeSttStatusFromSnapshot(snapshot);
+    nativeSttSnapshotRef.current = snapshot;
+    const sameRoomHasLiveSession = activeConversationId === requestedConversationId
+      && isLiveNativeSttStatus(activeStatus);
+
+    if (sameRoomHasLiveSession) {
+      nativeSttConversationIdRef.current = activeConversationId;
+      nativeSttSessionIdRef.current = activeSessionId || null;
+      nativeSttRequestedConversationIdRef.current = activeConversationId;
+      nativeSttRequestedSessionIdRef.current = activeSessionId || null;
+      nativeStatusRef.current = activeStatus;
+      nativeSttSnapshotRef.current = snapshot;
+      emitToWeb({
+        type: 'status',
+        status: activeStatus,
+        conversationId: requestedConversationId,
+        ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+        replay: true,
+      });
+      return;
+    }
+
+    // A terminal status for this room should clear stale RN identity, while a
+    // live session owned by another room must remain untouched. This keeps a
+    // visible room from inheriting another room's singleton state.
+    if (!isLiveNativeSttStatus(activeStatus)
+      && (!activeConversationId || activeConversationId === requestedConversationId)) {
+      nativeSttConversationIdRef.current = null;
+      nativeSttSessionIdRef.current = null;
+      nativeSttRequestedConversationIdRef.current = null;
+      nativeSttRequestedSessionIdRef.current = null;
+      nativeStatusRef.current = activeStatus;
+      nativeSttSnapshotRef.current = snapshot;
+    }
+    emitToWeb({
+      type: 'status',
+      status: 'idle',
+      conversationId: requestedConversationId,
+      replay: true,
+    });
+  }, [emitToWeb, nativeAvailable]);
+
   const emitCurrentMicPermissionToWeb = useCallback(async () => {
     if (Platform.OS !== 'ios' || !nativeAvailable) return;
     try {
@@ -3565,6 +3664,14 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_stt_status_request') {
+      if (__DEV__) {
+        console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
+      }
+      enqueueNativeSttCommand(() => handleNativeStatusRequest(parsed.payload));
+      return;
+    }
+
     if (parsed.type === 'native_stt_stop') {
       if (__DEV__) {
         console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
@@ -3640,6 +3747,7 @@ function AppInner(): React.JSX.Element {
     handleNativeQrSave,
     handleNativeStart,
     handleNativeStop,
+    handleNativeStatusRequest,
     enqueueNativeSttCommand,
     rememberCurrentWebUrl,
     updateSafeAreaPalette,

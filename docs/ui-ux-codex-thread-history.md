@@ -1667,3 +1667,17 @@
   - Ignore Android's initial audio-route enumeration callback and scope delayed audio recovery to the session that requested it, preventing a stopped generation from recreating capture.
 - Data contract: No Prisma migration or API namespace change is required.
 - Testing notes: Start STT, return to the list, speak while the list is visible, and confirm the room preview updates without the session stopping. Reopen with one tap, continue speaking, repeat the cycle several times, then explicitly Stop. Repeat on iOS and Android; also verify starting STT in a different room cleanly transfers the singleton session.
+
+## 2026-09-01 — Resynchronize Android STT after returning to a room
+
+- Surface: Android native STT status, the React Native-to-WebView bridge, hidden live-room rendering, and conversation-room re-entry.
+- Issue: The native recorder could continue capturing while the room was hidden on the conversation list, but a visible room hook could retain an old or missing session generation. The control then showed Stop while the visible room no longer consumed new transcript events; leaving the room made the hidden live room appear to recover, and repeated navigation could leave a phantom running state.
+- User impact: Android users could see new speech appear only after returning from the list, repeatedly re-enter a room with no live transcription, or see Stop after the native session had actually stopped. App restart cleared the mismatch because it recreated the React Native and WebView state together.
+- Resolution:
+  - Pass room visibility into the STT hook and request an authoritative native status snapshot whenever a room becomes visible.
+  - Add a room-scoped `native_stt_status_request` bridge command. Android answers it from the native singleton's actual running/server-ready state and session generation, then sends an explicit replay to the requested room.
+  - Replace a remounted visible hook's stale session generation from the replay before draining queued transcripts, and defer session-tagged queued messages until that generation is known instead of deleting them.
+  - Add an owner lease to distinguish a newly mounted same-room hook from the old hook's cleanup, so stale cleanup cannot release the new visible room's native ownership.
+  - Keep a live session owned by another room untouched when a different room requests a status snapshot; that room receives an idle replay rather than inheriting a phantom Stop state.
+- Data contract: No Prisma migration or server data change is required. The Android native bundle uses the existing `android/v2.0.1` namespace; iOS behavior and namespace are unchanged.
+- Testing notes: Install a newly rebuilt Android native artifact before testing. Start STT, return to the list, speak, re-enter the same room, continue speaking, explicitly Stop, and repeat the cycle. Confirm the visible control matches the native session, queued messages are not lost, and an actually stopped session returns to Start. Device testing was not performed during this change.
