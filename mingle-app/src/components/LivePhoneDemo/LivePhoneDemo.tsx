@@ -4018,6 +4018,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     conversationId,
+    isVisible,
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
