@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-01 - Render language-selector member avatars local-first
+
+- **Surface:** The shared-room language selector, its per-language attribution avatar stacks, and the conversation-list-to-room handoff.
+- **Issue:** The selector loaded every member profile from `GET /conversations/{id}/members` with `cache: "no-store"` each time it opened. The room/list snapshot already had the counterpart avatar metadata, but the selector did not consume it, and the full member response was not persisted locally. Slow or unavailable server reads therefore left the attribution avatars blank or delayed even though the conversation itself was already visible.
+- **User impact:** Opening the language selector could show the language rows before the user's and counterpart's photos appeared. A temporary network failure removed the avatars instead of preserving the last known identity, making the selector feel like it was still loading and adding another visible server dependency to an otherwise local-first room.
+- **Resolution:** Add an API-namespace, account/tracking-identity, and conversation-scoped member-profile cache with a seven-day bounded snapshot. Seed the selector immediately from cached profiles plus the already-hydrated counterpart profiles and signed-in viewer profile, then revalidate the member endpoint in the background. A failed revalidation now keeps the local snapshot; a successful response replaces and persists the authoritative member profile set.
+- **Boundary:** Profile image URLs remain remote assets and may still be fetched by the browser when its image cache is cold. This change removes the blocking member/DB request from the first render and preserves the last known URL/crop metadata; it does not copy image bytes into IndexedDB or alter membership/privacy rules.
+- **Data change:** None. No Prisma migration, API namespace change, native-code change, or mobile rebuild is required.
+- **Testing notes:** Verify a shared room shows both attribution avatars immediately on a second selector open, the first open uses the room snapshot while the member request is pending, an offline/failed revalidation keeps the prior avatars, account/API namespace/conversation caches remain isolated, and a changed profile arrives after background revalidation on iOS and Android.
+
 ## 2026-08-25 - Persist default display language and preserve keyboard mode
 
 - **Surface:** Conversation hamburger menu, default display-language selection, text-size defaults, and the live conversation composer controls.

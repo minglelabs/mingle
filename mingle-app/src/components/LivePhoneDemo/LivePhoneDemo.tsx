@@ -13,6 +13,11 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
+import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
+import {
+  mergeConversationMemberProfiles,
+  type ConversationMemberProfile,
+} from '@/components/conversation-member-profile-cache'
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -1102,6 +1107,7 @@ interface LivePhoneDemoProps {
   preferredDisplayLanguages?: string[]
   sessionKeyOverride?: string
   storageNamespace?: string
+  initialOtherMembers?: ConversationChannelOtherMember[]
   initialSelectedLanguages?: string[]
   // The caller's OWN picks, distinct from initialSelectedLanguages (the room
   // union) once a room has 2+ members. Solo rooms: identical to the above.
@@ -1506,6 +1512,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   preferredDisplayLanguages,
   sessionKeyOverride,
   storageNamespace,
+  initialOtherMembers,
   initialSelectedLanguages,
   initialOwnSelectedLanguages,
   selectedLanguagesAttribution: initialSelectedLanguagesAttribution,
@@ -1533,6 +1540,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
+  const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
+    const otherMemberProfiles = (initialOtherMembers ?? []).map((member) => ({
+      userId: member.userId,
+      image: member.image,
+      imageCropScale: member.imageCropScale,
+      imageCropX: member.imageCropX,
+      imageCropY: member.imageCropY,
+      name: member.name,
+    }));
+    const viewerProfile = viewerUserId
+      ? [{
+          userId: viewerUserId,
+          image: viewerImage,
+          imageCropScale: null,
+          imageCropX: null,
+          imageCropY: null,
+          name: typeof session?.user?.name === 'string' ? session.user.name : null,
+        }]
+      : []
+    return mergeConversationMemberProfiles(otherMemberProfiles, viewerProfile)
+  }, [initialOtherMembers, session?.user?.name, viewerImage, viewerUserId])
   const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     userId: viewerUserId,
@@ -6163,6 +6191,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   conversationId={conversationId}
                   selectedLanguagesAttribution={selectedLanguagesAttribution}
                   viewerSelectedLanguages={ownSelectedLanguages}
+                  initialMemberProfiles={initialLanguageSelectorMembers}
+                  viewerUserId={viewerUserId}
+                  trackingUserId={accountPreferencesTrackingUserId}
                 />
               ) : null}
             </div>

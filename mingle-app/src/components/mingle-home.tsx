@@ -44,6 +44,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -61,6 +62,7 @@ type MingleHomeProps = {
   preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialOtherMembers?: ConversationChannelOtherMember[];
   initialSelectedLanguages?: string[];
   initialOwnSelectedLanguages?: string[];
   selectedLanguagesAttribution?: Record<string, string[]>;
@@ -1969,6 +1971,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialOtherMembers={props.initialOtherMembers}
           initialSelectedLanguages={props.initialSelectedLanguages}
           initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
           selectedLanguagesAttribution={props.selectedLanguagesAttribution}

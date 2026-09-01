@@ -5651,6 +5651,7 @@ export default function ConversationList({
                         preferredDisplayLanguages={preferredDisplayLanguages}
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
+                        initialOtherMembers={conversation.otherMembers}
                         initialSelectedLanguages={conversation.selectedLanguages}
                         initialOwnSelectedLanguages={conversation.viewerSelectedLanguages}
                         selectedLanguagesAttribution={conversation.selectedLanguagesAttribution}
