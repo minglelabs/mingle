@@ -253,16 +253,6 @@ export function updateConversationSummaryStatus(
   };
 }
 
-export function resolveMountedConversationIds(
-  activeConversationId: string | null | undefined,
-  liveConversationId: string | null | undefined,
-): string[] {
-  const ids = new Set<string>();
-  if (activeConversationId) ids.add(activeConversationId);
-  if (liveConversationId) ids.add(liveConversationId);
-  return [...ids];
-}
-
 export function findNativeSttRestoreConversation(
   conversations: ConversationChannelSummary[],
   deletingConversationIds: ReadonlySet<string>,
