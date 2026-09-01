@@ -322,7 +322,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 87;
+				CURRENT_PROJECT_VERSION = 88;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = mingle/Info.plist;
@@ -331,11 +331,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 2.0.1;
 				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
 				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
 				MINGLE_PUSH_ENVIRONMENT = sandbox;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.0;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
@@ -370,7 +370,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 87;
+				CURRENT_PROJECT_VERSION = 88;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -378,11 +378,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 2.0.1;
 				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
 				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
 				MINGLE_PUSH_ENVIRONMENT = production;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.0;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
