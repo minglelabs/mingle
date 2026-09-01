@@ -1715,3 +1715,18 @@
   - Resolve native stop completion from the terminal bridge status as well as close/error events, while retaining a bounded timeout fallback.
 - Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
 - Testing notes: Verify repeated Android start/stop taps, start while a prior stop is pending, room switch during `connecting`, close and re-entry with missed status events, stale `already_running` recovery, and both pointer and keyboard activation paths. Confirm iOS behavior remains unchanged.
+
+## 2026-09-01 — Extend local-first ownership to conversation mutations
+
+- Surface: The 2.0.0 conversation list, room management menu, language selector, display-language menu, read markers, and active/paused room state in the remotely loaded WebView.
+- Issue: Language and account preferences already had local snapshots, but room title, status, read markers, language-link settings, and delete/leave actions still depended on a live server response. A slow request or stale list refresh could visibly restore the previous value, show a room that had just been removed, or make an active room appear paused and then active again.
+- User impact: A language selection could appear to undo itself, a renamed room could jump back, switching rooms could expose stale status metadata, and removing a room could bring it back after a reconnect. The room's in-menu title/delete actions also used a different direct-request path from the list actions.
+- Resolution:
+  - Add an API-namespace- and identity-scoped persistent conversation mutation queue with bounded storage, field-level coalescing, first-value rollback, serial delivery, exponential retry, and reconnect/focus/visibility retries.
+  - Overlay pending mutations on both warm-cache and fresh list responses so an older GET cannot replace a newer local intent. Adopt mutations created before session restoration into the authenticated account queue.
+  - Apply optimistic patches for room status (including implicit pauses of other active rooms), selected/speech/display languages, translation-language linking, title, and read markers. Queue the profile default-language update alongside the room language change so the default cannot be resurrected by a slower profile GET.
+  - Hide delete/leave actions immediately with a durable tombstone. A 404 is treated as an idempotent success; a permanent rejection clears the tombstone and restores the last visible summary when the current session still has it.
+  - Route room-menu title and delete/leave actions through the same list-level queue callbacks, preserving the existing direct-request fallback for standalone room usage.
+- Deliberate boundaries: Membership, invitations, permissions, blocks, account identity, usage/billing, and canonical transcript history remain server-authoritative. Full history is not copied to `localStorage`; an IndexedDB/native store and an incremental change feed are required before broad transcript Local-first behavior is safe.
+- Data contract: No Prisma migration, API namespace change, native-code change, or mobile rebuild is required. The installed app remains `2.0.0` and continues to use its existing `ios/v2.0.0`/`android/v2.0.0` routes.
+- Testing notes: Cover coalesced edits over stale snapshots, transient retry ordering, stale-response acknowledgement, remove tombstones and 404 idempotency, permanent rejection callbacks, rapid shared-room language add/remove, room-menu title/remove parity, account switching, WebView recreation, offline edits, and reconnect flushes. Confirm that server-only membership and permission changes still hydrate normally.

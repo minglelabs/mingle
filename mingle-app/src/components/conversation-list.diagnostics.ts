@@ -8,7 +8,8 @@ export type ConversationMutationFailureLabel =
   | "route-open"
   | "route-hydrate"
   | "popstate-open"
-  | "create";
+  | "create"
+  | "queued-mutation";
 
 export type ConversationMutationFailureContext = {
   label: ConversationMutationFailureLabel;

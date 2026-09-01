@@ -1091,6 +1091,8 @@ interface LivePhoneDemoProps {
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
+  onConversationTitleChange?: (title: string) => void | Promise<void>
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>
   conversationTitle?: string
   conversationId?: string
   preferredDisplayLanguage?: string | null
@@ -1493,6 +1495,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   backButtonLabel = 'Back',
   onBack,
   onConversationDeleted,
+  onConversationTitleChange,
+  onConversationRemoveRequested,
   conversationTitle,
   conversationId,
   preferredDisplayLanguage,
@@ -4382,6 +4386,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
+      if (onConversationRemoveRequested) {
+        const accepted = await onConversationRemoveRequested()
+        if (accepted === false) {
+          throw new Error('conversation_remove_not_accepted')
+        }
+        manualTtsRequestSeqRef.current += 1
+        setPendingManualTtsTarget(null)
+        forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+        clearConversationHistory()
+        setDeleteConversationDialogOpen(false)
+        requestCloseMenuPanel()
+        toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
+        return
+      }
+
       const trackingUserId = getOrCreateTrackingUserId()
       // A multi-member room's row-removal action is "leave" (removes just
       // this caller's membership, see leaveConversationChannel), not
@@ -4428,6 +4447,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     leaveConversationCopy.successToastLabel,
     nativeAppUpdate,
     onConversationDeleted,
+    onConversationRemoveRequested,
     prepareForDeletion,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
@@ -4447,6 +4467,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setIsRenamingConversation(true)
 
     try {
+      if (onConversationTitleChange) {
+        await onConversationTitleChange(normalizedTitle)
+        setDisplayConversationTitle(normalizedTitle)
+        setRenameConversationValue(normalizedTitle)
+        setRenameConversationDialogOpen(false)
+        toast.success(roomManagementCopy.renameSuccessToastLabel)
+        return
+      }
+
       const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
         method: 'PATCH',
         headers: {
@@ -4477,6 +4506,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationId,
     isRenamingConversation,
     nativeAppUpdate,
+    onConversationTitleChange,
     renameConversationValue,
     resolveConversationSessionKey,
     roomManagementCopy.renameEmptyMessage,

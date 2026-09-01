@@ -90,13 +90,11 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
-  createMutationVersionTracker,
   findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   MAX_RECENT_SEARCHES,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
-  type MutationVersionTracker,
   normalizeRecentSearches,
   normalizeSearchTerm,
   replaceConversationLists,
@@ -125,6 +123,17 @@ import {
   type CachedConversationLocalStats,
   type ConversationListCacheIdentity,
 } from "@/components/conversation-list-cache";
+import {
+  adoptConversationMutationRecords,
+  applyPendingConversationMutations,
+  enqueueConversationMutation,
+  flushConversationMutationQueue,
+  readConversationMutationRecords,
+  type ConversationMutationKind,
+  type ConversationMutationPatch,
+  type ConversationMutationQueueIdentity,
+  type ConversationMutationRecord,
+} from "@/components/conversation-mutation-queue";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   postNativeAndroidBackCapability,
@@ -1867,7 +1876,6 @@ export default function ConversationList({
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
-  const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
     !initialListState.hasSnapshot,
   );
@@ -2021,18 +2029,25 @@ export default function ConversationList({
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
-  // Speech, translation, and link PATCHes all mutate one language setting surface.
-  // Share a version counter so stale responses from any one kind cannot clobber another.
-  const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
-  // Status PATCH (active/paused) is much slower on devbox (3-5s) than App Store; without
-  // a per-conversation guard, an in-flight active response can land after a paused
-  // response and re-flip local state. Track the latest mutation version + abort the
-  // previous controller so stale responses are dropped instead of overwriting state.
-  const statusMutationVersionRef = useRef<MutationVersionTracker<string>>(createMutationVersionTracker<string>());
-  const statusMutationAbortRef = useRef(new Map<string, AbortController>());
+  // User-controlled room metadata is durable locally before it is sent to the
+  // server. The queue is intentionally separate from message delivery: these
+  // mutations must be replayed in order and must also overlay stale list GETs.
+  const conversationMutationIdentity = useMemo<ConversationMutationQueueIdentity>(() => ({
+    apiNamespace: clientApiNamespace,
+    authenticatedUserId: authenticatedUserId || null,
+    // Do not mint a random browser identity during SSR. The client fills it
+    // from localStorage once a WebView exists, while server-provided tracking
+    // cookies remain available in either environment.
+    externalUserId: initialTrackingExternalUserId.trim() || (
+      typeof window === "undefined" ? "" : getOrCreateTrackingUserId()
+    ),
+  }), [authenticatedUserId, initialTrackingExternalUserId]);
+  const pendingConversationMutationsRef = useRef<ConversationMutationRecord[]>([]);
+  const conversationMutationFlushInFlightRef = useRef<Promise<unknown> | null>(null);
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
+  const conversationRemovalRollbackRef = useRef(new Map<string, ConversationChannelSummary>());
   const nativeSttRestoreAttemptedRef = useRef(false);
   const nativeTabRootRestoreHandledRef = useRef<string | null>(null);
   // Track the last conversation ID manually closed by the user (conversationId-scoped).
@@ -2066,7 +2081,6 @@ export default function ConversationList({
     sessionKey: initialTrackingSessionKey.trim(),
   });
   const isCreatingConversationRef = useRef(isCreatingConversation);
-  const mutatingConversationIdRef = useRef<string | null>(mutatingConversationId);
   const isImportingLegacyConversationRef = useRef(false);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
@@ -2234,7 +2248,7 @@ export default function ConversationList({
       .map((conversationId) => conversations.find((conversation) => conversation.id === conversationId) || null)
       .filter((conversation): conversation is ConversationChannelSummary => conversation !== null)
   ), [conversations, mountedConversationIds]);
-  const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
+  const actionDisabled = isCreatingConversation || isImportingLegacyConversation;
   const conversationSelectionDisabled = isCreatingConversation || isImportingLegacyConversation;
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const effectivePullRefreshOffsetPx = isRefreshingConversations
@@ -2254,6 +2268,232 @@ export default function ConversationList({
         : nextSnapshot
     ));
   }, []);
+
+  const readPendingConversationMutationSnapshot = useCallback(() => {
+    const nextRecords = readConversationMutationRecords(conversationMutationIdentity);
+    pendingConversationMutationsRef.current = nextRecords;
+    return nextRecords;
+  }, [conversationMutationIdentity]);
+
+  const applyPendingConversationState = useCallback((
+    sourceConversations: ConversationChannelSummary[],
+    records = pendingConversationMutationsRef.current,
+  ) => applyPendingConversationMutations(sourceConversations, records), []);
+
+  const rollbackConversationMutation = useCallback((record: ConversationMutationRecord) => {
+    if (!record.rollback || record.rollback.removed === true) return;
+    const rollbackSnapshot = record.rollback;
+    const nextRecords = readPendingConversationMutationSnapshot();
+    setConversations((current) => {
+      const target = current.find((conversation) => conversation.id === record.conversationId);
+      if (!target) return current;
+      const rollback = { ...rollbackSnapshot };
+      delete rollback.removed;
+      return applyPendingConversationState(
+        current.map((conversation) => (
+          conversation.id === record.conversationId
+            ? { ...conversation, ...rollback }
+            : conversation
+        )),
+        nextRecords,
+      );
+    });
+  }, [applyPendingConversationState, readPendingConversationMutationSnapshot]);
+
+  const flushPendingConversationMutations = useCallback(() => {
+    if (typeof window === "undefined") return Promise.resolve();
+    if (conversationMutationFlushInFlightRef.current) {
+      return conversationMutationFlushInFlightRef.current;
+    }
+
+    const flushPromise = flushConversationMutationQueue({
+      identity: conversationMutationIdentity,
+      fetchImpl: (input, init) => {
+        const headers = new Headers(buildConversationRequestHeaders(initialTrackingIdentityRef.current));
+        new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+        return window.fetch(input, { ...init, headers });
+      },
+      onSuccess: async (record, response, acknowledged) => {
+        if (!acknowledged) return;
+        if (record.kind === "remove") {
+          conversationRemovalRollbackRef.current.delete(record.conversationId);
+          return;
+        }
+        if (record.kind === "mark-read" && response.status === 204) return;
+        if (record.kind === "profile-default-languages") {
+          try {
+            const profile = await response.json() as { defaultConversationLanguages?: unknown };
+            const savedLanguages = sanitizeSttLanguageSelection(
+              profile.defaultConversationLanguages,
+              record.patch.defaultConversationLanguages ?? [],
+            );
+            defaultSelectedLanguagesRef.current = savedLanguages;
+            setDefaultSelectedLanguages(savedLanguages);
+          } catch {
+            // Keep the optimistic local default when the profile response has
+            // no parseable body; the queued mutation was acknowledged.
+          }
+          return;
+        }
+        try {
+          const nextConversation = await readConversationResponse(response);
+          const nextRecords = readPendingConversationMutationSnapshot();
+          setConversations((current) => applyPendingConversationState(
+            upsertConversation(current, nextConversation),
+            nextRecords,
+          ));
+        } catch {
+          // A successful mutation is still removed from the queue. The next
+          // list refresh will provide the canonical summary if this response
+          // did not contain one.
+        }
+      },
+      onPermanentFailure: async (record, _response, acknowledged) => {
+        if (!acknowledged) return;
+        if (record.kind === "profile-default-languages") {
+          const rollbackLanguages = record.rollback?.defaultConversationLanguages;
+          if (rollbackLanguages) {
+            defaultSelectedLanguagesRef.current = [...rollbackLanguages];
+            setDefaultSelectedLanguages(rollbackLanguages);
+          }
+        }
+        if (record.kind === "remove") {
+          // The tombstone is gone after a permanent rejection. Allow a later
+          // server refresh to put the room back in the list. Restore the last
+          // visible summary immediately when this is still the same session.
+          deletingConversationIdsRef.current.delete(record.conversationId);
+          const rollbackConversation = conversationRemovalRollbackRef.current.get(record.conversationId);
+          conversationRemovalRollbackRef.current.delete(record.conversationId);
+          if (rollbackConversation) {
+            const nextRecords = readPendingConversationMutationSnapshot();
+            setConversations((current) => {
+              if (current.some((conversation) => conversation.id === record.conversationId)) {
+                return current;
+              }
+              return applyPendingConversationState(
+                upsertConversation(current, rollbackConversation),
+                nextRecords,
+              );
+            });
+          }
+        }
+        rollbackConversationMutation(record);
+        logConversationMutationFailure({
+          label: "queued-mutation",
+          conversationId: record.conversationId,
+          method: record.method,
+          path: record.endpoint,
+          error: new Error("conversation_mutation_rejected"),
+          stale: false,
+        });
+      },
+    }).finally(() => {
+      conversationMutationFlushInFlightRef.current = null;
+      const nextRecords = readPendingConversationMutationSnapshot();
+      setConversations((current) => applyPendingConversationState(current, nextRecords));
+    });
+
+    conversationMutationFlushInFlightRef.current = flushPromise;
+    return flushPromise;
+  }, [
+    applyPendingConversationState,
+    conversationMutationIdentity,
+    readPendingConversationMutationSnapshot,
+    rollbackConversationMutation,
+  ]);
+
+  const enqueueConversationMutationAndFlush = useCallback((input: {
+    conversationId: string;
+    kind: ConversationMutationKind;
+    endpoint: string;
+    method?: "PATCH" | "DELETE" | "POST";
+    body: Record<string, unknown>;
+    patch: ConversationMutationPatch;
+    rollback?: ConversationMutationPatch | null;
+  }) => {
+    const record = enqueueConversationMutation(conversationMutationIdentity, input);
+    const nextRecords = readPendingConversationMutationSnapshot();
+    setConversations((current) => applyPendingConversationState(current, nextRecords));
+    if (sessionStatus === "authenticated") {
+      void flushPendingConversationMutations();
+    }
+    return record;
+  }, [
+    applyPendingConversationState,
+    conversationMutationIdentity,
+    flushPendingConversationMutations,
+    readPendingConversationMutationSnapshot,
+    sessionStatus,
+  ]);
+
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      pendingConversationMutationsRef.current = [];
+      return;
+    }
+
+    // A native session can enqueue a room mutation before useSession exposes
+    // the account id. Move that durable work to the canonical account queue
+    // once authentication resolves, mirroring the message outbox adoption.
+    if (authenticatedUserId) {
+      adoptConversationMutationRecords({
+        from: {
+          apiNamespace: clientApiNamespace,
+          authenticatedUserId: null,
+          externalUserId: conversationMutationIdentity.externalUserId,
+        },
+        to: conversationMutationIdentity,
+      });
+    }
+
+    const nextRecords = readPendingConversationMutationSnapshot();
+    const pendingProfileDefaultLanguages = [...nextRecords]
+      .filter((record) => (
+        record.kind === "profile-default-languages"
+        && Array.isArray(record.patch.defaultConversationLanguages)
+      ))
+      .sort((left, right) => left.updatedAt - right.updatedAt)
+      .at(-1)
+      ?.patch.defaultConversationLanguages;
+    if (pendingProfileDefaultLanguages && pendingProfileDefaultLanguages.length > 0) {
+      defaultConversationLanguagesSyncVersionRef.current += 1;
+      defaultSelectedLanguagesRef.current = [...pendingProfileDefaultLanguages];
+      setDefaultSelectedLanguages(pendingProfileDefaultLanguages);
+    }
+    setConversations((current) => applyPendingConversationState(current, nextRecords));
+    if (sessionStatus === "authenticated") {
+      void flushPendingConversationMutations();
+    }
+  }, [
+    applyPendingConversationState,
+    authenticatedUserId,
+    conversationMutationIdentity,
+    flushPendingConversationMutations,
+    readPendingConversationMutationSnapshot,
+    sessionStatus,
+  ]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+
+    const flush = () => {
+      void flushPendingConversationMutations();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") flush();
+    };
+    const retryTimer = window.setInterval(flush, 15_000);
+    window.addEventListener("online", flush);
+    window.addEventListener("focus", flush);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(retryTimer);
+      window.removeEventListener("online", flush);
+      window.removeEventListener("focus", flush);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flushPendingConversationMutations, sessionStatus]);
 
   const handleConversationStatsChange = useCallback((
     conversationId: string,
@@ -2339,7 +2579,11 @@ export default function ConversationList({
         headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
       },
     );
-    const nextConversations = await readConversationListResponse(response);
+    const serverConversations = await readConversationListResponse(response);
+    // A list GET may have started before a local edit reached the server.
+    // Overlay pending mutations before caching or rendering so stale server
+    // snapshots cannot make a just-edited room visibly jump backwards.
+    const nextConversations = applyPendingConversationState(serverConversations);
     const nextLocalStats = buildConversationLocalStatsSnapshot(nextConversations);
     hasConversationListSnapshotRef.current = true;
     writeConversationListCache(
@@ -2358,7 +2602,7 @@ export default function ConversationList({
         : mergeConversationLists(current, nextConversations)
     ));
     return nextConversations;
-  }, [conversationCacheIdentity, initialNativeUi]);
+  }, [applyPendingConversationState, conversationCacheIdentity, initialNativeUi]);
 
   const refreshConversationList = useCallback((options?: { replaceCurrent?: boolean }) => {
     const inFlight = conversationListRefreshInFlightRef.current;
@@ -2416,19 +2660,20 @@ export default function ConversationList({
   const markConversationAsRead = useCallback((conversationId: string) => {
     const normalizedConversationId = conversationId.trim();
     if (!normalizedConversationId) return;
-
-    void fetch(buildConversationApiPath(`/${normalizedConversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      },
-      body: JSON.stringify({ markRead: true }),
-    }).catch(() => {
-      // A failed read marker is harmless; the next list refresh will keep the
-      // server-side unread count until the room can be opened successfully.
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === normalizedConversationId,
+    );
+    enqueueConversationMutationAndFlush({
+      conversationId: normalizedConversationId,
+      kind: "mark-read",
+      endpoint: buildConversationApiPath(`/${normalizedConversationId}`),
+      body: { markRead: true },
+      patch: { unreadMessageCount: 0 },
+      rollback: previousConversation
+        ? { unreadMessageCount: previousConversation.unreadMessageCount ?? 0 }
+        : null,
     });
-  }, []);
+  }, [enqueueConversationMutationAndFlush]);
 
   const triggerPullToRefresh = useCallback(async () => {
     if (isRefreshingConversations || isHydratingConversations || activeConversation || showSearch) {
@@ -2452,62 +2697,6 @@ export default function ConversationList({
     showSearch,
   ]);
 
-  const updateConversationStatus = useCallback(async (
-    conversationId: string,
-    status: "active" | "paused",
-    options?: { signal?: AbortSignal },
-  ) => {
-    setMutatingConversationId(conversationId);
-    try {
-      // Retry transient read-after-write/5xx failures once. On devbox a brand
-      // new conversation can return 404 on its first status PATCH because the
-      // create write has not yet propagated to read replicas; without this
-      // retry the user sees a misleading "failed to open" alert after pressing
-      // "start new conversation" even though the conversation exists.
-      let response: Response | undefined;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        response = await fetch(buildConversationApiPath(`/${conversationId}`), {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-          },
-          body: JSON.stringify({ status }),
-          signal: options?.signal,
-        });
-        const transient = response.status === 404 || response.status >= 500;
-        if (!transient || attempt === 1) break;
-        if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
-          // Conversation is being deleted; do not retry. Caller treats this as a no-op.
-          break;
-        }
-        await new Promise<void>((resolve) => {
-          const handle = window.setTimeout(resolve, 500);
-          options?.signal?.addEventListener(
-            "abort",
-            () => {
-              window.clearTimeout(handle);
-              resolve();
-            },
-            { once: true },
-          );
-        });
-        if (options?.signal?.aborted) break;
-      }
-      if (!response) return null;
-      if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
-        return null;
-      }
-      // Caller is responsible for the version-guarded state write so that a stale
-      // response cannot overwrite local state set by a newer mutation.
-      return await readConversationResponse(response);
-    } finally {
-      setMutatingConversationId((current) => (
-        current === conversationId ? null : current
-      ));
-    }
-  }, []);
-
   const handleConversationDeleted = useCallback((conversationId: string) => {
     deletingConversationIdsRef.current.add(conversationId);
     replaceConversationOverlayUrl(null, "conversation-deleted");
@@ -2519,7 +2708,6 @@ export default function ConversationList({
     setLiveConversationId((current) => (
       current === conversationId ? null : current
     ));
-    languageSettingsSyncVersionRef.current.delete(conversationId);
     conversationRunningStateRef.current.delete(conversationId);
     conversationRoomRefs.current.delete(conversationId);
     setActiveConversation((current) => (
@@ -2528,7 +2716,43 @@ export default function ConversationList({
     setConversations((current) => current.filter((conversation) => conversation.id !== conversationId));
   }, []);
 
-  const handleRenameConversationFromList = useCallback(async () => {
+  const enqueueConversationTitleMutation = useCallback((conversationId: string, normalizedTitle: string) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return false;
+
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "title",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { title: normalizedTitle },
+      patch: { title: normalizedTitle },
+      rollback: { title: previousConversation.title },
+    });
+    return true;
+  }, [enqueueConversationMutationAndFlush]);
+
+  const enqueueConversationRemoval = useCallback((conversationId: string, isLeavingSharedConversation: boolean) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return false;
+
+    conversationRemovalRollbackRef.current.set(conversationId, previousConversation);
+    handleConversationDeleted(conversationId);
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "remove",
+      endpoint: buildConversationApiPath(`/${conversationId}${isLeavingSharedConversation ? "/leave" : ""}`),
+      method: isLeavingSharedConversation ? "POST" : "DELETE",
+      body: {},
+      patch: { removed: true },
+    });
+    return true;
+  }, [enqueueConversationMutationAndFlush, handleConversationDeleted]);
+
+  const handleRenameConversationFromList = useCallback(() => {
     if (isRenamingConversation || !renameDialogConversationId) return;
 
     const normalizedTitle = renameConversationValue.trim();
@@ -2537,31 +2761,16 @@ export default function ConversationList({
       return;
     }
 
-    setIsRenamingConversation(true);
-    try {
-      const response = await fetch(buildConversationApiPath(`/${renameDialogConversationId}`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-        },
-        body: JSON.stringify({ title: normalizedTitle }),
-      });
-      const nextConversation = await readConversationResponse(response);
-      setConversations((current) => upsertConversation(current, nextConversation));
-      setRenameDialogConversationId(null);
-      setRenameConversationValue("");
-    } catch {
-      window.alert(roomManagementCopy.renameErrorToastLabel);
-    } finally {
-      setIsRenamingConversation(false);
-    }
+    if (!enqueueConversationTitleMutation(renameDialogConversationId, normalizedTitle)) return;
+    setRenameDialogConversationId(null);
+    setRenameConversationValue("");
+    setIsRenamingConversation(false);
   }, [
+    enqueueConversationTitleMutation,
     isRenamingConversation,
     renameConversationValue,
     renameDialogConversationId,
     roomManagementCopy.renameEmptyMessage,
-    roomManagementCopy.renameErrorToastLabel,
   ]);
 
   // Solo room -> DELETE (deletes for the owner, the only real member).
@@ -2576,10 +2785,12 @@ export default function ConversationList({
   const handleRemoveConversationFromList = useCallback(async () => {
     if (isDeletingConversation || !deleteDialogConversationId) return;
 
+    const conversationId = deleteDialogConversationId;
+    const isLeavingSharedConversation = deleteDialogTargetIsMultiMember;
     setIsDeletingConversation(true);
     try {
-      deletingConversationIdsRef.current.add(deleteDialogConversationId);
-      const roomRef = conversationRoomRefs.current.get(deleteDialogConversationId);
+      deletingConversationIdsRef.current.add(conversationId);
+      const roomRef = conversationRoomRefs.current.get(conversationId);
       if (roomRef?.isSttSessionRunning()) {
         try {
           roomRef.prepareForDeletion?.();
@@ -2589,33 +2800,16 @@ export default function ConversationList({
         }
       }
 
-      const response = await fetch(
-        buildConversationApiPath(`/${deleteDialogConversationId}${deleteDialogTargetIsMultiMember ? "/leave" : ""}`),
-        {
-          method: deleteDialogTargetIsMultiMember ? "POST" : "DELETE",
-          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-        },
-      );
-      const body = await response.json().catch(() => ({})) as {
-        deletedConversationId?: string;
-        leftConversationId?: string;
-        error?: string;
-      };
-      const removedConversationId = body.deletedConversationId || body.leftConversationId;
-      if (response.status === 404) {
-        handleConversationDeleted(deleteDialogConversationId);
-        setDeleteDialogConversationId(null);
-        return;
+      // Hide the room immediately and persist the destructive intent. A
+      // transient network failure keeps this tombstone in the queue so a
+      // later launch cannot resurrect a room the user already removed.
+      if (!enqueueConversationRemoval(conversationId, isLeavingSharedConversation)) {
+        throw new Error("conversation_not_found");
       }
-      if (!response.ok || !removedConversationId) {
-        throw new Error(body.error || (deleteDialogTargetIsMultiMember ? "conversation_leave_failed" : "conversation_delete_failed"));
-      }
-
-      handleConversationDeleted(removedConversationId);
       setDeleteDialogConversationId(null);
     } catch {
-      deletingConversationIdsRef.current.delete(deleteDialogConversationId);
-      window.alert(deleteDialogTargetIsMultiMember ? leaveConversationCopy.errorToastLabel : deleteConversationCopy.errorToastLabel);
+      deletingConversationIdsRef.current.delete(conversationId);
+      window.alert(isLeavingSharedConversation ? leaveConversationCopy.errorToastLabel : deleteConversationCopy.errorToastLabel);
     } finally {
       setIsDeletingConversation(false);
     }
@@ -2623,7 +2817,7 @@ export default function ConversationList({
     deleteConversationCopy.errorToastLabel,
     deleteDialogConversationId,
     deleteDialogTargetIsMultiMember,
-    handleConversationDeleted,
+    enqueueConversationRemoval,
     isDeletingConversation,
     leaveConversationCopy.errorToastLabel,
   ]);
@@ -2718,6 +2912,13 @@ export default function ConversationList({
     }
     conversationRunningStateRef.current.set(conversationId, isRunning);
 
+    const nextStatus = isRunning ? "active" : "paused";
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const nowIso = new Date().toISOString();
     applyRunningConversationState(conversationId, isRunning);
     setLiveConversationId((current) => {
       if (isRunning) return conversationId;
@@ -2729,153 +2930,65 @@ export default function ConversationList({
       ));
     }
 
-    const nextStatus = isRunning ? "active" : "paused";
-    const previousController = statusMutationAbortRef.current.get(conversationId);
-    if (previousController) {
-      previousController.abort();
-    }
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    if (controller) {
-      statusMutationAbortRef.current.set(conversationId, controller);
-    }
-    const version = statusMutationVersionRef.current.next(conversationId);
-    const apiPath = buildConversationApiPath(`/${conversationId}`);
-    const releaseAbort = () => {
-      if (controller && statusMutationAbortRef.current.get(conversationId) === controller) {
-        statusMutationAbortRef.current.delete(conversationId);
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "status",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { status: nextStatus },
+      patch: {
+        status: nextStatus,
+        pausedAt: isRunning ? null : (previousConversation.pausedAt ?? nowIso),
+      },
+      rollback: {
+        status: previousConversation.status,
+        pausedAt: previousConversation.pausedAt,
+      },
+    });
+
+    // Activating a room also pauses the caller's other active rooms on the
+    // server. Queue those implicit local changes as well so a stale list GET
+    // cannot briefly resurrect another active room.
+    if (isRunning) {
+      for (const conversation of conversationsRef.current) {
+        if (
+          conversation.id === conversationId
+          || conversation.status !== "active"
+          || deletingConversationIdsRef.current.has(conversation.id)
+        ) {
+          continue;
+        }
+        enqueueConversationMutationAndFlush({
+          conversationId: conversation.id,
+          kind: "status",
+          endpoint: buildConversationApiPath(`/${conversation.id}`),
+          body: { status: "paused" },
+          patch: { status: "paused", pausedAt: conversation.pausedAt ?? nowIso },
+          rollback: { status: conversation.status, pausedAt: conversation.pausedAt },
+        });
       }
-    };
-
-    void updateConversationStatus(conversationId, nextStatus, controller ? { signal: controller.signal } : undefined)
-      .then((nextConversation) => {
-        releaseAbort();
-        if (!nextConversation) return;
-        if (!statusMutationVersionRef.current.isLatest(conversationId, version)) {
-          // Stale success: a newer status mutation has been issued; do not let this
-          // older response clobber local state set by the newer mutation.
-          return;
-        }
-        setConversations((current) => upsertConversation(current, nextConversation));
-      })
-      .catch((error: unknown) => {
-        releaseAbort();
-        const aborted = isAbortLikeMutationError(error);
-        const stale = !statusMutationVersionRef.current.isLatest(conversationId, version);
-        if (aborted) {
-          // A newer status mutation already replaced this one — silent on purpose.
-          return;
-        }
-        if (stale) {
-          logConversationMutationFailure({
-            label: "status-change",
-            conversationId,
-            method: "PATCH",
-            path: apiPath,
-            error,
-            stale: true,
-          });
-          return;
-        }
-        if (deletingConversationIdsRef.current.has(conversationId)) {
-          return;
-        }
-
-        // Native runtime principle: "actual native STT state takes priority over PATCH responses".
-        // Rolling back UI/STT state on a PATCH failure causes a mismatch with the native layer,
-        // which triggers the restore-loop / re-entry bug. In native runtime, do not flip
-        // status or clear liveConversationId — only log the failure.
-        const isNativeRuntime = isNativeAppRuntime();
-        if (isNativeRuntime) {
-          logConversationMutationFailure({
-            label: "status-change",
-            conversationId,
-            method: "PATCH",
-            path: apiPath,
-            error,
-            stale: false,
-          });
-          // Silent — no alert. Server sync will naturally converge on the next status change.
-          return;
-        }
-
-        // Non-native (direct browser) environments keep the original rollback behaviour.
-        setConversations((current) => {
-          const conversation = current.find((item) => item.id === conversationId);
-          if (!conversation) return current;
-          return upsertConversation(
-            current,
-            updateConversationSummaryStatus(
-              conversation,
-              isRunning ? "paused" : "active",
-            ),
-          );
-        });
-        if (isRunning) {
-          setLiveConversationId((current) => (
-            current === conversationId ? null : current
-          ));
-        }
-        logConversationMutationFailure({
-          label: "status-change",
-          conversationId,
-          method: "PATCH",
-          path: apiPath,
-          error,
-          stale: false,
-        });
-        window.alert(
-          isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
-        );
-      });
-  }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
+    }
+  }, [applyRunningConversationState, enqueueConversationMutationAndFlush, getDerivedConversationRunningState]);
 
   const persistUserDefaultConversationLanguages = useCallback((
-    conversationId: string,
     nextLanguages: string[],
     previousLanguages: string[],
     expectedVersion: number,
   ) => {
     if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+    if (defaultConversationLanguagesSyncVersionRef.current !== expectedVersion) return;
 
-    void fetch(buildClientApiPath("/profile"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ defaultConversationLanguages: nextLanguages }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Default conversation language update failed (${response.status})`);
-        }
-        return await response.json() as {
-          defaultConversationLanguages?: unknown;
-        };
-      })
-      .then((profile) => {
-        if (defaultConversationLanguagesSyncVersionRef.current !== expectedVersion) return;
-
-        const savedLanguages = sanitizeSttLanguageSelection(
-          profile.defaultConversationLanguages,
-          nextLanguages,
-        );
-        defaultSelectedLanguagesRef.current = savedLanguages;
-        setDefaultSelectedLanguages(savedLanguages);
-      })
-      .catch((error: unknown) => {
-        const stale = defaultConversationLanguagesSyncVersionRef.current !== expectedVersion;
-        logConversationMutationFailure({
-          label: "selected-languages",
-          conversationId,
-          method: "PATCH",
-          path: buildClientApiPath("/profile"),
-          error,
-          stale,
-        });
-        if (stale) return;
-
-        defaultSelectedLanguagesRef.current = [...previousLanguages];
-        setDefaultSelectedLanguages(previousLanguages);
-      });
-  }, [authenticatedUserId, sessionStatus]);
+    enqueueConversationMutationAndFlush({
+      // Profile preferences do not belong to a room. A stable sentinel keeps
+      // them in the same ordered, durable queue while applyPending... ignores
+      // them for conversation-list rendering.
+      conversationId: "__profile__",
+      kind: "profile-default-languages",
+      endpoint: buildClientApiPath("/profile"),
+      body: { defaultConversationLanguages: nextLanguages },
+      patch: { defaultConversationLanguages: nextLanguages },
+      rollback: { defaultConversationLanguages: previousLanguages },
+    });
+  }, [authenticatedUserId, enqueueConversationMutationAndFlush, sessionStatus]);
 
   const handleConversationSelectedLanguagesChange = useCallback((
     conversationId: string,
@@ -2905,88 +3018,91 @@ export default function ConversationList({
     );
     const previousTranslationLanguagesLinked =
       previousConversation.translationLanguagesLinked !== false;
+    const currentUnion = sanitizeSttLanguageUnion(
+      previousConversation.selectedLanguages,
+      previousSelectedLanguages,
+    );
+    const hasLanguageAttribution = previousConversation.selectedLanguagesAttribution !== undefined;
+    const nextUnion = previousConversation.isMultiMember
+      ? sanitizeSttLanguageUnion(
+          [
+            ...currentUnion.filter((language) => (
+              normalizedSelectedLanguages.includes(language)
+              || !hasLanguageAttribution
+              || (previousConversation.selectedLanguagesAttribution?.[language] ?? []).length === 0
+              || (previousConversation.selectedLanguagesAttribution?.[language] ?? [])
+                .some((memberId) => memberId !== authenticatedUserId)
+            )),
+            ...normalizedSelectedLanguages,
+          ],
+          normalizedSelectedLanguages,
+        )
+      : [...normalizedSelectedLanguages];
+    const nextAttribution = previousConversation.isMultiMember
+      && authenticatedUserId
+      && hasLanguageAttribution
+      ? Object.entries(previousConversation.selectedLanguagesAttribution ?? {}).reduce<Record<string, string[]>>(
+          (result, [language, memberIds]) => {
+            const remainingMemberIds = memberIds.filter((memberId) => memberId !== authenticatedUserId);
+            if (remainingMemberIds.length > 0) result[language] = remainingMemberIds;
+            return result;
+          },
+          {},
+        )
+      : undefined;
+    if (nextAttribution) {
+      for (const language of normalizedSelectedLanguages) {
+        nextAttribution[language] = [
+          ...(nextAttribution[language] ?? []),
+          authenticatedUserId,
+        ];
+      }
+    }
     const previousDefaultLanguages = [...currentDefaultLanguages];
     const nextDefaultLanguagesVersion = defaultConversationLanguagesSyncVersionRef.current + 1;
     defaultConversationLanguagesSyncVersionRef.current = nextDefaultLanguagesVersion;
     defaultSelectedLanguagesRef.current = [...normalizedSelectedLanguages];
     setDefaultSelectedLanguages(normalizedSelectedLanguages);
 
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+    const optimisticPatch: ConversationMutationPatch = {
+      // Update both the caller's own picks and the visible room union. For a
+      // shared room the union keeps languages held by another member while
+      // immediately dropping a language nobody owns anymore.
+      selectedLanguages: nextUnion,
+      viewerSelectedLanguages: [...normalizedSelectedLanguages],
+      translationLanguagesLinked: false,
+      ...(nextAttribution ? { selectedLanguagesAttribution: nextAttribution } : {}),
+    };
 
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            // For a multi-member room this is the caller's own next pick,
-            // not the room union — leave the displayed union (selectedLanguages)
-            // untouched here and let the server's response (below) supply the
-            // recomputed union, so it doesn't briefly collapse to just "my"
-            // languages while the PATCH is in flight. Solo rooms have no such
-            // distinction, so updating both together is a no-op behavior change.
-            selectedLanguages: conversation.isMultiMember
-              ? conversation.selectedLanguages
-              : [...normalizedSelectedLanguages],
-            viewerSelectedLanguages: [...normalizedSelectedLanguages],
-            translationLanguagesLinked: false,
-          }
-        : conversation
-    )));
-
-    void fetch(buildConversationApiPath(`/${conversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "selected-languages",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { selectedLanguages: normalizedSelectedLanguages },
+      patch: optimisticPatch,
+      rollback: {
+        selectedLanguages: previousSelectedLanguages,
+        selectedLanguagesAttribution: previousConversation.selectedLanguagesAttribution,
+        viewerSelectedLanguages: previousViewerSelectedLanguages,
+        translationLanguagesLinked: previousTranslationLanguagesLinked,
       },
-      body: JSON.stringify({ selectedLanguages: normalizedSelectedLanguages }),
-    })
-      .then(readConversationResponse)
-      .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) === nextVersion) {
-          setConversations((current) => upsertConversation(current, nextConversation));
-        }
-        // Speech-language and translation-link mutations share the room
-        // version guard, but they do not invalidate this successful
-        // selected-language change. The user default has its own version guard.
-        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
-          persistUserDefaultConversationLanguages(
-            conversationId,
-            normalizedSelectedLanguages,
-            previousDefaultLanguages,
-            nextDefaultLanguagesVersion,
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-        logConversationMutationFailure({
-          label: "selected-languages",
-          conversationId,
-          method: "PATCH",
-          path: buildConversationApiPath(`/${conversationId}`),
-          error,
-          stale,
-        });
-        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
-          defaultSelectedLanguagesRef.current = [...previousDefaultLanguages];
-          setDefaultSelectedLanguages(previousDefaultLanguages);
-        }
-        if (stale) return;
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                selectedLanguages: [...previousSelectedLanguages],
-                viewerSelectedLanguages: [...previousViewerSelectedLanguages],
-                translationLanguagesLinked: previousTranslationLanguagesLinked,
-              }
-            : conversation
-        )));
-        // Language sync failures inside an already-open room must not surface as
-        // "failed to open" — the optimistic rollback above is the visible signal.
-      });
-  }, [persistUserDefaultConversationLanguages]);
+    });
+
+    // Keep the user's default language in the same durable queue instead of
+    // waiting for the room PATCH response. This prevents a profile GET or a
+    // failed room request from resurrecting the previous default.
+    if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
+      persistUserDefaultConversationLanguages(
+        normalizedSelectedLanguages,
+        previousDefaultLanguages,
+        nextDefaultLanguagesVersion,
+      );
+    }
+  }, [
+    authenticatedUserId,
+    enqueueConversationMutationAndFlush,
+    persistUserDefaultConversationLanguages,
+  ]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,
@@ -3009,54 +3125,15 @@ export default function ConversationList({
       previousConversation.speechLanguages,
       previousConversation.selectedLanguages,
     );
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
-
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            speechLanguages: [...normalizedSpeechLanguages],
-          }
-        : conversation
-    )));
-
-    void fetch(buildConversationApiPath(`/${conversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      },
-      body: JSON.stringify({ speechLanguages: normalizedSpeechLanguages }),
-    })
-      .then(readConversationResponse)
-      .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
-        setConversations((current) => upsertConversation(current, nextConversation));
-      })
-      .catch((error: unknown) => {
-        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-        logConversationMutationFailure({
-          label: "speech-languages",
-          conversationId,
-          method: "PATCH",
-          path: buildConversationApiPath(`/${conversationId}`),
-          error,
-          stale,
-        });
-        if (stale) return;
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                speechLanguages: [...previousSpeechLanguages],
-              }
-            : conversation
-        )));
-        // Language sync failures inside an already-open room must not surface as
-        // "failed to open" — the optimistic rollback above is the visible signal.
-      });
-  }, [defaultSelectedLanguages]);
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "speech-languages",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { speechLanguages: normalizedSpeechLanguages },
+      patch: { speechLanguages: [...normalizedSpeechLanguages] },
+      rollback: { speechLanguages: previousSpeechLanguages },
+    });
+  }, [defaultSelectedLanguages, enqueueConversationMutationAndFlush]);
 
   const handleConversationTranslationLanguagesLinkedChange = useCallback((
     conversationId: string,
@@ -3069,54 +3146,15 @@ export default function ConversationList({
 
     const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
-
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            translationLanguagesLinked: nextTranslationLanguagesLinked,
-          }
-        : conversation
-    )));
-
-    void fetch(buildConversationApiPath(`/${conversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      },
-      body: JSON.stringify({ translationLanguagesLinked: nextTranslationLanguagesLinked }),
-    })
-      .then(readConversationResponse)
-      .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
-        setConversations((current) => upsertConversation(current, nextConversation));
-      })
-      .catch((error: unknown) => {
-        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-        logConversationMutationFailure({
-          label: "translation-linked",
-          conversationId,
-          method: "PATCH",
-          path: buildConversationApiPath(`/${conversationId}`),
-          error,
-          stale,
-        });
-        if (stale) return;
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                translationLanguagesLinked: previousTranslationLanguagesLinked,
-              }
-            : conversation
-        )));
-        // Language sync failures inside an already-open room must not surface as
-        // "failed to open" — the optimistic rollback above is the visible signal.
-      });
-  }, []);
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "translation-languages-linked",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { translationLanguagesLinked: nextTranslationLanguagesLinked },
+      patch: { translationLanguagesLinked: nextTranslationLanguagesLinked },
+      rollback: { translationLanguagesLinked: previousTranslationLanguagesLinked },
+    });
+  }, [enqueueConversationMutationAndFlush]);
 
   const handleConversationDefaultDisplayLanguageChange = useCallback((
     conversationId: string,
@@ -3133,52 +3171,15 @@ export default function ConversationList({
     if (nextDefaultDisplayLanguage && !normalizedDefaultDisplayLanguage) return;
 
     const previousDefaultDisplayLanguage = previousConversation.defaultDisplayLanguage ?? null;
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
-
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
-          }
-        : conversation
-    )));
-
-    void fetch(buildConversationApiPath(`/${conversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      },
-      body: JSON.stringify({ defaultDisplayLanguage: normalizedDefaultDisplayLanguage }),
-    })
-      .then(readConversationResponse)
-      .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
-        setConversations((current) => upsertConversation(current, nextConversation));
-      })
-      .catch((error: unknown) => {
-        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-        logConversationMutationFailure({
-          label: "default-display-language",
-          conversationId,
-          method: "PATCH",
-          path: buildConversationApiPath(`/${conversationId}`),
-          error,
-          stale,
-        });
-        if (stale) return;
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                defaultDisplayLanguage: previousDefaultDisplayLanguage,
-              }
-            : conversation
-        )));
-      });
-  }, []);
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "default-display-language",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { defaultDisplayLanguage: normalizedDefaultDisplayLanguage },
+      patch: { defaultDisplayLanguage: normalizedDefaultDisplayLanguage },
+      rollback: { defaultDisplayLanguage: previousDefaultDisplayLanguage },
+    });
+  }, [enqueueConversationMutationAndFlush]);
 
   const clearConversationInterimPreview = useCallback((conversationId: string) => {
     setConversationInterimPreviews((current) => {
@@ -3598,8 +3599,8 @@ export default function ConversationList({
       ) {
         // The hidden room mounts with an idle React state before its cached
         // native status is applied. Keep a false sentinel so that its initial
-        // callback cannot PATCH the live conversation to paused; the first
-        // native running callback will promote it back to active.
+        // callback cannot enqueue a paused mutation; the first native running
+        // callback will promote it back to active.
         conversationRunningStateRef.current.set(hiddenNativeSttConversation.id, false);
         setLiveConversationId(hiddenNativeSttConversation.id);
       }
@@ -3690,21 +3691,23 @@ export default function ConversationList({
     )).sort(compareConversationRecency));
 
     for (const conversationId of staleActiveConversationIds) {
-      void fetch(buildConversationApiPath(`/${conversationId}`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-        },
-        body: JSON.stringify({ status: "paused" }),
-      }).catch(() => {
-        // Keep the local fallback paused state even when the reconciliation request fails.
+      const previousConversation = conversations.find((conversation) => conversation.id === conversationId);
+      enqueueConversationMutationAndFlush({
+        conversationId,
+        kind: "status",
+        endpoint: buildConversationApiPath(`/${conversationId}`),
+        body: { status: "paused" },
+        patch: { status: "paused", pausedAt: previousConversation?.pausedAt ?? new Date().toISOString() },
+        rollback: previousConversation
+          ? { status: previousConversation.status, pausedAt: previousConversation.pausedAt }
+          : null,
       });
     }
   }, [
     activeConversation,
     closeSearchOverlay,
     conversations,
+    enqueueConversationMutationAndFlush,
     isHydratingConversations,
     liveConversationId,
     nativeSttStatus,
@@ -3729,10 +3732,6 @@ export default function ConversationList({
       isCreatingConversationRef.current = true;
     }
   }, [isCreatingConversation]);
-
-  useEffect(() => {
-    mutatingConversationIdRef.current = mutatingConversationId;
-  }, [mutatingConversationId]);
 
   useEffect(() => {
     isImportingLegacyConversationRef.current = isImportingLegacyConversation;
@@ -3814,15 +3813,17 @@ export default function ConversationList({
     const cached = readConversationListCache(conversationCacheIdentity);
     if (!cached) return;
 
-    conversationsRef.current = cached.conversations;
+    const cachedConversations = applyPendingConversationState(cached.conversations);
+    conversationsRef.current = cachedConversations;
     hasConversationListSnapshotRef.current = true;
-    setConversations(cached.conversations);
+    setConversations(cachedConversations);
     setConversationLocalStats(cached.localStats);
-    refreshConversationLocalStats(cached.conversations);
+    refreshConversationLocalStats(cachedConversations);
     setTimeLabelsReady(true);
     setIsHydratingConversations(false);
   }, [
     conversationCacheIdentity,
+    applyPendingConversationState,
     initialConversations.length,
     initialNativeUi,
     initialWarmSnapshot,
@@ -4019,7 +4020,7 @@ export default function ConversationList({
     if (isHydratingConversations) return;
     if (activeConversation) return;
     if (conversations.length > 0) return;
-    if (isCreatingConversation || mutatingConversationId || isImportingLegacyConversationRef.current) return;
+    if (isCreatingConversation || isImportingLegacyConversationRef.current) return;
     if (hasLegacySingleRoomMigrationCompleted()) return;
 
     const legacySnapshot = readLegacySingleRoomSnapshot();
@@ -4075,7 +4076,6 @@ export default function ConversationList({
     isCreatingConversation,
     isHydratingConversations,
     locale,
-    mutatingConversationId,
   ]);
 
   useEffect(() => {
@@ -4893,7 +4893,6 @@ export default function ConversationList({
     isCreatingConversation,
     isHydratingConversations,
     isImportingLegacyConversation,
-    mutatingConversationId,
     openConversationSummary,
     routeConversationId,
   ]);
@@ -5579,6 +5578,12 @@ export default function ConversationList({
                         onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
+                        }}
+                        onConversationTitleChange={(title) => {
+                          enqueueConversationTitleMutation(conversation.id, title);
+                        }}
+                        onConversationRemoveRequested={() => {
+                          return enqueueConversationRemoval(conversation.id, conversation.isMultiMember);
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}

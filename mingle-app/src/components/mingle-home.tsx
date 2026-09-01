@@ -53,6 +53,8 @@ type MingleHomeProps = {
   headerMode?: "default" | "conversation";
   onBack?: () => void;
   onConversationDeleted?: () => void;
+  onConversationTitleChange?: (title: string) => void | Promise<void>;
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>;
   conversationTitle?: string;
   conversationId?: string;
   preferredDisplayLanguage?: string | null;
@@ -1959,6 +1961,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          onConversationTitleChange={props.onConversationTitleChange}
+          onConversationRemoveRequested={props.onConversationRemoveRequested}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           preferredDisplayLanguage={props.preferredDisplayLanguage}
