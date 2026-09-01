@@ -1696,3 +1696,14 @@
   - Make the 20-second connecting watchdog probe the authoritative native status once, then force-recover only if the probe does not reconcile the visible room within a short grace period.
 - Data contract: No Prisma migration or server data change is required. The session metadata is internal lifecycle information only. The Android build remains on `2.0.1`; because the App Store Connect `2.0.0` pre-release train is closed, the iOS TestFlight build uses `2.0.1` with the matching `ios/v2.0.1` namespace.
 - Testing notes: No device test or automated test suite was run during this change by request. Install the newly built Android artifact before validating cold start, permission grant, list navigation, same-room re-entry, repeated start/stop, graceful stop, and app restart. Confirm Start/Stop matches actual capture, room transcripts remain live after re-entry, and queued messages are neither lost nor duplicated.
+
+## 2026-09-01 — Reconcile Android STT status in the visible room
+
+- Surface: The visible conversation room's STT hook and the React Native status snapshot/replay bridge.
+- Issue: After a text-message interaction and a room/list transition, the visible room could receive the native status event while a hidden same-room consumer still held a different owner lease. The visible hook then ignored the status even though the event was explicitly scoped to that room. React Native could also accept an older Android status event sequence and replay the stale `connecting` or terminal state back into the room.
+- User impact: The conversation list could show active recognition while the room remained on Connecting or Start, and transcripts could appear only after leaving or re-entering the room.
+- Resolution:
+  - Allow a visible hook to take over same-conversation status ownership when the event carries the matching conversation ID, even if an older same-room lease uses a different owner key.
+  - Reject older Android status sequences in the React Native event listener, status polling path, and cached native snapshot. Preserve the latest sequence when synthetic bridge statuses are emitted without sequence metadata.
+- Data contract: No Prisma migration, API namespace change, or server change is required. The Android app remains on `2.0.1` with `android/v2.0.1`.
+- Testing notes: No device test or automated test suite was run by request. Install a fresh Android artifact and repeat two text messages, start STT, remain in the room through `connecting`, visit the conversation list before and after the state settles, and confirm that the room and list show the same live state and receive transcripts.

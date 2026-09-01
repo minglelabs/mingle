@@ -5754,8 +5754,8 @@ export default function useRealtimeSTT({
           || detail.status.trim().toLowerCase() === 'stopping'
         const isTerminalStatus = nextConnectionStatus === 'idle' || nextConnectionStatus === 'error'
         const canTakeOverVisibleStatus = isVisibleRef.current
-          && (!eventConversationId || eventConversationId === currentConversationId)
-          && activeNativeSttOwnerKey === nativeSttOwnerKeyRef.current
+          && Boolean(eventConversationId)
+          && eventConversationId === currentConversationId
           && shouldTakeOverNativeSttOwnerForMessage({
             hasActiveOwner: true,
             isCurrentOwner: handlers.isCurrentNativeSttOwner(),

@@ -93,7 +93,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 93
+def appVersionCode = 94
 def appVersionName = "2.0.1"
 
 def normalizeRuntimeConfigValue = { String value ->
