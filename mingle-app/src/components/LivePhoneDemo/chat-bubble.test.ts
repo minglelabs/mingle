@@ -604,7 +604,8 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(5)
     expect((html.match(/border-b-2 border-amber-400/g) || []).length).toBeGreaterThanOrEqual(1)
     expect(html).toContain('h-5 min-h-5')
-    expect(html).toContain('text-base font-medium leading-5')
+    expect(html).toContain('text-sm font-medium leading-5')
+    expect(html).toContain('px-2.5 pt-0.5 pb-1')
     expect(html).toContain('w-max min-w-0 max-w-full')
     expect(html).not.toContain('data-chat-bubble-language-badges')
     expect(html).toContain('rounded-2xl rounded-tl-none')
@@ -633,7 +634,8 @@ describe('ChatBubble', () => {
     )
 
     expect(expandedHtml).toContain('h-5 min-h-5')
-    expect(expandedHtml).toContain('text-base font-medium leading-5')
+    expect(expandedHtml).toContain('text-sm font-medium leading-5')
+    expect(expandedHtml).toContain('px-2 pt-0.5 pb-1')
     expect(expandedHtml).not.toContain('data-chat-bubble-header-language-badges')
   })
 

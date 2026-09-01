@@ -1707,3 +1707,13 @@
   - Reject older Android status sequences in the React Native event listener, status polling path, and cached native snapshot. Preserve the latest sequence when synthetic bridge statuses are emitted without sequence metadata.
 - Data contract: No Prisma migration, API namespace change, or server change is required. The Android app remains on `2.0.1` with `android/v2.0.1`.
 - Testing notes: No device test or automated test suite was run by request. Install a fresh Android artifact and repeat two text messages, start STT, remain in the room through `connecting`, visit the conversation list before and after the state settles, and confirm that the room and list show the same live state and receive transcripts.
+
+## 2026-09-01 — Align Android counterpart bubble metadata with iOS proportions
+
+- Surface: Shared-room counterpart names, language flags, and collapsed/expanded message bubble padding in `ChatBubble`.
+- Issue: The speaker-name row was correctly given the same 20px height as the flag hit area, but the label was also increased to `text-base`. Android WebView font metrics made the name look noticeably larger than the iOS presentation. Counterpart bubbles also appeared to have excess top whitespace, especially around the inline language flag.
+- Resolution:
+  - Keep the speaker-name wrapper at `h-5` with `leading-5` so its layout height remains aligned with the flag control, while reducing the label to `text-sm`.
+  - Keep the sender's bubble padding unchanged and reduce only counterpart collapsed and expanded bubble top padding to `pt-0.5`, retaining `pb-1` for the existing bottom rhythm.
+- Data contract: No Prisma migration, API namespace change, native app version change, or server change is required.
+- Testing notes: Updated the ChatBubble rendering contract, ran the focused 22-test rendering suite, and passed ESLint plus whitespace validation. Device testing was not performed by request; validate the Android WebView presentation against iOS after the web change is deployed.
