@@ -8,6 +8,7 @@ import { MAX_CONVERSATION_MEMBERS } from "@/lib/app-conversations";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { showRouteTransitionCurtain } from "@/lib/route-transition-curtain";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
 import { motion, useAnimationControls } from "framer-motion";
@@ -139,6 +140,50 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     if (isMountedRef.current) navigateBack();
   }, [motionControls, navigateBack]);
 
+  // Returning after a successful invite into an EXISTING room always has one
+  // known destination: the room entry we pushed FROM to get here
+  // (openInviteMembers in conversation-list.tsx is this screen's only
+  // entry point, and it always does a real router.push). Earlier code chose
+  // between router.back() and a reconstructed push by checking
+  // `window.history.length > 1` (navigateBack's generic "cancel" logic,
+  // still used below) — but that length check is unreliable inside a native
+  // WebView tab, often under-reporting even right after a real push, which
+  // silently forced the reconstructed-push fallback every time and dropped
+  // `?conversation=` in the process. Since this call site's history shape is
+  // never ambiguous, skip the check and call router.back() directly.
+  //
+  // This also isn't just about avoiding that flaky check: this page reads
+  // cookies()/headers()/searchParams, so it's a fully dynamic route with
+  // staleTimes.dynamic = 0 — a router.push() back to it, even to the exact
+  // original URL, always triggers a fresh RSC fetch over the network. Real
+  // back/forward navigation is the one case Next.js's Router Cache always
+  // reuses regardless of staleness, so router.back() is the only way to
+  // return with no network round trip and no flash.
+  const navigateBackToConversation = useCallback(() => {
+    if (!normalizedConversationId) {
+      navigateBack();
+      return;
+    }
+    router.back();
+  }, [navigateBack, normalizedConversationId, router]);
+
+  // router.back() replaces this whole page's tree with conversation-list.tsx's
+  // in one React commit, but the browser doesn't paint that commit
+  // instantly — remounting a component that size is real synchronous work,
+  // and on-device that boundary was visible for a frame regardless of what
+  // this screen's own exit animation did (a slide made it worse — two
+  // disconnected motions; a fade only shrank the gap, it didn't close it).
+  // showRouteTransitionCurtain() covers the screen through that boundary
+  // instead: it lives in the root layout, so it survives the navigation and
+  // only lifts once the destination has actually painted. Nothing needs to
+  // animate out here anymore — the curtain hides it.
+  const handleBackToConversation = useCallback(() => {
+    if (!isMountedRef.current || isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    showRouteTransitionCurtain();
+    navigateBackToConversation();
+  }, [navigateBackToConversation]);
+
   const toggleUser = useCallback((user: InviteFriendsUser) => {
     setSelectedUsers((current) => {
       if (current.some((candidate) => candidate.id === user.id)) {
@@ -241,7 +286,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     try {
       if (isAddingToExistingConversation) {
         await requestMemberInvite();
-        await handleBack();
+        await handleBackToConversation();
         return;
       }
       const { conversationId, reused } = await requestConversationStart(false);
@@ -256,7 +301,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
       setIsStarting(false);
     }
   }, [
-    handleBack,
+    handleBackToConversation,
     isAddingToExistingConversation,
     isStarting,
     navigateToConversation,

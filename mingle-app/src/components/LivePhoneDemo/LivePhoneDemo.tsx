@@ -3864,6 +3864,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     // Demo animation states
     isDemoAnimating,
@@ -5775,6 +5776,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     uiLocale,
     utterances.length,
   ])
+
+  // Membership/invites are deliberately server-authoritative, never
+  // optimistic (docs/local-first-conversation-plan.md, client-SoT branch):
+  // leaveNotices/inviteNotices only exist once the one-shot mount hydration
+  // resolves, so painting the transcript before then can show a message with
+  // no accompanying "X invited Y" notice for an invite that already
+  // succeeded server-side, which then pops in a moment later. Hold real
+  // rooms (not the marketing demo) in the same loading state the outer
+  // Suspense fallback already shows until that first hydration settles, so
+  // what's shown is the complete state from the first frame.
+  if (headerMode === 'conversation' && isInitialServerHydrationPending) {
+    return (
+      <PhoneFrame>
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+          <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+        </div>
+      </PhoneFrame>
+    )
+  }
 
   return (
     <PhoneFrame>

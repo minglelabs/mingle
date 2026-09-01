@@ -2674,6 +2674,14 @@ export default function useRealtimeSTT({
   const [isSharedRoom, setIsSharedRoom] = useState(false)
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
+  // Membership/invites are deliberately server-authoritative, never optimistic
+  // (see docs/local-first-conversation-plan.md on the client-SoT branch) — a
+  // fresh mount always starts with empty leave/invite notices and only fills
+  // them in once the one-shot mount hydration below resolves. True while
+  // that first hydration is outstanding, so a caller can hold the room in a
+  // loading state instead of briefly painting a transcript that's missing
+  // notices for an invite/leave that already happened server-side.
+  const [isInitialServerHydrationPending, setIsInitialServerHydrationPending] = useState(true)
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -3499,14 +3507,21 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!conversationId) return
+    if (!conversationId) {
+      // Nothing to hydrate (demo/legacy callers without a real room) — don't
+      // hold a caller waiting on isInitialServerHydrationPending forever.
+      setIsInitialServerHydrationPending(false)
+      return
+    }
     if (!isStorageHydrated) return
 
     const hydrationKey = `${conversationId}:${sessionKeyOverride || ''}`
     if (serverHydrationKeyRef.current === hydrationKey) return
     serverHydrationKeyRef.current = hydrationKey
 
-    void refreshFromServerHydration('mount')
+    void refreshFromServerHydration('mount').finally(() => {
+      setIsInitialServerHydrationPending(false)
+    })
   }, [conversationId, isStorageHydrated, refreshFromServerHydration, sessionKeyOverride])
 
   // Live sync: a solo room never needed this (nothing else can add a
@@ -6434,6 +6449,7 @@ export default function useRealtimeSTT({
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,
