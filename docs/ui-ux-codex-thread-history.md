@@ -1774,3 +1774,16 @@
   - Keep a live session owned by another room untouched when a different room requests a status snapshot; that room receives an idle replay rather than inheriting a phantom Stop state.
 - Data contract: No Prisma migration or server data change is required. The Android native bundle uses the existing `android/v2.0.1` namespace; iOS behavior and namespace are unchanged.
 - Testing notes: Install a newly rebuilt Android native artifact before testing. Start STT, return to the list, speak, re-enter the same room, continue speaking, explicitly Stop, and repeat the cycle. Confirm the visible control matches the native session, queued messages are not lost, and an actually stopped session returns to Start. Device testing was not performed during this change.
+
+## 2026-09-01 — Harden local-first synchronization after acknowledgements and silent sockets
+
+- Surface: The 2.0.0 conversation list, durable finalized-message outbox, account settings controls, and realtime list/room updates in iOS and Android WebViews.
+- Issue: A same-id finalized message could be edited locally while an older POST was still in flight; its success response then deleted the newer durable outbox record. A list GET that began before a room mutation could arrive after the mutation acknowledgement had removed its optimistic queue record and visibly restore the old server summary. Failed account-preference PATCH requests stayed pending until a user made another edit, and iOS WebSockets can remain reported as `OPEN` after traffic has stopped, which disabled the existing disconnected-only polling fallback.
+- User impact: A finalized transcript update could be lost, a title/language/status/read-marker/delete action could snap backward, a slider or menu choice could remain local-only after a transient failure, and another participant's room/list change could stop appearing until a later reload.
+- Resolution:
+  - Treat each outbox flush record as a snapshot: only its exact current version can be deleted or assigned retry metadata after the network request completes. A newer payload with the same idempotency key remains queued for delivery.
+  - Version local conversation mutations. A list GET whose request began before that version changed is neither cached nor rendered; it asks the existing coalesced refresh loop for a fresh server read instead.
+  - Retry pending account preferences with bounded exponential backoff, clear the retry after acknowledgement, and retry immediately on network, focus, or visible-foreground recovery.
+  - Keep the normal 20-second fallback for disconnected realtime, and add a 60-second activity watchdog so an apparently open but silent WebSocket also triggers a fresh list/room hydration while visible.
+- Data contract: No Prisma migration, API namespace change, native-code change, or mobile rebuild is required. These are remotely delivered WebView safeguards for the installed 2.0.0 application.
+- Testing notes: Added regressions for an old outbox delivery finishing after a newer same-id payload, mutation-revision invalidation of an in-flight list refresh, retry eligibility/backoff, and healthy/disconnected/silent-socket fallback decisions. Verify on device with delayed PATCH/POST and airplane-mode recovery, then leave a room/list open across an iOS network transition and confirm updates resume without a manual reload.

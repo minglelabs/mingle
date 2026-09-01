@@ -65,8 +65,10 @@ import {
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
   readCachedAccountPreferencesSnapshot,
+  resolveAccountPreferencesSyncRetryDelayMs,
   serializeAccountPreferencesSyncState,
   shouldApplyAccountPreferencesHydration,
+  shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
   writeCachedAccountPreferences,
@@ -1772,6 +1774,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
+  const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
+  const accountPreferencesSyncRetryAttemptRef = useRef(0)
   const accountPreferencesCacheWriteTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncInFlightRef = useRef<Promise<void> | null>(null)
   const accountPreferencesSyncQueuedRef = useRef(false)
@@ -2382,11 +2386,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     accountPreferencesSyncTimerRef.current = null
   }, [])
 
+  const clearAccountPreferencesSyncRetryTimer = useCallback((options?: { resetAttempt?: boolean }) => {
+    if (accountPreferencesSyncRetryTimerRef.current !== null) {
+      window.clearTimeout(accountPreferencesSyncRetryTimerRef.current)
+      accountPreferencesSyncRetryTimerRef.current = null
+    }
+    if (options?.resetAttempt) {
+      accountPreferencesSyncRetryAttemptRef.current = 0
+    }
+  }, [])
+
   useEffect(() => {
     // Hydrate from the server only on lifecycle inputs. Re-fetching on live local
     // preference changes would clobber in-progress edits with the last server snapshot.
     let cancelled = false
     clearAccountPreferencesSyncTimer()
+    clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
@@ -2483,10 +2498,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     accountPreferencesApiPath,
     accountPreferencesCacheIdentity,
     clearAccountPreferencesSyncTimer,
+    clearAccountPreferencesSyncRetryTimer,
     enableAccountPreferencesSync,
     nativeAppUpdate,
     resolveConversationSessionKey,
   ])
+
+  const scheduleAccountPreferencesSyncRetry = useCallback(() => {
+    if (!shouldRetryAccountPreferencesSync({
+      allowSync: enableAccountPreferencesSync,
+      pendingSync: accountPreferencesPendingSyncRef.current,
+      mounted: accountPreferencesComponentMountedRef.current,
+    })) {
+      return
+    }
+    if (accountPreferencesSyncRetryTimerRef.current !== null) return
+
+    accountPreferencesSyncRetryAttemptRef.current += 1
+    const delayMs = resolveAccountPreferencesSyncRetryDelayMs(
+      accountPreferencesSyncRetryAttemptRef.current,
+    )
+    accountPreferencesSyncRetryTimerRef.current = window.setTimeout(() => {
+      accountPreferencesSyncRetryTimerRef.current = null
+      if (!shouldRetryAccountPreferencesSync({
+        allowSync: enableAccountPreferencesSync,
+        pendingSync: accountPreferencesPendingSyncRef.current,
+        mounted: accountPreferencesComponentMountedRef.current,
+      })) {
+        return
+      }
+      accountPreferencesSyncRunnerRef.current()
+    }, delayMs)
+  }, [enableAccountPreferencesSync])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
@@ -2494,6 +2537,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       accountPreferencesSyncQueuedRef.current = true
       return
     }
+
+    clearAccountPreferencesSyncRetryTimer()
 
     const currentPreferences = latestAccountPreferencesRef.current
     const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
@@ -2518,6 +2563,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         if (!response.ok) {
           throw new Error(`account_preferences_patch_failed:${response.status}`)
         }
+        clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
         accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
         if (
           serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
@@ -2535,7 +2581,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       })
       .catch(() => {
-        // Keep the current in-memory state and retry on the next change.
+        // Keep the local-first state durable and retry even if the user does
+        // not make another settings edit before connectivity recovers.
+        scheduleAccountPreferencesSyncRetry()
       })
       .finally(() => {
         accountPreferencesSyncInFlightRef.current = null
@@ -2549,8 +2597,41 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         accountPreferencesSyncRunnerRef.current()
       })
     accountPreferencesSyncInFlightRef.current = syncPromise
-  }, [accountPreferencesApiPath, accountPreferencesCacheIdentity, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+  }, [accountPreferencesApiPath, accountPreferencesCacheIdentity, clearAccountPreferencesSyncRetryTimer, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey, scheduleAccountPreferencesSyncRetry])
   accountPreferencesSyncRunnerRef.current = syncAccountPreferences
+
+  useEffect(() => {
+    if (!enableAccountPreferencesSync) return
+
+    const retryPendingSync = () => {
+      if (!shouldRetryAccountPreferencesSync({
+        allowSync: enableAccountPreferencesSync,
+        pendingSync: accountPreferencesPendingSyncRef.current,
+        mounted: accountPreferencesComponentMountedRef.current,
+      })) {
+        return
+      }
+      clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
+      accountPreferencesSyncRunnerRef.current()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') retryPendingSync()
+    }
+
+    window.addEventListener('online', retryPendingSync)
+    window.addEventListener('focus', retryPendingSync)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('online', retryPendingSync)
+      window.removeEventListener('focus', retryPendingSync)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [clearAccountPreferencesSyncRetryTimer, enableAccountPreferencesSync])
+
+  useEffect(() => () => {
+    clearAccountPreferencesSyncTimer()
+    clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
+  }, [clearAccountPreferencesSyncRetryTimer, clearAccountPreferencesSyncTimer])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
     latestAccountPreferencesRef.current = nextPreferences

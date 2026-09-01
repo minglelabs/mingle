@@ -253,6 +253,18 @@ function resolveRetryDelayMs(attemptCount: number): number {
   )
 }
 
+function isCurrentClientMessageOutboxRecord(record: ClientMessageOutboxRecord): boolean {
+  const current = outboxMemory.get(record.id)
+  if (!current) return false
+
+  return current.ownerIdentity === record.ownerIdentity
+    && current.endpoint === record.endpoint
+    && current.body === record.body
+    && current.trackingUserId === record.trackingUserId
+    && current.createdAt === record.createdAt
+    && current.updatedAt === record.updatedAt
+}
+
 async function performFlush(input: {
   ownerIdentity: string
   fetchImpl: FetchLike
@@ -276,23 +288,27 @@ async function performFlush(input: {
         keepalive: true,
       })
       if (response.ok) {
-        outboxMemory.delete(record.id)
+        if (isCurrentClientMessageOutboxRecord(record)) {
+          outboxMemory.delete(record.id)
+          persistOutbox()
+        }
         delivered += 1
-        persistOutbox()
         continue
       }
     } catch {
       // Retain the record and retry after an exponential backoff.
     }
 
-    const attemptCount = record.attemptCount + 1
-    outboxMemory.set(record.id, {
-      ...record,
-      attemptCount,
-      updatedAt: input.now(),
-      nextAttemptAt: input.now() + resolveRetryDelayMs(attemptCount),
-    })
-    persistOutbox()
+    if (isCurrentClientMessageOutboxRecord(record)) {
+      const attemptCount = record.attemptCount + 1
+      outboxMemory.set(record.id, {
+        ...record,
+        attemptCount,
+        updatedAt: input.now(),
+        nextAttemptAt: input.now() + resolveRetryDelayMs(attemptCount),
+      })
+      persistOutbox()
+    }
   }
 
   return {

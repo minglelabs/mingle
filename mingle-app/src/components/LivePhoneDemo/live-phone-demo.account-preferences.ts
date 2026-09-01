@@ -34,6 +34,8 @@ export type SttSegmentationMode = 'fin' | 'end'
 export const DEFAULT_STT_SEGMENTATION_MODE: SttSegmentationMode = 'end'
 export const DEFAULT_STT_SEGMENTATION_PREFERENCE: SttSegmentationMode | null = null
 export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom'
+export const ACCOUNT_PREFERENCES_SYNC_RETRY_BASE_MS = 2_000
+export const ACCOUNT_PREFERENCES_SYNC_RETRY_MAX_MS = 60_000
 
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
@@ -347,6 +349,21 @@ export function shouldScheduleAccountPreferencesSync(args: {
   if (args.hydratedGeneration !== args.requestedHydrationGeneration) return false
 
   return serializeAccountPreferencesSyncState(args.currentPreferences) !== args.lastSyncedStateKey
+}
+
+export function resolveAccountPreferencesSyncRetryDelayMs(attemptCount: number): number {
+  return Math.min(
+    ACCOUNT_PREFERENCES_SYNC_RETRY_MAX_MS,
+    ACCOUNT_PREFERENCES_SYNC_RETRY_BASE_MS * (2 ** Math.max(0, attemptCount - 1)),
+  )
+}
+
+export function shouldRetryAccountPreferencesSync(args: {
+  allowSync: boolean
+  pendingSync: boolean
+  mounted: boolean
+}): boolean {
+  return args.allowSync && args.pendingSync && args.mounted
 }
 
 export function shouldSendTranslationModelPreference(args: {

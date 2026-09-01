@@ -309,6 +309,13 @@ export function areConversationListsEqual(
   return areConversationValuesEqual(left, right);
 }
 
+export function isConversationListRefreshCurrent(input: {
+  startedMutationRevision: number;
+  currentMutationRevision: number;
+}): boolean {
+  return input.startedMutationRevision === input.currentMutationRevision;
+}
+
 export function mergeConversationLists(
   current: ConversationChannelSummary[],
   incoming: ConversationChannelSummary[],

@@ -31,6 +31,10 @@ import {
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import {
+  REALTIME_FALLBACK_POLL_INTERVAL_MS,
+  shouldRunRealtimeFallbackRefresh,
+} from '@/lib/realtime-fallback-poll'
+import {
   isNativeSttMessageForConversation,
   filterNativeSttMessagesForSession,
   readNativeSttMessageQueue,
@@ -3610,9 +3614,9 @@ export default function useRealtimeSTT({
   // message), but a room shared by more than one real account does — without
   // it, another member's messages only show up on next mount/reload. Opens a
   // push channel on mingle-messaging (membership-checked token minted by the
-  // server) and re-runs the same fetch+merge above on push; a long-interval
-  // poll is the fallback for whenever the socket is down or push is
-  // unconfigured in this environment.
+  // server) and re-runs the same fetch+merge above on push. A fallback poll
+  // covers unavailable push, while a watchdog catches an iOS socket that stays
+  // OPEN after it stops receiving traffic.
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!conversationId) return
@@ -3620,6 +3624,7 @@ export default function useRealtimeSTT({
     let cancelled = false
     let socket: WebSocket | null = null
     let reconnectTimer: number | null = null
+    let lastRealtimeActivityAt = Date.now()
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== null) {
@@ -3657,7 +3662,11 @@ export default function useRealtimeSTT({
         }
 
         socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
+        socket.onopen = () => {
+          lastRealtimeActivityAt = Date.now()
+        }
         socket.onmessage = () => {
+          lastRealtimeActivityAt = Date.now()
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
@@ -3673,12 +3682,15 @@ export default function useRealtimeSTT({
 
     void openSocket()
 
-    const pollIntervalMs = 20_000
     const pollTimer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return
-      if (socket?.readyState === WebSocket.OPEN) return
+      if (!shouldRunRealtimeFallbackRefresh({
+        isDocumentVisible: document.visibilityState === 'visible',
+        socketReadyState: socket?.readyState,
+        lastRealtimeActivityAt,
+        now: Date.now(),
+      })) return
       void refreshFromServerHydration('poll')
-    }, pollIntervalMs)
+    }, REALTIME_FALLBACK_POLL_INTERVAL_MS)
 
     return () => {
       cancelled = true

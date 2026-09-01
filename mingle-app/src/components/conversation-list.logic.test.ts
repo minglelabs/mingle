@@ -11,6 +11,7 @@ import {
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   createMutationVersionTracker,
   findNativeSttRestoreConversation,
+  isConversationListRefreshCurrent,
   isSearchOverlayHistoryOpen,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
@@ -305,6 +306,17 @@ describe("conversation-list logic", () => {
         latestMessageAt: "2026-04-12T10:00:00.000Z",
       }),
     ]);
+  });
+
+  it("discards a list refresh when a room mutation changed while it was in flight", () => {
+    expect(isConversationListRefreshCurrent({
+      startedMutationRevision: 4,
+      currentMutationRevision: 4,
+    })).toBe(true);
+    expect(isConversationListRefreshCurrent({
+      startedMutationRevision: 4,
+      currentMutationRevision: 5,
+    })).toBe(false);
   });
 
   it("keeps the current list reference when a refresh contains no visible changes", () => {

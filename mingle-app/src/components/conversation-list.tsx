@@ -94,6 +94,7 @@ import {
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
+  isConversationListRefreshCurrent,
   isSearchOverlayHistoryOpen,
   MAX_RECENT_SEARCHES,
   mergeConversationLists,
@@ -160,6 +161,10 @@ import {
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
 import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import {
+  REALTIME_FALLBACK_POLL_INTERVAL_MS,
+  shouldRunRealtimeFallbackRefresh,
+} from "@/lib/realtime-fallback-poll";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
@@ -2047,6 +2052,7 @@ export default function ConversationList({
   }), [authenticatedUserId, initialTrackingExternalUserId]);
   const pendingConversationMutationsRef = useRef<ConversationMutationRecord[]>([]);
   const conversationMutationFlushInFlightRef = useRef<Promise<unknown> | null>(null);
+  const conversationListMutationRevisionRef = useRef(0);
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
@@ -2284,6 +2290,10 @@ export default function ConversationList({
     records = pendingConversationMutationsRef.current,
   ) => applyPendingConversationMutations(sourceConversations, records), []);
 
+  const advanceConversationListMutationRevision = useCallback(() => {
+    conversationListMutationRevisionRef.current += 1;
+  }, []);
+
   const rollbackConversationMutation = useCallback((record: ConversationMutationRecord) => {
     if (!record.rollback || record.rollback.removed === true) return;
     const rollbackSnapshot = record.rollback;
@@ -2319,6 +2329,7 @@ export default function ConversationList({
       },
       onSuccess: async (record, response, acknowledged) => {
         if (!acknowledged) return;
+        advanceConversationListMutationRevision();
         if (record.kind === "remove") {
           conversationRemovalRollbackRef.current.delete(record.conversationId);
           return;
@@ -2354,6 +2365,7 @@ export default function ConversationList({
       },
       onPermanentFailure: async (record, _response, acknowledged) => {
         if (!acknowledged) return;
+        advanceConversationListMutationRevision();
         if (record.kind === "profile-default-languages") {
           const rollbackLanguages = record.rollback?.defaultConversationLanguages;
           if (rollbackLanguages) {
@@ -2400,6 +2412,7 @@ export default function ConversationList({
     conversationMutationFlushInFlightRef.current = flushPromise;
     return flushPromise;
   }, [
+    advanceConversationListMutationRevision,
     applyPendingConversationState,
     conversationMutationIdentity,
     readPendingConversationMutationSnapshot,
@@ -2416,6 +2429,7 @@ export default function ConversationList({
     rollback?: ConversationMutationPatch | null;
   }) => {
     const record = enqueueConversationMutation(conversationMutationIdentity, input);
+    advanceConversationListMutationRevision();
     const nextRecords = readPendingConversationMutationSnapshot();
     setConversations((current) => applyPendingConversationState(current, nextRecords));
     if (sessionStatus === "authenticated") {
@@ -2423,6 +2437,7 @@ export default function ConversationList({
     }
     return record;
   }, [
+    advanceConversationListMutationRevision,
     applyPendingConversationState,
     conversationMutationIdentity,
     flushPendingConversationMutations,
@@ -2574,6 +2589,7 @@ export default function ConversationList({
   }, [setSearchOverlayVisible]);
 
   const performConversationListRefresh = useCallback(async (options?: { replaceCurrent?: boolean }) => {
+    const refreshMutationRevision = conversationListMutationRevisionRef.current;
     const response = await fetch(
       initialNativeUi
         ? buildConversationApiPath("?view=native-list")
@@ -2584,6 +2600,20 @@ export default function ConversationList({
       },
     );
     const serverConversations = await readConversationListResponse(response);
+    if (!isConversationListRefreshCurrent({
+      startedMutationRevision: refreshMutationRevision,
+      currentMutationRevision: conversationListMutationRevisionRef.current,
+    })) {
+      // The response started before a local room mutation was acknowledged.
+      // Do not cache or render that stale snapshot after the queue has already
+      // removed its optimistic overlay; ask the existing refresh loop to retry.
+      queuedConversationListRefreshOptionsRef.current = {
+        replaceCurrent:
+          queuedConversationListRefreshOptionsRef.current?.replaceCurrent === true
+          || options?.replaceCurrent === true,
+      };
+      return conversationsRef.current;
+    }
     // A list GET may have started before a local edit reached the server.
     // Overlay pending mutations before caching or rendering so stale server
     // snapshots cannot make a just-edited room visibly jump backwards.
@@ -3894,8 +3924,8 @@ export default function ConversationList({
   // manual refresh, not just inside an already-open room — mirrors
   // use-realtime-stt.ts's per-room version of the same pattern, just scoped
   // to this user's own list:<userId> topic on mingle-stt's event bus
-  // instead of one room's sessionKey. A long-interval poll is the fallback
-  // for whenever the socket is down or push is unconfigured.
+  // instead of one room's sessionKey. A fallback poll covers unavailable push,
+  // and a watchdog covers iOS sockets that remain OPEN after losing traffic.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sessionStatus !== "authenticated") return;
@@ -3903,6 +3933,7 @@ export default function ConversationList({
     let cancelled = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
+    let lastRealtimeActivityAt = Date.now();
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== null) {
@@ -3940,7 +3971,11 @@ export default function ConversationList({
         }
 
         socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+        socket.onopen = () => {
+          lastRealtimeActivityAt = Date.now();
+        };
         socket.onmessage = () => {
+          lastRealtimeActivityAt = Date.now();
           void refreshConversationList().catch(() => {
             // Keep the current local snapshot; a later push or fallback poll retries.
           });
@@ -3958,14 +3993,17 @@ export default function ConversationList({
 
     void openSocket();
 
-    const pollIntervalMs = 20_000;
     const pollTimer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (socket?.readyState === WebSocket.OPEN) return;
+      if (!shouldRunRealtimeFallbackRefresh({
+        isDocumentVisible: document.visibilityState === "visible",
+        socketReadyState: socket?.readyState,
+        lastRealtimeActivityAt,
+        now: Date.now(),
+      })) return;
       void refreshConversationList().catch(() => {
         // Keep the current local snapshot while realtime recovery is unavailable.
       });
-    }, pollIntervalMs);
+    }, REALTIME_FALLBACK_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;

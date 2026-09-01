@@ -115,6 +115,102 @@ describe('client message outbox', () => {
     expect(localStorage.length).toBe(0)
   })
 
+  it('retains a newer payload when an older delivery succeeds in flight', async () => {
+    const ownerIdentity = 'user:user-1'
+    const record = {
+      id: 'outbox-1',
+      ownerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      trackingUserId: 'tracking-1',
+    }
+    outbox.enqueueClientMessageOutboxRecord({
+      ...record,
+      body: '{"sourceText":"first"}',
+      now: 1_000,
+    })
+
+    let resolveFirstDelivery: (response: Response) => void = () => {}
+    const firstDelivery = new Promise<Response>((resolve) => {
+      resolveFirstDelivery = resolve
+    })
+    const fetchImpl = vi.fn(() => firstDelivery)
+    const firstFlush = outbox.flushClientMessageOutbox({
+      ownerIdentity,
+      fetchImpl,
+      force: true,
+      now: () => 1_500,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    outbox.enqueueClientMessageOutboxRecord({
+      ...record,
+      body: '{"sourceText":"latest"}',
+      now: 2_000,
+    })
+    resolveFirstDelivery(new Response(null, { status: 204 }))
+    await firstFlush
+
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_000)).toEqual([
+      expect.objectContaining({ body: '{"sourceText":"latest"}' }),
+    ])
+
+    const nextFetch = vi.fn(async () => new Response(null, { status: 204 }))
+    await outbox.flushClientMessageOutbox({
+      ownerIdentity,
+      fetchImpl: nextFetch,
+      force: true,
+      now: () => 2_500,
+    })
+
+    expect(nextFetch).toHaveBeenCalledWith(
+      record.endpoint,
+      expect.objectContaining({ body: '{"sourceText":"latest"}' }),
+    )
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_500)).toEqual([])
+  })
+
+  it('does not apply an older delivery retry to a newer payload in flight', async () => {
+    const ownerIdentity = 'user:user-1'
+    const record = {
+      id: 'outbox-1',
+      ownerIdentity,
+      endpoint: '/api/ios/v2.0.0/log/client-event',
+      trackingUserId: 'tracking-1',
+    }
+    outbox.enqueueClientMessageOutboxRecord({
+      ...record,
+      body: '{"sourceText":"first"}',
+      now: 1_000,
+    })
+
+    let resolveFirstDelivery: (response: Response) => void = () => {}
+    const firstDelivery = new Promise<Response>((resolve) => {
+      resolveFirstDelivery = resolve
+    })
+    const firstFlush = outbox.flushClientMessageOutbox({
+      ownerIdentity,
+      fetchImpl: vi.fn(() => firstDelivery),
+      force: true,
+      now: () => 1_500,
+    })
+
+    outbox.enqueueClientMessageOutboxRecord({
+      ...record,
+      body: '{"sourceText":"latest"}',
+      now: 2_000,
+    })
+    resolveFirstDelivery(new Response(null, { status: 503 }))
+    await firstFlush
+
+    expect(outbox.readClientMessageOutboxRecords(ownerIdentity, 2_000)).toEqual([
+      expect.objectContaining({
+        body: '{"sourceText":"latest"}',
+        attemptCount: 0,
+        nextAttemptAt: 0,
+      }),
+    ])
+  })
+
   it('never flushes another account\'s queued message', async () => {
     outbox.enqueueClientMessageOutboxRecord({
       id: 'outbox-user-a',
