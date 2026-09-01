@@ -1717,3 +1717,15 @@
   - Keep the sender's bubble padding unchanged and reduce only counterpart collapsed and expanded bubble top padding to `pt-0.5`, retaining `pb-1` for the existing bottom rhythm.
 - Data contract: No Prisma migration, API namespace change, native app version change, or server change is required.
 - Testing notes: Updated the ChatBubble rendering contract, ran the focused 22-test rendering suite, and passed ESLint plus whitespace validation. Device testing was not performed by request; validate the Android WebView presentation against iOS after the web change is deployed.
+
+## 2026-09-01 — Recover Android STT delivery from stale WebView readiness
+
+- Surface: Android cold-start conversation rooms, React Native WebView lifecycle readiness, and native STT status/transcript delivery.
+- Issue: Android WebView could leave the React Native `pageReady` flag false after the room was already interactive. The room could send the native Start command, native audio capture and the STT WebSocket could reach `ready`, and transcript messages could arrive, while the outbound bridge still discarded every status event and held transcript messages behind a queue. The visible room therefore remained on Connecting until its 20-second watchdog stopped the otherwise healthy native session. A legacy native listener-count guard added a second delivery-loss window under React Native's bridgeless architecture.
+- User impact: Pressing Start immediately after opening the Android app could remain on Connecting and then return to Start without showing recognized speech. Leaving for the conversation list before the timeout could make the background session appear active even though the room itself had not consumed the native events.
+- Resolution:
+  - Treat any valid WebView-to-React-Native command as authoritative evidence that the current document is interactive, restore `pageReady`, and immediately flush queued native transcript messages.
+  - Restore outbound delivery before handling the Start or status-request command so all subsequent native `connecting`, `ready`, and transcript events reach the initiating room.
+  - Always emit Android native STT events through `DeviceEventEmitter`; it safely ignores missing JavaScript listeners, while gating on the legacy listener counter can incorrectly discard the only lifecycle event.
+- Data contract: No Prisma migration, server change, API namespace change, or iOS behavior change is required. A new Android native build is required because the delivery fix changes the React Native shell and Kotlin module.
+- Testing notes: Verify Android cold start followed by an immediate Start tap, remain in the room beyond 20 seconds, speak before and after `ready`, return to the list while recording, re-enter the room, explicitly Stop, and repeat. Confirm Connecting transitions to Stop/ready, transcripts stay visible in the room, and no watchdog-triggered stop occurs while native capture is healthy.

@@ -3567,6 +3567,17 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    // Receiving a valid command is stronger evidence that the current
+    // document is interactive than Android WebView's load callbacks. Some
+    // renderer/navigation paths leave onLoadStart unmatched long enough for
+    // native STT status and transcript events to be discarded even though
+    // the room can already send Start. Restore the outbound bridge as soon as
+    // the current document proves that it is ready.
+    if (!isPageReadyRef.current) {
+      isPageReadyRef.current = true;
+      flushPendingNativeSttMessagesToWeb();
+    }
+
     if (parsed.type === 'native_qr_scanner_open') {
       setQrScannerRequest(parsed.payload ?? {});
       return;
@@ -3829,6 +3840,7 @@ function AppInner(): React.JSX.Element {
     handleNativeStop,
     handleNativeStatusRequest,
     enqueueNativeSttCommand,
+    flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
     updateSafeAreaPalette,
   ]);

@@ -1155,9 +1155,11 @@ class NativeSTTModule(
     eventName: String,
     payload: com.facebook.react.bridge.WritableMap,
   ) {
-    if (listenerCount.get() <= 0) {
-      return
-    }
+    // DeviceEventEmitter safely ignores events when JavaScript has no active
+    // subscriber. Do not gate delivery on the legacy listener counter: under
+    // React Native's bridgeless architecture its bookkeeping can briefly lag
+    // behind an already-mounted NativeEventEmitter and drop the only ready or
+    // transcript event for a live capture session.
     reactApplicationContext
       .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
       .emit(eventName, payload)

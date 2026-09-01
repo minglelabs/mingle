@@ -100,4 +100,30 @@ describe('runtime fallback contract', () => {
     expect(mingleHomeSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
     expect(mingleHomeSource).toContain('if (authPanelStep === "terms") {');
   });
+
+  it('restores native event delivery when the WebView sends a valid command', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const nativeSttModule = readWorkspaceFile(
+      'android/app/src/main/java/com/minglelabs/mingle/rn/NativeSTTModule.kt',
+    );
+    const parsedCommandIndex = appSource.indexOf(
+      "if (!parsed || typeof parsed !== 'object') return;",
+    );
+    const pageReadyRecoveryIndex = appSource.indexOf(
+      'if (!isPageReadyRef.current) {',
+      parsedCommandIndex,
+    );
+    const nativeStartCommandIndex = appSource.indexOf(
+      "if (parsed.type === 'native_stt_start') {",
+      parsedCommandIndex,
+    );
+
+    expect(parsedCommandIndex).toBeGreaterThanOrEqual(0);
+    expect(pageReadyRecoveryIndex).toBeGreaterThan(parsedCommandIndex);
+    expect(pageReadyRecoveryIndex).toBeLessThan(nativeStartCommandIndex);
+    expect(appSource.slice(pageReadyRecoveryIndex, nativeStartCommandIndex)).toContain(
+      'flushPendingNativeSttMessagesToWeb();',
+    );
+    expect(nativeSttModule).not.toContain('if (listenerCount.get() <= 0) {');
+  });
 });
