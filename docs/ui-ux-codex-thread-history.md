@@ -410,3 +410,11 @@
 - Issue: The admin conversation review flow had an unnecessary dashboard entry point, and the initial external-user lookup could remain in browser history. Pressing Back from a room could therefore return to the pre-lookup screen instead of the room list.
 - User impact: Operators could lose the loaded room list while navigating through a user’s history and had to repeat the lookup before continuing their review.
 - Resolution: Removed the dashboard conversation button, changed external-user lookup navigation to replace the pre-lookup URL, and kept room selection as an explicit history push. Browser Back now moves from a room to its room list while preserving the loaded user context.
+
+## 2026-09-02 — Short XR presentation goal split
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation needed an additional third page to explain the two competing motivations behind the language-exchange problem. The existing centered slide treatment did not provide enough visual separation or emphasis for the two goals.
+- User impact: Viewers could not immediately distinguish between wanting to make foreign friends and wanting to learn a foreign language, which weakened the problem framing in the short presentation.
+- Resolution: Added a centered third slide with the `문제` kicker and `닭 vs 달걀 문제` title. Added a responsive two-column goal layout with larger type, separate accent treatments, gradient key-color bars, soft tinted panels, and mobile sizing that preserves the side-by-side comparison. Updated the static page counter to six slides; the existing slide navigation continues to derive the final count from the slide elements.
+- Tests: Verified six top-level `.slide` elements, confirmed the requested page order and text, and ran `git diff --check`.

@@ -156,6 +156,76 @@
         text-align: center;
       }
 
+      .slide-copy--goal-split {
+        width: min(1120px, 100%);
+        max-width: min(1120px, 100%);
+        margin-inline: auto;
+        justify-items: center;
+        gap: clamp(28px, 4vh, 52px);
+        text-align: center;
+      }
+
+      .slide-copy--goal-split .slide-title {
+        font-size: clamp(2.8rem, 5.2vw, 5.8rem);
+        line-height: 1.12;
+      }
+
+      .slide-goal-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(18px, 4vw, 64px);
+        width: min(100%, 1040px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-goal {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: clamp(190px, 22vh, 280px);
+        padding: clamp(28px, 3vw, 48px) clamp(22px, 3vw, 44px);
+        overflow: hidden;
+        border: 1px solid rgba(45, 42, 30, 0.1);
+        border-radius: 28px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.56)),
+          var(--goal-tint);
+        box-shadow: 0 24px 54px rgba(52, 43, 16, 0.12);
+      }
+
+      .slide-goal::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 8px;
+        content: "";
+        background: var(--goal-accent);
+      }
+
+      .slide-goal--left {
+        --goal-accent: linear-gradient(90deg, var(--accent), #ffd978);
+        --goal-text-accent: #c98200;
+        --goal-tint: rgba(251, 188, 50, 0.2);
+      }
+
+      .slide-goal--right {
+        --goal-accent: linear-gradient(90deg, var(--accent-strong), var(--accent));
+        --goal-text-accent: var(--accent-strong);
+        --goal-tint: rgba(249, 115, 22, 0.14);
+      }
+
+      .slide-goal-text {
+        margin: 0;
+        font-size: clamp(2.2rem, 4.1vw, 4.8rem);
+        font-weight: 750;
+        line-height: 1.14;
+        letter-spacing: -0.06em;
+        text-wrap: balance;
+      }
+
+      .slide-goal-emphasis {
+        color: var(--goal-text-accent);
+      }
+
       .slide-copy--center .slide-kicker {
         left: 50%;
         transform: translateX(-50%);
@@ -1738,6 +1808,36 @@
         text-align: center;
       }
 
+      html.is-mobile-viewport .slide-copy--goal-split {
+        gap: clamp(20px, 3vh, 30px);
+      }
+
+      html.is-mobile-viewport .slide-copy--goal-split .slide-title {
+        font-size: clamp(2.16rem, 9.2vw, 3.35rem);
+      }
+
+      html.is-mobile-viewport .slide-goal-columns {
+        gap: clamp(10px, 2vw, 16px);
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .slide-goal {
+        min-height: clamp(164px, 23vh, 220px);
+        padding: clamp(24px, 3vh, 32px) 10px;
+        border-radius: 22px;
+      }
+
+      html.is-mobile-viewport .slide-goal::before {
+        height: 6px;
+      }
+
+      html.is-mobile-viewport .slide-goal-text {
+        font-size: clamp(1.32rem, 5.2vw, 1.9rem);
+        line-height: 1.16;
+        letter-spacing: -0.04em;
+        word-break: keep-all;
+      }
+
       html.is-mobile-viewport .slide-copy--toc {
         gap: clamp(20px, 4vh, 34px);
       }
@@ -2289,6 +2389,22 @@
         </section>
         <section class="slide">
           <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">닭 vs 달걀 문제</h1>
+              <div class="slide-goal-columns">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">해결책</p>
               <h1 class="slide-title slide-title--quoted">
@@ -2356,7 +2472,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 61</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 06</div>
       </div>
     </main>
 
@@ -2746,4 +2862,3 @@
     </script>
   </body>
 </html>
-
