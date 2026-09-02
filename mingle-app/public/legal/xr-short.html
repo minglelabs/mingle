@@ -394,67 +394,25 @@
         overflow: hidden;
         padding: clamp(22px, 2.3vw, 34px);
         border: 0;
-        border-radius: clamp(24px, 2.4vw, 34px);
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.38)),
-          var(--market-tint);
-        box-shadow: 0 22px 48px rgba(66, 49, 15, 0.11);
-      }
-
-      .slide-market-category::before {
-        position: absolute;
-        top: -22%;
-        right: -12%;
-        width: 48%;
-        aspect-ratio: 1;
-        border-radius: 50%;
-        content: "";
-        background: radial-gradient(circle, var(--market-glow) 0%, transparent 70%);
-        pointer-events: none;
-      }
-
-      .slide-market-category::after {
-        position: absolute;
-        top: clamp(24px, 2.3vw, 34px);
-        right: clamp(24px, 2.3vw, 34px);
-        width: clamp(10px, 0.7vw, 14px);
-        height: clamp(10px, 0.7vw, 14px);
-        border-radius: 50%;
-        content: "";
-        background: var(--market-accent);
-        box-shadow: 0 0 0 7px var(--market-halo), 0 10px 20px var(--market-shadow);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
       }
 
       .slide-market-category--language {
         --market-accent: #6366f1;
-        --market-glow: rgba(99, 102, 241, 0.28);
-        --market-halo: rgba(99, 102, 241, 0.12);
-        --market-shadow: rgba(99, 102, 241, 0.2);
-        --market-tint: rgba(99, 102, 241, 0.11);
       }
 
       .slide-market-category--voice {
         --market-accent: #ef765e;
-        --market-glow: rgba(239, 118, 94, 0.26);
-        --market-halo: rgba(239, 118, 94, 0.12);
-        --market-shadow: rgba(239, 118, 94, 0.2);
-        --market-tint: rgba(239, 118, 94, 0.12);
       }
 
       .slide-market-category--dating {
         --market-accent: #db2777;
-        --market-glow: rgba(219, 39, 119, 0.24);
-        --market-halo: rgba(219, 39, 119, 0.12);
-        --market-shadow: rgba(219, 39, 119, 0.2);
-        --market-tint: rgba(219, 39, 119, 0.1);
       }
 
       .slide-market-category--offline {
         --market-accent: #159570;
-        --market-glow: rgba(21, 149, 112, 0.24);
-        --market-halo: rgba(21, 149, 112, 0.12);
-        --market-shadow: rgba(21, 149, 112, 0.2);
-        --market-tint: rgba(21, 149, 112, 0.1);
       }
 
       .slide-market-category-title {
@@ -1974,15 +1932,6 @@
 
       html.is-mobile-viewport .slide-market-category {
         padding: 16px 11px 10px;
-        border-radius: 20px;
-      }
-
-      html.is-mobile-viewport .slide-market-category::after {
-        top: 18px;
-        right: 18px;
-        width: 9px;
-        height: 9px;
-        box-shadow: 0 0 0 5px var(--market-halo), 0 7px 14px var(--market-shadow);
       }
 
       html.is-mobile-viewport .slide-market-category-title {

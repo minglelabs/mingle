@@ -434,3 +434,11 @@
 - User impact: Without a compact market map, viewers could miss the distinction between language exchange, sincere voice conversation, global dating, and offline meetups, as well as the competitive context for Mingle.
 - Resolution: Added a fourth slide with a left-aligned `시장` message and a right-side 2x2 category grid. Each category uses a distinct key color, soft tinted panel, and irregularly scattered local service icons without divider lines. Grouped K Friends, HelloTalk, Tandem, Hilokal, and Yeetalk under `언어교환`; Maum, Connecting, and Wakie under `진솔한 음성 대화`; Meeff, Azar, Tinder, and Yubo under `글로벌 데이팅`; and Timeleft and Meetup under `오프라인 모임`. Added local app artwork assets and updated the presentation count to seven slides.
 - Tests: Verified the page-four text, category counts, local image loading, and `04 / 07` counter in the local browser at desktop and mobile sizes. Confirmed no viewport overflow and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category simplification
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The category panels on the market slide added visual weight that competed with the service icons and made the market map feel more like four separate cards than one comparison field.
+- User impact: Viewers could focus on the panel decoration instead of quickly scanning the category names and the services grouped beneath them.
+- Resolution: Removed category backgrounds, rounded-card treatment, shadows, glow ornaments, and corner dots. Kept the 2x2 placement, category names, per-category title colors, and irregular icon clouds as the only visual structure.
+- Tests: Rechecked the market slide at desktop and mobile sizes, confirmed all 14 local icons load, and ran `git diff --check`.
