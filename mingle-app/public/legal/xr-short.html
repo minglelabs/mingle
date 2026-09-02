@@ -189,6 +189,33 @@
         white-space: nowrap;
       }
 
+      .slide-shell--market-categories {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: clamp(18px, 3.4vh, 34px);
+        padding-inline: clamp(40px, 6vw, 96px);
+      }
+
+      .slide-copy--market-categories {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(62px, calc(15vh - 28px), 106px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-copy--market-categories .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--market-categories .slide-title {
+        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
       .slide-shell--market-overview {
         flex-direction: column;
         align-items: center;
@@ -412,6 +439,21 @@
         gap: clamp(14px, 1.4vw, 22px);
         width: 100%;
         height: 100%;
+      }
+
+      .slide-side-media--market-categories {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: min(1180px, 100%);
+        height: clamp(300px, 42vh, 400px);
+        padding: 0;
+      }
+
+      .slide-market-grid--categories {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: clamp(14px, 2.5vw, 32px);
       }
 
       .slide-market-category {
@@ -1987,6 +2029,11 @@
         gap: clamp(18px, 2.8vh, 28px);
       }
 
+      html.is-mobile-viewport .slide-shell--market-categories {
+        justify-content: flex-start;
+        gap: clamp(20px, 3.4vh, 30px);
+      }
+
       html.is-mobile-viewport .slide-copy--market {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
@@ -2000,14 +2047,44 @@
         white-space: nowrap;
       }
 
+      html.is-mobile-viewport .slide-copy--market-categories {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--market-categories .slide-title {
+        font-size: clamp(2.05rem, 9.2vw, 3.3rem);
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
       html.is-mobile-viewport .slide-side-media--market {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
         padding: 0 6px;
       }
 
+      html.is-mobile-viewport .slide-side-media--market-categories {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: clamp(260px, 43vh, 360px);
+        padding: 0;
+      }
+
       html.is-mobile-viewport .slide-market-grid {
         gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: 6px;
       }
 
       html.is-mobile-viewport .slide-market-category {
@@ -2019,8 +2096,21 @@
         line-height: 1.15;
       }
 
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-category {
+        padding: 8px 0 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-category-title {
+        font-size: clamp(0.8rem, 3.55vw, 1.15rem);
+        white-space: nowrap;
+      }
+
       html.is-mobile-viewport .slide-market-logo-cloud {
         inset: 24% 1% 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo-cloud {
+        inset: 24% 0 0;
       }
 
       html.is-mobile-viewport .slide-market-logo {
@@ -2028,6 +2118,13 @@
         height: clamp(36px, 10.8vw, 58px);
         padding: 5px;
         border-radius: 12px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo {
+        width: clamp(32px, 10.8vw, 50px);
+        height: clamp(32px, 10.8vw, 50px);
+        padding: 4px;
+        border-radius: 10px;
       }
 
       html.is-mobile-viewport .slide-shell--market-overview {
@@ -2174,6 +2271,10 @@
 
       html.is-mobile-viewport .slide-side-media--market {
         height: clamp(340px, 49vh, 460px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--market-categories {
+        height: clamp(260px, 43vh, 360px);
       }
 
       html.is-mobile-viewport .slide-side-media--brand-collage,
@@ -2711,24 +2812,13 @@
           </article>
         </section>
         <section class="slide">
-          <article class="slide-shell slide-shell--market">
-            <div class="slide-copy slide-copy--market">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories">
               <p class="slide-kicker">시장</p>
               <h1 class="slide-title"><span>수많은 서비스가</span><br/><span>이에 도전합니다</span></h1>
             </div>
-            <div class="slide-side-media slide-side-media--market" aria-hidden="true">
-              <div class="slide-market-grid">
-                <section class="slide-market-category slide-market-category--language">
-                  <h2 class="slide-market-category-title">언어교환</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 17%; --y: 45%; --s: clamp(56px, 4.5vw, 76px); --r: -10deg" src="./assets/logo-market-kfriends.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 42%; --y: 71%; --s: clamp(52px, 4.2vw, 70px); --r: 7deg" src="./assets/logo-hellotalk.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 64%; --y: 40%; --s: clamp(54px, 4.3vw, 72px); --r: -5deg" src="./assets/logo-market-tandem.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 84%; --y: 70%; --s: clamp(52px, 4.1vw, 68px); --r: 11deg" src="./assets/logo-market-hilokal.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 25%; --y: 84%; --s: clamp(48px, 3.8vw, 64px); --r: -4deg" src="./assets/logo-market-yeetalk.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 64%; --y: 84%; --s: clamp(54px, 4.4vw, 78px); --r: 8deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
-                  </div>
-                </section>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories">
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">

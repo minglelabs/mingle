@@ -458,3 +458,11 @@
 - User impact: Viewers could not immediately see how many large language-exchange services compete in this space or distinguish the two similarly named KFriends products.
 - Resolution: Added a centered fourth slide stating that many language-exchange services still do not solve the chicken-and-egg problem. Added a single horizontal row of six apps ordered by estimated Android downloads—HelloTalk, Tandem, Yeetalk, K-Friends, Hilokal, and Kfriends—with each app name and estimate on two lines. Added the provided blue KFriends artwork as a separate local asset and added it to the language-exchange group on the following market map slide. Removed residual logo shadows so the category areas remain visually flat.
 - Tests: Verified the new page as `04 / 08`, the moved market map as `05 / 08`, six horizontal overview items, six language-category icons, local image loading, centered page-four content, no body overflow on desktop/mobile, and no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The language-exchange proof page made the language-exchange group redundant on the following market map, while the remaining categories were still shown as a 2x2 side panel beside left-aligned copy.
+- User impact: The market page did not read as a single centered comparison, and the three remaining competitive spaces were harder to scan as a sequence.
+- Resolution: Removed the language-exchange category from the market map, centered the market kicker and title, and changed the remaining sincere voice conversation, global dating, and offline meetup groups to one horizontal row. Preserved the irregular icon scattering within each category and added responsive sizing for the three-column layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the three category titles and icon counts of 3/4/2, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
