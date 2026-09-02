@@ -466,3 +466,11 @@
 - User impact: The market page did not read as a single centered comparison, and the three remaining competitive spaces were harder to scan as a sequence.
 - Resolution: Removed the language-exchange category from the market map, centered the market kicker and title, and changed the remaining sincere voice conversation, global dating, and offline meetup groups to one horizontal row. Preserved the irregular icon scattering within each category and added responsive sizing for the three-column layout.
 - Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the three category titles and icon counts of 3/4/2, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR download estimate refresh
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/logo-market-kof.png`
+- Issue: The language-exchange proof page presented Android-only figures without making the platform scope clear. The final Kfriends entry also represented the smaller Bibimbap Story app, while KOF had a larger publicly visible Android footprint and was a better market comparison.
+- User impact: The scale comparison understated several competitors and made the source scope of the figures ambiguous. The similarly named Kfriends entry could also distract from the more relevant KOF competitor.
+- Resolution: Recalculated the rounded figures using public Android and iOS indicators where available: HelloTalk `약 7,000만+`, Tandem `약 3,500만+`, Yeetalk `약 1,100만`, K-Friends `약 450만`, Hilokal `약 170만`, and KOF `약 60만`. Replaced the Bibimbap Story Kfriends artwork with a local KOF icon, added a platform-scope caption, and increased the app-name and estimate type sizes while preserving the six-item horizontal row. KOF is marked as Google Play-based because no matching Apple App Store listing was found.
+- Tests: Verified page `04 / 08` at desktop and mobile sizes, confirmed the six apps remain in descending order, confirmed all local images load, checked the page-five 3/4/2 category layout for regression, confirmed no viewport overflow, and found no browser console warnings or errors.

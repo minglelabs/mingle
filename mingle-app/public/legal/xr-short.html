@@ -551,7 +551,7 @@
 
       .slide-market-overview-name {
         color: var(--title);
-        font-size: clamp(0.96rem, 1.2vw, 1.18rem);
+        font-size: clamp(1.12rem, 1.5vw, 1.42rem);
         font-weight: 800;
         line-height: 1.1;
         letter-spacing: -0.03em;
@@ -560,10 +560,20 @@
       .slide-market-overview-downloads {
         margin-top: -5px;
         color: rgba(45, 42, 30, 0.58);
-        font-size: clamp(0.76rem, 0.95vw, 0.94rem);
+        font-size: clamp(0.9rem, 1.15vw, 1.1rem);
         font-weight: 650;
         line-height: 1.1;
         letter-spacing: -0.02em;
+      }
+
+      .slide-market-overview-caption {
+        margin: clamp(8px, 1.2vh, 14px) 0 0;
+        color: rgba(45, 42, 30, 0.48);
+        font-size: clamp(0.72rem, 0.88vw, 0.88rem);
+        font-weight: 650;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        text-align: center;
       }
 
       .slide-side-media--hellotalk-primary {
@@ -2164,12 +2174,17 @@
       }
 
       html.is-mobile-viewport .slide-market-overview-name {
-        font-size: clamp(0.48rem, 2.2vw, 0.78rem);
+        font-size: clamp(0.54rem, 2.45vw, 0.82rem);
       }
 
       html.is-mobile-viewport .slide-market-overview-downloads {
         margin-top: -4px;
-        font-size: clamp(0.4rem, 1.85vw, 0.64rem);
+        font-size: clamp(0.46rem, 2.2vw, 0.7rem);
+      }
+
+      html.is-mobile-viewport .slide-market-overview-caption {
+        margin-top: 8px;
+        font-size: clamp(0.5rem, 2.15vw, 0.68rem);
       }
 
       html.is-mobile-viewport .slide-copy--goal-split .slide-title {
@@ -2781,34 +2796,35 @@
               <article class="slide-market-overview-item">
                 <img class="slide-market-overview-logo" src="./assets/logo-hellotalk.png" alt="" />
                 <p class="slide-market-overview-name">HelloTalk</p>
-                <p class="slide-market-overview-downloads">약 4,500만</p>
+                <p class="slide-market-overview-downloads">약 7,000만+</p>
               </article>
               <article class="slide-market-overview-item">
                 <img class="slide-market-overview-logo" src="./assets/logo-market-tandem.jpg" alt="" />
                 <p class="slide-market-overview-name">Tandem</p>
-                <p class="slide-market-overview-downloads">약 2,100만</p>
+                <p class="slide-market-overview-downloads">약 3,500만+</p>
               </article>
               <article class="slide-market-overview-item">
                 <img class="slide-market-overview-logo" src="./assets/logo-market-yeetalk.jpg" alt="" />
                 <p class="slide-market-overview-name">Yeetalk</p>
-                <p class="slide-market-overview-downloads">약 840만</p>
+                <p class="slide-market-overview-downloads">약 1,100만</p>
               </article>
               <article class="slide-market-overview-item">
                 <img class="slide-market-overview-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
                 <p class="slide-market-overview-name">K-Friends</p>
-                <p class="slide-market-overview-downloads">약 400만</p>
+                <p class="slide-market-overview-downloads">약 450만</p>
               </article>
               <article class="slide-market-overview-item">
                 <img class="slide-market-overview-logo" src="./assets/logo-market-hilokal.jpg" alt="" />
                 <p class="slide-market-overview-name">Hilokal</p>
-                <p class="slide-market-overview-downloads">약 160만</p>
+                <p class="slide-market-overview-downloads">약 170만</p>
               </article>
               <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-kfriends.jpg" alt="" />
-                <p class="slide-market-overview-name">Kfriends</p>
-                <p class="slide-market-overview-downloads">약 10만</p>
+                <img class="slide-market-overview-logo" src="./assets/logo-market-kof.png" alt="" />
+                <p class="slide-market-overview-name">KOF</p>
+                <p class="slide-market-overview-downloads">약 60만</p>
               </article>
             </div>
+            <p class="slide-market-overview-caption">iOS·Android 합산 누적 다운로드 추정치 · KOF는 Google Play 기준</p>
           </article>
         </section>
         <section class="slide">
