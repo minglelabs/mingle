@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-02 - Clarify new conversation-room creation labels
+
+- **Surface:** Conversation-list create action and the modal that chooses between a solo conversation room and inviting friends.
+- **Issue:** The Korean create action said `새 대화 시작`, which described starting a conversation but not creating the persistent conversation room. The solo option `혼자서 시작하기` also did not explain what would be created. The English `Start Conversation!` had the same ambiguity and retained an unnecessary exclamation mark.
+- **Resolution:** Rename the Korean create action to `새 대화방 만들기` and the English action to `Create a new chat`. Rename the solo option to `혼자 쓰는 대화방` and `Your own room`. Localize both labels for all 15 primary UI locales, using concise, natural chat/room terminology where a literal translation would be too long or unnatural.
+- **Interaction:** Keep `Invite friends`, `Cancel`, the invite-screen title, and the invite-screen submit action unchanged. The modal continues to present the solo and friend-invite choices without adding a visible title.
+- **Data change:** None. This is a presentation-only i18n change.
+- **Testing notes:** Verify both labels in all 15 primary UI locales, with special attention to Spanish and Vietnamese button widths, RTL Arabic layout, CJK rendering, and fallback locales that resolve supplemental copy through English.
+
 ## 2026-08-25 - Persist default display language and preserve keyboard mode
 
 - **Surface:** Conversation hamburger menu, default display-language selection, text-size defaults, and the live conversation composer controls.
