@@ -41,6 +41,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
 class NativeSTTModule(
@@ -79,6 +80,7 @@ class NativeSTTModule(
   private val isRunning = AtomicBoolean(false)
 
   private val listenerCount = AtomicInteger(0)
+  private val statusEventSequence = AtomicLong(0L)
   @Volatile private var webSocketReady = false
   @Volatile private var serverReady = false
   @Volatile private var audioRecord: AudioRecord? = null
@@ -139,6 +141,7 @@ class NativeSTTModule(
   fun getStatus(promise: Promise) {
     val running = isRunning.get()
     val status = when {
+      gracefulStopPending -> "stopping"
       !running -> "idle"
       serverReady -> "ready"
       else -> "connecting"
@@ -149,6 +152,8 @@ class NativeSTTModule(
       activeSessionId?.let { putString("sessionId", it) }
       putBoolean("running", running)
       putBoolean("serverReady", running && serverReady)
+      putBoolean("stopping", gracefulStopPending)
+      putDouble("eventSequence", statusEventSequence.get().toDouble())
     })
   }
 
@@ -959,6 +964,7 @@ class NativeSTTModule(
     webSocketReady = false
     serverReady = false
     sessionStartedAtMs = 0L
+    emitStatus("stopping")
 
     stopAudioThread()
     stopStallMonitor()
@@ -1071,6 +1077,9 @@ class NativeSTTModule(
     if (emitClose && wasRunning && reason != null) {
       emitClose(reason)
     }
+    if (wasRunning) {
+      emitStatus("idle")
+    }
     resolveGracefulStopPromise()
     activeConversationId = null
     activeSessionId = null
@@ -1083,10 +1092,11 @@ class NativeSTTModule(
   }
 
   private fun emitStatus(status: String) {
+    val eventSequence = statusEventSequence.incrementAndGet()
     Log.i(
       TAG,
       "status=$status conversation=${activeConversationId ?: "unknown"} " +
-        "session=${activeSessionId ?: "unknown"}",
+        "session=${activeSessionId ?: "unknown"} sequence=$eventSequence",
     )
     emitEvent(
       "status",
@@ -1094,6 +1104,10 @@ class NativeSTTModule(
         putString("status", status)
         activeConversationId?.let { putString("conversationId", it) }
         activeSessionId?.let { putString("sessionId", it) }
+        putBoolean("running", isRunning.get())
+        putBoolean("serverReady", isRunning.get() && serverReady)
+        putBoolean("stopping", gracefulStopPending)
+        putDouble("eventSequence", eventSequence.toDouble())
       },
     )
   }
@@ -1141,9 +1155,11 @@ class NativeSTTModule(
     eventName: String,
     payload: com.facebook.react.bridge.WritableMap,
   ) {
-    if (listenerCount.get() <= 0) {
-      return
-    }
+    // DeviceEventEmitter safely ignores events when JavaScript has no active
+    // subscriber. Do not gate delivery on the legacy listener counter: under
+    // React Native's bridgeless architecture its bookkeeping can briefly lag
+    // behind an already-mounted NativeEventEmitter and drop the only ready or
+    // transcript event for a live capture session.
     reactApplicationContext
       .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
       .emit(eventName, payload)

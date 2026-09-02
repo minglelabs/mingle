@@ -19,14 +19,14 @@ function readWorkspaceFile(relativePath: string): string {
 }
 
 describe('runtime fallback contract', () => {
-  it('keeps the iOS 2.0.0 Railway endpoints in the native runtime config', () => {
+  it('keeps the iOS 2.0.1 Railway endpoints in the native runtime config', () => {
     const projectFile = readWorkspaceFile('ios/mingle.xcodeproj/project.pbxproj');
     const infoPlist = readWorkspaceFile('ios/mingle/Info.plist');
     const nativeSttModule = readWorkspaceFile('ios/mingle/NativeSTTModule.swift');
 
     expect(projectFile).toContain('NEXT_PUBLIC_SITE_URL = "https://mingle-2-0-0-production.up.railway.app";');
     expect(projectFile).toContain('NEXT_PUBLIC_WS_URL = "wss://mingle-2-0-0-production.up.railway.app/stt";');
-    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.0;');
+    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.1;');
     expect(infoPlist).toContain('<key>MingleDefaultWsURL</key>');
     expect(infoPlist).toContain('<string>$(NEXT_PUBLIC_WS_URL)</string>');
 
@@ -99,5 +99,31 @@ describe('runtime fallback contract', () => {
     expect(languageOnboardingSource).toContain('handleStepBack();');
     expect(mingleHomeSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
     expect(mingleHomeSource).toContain('if (authPanelStep === "terms") {');
+  });
+
+  it('restores native event delivery when the WebView sends a valid command', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const nativeSttModule = readWorkspaceFile(
+      'android/app/src/main/java/com/minglelabs/mingle/rn/NativeSTTModule.kt',
+    );
+    const parsedCommandIndex = appSource.indexOf(
+      "if (!parsed || typeof parsed !== 'object') return;",
+    );
+    const pageReadyRecoveryIndex = appSource.indexOf(
+      'if (!isPageReadyRef.current) {',
+      parsedCommandIndex,
+    );
+    const nativeStartCommandIndex = appSource.indexOf(
+      "if (parsed.type === 'native_stt_start') {",
+      parsedCommandIndex,
+    );
+
+    expect(parsedCommandIndex).toBeGreaterThanOrEqual(0);
+    expect(pageReadyRecoveryIndex).toBeGreaterThan(parsedCommandIndex);
+    expect(pageReadyRecoveryIndex).toBeLessThan(nativeStartCommandIndex);
+    expect(appSource.slice(pageReadyRecoveryIndex, nativeStartCommandIndex)).toContain(
+      'flushPendingNativeSttMessagesToWeb();',
+    );
+    expect(nativeSttModule).not.toContain('if (listenerCount.get() <= 0) {');
   });
 });

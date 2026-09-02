@@ -829,7 +829,17 @@ type WebViewCommand =
   | NativeQaSetSttStatusCommand;
 
 type NativeSttEvent =
-  | { type: 'status'; status: string; conversationId?: string; sessionId?: string; replay?: boolean }
+  | {
+      type: 'status';
+      status: string;
+      conversationId?: string;
+      sessionId?: string;
+      replay?: boolean;
+      running?: boolean;
+      serverReady?: boolean;
+      stopping?: boolean;
+      eventSequence?: number;
+    }
   | { type: 'message'; raw: string; conversationId?: string; sessionId?: string; queueId?: string }
   | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string }
   | { type: 'permission'; permission: string; platform?: string }
@@ -842,6 +852,8 @@ type NativeSttSnapshot = {
   sessionId?: string;
   running?: boolean;
   serverReady?: boolean;
+  stopping?: boolean;
+  eventSequence?: number;
 };
 
 function isTerminalNativeSttStatus(status: string): boolean {
@@ -863,16 +875,31 @@ function resolveNativeSttStatusFromSnapshot(snapshot: NativeSttSnapshot): string
   const rawStatus = typeof snapshot.status === 'string'
     ? snapshot.status.trim().toLowerCase()
     : '';
-  if (snapshot.running === false) {
-    return isTerminalNativeSttStatus(rawStatus) ? rawStatus : 'idle';
-  }
-  if (snapshot.serverReady === true || rawStatus === 'ready') {
-    return 'ready';
+  if (snapshot.stopping === true || rawStatus === 'stopping') {
+    return 'stopping';
   }
   if (isTerminalNativeSttStatus(rawStatus)) {
     return rawStatus;
   }
+  if (rawStatus === 'error' || rawStatus === 'failed') {
+    return rawStatus;
+  }
+  if (snapshot.running === false) {
+    return 'idle';
+  }
+  if (snapshot.serverReady === true || rawStatus === 'ready') {
+    return 'ready';
+  }
   return 'connecting';
+}
+
+function hasOlderNativeSttStatusSequence(
+  nextSequence?: number,
+  currentSequence?: number,
+): boolean {
+  if (typeof nextSequence !== 'number' || !Number.isFinite(nextSequence)) return false;
+  if (typeof currentSequence !== 'number' || !Number.isFinite(currentSequence)) return false;
+  return nextSequence < currentSequence;
 }
 
 function rememberRetiredNativeSttSession(sessionIds: Set<string>, sessionId?: string): void {
@@ -2575,11 +2602,22 @@ function AppInner(): React.JSX.Element {
     // queue, so the next room can receive a correctly scoped replay instead
     // of inheriting a status from the previous room.
     if (nextPayload.type === 'status' && !nextPayload.replay) {
-      nativeSttSnapshotRef.current = {
-        status: nextPayload.status,
-        ...(nextPayload.conversationId ? { conversationId: nextPayload.conversationId } : {}),
-        ...(nextPayload.sessionId ? { sessionId: nextPayload.sessionId } : {}),
-      };
+      const currentSnapshot = nativeSttSnapshotRef.current;
+      if (!hasOlderNativeSttStatusSequence(nextPayload.eventSequence, currentSnapshot.eventSequence)) {
+        nativeSttSnapshotRef.current = {
+          status: nextPayload.status,
+          ...(nextPayload.conversationId ? { conversationId: nextPayload.conversationId } : {}),
+          ...(nextPayload.sessionId ? { sessionId: nextPayload.sessionId } : {}),
+          ...(typeof nextPayload.running === 'boolean' ? { running: nextPayload.running } : {}),
+          ...(typeof nextPayload.serverReady === 'boolean' ? { serverReady: nextPayload.serverReady } : {}),
+          ...(typeof nextPayload.stopping === 'boolean' ? { stopping: nextPayload.stopping } : {}),
+          ...(typeof nextPayload.eventSequence === 'number'
+            ? { eventSequence: nextPayload.eventSequence }
+            : typeof currentSnapshot.eventSequence === 'number'
+              ? { eventSequence: currentSnapshot.eventSequence }
+              : {}),
+        };
+      }
     }
 
     if (!isPageReadyRef.current) {
@@ -2603,7 +2641,7 @@ function AppInner(): React.JSX.Element {
       console.log(`[NativeSTT→Web] ${preview}`);
     }
     const cacheStatusScript = nextPayload.type === 'status'
-      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; window.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID = ${JSON.stringify(nextPayload.conversationId || null)}; window.__MINGLE_LAST_NATIVE_STT_SESSION_ID = ${JSON.stringify(nextPayload.sessionId || null)}; `
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; window.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID = ${JSON.stringify(nextPayload.conversationId || null)}; window.__MINGLE_LAST_NATIVE_STT_SESSION_ID = ${JSON.stringify(nextPayload.sessionId || null)}; window.__MINGLE_LAST_NATIVE_STT_RUNNING = ${JSON.stringify(typeof nextPayload.running === 'boolean' ? nextPayload.running : null)}; window.__MINGLE_LAST_NATIVE_STT_SERVER_READY = ${JSON.stringify(typeof nextPayload.serverReady === 'boolean' ? nextPayload.serverReady : null)}; window.__MINGLE_LAST_NATIVE_STT_STOPPING = ${JSON.stringify(typeof nextPayload.stopping === 'boolean' ? nextPayload.stopping : null)}; window.__MINGLE_LAST_NATIVE_STT_EVENT_SEQUENCE = ${JSON.stringify(typeof nextPayload.eventSequence === 'number' ? nextPayload.eventSequence : null)}; `
       : '';
     const cachePermissionScript = nextPayload.type === 'permission'
       ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(nextPayload.permission)}; `
@@ -2661,6 +2699,14 @@ function AppInner(): React.JSX.Element {
 
       if (syncSequence !== nativeSttStatusSyncSequenceRef.current) return;
 
+      if (hasOlderNativeSttStatusSequence(
+        snapshot.eventSequence,
+        nativeSttSnapshotRef.current.eventSequence,
+      )) {
+        await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
+
       const activeConversationId = typeof snapshot.conversationId === 'string'
         ? snapshot.conversationId.trim()
         : '';
@@ -2684,14 +2730,7 @@ function AppInner(): React.JSX.Element {
         continue;
       }
 
-      const rawStatus = typeof snapshot.status === 'string'
-        ? snapshot.status.trim().toLowerCase()
-        : '';
-      const status = snapshot.serverReady === true || rawStatus === 'ready'
-        ? 'ready'
-        : rawStatus === 'idle' || rawStatus === 'stopped' || rawStatus === 'closed'
-          ? rawStatus
-          : 'connecting';
+      const status = resolveNativeSttStatusFromSnapshot(snapshot);
       const scopedConversationId = activeConversationId
         || (isLiveNativeSttStatus(status) ? requestedConversationId : '')
         || undefined;
@@ -2705,15 +2744,33 @@ function AppInner(): React.JSX.Element {
       if (scopedSessionId) {
         nativeSttSessionIdRef.current = scopedSessionId;
       }
+      const currentSnapshot = nativeSttSnapshotRef.current;
+      nativeSttSnapshotRef.current = {
+        status,
+        ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+        ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number'
+          ? { eventSequence: snapshot.eventSequence }
+          : typeof currentSnapshot.eventSequence === 'number'
+            ? { eventSequence: currentSnapshot.eventSequence }
+            : {}),
+      };
       nativeStatusRef.current = status;
       emitToWeb({
         type: 'status',
         status,
         ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
         ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
       });
 
-      if (status === 'ready' || isTerminalNativeSttStatus(status)) return;
+      if (status === 'ready' || status === 'stopping' || isTerminalNativeSttStatus(status)) return;
       await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
     }
   }, [emitToWeb, nativeAvailable]);
@@ -2728,13 +2785,20 @@ function AppInner(): React.JSX.Element {
     if (Platform.OS === 'android' && nativeAvailable) {
       try {
         const nativeSnapshot = await getNativeSttStatus();
-        snapshot = {
-          status: nativeSnapshot.status,
-          ...(nativeSnapshot.conversationId ? { conversationId: nativeSnapshot.conversationId } : {}),
-          ...(nativeSnapshot.sessionId ? { sessionId: nativeSnapshot.sessionId } : {}),
-          ...(typeof nativeSnapshot.running === 'boolean' ? { running: nativeSnapshot.running } : {}),
-          ...(typeof nativeSnapshot.serverReady === 'boolean' ? { serverReady: nativeSnapshot.serverReady } : {}),
-        };
+        if (!hasOlderNativeSttStatusSequence(
+          nativeSnapshot.eventSequence,
+          nativeSttSnapshotRef.current.eventSequence,
+        )) {
+          snapshot = {
+            status: nativeSnapshot.status,
+            ...(nativeSnapshot.conversationId ? { conversationId: nativeSnapshot.conversationId } : {}),
+            ...(nativeSnapshot.sessionId ? { sessionId: nativeSnapshot.sessionId } : {}),
+            ...(typeof nativeSnapshot.running === 'boolean' ? { running: nativeSnapshot.running } : {}),
+            ...(typeof nativeSnapshot.serverReady === 'boolean' ? { serverReady: nativeSnapshot.serverReady } : {}),
+            ...(typeof nativeSnapshot.stopping === 'boolean' ? { stopping: nativeSnapshot.stopping } : {}),
+            ...(typeof nativeSnapshot.eventSequence === 'number' ? { eventSequence: nativeSnapshot.eventSequence } : {}),
+          };
+        }
       } catch (error: unknown) {
         if (__DEV__) {
           const message = error instanceof Error ? error.message : String(error);
@@ -2753,8 +2817,10 @@ function AppInner(): React.JSX.Element {
     nativeSttSnapshotRef.current = snapshot;
     const sameRoomHasLiveSession = activeConversationId === requestedConversationId
       && isLiveNativeSttStatus(activeStatus);
+    const sameRoomIsStopping = activeConversationId === requestedConversationId
+      && activeStatus === 'stopping';
 
-    if (sameRoomHasLiveSession) {
+    if (sameRoomHasLiveSession || sameRoomIsStopping) {
       nativeSttConversationIdRef.current = activeConversationId;
       nativeSttSessionIdRef.current = activeSessionId || null;
       nativeSttRequestedConversationIdRef.current = activeConversationId;
@@ -2766,6 +2832,10 @@ function AppInner(): React.JSX.Element {
         status: activeStatus,
         conversationId: requestedConversationId,
         ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
         replay: true,
       });
       return;
@@ -2787,6 +2857,10 @@ function AppInner(): React.JSX.Element {
       type: 'status',
       status: 'idle',
       conversationId: requestedConversationId,
+      running: false,
+      serverReady: false,
+      stopping: false,
+      ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
       replay: true,
     });
   }, [emitToWeb, nativeAvailable]);
@@ -3161,6 +3235,9 @@ function AppInner(): React.JSX.Element {
             status: 'stopped',
             ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
             ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+            running: false,
+            serverReady: false,
+            stopping: false,
           });
           nativeSttConversationIdRef.current = null;
           rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, stoppedSessionId);
@@ -3325,6 +3402,9 @@ function AppInner(): React.JSX.Element {
         status: 'stopped',
         ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
         ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+        running: false,
+        serverReady: false,
+        stopping: false,
       });
       nativeSttConversationIdRef.current = null;
       rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, stoppedSessionId);
@@ -3486,6 +3566,17 @@ function AppInner(): React.JSX.Element {
       return;
     }
     if (!parsed || typeof parsed !== 'object') return;
+
+    // Receiving a valid command is stronger evidence that the current
+    // document is interactive than Android WebView's load callbacks. Some
+    // renderer/navigation paths leave onLoadStart unmatched long enough for
+    // native STT status and transcript events to be discarded even though
+    // the room can already send Start. Restore the outbound bridge as soon as
+    // the current document proves that it is ready.
+    if (!isPageReadyRef.current) {
+      isPageReadyRef.current = true;
+      flushPendingNativeSttMessagesToWeb();
+    }
 
     if (parsed.type === 'native_qr_scanner_open') {
       setQrScannerRequest(parsed.payload ?? {});
@@ -3749,6 +3840,7 @@ function AppInner(): React.JSX.Element {
     handleNativeStop,
     handleNativeStatusRequest,
     enqueueNativeSttCommand,
+    flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
     updateSafeAreaPalette,
   ]);
@@ -3777,6 +3869,18 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     const statusSub = addNativeSttListener('status', event => {
       if (__DEV__) console.log(`[NativeSTT] status: ${event.status}`);
+      if (hasOlderNativeSttStatusSequence(
+        event.eventSequence,
+        nativeSttSnapshotRef.current.eventSequence,
+      )) {
+        if (__DEV__) {
+          console.log(
+            `[NativeSTT] ignored older status sequence=${event.eventSequence} `
+              + `current=${nativeSttSnapshotRef.current.eventSequence}`,
+          );
+        }
+        return;
+      }
       const eventConversationId = event.conversationId?.trim() || '';
       const eventSessionId = event.sessionId?.trim() || '';
       const isStale = isStaleNativeSttSessionEvent({
@@ -3809,6 +3913,10 @@ function AppInner(): React.JSX.Element {
         status: event.status,
         ...(event.conversationId ? { conversationId: event.conversationId } : {}),
         ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+        ...(typeof event.running === 'boolean' ? { running: event.running } : {}),
+        ...(typeof event.serverReady === 'boolean' ? { serverReady: event.serverReady } : {}),
+        ...(typeof event.stopping === 'boolean' ? { stopping: event.stopping } : {}),
+        ...(typeof event.eventSequence === 'number' ? { eventSequence: event.eventSequence } : {}),
       });
       if (isTerminalNativeSttStatus(event.status)) {
         nativeSttConversationIdRef.current = null;
@@ -4011,11 +4119,14 @@ function AppInner(): React.JSX.Element {
 
     const roomConversationId = roomPayload.conversationId;
     const snapshot = nativeSttSnapshotRef.current;
-    const activeConversationId = nativeSttConversationIdRef.current || snapshot.conversationId || '';
-    const activeSessionId = nativeSttSessionIdRef.current || snapshot.sessionId || '';
-    const activeStatus = nativeStatusRef.current || snapshot.status;
+    // The snapshot is the latest native acknowledgement. The refs may still
+    // describe the WebView's previous room after a reload, so using them first
+    // can replay a stale idle/live state into the newly mounted room.
+    const activeConversationId = snapshot.conversationId || nativeSttConversationIdRef.current || '';
+    const activeSessionId = snapshot.sessionId || nativeSttSessionIdRef.current || '';
+    const activeStatus = resolveNativeSttStatusFromSnapshot(snapshot);
     const sameRoomHasLiveSession = activeConversationId === roomConversationId
-      && isLiveNativeSttStatus(activeStatus);
+      && (isLiveNativeSttStatus(activeStatus) || activeStatus === 'stopping');
 
     if (sameRoomHasLiveSession) {
       emitToWeb({
@@ -4023,6 +4134,10 @@ function AppInner(): React.JSX.Element {
         status: activeStatus,
         conversationId: roomConversationId,
         ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
         replay: true,
       });
       return;
@@ -4035,6 +4150,10 @@ function AppInner(): React.JSX.Element {
       type: 'status',
       status: 'idle',
       conversationId: roomConversationId,
+      running: false,
+      serverReady: false,
+      stopping: false,
+      ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
       replay: true,
     });
   }, [emitToWeb]);

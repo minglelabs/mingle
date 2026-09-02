@@ -148,14 +148,7 @@ export function resolveLanguageSelectorUnionAfterOwnLanguagesChange(args: {
   const nextUnion = new Set(args.previousUnion);
   addedCodes.forEach((code) => nextUnion.add(code));
   removedCodes.forEach((code) => {
-    // If the server did not include member attribution, keep the union
-    // conservative until the next canonical response. Dropping an unknown
-    // member's code locally would make a shared room flicker or hide a
-    // language that another participant still owns.
-    if (args.previousAttribution === undefined) return;
-    const holders = args.previousAttribution[code];
-    if (!holders || holders.length === 0) return;
-    const otherHolders = holders
+    const otherHolders = (args.previousAttribution?.[code] ?? [])
       .filter((memberId) => memberId !== args.viewerUserId);
     if (otherHolders.length === 0) {
       nextUnion.delete(code);

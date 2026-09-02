@@ -1,5 +1,5 @@
 export const EXPECTED_RN_API_NAMESPACE_BY_OS = {
-  ios: 'ios/v2.0.0',
+  ios: 'ios/v2.0.1',
   android: 'android/v2.0.1',
 }
 

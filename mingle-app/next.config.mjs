@@ -28,6 +28,16 @@ const nextConfig = {
         source: "/api/android/v2.0.1/:path*",
         destination: "/api/android/v2.0.0/:path*",
       },
+      // iOS 2.0.1 keeps the v2.0.0 server contract while using its own
+      // versioned namespace, so existing production API behavior is preserved.
+      {
+        source: "/api/ios/v2.0.1",
+        destination: "/api/ios/v2.0.0",
+      },
+      {
+        source: "/api/ios/v2.0.1/:path*",
+        destination: "/api/ios/v2.0.0/:path*",
+      },
     ];
   },
   turbopack: {

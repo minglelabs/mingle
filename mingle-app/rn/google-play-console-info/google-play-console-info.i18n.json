@@ -23,9 +23,9 @@
     "release": {
       "version": "2.0.1",
       "defaultTrack": "internal",
-      "defaultReleaseStatus": "draft",
+      "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.0.1 (92)",
+      "releaseName": "2.0.1 (96)",
       "releaseNotes": {
         "en-US": "Version 2.0.1 adds messenger-style conversations, shared rooms, profile sharing, real-time translation, native speech input, unread message counts, reliable push notifications, and more reliable navigation.",
         "ar": "Version 2.0.1 adds messenger-style conversations, shared rooms, profile sharing, real-time translation, native speech input, unread message counts, reliable push notifications, and more reliable navigation.",

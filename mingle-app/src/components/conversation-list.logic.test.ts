@@ -406,8 +406,8 @@ describe("conversation-list logic", () => {
     expect(resolveMountedConversationIds(null, "conv-live")).toEqual(["conv-live"]);
     expect(resolveMountedConversationIds("conv-live", "conv-live")).toEqual(["conv-live"]);
     expect(resolveMountedConversationIds("conv-visible", "conv-live")).toEqual([
-      "conv-live",
       "conv-visible",
+      "conv-live",
     ]);
   });
 

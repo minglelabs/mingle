@@ -591,6 +591,7 @@ function ChatBubble({
   // — the server only sets it once the room has 2+ real members, so this
   // doubles as "is this a shared-room bubble" without a separate prop.
   const isSharedRoomMember = Boolean(utterance.speakerUserId)
+  const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
@@ -673,6 +674,8 @@ function ChatBubble({
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
   const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleCornerClassName = isOwnMessage ? 'rounded-tl-2xl' : 'rounded-tl-none'
+  const expandedBubblePaddingClassName = isCounterpartMessage ? 'px-2 pt-0.5 pb-1' : 'px-2 py-1'
+  const collapsedBubblePaddingClassName = isCounterpartMessage ? 'px-2.5 pt-0.5 pb-1' : 'px-2.5 py-1'
   const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
     flag,
     utterance.originalText,
@@ -838,7 +841,7 @@ function ChatBubble({
       {speakerName && (
         <span
           data-chat-speaker-name
-          className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-base font-medium leading-5 text-gray-500"
+          className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
         </span>
@@ -956,7 +959,7 @@ function ChatBubble({
               data-expanded-bubble-container
               data-display-language={originalDisplayLanguage}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              className={`inline-block w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2 py-1 shadow-sm`}
+              className={`inline-block w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${expandedBubblePaddingClassName} shadow-sm`}
             >
               {expandedBubbleEntries.map((entry, index) => (
                 <ExpandedChatBubbleRow
@@ -1007,7 +1010,7 @@ function ChatBubble({
               data-display-language={activeLanguage}
               data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2.5 py-1 shadow-sm`}
+              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${collapsedBubblePaddingClassName} shadow-sm`}
             >
               <div
                 data-original-bubble-row

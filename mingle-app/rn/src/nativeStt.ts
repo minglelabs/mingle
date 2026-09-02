@@ -31,6 +31,8 @@ type NativeSttStatus = {
   sessionId?: string;
   serverReady?: boolean;
   running?: boolean;
+  stopping?: boolean;
+  eventSequence?: number;
 };
 
 type NativeSttModuleType = {
@@ -42,7 +44,15 @@ type NativeSttModuleType = {
 };
 
 type NativeSttEventMap = {
-  status: { status: string; conversationId?: string; sessionId?: string };
+  status: {
+    status: string;
+    conversationId?: string;
+    sessionId?: string;
+    running?: boolean;
+    serverReady?: boolean;
+    stopping?: boolean;
+    eventSequence?: number;
+  };
   message: { raw: string; conversationId?: string; sessionId?: string };
   error: { message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string };
   close: { reason: string; conversationId?: string; sessionId?: string };
