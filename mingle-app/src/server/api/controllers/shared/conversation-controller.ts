@@ -7,16 +7,24 @@ import {
   type ConversationHydrationCursor,
   deleteConversationChannel,
   getConversationHydrationStateForUser,
+  getConversationSessionKeyForMember,
+  inviteMembersToConversationChannel,
+  leaveConversationChannel,
+  listChannelMemberUserIdsBySessionKey,
+  listConversationMembersForUser,
+  markConversationChannelRead,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
   updateConversationChannelSpeechLanguages,
   updateConversationChannelTranslationLanguagesLinked,
+  updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { mintConversationRealtimeToken, notifyConversationMessage } from "@/server/conversation-realtime";
 
 export const runtime = "nodejs";
 
@@ -85,7 +93,9 @@ export async function patchConversationResponse(
     selectedLanguages?: unknown;
     speechLanguages?: unknown;
     translationLanguagesLinked?: unknown;
+    defaultDisplayLanguage?: unknown;
     title?: unknown;
+    markRead?: unknown;
   };
   try {
     body = await request.json();
@@ -97,15 +107,35 @@ export async function patchConversationResponse(
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
   const hasSpeechLanguages = body.speechLanguages !== undefined;
   const hasTranslationLanguagesLinked = body.translationLanguagesLinked !== undefined;
+  const hasDefaultDisplayLanguage = body.defaultDisplayLanguage !== undefined;
   const hasTitle = typeof body.title === "string";
+  const hasMarkRead = body.markRead !== undefined;
 
-  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasDefaultDisplayLanguage && !hasTitle && !hasMarkRead) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
+  }
+
+  if (hasMarkRead && body.markRead !== true) {
+    return NextResponse.json({ error: "invalid_mark_read" }, { status: 400 });
   }
 
   if (hasTranslationLanguagesLinked && typeof body.translationLanguagesLinked !== "boolean") {
     return NextResponse.json({ error: "invalid_translation_languages_linked" }, { status: 400 });
   }
+
+  if (
+    hasDefaultDisplayLanguage
+    && body.defaultDisplayLanguage !== null
+    && typeof body.defaultDisplayLanguage !== "string"
+  ) {
+    return NextResponse.json({ error: "invalid_default_display_language" }, { status: 400 });
+  }
+
+  const requestedDefaultDisplayLanguage = hasDefaultDisplayLanguage
+    ? (typeof body.defaultDisplayLanguage === "string"
+      ? body.defaultDisplayLanguage.trim() || null
+      : null)
+    : null;
 
   const selectedLanguages = hasSelectedLanguages
     ? sanitizeSttLanguageSelection(body.selectedLanguages)
@@ -173,6 +203,24 @@ export async function patchConversationResponse(
     }
   }
 
+  if (hasDefaultDisplayLanguage) {
+    try {
+      conversation = await updateConversationChannelDefaultDisplayLanguage({
+        conversationId,
+        userId: resolvedUser.userId,
+        defaultDisplayLanguage: requestedDefaultDisplayLanguage,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "invalid_default_display_language") {
+        return NextResponse.json({ error: "invalid_default_display_language" }, { status: 400 });
+      }
+      throw error;
+    }
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+  }
+
   if (hasStatus) {
     conversation = await updateConversationChannelStatus({
       conversationId,
@@ -195,7 +243,28 @@ export async function patchConversationResponse(
     }
   }
 
+  if (hasMarkRead) {
+    const markedRead = await markConversationChannelRead({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+    if (!markedRead) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+  }
+
   if (!conversation) {
+    if (hasMarkRead) {
+      const trackingHints = resolvedUser.tracking
+        ? {
+            externalUserId: resolvedUser.tracking.externalUserId,
+            sessionKey: resolvedUser.tracking.sessionKey,
+          }
+        : resolvedUser.identity;
+      const response = NextResponse.json({ read: true });
+      applyTrackingCookies(request, response, trackingHints);
+      return response;
+    }
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -250,6 +319,141 @@ export async function getConversationResponse(
   return response;
 }
 
+/**
+ * Mints the token the client hands mingle-stt to open a push channel for
+ * this conversation. This is the one place membership actually gets
+ * checked — mingle-stt has no database, so everything downstream trusts
+ * this signature.
+ */
+export async function getConversationRealtimeTokenResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const sessionKey = await getConversationSessionKeyForMember({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!sessionKey) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const token = mintConversationRealtimeToken({ sessionKey, userId: resolvedUser.userId });
+  // Realtime push is unconfigured in this environment — not an error the
+  // caller needs to see, since the client falls back to polling.
+  return NextResponse.json({ token });
+}
+
+export async function getConversationMembersResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const members = await listConversationMembersForUser({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!members) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ members });
+}
+
+export async function postConversationMembersResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let body: { inviteeUserIds?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const inviteeUserIds = Array.isArray(body.inviteeUserIds)
+    ? body.inviteeUserIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  if (inviteeUserIds.length === 0) {
+    return NextResponse.json({ error: "invalid_invitees" }, { status: 400 });
+  }
+
+  let conversation;
+  try {
+    conversation = await inviteMembersToConversationChannel({
+      conversationId,
+      userId: resolvedUser.userId,
+      inviteeUserIds,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "too_many_invitees") {
+      return NextResponse.json({ error: "too_many_invitees" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "already_members") {
+      return NextResponse.json({ error: "already_members" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
+    if (error instanceof Error && error.message === "target_user_not_found") {
+      return NextResponse.json({ error: "target_user_not_found" }, { status: 404 });
+    }
+    console.error("[conversations] invite_failed", error);
+    return NextResponse.json({ error: "conversation_channel_invite_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Same best-effort push used for a landed message/leave — lets any
+  // already-open room and conversation-list screen for the existing members
+  // pick up the new member (and the avatar/title switch that comes with
+  // going multi-member) without waiting on their own poll cycle.
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({ conversation });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
 export async function deleteConversationResponse(
   request: NextRequest,
   conversationId: string,
@@ -287,6 +491,55 @@ export async function deleteConversationResponse(
     : resolvedUser.identity;
   const response = NextResponse.json({
     deletedConversationId: conversation.id,
+  });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+export async function leaveConversationResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let conversation;
+  try {
+    conversation = await leaveConversationChannel({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+  } catch (error) {
+    console.error("[conversations] leave_failed", error);
+    return NextResponse.json({ error: "conversation_channel_leave_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Same best-effort push used for a landed message (see
+  // log-client-event-handler.ts) — lets any remaining member's already-open
+  // room and conversation-list screen pick up the departure and the new "X
+  // left" notice without waiting on their own poll cycle.
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({
+    leftConversationId: conversation.id,
   });
   applyTrackingCookies(request, response, trackingHints);
   return response;

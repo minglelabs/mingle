@@ -1,5 +1,273 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-23 Speaker-based message bubble color
+
+### `2026-08-23-speaker-based-message-bubble-color` | UI/UX issue found
+
+1. **Original and translated rows did not share a clear speaker identity color**
+   Problem: Expanded mode previously used white for the original row and amber for translation rows, which made language type compete with the more important distinction between the other participant's messages and the viewer's own messages.
+   Fix: Both original and translated bubbles now use white for other speakers and a light key-color background for the viewer's own messages. The existing border, radius, shadow, alignment, language flags, and text treatment remain unchanged.
+   Data change: None. This is a presentation-only change.
+   Verification: Focused ChatBubble tests, TypeScript, ESLint, and `git diff --check` passed. Physical-device verification remains pending.
+
+## 2026-08-23 Expanded message bubble layout regression
+
+### `2026-08-23-expanded-message-bubble-layout-regression` | UI/UX issue found
+
+1. **Opening a message bubble could separate its background from the text on iOS**
+   Problem: The expanded original/translation rows used an inline `div` to wrap block-level paragraph content. On the iOS WebView, the bubble border and background collapsed into a narrow strip while the text and controls were displaced to the side.
+   Fix: Expanded bubble surfaces now use a shared `inline-block` layout so the border, background, padding, and block text remain one shrink-to-fit bubble. The same class is used for interim rows to keep both states consistent.
+   Copy follow-up: The Korean mode option now uses the user-facing label `번역문 펼쳐보기`; the existing `하나의 말풍선으로 표시` label is retained for the combined mode.
+   Data change: None. This is a presentation-only fix.
+   Verification: Focused ChatBubble and Korean copy tests, TypeScript, ESLint, and `git diff --check` passed. Physical-device verification remains pending.
+
+## 2026-08-23 Conversation language defaults follow room selections
+
+### `2026-08-23-conversation-language-default-sync` | UI/UX issue found
+
+1. **Changing target languages inside a conversation did not update the user's default conversation languages**
+   Problem: The room language selector changed only the current conversation, while the same preference remained available from My Page as a separate user-level setting. A later conversation could therefore start with an older language list.
+   Fix: The selector's own language list now updates the local default immediately and, after the conversation PATCH succeeds, persists the same ordered list to the authenticated user's existing `default_conversation_languages` field through the profile API. Separate version guards keep rapid changes and unrelated language-setting responses from overwriting the newest choice; failed room/profile writes roll back the optimistic default when it is still current.
+   Data change: None. The existing user field, profile PATCH endpoint, and new-conversation payload already support the preference.
+   Verification: Focused conversation-list, conversation PATCH, and profile API tests passed; TypeScript validation, targeted ESLint, and `git diff --check` passed. The current worktree was clean-installed as iOS Release build 84 on the paired iPhone 14 through the Vault-backed Cloudflare devbox; manual interaction verification remains pending, and Android is still unavailable through ADB.
+
+## 2026-08-23 Message-bubble display mode
+
+### `2026-08-23-message-bubble-display-mode` | UI/UX issue found
+
+1. **The 2.0.0 conversation bubble combined the original utterance and translations, while some users need the 1.1.4-style separate rows**
+   Problem: A single combined bubble is compact, but it makes the original and each translation harder to compare and gives users no per-utterance copy action. Rapid taps near the language controls also benefit from a stable, explicit layout.
+   Fix: Added a persistent user-level bubble display preference with two modes: separate original/translation bubbles and the combined bubble. The preference is exposed below the translation-model selector in the conversation hamburger menu and defaults to separate bubbles. Each message now has a side control stack with copy above an animated chevron; the chevron points down when expanded and right when collapsed. Separate rows also expose their own copy buttons.
+   Data change: Added nullable `app_users.demo_bubble_display_mode` with an `expanded` default and account-preferences GET/PATCH support. Existing users and older clients fall back safely to the expanded mode.
+   Verification: Focused ChatBubble, account-preferences, and account-preferences route tests passed; targeted ESLint and local Prisma migration deployment passed. Physical-device interaction verification remains pending.
+
+## 2026-08-22 conversation creation banner and history stack
+
+### `2026-08-22-conversation-creation-banner-history` | UI/UX issue found
+
+1. **Starting a conversation showed an AdMob banner and could leave the creation screen underneath the new room**
+   Problem: The conversation-create choice modal inherited the conversations-list banner zone, and creating a group room or opening a direct room from a public profile pushed the room above the creation/profile route. Pressing back could therefore reveal an intermediate creation surface instead of the canonical conversations list.
+   Fix: The create-choice modal and invite-friends screen now hide the native banner. Group creation and profile-based direct conversation navigation first replace the current route with the conversations tab root, wait for it to settle, and then push exactly one conversation room entry. Standalone public-profile and native profile-link entry points use the same canonical stack helper.
+   Data change: None. This is a native banner visibility and navigation-history fix.
+   Verification: Focused banner-zone tests, web TypeScript validation, and targeted ESLint checks passed.
+
+## 2026-08-20 Android system back audit across all 2.0.0 surfaces
+
+### `2026-08-20-android-system-back-full-surface-audit` | UI/UX issue found
+
+1. **The Android back behavior is inconsistent across tab-root overlays and nested surfaces**
+   Scope: The active Android 2.0.0 native flow has six user-facing URL route files (`conversations`, `connect`, `mypage`, `mypage/follows`, `mypage/share`, and `users/[userId]`) and seven visible screen types when the conversation-room overlay is counted separately from the conversations list. The current implementation contains 20 active `role="dialog"` panel/dialog surfaces. Additional non-dialog transient surfaces are the conversation search overlay, the conversation-row action popover, the text-size dropdown, the translation-model dropdown, and the text composer mode.
+   Navigation boundary: The three top-level tabs intentionally carry `nativeTabRoot=1`, so Android WebView history reports no back target at a tab root. A local React state panel must therefore register a native back handler and separately advertise an Android back capability; browser `pushState` alone is not sufficient.
+   Confirmed working surfaces: My Page settings, its seven management pages, account-action confirmation dialogs, profile editing, and the My Page image preview use the Android capability signal and native back-handler stack added in `2b29af15`. The active conversation's room menu (root plus feedback, conversation management, participants, and display-language pages), language selector, text-size dropdown, translation-model dropdown, rename dialog, delete-conversation dialog, and normal room-to-list close path already have native handlers. Follow list and profile share return to the previous route when entered through their normal in-app history path; the native QR scanner closes first through the React Native shell.
+   Known failing or incomplete surfaces: Conversation-list search, notifications, conversation/notification profile overlays, row-action popovers, list rename/delete dialogs, and the mandatory language-onboarding modal do not advertise Android back capability at the tab root. The logged-out authentication gate and its privacy/terms and email sheets have the same gap. In a public profile route, report and image-preview modals have no native handler, so Android history can leave the entire profile instead of closing only the top modal. In the conversation room, the delete-account dialog and text composer are not in the room back handler; depending on history availability, Android can close the room or finish the activity instead of closing only that surface.
+   Expected root behavior: Pressing Android back on an unobstructed top-level Chats, Explore, or My Page tab exits the app because there is intentionally no prior in-tab screen at that navigation boundary. This is distinct from the failing behavior where a visible overlay is present.
+   Product direction: Preserve the tab-root boundary and iOS behavior. Extend the existing Android-only capability signal and native back-handler stack to the remaining local overlays, with one back press closing exactly the topmost visible surface before any route history or activity exit is considered.
+   Data change: None. This is an Android navigation and UI consistency audit.
+   Verification: Source-level route/state inventory and handler-path audit completed. The connected Android device is currently logged out after the release reinstall, so signed-in interaction checks for every listed surface remain pending.
+
+### `2026-08-20-android-system-back-installed-build-follow-up` | UI/UX issue found
+
+1. **The installed Android build still exited from surfaces previously classified as handled**
+   User report: The current installed build appeared to finish the app from My Page settings, profile editing, profile image preview, settings subpages and account dialogs, room menu/language/room-management controls, ordinary room-to-list back, follow list, and profile share. This invalidated the earlier source-only classification; all listed surfaces must be treated as failing until a signed-in physical-device pass confirms otherwise.
+   Remediation: Added a shared Android back capability poster that preserves the existing iOS history signal. ConversationList now advertises the active room and its local overlays, handles row-action/list dialogs, and keeps the topmost list surface in the native back stack. Public profiles, follow lists, and profile sharing now register their existing animated back actions directly. Public-profile report/image-preview states close before the profile. The room handler now closes account deletion and text-composer surfaces. Authentication sheets and language-onboarding steps also register local handlers. The My Page handler now uses the same shared poster.
+   Data change: None. This is an Android navigation and UI consistency fix.
+   Verification: Web and React Native TypeScript checks, focused RN contract/external-navigation tests, and the web navigation contract suite passed. No Android device is currently connected to this workstation, so the rebuilt APK still needs signed-in physical-device verification.
+
+## 2026-08-20 Android system back exits from tab-root panels
+
+### `2026-08-20-android-system-back-navigation` | UI/UX issue found
+
+1. **Android system back should match the visible in-page back action**
+   Problem: The React Native back listener dispatches the WebView back bridge only when `canWebViewGoBack` is true or a native menu overlay is open. The tab bar marks top-level tab URLs with `nativeTabRoot=1` and reports `canGoBack: false`, while My page settings and feedback panels are local React state and do not register a native back handler. Android therefore receives `false` and finishes the activity instead of closing the visible panel with its upper-left back button.
+   Fix: Kept the tab-root history boundary and existing iOS `canGoBack` state unchanged. Android now receives a separate panel-back capability signal, and My page panels register handlers that close the active panel first. Hardware back remains available to exit only at the top-level tab root.
+   Data change: None. This is an Android navigation and UI consistency issue.
+   Verification: TypeScript checks, focused native runtime contract tests, and an Android 2.0.0 release build/install passed. The connected device remains logged out of Mingle, so the panel interaction still needs a signed-in manual check.
+
+## 2026-08-20 Android Instagram feedback link fallback regression
+
+### `2026-08-20-android-instagram-feedback-external-navigation` | UI/UX issue found
+
+1. **The Instagram feedback action could replace the 2.0.0 WebView with the legacy web app on Android**
+   Problem: The feedback link opened inside the Android WebView. When Instagram was not installed, or when Instagram's logged-out web flow emitted an Android `intent://` navigation, the WebView load error activated the generic legacy-host fallback. Users then saw the old `mingle-app-xi.vercel.app` UI even though the installed native app was version 2.0.0.
+   Fix: Instagram web and Android intent URLs are now handed to native linking, and WebView fallback activation is limited to failures during the initial Mingle host load. External app/browser failures no longer replace the active Mingle WebView with the legacy host.
+   Data change: None. This is a native external-navigation and WebView recovery fix.
+   Verification: Reproduced on Android 2.0.0 build 82 without Instagram installed; the post-fix release build was installed on the same device, and the Instagram web/intent handling is covered by focused tests and TypeScript validation. The device remained logged out of Mingle after reinstall, so the complete feedback tap could not be repeated without signing in.
+
+## 2026-08-17 Shared English US/UK flag in language selectors
+
+### `2026-08-17-english-us-uk-language-flag` | UI/UX issue found
+
+1. **English was represented by a single US flag even though Soniox exposes English as one `en` language**
+   Problem: The four language selection surfaces used a single US emoji for English, while the product does not distinguish US and UK English in its language data. Unicode also has no combined US/UK flag emoji.
+   Fix: Added a shared `LanguageFlag` component that renders the existing US and UK flag emojis as a diagonal half-and-half mark only for English. All other language codes continue to use their existing emoji flags unchanged. The component is used by the conversation language selector, primary-language picker, default conversation-language picker, and app-language selector.
+   Data change: None. This is a presentation-only change.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-english-us-uk-conversation-display` | UI/UX issue found
+
+1. **The English flag reverted to the US-only emoji after leaving the language selector**
+   Problem: The conversation room's message language buttons, room header, default display-language menu, and preview rows still rendered the legacy string flag helper directly. English therefore appeared as only the US flag even though the selectors used the combined mark.
+   Fix: Conversation-room display paths now use the shared `LanguageFlag` component, including the current and legacy room implementations. English keeps the diagonal US/UK emoji treatment, while all other language flags remain unchanged.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-english-us-uk-all-language-surfaces` | UI/UX issue found
+
+1. **Some language indicators outside the conversation room still showed only the US flag for English**
+   Problem: Conversation-list rows, profile language stacks, usage breakdowns, and public profile image previews still rendered the old string flag helper or stored rendered flag strings. English therefore appeared inconsistently across the app.
+   Fix: Language indicators now keep language codes until render time and use the shared `LanguageFlag` component across those surfaces. Nationality-only flags remain unchanged because they represent a country, not the English language.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-notification-newest-first-order` | UI/UX issue found
+
+1. **The notification drawer could show older read notifications above newer ones**
+   Problem: The notifications API sorted by `readAt` before `createdAt`. Once notifications had been marked read at different times, an older read timestamp took precedence and made newer follow notifications appear lower in the first-tab notification drawer.
+   Fix: Notifications are now fetched in descending creation time. The existing unread/read sections remain in place, while each section preserves newest-first order.
+   Data change: None. This is an ordering-only API and presentation fix.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-notification-profile-hide-admob` | UI/UX issue found
+
+1. **The native AdMob banner remained visible behind a profile opened from a notification**
+   Problem: Tapping a notification actor opened the public profile as a stacked surface above the notification drawer, but the native banner zone still treated the underlying conversations list as active. The profile therefore inherited a banner that should not compete with the profile details.
+   Fix: Entering a notification profile posts the native `hidden` banner zone. Closing the profile through its header, edge/native back, or browser history restores the conversations-list `list` zone while keeping the notification drawer underneath.
+   Data change: None. This is a native banner visibility and overlay-state fix.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-conversation-target-language-selector-copy` | UI/UX issue found
+
+1. **The target-language selector header used a long sentence that could be clipped in narrower locales**
+   Problem: The Korean header asked “어떤 언어들로 번역해드릴까요?” and the corresponding localized sentences were long enough to be truncated in the compact top bar. The explanatory meaning also competed with the page title.
+   Fix: Replaced the top-bar title with the concise localized equivalent of “번역 언어 선택” / “Select Target Languages”. Added a smaller explanatory sentence at the top of the scrollable content explaining that multiple selected languages are translated simultaneously. All supported room-management locales now have the same description field.
+   Data change: None. This is a copy and layout-only change.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+### `2026-08-17-empty-conversation-start-guidance` | UI/UX issue found
+
+1. **The empty conversation screen showed supported flags but did not clearly connect language recognition to the Start action**
+   Problem: The empty room could say that any language was supported, but the carousel did not move automatically, the flags had no visible language names, and the screen did not guide the user toward the Start button.
+   Fix: The 60-language carousel now auto-scrolls slowly in a seamless loop, pauses during touch, pointer, wheel, or keyboard interaction, and resumes after a short delay. Each flag has a localized language name beneath it. The main instruction now tells the user to press Start before speaking, and the existing stretched gray SVG arrow design connects the carousel to the bottom voice control. The existing white visual treatment and absence of carousel position indicators are preserved.
+   Data change: None. This is a presentation-only change.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
+## 2026-08-16 Unified conversation message bubbles
+
+### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found
+
+1. **Original speech and translated outputs were rendered as separate stacked bubbles**
+   Problem: Each utterance used one bubble for the spoken text and separate amber bubbles for every output language. This made one message look like several unrelated messages and increased the vertical space needed to read a turn.
+   Fix: Each utterance now uses one white message bubble that displays one language at a time. The circular language buttons are appended directly before the displayed text without a separate row and are rendered at a compact 30px size with a small gap between buttons; selecting one switches the same bubble between the original text and the corresponding translation. The default display language comes from the signed-in user's profile primary language when that language is available, with the source language as the fallback. Only the original-language button carries a 12px white badge containing the provided black closing-quote image. The message copy button now copies only the currently displayed language, and its confirmation toast uses a black background with white text for contrast. Existing copy-all and selected-language pronunciation actions remain available.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
+## 2026-08-16 Conversation language selector ordering
+
+### `2026-08-16-conversation-language-featured-order` | UI/UX issue found
+
+1. **The in-room language selector showed the full catalog without the same featured-language grouping as My Page profile editing**
+   Problem: The My Page primary-language picker already surfaced seven featured languages first—English, Spanish, Korean, Japanese, Simplified Chinese, French, and Portuguese—while the conversation room selector showed one sorted list. This made the same language choice feel inconsistent and made common languages slower to reach.
+   Fix: The room selector now uses the shared featured-language order, renders a `Popular languages`/`주요 언어` section first, and renders the complete locale-sorted or alphabetical catalog below it. Search filters both sections while preserving the fixed featured order. The section labels are resolved by the same helper used by My Page so the two surfaces remain aligned.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
+## 2026-08-16 Profile QR Sharing and App Links
+
+### `2026-08-16-profile-qr-app-link-flow` | UI/UX issues found
+
+1. **Profile sharing still opened a placeholder route instead of a stable public profile link**
+   Problem: The profile share surface generated a locale-specific My Page URL and its QR action was only a placeholder. A shared code could not reliably identify the intended profile after a handle change, and the browser route could render the profile instead of guiding an uninstalled user to the app.
+   Fix: QR codes are generated on demand from the immutable profile user ID and an HTTPS `/p/{userId}` link. The QR image can be downloaded, the stable link can be copied or shared, and the browser route validates the ID without fetching or rendering profile content before offering the Mingle app links.
+
+2. **There was no native scanner path for QR profile links inside the WebView app**
+   Problem: A WebView-only camera scanner would make camera permissions and scan behavior inconsistent across iOS and Android. Invalid codes also had no product-level error boundary.
+   Fix: The React Native shell now requests camera permission, presents a framed Camera Kit scanner, accepts only Mingle HTTPS or `mingle://profile/` links, and sends valid results back to the WebView for public-profile navigation. Invalid, cancelled, and unavailable-camera states have explicit feedback and settings fallback.
+
+3. **Opening a shared HTTPS profile link did not have an app-link handoff**
+   Problem: The native shell only handled the existing authentication callback scheme, so a shared profile URL could not reach the correct profile when the app was already running or cold-started.
+   Fix: iOS Universal Links and Android App Links metadata were added, including the AASA and `assetlinks.json` endpoints. React Native handles both initial and subsequent URLs, queues the target until the WebView is ready, and then navigates to the localized public profile route. The first release intentionally uses link re-open or QR re-scan after installation instead of deferred deep-link persistence.
+
+   Status: Implemented in-thread on 2026-08-16. iOS simulator and Android debug builds passed; production Android App Links remain inactive until the Google Play app-signing SHA-256 fingerprint is configured.
+
+### `2026-08-16-profile-link-webview-routing` | UI/UX issue found
+
+1. **Opening a shared profile link launched Mingle but did not reliably open the target profile**
+   Problem: A profile link could reach the native shell while the WebView was still loading, or could be opened from a link inside the WebView without being routed through the profile handler. The resulting app launch left the user on the screen that was already open. The profile destination also omitted the active 2.0.0 API namespace and native WebView flags.
+   Fix: Profile targets are now queued until the WebView is ready, intercepted for both external app links and in-WebView profile links, and opened with a history-preserving navigation to the localized public profile route. The destination carries the platform API namespace and native runtime flags so the target page uses the same 2.0.0 session as the rest of the app. Back/edge-swipe navigation can therefore return to the page that was open before the shared profile.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
+### `2026-08-16-public-profile-layout-parity` | UI/UX issue found
+
+1. **Public profiles used a different layout from My Page**
+   Problem: Opening another user's profile showed a centered card with vertically stacked counts, while My Page used the compact avatar-and-stats layout with the name, handle, bio, and actions beneath it. The difference made the same profile information feel like two separate product surfaces.
+   Fix: The public profile now follows the My Page layout and spacing, keeps the profile image preview and language display behavior, removes the edit action for other users, and uses the same action row for follow and profile sharing. Block and report remain available as secondary actions. Profile sharing now accepts the selected public user ID so a shared profile's QR/link represents that user rather than the signed-in account.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
+### `2026-08-16-repeated-profile-link-open` | UI/UX issue found
+
+1. **Opening the same shared profile link a second time could bring Mingle to the foreground without changing the WebView profile**
+   Problem: The browser fallback always launched the identical `mingle://profile/{userId}` URL, while a warm native app depended on a single URL event and then navigated to a destination with the same route URL. Repeating the action could therefore be treated as a duplicate launch or appear to be a no-op when the same profile was already visible.
+   Fix: The browser launch control now uses a real anchor default navigation so Chrome preserves the user's click activation. Each click updates the anchor with a fresh nonce while keeping the canonical `mingle://` scheme; the earlier scheme-alternation workaround is no longer used for browser launches. The native shell persists the latest profile URL at the app delegate/activity boundary, retries pending-link consumption briefly after warm activation, accepts a repeated identical URL after the short duplicate-event window, and records masked `[MingleProfileLink]` trace events across browser, native callback, Linking, pending storage, and WebView routing. Native WebView profile destinations still add a fresh navigation nonce while keeping the immutable user ID as the actual profile target.
+   Status: Follow-up implementation started in-thread on 2026-08-16 after TestFlight 72 and 73 still reproduced the issue. Physical-device verification is intentionally left to the user on TestFlight 74.
+
+### `2026-08-16-app-store-profile-link-install-branding` | UI/UX issue found
+
+1. **The App Store install button used a generic outline apple instead of the recognizable Apple mark**
+   Problem: The button used the Lucide `Apple` outline icon, which did not match the Apple logo users expect when choosing the App Store.
+   Fix: The install page now renders a filled Apple mark directly in the button while keeping the existing store link and localized label unchanged.
+   Status: Implemented in-thread on 2026-08-16. Physical-device/browser verification is pending.
+
+## 2026-08-08 Native STT continuity across the My Page tab
+
+### `2026-08-08-native-stt-mypage-event-loss` | UI/UX issue found
+
+1. **Native STT appeared to stop when switching to My Page, although the native session was still running**
+   Problem: When a user started STT in a conversation, switched to My Page, and returned to the conversations tab, the list could still display the running state. However, speech captured while My Page was open was not reflected in the conversation. Opening the room again appeared to turn STT on, and recognition resumed only from that point. Leaving the room directly for the conversations list did not reproduce the same loss.
+   Root cause: The native STT session is owned by the React Native shell, but transcript event handling lived inside the room-only `useRealtimeSTT` hook. A top-level tab switch unmounted the conversation page and its native event listener without stopping the native microphone/WebSocket session. React Native continued injecting transcript events into the WebView, but no listener consumed them. The cached native status therefore remained `running` while partial and final transcript events were discarded.
+   Fix: Native STT message events now carry the originating conversation ID and a queue ID. The WebView keeps a bounded in-memory queue of events that arrive while the room listener is absent, and React Native also retains messages briefly while the WebView itself is loading. When the conversations tab returns, it mounts the live room as a non-visible STT consumer instead of reopening the room UI; that consumer drains only its own queued events after storage hydration and keeps updating the list preview. Opening the room later promotes the same consumer to the visible room without restarting native STT.
+   Regression coverage: Added unit coverage for message validation, conversation-scoped queue splitting, and delivered-event removal. Web lint and RN type-check pass. The Vault-backed devbox Release build was clean-installed on the connected iPhone, and the user confirmed that STT continues recognizing speech after switching through My Page and back to the conversations list without stopping or restarting when the room is opened.
+   Status: Resolved in-thread on 2026-08-08. The native queue/bridge fix is included in the installed app; the list-side live STT consumer fix is served by the connected devbox WebView.
+
+## 2026-08-08 Top-level tab navigation boundary while native STT is live
+
+### `2026-08-08-native-stt-tab-root-boundary` | UI/UX issue found
+
+1. **Switching from the conversation list to My Page and swiping back could reopen the live STT room instead of returning to the list**
+   Problem: While native STT was running, the user could leave the conversation list for My Page and then use the iOS back gesture. The stale WebView history pointed back to the active conversation room, so returning to the conversations tab could reopen that room and appear to stop/restart the running STT session. This made a top-level tab change behave like an in-tab room navigation.
+   Product decision: Conversations and My Page are top-level navigation roots. Switching tabs starts a fresh navigation boundary for the selected tab. The conversations tab always opens on the list after a tab switch; a room is entered only after the user explicitly taps a conversation. Native STT remains owned by the native shell and must continue without being stopped or restarted by the tab change.
+   Fix: Tab links now use `replace` and add a `nativeTabRoot=1` marker while preserving only the native runtime parameters. The native bridge reports no back/forward gesture target while that marker is active, and the iOS WebView gesture gate rejects the stale cross-tab stack. The conversation list consumes the explicit tab-root/skip-restore marker without restoring the live room. When the user explicitly taps a room, the current tab-root list entry is converted back into an ordinary in-tab entry before the room is pushed, so room → list → room forward navigation remains available. The native shell also starts directly at `/conversations` instead of first loading the locale redirect, and clears its persisted room-restore hint whenever the WebView reaches a non-room route.
+   Regression coverage: Added tab-root URL and native WebView gesture-gating tests, plus RN navigation-layout coverage. Physical-device verification is pending after rebuilding and reinstalling the devbox iOS app.
+   Status: Implemented in-thread on 2026-08-08; the latest Release build was installed on the connected iPhone, with the final physical interaction check pending.
+
+## 2026-08-08 Tab-root reset forward-navigation regression
+
+### `2026-08-08-tab-root-reset-forward-navigation` | UI/UX issue found
+
+1. **A normal room back gesture could return to the list but no longer allow a forward gesture**
+   Problem: After the tab-root reset was introduced, opening a room from the conversations tab and swiping back to the list left forward navigation disabled. The user expected the ordinary in-tab sequence `room → list → room` to remain reversible; only an explicit top-level tab switch should discard the older cross-tab stack.
+   Root cause: The initial implementation removed `nativeTabRoot=1` from the newly pushed room URL, but the preceding list history entry still carried the marker. When the room was popped, the native navigation bridge and iOS WebView gesture gate saw the marker on the list and treated the normal in-tab destination as a fresh tab root, hiding the forward target.
+   Fix: On an explicit room open (`syncHistory: "push"`), the current tab-root list entry is first converted to an ordinary list entry with `replaceState`; the room is then pushed on top of it. A later room back therefore returns to an unmarked list entry, preserving forward navigation. Tab buttons still use `router.replace` and create the marked root, so only an actual tab switch resets navigation.
+   Regression coverage: Focused web/RN tests pass, and the fix was committed as `caa7365c`. The connected iPhone was clean-installed with the Vault-backed devbox Release build; final manual confirmation of room → list → room and tab-switch behavior is pending.
+   Status: Fix implemented in-thread on 2026-08-08.
+
+## 2026-08-07 iOS room/list repeated back-forward regression follow-up
+
+### `2026-08-07-ios-room-list-history-stale-popstate` | UI/UX issues found
+
+1. **The first history fix could still leave a list screen in the forward stack after repeated edge swipes**
+   Problem: After opening a room, swiping back, and swiping forward, the room could appear briefly and then snap back to the conversation list after roughly three seconds. From that list, another back swipe moved to the same list again, and a forward swipe restored the list instead of the room. The same failure family can appear when repeatedly navigating through room subpages such as the hamburger drawer, conversation management, or feedback.
+   Root cause: The earlier mitigation separated the native-STT close guard from the popstate restore path, but still treated the delayed `popstate` event's route (or the transient URL) as authoritative. iOS can replay a stale list event from the previous back gesture after the WebView has already committed the forward room entry. The delayed event then closed the restored room, and the cleanup path could rewrite the current room history entry into another list entry. The native iOS restore-history seed also discarded the route metadata, leaving seeded entries without enough information to reject the stale event.
+   Fix: Every conversation-list history entry now carries an explicit list-or-room route marker while preserving the native navigation index and other WebView state. Popstate handling resolves the current committed history entry before falling back to the event state or URL, so a delayed older list event cannot close the current room. List URL cleanup removes the legacy plain `conversationId` field, preventing a list entry from being mistaken for a room. The native iOS restore-history seed preserves the same markers, and the QA reset path now creates a clean marked list entry.
+   Regression coverage: Unit, UI-contract, script, web production-build, and RN test suites pass. The physical iPhone edge-swipe scenario still needs manual confirmation because the connected iOS 26 WebDriverAgent cannot currently expose a usable WebView automation context.
+   Status: Fix implemented in-thread on 2026-08-07; pending physical-device confirmation.
+
+## 2026-08-07 iOS room/list repeated back-forward regression
+
+### `2026-08-07-ios-room-list-history-regression` | UI/UX issues found
+
+1. **Repeated iOS back/forward swipes could settle on the list while native history still pointed at a room**
+   Problem: After opening a room, swiping back, and swiping forward, the WebView could remain unresponsive during the native transition and then show the conversation list again. A later back swipe appeared to slide the list over the same list, and a subsequent forward swipe restored the list instead of the room. The same history family had previously affected the room hamburger menu and its feedback/conversation-management subpages.
+   Root cause: The conversation overlay close path marked every closed room with the native-STT restore suppression flag. When a legitimate forward `popstate` returned to that room, the route-sync and popstate-open paths treated it as an unwanted automatic restore and removed the `conversation` query with `replaceState`. That preserved the native stamped history index while changing the visible route to the list. The iOS native snapshot, delayed `popstate`, React overlay state, and URL then described different screens.
+   Fix: Track the latest room/list target produced by an actual `popstate` separately from the native-STT suppression flag. History-forward restoration now consumes the close guard and reopens the room without rewriting the room history entry. App-driven back closes also keep route-sync from rewriting the current room entry before `history.back()` commits.
+   Regression coverage: The iOS forward-swipe QA case now asserts the restored `activeConversationId`, not only the shared `/conversations` pathname.
+   Status: Initial mitigation implemented in-thread on 2026-08-07; superseded by the stale-popstate follow-up above.
+
 ## 2026-05-08 STT 실행 중 뒤로가기 → 대화방 재진입 루프
 
 ### `2026-05-08-stt-back-reentry-loop` | UI/UX issues found
@@ -1330,3 +1598,29 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-04-27-conversation-message-count-stat-cache-split` | The conversation-room message count stat briefly showed the latest localStorage cache length after room history persistence was reduced to a latest-100 warm cache. That made high-history rooms display `100 msgs` even when their total message history was larger, unlike STT usage which was already stored as an independent cumulative scalar. Message count is now persisted under its own per-conversation localStorage key, hydrated from the server's total visible message count, and only falls back to counting the utterance snapshot for legacy rooms without the new scalar.
 - `2026-04-27-native-stt-background-resume-room-loss` | Native STT sessions could return from background or a WebView remount through the conversation list before reopening the active room because the RN shell always seeded WebView from the locale home URL and relied on client effects to restore the room later. The native shell now persists the last conversation URL in platform storage, rebuilds the initial WebView source from the current runtime URL plus that `conversation` id, clears the restore hint when the user reaches the list, and removes stale room query hints when the conversation no longer exists. Conversation history hydration also renders the recent local batch first and defers full localStorage normalization so long rooms do not show an empty room while older history is parsed.
 - `2026-04-30-conversation-create-double-tap` | First-run users could double-tap the conversation start button before React rendered the disabled/loading state, creating two rooms and two conversation history entries. On iOS this could leave the first room behind the second one, then back navigation reopened the earlier room and surfaced a start failure alert instead of returning cleanly to the list. The create path now uses a synchronous ref lock shared by the visible button and QA room creation helper, so the second tap is ignored before any second POST or overlay history push can start.
+- `2026-08-07-ios-conversation-forward-gesture-diagnostics` | Repeated iOS back/forward edge swipes can return to the conversation-list shell after a conversation is expected to be restored, leaving the browser history position and the rendered overlay out of sync. A physical-device trace confirmed the sequence: the forward `popstate` moves to the room entry, but the route-sync subscriber runs before the popstate open handler has recorded its explicit target; because the close guard still contains that room id, the route-sync suppression branch calls `replaceState` with a list URL. The room history entry is therefore mutated into a second list entry, and the later open handler resolves no room from the now-overwritten current state. The fix now captures the history destination in the capture phase, lets route-sync own an explicit forward restore before applying native-STT suppression, and removes the fallback that could replace a room entry with a list URL. Physical-device verification is pending after the clean reinstall; the QA-only diagnostics remain in place and record WebView `pushState`, `replaceState`, `popstate`, route-resolution, suppression-guard, and overlay open/close events with URL, history length, native navigation index, route marker, and conversation id.
+- `2026-08-13-railway-native-tab-transition-latency` | On the Railway 2.0.0 runtime, switching from My Page to the conversations tab could appear slow or remain on the previous screen because the native tab route was waiting for the server-rendered conversation list. That render performed session lookup, identity lookup, conversation-channel lookup, latest-message summaries, and message counts, after which the client performed another identity-aware list refresh on native mount. The fix treats an explicit `nativeUi=1&nativeTabRoot=1` conversations route as a lightweight tab shell: it skips the blocking server-side conversation query, displays a recent per-identity `sessionStorage` list cache immediately when available, and performs one background refresh through `view=native-list`. The native API path reads channels directly by the authenticated session id or stable external tracking id, avoiding the extra resolve/create-user database round trip while keeping the existing fallback path for requests without a known identity. Initial conversation-room and history-forward routes retain server hydration and are not treated as tab-root navigations, so room restoration and back/forward behavior remain separate from the tab performance optimization.
+- `2026-08-13-profile-edit-panel` | The My Page `프로필 변경` control was only a visual placeholder after the messenger-tab draft was restored, so users could not change the name, introduction, or nationality shown on their profile. The control now opens the same right-to-left sliding surface used by the other in-app screens, supports a right-edge swipe to close, and saves the three editable fields through the authenticated `/api/profile` endpoint. Profile values are stored on `app_users`, loaded when My Page opens, and reused by the profile-share screen for the shared display name. Photo upload remains intentionally excluded because it was removed from the earlier PR#92 implementation and is not part of this feature scope.
+- `2026-08-13-mypage-profile-actions-inline` | The My Page `프로필 변경` and `프로필 공유` actions were stacked as two full-width rows, making the profile header unnecessarily tall for two short actions. They now sit side by side in equal-width, equal-height buttons with a compact gap, preserving the existing actions while keeping the profile controls visually grouped and easier to scan.
+- `2026-08-13-social-login-reactivation` | The 2.0.0 conversation list retained guest access, but its room authentication gate had been disabled and the Apple OAuth provider/button had been intentionally commented out, so the existing Apple/Google login surface could not be reached. The room authentication gate is restored, Apple OAuth credentials are resolved from the existing Vault-backed configuration, and the shared conversation entry now passes live Apple and Google configuration flags to the existing login surface. The list remains accessible before authentication; entering a conversation presents the established sign-in UI.
+- `2026-08-13-discover-tab-user-search` | The two-tab messenger shell had no dedicated place to find people before following them, so users had to rely on an unspecified future entry point. A centered Explore tab now opens a deliberately empty surface with the ID/name search field focused at the top. Search results are fetched only after the user types, show the matched display name and user ID, and leave follow actions out of this iteration. The tab is a replace-based native tab root and preserves the existing STT continuity rule when users return to the conversation list.
+- `2026-08-13-discover-user-follow` | Search results were visible but could not be acted on, so finding a friend did not lead to a relationship action. Each result now has a Follow/Following toggle backed by a unique user-to-user relation, with optimistic UI, rollback on failure, self-follow protection, and live follower/following counts on My Page. The follow action is deliberately limited to one-way following; mutual chat permissions and unfollow confirmation remain outside this iteration.
+- `2026-08-13-user-safety-controls` | Search results now open a right-to-left sliding public profile surface, where a user can follow, block, or report another account. Blocking immediately removes both follow directions and hides the blocked relationship from future search results; the block can be reversed from My Page > Menu and settings. Reports are stored independently from feedback as user-report threads with a reason, optional details, status, and team replies. My Page exposes the reporter's own report history and replies, while the admin report inbox supports filtering, replying, and status changes. The interaction keeps the existing app pattern: a left back arrow, horizontal swipe-to-dismiss, explicit confirmation for block/unblock, and a bottom-sheet form for report submission.
+- `2026-08-13-mypage-profile-edit-button-surface` | The inline `프로필 변경` action used a gray fill while the adjacent `프로필 공유` action used a white fill, making the two same-priority profile actions look visually inconsistent. The profile-edit action now uses the same white surface, border, size, and active-state treatment as profile sharing.
+- `2026-08-15-follow-notification-panel` | The first conversation tab had no lightweight way to notice new followers, and moving the conversation-search affordance toward the right edge left no room for a social notification entry point. The header now keeps search on the left and adds a bell button on the right with an unread-count badge. Tapping it opens a right-to-left panel above the tab content, so the notification surface does not become a new bottom tab or disrupt the conversation list. Follow notifications are grouped into unread and read sections; each horizontal row opens the actor's public profile when tapped, while a separate row action follows the actor directly without leaving the panel. The action stays disabled and reads `Following` once the relationship already exists. Notifications are persisted per user, individual rows are marked read when opened or followed, and the overlay supports the existing safe-area, Escape, native-back, and backdrop-dismiss patterns.
+- `2026-08-16-notification-banner-inset-and-auto-read` | The notification drawer could place its first rows underneath the native AdMob banner area, and users had to tap each notification before the unread badge cleared. The drawer now reuses the conversation list's measured native top-banner inset as scroll-content padding, and opening the drawer marks all of the viewer's unread follow notifications as read in one authenticated request while updating the visible rows and badge optimistically.
+- `2026-08-16-profile-image-and-language-preview` | Profile photos and the small nationality flag did not provide a clear way to inspect the full image, and the language identity was not consistently visible on the public profile. Both My Page and public profiles now make the avatar/flag and the language row tappable, open a shared full-screen image preview with the saved crop state, and show the flag plus canonical language code beneath the profile photo.
+- `2026-08-16-notification-profile-stack` | Tapping a follow notification closed the notification drawer before opening the actor's profile, so returning from the profile lost the notification context. The public profile now stacks above the still-open notification drawer when launched from a notification, and its header back action, edge swipe, and native back action remove only the profile layer so the notification list is immediately visible again.
+- `2026-08-16-profile-language-preview-label` | The profile surface showed a persistent flag-and-language-code row below the avatar, which added visual noise before the user opened the image preview, and the preview repeated a technical code such as `ko`. The persistent row is now removed while the avatar's flag affordance remains available, and the enlarged preview shows the flag with the localized full language name instead.
+- `2026-08-16-notification-profile-history-stack` | The notification profile overlay could preserve the drawer in React state but did not add its own browser/WebView history entry, allowing an iOS edge-back gesture to target an older screen instead of only dismissing the profile. Notification profile entry now pushes a dedicated same-URL history state while explicitly keeping the drawer open; header back, profile edge swipe, native back, and WebView popstate consume that profile layer and reveal the unchanged notification drawer underneath.
+- `2026-08-15-discover-search-tab-cache` | Explore search state was kept in the current browser history entry, which preserved the query when opening a result profile and returning but lost it when a bottom-tab route replacement remounted the Explore screen. The search query and resolved result rows now use a short-lived `sessionStorage` snapshot keyed by authenticated user and API namespace, with an in-memory fallback for restricted storage. Returning to Explore restores the cached rows immediately and still refreshes the matching query in the background; entering a new query records a pending snapshot, and clearing the field removes it. This keeps account-specific follow state isolated while preserving the existing profile-return history behavior.
+- `2026-08-17-profile-and-default-language-order` | Conversation language buttons could start with English even when the user's profile language was Japanese or Korean, and profile language selection supported only one language. New conversations now preserve the user's saved default-language order, with the profile's first primary language leading the initial three-language fallback. My Page separates profile primary languages from app UI language, allows one to five primary languages in selection order, and adds a dedicated default conversation-language settings surface. Both surfaces show selected flags above search, keep selection order stable, and persist their independent settings on the user profile.
+- `2026-08-20-notification-drawer-native-webview-entry` | The authenticated native WebView could open profile-edit and My Page menu surfaces while the conversation notification drawer remained visually absent. Server traces showed successful `GET /notifications` responses, so the failure was on the drawer entrance path rather than notification data loading. The final fix moved notifications out of the `ConversationList` state overlay into a dedicated `/notifications` route whose screen root is a fixed right-to-left motion surface, matching the working follow-list and profile-share route screens. The conversation list now fetches only the unread count for its badge, while the route owns notification loading, read state, swipe-back, and profile navigation. Status: Resolved in-thread.
+- `2026-08-21-public-profile-native-webview-entry` | Tapping a conversation avatar could successfully request the public profile while the profile overlay remained visually absent on the local native WebView. Server traces returned `200` for both the authenticated profile and counterpart profile endpoints, and device logs confirmed the tap and same-document navigation. The final fix now routes conversation-avatar and notification-row profile opens through the existing `/users/[userId]` page instead of conditionally mounting `PublicUserProfileScreen` inside `ConversationList`, so the profile uses the same fixed right-to-left route surface as profile sharing and follow-list entries. The `requestAnimationFrame` entrance guard remains as a defensive fallback for other native profile-link overlay callers. Status: Resolved in-thread.
+- `2026-08-21-native-social-surface-route-entry` | Notification and conversation-profile entry originally mixed browser history bookkeeping with parent-owned React state (`showNotifications`, `notificationProfileId`, and `conversationProfileId`). That made the visible result depend on a conditional overlay remaining mounted and differed from the already-working route-backed social screens. The bell now pushes a native-query-preserving `/notifications` route, avatar taps push `/users/[userId]`, browser/native back returns through actual history, and the route screens own their slide-in motion and banner-zone state. Status: Resolved in-thread.
+- `2026-08-20-first-install-discovery-source-onboarding` | The first-install onboarding collected the app language and private birth date, then immediately opened the authentication screen, leaving no way to understand how a new user found Mingle. The flow now adds a localized discovery-source step after the age check and before authentication, using compact selectable cards for friend/family referral, social media or online advertising, search, the App Store or Google Play, online community/school/workplace, and other. The selected value is kept in a dedicated localStorage pending key while the user is unauthenticated, survives the login transition, and is patched to the authenticated profile together with the existing pending language and birth-date values. The server validates a fixed source code list and stores it in the private `discovery_source` field without adding it to public profile responses. The existing first-install confirmation marker remains unchanged, so returning users are not unexpectedly shown a new survey.
+- `2026-08-20-discovery-source-order-and-categories` | The discovery survey originally grouped several acquisition channels together, which made the first option overly likely to be selected and left analytics too coarse. The visible choices are now split into ten concrete options: friend/family referral, HelloTalk, Threads, Instagram/TikTok/YouTube/X, online advertising, Google Search, ChatGPT or another AI, App Store/Google Play search, online community/school/workplace, and other. The first nine choices are shuffled each time the survey opens while `Other` stays last, reducing first-option bias without making the fallback choice harder to find. Legacy stored source codes remain accepted by the API for previously completed surveys.
+- `2026-08-20-discovery-source-random-order-label` | Because discovery choices are shuffled, a relative label such as `Other social media` could appear before HelloTalk or Threads and read as if it depended on the order below it. The grouped social-media choice now uses an order-independent label, `Instagram·TikTok·YouTube·X 등`, while keeping the same ten-choice count and randomized ordering.
+- `2026-08-20-private-birth-date-profile-edit` | Birth date was collected during onboarding and stored privately, but the profile edit surface did not let a user correct it later. Profile editing now includes the existing modern birth-date picker, displays the privacy explanation, and keeps Save disabled for an under-12 date. The authenticated profile endpoint returns the birth date only through the private `/profile` response, while public profile serialization remains unchanged. Discovery source remains absent from the edit draft and cannot be changed from the UI.
+- `2026-08-20-email-auth-keyboard-scroll` | The email login and signup sheets allowed the password keyboard to cover the submit button, while the login and password-confirmation panels had no independent scroll container. Each email-auth panel now scrolls within the sheet with safe-area padding and overscroll containment, so focusing a password field no longer requires dismissing the keyboard before the action button can be reached. The legacy auth surface receives the same behavior for parity.
+- `2026-08-20-profile-edit-primary-language-description` | The profile edit surface showed the primary-language picker without explaining that the selected order is also the order shown on the hamburger-menu language settings surface directly under the picker legend, keeping both editing paths consistent.

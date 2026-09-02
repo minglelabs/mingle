@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client/index";
 import type { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildDefaultHandle } from "@/lib/handles";
+import { captureMingleEvent } from "@/lib/posthog-server";
 
 const USER_COOKIE_KEY = "mingle_uid";
 const SESSION_COOKIE_KEY = "mingle_sid";
@@ -89,6 +91,73 @@ function appendUniqueHistory(history: string[], nextValue: string | null): strin
   return [...history, nextValue];
 }
 
+function readMetadataRecord(value: Prisma.InputJsonValue | undefined): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function readMetadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 128) : null;
+}
+
+function readMetadataNumber(metadata: Record<string, unknown>, key: string): number | null {
+  const value = metadata[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readMetadataBoolean(metadata: Record<string, unknown>, key: string): boolean | null {
+  const value = metadata[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function readMetadataArrayLength(metadata: Record<string, unknown>, key: string): number | null {
+  const value = metadata[key];
+  return Array.isArray(value) ? value.length : null;
+}
+
+function buildPostHogProperties(args: {
+  tracking: TrackingContext;
+  clientContext: ClientContext;
+  eventType: string;
+  messageId: string | null | undefined;
+  usageSec: number | null;
+  metadata: Prisma.InputJsonValue | undefined;
+}): Record<string, string | number | boolean | null | undefined> {
+  const metadata = readMetadataRecord(args.metadata);
+  const clientMetadata = readMetadataRecord(
+    metadata.clientMetadata as Prisma.InputJsonValue | undefined,
+  );
+  const finalizeReason = readMetadataString(clientMetadata, "reason");
+  const locale = args.clientContext.pageLanguage
+    ?? args.clientContext.language
+    ?? args.tracking.requestLocale;
+
+  return {
+    app_version: args.clientContext.appVersion,
+    api_namespace: args.clientContext.apiNamespace,
+    client_platform: args.clientContext.clientPlatform,
+    locale,
+    pathname: args.clientContext.pathname ?? args.tracking.requestPathname,
+    event_type: args.eventType,
+    usage_sec: args.usageSec,
+    source_language: readMetadataString(metadata, "sourceLanguage"),
+    translation_language_count: readMetadataArrayLength(metadata, "translationLanguages")
+      ?? readMetadataArrayLength(metadata, "translations"),
+    translation_provider: readMetadataString(metadata, "infrastructureProvider")
+      ?? readMetadataString(metadata, "provider"),
+    translation_model: readMetadataString(metadata, "model"),
+    stt_duration_ms: readMetadataNumber(metadata, "sttDurationMs"),
+    total_duration_ms: readMetadataNumber(metadata, "totalDurationMs"),
+    duration_anomaly: readMetadataBoolean(metadata, "durationAnomaly"),
+    speaker: readMetadataString(clientMetadata, "speaker"),
+    message_input_mode: args.eventType === "stt_turn_finalized"
+      ? finalizeReason === "manual_text_input" ? "keyboard" : "voice"
+      : undefined,
+    has_message: Boolean(args.messageId),
+  };
+}
+
 export function sanitizeNonNegativeInt(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     const floored = Math.floor(value);
@@ -167,11 +236,13 @@ export function ensureTrackingContext(
   const cookieUserId = sanitizeText(request.cookies.get(USER_COOKIE_KEY)?.value, 128);
   const cookieSessionKey = sanitizeText(request.cookies.get(SESSION_COOKIE_KEY)?.value, 128);
   const headerUserId = sanitizeText(request.headers.get("x-mingle-user-id"), 128);
+  const postHogDistinctId = sanitizeText(request.headers.get("x-posthog-distinct-id"), 128);
   const headerSessionKey = sanitizeText(request.headers.get("x-mingle-session-key"), 128);
 
   const externalUserId = (
     sanitizeText(args?.externalUserIdHint, 128)
     || headerUserId
+    || postHogDistinctId
     || cookieUserId
     || generateStableId("anon")
   );
@@ -235,6 +306,7 @@ export async function upsertTrackedUser(args: {
     where: { externalUserId: tracking.externalUserId },
     create: {
       externalUserId: tracking.externalUserId,
+      handle: buildDefaultHandle({ id: tracking.externalUserId }),
       latestIpAddress: tracking.ipAddress ?? undefined,
       latestUserAgent: latestUserAgent ?? undefined,
       language: language ?? undefined,
@@ -351,8 +423,30 @@ export async function createTrackedEventLog(args: {
       create: data,
       update: data,
     });
-    return;
+  } else {
+    await prisma.appEventLog.create({ data });
   }
 
-  await prisma.appEventLog.create({ data });
+  const postHogProperties = buildPostHogProperties({
+    tracking,
+    clientContext,
+    eventType: args.eventType,
+    messageId: args.messageId,
+    usageSec,
+    metadata: args.metadata,
+  });
+
+  captureMingleEvent({
+    distinctId: tracking.externalUserId,
+    event: `mingle_${args.eventType}`,
+    properties: postHogProperties,
+  });
+
+  if (args.eventType === "stt_turn_finalized" && args.messageId) {
+    captureMingleEvent({
+      distinctId: tracking.externalUserId,
+      event: "mingle_message_sent",
+      properties: postHogProperties,
+    });
+  }
 }

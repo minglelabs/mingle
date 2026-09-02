@@ -6,6 +6,7 @@ import {
   Image,
   Linking,
   NativeModules,
+  PermissionsAndroid,
   Platform,
   Pressable,
   StatusBar,
@@ -14,17 +15,22 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   addNativeSttListener,
   getNativeSttMicrophonePermissionStatus,
+  getNativeSttStatus,
   isNativeSttAvailable,
   setNativeSttAec,
   startNativeStt,
   stopNativeStt,
 } from './src/nativeStt';
+import {
+  isNativeSttServerReadyMessage,
+  resolveNativeSttStatusAfterStart,
+} from './src/nativeSttStatus';
 
 import {
   addNativeTtsListener,
@@ -76,12 +82,28 @@ import {
   shouldFallbackHttpStatus,
 } from './src/fallbackTargets';
 import {
+  extractAndroidIntentBrowserFallbackUrl,
+  shouldOpenNativeExternalUrl,
+} from './src/externalNavigation';
+import {
   buildConversationRestoreWebUrl,
   classifyConversationWebUrl,
   readNativeConversationRestorePayload,
   resolveConversationRestorePayloadFromUrl,
   type NativeConversationRestorePayload,
 } from './src/webViewRestore';
+import {
+  resolveNativeBannerNavigationState,
+  type NativeBannerZone as BannerZone,
+  type StableNativeBannerZone,
+} from './src/nativeBannerZone';
+import NativeQrScanner, {
+  type NativeQrScannerRequest,
+} from './src/nativeQrScanner';
+import {
+  buildNativeProfileLinkEventScript,
+  parseNativeProfileLink,
+} from './src/profileLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -112,6 +134,40 @@ type NativeConversationRestoreStorageModule = {
     createdAtMs: number,
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
+  getPendingProfileLink?: () => Promise<NativePendingProfileLink | null>;
+  clearPendingProfileLink?: (sequence: number) => Promise<unknown> | void;
+  recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
+};
+type NativePendingProfileLink = {
+  url?: unknown;
+  sequence?: unknown;
+};
+type NativeQrImageModule = {
+  savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
+};
+type NativePushRegistrationInfo = {
+  token?: unknown;
+  installationId?: unknown;
+  platform?: unknown;
+  environment?: unknown;
+  permission?: unknown;
+  appVersion?: unknown;
+  apiNamespace?: unknown;
+};
+type NativePushNotificationModule = {
+  registerForPushNotifications?: () => Promise<NativePushRegistrationInfo>;
+  getRegistrationInfo?: () => Promise<NativePushRegistrationInfo>;
+};
+type NativeLocationModule = {
+  checkLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
+  requestLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
+  getCurrentLocation?: () => Promise<{
+    latitude?: unknown;
+    longitude?: unknown;
+    accuracy?: unknown;
+    provider?: unknown;
+    receivedAtMs?: unknown;
+  }>;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -135,7 +191,6 @@ type NativeAdModule = {
   };
 };
 type NativeBannerPosition = 'top' | 'bottom';
-type BannerZone = 'list' | 'conversation' | 'hidden';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
   bannerUnitId?: string;
@@ -269,9 +324,10 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
     const normalized = hostname.toLowerCase();
     return normalized.endsWith('.ngrok-free.dev')
       || normalized.endsWith('.ngrok-free.app')
+      || normalized.endsWith('.trycloudflare.com')
       || normalized === 'mingle-app-devbox.photo-for-passport.com';
   } catch {
-    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+    return /(\.ngrok-free\.(dev|app)|\.trycloudflare\.com|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
   }
 }
 
@@ -342,6 +398,17 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
   return `${normalizedDescription} (현재 앱 URL이 ${currentWebUrl} 입니다. 실기기에서는 127.0.0.1/localhost에 접속할 수 없습니다. scripts/devbox profile --profile device 후 --device-app-env prod 또는 dev로 설치해 주세요.)`;
 }
 
+function openNativeExternalUrl(rawUrl: string): void {
+  void Linking.openURL(rawUrl).catch(() => {
+    const fallbackUrl = extractAndroidIntentBrowserFallbackUrl(rawUrl);
+    if (!fallbackUrl || fallbackUrl === rawUrl) return;
+
+    void Linking.openURL(fallbackUrl).catch(() => {
+      // Ignore external app/browser failures so the Mingle WebView remains intact.
+    });
+  });
+}
+
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
 const NATIVE_CONVERSATION_RESTORE_STORAGE = (NativeModules.NativeRuntimeConfigModule || {}) as NativeConversationRestoreStorageModule;
@@ -377,7 +444,7 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
-) || 'wss://mingle-1-1-4-production.up.railway.app/stt';
+) || 'wss://mingle-2-0-0-production.up.railway.app/stt';
 const FALLBACK_WEB_APP_BASE_URL = resolveDistinctFallbackTarget(
   WEB_APP_BASE_URL,
   normalizeHttpBaseUrl(RUNTIME_FALLBACK_WEB_APP_BASE_URL),
@@ -386,6 +453,25 @@ const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
   DEFAULT_WS_URL,
   normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
 );
+const PROFILE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+
+function getProfileLinkUserIdHint(userId: string): string {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return '';
+  return normalizedUserId.length <= 6 ? normalizedUserId : `…${normalizedUserId.slice(-6)}`;
+}
+
+function recordProfileLinkTrace(event: string, details: Record<string, unknown> = {}): void {
+  try {
+    console.info('[MingleProfileLink]', JSON.stringify({
+      event,
+      at: Date.now(),
+      ...details,
+    }));
+  } catch {
+    // Diagnostic logging must never affect navigation.
+  }
+}
 
 function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -424,9 +510,18 @@ const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
+const NATIVE_STT_MESSAGE_QUEUE_KEY = '__MINGLE_NATIVE_STT_MESSAGE_QUEUE';
+const NATIVE_STT_MESSAGE_QUEUE_LIMIT = 200;
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
+const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
+const NATIVE_LOCATION_EVENT = 'mingle:native-location';
+const NATIVE_LOCATION_QUEUE_LIMIT = 8;
+const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
+const NATIVE_PUSH_TOKEN_EVENT = 'mingle:native-push-token';
+const NATIVE_PUSH_REGISTRATION_QUEUE_LIMIT = 4;
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
@@ -437,6 +532,7 @@ const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
 const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
+const CONVERSATION_HISTORY_ROUTE_STATE_KEY = '__MINGLE_CONVERSATION_HISTORY_ROUTE__';
 // Marks that a restored iOS room has received a synthetic list history entry.
 const IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG = '__MINGLE_IOS_ROOM_HISTORY_SEEDED__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -476,6 +572,16 @@ const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
   bottomEdgeMode: 'transparent',
 };
 
+const PROFILE_SHARE_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  topColor: '#1295e8',
+  topOverlayColor: 'transparent',
+  bottomColor: '#7338f2',
+  webViewColor: '#3569ed',
+  statusBarStyle: 'light-content',
+  topEdgeMode: 'transparent',
+  bottomEdgeMode: 'transparent',
+};
+
 type VersionPolicyLocale =
   | 'ko'
   | 'en'
@@ -511,31 +617,16 @@ const VERSION_POLICY_SUPPORTED_LOCALES = new Set<VersionPolicyLocale>([
   'vi',
 ]);
 
-function resolveBannerZoneForUrl(rawUrl: string): Exclude<BannerZone, 'hidden'> | null {
-  if (!rawUrl) return null;
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    return null;
-  }
-
-  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-  if (pathSegments.length < 2) return null;
-  if (pathSegments[1] !== 'conversations') return null;
-
-  return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
-}
 const IOS_VERSION_POLICY_TIMEOUT_MS = 8000;
 
 type NativeSttStartPayload = {
+  conversationId?: string;
+  sessionId?: string;
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
   apiNamespace?: string;
   behaviorProfile?: string;
-  sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: string;
   sonioxEndpointMaxDelayMs?: number;
@@ -543,8 +634,15 @@ type NativeSttStartPayload = {
 };
 
 type NativeSttStopPayload = {
+  conversationId?: string;
+  sessionId?: string;
   pendingText?: string;
   pendingLanguage?: string;
+  force?: boolean;
+};
+
+type NativeSttStatusRequestPayload = {
+  conversationId?: string;
 };
 
 type NativeSttCommand =
@@ -555,6 +653,10 @@ type NativeSttCommand =
   | {
       type: 'native_stt_stop';
       payload?: NativeSttStopPayload;
+    }
+  | {
+      type: 'native_stt_status_request';
+      payload?: NativeSttStatusRequestPayload;
     };
 
 type NativeTtsCommand =
@@ -586,6 +688,13 @@ type NativeOpenAppSettingsCommand = {
   };
 };
 
+type NativeLocationCommand = {
+  type: 'native_location_check' | 'native_location_request';
+  payload?: {
+    requestId?: string;
+  };
+};
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -613,8 +722,39 @@ type NativeNavigationStateCommand = {
   payload?: {
     canGoBack?: boolean;
     canGoForward?: boolean;
+    canHandleNativeBack?: boolean;
+    canHandleAndroidBack?: boolean;
     url?: string;
+    // Full-screen overlays (e.g. the profile screen) that render on top of a
+    // conversation room without changing the URL need to temporarily disable
+    // iOS's screen-edge swipe-back gesture themselves — otherwise a tap near
+    // the left edge (where another member's chat-bubble avatar sits) can be
+    // captured by WKWebView's own edge-pan recognizer instead, popping the
+    // room's back-forward list and silently dismissing the overlay.
+    suppressEdgeSwipe?: boolean;
   };
+};
+
+type NativeQrScannerOpenCommand = {
+  type: 'native_qr_scanner_open';
+  payload?: NativeQrScannerRequest;
+};
+
+type NativeQrSaveCommand = {
+  type: 'native_qr_save';
+  payload?: {
+    dataUrl?: string;
+    fileName?: string;
+  };
+};
+
+type NativePushRegisterCommand = {
+  type: 'native_push_register';
+};
+
+type NativeHistoryDebugCommand = {
+  type: 'native_history_debug';
+  payload?: Record<string, unknown>;
 };
 
 type NativeOpenUpdateStoreCommand = {
@@ -671,10 +811,15 @@ type WebViewCommand =
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeOpenAppSettingsCommand
+  | NativeLocationCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
+  | NativeQrScannerOpenCommand
+  | NativeQrSaveCommand
+  | NativePushRegisterCommand
   | NativeNavigationStateCommand
+  | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
@@ -684,12 +829,146 @@ type WebViewCommand =
   | NativeQaSetSttStatusCommand;
 
 type NativeSttEvent =
-  | { type: 'status'; status: string }
-  | { type: 'message'; raw: string }
-  | { type: 'error'; message: string; code?: string; platform?: string }
+  | {
+      type: 'status';
+      status: string;
+      conversationId?: string;
+      sessionId?: string;
+      replay?: boolean;
+      running?: boolean;
+      serverReady?: boolean;
+      stopping?: boolean;
+      eventSequence?: number;
+    }
+  | { type: 'message'; raw: string; conversationId?: string; sessionId?: string; queueId?: string }
+  | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string }
   | { type: 'permission'; permission: string; platform?: string }
   | { type: 'capabilities'; openAppSettings: boolean }
-  | { type: 'close'; reason: string };
+  | { type: 'close'; reason: string; conversationId?: string; sessionId?: string };
+
+type NativeSttSnapshot = {
+  status: string;
+  conversationId?: string;
+  sessionId?: string;
+  running?: boolean;
+  serverReady?: boolean;
+  stopping?: boolean;
+  eventSequence?: number;
+};
+
+function isTerminalNativeSttStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return normalized === 'idle' || normalized === 'stopped' || normalized === 'closed';
+}
+
+function isLiveNativeSttStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return normalized === 'starting'
+    || normalized === 'connecting'
+    || normalized === 'running'
+    || normalized === 'ready'
+    || normalized === 'silenced'
+    || normalized === 'recovering';
+}
+
+function resolveNativeSttStatusFromSnapshot(snapshot: NativeSttSnapshot): string {
+  const rawStatus = typeof snapshot.status === 'string'
+    ? snapshot.status.trim().toLowerCase()
+    : '';
+  if (snapshot.stopping === true || rawStatus === 'stopping') {
+    return 'stopping';
+  }
+  if (isTerminalNativeSttStatus(rawStatus)) {
+    return rawStatus;
+  }
+  if (rawStatus === 'error' || rawStatus === 'failed') {
+    return rawStatus;
+  }
+  if (snapshot.running === false) {
+    return 'idle';
+  }
+  if (snapshot.serverReady === true || rawStatus === 'ready') {
+    return 'ready';
+  }
+  return 'connecting';
+}
+
+function hasOlderNativeSttStatusSequence(
+  nextSequence?: number,
+  currentSequence?: number,
+): boolean {
+  if (typeof nextSequence !== 'number' || !Number.isFinite(nextSequence)) return false;
+  if (typeof currentSequence !== 'number' || !Number.isFinite(currentSequence)) return false;
+  return nextSequence < currentSequence;
+}
+
+function rememberRetiredNativeSttSession(sessionIds: Set<string>, sessionId?: string): void {
+  const normalized = sessionId?.trim() || '';
+  if (!normalized) return;
+  if (sessionIds.size >= 32 && !sessionIds.has(normalized)) {
+    const oldest = sessionIds.values().next().value;
+    if (typeof oldest === 'string') sessionIds.delete(oldest);
+  }
+  sessionIds.add(normalized);
+}
+
+function isStaleNativeSttSessionEvent(input: {
+  eventConversationId?: string;
+  eventSessionId?: string;
+  activeConversationId?: string | null;
+  activeSessionId?: string | null;
+  requestedConversationId?: string | null;
+  requestedSessionId?: string | null;
+  retiredSessionIds: ReadonlySet<string>;
+}): boolean {
+  const eventConversationId = input.eventConversationId?.trim() || '';
+  const eventSessionId = input.eventSessionId?.trim() || '';
+  const activeConversationId = input.activeConversationId?.trim() || '';
+  const activeSessionId = input.activeSessionId?.trim() || '';
+  const requestedConversationId = input.requestedConversationId?.trim() || '';
+  const requestedSessionId = input.requestedSessionId?.trim() || '';
+
+  if (eventSessionId) {
+    if (input.retiredSessionIds.has(eventSessionId)) return true;
+    if (requestedSessionId && eventSessionId !== requestedSessionId) return true;
+    if (activeSessionId && eventSessionId !== activeSessionId && eventSessionId !== requestedSessionId) {
+      return true;
+    }
+    return false;
+  }
+
+  // Older native shells do not attach a generation ID. Conversation scoping
+  // still prevents a delayed event from the previous room from taking over a
+  // newly requested room where both identities are known.
+  if (!eventConversationId) return false;
+  if (requestedConversationId) return eventConversationId !== requestedConversationId;
+  return Boolean(activeConversationId && eventConversationId !== activeConversationId);
+}
+
+type NativeLocationPermission = 'granted' | 'denied' | 'blocked' | 'not_determined' | 'unavailable' | 'unknown';
+type NativeLocationEvent =
+  | { type: 'permission'; permission: NativeLocationPermission; requestId?: string; platform?: string }
+  | {
+      type: 'location';
+      latitude: number;
+      longitude: number;
+      accuracy?: number | null;
+      provider?: string;
+      receivedAtMs?: number;
+      requestId?: string;
+    }
+  | { type: 'error'; code: string; requestId?: string };
+
+function normalizeNativeLocationPermission(value: unknown): NativeLocationPermission {
+  return value === 'granted'
+    || value === 'denied'
+    || value === 'blocked'
+    || value === 'not_determined'
+    || value === 'unavailable'
+    || value === 'unknown'
+    ? value
+    : 'unknown';
+}
 
 type NativeUiEvent = {
   type: 'scroll_to_top';
@@ -718,6 +997,14 @@ type NativeAuthEvent =
       provider: NativeAuthProvider;
       message: string;
     };
+
+type NativeQrScannerEvent =
+  | { type: 'result'; value: string }
+  | { type: 'cancel' }
+  | { type: 'error'; message: string };
+type NativeQrSaveEvent =
+  | { type: 'success' }
+  | { type: 'error'; message: string };
 type RecommendUpdatePrompt = {
   title: string;
   message: string;
@@ -845,6 +1132,10 @@ function isAuthLikePathname(pathname: string): boolean {
   return false;
 }
 
+export function shouldHideNativeBannersForPathname(pathname: string): boolean {
+  return isAuthLikePathname(pathname);
+}
+
 function isAllowedNativeAuthStartPath(pathname: string): boolean {
   const normalized = pathname.trim();
   if (!normalized.startsWith('/')) return false;
@@ -875,7 +1166,24 @@ function isConversationsLikePathname(pathname: string): boolean {
   const locale = segments[0]?.toLowerCase() || '';
   if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
 
-  return segments[1] === 'conversations';
+  return segments[1] === 'conversations' || segments[1] === 'mypage';
+}
+
+function isProfileSharePathname(pathname: string): boolean {
+  const normalized = pathname.trim();
+  if (!normalized.startsWith('/')) return false;
+
+  const segments = normalized
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length !== 3) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'mypage' && segments[2] === 'share';
 }
 
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
@@ -886,6 +1194,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     const parsed = new URL(candidate);
     if (isAuthLikePathname(parsed.pathname)) {
       return AUTH_LOGIN_SAFE_AREA_PALETTE;
+    }
+    if (isProfileSharePathname(parsed.pathname)) {
+      return PROFILE_SHARE_SAFE_AREA_PALETTE;
     }
     if (isConversationsLikePathname(parsed.pathname)) {
       return CONVERSATIONS_SAFE_AREA_PALETTE;
@@ -1087,6 +1398,28 @@ function AppInner(): React.JSX.Element {
   const recommendPromptShownRef = useRef(false);
   const pendingRecommendPromptRef = useRef<RecommendUpdatePrompt | null>(null);
   const nativeStatusRef = useRef('idle');
+  const nativeSttConversationIdRef = useRef<string | null>(null);
+  // The requested room is the WebView's intent; the active values are only
+  // assigned from a native acknowledgement/event. Keeping them separate
+  // prevents a new room from inheriting an old singleton session identity.
+  const nativeSttRequestedConversationIdRef = useRef<string | null>(null);
+  const nativeSttSessionIdRef = useRef<string | null>(null);
+  const nativeSttRequestedSessionIdRef = useRef<string | null>(null);
+  const nativeSttSnapshotRef = useRef<NativeSttSnapshot>({ status: 'idle' });
+  const retiredNativeSttSessionIdsRef = useRef<Set<string>>(new Set());
+  const nativeSttCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const nativeSttStatusSyncSequenceRef = useRef(0);
+  const nativeSttMessageSequenceRef = useRef(0);
+  const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
+  const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
+  const pendingNativeLocationEventsRef = useRef<NativeLocationEvent[]>([]);
+  const pendingNativePushRegistrationsRef = useRef<NativePushRegistrationInfo[]>([]);
+  const pendingProfileLinkUserIdRef = useRef<string | null>(null);
+  const lastHandledProfileLinkRef = useRef('');
+  const lastHandledProfileLinkAtRef = useRef(0);
+  const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const profileLinkNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1180,7 +1513,10 @@ function AppInner(): React.JSX.Element {
     const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    // Start directly at the conversation-list route. Loading the locale root
+    // first creates a redirect history entry, which would let a tab-root
+    // screen swipe back into an older room after a tab switch.
+    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/conversations?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
     return appendNativeRuntimeWebViewParams(rawWebUrl, {
       nativeListTopInsetPx: nativeInitialBannerInsetPx,
       nativeConversationBannerPosition: defaultNativeBannerPosition,
@@ -1235,7 +1571,7 @@ function AppInner(): React.JSX.Element {
       }
       return payload;
     }
-    if (webUrlKind === 'list') {
+    if (webUrlKind === 'list' || webUrlKind === null) {
       clearConversationRestoreUrl();
     }
     return null;
@@ -1246,6 +1582,175 @@ function AppInner(): React.JSX.Element {
     lastWebViewUrlRef.current = normalizedUrl;
     syncConversationRestoreFromUrl(normalizedUrl);
   }, [syncConversationRestoreFromUrl]);
+  const clearPendingProfileRouteRetries = useCallback(() => {
+    pendingProfileRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingProfileRouteRetryTimersRef.current = [];
+  }, []);
+  const dispatchProfileLinkToWebView = useCallback((userId: string, allowWhenPageNotReady = false) => {
+    const normalizedUserId = userId.trim();
+    const webView = webViewRef.current;
+    if (
+      !normalizedUserId
+      || !webView
+      || (!isPageReadyRef.current && !allowWhenPageNotReady)
+    ) {
+      return false;
+    }
+
+    profileLinkNavigationSequenceRef.current += 1;
+    const linkNonce = String(Date.now()) + '-' + String(profileLinkNavigationSequenceRef.current);
+    const eventScript = buildNativeProfileLinkEventScript({
+      userId: normalizedUserId,
+      linkNonce,
+      navigationSequence: profileLinkNavigationSequenceRef.current,
+    });
+
+    recordProfileLinkTrace('native_profile_overlay_event_dispatched', {
+      userIdHint: getProfileLinkUserIdHint(normalizedUserId),
+      navigationSequence: profileLinkNavigationSequenceRef.current,
+      linkNonce,
+      pageReady: isPageReadyRef.current,
+      forced: allowWhenPageNotReady && !isPageReadyRef.current,
+    });
+    webView.injectJavaScript(eventScript);
+    return true;
+  }, []);
+  const schedulePendingProfileRouteFlush = useCallback((allowWhenPageNotReady = false) => {
+    clearPendingProfileRouteRetries();
+    [0, 150, 500, 1_200, 3_000].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        const pendingUserId = pendingProfileLinkUserIdRef.current;
+        if (!pendingUserId) return;
+
+        // A warm-started WKWebView can leave the ref false without emitting a
+        // matching loadEnd event. Retry against the existing WebView as well as
+        // waiting for the normal loadEnd flush path.
+        if (dispatchProfileLinkToWebView(pendingUserId, allowWhenPageNotReady)) {
+          pendingProfileLinkUserIdRef.current = null;
+          clearPendingProfileRouteRetries();
+        }
+      }, delayMs);
+      pendingProfileRouteRetryTimersRef.current.push(timer);
+    });
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
+  const navigateWebViewToProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    if (dispatchProfileLinkToWebView(normalizedUserId)) {
+      pendingProfileLinkUserIdRef.current = null;
+      clearPendingProfileRouteRetries();
+      return;
+    }
+
+    pendingProfileLinkUserIdRef.current = normalizedUserId;
+    recordProfileLinkTrace('native_profile_route_pending', {
+      userIdHint: getProfileLinkUserIdHint(normalizedUserId),
+      pageReady: isPageReadyRef.current,
+      hasWebView: Boolean(webViewRef.current),
+    });
+    schedulePendingProfileRouteFlush();
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView, schedulePendingProfileRouteFlush]);
+  const handleIncomingProfileLink = useCallback((rawUrl: string) => {
+    const candidateOrigins = [
+      activeWebAppBaseUrl,
+      WEB_APP_BASE_URL,
+      FALLBACK_WEB_APP_BASE_URL,
+    ].filter(Boolean);
+    const parsed = candidateOrigins
+      .map((origin) => parseNativeProfileLink(rawUrl, origin))
+      .find((value) => value !== null);
+    if (!parsed) {
+      recordProfileLinkTrace('native_profile_link_rejected');
+      return false;
+    }
+
+    recordProfileLinkTrace('native_profile_link_received', {
+      source: parsed.source,
+      userIdHint: getProfileLinkUserIdHint(parsed.userId),
+    });
+    navigateWebViewToProfile(parsed.userId);
+    return true;
+  }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
+  const handleIncomingProfileLinkOnce = useCallback((rawUrl: string) => {
+    const normalizedUrl = rawUrl.trim();
+    if (!normalizedUrl) return false;
+    const now = Date.now();
+    if (
+      lastHandledProfileLinkRef.current === normalizedUrl
+      && now - lastHandledProfileLinkAtRef.current < PROFILE_LINK_DUPLICATE_WINDOW_MS
+      && !pendingProfileLinkUserIdRef.current
+    ) {
+      recordProfileLinkTrace('native_profile_link_duplicate_ignored');
+      return true;
+    }
+
+    const handled = handleIncomingProfileLink(normalizedUrl);
+    if (handled) {
+      lastHandledProfileLinkRef.current = normalizedUrl;
+      lastHandledProfileLinkAtRef.current = now;
+    }
+    return handled;
+  }, [handleIncomingProfileLink]);
+  const consumePendingProfileLink = useCallback(async () => {
+    const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
+    if (!getPendingProfileLink) return;
+
+    try {
+      const pending = await getPendingProfileLink();
+      if (!pending || typeof pending !== 'object' || typeof pending.url !== 'string') return;
+
+      recordProfileLinkTrace('native_pending_profile_link_found', {
+        sequence: typeof pending.sequence === 'number' ? pending.sequence : 0,
+      });
+      const handled = handleIncomingProfileLinkOnce(pending.url);
+      if (!handled) return;
+
+      const sequence = typeof pending.sequence === 'number' && Number.isFinite(pending.sequence)
+        ? pending.sequence
+        : 0;
+      await NATIVE_CONVERSATION_RESTORE_STORAGE.clearPendingProfileLink?.(sequence);
+      recordProfileLinkTrace('native_pending_profile_link_consumed', { sequence });
+    } catch {
+      // The regular React Native Linking event remains the primary path.
+      recordProfileLinkTrace('native_pending_profile_link_error');
+    }
+  }, [handleIncomingProfileLinkOnce]);
+  const schedulePendingProfileLinkConsumption = useCallback(() => {
+    pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingProfileLinkRetryTimersRef.current = [];
+
+    void consumePendingProfileLink();
+    [150, 500, 1_200].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        void consumePendingProfileLink();
+      }, delayMs);
+      pendingProfileLinkRetryTimersRef.current.push(timer);
+    });
+  }, [consumePendingProfileLink]);
+  const handleShouldStartLoadWithRequest = useCallback((request: WebViewNavigation) => {
+    const rawUrl = typeof request.url === 'string' ? request.url.trim() : '';
+    if (rawUrl && handleIncomingProfileLinkOnce(rawUrl)) {
+      recordProfileLinkTrace('webview_profile_link_intercepted');
+      return false;
+    }
+    if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
+      openNativeExternalUrl(rawUrl);
+      return false;
+    }
+    return true;
+  }, [handleIncomingProfileLinkOnce]);
+  const flushPendingProfileLinkToWeb = useCallback(() => {
+    const pendingUserId = pendingProfileLinkUserIdRef.current;
+    if (!pendingUserId || !isPageReadyRef.current) return;
+    recordProfileLinkTrace('native_pending_profile_route_flushed', {
+      userIdHint: getProfileLinkUserIdHint(pendingUserId),
+    });
+    if (dispatchProfileLinkToWebView(pendingUserId)) {
+      pendingProfileLinkUserIdRef.current = null;
+      clearPendingProfileRouteRetries();
+    }
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
   useEffect(() => {
     setDebugRemountWebUrl('');
   }, [baseWebUrl]);
@@ -1261,6 +1766,47 @@ function AppInner(): React.JSX.Element {
       }
     }
   }, []);
+  useEffect(() => {
+    let mounted = true;
+    const handleUrl = (rawUrl: string | null | undefined) => {
+      if (!mounted || typeof rawUrl !== 'string') return;
+      recordProfileLinkTrace('react_native_linking_event');
+      handleIncomingProfileLinkOnce(rawUrl);
+    };
+
+    void Linking.getInitialURL().then(handleUrl).catch(() => {
+      // Ignore malformed or unavailable initial URLs.
+    });
+    schedulePendingProfileLinkConsumption();
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleUrl(url);
+      schedulePendingProfileLinkConsumption();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+      pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingProfileLinkRetryTimersRef.current = [];
+      clearPendingProfileRouteRetries();
+    };
+  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (becameActive) {
+        recordProfileLinkTrace('app_state_active_for_profile_link');
+        schedulePendingProfileLinkConsumption();
+        schedulePendingProfileRouteFlush(true);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],
@@ -1399,10 +1945,10 @@ function AppInner(): React.JSX.Element {
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
   const nativeTranscriptInsetPx = nativeInitialBannerInsetPx;
-  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
-  const activeBannerZoneRef = useRef<BannerZone>('list');
-  const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
-  const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
+  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('hidden');
+  const activeBannerZoneRef = useRef<BannerZone>('hidden');
+  const stableBannerZoneRef = useRef<StableNativeBannerZone>('list');
+  const pendingNavigationBannerZoneRef = useRef<BannerZone | null>(null);
   const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
@@ -1415,8 +1961,15 @@ function AppInner(): React.JSX.Element {
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
+  const [canWebViewHandleAndroidBack, setCanWebViewHandleAndroidBack] = useState(false);
+  const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldHideNativeBanners = useMemo(
+    () => shouldHideNativeBannersForPathname(currentWebPathname),
+    [currentWebPathname],
+  );
   const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
     isIosPlatform: Platform.OS === 'ios',
     pathname: currentWebPathname,
@@ -1514,10 +2067,14 @@ function AppInner(): React.JSX.Element {
     if (Platform.OS !== 'android') return;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (qrScannerRequest) {
+        setQrScannerRequest(null);
+        return true;
+      }
       if (versionGate.status === 'force_update') {
         return false;
       }
-      if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
+      if (!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen) {
         return false;
       }
       webViewRef.current?.injectJavaScript(`
@@ -1544,7 +2101,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, isNativeMenuOverlayOpen, versionGate.status]);
+  }, [canWebViewGoBack, canWebViewHandleAndroidBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1744,24 +2301,569 @@ function AppInner(): React.JSX.Element {
     void Linking.openURL(updateUrl);
   }, [versionGate]);
 
-  const emitToWeb = useCallback((payload: NativeSttEvent) => {
-    if (!isPageReadyRef.current) return;
+  const emitQrScannerToWeb = useCallback((payload: NativeQrScannerEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativeQrScannerEventsRef.current.push(payload);
+      if (pendingNativeQrScannerEventsRef.current.length > NATIVE_QR_SCANNER_QUEUE_LIMIT) {
+        pendingNativeQrScannerEventsRef.current.splice(
+          0,
+          pendingNativeQrScannerEventsRef.current.length - NATIVE_QR_SCANNER_QUEUE_LIMIT,
+        );
+      }
+      return;
+    }
+
     const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_QR_SCANNER_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingQrScannerEventsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingEvents = pendingNativeQrScannerEventsRef.current.splice(0);
+    pendingEvents.forEach((event) => emitQrScannerToWeb(event));
+  }, [emitQrScannerToWeb]);
+
+  const handleNativeQrRead = useCallback((value: string) => {
+    setQrScannerRequest(null);
+    emitQrScannerToWeb({ type: 'result', value });
+  }, [emitQrScannerToWeb]);
+
+  const handleNativeQrClose = useCallback(() => {
+    setQrScannerRequest(null);
+    emitQrScannerToWeb({ type: 'cancel' });
+  }, [emitQrScannerToWeb]);
+
+  const emitLocationToWeb = useCallback((payload: NativeLocationEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativeLocationEventsRef.current.push(payload);
+      if (pendingNativeLocationEventsRef.current.length > NATIVE_LOCATION_QUEUE_LIMIT) {
+        pendingNativeLocationEventsRef.current.splice(
+          0,
+          pendingNativeLocationEventsRef.current.length - NATIVE_LOCATION_QUEUE_LIMIT,
+        );
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_LOCATION_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingNativeLocationEventsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingEvents = pendingNativeLocationEventsRef.current.splice(0);
+    pendingEvents.forEach((event) => emitLocationToWeb(event));
+  }, [emitLocationToWeb]);
+
+  const getNativeLocationModule = useCallback(() => (
+    (NativeModules as { NativeRuntimeConfigModule?: NativeLocationModule }).NativeRuntimeConfigModule
+  ), []);
+
+  const handleNativeLocationCheck = useCallback(async (requestId?: string) => {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.checkLocationPermission) {
+      emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
+      return;
+    }
+
+    try {
+      const result = await nativeLocationModule.checkLocationPermission();
+      emitLocationToWeb({
+        type: 'permission',
+        permission: normalizeNativeLocationPermission(result?.permission),
+        platform: typeof result?.platform === 'string' ? result.platform : Platform.OS,
+        ...(requestId ? { requestId } : {}),
+      });
+      console.info('[NativeLocation] permission', {
+        requestId: requestId ?? '',
+        permission: normalizeNativeLocationPermission(result?.permission),
+        platform: typeof result?.platform === 'string' ? result.platform : Platform.OS,
+      });
+    } catch (error: unknown) {
+      console.warn('[NativeLocation] permission_failed', {
+        requestId: requestId ?? '',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      emitLocationToWeb({ type: 'permission', permission: 'unavailable', ...(requestId ? { requestId } : {}) });
+    }
+  }, [emitLocationToWeb, getNativeLocationModule]);
+
+  const handleNativeLocationRequest = useCallback(async (requestId?: string) => {
+    const nativeLocationModule = getNativeLocationModule();
+    if (!nativeLocationModule?.requestLocationPermission || !nativeLocationModule.getCurrentLocation) {
+      emitLocationToWeb({ type: 'error', code: 'location_unavailable', ...(requestId ? { requestId } : {}) });
+      return;
+    }
+
+    try {
+      const permissionResult = await nativeLocationModule.requestLocationPermission();
+      const permission = normalizeNativeLocationPermission(permissionResult?.permission);
+      emitLocationToWeb({
+        type: 'permission',
+        permission,
+        platform: typeof permissionResult?.platform === 'string' ? permissionResult.platform : Platform.OS,
+        ...(requestId ? { requestId } : {}),
+      });
+      if (permission !== 'granted') return;
+
+      const location = await nativeLocationModule.getCurrentLocation();
+      const latitude = typeof location?.latitude === 'number' ? location.latitude : NaN;
+      const longitude = typeof location?.longitude === 'number' ? location.longitude : NaN;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        emitLocationToWeb({ type: 'error', code: 'location_invalid', ...(requestId ? { requestId } : {}) });
+        return;
+      }
+      const accuracy = typeof location?.accuracy === 'number' && Number.isFinite(location.accuracy)
+        ? location.accuracy
+        : null;
+      const provider = typeof location?.provider === 'string' && location.provider.trim().length > 0
+        ? location.provider.trim()
+        : 'native_unknown';
+      const receivedAtMs = typeof location?.receivedAtMs === 'number' && Number.isFinite(location.receivedAtMs)
+        ? location.receivedAtMs
+        : Date.now();
+      console.info('[NativeLocation] location_received', {
+        requestId: requestId ?? '',
+        provider,
+        accuracy,
+        receivedAtMs,
+      });
+      emitLocationToWeb({
+        type: 'location',
+        latitude,
+        longitude,
+        accuracy,
+        provider,
+        receivedAtMs,
+        ...(requestId ? { requestId } : {}),
+      });
+    } catch (error: unknown) {
+      console.warn('[NativeLocation] request_failed', {
+        requestId: requestId ?? '',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      emitLocationToWeb({ type: 'error', code: 'location_failed', ...(requestId ? { requestId } : {}) });
+    }
+  }, [emitLocationToWeb, getNativeLocationModule]);
+
+  const emitQrSaveToWeb = useCallback((payload: NativeQrSaveEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_QR_SAVE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const handleNativeQrSave = useCallback(async (payload?: NativeQrSaveCommand['payload']) => {
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : '';
+    const nativeQrImageModule = (NativeModules as {
+      NativeQrImageModule?: NativeQrImageModule;
+    }).NativeQrImageModule;
+
+    if (!/^data:image\/png;base64,/i.test(dataUrl) || dataUrl.length > 5_000_000) {
+      emitQrSaveToWeb({ type: 'error', message: 'native_qr_invalid_image' });
+      return;
+    }
+    if (!nativeQrImageModule || typeof nativeQrImageModule.savePng !== 'function') {
+      emitQrSaveToWeb({ type: 'error', message: 'native_qr_save_unavailable' });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) < 29) {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('native_qr_photo_permission_denied');
+        }
+      }
+
+      await nativeQrImageModule.savePng(dataUrl, fileName || 'mingle-profile.png');
+      emitQrSaveToWeb({ type: 'success' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (__DEV__) {
+        console.warn(`[NativeQrImage] save failed: ${message}`);
+      }
+      emitQrSaveToWeb({ type: 'error', message: message || 'native_qr_save_failed' });
+    }
+  }, [emitQrSaveToWeb]);
+
+  const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
+    const normalizedPayload: NativePushRegistrationInfo = {
+      ...payload,
+      platform: typeof payload.platform === 'string' && payload.platform.trim()
+        ? payload.platform.trim()
+        : Platform.OS,
+      appVersion: typeof payload.appVersion === 'string' && payload.appVersion.trim()
+        ? payload.appVersion.trim()
+        : RUNTIME_CLIENT_INFO.clientVersion,
+      apiNamespace: typeof payload.apiNamespace === 'string' && payload.apiNamespace.trim()
+        ? payload.apiNamespace.trim()
+        : VALIDATED_API_NAMESPACE,
+    };
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativePushRegistrationsRef.current = [normalizedPayload].slice(
+        -NATIVE_PUSH_REGISTRATION_QUEUE_LIMIT,
+      );
+      return;
+    }
+
+    const serialized = JSON.stringify(normalizedPayload);
+    const script = `window.__MINGLE_LAST_NATIVE_PUSH_TOKEN = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PUSH_TOKEN_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingNativePushRegistrationsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingRegistrations = pendingNativePushRegistrationsRef.current.splice(0);
+    pendingRegistrations.forEach((registration) => emitPushRegistrationToWeb(registration));
+  }, [emitPushRegistrationToWeb]);
+
+  const requestNativePushRegistration = useCallback(async () => {
+    const nativePushModule = (NativeModules as {
+      NativePushNotificationModule?: NativePushNotificationModule;
+    }).NativePushNotificationModule;
+    if (!nativePushModule?.registerForPushNotifications) {
+      emitPushRegistrationToWeb({
+        platform: Platform.OS,
+        permission: 'unavailable',
+      });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
+        const permissions = PermissionsAndroid.PERMISSIONS as typeof PermissionsAndroid.PERMISSIONS & {
+          POST_NOTIFICATIONS?: string;
+        };
+        const permissionName = permissions.POST_NOTIFICATIONS || 'android.permission.POST_NOTIFICATIONS';
+        const permissionResult = await PermissionsAndroid.request(permissionName);
+        if (permissionResult !== PermissionsAndroid.RESULTS.GRANTED) {
+          emitPushRegistrationToWeb({
+            platform: 'android',
+            environment: 'production',
+            permission: permissionResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+              ? 'never_ask_again'
+              : 'denied',
+          });
+          return;
+        }
+      }
+
+      const registration = await nativePushModule.registerForPushNotifications();
+      emitPushRegistrationToWeb(registration);
+    } catch (error: unknown) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[NativePushNotification] registration failed: ${message}`);
+      }
+      emitPushRegistrationToWeb({
+        platform: Platform.OS,
+        permission: 'registration_failed',
+      });
+    }
+  }, [emitPushRegistrationToWeb]);
+
+  const emitToWeb = useCallback((payload: NativeSttEvent) => {
+    const queueId = payload.type === 'message' && !payload.queueId
+      ? `native-stt-${Date.now()}-${++nativeSttMessageSequenceRef.current}`
+      : undefined;
+    const isReplayStatus = payload.type === 'status' && payload.replay === true;
+    const scopedConversationId = 'conversationId' in payload
+      ? payload.conversationId || nativeSttConversationIdRef.current || undefined
+      : nativeSttConversationIdRef.current || undefined;
+    const scopedSessionId = 'sessionId' in payload
+      ? (isReplayStatus
+        ? payload.sessionId
+        : payload.sessionId || nativeSttSessionIdRef.current || undefined)
+      : nativeSttSessionIdRef.current || undefined;
+    const nextPayload: NativeSttEvent = payload.type === 'message'
+      ? {
+          ...payload,
+          ...(payload.queueId || queueId ? { queueId: payload.queueId || queueId } : {}),
+          ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+          ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+        }
+      : payload.type === 'status' || payload.type === 'error' || payload.type === 'close'
+        ? {
+            ...payload,
+            ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+            ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+          }
+        : payload;
+
+    // Keep the native snapshot in the RN process even while the WebView is
+    // loading. Status events are intentionally not put behind the message
+    // queue, so the next room can receive a correctly scoped replay instead
+    // of inheriting a status from the previous room.
+    if (nextPayload.type === 'status' && !nextPayload.replay) {
+      const currentSnapshot = nativeSttSnapshotRef.current;
+      if (!hasOlderNativeSttStatusSequence(nextPayload.eventSequence, currentSnapshot.eventSequence)) {
+        nativeSttSnapshotRef.current = {
+          status: nextPayload.status,
+          ...(nextPayload.conversationId ? { conversationId: nextPayload.conversationId } : {}),
+          ...(nextPayload.sessionId ? { sessionId: nextPayload.sessionId } : {}),
+          ...(typeof nextPayload.running === 'boolean' ? { running: nextPayload.running } : {}),
+          ...(typeof nextPayload.serverReady === 'boolean' ? { serverReady: nextPayload.serverReady } : {}),
+          ...(typeof nextPayload.stopping === 'boolean' ? { stopping: nextPayload.stopping } : {}),
+          ...(typeof nextPayload.eventSequence === 'number'
+            ? { eventSequence: nextPayload.eventSequence }
+            : typeof currentSnapshot.eventSequence === 'number'
+              ? { eventSequence: currentSnapshot.eventSequence }
+              : {}),
+        };
+      }
+    }
+
+    if (!isPageReadyRef.current) {
+      if (nextPayload.type === 'message') {
+        pendingNativeSttMessagesRef.current.push(nextPayload);
+        if (pendingNativeSttMessagesRef.current.length > NATIVE_STT_MESSAGE_QUEUE_LIMIT) {
+          pendingNativeSttMessagesRef.current.splice(
+            0,
+            pendingNativeSttMessagesRef.current.length - NATIVE_STT_MESSAGE_QUEUE_LIMIT,
+          );
+        }
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(nextPayload);
     if (__DEV__) {
-      const preview = payload.type === 'message'
-        ? `message(${(payload as { raw?: string }).raw?.slice(0, 80) ?? ''})`
-        : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
+      const preview = nextPayload.type === 'message'
+        ? `message(${nextPayload.raw.slice(0, 80)})`
+        : `${nextPayload.type}(${JSON.stringify(nextPayload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const cacheStatusScript = payload.type === 'status'
-      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
+    const cacheStatusScript = nextPayload.type === 'status'
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; window.__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID = ${JSON.stringify(nextPayload.conversationId || null)}; window.__MINGLE_LAST_NATIVE_STT_SESSION_ID = ${JSON.stringify(nextPayload.sessionId || null)}; window.__MINGLE_LAST_NATIVE_STT_RUNNING = ${JSON.stringify(typeof nextPayload.running === 'boolean' ? nextPayload.running : null)}; window.__MINGLE_LAST_NATIVE_STT_SERVER_READY = ${JSON.stringify(typeof nextPayload.serverReady === 'boolean' ? nextPayload.serverReady : null)}; window.__MINGLE_LAST_NATIVE_STT_STOPPING = ${JSON.stringify(typeof nextPayload.stopping === 'boolean' ? nextPayload.stopping : null)}; window.__MINGLE_LAST_NATIVE_STT_EVENT_SEQUENCE = ${JSON.stringify(typeof nextPayload.eventSequence === 'number' ? nextPayload.eventSequence : null)}; `
       : '';
-    const cachePermissionScript = payload.type === 'permission'
-      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(payload.permission)}; `
+    const cachePermissionScript = nextPayload.type === 'permission'
+      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(nextPayload.permission)}; `
       : '';
-    const script = `${cacheStatusScript}${cachePermissionScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheMessageScript = nextPayload.type === 'message'
+      ? `(function () {
+          var queue = Array.isArray(window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}])
+            ? window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}]
+            : [];
+          queue.push(${serialized});
+          if (queue.length > ${NATIVE_STT_MESSAGE_QUEUE_LIMIT}) {
+            queue.splice(0, queue.length - ${NATIVE_STT_MESSAGE_QUEUE_LIMIT});
+          }
+          window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}] = queue;
+        })(); `
+      : '';
+    const script = `${cacheStatusScript}${cachePermissionScript}${cacheMessageScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
+
+  const flushPendingNativeSttMessagesToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingMessages = pendingNativeSttMessagesRef.current.splice(0);
+    for (const message of pendingMessages) {
+      emitToWeb(message);
+    }
+  }, [emitToWeb]);
+
+  const syncNativeSttStatusAfterStart = useCallback(async (
+    requestedConversationId: string,
+    requestedSessionId: string,
+    syncSequence: number,
+  ) => {
+    // Android can reach the native WebSocket `ready` state even when the
+    // NativeEventEmitter event is lost during a WebView transition. Querying
+    // the native singleton after start gives the WebView an authoritative
+    // recovery path without putting native events behind another queue.
+    if (Platform.OS !== 'android' || !nativeAvailable) return;
+
+    const maxAttempts = 32;
+    const retryDelayMs = 250;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (syncSequence !== nativeSttStatusSyncSequenceRef.current) return;
+
+      let snapshot;
+      try {
+        snapshot = await getNativeSttStatus();
+      } catch (error: unknown) {
+        if (__DEV__) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(`[NativeSTT] status sync failed: ${message}`);
+        }
+        return;
+      }
+
+      if (syncSequence !== nativeSttStatusSyncSequenceRef.current) return;
+
+      if (hasOlderNativeSttStatusSequence(
+        snapshot.eventSequence,
+        nativeSttSnapshotRef.current.eventSequence,
+      )) {
+        await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
+
+      const activeConversationId = typeof snapshot.conversationId === 'string'
+        ? snapshot.conversationId.trim()
+        : '';
+      const activeSessionId = typeof snapshot.sessionId === 'string'
+        ? snapshot.sessionId.trim()
+        : '';
+
+      // Never let a query for a newly opened room adopt a still-running
+      // session from the previous room. Wait for the native recovery path or
+      // the next poll instead.
+      if (requestedConversationId
+        && activeConversationId
+        && requestedConversationId !== activeConversationId) {
+        await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
+      if (requestedSessionId
+        && activeSessionId
+        && requestedSessionId !== activeSessionId) {
+        await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
+        continue;
+      }
+
+      const status = resolveNativeSttStatusFromSnapshot(snapshot);
+      const scopedConversationId = activeConversationId
+        || (isLiveNativeSttStatus(status) ? requestedConversationId : '')
+        || undefined;
+      const scopedSessionId = activeSessionId
+        || (isLiveNativeSttStatus(status) ? requestedSessionId : '')
+        || undefined;
+
+      if (scopedConversationId) {
+        nativeSttConversationIdRef.current = scopedConversationId;
+      }
+      if (scopedSessionId) {
+        nativeSttSessionIdRef.current = scopedSessionId;
+      }
+      const currentSnapshot = nativeSttSnapshotRef.current;
+      nativeSttSnapshotRef.current = {
+        status,
+        ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+        ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number'
+          ? { eventSequence: snapshot.eventSequence }
+          : typeof currentSnapshot.eventSequence === 'number'
+            ? { eventSequence: currentSnapshot.eventSequence }
+            : {}),
+      };
+      nativeStatusRef.current = status;
+      emitToWeb({
+        type: 'status',
+        status,
+        ...(scopedConversationId ? { conversationId: scopedConversationId } : {}),
+        ...(scopedSessionId ? { sessionId: scopedSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
+      });
+
+      if (status === 'ready' || status === 'stopping' || isTerminalNativeSttStatus(status)) return;
+      await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs));
+    }
+  }, [emitToWeb, nativeAvailable]);
+
+  const handleNativeStatusRequest = useCallback(async (payload?: NativeSttStatusRequestPayload) => {
+    const requestedConversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    if (!requestedConversationId) return;
+
+    let snapshot: NativeSttSnapshot = nativeSttSnapshotRef.current;
+    if (Platform.OS === 'android' && nativeAvailable) {
+      try {
+        const nativeSnapshot = await getNativeSttStatus();
+        if (!hasOlderNativeSttStatusSequence(
+          nativeSnapshot.eventSequence,
+          nativeSttSnapshotRef.current.eventSequence,
+        )) {
+          snapshot = {
+            status: nativeSnapshot.status,
+            ...(nativeSnapshot.conversationId ? { conversationId: nativeSnapshot.conversationId } : {}),
+            ...(nativeSnapshot.sessionId ? { sessionId: nativeSnapshot.sessionId } : {}),
+            ...(typeof nativeSnapshot.running === 'boolean' ? { running: nativeSnapshot.running } : {}),
+            ...(typeof nativeSnapshot.serverReady === 'boolean' ? { serverReady: nativeSnapshot.serverReady } : {}),
+            ...(typeof nativeSnapshot.stopping === 'boolean' ? { stopping: nativeSnapshot.stopping } : {}),
+            ...(typeof nativeSnapshot.eventSequence === 'number' ? { eventSequence: nativeSnapshot.eventSequence } : {}),
+          };
+        }
+      } catch (error: unknown) {
+        if (__DEV__) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(`[NativeSTT] status request failed: ${message}`);
+        }
+      }
+    }
+
+    const activeConversationId = typeof snapshot.conversationId === 'string'
+      ? snapshot.conversationId.trim()
+      : '';
+    const activeSessionId = typeof snapshot.sessionId === 'string'
+      ? snapshot.sessionId.trim()
+      : '';
+    const activeStatus = resolveNativeSttStatusFromSnapshot(snapshot);
+    nativeSttSnapshotRef.current = snapshot;
+    const sameRoomHasLiveSession = activeConversationId === requestedConversationId
+      && isLiveNativeSttStatus(activeStatus);
+    const sameRoomIsStopping = activeConversationId === requestedConversationId
+      && activeStatus === 'stopping';
+
+    if (sameRoomHasLiveSession || sameRoomIsStopping) {
+      nativeSttConversationIdRef.current = activeConversationId;
+      nativeSttSessionIdRef.current = activeSessionId || null;
+      nativeSttRequestedConversationIdRef.current = activeConversationId;
+      nativeSttRequestedSessionIdRef.current = activeSessionId || null;
+      nativeStatusRef.current = activeStatus;
+      nativeSttSnapshotRef.current = snapshot;
+      emitToWeb({
+        type: 'status',
+        status: activeStatus,
+        conversationId: requestedConversationId,
+        ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
+        replay: true,
+      });
+      return;
+    }
+
+    // A terminal status for this room should clear stale RN identity, while a
+    // live session owned by another room must remain untouched. This keeps a
+    // visible room from inheriting another room's singleton state.
+    if (!isLiveNativeSttStatus(activeStatus)
+      && (!activeConversationId || activeConversationId === requestedConversationId)) {
+      nativeSttConversationIdRef.current = null;
+      nativeSttSessionIdRef.current = null;
+      nativeSttRequestedConversationIdRef.current = null;
+      nativeSttRequestedSessionIdRef.current = null;
+      nativeStatusRef.current = activeStatus;
+      nativeSttSnapshotRef.current = snapshot;
+    }
+    emitToWeb({
+      type: 'status',
+      status: 'idle',
+      conversationId: requestedConversationId,
+      running: false,
+      serverReady: false,
+      stopping: false,
+      ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
+      replay: true,
+    });
+  }, [emitToWeb, nativeAvailable]);
 
   const emitCurrentMicPermissionToWeb = useCallback(async () => {
     if (Platform.OS !== 'ios' || !nativeAvailable) return;
@@ -1821,8 +2923,12 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
-    const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
-    const shouldReserveConversationInset = activeBannerZone === 'conversation'
+    const shouldReserveListTopInset = !shouldHideNativeBanners
+      && activeBannerZone === 'list'
+      && canRenderNativeBanner
+      && nativeAdsReady;
+    const shouldReserveConversationInset = !shouldHideNativeBanners
+      && activeBannerZone === 'conversation'
       && canRenderNativeBanner
       && nativeAdsReady
       && !isNativeMenuOverlayOpen;
@@ -1858,29 +2964,25 @@ function AppInner(): React.JSX.Element {
     nativeBannerUnitId,
     nativeTranscriptInsetPx,
     safeAreaInsets.bottom,
+    shouldHideNativeBanners,
   ]);
 
   const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {
-    const inferredZone = resolveBannerZoneForUrl(typeof nextUrl === 'string' ? nextUrl : '');
-    if (!inferredZone) return;
+    const currentState = {
+      activeZone: activeBannerZoneRef.current,
+      stableZone: stableBannerZoneRef.current,
+      pendingNavigationZone: pendingNavigationBannerZoneRef.current,
+    };
+    const nextState = resolveNativeBannerNavigationState(
+      currentState,
+      typeof nextUrl === 'string' ? nextUrl : '',
+    );
+    if (nextState === currentState) return;
 
-    const stableZone = stableBannerZoneRef.current;
-    if (inferredZone !== stableZone) {
-      pendingNavigationBannerZoneRef.current = inferredZone;
-      if (activeBannerZoneRef.current !== 'hidden') {
-        setActiveBannerZone('hidden');
-      }
-      return;
-    }
-
-    if (
-      activeBannerZoneRef.current === 'hidden'
-      && pendingNavigationBannerZoneRef.current
-      && inferredZone === stableZone
-    ) {
-      pendingNavigationBannerZoneRef.current = null;
-      setActiveBannerZone(stableZone);
-    }
+    activeBannerZoneRef.current = nextState.activeZone;
+    stableBannerZoneRef.current = nextState.stableZone;
+    pendingNavigationBannerZoneRef.current = nextState.pendingNavigationZone;
+    setActiveBannerZone(nextState.activeZone);
   }, []);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
@@ -2003,15 +3105,15 @@ function AppInner(): React.JSX.Element {
     const aecEnabled = payload?.aecEnabled === true;
     const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
     const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
-    const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
-      ? payload.sonioxLanguageHints
-        .filter((language): language is string => typeof language === 'string')
-        .map(language => language.trim())
-        .filter(Boolean)
-      : [];
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
+    const conversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    const sessionId = typeof payload?.sessionId === 'string'
+      ? payload.sessionId.trim()
+      : '';
     const normalizedSttSegmentationMode = typeof payload?.sttSegmentationMode === 'string'
       ? payload.sttSegmentationMode.trim().toLowerCase()
       : '';
@@ -2025,13 +3127,20 @@ function AppInner(): React.JSX.Element {
     const sonioxEndpointTuningStep = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxEndpointTuningStep,
     );
+    nativeSttRequestedConversationIdRef.current = conversationId || null;
+    nativeSttRequestedSessionIdRef.current = sessionId || null;
+    const statusSyncSequence = ++nativeSttStatusSyncSequenceRef.current;
+    const statusBeforeStart = nativeStatusRef.current;
+    const activeNativeConversationIdBeforeStart = nativeSttConversationIdRef.current;
+    const activeNativeSessionIdBeforeStart = nativeSttSessionIdRef.current;
 
     const startPayload = {
+      conversationId,
+      ...(sessionId ? { sessionId } : {}),
       sttModel,
       aecEnabled,
       ...(apiNamespace ? { apiNamespace } : {}),
       ...(behaviorProfile ? { behaviorProfile } : {}),
-      sonioxLanguageHints,
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
         : {}),
@@ -2046,16 +3155,119 @@ function AppInner(): React.JSX.Element {
 
     try {
       nativeStatusRef.current = 'starting';
+      // The native module is the source of truth for the active conversation.
+      // Do not overwrite its cached owner before start resolves: doing so can
+      // make an `already_running` session from another room look like this
+      // room's existing session.
       await startNativeStt({
         wsUrl,
         ...startPayload,
       });
-      nativeStatusRef.current = 'running';
+      // A resolved start means native accepted this request. Native events
+      // usually populate the active identity first; this fallback covers a
+      // short WebView/event-listener gap without claiming an old room before
+      // the native start has actually succeeded.
+      if (!nativeSttConversationIdRef.current) {
+        nativeSttConversationIdRef.current = conversationId || null;
+      }
+      if (!nativeSttSessionIdRef.current && sessionId) {
+        nativeSttSessionIdRef.current = sessionId;
+      }
+      if (sessionId) {
+        retiredNativeSttSessionIdsRef.current.delete(sessionId);
+      }
+      nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
+      void syncNativeSttStatusAfterStart(conversationId, sessionId, statusSyncSequence);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const code = typeof (error as { code?: unknown })?.code === 'string'
         ? (error as { code: string }).code.trim()
         : resolveNativeSttErrorCode(message);
+      const activeSessionMatchesRequest = !sessionId
+        || nativeSttSessionIdRef.current === sessionId;
+      const isExistingNativeSessionForSameConversation = code === 'already_running'
+        && Boolean(conversationId)
+        && nativeSttConversationIdRef.current === conversationId
+        && activeSessionMatchesRequest;
+      if (isExistingNativeSessionForSameConversation) {
+        nativeStatusRef.current = ['starting', 'running', 'ready', 'silenced', 'recovering', 'connecting']
+          .includes(statusBeforeStart)
+          ? statusBeforeStart
+          : 'running';
+        emitToWeb({
+          type: 'status',
+          status: nativeStatusRef.current,
+          conversationId,
+          ...(nativeSttSessionIdRef.current || sessionId
+            ? { sessionId: nativeSttSessionIdRef.current || sessionId }
+            : {}),
+        });
+        void syncNativeSttStatusAfterStart(
+          conversationId,
+          nativeSttSessionIdRef.current || sessionId,
+          statusSyncSequence,
+        );
+        return;
+      }
+      if (code === 'already_running') {
+        // A previous room can outlive its WebView listener. Recover the
+        // process-wide native singleton instead of leaving the new room in a
+        // false connecting state. An empty conversation ID intentionally asks
+        // the native module to stop whichever session actually owns capture.
+        try {
+          const stoppedConversationId = nativeSttConversationIdRef.current
+            || activeNativeConversationIdBeforeStart
+            || undefined;
+          const stoppedSessionId = nativeSttSessionIdRef.current
+            || activeNativeSessionIdBeforeStart
+            || undefined;
+          await stopNativeStt({
+            // Recovery is process-wide. A stale room/session ID would be
+            // rejected by Android's stale-stop guard and leave the recorder
+            // alive behind the new WebView.
+            force: true,
+            pendingText: '',
+            pendingLanguage: 'unknown',
+          });
+          nativeStatusRef.current = 'stopped';
+          emitToWeb({
+            type: 'status',
+            status: 'stopped',
+            ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+            ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+            running: false,
+            serverReady: false,
+            stopping: false,
+          });
+          nativeSttConversationIdRef.current = null;
+          rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, stoppedSessionId);
+          nativeSttSessionIdRef.current = null;
+          nativeStatusRef.current = 'starting';
+          await startNativeStt({
+            wsUrl,
+            ...startPayload,
+          });
+          if (!nativeSttConversationIdRef.current) {
+            nativeSttConversationIdRef.current = conversationId || null;
+          }
+          if (!nativeSttSessionIdRef.current && sessionId) {
+            nativeSttSessionIdRef.current = sessionId;
+          }
+          if (sessionId) {
+            retiredNativeSttSessionIdsRef.current.delete(sessionId);
+          }
+          nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
+          void syncNativeSttStatusAfterStart(conversationId, sessionId, statusSyncSequence);
+          return;
+        } catch (recoveryError: unknown) {
+          if (__DEV__) {
+            const recoveryMessage = recoveryError instanceof Error
+              ? recoveryError.message
+              : String(recoveryError);
+            console.warn(`[NativeSTT] stale-session recovery failed: ${recoveryMessage}`);
+          }
+        }
+      }
       const shouldRetryFallback = Boolean(
         fallbackWsUrl
         && code !== 'mic_permission'
@@ -2069,24 +3281,57 @@ function AppInner(): React.JSX.Element {
             wsUrl: fallbackWsUrl,
             ...startPayload,
           });
-          nativeStatusRef.current = 'running';
+          if (!nativeSttConversationIdRef.current) {
+            nativeSttConversationIdRef.current = conversationId || null;
+          }
+          if (!nativeSttSessionIdRef.current && sessionId) {
+            nativeSttSessionIdRef.current = sessionId;
+          }
+          if (sessionId) {
+            retiredNativeSttSessionIdsRef.current.delete(sessionId);
+          }
+          nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
+          void syncNativeSttStatusAfterStart(conversationId, sessionId, statusSyncSequence);
           return;
         } catch (fallbackError: unknown) {
           const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
           const fallbackCode = typeof (fallbackError as { code?: unknown })?.code === 'string'
             ? (fallbackError as { code: string }).code.trim()
             : resolveNativeSttErrorCode(fallbackMessage);
+          const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
+          const failedSessionId = nativeSttSessionIdRef.current || sessionId || undefined;
           nativeStatusRef.current = fallbackCode === 'mic_permission' ? 'idle' : 'failed';
+          emitToWeb({
+            type: 'status',
+            status: nativeStatusRef.current,
+            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+            ...(failedSessionId ? { sessionId: failedSessionId } : {}),
+          });
+          nativeSttConversationIdRef.current = null;
+          nativeSttSessionIdRef.current = null;
           emitToWeb({
             type: 'error',
             message: fallbackMessage,
             ...(fallbackCode ? { code: fallbackCode } : {}),
             platform: Platform.OS,
+            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+            ...(failedSessionId ? { sessionId: failedSessionId } : {}),
           });
+          nativeSttRequestedConversationIdRef.current = null;
+          nativeSttRequestedSessionIdRef.current = null;
+          rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, failedSessionId);
           return;
         }
       }
+      const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
+      const failedSessionId = nativeSttSessionIdRef.current || sessionId || undefined;
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
+      emitToWeb({
+        type: 'status',
+        status: nativeStatusRef.current,
+        ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+        ...(failedSessionId ? { sessionId: failedSessionId } : {}),
+      });
       if (code === 'mic_permission') {
         emitToWeb({
           type: 'permission',
@@ -2099,22 +3344,91 @@ function AppInner(): React.JSX.Element {
         message,
         ...(code ? { code } : {}),
         platform: Platform.OS,
+        ...(failedConversationId ? { conversationId: failedConversationId } : {}),
+        ...(failedSessionId ? { sessionId: failedSessionId } : {}),
       });
+      nativeSttConversationIdRef.current = null;
+      rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, failedSessionId);
+      nativeSttSessionIdRef.current = null;
+      nativeSttRequestedConversationIdRef.current = null;
+      nativeSttRequestedSessionIdRef.current = null;
     }
-  }, [emitToWeb, nativeAvailable]);
+  }, [emitToWeb, nativeAvailable, syncNativeSttStatusAfterStart]);
 
   const handleNativeStop = useCallback(async (payload?: NativeSttStopPayload) => {
+    const requestedConversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    const requestedSessionId = typeof payload?.sessionId === 'string'
+      ? payload.sessionId.trim()
+      : '';
+    const force = payload?.force === true;
+    const activeConversationId = nativeSttConversationIdRef.current || '';
+    const activeSessionId = nativeSttSessionIdRef.current || '';
+    if (!force && requestedConversationId && activeConversationId && requestedConversationId !== activeConversationId) {
+      if (__DEV__) {
+        console.log(`[Web→NativeSTT] ignored stale stop conversation=${requestedConversationId} active=${activeConversationId}`);
+      }
+      return;
+    }
+    if (!force && requestedSessionId && activeSessionId && requestedSessionId !== activeSessionId) {
+      if (__DEV__) {
+        console.log(`[Web→NativeSTT] ignored stale stop session=${requestedSessionId} active=${activeSessionId}`);
+      }
+      return;
+    }
+    nativeSttStatusSyncSequenceRef.current += 1;
+    const stoppedConversationId = requestedConversationId || activeConversationId || undefined;
+    const stoppedSessionId = requestedSessionId || activeSessionId || undefined;
+    // If RN has lost the active identity during a WebView reload, omitting the
+    // room/session fields lets the native singleton stop itself instead of
+    // being rejected as a stale request. Explicit force stops always use this
+    // process-wide form as well.
+    const nativeStopConversationId = force
+      ? undefined
+      : activeConversationId || (activeSessionId ? requestedConversationId : undefined);
+    const nativeStopSessionId = force ? undefined : activeSessionId || undefined;
     try {
       await stopNativeStt({
+        ...(nativeStopConversationId ? { conversationId: nativeStopConversationId } : {}),
+        ...(nativeStopSessionId ? { sessionId: nativeStopSessionId } : {}),
+        ...(force ? { force: true } : {}),
         pendingText: typeof payload?.pendingText === 'string' ? payload.pendingText : '',
         pendingLanguage: typeof payload?.pendingLanguage === 'string' ? payload.pendingLanguage : 'unknown',
       });
       nativeStatusRef.current = 'stopped';
+      emitToWeb({
+        type: 'status',
+        status: 'stopped',
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+        ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+        running: false,
+        serverReady: false,
+        stopping: false,
+      });
+      nativeSttConversationIdRef.current = null;
+      rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, stoppedSessionId);
+      nativeSttSessionIdRef.current = null;
+      nativeSttRequestedConversationIdRef.current = null;
+      nativeSttRequestedSessionIdRef.current = null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      emitToWeb({ type: 'error', message });
+      emitToWeb({
+        type: 'error',
+        message,
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+        ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+      });
     }
   }, [emitToWeb]);
+
+  const enqueueNativeSttCommand = useCallback((task: () => Promise<void>) => {
+    const queuedTask = nativeSttCommandQueueRef.current.then(task, task);
+    nativeSttCommandQueueRef.current = queuedTask.then(
+      () => undefined,
+      () => undefined,
+    );
+  }, []);
 
   const handleNativeAuthStart = useCallback(async (payload?: {
     provider?: NativeAuthProvider;
@@ -2253,6 +3567,42 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    // Receiving a valid command is stronger evidence that the current
+    // document is interactive than Android WebView's load callbacks. Some
+    // renderer/navigation paths leave onLoadStart unmatched long enough for
+    // native STT status and transcript events to be discarded even though
+    // the room can already send Start. Restore the outbound bridge as soon as
+    // the current document proves that it is ready.
+    if (!isPageReadyRef.current) {
+      isPageReadyRef.current = true;
+      flushPendingNativeSttMessagesToWeb();
+    }
+
+    if (parsed.type === 'native_qr_scanner_open') {
+      setQrScannerRequest(parsed.payload ?? {});
+      return;
+    }
+
+    if (parsed.type === 'native_qr_save') {
+      void handleNativeQrSave(parsed.payload);
+      return;
+    }
+
+    if (parsed.type === 'native_location_check') {
+      void handleNativeLocationCheck(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_location_request') {
+      void handleNativeLocationRequest(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_push_register') {
+      void requestNativePushRegistration();
+      return;
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -2262,8 +3612,29 @@ function AppInner(): React.JSX.Element {
       if (typeof parsed.payload?.canGoForward === 'boolean') {
         setCanWebViewGoForward(parsed.payload.canGoForward);
       }
+      if (typeof parsed.payload?.canHandleNativeBack === 'boolean') {
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleNativeBack);
+      }
+      if (typeof parsed.payload?.suppressEdgeSwipe === 'boolean') {
+        setIsEdgeSwipeSuppressedByWeb(parsed.payload.suppressEdgeSwipe);
+      } else if (typeof parsed.payload?.canHandleAndroidBack === 'boolean') {
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleAndroidBack);
+      }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
+      return;
+    }
+
+    if (parsed.type === 'native_history_debug') {
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
+      try {
+        const serializedPayload = JSON.stringify(parsed.payload ?? {}).slice(0, 4000);
+        NATIVE_CONVERSATION_RESTORE_STORAGE.recordHistoryDebug?.(serializedPayload);
+        console.warn('[MingleHistoryDebug]', serializedPayload);
+      } catch {
+        NATIVE_CONVERSATION_RESTORE_STORAGE.recordHistoryDebug?.('{"error":"unable_to_serialize"}');
+        console.warn('[MingleHistoryDebug] unable to serialize diagnostic payload');
+      }
       return;
     }
 
@@ -2326,6 +3697,7 @@ function AppInner(): React.JSX.Element {
           stableBannerZoneRef.current = zone;
           pendingNavigationBannerZoneRef.current = null;
         }
+        activeBannerZoneRef.current = zone;
         setActiveBannerZone(zone);
       }
       return;
@@ -2379,7 +3751,15 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
       }
-      void handleNativeStart(parsed.payload);
+      enqueueNativeSttCommand(() => handleNativeStart(parsed.payload));
+      return;
+    }
+
+    if (parsed.type === 'native_stt_status_request') {
+      if (__DEV__) {
+        console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
+      }
+      enqueueNativeSttCommand(() => handleNativeStatusRequest(parsed.payload));
       return;
     }
 
@@ -2387,7 +3767,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[Web→NativeSTT] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
       }
-      void handleNativeStop(parsed.payload);
+      enqueueNativeSttCommand(() => handleNativeStop(parsed.payload));
       return;
     }
 
@@ -2453,8 +3833,14 @@ function AppInner(): React.JSX.Element {
     emitTtsToWeb,
     handleDebugWebViewRemount,
     handleNativeAuthStart,
+    handleNativeLocationCheck,
+    handleNativeLocationRequest,
+    handleNativeQrSave,
     handleNativeStart,
     handleNativeStop,
+    handleNativeStatusRequest,
+    enqueueNativeSttCommand,
+    flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
     updateSafeAreaPalette,
   ]);
@@ -2483,23 +3869,138 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     const statusSub = addNativeSttListener('status', event => {
       if (__DEV__) console.log(`[NativeSTT] status: ${event.status}`);
+      if (hasOlderNativeSttStatusSequence(
+        event.eventSequence,
+        nativeSttSnapshotRef.current.eventSequence,
+      )) {
+        if (__DEV__) {
+          console.log(
+            `[NativeSTT] ignored older status sequence=${event.eventSequence} `
+              + `current=${nativeSttSnapshotRef.current.eventSequence}`,
+          );
+        }
+        return;
+      }
+      const eventConversationId = event.conversationId?.trim() || '';
+      const eventSessionId = event.sessionId?.trim() || '';
+      const isStale = isStaleNativeSttSessionEvent({
+        eventConversationId,
+        eventSessionId,
+        activeConversationId: nativeSttConversationIdRef.current,
+        activeSessionId: nativeSttSessionIdRef.current,
+        requestedConversationId: nativeSttRequestedConversationIdRef.current,
+        requestedSessionId: nativeSttRequestedSessionIdRef.current,
+        retiredSessionIds: retiredNativeSttSessionIdsRef.current,
+      });
+      if (isStale) {
+        if (__DEV__) {
+          console.log(
+            `[NativeSTT] ignored stale status=${event.status} conversation=${eventConversationId || 'unknown'} `
+              + `session=${eventSessionId || 'unknown'}`,
+          );
+        }
+        return;
+      }
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
+      if (event.sessionId) {
+        nativeSttSessionIdRef.current = event.sessionId;
+      }
       nativeStatusRef.current = event.status;
-      emitToWeb({ type: 'status', status: event.status });
+      emitToWeb({
+        type: 'status',
+        status: event.status,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+        ...(typeof event.running === 'boolean' ? { running: event.running } : {}),
+        ...(typeof event.serverReady === 'boolean' ? { serverReady: event.serverReady } : {}),
+        ...(typeof event.stopping === 'boolean' ? { stopping: event.stopping } : {}),
+        ...(typeof event.eventSequence === 'number' ? { eventSequence: event.eventSequence } : {}),
+      });
+      if (isTerminalNativeSttStatus(event.status)) {
+        nativeSttConversationIdRef.current = null;
+        rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, eventSessionId);
+        nativeSttSessionIdRef.current = null;
+        if (!eventSessionId
+          || !nativeSttRequestedSessionIdRef.current
+          || eventSessionId === nativeSttRequestedSessionIdRef.current) {
+          nativeSttRequestedConversationIdRef.current = null;
+          nativeSttRequestedSessionIdRef.current = null;
+        }
+      }
     });
 
     const messageSub = addNativeSttListener('message', event => {
-      if (nativeStatusRef.current) {
-        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      const eventConversationId = event.conversationId?.trim() || '';
+      const eventSessionId = event.sessionId?.trim() || '';
+      if (isStaleNativeSttSessionEvent({
+        eventConversationId,
+        eventSessionId,
+        activeConversationId: nativeSttConversationIdRef.current,
+        activeSessionId: nativeSttSessionIdRef.current,
+        requestedConversationId: nativeSttRequestedConversationIdRef.current,
+        requestedSessionId: nativeSttRequestedSessionIdRef.current,
+        retiredSessionIds: retiredNativeSttSessionIdsRef.current,
+      })) {
+        return;
       }
-      emitToWeb({ type: 'message', raw: event.raw });
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
+      if (event.sessionId) {
+        nativeSttSessionIdRef.current = event.sessionId;
+      }
+      if (isNativeSttServerReadyMessage(event.raw)) {
+        nativeStatusRef.current = 'ready';
+      }
+      if (nativeStatusRef.current) {
+        emitToWeb({
+          type: 'status',
+          status: nativeStatusRef.current,
+          ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+          ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+        });
+      }
+      emitToWeb({
+        type: 'message',
+        raw: event.raw,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+      });
     });
 
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
+      const eventConversationId = event.conversationId?.trim() || '';
+      const eventSessionId = event.sessionId?.trim() || '';
+      if (isStaleNativeSttSessionEvent({
+        eventConversationId,
+        eventSessionId,
+        activeConversationId: nativeSttConversationIdRef.current,
+        activeSessionId: nativeSttSessionIdRef.current,
+        requestedConversationId: nativeSttRequestedConversationIdRef.current,
+        requestedSessionId: nativeSttRequestedSessionIdRef.current,
+        retiredSessionIds: retiredNativeSttSessionIdsRef.current,
+      })) {
+        return;
+      }
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
+      if (event.sessionId) {
+        nativeSttSessionIdRef.current = event.sessionId;
+      }
       const code = typeof event.code === 'string' && event.code.trim()
         ? event.code.trim()
         : resolveNativeSttErrorCode(event.message);
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'error';
+      emitToWeb({
+        type: 'status',
+        status: nativeStatusRef.current,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+      });
       if (code === 'mic_permission') {
         emitToWeb({
           type: 'permission',
@@ -2512,13 +4013,48 @@ function AppInner(): React.JSX.Element {
         message: event.message,
         ...(code ? { code } : {}),
         platform: Platform.OS,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
       });
     });
 
     const closeSub = addNativeSttListener('close', event => {
       if (__DEV__) console.log(`[NativeSTT] close: ${event.reason}`);
+      const eventConversationId = event.conversationId?.trim() || '';
+      const eventSessionId = event.sessionId?.trim() || '';
+      if (isStaleNativeSttSessionEvent({
+        eventConversationId,
+        eventSessionId,
+        activeConversationId: nativeSttConversationIdRef.current,
+        activeSessionId: nativeSttSessionIdRef.current,
+        requestedConversationId: nativeSttRequestedConversationIdRef.current,
+        requestedSessionId: nativeSttRequestedSessionIdRef.current,
+        retiredSessionIds: retiredNativeSttSessionIdsRef.current,
+      })) {
+        return;
+      }
+      if (event.conversationId) {
+        nativeSttConversationIdRef.current = event.conversationId;
+      }
+      if (event.sessionId) {
+        nativeSttSessionIdRef.current = event.sessionId;
+      }
       nativeStatusRef.current = 'closed';
-      emitToWeb({ type: 'close', reason: event.reason });
+      emitToWeb({
+        type: 'status',
+        status: 'closed',
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+      });
+      emitToWeb({
+        type: 'close',
+        reason: event.reason,
+        ...(event.conversationId ? { conversationId: event.conversationId } : {}),
+        ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+      });
+      nativeSttConversationIdRef.current = null;
+      rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, eventSessionId);
+      nativeSttSessionIdRef.current = null;
     });
 
     return () => {
@@ -2573,6 +4109,55 @@ function AppInner(): React.JSX.Element {
     updateSafeAreaPalette(nextUrl);
   }, [rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
+  const replayNativeSttStatusToWeb = useCallback((nextUrl: string) => {
+    const roomPayload = resolveConversationRestorePayloadFromUrl(nextUrl);
+    if (!roomPayload) {
+      // A list page must not receive a live status scoped to whichever room
+      // happened to own the process-wide native singleton previously.
+      return;
+    }
+
+    const roomConversationId = roomPayload.conversationId;
+    const snapshot = nativeSttSnapshotRef.current;
+    // The snapshot is the latest native acknowledgement. The refs may still
+    // describe the WebView's previous room after a reload, so using them first
+    // can replay a stale idle/live state into the newly mounted room.
+    const activeConversationId = snapshot.conversationId || nativeSttConversationIdRef.current || '';
+    const activeSessionId = snapshot.sessionId || nativeSttSessionIdRef.current || '';
+    const activeStatus = resolveNativeSttStatusFromSnapshot(snapshot);
+    const sameRoomHasLiveSession = activeConversationId === roomConversationId
+      && (isLiveNativeSttStatus(activeStatus) || activeStatus === 'stopping');
+
+    if (sameRoomHasLiveSession) {
+      emitToWeb({
+        type: 'status',
+        status: activeStatus,
+        conversationId: roomConversationId,
+        ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+        ...(typeof snapshot.running === 'boolean' ? { running: snapshot.running } : {}),
+        ...(typeof snapshot.serverReady === 'boolean' ? { serverReady: snapshot.serverReady } : {}),
+        ...(typeof snapshot.stopping === 'boolean' ? { stopping: snapshot.stopping } : {}),
+        ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
+        replay: true,
+      });
+      return;
+    }
+
+    // Reset only this WebView room's cached UI state. The RN/native snapshot
+    // is deliberately left untouched because another room may still own the
+    // native singleton and must be recovered explicitly on the next start.
+    emitToWeb({
+      type: 'status',
+      status: 'idle',
+      conversationId: roomConversationId,
+      running: false,
+      serverReady: false,
+      stopping: false,
+      ...(typeof snapshot.eventSequence === 'number' ? { eventSequence: snapshot.eventSequence } : {}),
+      replay: true,
+    });
+  }, [emitToWeb]);
+
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
@@ -2583,7 +4168,12 @@ function AppInner(): React.JSX.Element {
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
-    emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    replayNativeSttStatusToWeb(nextUrl);
+    flushPendingNativeSttMessagesToWeb();
+    flushPendingQrScannerEventsToWeb();
+    flushPendingNativeLocationEventsToWeb();
+    flushPendingNativePushRegistrationsToWeb();
+    flushPendingProfileLinkToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
@@ -2609,8 +4199,33 @@ function AppInner(): React.JSX.Element {
             } catch (urlError) {
               listUrl = currentHref.replace(/[?&]conversation=[^&]*/g, '').replace(/[?&]$/, '');
             }
-            window.history.replaceState(null, '', listUrl);
-            window.history.pushState(null, '', currentHref);
+            var conversationId = '';
+            try {
+              conversationId = new URL(currentHref).searchParams.get('conversation') || '';
+            } catch (urlError) {
+              conversationId = '';
+            }
+            var buildConversationRouteState = function (routeConversationId, sourceState) {
+              var nextState = sourceState && typeof sourceState === 'object' && !Array.isArray(sourceState)
+                ? Object.assign({}, sourceState)
+                : {};
+              delete nextState.conversationId;
+              nextState[${JSON.stringify(CONVERSATION_HISTORY_ROUTE_STATE_KEY)}] = routeConversationId || null;
+              if (routeConversationId) {
+                nextState.conversationId = routeConversationId;
+              }
+              return nextState;
+            };
+            window.history.replaceState(
+              buildConversationRouteState(null, window.history.state),
+              '',
+              listUrl,
+            );
+            window.history.pushState(
+              buildConversationRouteState(conversationId, window.history.state),
+              '',
+              currentHref,
+            );
             window[${JSON.stringify(IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG)}] = true;
           } catch (e) {
             // Ignore errors in history seed injection.
@@ -2621,10 +4236,10 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
-    if (activateWebFallback()) return;
+    if (!initialLoadSettledRef.current && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -2637,6 +4252,7 @@ function AppInner(): React.JSX.Element {
   const handleHttpError = useCallback((event: WebViewHttpStatusEvent) => {
     if (
       shouldFallbackHttpStatus(event.nativeEvent.statusCode)
+      && !initialLoadSettledRef.current
       && !isPageReadyRef.current
       && activateWebFallback()
     ) {
@@ -2647,6 +4263,7 @@ function AppInner(): React.JSX.Element {
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     rememberCurrentWebUrl(navigationState.url);
     setCurrentWebPathname(parseWebPathname(navigationState.url));
+    prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
   }, [prepareBannerZoneTransition, rememberCurrentWebUrl, updateSafeAreaPalette]);
 
@@ -2696,6 +4313,7 @@ function AppInner(): React.JSX.Element {
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
+            keyboardDisplayRequiresUserAction={false}
             setSupportMultipleWindows={false}
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
@@ -2706,7 +4324,7 @@ function AppInner(): React.JSX.Element {
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             injectedJavaScriptBeforeContentLoaded={nativeQaBridgeBootstrapScript}
-            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+            allowsBackForwardNavigationGestures={!isEdgeSwipeSuppressedByWeb && shouldEnableIosWebViewBackForwardNavigation({
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,
@@ -2717,6 +4335,7 @@ function AppInner(): React.JSX.Element {
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
+            onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}
             onError={handleLoadError}
@@ -2803,7 +4422,7 @@ function AppInner(): React.JSX.Element {
             bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
-            hidden={activeBannerZone !== 'list'}
+            hidden={shouldHideNativeBanners || activeBannerZone !== 'list'}
           />
           <NativeAdBanner
             adModule={nativeAdModule}
@@ -2815,9 +4434,16 @@ function AppInner(): React.JSX.Element {
             bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
-            hidden={activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
+            hidden={shouldHideNativeBanners || activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
           />
         </>
+      ) : null}
+      {qrScannerRequest ? (
+        <NativeQrScanner
+          requestConfig={qrScannerRequest}
+          onClose={handleNativeQrClose}
+          onRead={handleNativeQrRead}
+        />
       ) : null}
     </View>
   );

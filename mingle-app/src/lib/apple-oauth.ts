@@ -29,11 +29,12 @@ function base64UrlEncode(input: Buffer | string): string {
 }
 
 function decodeEscapedMultilineText(value: string): string {
+  // Vault-backed Devbox env values can pass through more than one dotenv/TSV
+  // serialization layer. Normalize each layer so PEM values remain valid in
+  // both direct runtime envs and locally generated runtime env files.
   return value
-    .replace(/\\\\r\\\\n/g, "\n")
-    .replace(/\\\\n/g, "\n")
-    .replace(/\\r\\n/g, "\n")
-    .replace(/\\n/g, "\n");
+    .replace(/\\+r\\+n/g, "\n")
+    .replace(/\\+n/g, "\n");
 }
 
 function normalizePrivateKey(rawValue: string): string {

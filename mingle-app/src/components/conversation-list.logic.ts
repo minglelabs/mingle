@@ -4,6 +4,7 @@ import type { ConversationChannelSummary } from "@/lib/app-conversations";
 
 export const MAX_RECENT_SEARCHES = 6;
 export const SEARCH_OVERLAY_HISTORY_STATE_KEY = "__mingleConversationSearchOpen";
+export const CONVERSATION_HISTORY_ROUTE_STATE_KEY = "__MINGLE_CONVERSATION_HISTORY_ROUTE__";
 export const ROW_ACTION_TOOLTIP_GAP_PX = 8;
 export const ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX = 200;
 export const ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO = 0.4;
@@ -110,6 +111,74 @@ export function isSearchOverlayHistoryOpen(state: unknown): boolean {
   );
 }
 
+function isMergeableHistoryState(state: unknown): state is Record<string, unknown> {
+  return state !== null && typeof state === "object" && !Array.isArray(state);
+}
+
+export function readConversationHistoryRouteFromState(state: unknown): string | null | undefined {
+  if (!isMergeableHistoryState(state)) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(state, CONVERSATION_HISTORY_ROUTE_STATE_KEY)) {
+    return undefined;
+  }
+
+  const rawRoute = state[CONVERSATION_HISTORY_ROUTE_STATE_KEY];
+  if (typeof rawRoute !== "string") return null;
+  const normalizedRoute = rawRoute.trim();
+  return normalizedRoute || null;
+}
+
+export function resolveConversationHistoryRoute(
+  eventState: unknown,
+  currentState: unknown,
+  fallbackRoute: string | null,
+): string | null {
+  // On iOS, a delayed popstate can carry the route from the gesture that
+  // started earlier even after the WebView has already committed a later
+  // forward entry. The current history entry is the authoritative route when
+  // it has our marker; older entries fall back to the event state and URL.
+  const currentRoute = readConversationHistoryRouteFromState(currentState);
+  if (currentRoute !== undefined) return currentRoute;
+
+  const eventRoute = readConversationHistoryRouteFromState(eventState);
+  if (eventRoute !== undefined) return eventRoute;
+
+  return fallbackRoute;
+}
+
+export type ConversationHistoryNavigationDirection = "back" | "forward" | "unknown";
+
+export function resolveConversationHistoryNavigationDirection(
+  activeConversationId: string | null,
+  targetConversationId: string | null,
+): ConversationHistoryNavigationDirection {
+  if (activeConversationId && targetConversationId !== activeConversationId) {
+    return "back";
+  }
+  if (!activeConversationId && targetConversationId) {
+    return "forward";
+  }
+  return "unknown";
+}
+
+export function buildConversationHistoryState(
+  conversationId: string | null,
+  currentState: unknown,
+): Record<string, unknown> {
+  const nextState = isMergeableHistoryState(currentState)
+    ? { ...currentState }
+    : {};
+
+  // The old plain field is only used by the first version of the room history
+  // implementation. Remove it on list entries so a browser popstate cannot
+  // mistake a list entry for a room after a stale iOS gesture replay.
+  delete nextState.conversationId;
+  nextState[CONVERSATION_HISTORY_ROUTE_STATE_KEY] = conversationId;
+  if (conversationId) {
+    nextState.conversationId = conversationId;
+  }
+  return nextState;
+}
+
 export function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
   const leftTimestamp = Date.parse(a.latestMessageAt || a.createdAt) || 0;
   const rightTimestamp = Date.parse(b.latestMessageAt || b.createdAt) || 0;
@@ -172,10 +241,30 @@ export function updateConversationSummaryStatus(
   };
 }
 
+export function resolveMountedConversationIds(
+  activeConversationId: string | null | undefined,
+  liveConversationId: string | null | undefined,
+): string[] {
+  const ids = new Set<string>();
+  if (activeConversationId) ids.add(activeConversationId);
+  if (liveConversationId) ids.add(liveConversationId);
+  return [...ids];
+}
+
 export function findNativeSttRestoreConversation(
   conversations: ConversationChannelSummary[],
   deletingConversationIds: ReadonlySet<string>,
+  preferredConversationId?: string | null,
 ): ConversationChannelSummary | null {
+  const normalizedPreferredConversationId = preferredConversationId?.trim() || null;
+  if (normalizedPreferredConversationId) {
+    return conversations.find((conversation) => (
+      conversation.id === normalizedPreferredConversationId
+      && conversation.status === "active"
+      && !deletingConversationIds.has(conversation.id)
+    )) ?? null;
+  }
+
   return conversations.find((conversation) => (
     conversation.status === "active"
     && !deletingConversationIds.has(conversation.id)

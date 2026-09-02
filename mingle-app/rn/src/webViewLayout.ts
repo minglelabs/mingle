@@ -1,6 +1,8 @@
 import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
 import { classifyConversationWebUrl } from './webViewRestore';
 
+const NATIVE_TAB_ROOT_QUERY_KEY = 'nativeTabRoot';
+
 function splitPathname(pathname: string): string[] {
   return pathname
     .split('/')
@@ -30,9 +32,31 @@ export function isLiveDemoPathname(pathname: string): boolean {
   if (segments.length === 1) return true;
 
   return (
-    segments.length === 2
-    && (segments[1] === 'translator' || segments[1] === 'conversations')
+    (segments.length === 2
+      && (segments[1] === 'translator' || segments[1] === 'conversations' || segments[1] === 'mypage'))
+    || (segments.length === 3
+      && segments[1] === 'mypage'
+      && (segments[2] === 'share' || segments[2] === 'follows'))
   );
+}
+
+function isMyPagePathname(pathname: string): boolean {
+  const segments = splitPathname(pathname);
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  return WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale) && segments[1] === 'mypage';
+}
+
+export function isNativeTabRootUrl(rawUrl: string): boolean {
+  const candidate = rawUrl.trim();
+  if (!candidate) return false;
+
+  try {
+    return new URL(candidate).searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function shouldDisableIosWebViewScrolling(params: {
@@ -56,6 +80,17 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
   currentUrl?: string;
 }): boolean {
   if (!params.isIosPlatform) return false;
+  // My Page owns its panel-level edge swipes. Letting WKWebView handle the
+  // same gesture on profile/share routes can race the web router and briefly
+  // expose the native WebView background during the route transition.
+  if (params.currentUrl && isMyPagePathname(parseWebPathname(params.currentUrl))) {
+    return false;
+  }
+  // A tab switch marks the destination as a fresh navigation root. Do not
+  // expose the WebView's older cross-tab history entries as edge-swipe targets.
+  if (params.currentUrl && isNativeTabRootUrl(params.currentUrl)) {
+    return false;
+  }
   // Restored conversation URLs may have no prior WebView history entry after
   // app relaunch, but iOS should still expose the edge-swipe affordance.
   if (params.currentUrl && classifyConversationWebUrl(params.currentUrl) === 'room') {

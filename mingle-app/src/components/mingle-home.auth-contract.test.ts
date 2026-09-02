@@ -50,7 +50,7 @@ describe("mingle-home auth contracts", () => {
     });
   });
 
-  it("keeps the auth gate in a stable loading state while session resolution is in progress", () => {
+  it("does not show the auth gate while session resolution is in progress", () => {
     expect(
       resolveAuthGateVisualState({
         requireAuthGate: true,
@@ -62,7 +62,7 @@ describe("mingle-home auth contracts", () => {
         agreedTerms: true,
       }),
     ).toEqual({
-      shouldShowAuthGate: true,
+      shouldShowAuthGate: false,
       isLoading: true,
       disabled: true,
       emailSheetDisabled: true,

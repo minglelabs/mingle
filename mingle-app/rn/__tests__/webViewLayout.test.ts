@@ -1,4 +1,9 @@
-import { appendNativeRuntimeWebViewParams, shouldEnableIosWebViewBackForwardNavigation } from '../src/webViewLayout';
+import {
+  appendNativeRuntimeWebViewParams,
+  isLiveDemoPathname,
+  isNativeTabRootUrl,
+  shouldEnableIosWebViewBackForwardNavigation,
+} from '../src/webViewLayout';
 
 describe('appendNativeRuntimeWebViewParams', () => {
   it('adds zone-specific banner fallbacks and client build query params', () => {
@@ -56,6 +61,16 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
     })).toBe(false);
   });
 
+  it('returns false for an explicit tab root even when older history exists', () => {
+    expect(isNativeTabRootUrl(`${BASE}/ko/mypage?nativeTabRoot=1`)).toBe(true);
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: true,
+      currentUrl: `${BASE}/ko/mypage?nativeTabRoot=1`,
+    })).toBe(false);
+  });
+
   it('returns true for iOS conversation list URLs when back history exists', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,
@@ -65,11 +80,32 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
     })).toBe(true);
   });
 
+  it('returns false for My Page surfaces so web panel swipes own the gesture', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/mypage/share?nativeUi=1`,
+    })).toBe(false);
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: true,
+      currentUrl: `${BASE}/ko/mypage?nativeUi=1`,
+    })).toBe(false);
+  });
+
   it('returns false on iOS without currentUrl or back history', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,
       canGoBack: false,
       canGoForward: false,
     })).toBe(false);
+  });
+});
+
+describe('isLiveDemoPathname', () => {
+  it('treats the follower/following list as an in-app My Page surface', () => {
+    expect(isLiveDemoPathname('/ko/mypage/follows')).toBe(true);
   });
 });

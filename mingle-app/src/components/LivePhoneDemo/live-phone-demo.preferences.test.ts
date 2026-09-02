@@ -251,3 +251,63 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     })
   })
 })
+
+describe('pending preference helpers', () => {
+  let mockStore: Record<string, string>
+
+  beforeEach(() => {
+    mockStore = {}
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => mockStore[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        mockStore[key] = value
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete mockStore[key]
+      }),
+    } as unknown as Storage)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads and clears pending birth date', async () => {
+    const { readPendingBirthDate, clearPendingBirthDate, LS_KEY_PENDING_BIRTH_DATE } = await import('./live-phone-demo.preferences')
+
+    expect(readPendingBirthDate()).toBeNull()
+
+    mockStore[LS_KEY_PENDING_BIRTH_DATE] = '1990-12-25'
+    expect(readPendingBirthDate()).toBe('1990-12-25')
+
+    mockStore[LS_KEY_PENDING_BIRTH_DATE] = 'invalid'
+    expect(readPendingBirthDate()).toBeNull()
+
+    mockStore[LS_KEY_PENDING_BIRTH_DATE] = '1990-12-25'
+    clearPendingBirthDate()
+    expect(readPendingBirthDate()).toBeNull()
+  })
+
+  it('reads and clears pending primary and default conversation languages', async () => {
+    const {
+      readPendingPrimaryLanguages,
+      readPendingDefaultConversationLanguages,
+      clearPendingLanguagePreferences,
+      LS_KEY_PENDING_PRIMARY_LANGUAGES,
+      LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+    } = await import('./live-phone-demo.preferences')
+
+    expect(readPendingPrimaryLanguages()).toEqual([])
+    expect(readPendingDefaultConversationLanguages()).toEqual([])
+
+    mockStore[LS_KEY_PENDING_PRIMARY_LANGUAGES] = JSON.stringify(['ko-KR', 'en-US'])
+    mockStore[LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES] = JSON.stringify(['ko-KR', 'ja-JP'])
+
+    expect(readPendingPrimaryLanguages()).toEqual(['ko', 'en'])
+    expect(readPendingDefaultConversationLanguages()).toEqual(['ko', 'ja'])
+
+    clearPendingLanguagePreferences()
+    expect(readPendingPrimaryLanguages()).toEqual([])
+    expect(readPendingDefaultConversationLanguages()).toEqual([])
+  })
+})

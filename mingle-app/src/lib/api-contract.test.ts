@@ -93,6 +93,27 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v1.1.4/conversations')
   })
 
+  it('accepts 2.0.0 env namespace values', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.0'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v2.0.0')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.0/conversations')
+  })
+
+  it('accepts iOS 2.0.1 env namespace values', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.1'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v2.0.1')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.1/conversations')
+  })
+
+  it('accepts Android 2.0.1 env namespace values', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v2.0.1'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('android/v2.0.1')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/android/v2.0.1/conversations')
+  })
+
   it('keeps v1.0.10 namespaces allow-listed for older installed apps', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.10'
     const contract = await loadApiContractModule()
@@ -113,6 +134,8 @@ describe('api-contract namespace guard', () => {
     '/api/android/v1.1.2/translate/finalize',
     '/api/android/v1.1.3/translate/finalize',
     '/api/android/v1.1.4/translate/finalize',
+    '/api/android/v2.0.0/translate/finalize',
+    '/api/android/v2.0.1/translate/finalize',
     '/api/ios/v1.0.4/translate/finalize',
     '/api/ios/v1.0.5/translate/finalize',
     '/api/ios/v1.0.6/translate/finalize',
@@ -125,6 +148,8 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.1.2/translate/finalize',
     '/api/ios/v1.1.3/translate/finalize',
     '/api/ios/v1.1.4/translate/finalize',
+    '/api/ios/v2.0.0/translate/finalize',
+    '/api/ios/v2.0.1/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)

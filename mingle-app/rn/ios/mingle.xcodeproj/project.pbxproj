@@ -14,6 +14,8 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A1B2C3D45E6F708192A3B4C5 /* NativeAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */; };
 		A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */; };
+		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
+		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
 		B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */; };
 		B2C3D4E56F708192A3B4C5D6 /* NativeAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */; };
 		E3A4B5C62D5F7B8192CD34E5 /* NativeTTSModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */; };
@@ -35,7 +37,9 @@
 		C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeSTTModule.swift; path = mingle/NativeSTTModule.swift; sourceTree = "<group>"; };
 		D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeSTTModuleBridge.m; path = mingle/NativeSTTModuleBridge.m; sourceTree = "<group>"; };
 		D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeAuthModuleBridge.m; path = mingle/NativeAuthModuleBridge.m; sourceTree = "<group>"; };
+		E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeQrImageModule.swift; path = mingle/NativeQrImageModule.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeQrImageModuleBridge.m; path = mingle/NativeQrImageModuleBridge.m; sourceTree = "<group>"; };
 		F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTTSModule.swift; path = mingle/NativeTTSModule.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -58,6 +62,8 @@
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */,
 				D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */,
+				E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */,
+				F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */,
 				C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */,
 				D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */,
 				F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */,
@@ -295,6 +301,8 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				A1B2C3D45E6F708192A3B4C5 /* NativeAuthModule.swift in Sources */,
 				B2C3D4E56F708192A3B4C5D6 /* NativeAuthModuleBridge.m in Sources */,
+				B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */,
+				C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */,
 				A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */,
 				B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */,
 				E3A4B5C62D5F7B8192CD34E5 /* NativeTTSModule.swift in Sources */,
@@ -310,10 +318,11 @@
 			baseConfigurationReference = 3B4392A12AC88292D35C810B /* Pods-mingle.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				APS_ENVIRONMENT = development;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 64;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = mingle/Info.plist;
@@ -322,19 +331,20 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 2.0.1;
 				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
 				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.4;
+				MINGLE_PUSH_ENVIRONMENT = sandbox;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
-				NEXT_PUBLIC_SITE_HOST = mingle-1-1-4-production.up.railway.app;
+				NEXT_PUBLIC_SITE_HOST = mingle-2-0-0-production.up.railway.app;
 				NEXT_PUBLIC_SITE_SCHEME = https;
-				NEXT_PUBLIC_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
-				NEXT_PUBLIC_WS_HOST = mingle-1-1-4-production.up.railway.app;
+				NEXT_PUBLIC_SITE_URL = "https://mingle-2-0-0-production.up.railway.app";
+				NEXT_PUBLIC_WS_HOST = mingle-2-0-0-production.up.railway.app;
 				NEXT_PUBLIC_WS_SCHEME = wss;
-				NEXT_PUBLIC_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
+				NEXT_PUBLIC_WS_URL = "wss://mingle-2-0-0-production.up.railway.app/stt";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -356,10 +366,11 @@
 			baseConfigurationReference = 5709B34CF0A7D63546082F79 /* Pods-mingle.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				APS_ENVIRONMENT = production;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 64;
+				CURRENT_PROJECT_VERSION = 89;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -367,19 +378,20 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 2.0.1;
 				MINGLE_LEGACY_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
 				MINGLE_LEGACY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.4;
+				MINGLE_PUSH_ENVIRONMENT = production;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
-				NEXT_PUBLIC_SITE_HOST = mingle-1-1-4-production.up.railway.app;
+				NEXT_PUBLIC_SITE_HOST = mingle-2-0-0-production.up.railway.app;
 				NEXT_PUBLIC_SITE_SCHEME = https;
-				NEXT_PUBLIC_SITE_URL = "https://mingle-1-1-4-production.up.railway.app";
-				NEXT_PUBLIC_WS_HOST = mingle-1-1-4-production.up.railway.app;
+				NEXT_PUBLIC_SITE_URL = "https://mingle-2-0-0-production.up.railway.app";
+				NEXT_PUBLIC_WS_HOST = mingle-2-0-0-production.up.railway.app;
 				NEXT_PUBLIC_WS_SCHEME = wss;
-				NEXT_PUBLIC_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
+				NEXT_PUBLIC_WS_URL = "wss://mingle-2-0-0-production.up.railway.app/stt";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

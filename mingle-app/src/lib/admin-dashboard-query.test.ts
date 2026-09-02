@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdminDashboardDateRange } from "./admin-dashboard-metrics";
-import { parseDayKey, resolveTodayKey, startOfDayUtc } from "./admin-dashboard-metrics";
+import { parseDayKey, resolveTodayKey, shiftDayKey, startOfDayUtc } from "./admin-dashboard-metrics";
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
+  deleteMany: vi.fn(),
   upsert: vi.fn(),
   queryRawUnsafe: vi.fn(),
 }));
@@ -12,13 +13,14 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminDashboardDailyMetric: {
       findMany: mocks.findMany,
+      deleteMany: mocks.deleteMany,
       upsert: mocks.upsert,
     },
     $queryRawUnsafe: mocks.queryRawUnsafe,
   },
 }));
 
-import { loadAdminDashboardMetrics } from "./admin-dashboard-query";
+import { clearAdminDashboardCache, loadAdminDashboardMetrics } from "./admin-dashboard-query";
 
 function makeRange(dayKeys: string[]): AdminDashboardDateRange {
   const rangeStart = startOfDayUtc(dayKeys[0]);
@@ -33,9 +35,9 @@ function rawDay(dayKey: string): Date {
 
 function setRawMetricResults(dayKey: string): void {
   mocks.queryRawUnsafe
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 2n }])
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 3n }])
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 4n }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(2) }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(3) }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(4) }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 5 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 100, p95_ms: 180 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 220, p95_ms: 360 }]);
@@ -46,7 +48,7 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
-  it("uses cached daily rows without querying source tables", async () => {
+  it("uses cached daily rows without querying source tables for historical days", async () => {
     const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
     mocks.findMany.mockResolvedValue(dayKeys.map((day, index) => ({
       day: rawDay(day),
@@ -131,29 +133,81 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(5);
   });
 
-  it("refreshes only the current day while retaining the cached history", async () => {
+  it("queries today and yesterday on the fly without saving them to DB cache", async () => {
     const today = resolveTodayKey(new Date());
-    mocks.findMany.mockResolvedValue([{
-      day: rawDay(today),
-      signupCount: 1,
-      dauCount: 1,
-      messageCount: 1,
-      usageSeconds: 1,
-      sttAvgMs: 1,
-      sttP95Ms: 1,
-      translationAvgMs: 1,
-      translationP95Ms: 1,
-      usageMetricVersion: 1,
-    }]);
+    const yesterday = shiftDayKey(today, -1);
     setRawMetricResults(today);
-    mocks.upsert.mockResolvedValue({});
 
-    const metrics = await loadAdminDashboardMetrics(makeRange([today]));
+    await loadAdminDashboardMetrics(makeRange([yesterday, today]));
 
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
-    expect(mocks.upsert).toHaveBeenCalledTimes(1);
-    expect(mocks.upsert.mock.calls[0][0].where.day).toEqual(rawDay(today));
-    expect(metrics[0].points[0].value).toBe(5);
-    expect(metrics[4].points[0].value).toBe(100);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("uses historical cache while recalculating today and yesterday", async () => {
+    const today = resolveTodayKey(new Date());
+    const yesterday = shiftDayKey(today, -1);
+    const twoDaysAgo = shiftDayKey(today, -2);
+    const dayKeys = [twoDaysAgo, yesterday, today];
+
+    mocks.findMany.mockResolvedValue([{
+      day: rawDay(twoDaysAgo),
+      signupCount: 9,
+      dauCount: 8,
+      messageCount: 7,
+      usageSeconds: 6,
+      usageMetricVersion: 1,
+      sttAvgMs: null,
+      sttP95Ms: null,
+      translationAvgMs: null,
+      translationP95Ms: null,
+    }]);
+    setRawMetricResults(today);
+
+    const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys));
+
+    expect(mocks.findMany).toHaveBeenCalledTimes(1);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(metrics[0].points[0].value).toBe(6);
+  });
+
+  it("forceRefresh deletes only cacheable days and recalculates everything, persisting only cacheable days", async () => {
+    const today = resolveTodayKey(new Date());
+    const yesterday = shiftDayKey(today, -1);
+    const dayKeys = ["2026-08-02", "2026-08-03", yesterday, today];
+    setRawMetricResults("2026-08-02");
+    mocks.deleteMany.mockResolvedValue({ count: 2 });
+    mocks.upsert.mockResolvedValue({});
+
+    const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { forceRefresh: true });
+
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
+    const deletedDays: Date[] = mocks.deleteMany.mock.calls[0][0].where.day.in;
+    expect(deletedDays).toHaveLength(2);
+    expect(mocks.upsert).toHaveBeenCalledTimes(2);
+    expect(mocks.upsert.mock.calls.map(([args]) => args.where.day)).toEqual([
+      rawDay("2026-08-02"),
+      rawDay("2026-08-03"),
+    ]);
+    expect(metrics[0].points).toHaveLength(4);
+  });
+});
+
+describe("clearAdminDashboardCache", () => {
+  it("deletes only the specified day keys", async () => {
+    const dayKeys = ["2026-08-01", "2026-08-02", "2026-08-03"];
+    mocks.deleteMany.mockResolvedValue({ count: 3 });
+    await clearAdminDashboardCache(dayKeys);
+    expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteMany.mock.calls[0][0].where.day.in).toHaveLength(3);
+  });
+
+  it("does nothing when given an empty array", async () => {
+    await clearAdminDashboardCache([]);
+    expect(mocks.deleteMany).not.toHaveBeenCalled();
   });
 });

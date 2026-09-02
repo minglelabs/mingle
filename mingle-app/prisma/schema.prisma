@@ -9,58 +9,193 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  externalUserId  String?  @unique @map("external_user_id")
-  email           String?  @unique(map: "app_users_email_key")
-  emailVerified   DateTime? @map("email_verified")
-  passwordHash    String?  @map("password_hash")
-  name            String?
-  image           String?
-  latestIpAddress String?  @map("latest_ip_address")
-  latestUserAgent String?  @map("latest_user_agent")
-  language        String?
-  pageLanguage    String?  @map("page_language")
-  referrer        String?
-  fullUrl         String?  @map("full_url")
-  queryParams     String?  @map("query_params")
-  screenWidth     Int?     @map("screen_width")
-  screenHeight    Int?     @map("screen_height")
-  timezone        String?
-  platform        String?
-  latestClientPlatform String? @map("latest_client_platform")
-  latestAppVersion String? @map("latest_app_version")
-  latestApiNamespace String? @map("latest_api_namespace")
-  appVersionHistory String[] @default([]) @map("app_version_history")
-  apiNamespaceHistory String[] @default([]) @map("api_namespace_history")
-  pathname        String?
-  demoTextSizeLevel Int?   @map("demo_text_size_level")
-  demoSilenceFinalizeMs Int? @default(1000) @map("demo_silence_finalize_ms")
-  demoEndpointMaxDelayMs Int? @default(3000) @map("demo_endpoint_max_delay_ms")
-  demoEndpointTuningStep Int? @default(2) @map("demo_endpoint_tuning_step")
-  translationModel  String?  @map("translation_model")
-  adBannerPosition  String?  @map("ad_banner_position")
-  demoInputMode     String?  @map("demo_input_mode")
-  demoSpeakerEnabled Boolean? @default(false) @map("demo_speaker_enabled")
-  demoEchoAllowed Boolean? @default(true) @map("demo_echo_allowed")
-  sttSegmentationMode String?  @map("stt_segmentation_mode")
-  totalUsageSec   Int      @default(0) @map("total_usage_sec")
-  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
-  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                           String    @id @default(cuid())
+  externalUserId               String?   @unique @map("external_user_id")
+  email                        String?   @unique(map: "app_users_email_key")
+  emailVerified                DateTime? @map("email_verified")
+  passwordHash                 String?   @map("password_hash")
+  name                         String?
+  image                        String?
+  imageObjectKey               String?   @map("image_object_key")
+  imageCropScale               Float?    @map("image_crop_scale")
+  imageCropX                   Float?    @map("image_crop_x")
+  imageCropY                   Float?    @map("image_crop_y")
+  latestIpAddress              String?   @map("latest_ip_address")
+  latestUserAgent              String?   @map("latest_user_agent")
+  language                     String?
+  pageLanguage                 String?   @map("page_language")
+  referrer                     String?
+  fullUrl                      String?   @map("full_url")
+  queryParams                  String?   @map("query_params")
+  screenWidth                  Int?      @map("screen_width")
+  screenHeight                 Int?      @map("screen_height")
+  timezone                     String?
+  platform                     String?
+  latestClientPlatform         String?   @map("latest_client_platform")
+  latestAppVersion             String?   @map("latest_app_version")
+  latestApiNamespace           String?   @map("latest_api_namespace")
+  appVersionHistory            String[]  @default([]) @map("app_version_history")
+  apiNamespaceHistory          String[]  @default([]) @map("api_namespace_history")
+  pathname                     String?
+  demoTextSizeLevel            Int?      @map("demo_text_size_level")
+  demoSilenceFinalizeMs        Int?      @default(1000) @map("demo_silence_finalize_ms")
+  demoEndpointMaxDelayMs       Int?      @default(3000) @map("demo_endpoint_max_delay_ms")
+  demoEndpointTuningStep       Int?      @default(2) @map("demo_endpoint_tuning_step")
+  translationModel             String?   @map("translation_model")
+  adBannerPosition             String?   @map("ad_banner_position")
+  demoInputMode                String?   @map("demo_input_mode")
+  demoSpeakerEnabled           Boolean?  @default(false) @map("demo_speaker_enabled")
+  demoEchoAllowed              Boolean?  @default(true) @map("demo_echo_allowed")
+  demoBubbleDisplayMode        String?   @default("expanded") @map("demo_bubble_display_mode")
+  sttSegmentationMode          String?   @map("stt_segmentation_mode")
+  totalUsageSec                Int       @default(0) @map("total_usage_sec")
+  handle                       String    @unique(map: "app_users_handle_key")
+  bio                          String?   @db.Text
+  nationality                  String?
+  primaryLanguages             String[]  @default([]) @map("primary_languages")
+  defaultConversationLanguages String[]  @default([]) @map("default_conversation_languages")
+  defaultDisplayLanguage       String?   @map("default_display_language")
+  locationLatitude             Float?    @map("location_latitude")
+  locationLongitude            Float?    @map("location_longitude")
+  locationCity                 String?   @map("location_city")
+  locationCountry              String?   @map("location_country")
+  locationCountryCode          String?   @map("location_country_code")
+  locationUpdatedAt            DateTime? @map("location_updated_at")
+  locationPermissionVerifiedAt DateTime? @map("location_permission_verified_at")
+  birthDate                    DateTime? @map("birth_date") @db.Date
+  discoverySource              String?   @map("discovery_source")
+  isActive                     Boolean   @default(true) @map("is_active")
+  deactivatedAt                DateTime? @map("deactivated_at")
+  withdrawnAt                  DateTime? @map("withdrawn_at")
+  scheduledDeleteAt            DateTime? @map("scheduled_delete_at")
+  isDeleted                    Boolean   @default(false) @map("is_deleted")
+  deletedAt                    DateTime? @map("deleted_at")
+  firstSeenAt                  DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt                   DateTime  @default(now()) @map("last_seen_at")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
 
-  messages  AppMessage[]
-  eventLogs AppEventLog[]
-  feedbackEntries AppFeedback[]
-  versionPoliciesCreated AppClientVersionPolicy[]
-  accounts  Account[]
-  sessions  Session[]
-  passwordResetTokens PasswordResetToken[]
-  conversationChannels AppConversationChannel[]
+  messages                AppMessage[]
+  eventLogs               AppEventLog[]
+  feedbackEntries         AppFeedback[]
+  versionPoliciesCreated  AppClientVersionPolicy[]
+  accounts                Account[]
+  sessions                Session[]
+  passwordResetTokens     PasswordResetToken[]
+  conversationChannels    AppConversationChannel[]
+  conversationMemberships AppConversationChannelMember[]
+  followingRelations      UserFollow[]                   @relation("UserFollowing")
+  followerRelations       UserFollow[]                   @relation("UserFollowers")
+  receivedNotifications   UserNotification[]             @relation("UserNotificationsReceived")
+  sentNotifications       UserNotification[]             @relation("UserNotificationsSent")
+  pushTokens              UserPushToken[]
+  blockingRelations       UserBlock[]                    @relation("UserBlocking")
+  blockedByRelations      UserBlock[]                    @relation("UserBlockedBy")
+  sentUserReports         UserReport[]                   @relation("UserReportsSent")
+  receivedUserReports     UserReport[]                   @relation("UserReportsReceived")
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
   @@map("app_users")
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId], map: "app_user_follows_follower_following_uidx")
+  @@index([followerId, createdAt], map: "app_user_follows_follower_created_at_idx")
+  @@index([followingId, createdAt], map: "app_user_follows_following_created_at_idx")
+  @@map("app_user_follows")
+}
+
+model UserNotification {
+  id          String    @id @default(cuid())
+  recipientId String    @map("recipient_id")
+  actorId     String    @map("actor_id")
+  type        String    @default("follow")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  recipient User @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
+  @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")
+  @@map("app_user_notifications")
+}
+
+model UserPushToken {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  installationId String   @map("installation_id")
+  platform       String
+  token          String   @unique
+  environment    String   @default("production")
+  appVersion     String?  @map("app_version")
+  apiNamespace   String?  @map("api_namespace")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([installationId, platform], map: "app_user_push_tokens_installation_platform_uidx")
+  @@index([userId, platform], map: "app_user_push_tokens_user_platform_idx")
+  @@map("app_user_push_tokens")
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("UserBlocking", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId], map: "app_user_blocks_blocker_blocked_uidx")
+  @@index([blockerId, createdAt], map: "app_user_blocks_blocker_created_at_idx")
+  @@index([blockedId, createdAt], map: "app_user_blocks_blocked_created_at_idx")
+  @@map("app_user_blocks")
+}
+
+model UserReport {
+  id             String   @id @default(cuid())
+  reporterId     String   @map("reporter_id")
+  reportedUserId String   @map("reported_user_id")
+  reason         String
+  message        String?  @db.Text
+  status         String   @default("open")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  reporter     User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  replies      UserReportReply[]
+
+  @@index([reporterId, createdAt], map: "app_user_reports_reporter_created_at_idx")
+  @@index([reportedUserId, createdAt], map: "app_user_reports_reported_created_at_idx")
+  @@index([status, createdAt], map: "app_user_reports_status_created_at_idx")
+  @@map("app_user_reports")
+}
+
+model UserReportReply {
+  id         String   @id @default(cuid())
+  reportId   String   @map("report_id")
+  authorType String   @map("author_type")
+  message    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  report UserReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt], map: "app_user_report_replies_report_created_at_idx")
+  @@map("app_user_report_replies")
 }
 
 model AppMessage {
@@ -144,33 +279,123 @@ model AppEventLog {
   @@index([sessionKey, createdAt(sort: Desc)], map: "app_event_logs_session_created_at_desc_idx")
   @@index([messageId], map: "app_event_logs_message_id_idx")
   @@index([eventType, ipAddress, createdAt, messageId], map: "app_event_logs_event_ip_created_message_idx")
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)], map: "app_event_logs_user_usage_created_desc_idx")
   @@map("app_event_logs")
 }
 
 model AppConversationChannel {
-  id             String    @id @default(cuid())
-  ownerUserId    String    @map("owner_user_id")
-  sequenceNumber Int       @map("sequence_number")
-  title          String
-  userEditedTitleAt DateTime? @map("user_edited_title_at")
-  autoTitleGeneratedAt DateTime? @map("auto_title_generated_at")
-  autoTitleLastTurnCount Int? @map("auto_title_last_turn_count")
-  isDeleted      Boolean?  @map("is_deleted")
-  status         String    @default("active")
-  sessionKey     String    @unique @map("session_key")
-  selectedLanguages String[] @default([]) @map("selected_languages")
-  speechLanguages   String[] @default([]) @map("speech_languages")
-  translationLanguagesLinked Boolean @default(true) @map("translation_languages_linked")
-  pausedAt       DateTime? @map("paused_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                         String    @id @default(cuid())
+  ownerUserId                String    @map("owner_user_id")
+  sequenceNumber             Int       @map("sequence_number")
+  title                      String
+  userEditedTitleAt          DateTime? @map("user_edited_title_at")
+  autoTitleGeneratedAt       DateTime? @map("auto_title_generated_at")
+  autoTitleLastTurnCount     Int?      @map("auto_title_last_turn_count")
+  isDeleted                  Boolean?  @map("is_deleted")
+  status                     String    @default("active")
+  sessionKey                 String    @unique @map("session_key")
+  selectedLanguages          String[]  @default([]) @map("selected_languages")
+  speechLanguages            String[]  @default([]) @map("speech_languages")
+  translationLanguagesLinked Boolean   @default(true) @map("translation_languages_linked")
+  defaultDisplayLanguage     String?   @map("default_display_language")
+  pausedAt                   DateTime? @map("paused_at")
+  // Invitees from "message this person" / room creation who do NOT yet have
+  // an AppConversationChannelMember row. Nothing about the room is visible to
+  // them (buildVisibleMembershipWhere is membership-only) or persisted about
+  // their participation until the inviter actually sends a first message —
+  // materializePendingConversationInvitees turns these into real membership
+  // rows at that point and clears this list. Kept on the channel rather than
+  // as membership rows with a "pending" status because the requirement is
+  // literally zero DB footprint for the invitee before a message is sent, not
+  // just zero visibility.
+  pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  owner   User                           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members AppConversationChannelMember[]
+  invites AppConversationChannelInvite[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@map("app_conversation_channels")
+}
+
+model AppConversationChannelMember {
+  id                String    @id @default(cuid())
+  channelId         String    @map("channel_id")
+  userId            String    @map("user_id")
+  role              String    @default("member") // "owner" | "member"
+  // This member's own preferred display language for this room, written via
+  // the room's existing "display-language" menu screen. Solo rooms keep
+  // using AppConversationChannel.defaultDisplayLanguage unchanged; this only
+  // applies once a channel has 2+ members, since one channel-wide value
+  // can't represent per-viewer preference.
+  displayLanguage   String?   @map("display_language")
+  // This member's own selected translation-target languages for a shared
+  // (2+-member) room. The room's language-selection screen shows the UNION
+  // of every member's own selectedLanguages (see resolveRoomLanguageUnion in
+  // app-conversations.ts), with per-language attribution, so one member
+  // deselecting a language doesn't remove it for everyone else. Solo rooms
+  // (0-1 members) keep using AppConversationChannel.selectedLanguages
+  // unchanged, same split as displayLanguage above.
+  selectedLanguages String[]  @default([]) @map("selected_languages")
+  // This member's own active/paused state for a shared (2+-member) room.
+  // "One active room per account" is a per-person invariant, not a per-room
+  // one — a single channel-wide status can't represent "active for Alice,
+  // paused for Bob" once a room has more than one real account in it. Solo
+  // rooms (0-1 members) keep using AppConversationChannel.status/pausedAt
+  // unchanged, same split as displayLanguage above.
+  status            String    @default("active") @map("status")
+  pausedAt          DateTime? @map("paused_at")
+  // The last time this member opened the room. Message unread counts are
+  // derived from messages sent by other members after this timestamp.
+  lastReadAt        DateTime? @map("last_read_at")
+  joinedAt          DateTime  @default(now()) @map("joined_at")
+  // Set when this member leaves a shared (2+-member) room. The row is kept
+  // (never deleted) rather than removed outright: the remaining members'
+  // room title/avatar/message speaker attribution all read from full
+  // membership history (see resolveViewerFacingTitle and friends in
+  // app-conversations.ts), and this timestamp is also what drives the
+  // in-room "X left" notice. Every read/write that should treat a departed
+  // member as if they were never here (visibility, dedup matching, message
+  // sending, own status/language/pause state) filters on leftAt: null
+  // instead of deleting the row.
+  leftAt            DateTime? @map("left_at")
+
+  channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId], map: "app_conversation_channel_members_channel_user_uidx")
+  @@index([userId, joinedAt], map: "app_conversation_channel_members_user_joined_idx")
+  @@index([channelId], map: "app_conversation_channel_members_channel_idx")
+  @@map("app_conversation_channel_members")
+}
+
+// One record per "X invited Y into this room" event, written the moment the
+// invite happens (inviteMembersToConversationChannel / room creation with
+// inviteeUserIds) — independent of AppConversationChannelMember, which only
+// gets a row for the invitee once materializePendingConversationInvitees
+// runs. Drives the in-timeline "{inviter} invited {invitee}" notice, so it
+// has to exist immediately, not deferred to materialization. Kept forever
+// (never deleted) for the same reason AppConversationChannelMember.leftAt
+// rows are kept: remaining members' timeline history must stay stable.
+// inviteeUserId/invitedByUserId are plain ids with no FK, same as
+// AppConversationChannel.pendingInviteeUserIds — this is a lightweight
+// event log, not a membership relation.
+model AppConversationChannelInvite {
+  id              String   @id @default(cuid())
+  channelId       String   @map("channel_id")
+  inviteeUserId   String   @map("invitee_user_id")
+  invitedByUserId String   @map("invited_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, inviteeUserId], map: "app_conversation_channel_invites_channel_invitee_uidx")
+  @@index([channelId], map: "app_conversation_channel_invites_channel_idx")
+  @@map("app_conversation_channel_invites")
 }
 
 model AppFeedback {
@@ -258,13 +483,13 @@ model VerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  tokenHash String   @unique(map: "app_password_reset_tokens_token_hash_key") @map("token_hash")
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique(map: "app_password_reset_tokens_token_hash_key") @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -274,15 +499,15 @@ model PasswordResetToken {
 }
 
 model NativeAuthPendingResult {
-  requestId  String   @id @map("request_id")
-  status     String
-  provider   String?
-  callbackUrl String  @map("callback_url")
-  bridgeToken String? @map("bridge_token")
-  message    String?
-  expiresAt  DateTime @map("expires_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  requestId   String   @id @map("request_id")
+  status      String
+  provider    String?
+  callbackUrl String   @map("callback_url")
+  bridgeToken String?  @map("bridge_token")
+  message     String?
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([expiresAt], map: "native_auth_pending_results_expires_at_idx")
   @@map("native_auth_pending_results")
@@ -325,18 +550,18 @@ model AppClientVersionPolicy {
 }
 
 model AdminDashboardDailyMetric {
-  day                    DateTime @id @db.Date
-  signupCount            Int      @map("signup_count")
-  dauCount               Int      @map("dau_count")
-  messageCount           Int      @map("message_count")
-  usageSeconds           Float    @map("usage_seconds")
-  usageMetricVersion     Int      @default(0) @map("usage_metric_version")
-  sttAvgMs               Float?   @map("stt_avg_ms")
-  sttP95Ms               Float?   @map("stt_p95_ms")
-  translationAvgMs       Float?   @map("translation_avg_ms")
-  translationP95Ms       Float?   @map("translation_p95_ms")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  day                DateTime @id @db.Date
+  signupCount        Int      @map("signup_count")
+  dauCount           Int      @map("dau_count")
+  messageCount       Int      @map("message_count")
+  usageSeconds       Float    @map("usage_seconds")
+  usageMetricVersion Int      @default(0) @map("usage_metric_version")
+  sttAvgMs           Float?   @map("stt_avg_ms")
+  sttP95Ms           Float?   @map("stt_p95_ms")
+  translationAvgMs   Float?   @map("translation_avg_ms")
+  translationP95Ms   Float?   @map("translation_p95_ms")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("admin_dashboard_daily_metrics")
 }

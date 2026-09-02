@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockAppEventLogCreate,
   mockAppEventLogUpsert,
+  mockCaptureMingleEvent,
 } = vi.hoisted(() => ({
   mockAppEventLogCreate: vi.fn(),
   mockAppEventLogUpsert: vi.fn(),
+  mockCaptureMingleEvent: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -15,6 +17,10 @@ vi.mock("@/lib/prisma", () => ({
       upsert: mockAppEventLogUpsert,
     },
   },
+}));
+
+vi.mock("@/lib/posthog-server", () => ({
+  captureMingleEvent: mockCaptureMingleEvent,
 }));
 
 import { createTrackedEventLog, type ClientContext, type TrackingContext } from "@/lib/app-analytics";
@@ -140,5 +146,61 @@ describe("createTrackedEventLog", () => {
     expect(mockAppEventLogCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "stt_session_started" }),
     }));
+  });
+
+  it("forwards release-safe analytics properties without message text", async () => {
+    await createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext: {
+        ...clientContext,
+        apiNamespace: "android/v2.0.0",
+        appVersion: "2.0.0",
+        clientPlatform: "android",
+        language: "ko",
+        pathname: "/conversation",
+      },
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: {
+        sourceLanguage: "ko",
+        sourceText: "비공개 원문",
+        translations: { en: "Private translation" },
+        translationLanguages: ["en", "ja"],
+        model: "model-id",
+        clientMetadata: {
+          speaker: "self",
+          reason: "manual_text_input",
+          sourceText: "또 다른 비공개 원문",
+        },
+      },
+    });
+
+    expect(mockCaptureMingleEvent).toHaveBeenCalledWith({
+      distinctId: "anon_1",
+      event: "mingle_stt_turn_finalized",
+      properties: expect.objectContaining({
+        app_version: "2.0.0",
+        api_namespace: "android/v2.0.0",
+        client_platform: "android",
+        translation_language_count: 2,
+        speaker: "self",
+        message_input_mode: "keyboard",
+        has_message: true,
+      }),
+    });
+
+    expect(mockCaptureMingleEvent).toHaveBeenCalledWith({
+      distinctId: "anon_1",
+      event: "mingle_message_sent",
+      properties: expect.objectContaining({
+        message_input_mode: "keyboard",
+        has_message: true,
+      }),
+    });
+
+    const capturedProperties = mockCaptureMingleEvent.mock.calls.at(-1)?.[0]?.properties;
+    expect(capturedProperties).not.toHaveProperty("sourceText");
+    expect(capturedProperties).not.toHaveProperty("translations");
   });
 });

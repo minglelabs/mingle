@@ -6,6 +6,7 @@ export type LivePhoneDemoComposerCopy = {
   closeKeyboardLabel: string;
   composerPlaceholder: string;
   sendMessageLabel: string;
+  blockedComposerMessage: string;
 };
 
 const COMPOSER_COPY_BY_LOCALE = {
@@ -15,6 +16,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "텍스트 입력 닫기",
     composerPlaceholder: "메시지를 입력하세요",
     sendMessageLabel: "메시지 보내기",
+    blockedComposerMessage: "차단된 사용자입니다",
   },
   en: {
     manualSpeakerLabel: "You",
@@ -22,6 +24,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Close text input",
     composerPlaceholder: "Type a message",
     sendMessageLabel: "Send message",
+    blockedComposerMessage: "This user is blocked.",
   },
   ja: {
     manualSpeakerLabel: "自分",
@@ -29,6 +32,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "テキスト入力を閉じる",
     composerPlaceholder: "メッセージを入力",
     sendMessageLabel: "メッセージを送信",
+    blockedComposerMessage: "このユーザーはブロックされています。",
   },
   "zh-CN": {
     manualSpeakerLabel: "我",
@@ -36,6 +40,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "关闭文字输入",
     composerPlaceholder: "输入消息",
     sendMessageLabel: "发送消息",
+    blockedComposerMessage: "该用户已被屏蔽。",
   },
   "zh-TW": {
     manualSpeakerLabel: "我",
@@ -43,6 +48,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "關閉文字輸入",
     composerPlaceholder: "輸入訊息",
     sendMessageLabel: "傳送訊息",
+    blockedComposerMessage: "此使用者已被封鎖。",
   },
   fr: {
     manualSpeakerLabel: "Moi",
@@ -50,6 +56,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Fermer la saisie texte",
     composerPlaceholder: "Saisissez un message",
     sendMessageLabel: "Envoyer le message",
+    blockedComposerMessage: "Cet utilisateur est bloqué.",
   },
   de: {
     manualSpeakerLabel: "Ich",
@@ -57,6 +64,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Texteingabe schließen",
     composerPlaceholder: "Nachricht eingeben",
     sendMessageLabel: "Nachricht senden",
+    blockedComposerMessage: "Dieser Nutzer ist blockiert.",
   },
   es: {
     manualSpeakerLabel: "Yo",
@@ -64,6 +72,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Cerrar entrada de texto",
     composerPlaceholder: "Escribe un mensaje",
     sendMessageLabel: "Enviar mensaje",
+    blockedComposerMessage: "Este usuario está bloqueado.",
   },
   pt: {
     manualSpeakerLabel: "Eu",
@@ -71,6 +80,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Fechar entrada de texto",
     composerPlaceholder: "Digite uma mensagem",
     sendMessageLabel: "Enviar mensagem",
+    blockedComposerMessage: "Este usuário está bloqueado.",
   },
   it: {
     manualSpeakerLabel: "Io",
@@ -78,6 +88,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Chiudi input di testo",
     composerPlaceholder: "Scrivi un messaggio",
     sendMessageLabel: "Invia messaggio",
+    blockedComposerMessage: "Questo utente è bloccato.",
   },
   ru: {
     manualSpeakerLabel: "Я",
@@ -85,6 +96,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Закрыть ввод текста",
     composerPlaceholder: "Введите сообщение",
     sendMessageLabel: "Отправить сообщение",
+    blockedComposerMessage: "Этот пользователь заблокирован.",
   },
   ar: {
     manualSpeakerLabel: "أنا",
@@ -92,6 +104,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "إغلاق إدخال النص",
     composerPlaceholder: "اكتب رسالة",
     sendMessageLabel: "إرسال الرسالة",
+    blockedComposerMessage: "تم حظر هذا المستخدم.",
   },
   hi: {
     manualSpeakerLabel: "मैं",
@@ -99,6 +112,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "टेक्स्ट इनपुट बंद करें",
     composerPlaceholder: "संदेश लिखें",
     sendMessageLabel: "संदेश भेजें",
+    blockedComposerMessage: "इस उपयोगकर्ता को ब्लॉक किया गया है।",
   },
   th: {
     manualSpeakerLabel: "ฉัน",
@@ -106,6 +120,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "ปิดการพิมพ์ข้อความ",
     composerPlaceholder: "พิมพ์ข้อความ",
     sendMessageLabel: "ส่งข้อความ",
+    blockedComposerMessage: "ผู้ใช้นี้ถูกบล็อก",
   },
   vi: {
     manualSpeakerLabel: "Tôi",
@@ -113,6 +128,7 @@ const COMPOSER_COPY_BY_LOCALE = {
     closeKeyboardLabel: "Đóng nhập văn bản",
     composerPlaceholder: "Nhập tin nhắn",
     sendMessageLabel: "Gửi tin nhắn",
+    blockedComposerMessage: "Người dùng này đã bị chặn.",
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoComposerCopy>;
 

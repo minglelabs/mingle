@@ -26,6 +26,27 @@ type ConversationsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function readSearchParamValue(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+): string {
+  const rawValue = searchParams[key];
+  if (typeof rawValue === "string") return rawValue.trim();
+  if (Array.isArray(rawValue)) return (rawValue[0] || "").trim();
+  return "";
+}
+
+function inferNativeApiNamespace(
+  searchParams: Record<string, string | string[] | undefined>,
+): string {
+  const platform = readSearchParamValue(searchParams, "nativePlatform").toLowerCase();
+  const clientVersion = readSearchParamValue(searchParams, "nativeClientVersion")
+    .replace(/^v/i, "");
+  if (platform !== "ios" && platform !== "android") return "";
+  if (!/^\d+\.\d+\.\d+$/.test(clientVersion)) return "";
+  return `${platform}/v${clientVersion}`;
+}
+
 export default async function ConversationsPage({ params, searchParams }: ConversationsPageProps) {
   const { locale } = await params;
   const resolvedSearchParams = await searchParams;
@@ -35,9 +56,16 @@ export default async function ConversationsPage({ params, searchParams }: Conver
   }
 
   const requestedApiNamespace = readRequestedApiNamespaceFromSearchParams(resolvedSearchParams);
+  // Native tab/navigation parameters can survive a partial route transition
+  // even when apiNamespace did not. Recover the release from the native app
+  // version before considering the server's default, so a native room never
+  // silently falls back to the legacy web entry.
+  const inferredNativeApiNamespace = inferNativeApiNamespace(resolvedSearchParams);
   const releaseVariant = requestedApiNamespace
     ? resolveMingleClientReleaseVariant(requestedApiNamespace)
-    : resolveDefaultMingleClientReleaseVariant();
+    : inferredNativeApiNamespace
+      ? resolveMingleClientReleaseVariant(inferredNativeApiNamespace)
+      : resolveDefaultMingleClientReleaseVariant();
 
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":

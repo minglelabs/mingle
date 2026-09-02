@@ -17,9 +17,15 @@ importers:
       react-native:
         specifier: 0.84.0
         version: 0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3)
+      react-native-camera-kit:
+        specifier: ^18.0.1
+        version: 18.0.1(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       react-native-google-mobile-ads:
         specifier: 16.3.1
         version: 16.3.1(react@19.2.3)
+      react-native-permissions:
+        specifier: ^5.6.1
+        version: 5.6.1(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       react-native-safe-area-context:
         specifier: ^5.5.2
         version: 5.6.2(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -2900,12 +2906,29 @@ packages:
   react-is@19.2.4:
     resolution: {integrity: sha512-W+EWGn2v0ApPKgKKCy/7s7WHXkboGcsrXE+2joLyVxkbyVQfO3MUEaUQDHoSmb8TFFrSKYa9mw64WZHNHSDzYA==}
 
+  react-native-camera-kit@18.0.1:
+    resolution: {integrity: sha512-iI/4z4ZCrQTbcQVUkiKYiYvW4jru7JZ5T9/x7C8J1DXg3tXEBmf8ULnw2IGHCUpTPJnMlFJ9YE2hClu5YJ1FQw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
   react-native-google-mobile-ads@16.3.1:
     resolution: {integrity: sha512-hFjxGYyVjCtaQHmwRMag3ZCSFgewzCDKsh7S/ppQlIUXvRlXQ7P9IAg7V4tx9L32mMSrO1SlDmL1Eken1gC/QA==}
     peerDependencies:
       expo: '>=47.0.0'
     peerDependenciesMeta:
       expo:
+        optional: true
+
+  react-native-permissions@5.6.1:
+    resolution: {integrity: sha512-9FwecmnUCHPwUZ+uwfcB7+CHES8cmwyY2gcVZQsZ3zloQCumle10KbDWuaOtgaEqNdzjLd5cyCpb7hKLw8H16A==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+      react-native-windows: '*'
+    peerDependenciesMeta:
+      react-native-windows:
         optional: true
 
   react-native-safe-area-context@5.6.2:
@@ -7236,12 +7259,22 @@ snapshots:
 
   react-is@19.2.4: {}
 
+  react-native-camera-kit@18.0.1(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-native: 0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3)
+
   react-native-google-mobile-ads@16.3.1(react@19.2.3):
     dependencies:
       '@iabtcf/core': 1.5.6
       use-deep-compare-effect: 1.8.1(react@19.2.3)
     transitivePeerDependencies:
       - react
+
+  react-native-permissions@5.6.1(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-native: 0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3)
 
   react-native-safe-area-context@5.6.2(react-native@0.84.0(@babel/core@7.29.0)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/metro-config@0.84.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
     dependencies:

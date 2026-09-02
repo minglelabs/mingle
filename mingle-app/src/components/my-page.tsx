@@ -1,0 +1,2321 @@
+"use client";
+
+import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import ProfileImageCropper, {
+  type ProfileImageCropperChange,
+} from "@/components/profile-image-cropper";
+import ProfileImagePreview from "@/components/profile-image-preview";
+import ProfileShareScreen from "@/components/profile-share-screen";
+import FollowListScreen from "@/components/follow-list-screen";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import ProfileFeedbackContent from "@/components/profile-feedback-content";
+import ProfileUsageContent from "@/components/profile-usage-content";
+import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileLocation from "@/components/profile-location";
+import LanguagePreferencePicker from "@/components/language-preference-picker";
+import LanguageFlag from "@/components/language-flag";
+import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
+import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
+import {
+  DEFAULT_NATIVE_APP_UPDATE_DETAIL,
+  NATIVE_APP_UPDATE_EVENT,
+  parseNativeAppUpdateDetail,
+  resolveNativeAppUpdateCopy,
+  type NativeAppUpdateDetail,
+  type NativeAppUpdateCopy,
+} from "@/components/LivePhoneDemo/live-phone-demo.app-update.logic";
+import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
+import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
+import { storeAppLocale } from "@/components/app-locale-preference-sync";
+import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import { buildClientApiPath } from "@/lib/api-contract";
+import { unregisterNativePushToken } from "@/lib/native-push";
+import { resetMinglePostHogIdentity } from "@/lib/posthog-client";
+import SlideSurface from "@/components/slide-surface";
+import {
+  consumeSlideSurfaceHistoryForScope,
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
+} from "@/lib/slide-surface-history";
+import {
+  DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
+  replaceWithConversationListThenPush,
+} from "@/lib/direct-conversation-navigation";
+import {
+  buildProfileImageTransform,
+  DEFAULT_PROFILE_IMAGE_CROP,
+  normalizeProfileImageCrop,
+  type ProfileImageCrop,
+  type ProfileImageCropInput,
+} from "@/lib/profile-image-crop";
+import {
+  MAX_STT_LANGUAGE_SELECTION,
+  STT_LANGUAGE_OPTIONS,
+  canonicalizeSttLanguageCode,
+  deriveDefaultConversationLanguages,
+  getSttLanguageDisplayName,
+  sanitizeSttLanguageSelection,
+  type SttLanguageCode,
+} from "@/lib/stt-languages";
+import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
+import { motion } from "framer-motion";
+import {
+  formatBirthDate,
+  isOldEnoughForSignup,
+  parseBirthDate,
+  type BirthDateParts,
+} from "@/lib/birth-date";
+import { resolveSignupCopy } from "@/i18n/signup-copy";
+import { resolveProfileManagementCopy } from "@/i18n/profile-management-copy";
+import { checkProfileLocationPermission } from "@/components/profile-location";
+import {
+  normalizeProfileLocation,
+  type ProfileLocationRecord,
+} from "@/lib/profile-location";
+import {
+  type NativeLocationPermission,
+} from "@/lib/native-location";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
+import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type MyPageProps = {
+  dictionary: AppDictionary;
+  initialProfile: ProfileRecord | null;
+  locale: AppLocale;
+};
+
+type ProfileRecord = {
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
+  handle: string | null;
+  name: string | null;
+  bio: string | null;
+  nationality: string | null;
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
+  location: ProfileLocationRecord | null;
+  birthDate?: BirthDateParts | null;
+  followersCount: number;
+  followingCount: number;
+};
+
+type ProfileDraft = {
+  imageFile: File | null;
+  imageCrop: ProfileImageCrop;
+  handle: string;
+  name: string;
+  bio: string;
+  nationality: SttLanguageCode | null;
+  primaryLanguages: SttLanguageCode[];
+  birthDate: BirthDateParts | null;
+};
+
+const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
+  year: 2000,
+  month: 1,
+  day: 1,
+};
+
+function parseProfileBirthDate(value: unknown): BirthDateParts | null {
+  const parsed = parseBirthDate(value);
+  return parsed
+    ? {
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        day: parsed.getUTCDate(),
+      }
+    : null;
+}
+
+type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
+
+type ProfileLocationPatchContext = {
+  operation: "permission_sync" | "save" | "clear";
+  requestId?: string;
+};
+
+const PROFILE_LOCATION_PATCH_TIMEOUT_MS = 10_000;
+
+async function patchProfileLocation(
+  body: Record<string, unknown>,
+  context: ProfileLocationPatchContext,
+): Promise<Response> {
+  const controller = new AbortController();
+  const startedAtMs = Date.now();
+  let didTimeout = false;
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, PROFILE_LOCATION_PATCH_TIMEOUT_MS);
+
+  console.info("[ProfileLocation] profile_patch_start", {
+    operation: context.operation,
+    requestId: context.requestId ?? "",
+  });
+  try {
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    console.info("[ProfileLocation] profile_patch_response", {
+      operation: context.operation,
+      requestId: context.requestId ?? "",
+      status: response.status,
+      durationMs: Date.now() - startedAtMs,
+    });
+    return response;
+  } catch (error: unknown) {
+    console.warn("[ProfileLocation] profile_patch_failed", {
+      operation: context.operation,
+      requestId: context.requestId ?? "",
+      durationMs: Date.now() - startedAtMs,
+      reason: didTimeout
+        ? "timeout"
+        : error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+const MY_PAGE_SURFACE_SCOPE = "mypage";
+const MY_PAGE_SETTINGS_SCOPE = "mypage-settings";
+const MY_PAGE_PROFILE_EDIT_SURFACE_ID = "profile-edit";
+const MY_PAGE_PROFILE_SETTINGS_SURFACE_ID = "profile-settings";
+const MY_PAGE_PROFILE_SHARE_SURFACE_ID = "profile-share";
+const MY_PAGE_FOLLOW_LIST_SURFACE_ID = "follow-list";
+const MY_PAGE_PUBLIC_PROFILE_SURFACE_ID = "public-profile";
+const MY_PAGE_MANAGEMENT_SURFACE_ID = "management";
+
+type BlockedUserRecord = {
+  id: string;
+  createdAt: string;
+  user: {
+    id: string;
+    handle: string | null;
+    name: string | null;
+    image: string | null;
+  };
+};
+
+type ReportRecord = {
+  id: string;
+  reason: string;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  reportedUser: {
+    id: string;
+    handle: string | null;
+    name: string | null;
+    image: string | null;
+  };
+  replies: Array<{
+    id: string;
+    authorType: string;
+    message: string;
+    createdAt: string;
+  }>;
+};
+
+type SessionStatus = "loading" | "authenticated" | "unauthenticated";
+type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
+type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback";
+
+function isProfileManagementPage(value: string | undefined): value is ProfileManagementPage {
+  return value === "blocked"
+    || value === "reports"
+    || value === "language"
+    || value === "primaryLanguages"
+    || value === "defaultLanguages"
+    || value === "usage"
+    || value === "feedback";
+}
+
+type NativeAppUpdateWindow = Window & {
+  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown;
+  ReactNativeWebView?: {
+    postMessage?: (message: string) => void;
+  };
+};
+
+type NativeOpenUpdateStoreCommand = {
+  type: "native_open_update_store";
+  payload?: {
+    updateUrl?: string;
+  };
+};
+
+function isNativeAppRuntimeSignalPresent(): boolean {
+  if (typeof window === "undefined") return false;
+  const nativeWindow = window as NativeAppUpdateWindow;
+  return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
+    || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
+}
+
+function NativeAppUpdateCard({
+  copy,
+  installedVersion,
+  latestVersion,
+  statusMessage,
+  showUpdateAction,
+  onUpdate,
+}: {
+  copy: NativeAppUpdateCopy;
+  installedVersion: string;
+  latestVersion: string;
+  statusMessage: string;
+  showUpdateAction: boolean;
+  onUpdate: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
+            {copy.sectionLabel}
+          </div>
+          <div className="mt-2 text-sm font-semibold text-gray-900">
+            {copy.installedLabel} {installedVersion}
+          </div>
+          {latestVersion ? (
+            <div className="mt-1 text-xs font-medium text-gray-600">
+              {copy.latestLabel} {latestVersion}
+            </div>
+          ) : null}
+          <div className="mt-2 text-xs leading-5 text-gray-600">
+            {statusMessage}
+          </div>
+        </div>
+        {showUpdateAction ? (
+          <button
+            type="button"
+            onClick={onUpdate}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            <Download size={13} strokeWidth={2.2} />
+            <span>{copy.updateButtonLabel}</span>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
+  STT_LANGUAGE_OPTIONS.map(({ code, englishName, flag }) => ({
+    locale: code,
+    label: englishName,
+    flag,
+  }));
+
+function getNationalityOption(value: string | null | undefined) {
+  const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
+  return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
+}
+
+function ProfileAvatar({
+  alt,
+  languages,
+  imageUrl,
+  imageCrop,
+  size = 88,
+  onClick,
+}: {
+  alt: string;
+  languages: readonly string[];
+  imageUrl?: string | null;
+  imageCrop?: ProfileImageCropInput;
+  size?: number;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+      style={{ height: size, width: size }}
+      aria-label={alt}
+    >
+      <div
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100"
+      >
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={alt}
+            width={size}
+            height={size}
+            className="h-full w-full object-cover"
+            style={{ transform: buildProfileImageTransform(size, imageCrop) }}
+          />
+        ) : (
+          <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
+        )}
+      </div>
+      <ProfileLanguageFlagStack languages={languages} size={size} />
+    </button>
+  );
+}
+
+function UserMiniAvatar({ image, label }: { image: string | null; label: string }) {
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt={label} className="h-full w-full object-cover" />
+      ) : (
+        <UserRound size={22} className="text-gray-400" aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+function ProfileSettingsPanel({
+  dictionary,
+  locale,
+  onClose,
+  onChangeAppLanguage,
+  initialPrimaryLanguages,
+  onSavePrimaryLanguages,
+  initialDefaultConversationLanguages,
+  onSaveDefaultConversationLanguages,
+  onSignOut,
+  signOutCallbackUrl,
+  defaultFeedbackEmail,
+  open,
+  sessionStatus,
+}: {
+  dictionary: AppDictionary;
+  locale: AppLocale;
+  onClose: () => void;
+  onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
+  initialPrimaryLanguages: readonly string[];
+  onSavePrimaryLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
+  initialDefaultConversationLanguages: readonly string[];
+  onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
+  onSignOut: () => void;
+  signOutCallbackUrl: string;
+  defaultFeedbackEmail?: string;
+  open: boolean;
+  sessionStatus: SessionStatus;
+}) {
+  const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [requiresAuthentication, setRequiresAuthentication] = useState(false);
+  const [blocksLoadState, setBlocksLoadState] = useState<ManagementLoadState>("idle");
+  const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [managementPage, setManagementPage] = useState<ProfileManagementPage | null>(() => {
+    if (typeof window === "undefined") return null;
+    const entry = [...readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE)].reverse()
+      .find((candidate) => candidate.id === MY_PAGE_MANAGEMENT_SURFACE_ID);
+    return isProfileManagementPage(entry?.value) ? entry.value : null;
+  });
+  const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialPrimaryLanguages)
+  ));
+  const [isSavingPrimaryLanguages, setIsSavingPrimaryLanguages] = useState(false);
+  const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
+  ));
+  const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
+  const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
+  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
+  const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
+  const copy = {
+    title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
+    blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
+    reports: dictionary.profile.reportsLabel ?? (locale === "ko" ? "신고 내역" : "Reports"),
+    appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
+    appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
+    appLanguageDescription: dictionary.profile.appLanguageDescription
+      ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
+    defaultLanguages: managementCopy.defaultLanguages,
+    defaultLanguagesTitle: managementCopy.defaultLanguages,
+    defaultLanguagesDescription: managementCopy.defaultLanguagesDescription,
+    defaultLanguagesSaveError: managementCopy.defaultLanguagesSaveError,
+    primaryLanguages: dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+    primaryLanguagesTitle: dictionary.profile.primaryLanguagesTitle
+      ?? dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+    primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
+      ?? (locale === "ko"
+        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        : "Choose up to five primary languages in the order they should appear on your profile."),
+    primaryLanguagesSaveError: dictionary.profile.primaryLanguagesSaveError
+      ?? (locale === "ko" ? "주 사용 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
+    usage: managementCopy.usage,
+    noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
+    noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
+    unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
+    unblockError: dictionary.profile.unblockError ?? (locale === "ko" ? "차단을 해제하지 못했습니다." : "Could not unblock this user."),
+    pending: dictionary.profile.reportPendingLabel ?? (locale === "ko" ? "운영진 확인 중" : "Under review"),
+    close: dictionary.profile.settingsCloseLabel ?? (locale === "ko" ? "닫기" : "Close"),
+    loading: dictionary.profile.settingsLoadingLabel ?? (locale === "ko" ? "불러오는 중..." : "Loading..."),
+    loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
+    authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
+    logout: dictionary.profile.logout,
+    deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
+    deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
+    deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
+    deactivateLogoutOnlyAction: dictionary.profile.deactivateAccountLogoutOnlyAction ?? (locale === "ko" ? "로그아웃만 하기" : "Just Log Out"),
+    deactivateFailed: dictionary.profile.deactivateAccountFailed ?? (locale === "ko" ? "계정을 비활성화하지 못했습니다." : "Failed to deactivate account."),
+    accountActionSelectTitle: dictionary.profile.accountActionSelectTitle ?? (locale === "ko" ? "비활성화 또는 탈퇴" : "Deactivate or Delete"),
+    withdrawAccount: dictionary.profile.withdrawAccount ?? (locale === "ko" ? "회원탈퇴" : "Delete Account"),
+    withdrawAccountConfirmTitle: dictionary.profile.withdrawAccountConfirmTitle ?? (locale === "ko" ? "회원탈퇴 안내" : "Account Deletion Notice"),
+    withdrawAccountConfirmMessage: dictionary.profile.withdrawAccountConfirmMessage ?? (locale === "ko" ? "30일 동안 비활성화되며, 그 안에는 언제든 로그인하면 다시 살릴 수 있습니다." : "Your account will be deactivated for 30 days. You can restore it anytime by logging back in during this period."),
+    withdrawAccountAction: dictionary.profile.withdrawAccountAction ?? (locale === "ko" ? "탈퇴하기" : "Delete Account"),
+    withdrawAccountFailed: dictionary.profile.withdrawAccountFailed ?? (locale === "ko" ? "탈퇴 처리에 실패했습니다." : "Failed to delete account."),
+    reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
+    myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
+    teamReply: dictionary.profile.settingsTeamReplyLabel ?? (locale === "ko" ? "운영진 답변" : "Team reply"),
+    reasonLabels: {
+      spam: dictionary.profile.reportReasonSpam ?? (locale === "ko" ? "스팸·도배" : "Spam"),
+      harassment: dictionary.profile.reportReasonHarassment ?? (locale === "ko" ? "괴롭힘·불쾌한 행동" : "Harassment"),
+      inappropriate: dictionary.profile.reportReasonInappropriate ?? (locale === "ko" ? "부적절한 콘텐츠" : "Inappropriate content"),
+      impersonation: dictionary.profile.reportReasonImpersonation ?? (locale === "ko" ? "사칭" : "Impersonation"),
+      other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
+    } as Record<string, string>,
+  };
+  const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
+  const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
+  const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
+  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
+  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || "";
+  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === "checking"
+    ? nativeAppUpdateCopy.checkingMessage
+    : nativeAppUpdateStatus.status === "available"
+      ? nativeAppUpdateCopy.availableMessage
+      : nativeAppUpdateStatus.status === "current"
+        ? nativeAppUpdateCopy.currentMessage
+        : nativeAppUpdateCopy.unknownMessage;
+  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl);
+  const managementPageTitle = managementPage === "blocked"
+    ? copy.blocked
+    : managementPage === "reports"
+      ? copy.reports
+      : managementPage === "feedback"
+        ? feedbackCopy.pageTitle
+        : managementPage === "usage"
+          ? copy.usage.title
+          : managementPage === "primaryLanguages"
+            ? copy.primaryLanguagesTitle
+            : managementPage === "defaultLanguages"
+              ? copy.defaultLanguagesTitle
+              : copy.appLanguageTitle;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncNativeRuntime = () => {
+      if (isNativeAppRuntimeSignalPresent()) setIsNativeAppRuntime(true);
+    };
+
+    syncNativeRuntime();
+    const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0);
+    const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250);
+    const windowWithUpdate = window as NativeAppUpdateWindow;
+    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS);
+    const nativeUpdateTimerId = window.setTimeout(() => {
+      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL);
+    }, 0);
+
+    const handleNativeAppUpdate = (event: Event) => {
+      const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail);
+      if (!detail) return;
+      setNativeAppUpdate(detail);
+    };
+
+    window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
+    return () => {
+      window.clearTimeout(nativeRuntimeTimerId);
+      window.clearTimeout(nativeRuntimeRetryTimerId);
+      window.clearTimeout(nativeUpdateTimerId);
+      window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncManagementHistory = () => {
+      if (!open) {
+        setManagementPage(null);
+        return;
+      }
+      const entry = [...readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE)].reverse()
+        .find((candidate) => candidate.id === MY_PAGE_MANAGEMENT_SURFACE_ID);
+      setManagementPage(isProfileManagementPage(entry?.value) ? entry.value : null);
+    };
+
+    window.addEventListener("popstate", syncManagementHistory);
+    return () => window.removeEventListener("popstate", syncManagementHistory);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setDefaultConversationLanguages(sanitizeSttLanguageSelection(initialDefaultConversationLanguages));
+  }, [initialDefaultConversationLanguages, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
+  }, [initialPrimaryLanguages, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setManagementPage(null);
+      return;
+    }
+
+    let cancelled = false;
+    setBlocks([]);
+    setReports([]);
+    setRequiresAuthentication(false);
+
+    if (sessionStatus === "loading") {
+      setIsLoading(true);
+      setBlocksLoadState("loading");
+      setReportsLoadState("loading");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (sessionStatus !== "authenticated") {
+      setIsLoading(false);
+      setRequiresAuthentication(true);
+      setBlocksLoadState("unauthorized");
+      setReportsLoadState("unauthorized");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoading(true);
+    setBlocksLoadState("loading");
+    setReportsLoadState("loading");
+
+    const loadBlocks = async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/account/blocks"), { cache: "no-store" });
+        if (cancelled) return;
+        if (response.status === 401) {
+          setBlocksLoadState("unauthorized");
+          return;
+        }
+        if (!response.ok) throw new Error("blocks_load_failed");
+        const payload = await response.json() as { blocks?: BlockedUserRecord[] };
+        if (cancelled) return;
+        setBlocks(Array.isArray(payload.blocks) ? payload.blocks : []);
+        setBlocksLoadState("ready");
+      } catch {
+        if (!cancelled) setBlocksLoadState("error");
+      }
+    };
+
+    const loadReports = async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/account/reports"), { cache: "no-store" });
+        if (cancelled) return;
+        if (response.status === 401) {
+          setReportsLoadState("unauthorized");
+          return;
+        }
+        if (!response.ok) throw new Error("reports_load_failed");
+        const payload = await response.json() as { reports?: ReportRecord[] };
+        if (cancelled) return;
+        setReports(Array.isArray(payload.reports) ? payload.reports : []);
+        setReportsLoadState("ready");
+      } catch {
+        if (!cancelled) setReportsLoadState("error");
+      }
+    };
+
+    void Promise.all([loadBlocks(), loadReports()]).finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
+
+  const handleUnblock = useCallback(async (userId: string) => {
+    if (unblockingId) return;
+    setUnblockingId(userId);
+    try {
+      const response = await fetch(buildClientApiPath(`/account/blocks/${encodeURIComponent(userId)}`), {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("unblock_failed");
+      setBlocks((current) => current.filter((block) => block.user.id !== userId));
+    } catch {
+      window.alert(copy.unblockError);
+    } finally {
+      setUnblockingId(null);
+    }
+  }, [copy.unblockError, unblockingId]);
+
+  const handleSelectAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
+    if (nextLocale === locale) return;
+    storeAppLocale(nextLocale);
+    onChangeAppLanguage(nextLocale);
+  }, [locale, onChangeAppLanguage]);
+
+  const handleToggleDefaultConversationLanguage = useCallback(async (code: SttLanguageCode) => {
+    if (isSavingDefaultConversationLanguages) return;
+
+    const currentLanguages = sanitizeSttLanguageSelection(defaultConversationLanguages);
+    const selected = currentLanguages.includes(code);
+    if (selected && currentLanguages.length <= 1) return;
+    if (!selected && currentLanguages.length >= MAX_STT_LANGUAGE_SELECTION) return;
+
+    const nextLanguages = selected
+      ? currentLanguages.filter((language) => language !== code)
+      : [...currentLanguages, code];
+    setDefaultConversationLanguages(nextLanguages);
+    setIsSavingDefaultConversationLanguages(true);
+    try {
+      const saved = await onSaveDefaultConversationLanguages(nextLanguages);
+      if (!saved) {
+        setDefaultConversationLanguages(currentLanguages);
+        window.alert(copy.defaultLanguagesSaveError);
+      }
+    } finally {
+      setIsSavingDefaultConversationLanguages(false);
+    }
+  }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
+
+  const handleTogglePrimaryLanguage = useCallback(async (code: SttLanguageCode) => {
+    if (isSavingPrimaryLanguages) return;
+
+    const currentLanguages = sanitizeSttLanguageSelection(primaryLanguages);
+    const selected = currentLanguages.includes(code);
+    if (selected && currentLanguages.length <= 1) return;
+    if (!selected && currentLanguages.length >= MAX_STT_LANGUAGE_SELECTION) return;
+
+    const nextLanguages = selected
+      ? currentLanguages.filter((language) => language !== code)
+      : [...currentLanguages, code];
+    setPrimaryLanguages(nextLanguages);
+    setIsSavingPrimaryLanguages(true);
+    try {
+      const saved = await onSavePrimaryLanguages(nextLanguages);
+      if (!saved) {
+        setPrimaryLanguages(currentLanguages);
+        window.alert(copy.primaryLanguagesSaveError);
+      }
+    } finally {
+      setIsSavingPrimaryLanguages(false);
+    }
+  }, [copy.primaryLanguagesSaveError, isSavingPrimaryLanguages, onSavePrimaryLanguages, primaryLanguages]);
+
+  const handleNativeAppUpdatePress = useCallback(() => {
+    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
+    if (!updateUrl) return;
+
+    onClose();
+    const command: NativeOpenUpdateStoreCommand = {
+      type: "native_open_update_store",
+      payload: { updateUrl },
+    };
+    const nativeWindow = typeof window === "undefined" ? null : window as NativeAppUpdateWindow;
+    if (nativeWindow?.ReactNativeWebView?.postMessage) {
+      try {
+        nativeWindow.ReactNativeWebView.postMessage(JSON.stringify(command));
+        return;
+      } catch {
+        // Fall back to browser navigation if the bridge errors.
+      }
+    }
+
+    window.location.href = updateUrl;
+  }, [nativeAppUpdate?.updateUrl, onClose]);
+
+  const openManagementPage = useCallback((page: ProfileManagementPage) => {
+    pushSlideSurfaceHistory({
+      scope: MY_PAGE_SETTINGS_SCOPE,
+      id: MY_PAGE_MANAGEMENT_SURFACE_ID,
+      value: page,
+    });
+    setManagementPage(page);
+  }, []);
+
+  const closeManagementPage = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const entries = readSlideSurfaceHistoryForScope(MY_PAGE_SETTINGS_SCOPE, window.history.state);
+      const topEntry = entries[entries.length - 1];
+      if (topEntry?.id === MY_PAGE_MANAGEMENT_SURFACE_ID) {
+        window.history.back();
+        return;
+      }
+    }
+    setManagementPage(null);
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!open) return false;
+    if (isWithdrawConfirmModalOpen) {
+      if (!isWithdrawing) setIsWithdrawConfirmModalOpen(false);
+      return true;
+    }
+    if (isDeactivateModalOpen) {
+      if (!isDeactivating) setIsDeactivateModalOpen(false);
+      return true;
+    }
+    if (isAccountActionModalOpen) {
+      setIsAccountActionModalOpen(false);
+      return true;
+    }
+    if (!managementPage) return false;
+    closeManagementPage();
+    return true;
+  }, 30), [
+    closeManagementPage,
+    isAccountActionModalOpen,
+    isDeactivateModalOpen,
+    isDeactivating,
+    isWithdrawConfirmModalOpen,
+    isWithdrawing,
+    managementPage,
+    open,
+  ]);
+
+  const handleDeactivate = useCallback(async () => {
+    if (isDeactivating) return;
+    setIsDeactivating(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/deactivate"), {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to deactivate account");
+      }
+      await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
+      await signOut({ callbackUrl: signOutCallbackUrl });
+      if (typeof window !== "undefined") {
+        window.location.replace(signOutCallbackUrl);
+      }
+    } catch (err) {
+      console.error("Account deactivation failed", err);
+      alert(copy.deactivateFailed);
+      setIsDeactivating(false);
+    }
+  }, [copy.deactivateFailed, isDeactivating, signOutCallbackUrl]);
+
+  const handleWithdraw = useCallback(async () => {
+    if (isWithdrawing) return;
+    setIsWithdrawing(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/withdraw"), {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to withdraw account");
+      }
+      await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
+      await signOut({ callbackUrl: signOutCallbackUrl });
+      if (typeof window !== "undefined") {
+        window.location.replace(signOutCallbackUrl);
+      }
+    } catch (err) {
+      console.error("Account withdrawal failed", err);
+      alert(copy.withdrawAccountFailed);
+      setIsWithdrawing(false);
+    }
+  }, [copy.withdrawAccountFailed, isWithdrawing, signOutCallbackUrl]);
+
+  return (<>
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
+          <header
+            className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+            style={{
+              height: "calc(54px + env(safe-area-inset-top, 44px))",
+              paddingTop: "env(safe-area-inset-top, 44px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={copy.close}
+            >
+              <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <h2 className="truncate text-center text-[17px] font-bold">{copy.title}</h2>
+            <div aria-hidden="true" />
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <button
+                type="button"
+                onClick={() => openManagementPage("blocked")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <UserRoundX size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.blocked}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("reports")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Siren size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.reports}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("feedback")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <MessageCircle size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{feedbackCopy.feedbackMenuItemLabel}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("usage")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <BarChart3 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.usage.title}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("primaryLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.primaryLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("defaultLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.defaultLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("language")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.appLanguage}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
+            {isNativeAppRuntime ? (
+              <div className="mt-4 px-0">
+                <NativeAppUpdateCard
+                  copy={nativeAppUpdateCopy}
+                  installedVersion={nativeAppInstalledVersion}
+                  latestVersion={nativeAppLatestVersion}
+                  statusMessage={nativeAppUpdateStatusMessage}
+                  showUpdateAction={showNativeAppUpdateAction}
+                  onUpdate={handleNativeAppUpdatePress}
+                />
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
+              {copy.logout}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAccountActionModalOpen(true)}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-[13px] font-medium text-gray-400 transition hover:text-gray-600 active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <UserRoundX size={15} strokeWidth={2} aria-hidden="true" />
+              {copy.deactivateAccount}
+            </button>
+          </div>
+          <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
+            <X size={18} aria-hidden="true" />
+          </button>
+    </SlideSurface>
+
+      {open && isAccountActionModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => setIsAccountActionModalOpen(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.accountActionSelectTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.accountActionSelectTitle}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountActionModalOpen(false);
+                  setIsWithdrawConfirmModalOpen(true);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                {copy.withdrawAccount}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountActionModalOpen(false);
+                  setIsDeactivateModalOpen(true);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700"
+              >
+                {copy.deactivateAction}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+      {open && isWithdrawConfirmModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => {
+            if (isWithdrawing) return;
+            setIsWithdrawConfirmModalOpen(false);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.withdrawAccountConfirmTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.withdrawAccountConfirmTitle}
+            </p>
+            <p className="mt-2.5 text-[13px] leading-relaxed text-gray-500">
+              {copy.withdrawAccountConfirmMessage}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleWithdraw()}
+                disabled={isWithdrawing}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isWithdrawing ? (
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                ) : (
+                  copy.withdrawAccountAction
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsWithdrawConfirmModalOpen(false)}
+                disabled={isWithdrawing}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {dictionary.profile.cancelAction ?? "Cancel"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+      {open && isDeactivateModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => {
+            if (isDeactivating) return;
+            setIsDeactivateModalOpen(false);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.deactivateConfirmTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.deactivateConfirmTitle}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDeactivate()}
+                disabled={isDeactivating}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeactivating ? (
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                ) : (
+                  copy.deactivateAction
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeactivateModalOpen(false);
+                  onSignOut();
+                }}
+                disabled={isDeactivating}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {copy.deactivateLogoutOnlyAction}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+      <SlideSurface
+        open={open && managementPage !== null}
+        onClose={closeManagementPage}
+        ariaLabel={managementPageTitle}
+        nativeBackPriority={30}
+        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
+          <header
+            className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+            style={{
+              height: "calc(54px + env(safe-area-inset-top, 44px))",
+              paddingTop: "env(safe-area-inset-top, 44px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={closeManagementPage}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={copy.close}
+            >
+              <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <h2 className="truncate text-center text-[17px] font-bold">
+              {managementPageTitle}
+            </h2>
+            <div aria-hidden="true" />
+          </header>
+
+          <div className={managementPage === "feedback" ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6"}>
+            {managementPage === "feedback" ? (
+              <ProfileFeedbackContent
+                uiLocale={locale}
+                defaultFeedbackEmail={defaultFeedbackEmail}
+              />
+            ) : managementPage === "usage" ? (
+              <ProfileUsageContent uiLocale={locale} copy={copy.usage} />
+            ) : managementPage === "primaryLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.primaryLanguagesDescription}</p>
+                <LanguagePreferencePicker
+                  selectedLanguages={primaryLanguages}
+                  onToggleLanguage={(code) => void handleTogglePrimaryLanguage(code)}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_STT_LANGUAGE_SELECTION}
+                  minLanguages={1}
+                  disabled={isSavingPrimaryLanguages}
+                />
+              </div>
+            ) : managementPage === "defaultLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.defaultLanguagesDescription}</p>
+                <LanguagePreferencePicker
+                  selectedLanguages={defaultConversationLanguages}
+                  onToggleLanguage={(code) => void handleToggleDefaultConversationLanguage(code)}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  disabled={isSavingDefaultConversationLanguages}
+                />
+              </div>
+            ) : managementPage === "language" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.appLanguageDescription}</p>
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                  {PRIMARY_UI_LANGUAGE_OPTIONS.map((option, index) => {
+                    const selected = option.code === locale;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => handleSelectAppLanguage(option.code)}
+                        className={`group relative flex w-full items-center gap-3 px-4 py-3.5 text-left transition focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/80 ${selected ? "bg-amber-50/95 text-slate-950 shadow-[0_8px_20px_rgba(245,158,11,0.12)] ring-1 ring-inset ring-amber-300" : "bg-white text-slate-900 active:bg-gray-50"} ${index < PRIMARY_UI_LANGUAGE_OPTIONS.length - 1 ? selected ? "border-b border-amber-200" : "border-b border-gray-100" : ""}`}
+                        aria-pressed={selected}
+                      >
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg ${selected ? "border border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]" : "bg-gray-50"}`} aria-hidden="true">
+                          <LanguageFlag language={option.code} className="text-lg leading-none" />
+                        </span>
+                        <span className={`min-w-0 flex-1 text-[15px] ${selected ? "font-bold text-slate-950" : "font-medium text-slate-900"}`}>{option.name}</span>
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition ${selected ? "border-amber-500 bg-amber-500 text-white shadow-sm" : "border-slate-300 bg-white text-transparent group-hover:border-slate-400"}`}
+                          aria-hidden="true"
+                        >
+                          <Check size={21} strokeWidth={3.2} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : isLoading ? (
+              <div className="flex justify-center pt-8 text-gray-400">
+                <Loader2 size={24} className="animate-spin" aria-label={copy.loading} />
+              </div>
+            ) : managementPage === "blocked" ? (
+              requiresAuthentication || blocksLoadState === "unauthorized" ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+              ) : blocksLoadState === "error" ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+              ) : blocks.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noBlocked}</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+                  {blocks.map((block) => {
+                    const name = block.user.name?.trim() || block.user.name?.trim() || copy.userFallback;
+                    const handle = formatHandle(block.user.handle);
+                    return (
+                      <li key={block.id} className="flex items-center gap-3 px-3 py-3">
+                        <UserMiniAvatar image={block.user.image} label={name} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold">{name}</p>
+                          {handle ? <p className="truncate text-[12px] text-gray-500">{handle}</p> : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleUnblock(block.user.id)}
+                          disabled={unblockingId === block.user.id}
+                          className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-[12px] font-semibold text-gray-700 transition active:bg-gray-50 disabled:opacity-50"
+                        >
+                          {unblockingId === block.user.id ? "…" : copy.unblock}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : requiresAuthentication || reportsLoadState === "unauthorized" ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+            ) : reportsLoadState === "error" ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+            ) : reports.length === 0 ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noReports}</p>
+            ) : (
+              <div className="space-y-3">
+                {reports.map((report) => {
+                  const name = report.reportedUser.name?.trim() || report.reportedUser.name?.trim() || copy.userFallback;
+                  const handle = formatHandle(report.reportedUser.handle);
+                  const statusLabel = report.status === "resolved"
+                    ? (dictionary.profile.reportStatusResolved ?? "Resolved")
+                    : report.status === "rejected"
+                      ? (dictionary.profile.reportStatusRejected ?? "Rejected")
+                      : report.status === "in_review"
+                        ? (dictionary.profile.reportStatusInReview ?? "In review")
+                        : copy.pending;
+                  const expanded = expandedReportId === report.id;
+                  return (
+                    <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                      <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-semibold">{name}</p>
+                            {handle ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{handle}</p> : null}
+                            <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
+                        </div>
+                      </button>
+                      {expanded ? (
+                        <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
+                          {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
+                          {report.replies.map((reply) => (
+                            <div key={reply.id} className="rounded-lg bg-white px-3 py-2">
+                              <p className="mb-1 text-[11px] font-semibold text-emerald-600">{copy.teamReply}</p>
+                              <p className="whitespace-pre-wrap text-gray-700">{reply.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={closeManagementPage}
+            className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100"
+            aria-label={copy.close}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+      </SlideSurface>
+    </>
+  );
+}
+
+function ProfileEditPanel({
+  dictionary,
+  locale,
+  imageUrl,
+  initialImageCrop,
+  initialBio,
+  initialName,
+  initialHandle,
+  initialPrimaryLanguages,
+  initialBirthDate,
+  onClose,
+  onSave,
+  open,
+}: {
+  dictionary: AppDictionary;
+  locale: AppLocale;
+  imageUrl?: string | null;
+  initialImageCrop?: ProfileImageCropInput;
+  initialBio: string;
+  initialName: string;
+  initialHandle: string;
+  initialPrimaryLanguages: readonly string[];
+  initialBirthDate?: BirthDateParts | null;
+  onClose: () => void;
+  onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
+  open: boolean;
+}) {
+  const [name, setName] = useState(initialName);
+  const [handle, setHandle] = useState(initialHandle);
+  const [bio, setBio] = useState(initialBio);
+  const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialPrimaryLanguages)
+  ));
+  const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+  const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
+  const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
+    file: null,
+    crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const copy = {
+    title: dictionary.profile.editProfileTitle ?? dictionary.profile.editProfile,
+    handleLabel: dictionary.profile.handleLabel ?? (locale === "ko" ? "아이디" : "Handle"),
+    handlePlaceholder: dictionary.profile.handlePlaceholder ?? (locale === "ko" ? "아이디를 입력하세요" : "Enter a handle"),
+    handleHint: dictionary.profile.handleHint ?? (locale === "ko" ? "영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
+    nameLabel: dictionary.profile.profileNameLabel ?? "Name",
+    namePlaceholder: dictionary.profile.profileNamePlaceholder ?? "Enter your name",
+    bioLabel: dictionary.profile.bioLabel ?? "Bio",
+    primaryLanguagesLabel: dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? "Primary languages",
+    primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
+      ?? (locale === "ko"
+        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        : "Choose up to five primary languages in the order they should appear on your profile."),
+    saveAction: dictionary.profile.saveAction ?? "Save",
+    cancelAction: dictionary.profile.cancelAction ?? "Cancel",
+    saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
+    handleTaken: dictionary.profile.handleTakenMessage ?? (locale === "ko" ? "이미 사용 중인 아이디입니다." : "That handle is already taken."),
+    handleInvalid: dictionary.profile.handleInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
+  };
+  const signupCopy = useMemo(() => resolveSignupCopy(locale), [locale]);
+  const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
+  const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
+  const initialImageCropScale = initialImageCrop?.scale;
+  const initialImageCropX = initialImageCrop?.x;
+  const initialImageCropY = initialImageCrop?.y;
+  const normalizedInitialImageCrop = useMemo(
+    () => normalizeProfileImageCrop({
+      scale: initialImageCropScale,
+      x: initialImageCropX,
+      y: initialImageCropY,
+    }),
+    [initialImageCropScale, initialImageCropX, initialImageCropY],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setName(initialName);
+    setHandle(initialHandle);
+    setBio(initialBio);
+    setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
+    setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+    setHasBirthDate(Boolean(initialBirthDate));
+    setImageDraft({
+      file: null,
+      crop: normalizedInitialImageCrop,
+    });
+    setSaveError(null);
+  }, [initialBirthDate, initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+
+  const handleSave = useCallback(async () => {
+    if (isSaving) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const saved = await onSave({
+        imageFile: imageDraft.file,
+        imageCrop: imageDraft.crop,
+        handle: handle.trim(),
+        name: name.trim(),
+        bio: bio.trim(),
+        nationality: primaryLanguages[0] ?? null,
+        primaryLanguages,
+        birthDate: hasBirthDate ? birthDate : null,
+      });
+      if (saved === "saved") {
+        onClose();
+      } else {
+        setSaveError(saved === "handle_taken" ? copy.handleTaken : saved === "handle_invalid" ? copy.handleInvalid : copy.saveError);
+      }
+    } catch {
+      setSaveError(copy.saveError);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, hasBirthDate, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
+
+  return (
+    <SlideSurface
+      open={open}
+      onClose={onClose}
+      ariaLabel={copy.title}
+      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
+          <header
+            className="grid shrink-0 grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 px-4"
+            style={{
+              height: "calc(54px + env(safe-area-inset-top, 44px))",
+              paddingTop: "env(safe-area-inset-top, 44px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:opacity-50"
+              aria-label={copy.cancelAction}
+            >
+              <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <h2 className="truncate text-center text-[17px] font-bold">{copy.title}</h2>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !isEligibleAge}
+              className="min-w-[52px] text-[15px] font-semibold text-blue-600 transition active:opacity-60 disabled:opacity-50"
+            >
+              {isSaving ? "…" : copy.saveAction}
+            </button>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            <div className="flex justify-center pb-7">
+              <ProfileImageCropper
+                key={`${open ? "open" : "closed"}:${imageUrl ?? ""}:${initialImageCrop?.scale ?? ""}:${initialImageCrop?.x ?? ""}:${initialImageCrop?.y ?? ""}`}
+                imageUrl={imageUrl ?? null}
+                initialCrop={initialImageCrop}
+                locale={locale}
+                onChange={setImageDraft}
+                open={open}
+              />
+            </div>
+
+            <div className="space-y-5">
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-semibold text-gray-600">{copy.handleLabel}</span>
+                <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-gray-400 focus-within:bg-white">
+                  <span className="text-[15px] text-gray-500">@</span>
+                  <input
+                    type="text"
+                    value={handle}
+                    maxLength={HANDLE_MAX_LENGTH}
+                    onChange={(event) => setHandle(event.target.value.replace(/[^A-Za-z0-9_.]/g, "").toLowerCase())}
+                    placeholder={copy.handlePlaceholder}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="h-12 min-w-0 flex-1 bg-transparent pl-1 text-[15px] outline-none"
+                  />
+                </div>
+                <span className="mt-1 block text-[12px] text-gray-400">{copy.handleHint}</span>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-semibold text-gray-600">{copy.nameLabel}</span>
+                <input
+                  type="text"
+                  value={name}
+                  maxLength={40}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={copy.namePlaceholder}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] outline-none transition focus:border-gray-400 focus:bg-white"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-semibold text-gray-600">{copy.bioLabel}</span>
+                <textarea
+                  value={bio}
+                  maxLength={160}
+                  rows={3}
+                  onChange={(event) => setBio(event.target.value)}
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] leading-relaxed outline-none transition focus:border-gray-400 focus:bg-white"
+                />
+                <span className="mt-1 block text-right text-[12px] text-gray-400">{bio.length}/160</span>
+              </label>
+
+              <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">
+                  {signupCopy.birthDateTitle}
+                </legend>
+                <SignupBirthDatePicker
+                  value={birthDate}
+                  onChange={(nextBirthDate) => {
+                    setBirthDate(nextBirthDate);
+                    setHasBirthDate(true);
+                  }}
+                  yearLabel={signupCopy.yearLabel}
+                  monthLabel={signupCopy.monthLabel}
+                  dayLabel={signupCopy.dayLabel}
+                />
+                <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
+                  {signupCopy.birthDateDescription}
+                </p>
+                {!isEligibleAge ? (
+                  <p className="mt-2 text-[12px] font-medium text-rose-600" role="alert">
+                    {signupCopy.birthDateUnderage}
+                  </p>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.primaryLanguagesLabel}</legend>
+                <p className="mb-3 text-[12px] leading-relaxed text-gray-500">
+                  {copy.primaryLanguagesDescription}
+                </p>
+                <LanguagePreferencePicker
+                  selectedLanguages={primaryLanguages}
+                  onToggleLanguage={(code) => {
+                    setPrimaryLanguages((current) => {
+                      const selected = current.includes(code);
+                      if (selected) {
+                        return current.length > 1 ? current.filter((language) => language !== code) : current;
+                      }
+                      return current.length < MAX_STT_LANGUAGE_SELECTION ? [...current, code] : current;
+                    });
+                  }}
+                  uiLocale={locale}
+                  searchPlaceholder={languageCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={languageCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={languageCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={languageCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_STT_LANGUAGE_SELECTION}
+                  minLanguages={1}
+                  disabled={isSaving}
+                />
+              </fieldset>
+
+              {saveError ? (
+                <p role="alert" className="text-center text-[13px] font-medium text-red-500">{saveError}</p>
+              ) : null}
+            </div>
+          </div>
+    </SlideSurface>
+  );
+}
+
+export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
+    image: null,
+    imageCropScale: null,
+    imageCropX: null,
+    imageCropY: null,
+    handle: null,
+    name: null,
+    bio: null,
+    nationality: null,
+    primaryLanguages: [],
+    defaultConversationLanguages: [],
+    location: null,
+    birthDate: null,
+    followersCount: 0,
+    followingCount: 0,
+  }));
+  const [myPageSurfaceHistory, setMyPageSurfaceHistory] = useState(() => (
+    typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
+  ));
+  const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const pendingDirectConversationNavigationRef = useRef(false);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
+
+  const showProfileEdit = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_EDIT_SURFACE_ID,
+  );
+  const showProfileSettings = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_SETTINGS_SURFACE_ID,
+  );
+  const showProfileShare = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_PROFILE_SHARE_SURFACE_ID,
+  );
+  const showFollowList = myPageSurfaceHistory.some(
+    (entry) => entry.id === MY_PAGE_FOLLOW_LIST_SURFACE_ID,
+  );
+  const followListSurface = [...myPageSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === MY_PAGE_FOLLOW_LIST_SURFACE_ID);
+  const followListTab = followListSurface?.value === "following" ? "following" : "followers";
+  const publicProfileSurface = [...myPageSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === MY_PAGE_PUBLIC_PROFILE_SURFACE_ID);
+  const [isLocationMapOpen, setIsLocationMapOpen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<NativeLocationPermission | "checking">(
+    () => "checking",
+  );
+  const locationPermissionRef = useRef<NativeLocationPermission | "checking">(locationPermission);
+  const locationPermissionSyncVersionRef = useRef(0);
+
+  useEffect(() => {
+    locationPermissionRef.current = locationPermission;
+  }, [locationPermission]);
+
+  const sessionUserId = session?.user?.id ?? "";
+  const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
+  const profileImageUrl = profile.image || session?.user?.image || null;
+  const name = profile.name?.trim() || fallbackName;
+  const bio = profile.bio?.trim() || "";
+  const primaryLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(
+      profile.primaryLanguages,
+      profile.nationality ? [profile.nationality] : [],
+    ),
+    [profile.nationality, profile.primaryLanguages],
+  );
+  const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
+  const nationalityFlag = getNationalityOption(nationality)?.flag;
+  const nationalityName = nationality
+    ? getSttLanguageDisplayName(nationality, locale)
+      ?? getNationalityOption(nationality)?.label
+      ?? nationality
+    : null;
+  const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}`, searchParams, {
+    skipConversationRestore: true,
+    tabRoot: true,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncMyPageSurfaceHistory = () => {
+      const nextHistory = readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+      if (pendingDirectConversationNavigationRef.current) {
+        const filteredHistory = nextHistory.filter((entry) => entry.id !== MY_PAGE_PUBLIC_PROFILE_SURFACE_ID);
+        if (filteredHistory.length !== nextHistory.length) {
+          setMyPageSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setMyPageSurfaceHistory(nextHistory);
+    };
+
+    window.addEventListener("popstate", syncMyPageSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncMyPageSurfaceHistory);
+  }, []);
+
+  const openMyPageSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: MY_PAGE_SURFACE_SCOPE,
+      ...entry,
+    });
+    setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
+  }, []);
+
+  const closeMyPageSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const allEntries = readSlideSurfaceHistory(window.history.state);
+      const entryIndex = [...allEntries].reverse().findIndex((candidate) => (
+        candidate.scope === MY_PAGE_SURFACE_SCOPE
+        && candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex >= 0) {
+        const actualIndex = allEntries.length - 1 - entryIndex;
+        window.history.go(-(allEntries.length - actualIndex));
+        return;
+      }
+    }
+
+    setMyPageSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (showProfileImagePreview) {
+      setShowProfileImagePreview(false);
+      return true;
+    }
+    if (isLocationMapOpen) {
+      setIsLocationMapOpen(false);
+      return true;
+    }
+    if (showProfileEdit) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID });
+      return true;
+    }
+    if (showProfileSettings) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID });
+      return true;
+    }
+    if (showProfileShare) {
+      closeMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID });
+      return true;
+    }
+    if (showFollowList) {
+      closeMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID });
+      return true;
+    }
+    if (publicProfileSurface?.value) {
+      closeMyPageSurface({
+        id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+        value: publicProfileSurface.value,
+      });
+      return true;
+    }
+    return false;
+  }, 10), [
+    closeMyPageSurface,
+    isLocationMapOpen,
+    publicProfileSurface?.value,
+    showFollowList,
+    showProfileEdit,
+    showProfileImagePreview,
+    showProfileSettings,
+    showProfileShare,
+  ]);
+
+  useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      isLocationMapOpen
+      || showProfileImagePreview
+      || showProfileEdit
+      || showProfileSettings
+      || showProfileShare
+      || showFollowList
+      || publicProfileSurface?.value
+    );
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [
+    isLocationMapOpen,
+    publicProfileSurface?.value,
+    showFollowList,
+    showProfileEdit,
+    showProfileImagePreview,
+    showProfileSettings,
+    showProfileShare,
+  ]);
+
+  const handleOpenPublicProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+    openMyPageSurface({
+      id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openMyPageSurface]);
+
+  const startDirectConversationFromMyPageProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    pendingDirectConversationNavigationRef.current = true;
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      await consumeSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE);
+      if (typeof window !== "undefined") {
+        replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+          entry.scope !== MY_PAGE_SURFACE_SCOPE
+        )));
+      }
+      setMyPageSurfaceHistory([]);
+
+      const conversationListHref = buildNativeAwareTabPath(
+        `/${locale}/conversations`,
+        searchParams,
+        { skipConversationRestore: true, tabRoot: true },
+      );
+      await replaceWithConversationListThenPush(router, conversationListHref, conversation.id);
+    } finally {
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        pendingDirectConversationNavigationRef.current = false;
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
+    }
+  }, [locale, router, searchParams]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    let cancelled = false;
+    void fetch(buildClientApiPath("/profile"), { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() as Promise<Partial<ProfileRecord>> : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setProfile({
+          image: typeof data.image === "string" ? data.image : null,
+          imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
+          imageCropX: typeof data.imageCropX === "number" ? data.imageCropX : null,
+          imageCropY: typeof data.imageCropY === "number" ? data.imageCropY : null,
+          handle: typeof data.handle === "string" ? data.handle : null,
+          name: typeof data.name === "string" ? data.name : null,
+          bio: typeof data.bio === "string" ? data.bio : null,
+          nationality: typeof data.nationality === "string" ? data.nationality : null,
+          primaryLanguages: sanitizeSttLanguageSelection(
+            data.primaryLanguages,
+            typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
+          ),
+          defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
+          location: locationPermissionRef.current !== "granted"
+            ? null
+            : normalizeProfileLocation(data.location),
+          birthDate: parseProfileBirthDate(data.birthDate),
+          followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
+          followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
+        });
+      })
+      .catch(() => {
+        // The session-backed name remains available when profile hydration fails.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUserId]);
+
+  const syncLocationPermission = useCallback(async () => {
+    if (!sessionUserId) return;
+    const syncVersion = ++locationPermissionSyncVersionRef.current;
+    const nextPermission = await checkProfileLocationPermission();
+    if (syncVersion !== locationPermissionSyncVersionRef.current) return;
+    locationPermissionRef.current = nextPermission;
+    setLocationPermission(nextPermission);
+    if (nextPermission === "granted") {
+      try {
+        await patchProfileLocation(
+          { locationPermissionStatus: "granted" },
+          { operation: "permission_sync" },
+        );
+      } catch {
+        // The native permission remains authoritative for the current screen.
+      }
+      return;
+    }
+    setProfile((current) => ({ ...current, location: null }));
+    const cleanupStatus = nextPermission === "unknown" ? "unavailable" : nextPermission;
+    try {
+      await patchProfileLocation(
+        { locationPermissionStatus: cleanupStatus },
+        { operation: "permission_sync" },
+      );
+    } catch {
+      // The local profile is cleared immediately even if the cleanup request is retried later.
+    }
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    const initialSyncTimer = window.setTimeout(() => {
+      void syncLocationPermission();
+    }, 0);
+
+    const handlePageVisible = () => {
+      if (document.visibilityState === "hidden") return;
+      void syncLocationPermission();
+    };
+    window.addEventListener("pageshow", handlePageVisible);
+    document.addEventListener("visibilitychange", handlePageVisible);
+    return () => {
+      window.clearTimeout(initialSyncTimer);
+      window.removeEventListener("pageshow", handlePageVisible);
+      document.removeEventListener("visibilitychange", handlePageVisible);
+    };
+  }, [sessionUserId, syncLocationPermission]);
+
+  const handleSaveLocation = useCallback(async (
+    nextLocation: ProfileLocationRecord,
+    context?: { requestId?: string },
+  ) => {
+    locationPermissionSyncVersionRef.current += 1;
+    const response = await patchProfileLocation({
+      location: nextLocation,
+      locationPermissionStatus: "granted",
+    }, {
+      operation: "save",
+      requestId: context?.requestId,
+    });
+    if (!response.ok) throw new Error("location_save_failed");
+    const data = await response.json() as { location?: unknown };
+    const savedLocation = normalizeProfileLocation(data.location) ?? nextLocation;
+    locationPermissionRef.current = "granted";
+    setLocationPermission("granted");
+    setProfile((current) => ({ ...current, location: savedLocation }));
+  }, []);
+
+  const handleClearLocation = useCallback(async (context?: { requestId?: string }) => {
+    locationPermissionSyncVersionRef.current += 1;
+    locationPermissionRef.current = "denied";
+    setLocationPermission("denied");
+    setProfile((current) => ({ ...current, location: null }));
+    const response = await patchProfileLocation(
+      { locationPermissionStatus: "denied" },
+      { operation: "clear", requestId: context?.requestId },
+    );
+    if (!response.ok) throw new Error("location_clear_failed");
+  }, []);
+
+  const handleLocationMapOpenChange = useCallback((open: boolean) => {
+    if (open) locationPermissionSyncVersionRef.current += 1;
+    setIsLocationMapOpen(open);
+  }, []);
+
+  const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
+    try {
+      if (draft.imageFile) {
+        const imageFormData = new FormData();
+        imageFormData.append("file", draft.imageFile);
+        imageFormData.append("imageCropScale", String(draft.imageCrop.scale));
+        imageFormData.append("imageCropX", String(draft.imageCrop.x));
+        imageFormData.append("imageCropY", String(draft.imageCrop.y));
+
+        const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
+          method: "POST",
+          body: imageFormData,
+        });
+        if (!imageResponse.ok) return "failed";
+
+        const imageSaved = await imageResponse.json() as Partial<ProfileRecord>;
+        setProfile((current) => ({
+          ...current,
+          image: typeof imageSaved.image === "string" ? imageSaved.image : current.image,
+          imageCropScale: typeof imageSaved.imageCropScale === "number" ? imageSaved.imageCropScale : current.imageCropScale,
+          imageCropX: typeof imageSaved.imageCropX === "number" ? imageSaved.imageCropX : current.imageCropX,
+          imageCropY: typeof imageSaved.imageCropY === "number" ? imageSaved.imageCropY : current.imageCropY,
+        }));
+      }
+
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          handle: draft.handle,
+          name: draft.name,
+          bio: draft.bio,
+          nationality: draft.nationality,
+          primaryLanguages: draft.primaryLanguages,
+          birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
+          imageCropScale: draft.imageCrop.scale,
+          imageCropX: draft.imageCrop.x,
+          imageCropY: draft.imageCrop.y,
+        }),
+      });
+      if (!response.ok) {
+        if (response.status === 409) {
+          const errorBody = await response.json().catch(() => null) as { error?: unknown } | null;
+          if (errorBody?.error === "handle_taken") return "handle_taken";
+          return "failed";
+        }
+        if (response.status === 400) {
+          const errorBody = await response.json().catch(() => null) as { error?: unknown } | null;
+          if (errorBody?.error === "invalid_handle") return "handle_invalid";
+        }
+        return "failed";
+      }
+
+      const saved = await response.json() as Partial<ProfileRecord>;
+      setProfile((current) => ({
+        ...current,
+        handle: typeof saved.handle === "string" ? saved.handle : current.handle,
+        name: typeof saved.name === "string" ? saved.name : saved.name === null ? null : current.name,
+        bio: typeof saved.bio === "string" ? saved.bio : saved.bio === null ? null : current.bio,
+        birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
+        nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
+        primaryLanguages: sanitizeSttLanguageSelection(
+          saved.primaryLanguages,
+          typeof saved.nationality === "string" && saved.nationality ? [saved.nationality] : [],
+        ),
+      }));
+      return "saved";
+    } catch {
+      return "failed";
+    }
+  }, []);
+
+  const handleSavePrimaryLanguages = useCallback(async (languages: SttLanguageCode[]) => {
+    try {
+      const normalizedLanguages = sanitizeSttLanguageSelection(languages);
+      if (normalizedLanguages.length === 0) return false;
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryLanguages: normalizedLanguages }),
+      });
+      if (!response.ok) return false;
+
+      const saved = await response.json() as Partial<ProfileRecord>;
+      setProfile((current) => ({
+        ...current,
+        primaryLanguages: sanitizeSttLanguageSelection(saved.primaryLanguages, normalizedLanguages),
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const defaultConversationLanguages = useMemo(() => {
+    const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
+    return storedLanguages.length > 0
+      ? storedLanguages
+      : deriveDefaultConversationLanguages(primaryLanguages, locale);
+  }, [locale, primaryLanguages, profile.defaultConversationLanguages]);
+
+  const handleSaveDefaultConversationLanguages = useCallback(async (languages: SttLanguageCode[]) => {
+    try {
+      const normalizedLanguages = sanitizeSttLanguageSelection(languages);
+      if (normalizedLanguages.length === 0) return false;
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultConversationLanguages: normalizedLanguages }),
+      });
+      if (!response.ok) return false;
+
+      const saved = await response.json() as Partial<ProfileRecord>;
+      const savedLanguages = sanitizeSttLanguageSelection(saved.defaultConversationLanguages, normalizedLanguages);
+      setProfile((current) => ({
+        ...current,
+        defaultConversationLanguages: savedLanguages,
+      }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT, {
+          detail: savedLanguages,
+        }));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    void unregisterNativePushToken().finally(() => {
+      resetMinglePostHogIdentity();
+      void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
+        if (typeof window !== "undefined") {
+          window.location.replace(signOutCallbackUrl);
+        }
+      });
+    });
+  }, [signOutCallbackUrl]);
+
+  const handleChangeAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
+    if (typeof window !== "undefined") {
+      replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+        entry.scope !== MY_PAGE_SURFACE_SCOPE && entry.scope !== MY_PAGE_SETTINGS_SCOPE
+      )));
+    }
+    setMyPageSurfaceHistory([]);
+    router.replace(buildNativeAwareTabPath(`/${nextLocale}/mypage`, searchParams, { tabRoot: true }));
+  }, [router, searchParams]);
+
+  return (
+    <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+      <ProfileEditPanel
+        dictionary={dictionary}
+        locale={locale}
+        imageUrl={profileImageUrl}
+        initialImageCrop={{
+          scale: profile.imageCropScale,
+          x: profile.imageCropX,
+          y: profile.imageCropY,
+        }}
+        initialBio={profile.bio ?? ""}
+        initialName={name}
+        initialHandle={profile.handle ?? ""}
+        initialPrimaryLanguages={primaryLanguages}
+        initialBirthDate={profile.birthDate}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
+        onSave={handleSaveProfile}
+        open={showProfileEdit}
+      />
+      <ProfileSettingsPanel
+        dictionary={dictionary}
+        locale={locale}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+        onChangeAppLanguage={handleChangeAppLanguage}
+        initialPrimaryLanguages={primaryLanguages}
+        onSavePrimaryLanguages={handleSavePrimaryLanguages}
+        initialDefaultConversationLanguages={defaultConversationLanguages}
+        onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
+        onSignOut={handleSignOut}
+        signOutCallbackUrl={signOutCallbackUrl}
+        defaultFeedbackEmail={session?.user?.email ?? ""}
+        open={showProfileSettings}
+        sessionStatus={sessionStatus}
+      />
+      <ProfileShareScreen
+        dictionary={dictionary}
+        locale={locale}
+        initialHandle={profile.handle ?? ""}
+        open={showProfileShare}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID })}
+      />
+      <FollowListScreen
+        key={`follow-list-${followListTab}`}
+        dictionary={dictionary}
+        locale={locale}
+        initialQuery=""
+        initialTab={followListTab}
+        open={showFollowList}
+        onClose={() => closeMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID })}
+        onOpenProfile={handleOpenPublicProfile}
+      />
+      <PublicUserProfileScreen
+        dictionary={dictionary}
+        locale={locale}
+        userId={publicProfileSurface?.value ?? ""}
+        open={Boolean(publicProfileSurface?.value)}
+        onStartDirectConversation={startDirectConversationFromMyPageProfile}
+        onClose={() => {
+          if (!publicProfileSurface?.value) return;
+          closeMyPageSurface({
+            id: MY_PAGE_PUBLIC_PROFILE_SURFACE_ID,
+            value: publicProfileSurface.value,
+          });
+        }}
+      />
+      <ProfileImagePreview
+        open={showProfileImagePreview}
+        image={profileImageUrl}
+        alt={name}
+        crop={{
+          scale: profile.imageCropScale,
+          x: profile.imageCropX,
+          y: profile.imageCropY,
+        }}
+        flag={nationalityFlag}
+        name={name}
+        handle={profile.handle}
+        bio={bio}
+        languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? "Primary language"}
+        languageName={nationalityName}
+        closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
+        onClose={() => setShowProfileImagePreview(false)}
+      />
+
+      <header
+        className="flex shrink-0 items-center px-4"
+        style={{
+          height: "calc(54px + env(safe-area-inset-top, 44px))",
+          paddingTop: "env(safe-area-inset-top, 44px)",
+        }}
+      >
+        <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
+          {name}
+        </h1>
+        <button
+          type="button"
+          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+          className="flex h-10 w-10 items-center justify-center rounded-full transition"
+          aria-label={dictionary.profile.menuLabel}
+        >
+          <Menu size={23} strokeWidth={2.2} />
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <section className="px-4 pb-4 pt-5">
+          <div className="flex items-center gap-6 pl-2">
+            <div className="flex shrink-0 flex-col items-center">
+              <ProfileAvatar
+                alt={name}
+                languages={primaryLanguages}
+                imageUrl={profileImageUrl}
+                imageCrop={{
+                  scale: profile.imageCropScale,
+                  x: profile.imageCropX,
+                  y: profile.imageCropY,
+                }}
+                onClick={() => setShowProfileImagePreview(true)}
+              />
+            </div>
+            <div className="min-w-0 flex-1 grid grid-cols-2 gap-1 text-center">
+              <button
+                type="button"
+                onClick={() => openMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID, value: "followers" })}
+                className="rounded-xl px-2 py-1 transition active:bg-gray-50"
+                aria-label={`${profile.followersCount} ${dictionary.profile.followersLabel}`}
+              >
+                <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followersLabel}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => openMyPageSurface({ id: MY_PAGE_FOLLOW_LIST_SURFACE_ID, value: "following" })}
+                className="rounded-xl px-2 py-1 transition active:bg-gray-50"
+                aria-label={`${profile.followingCount} ${dictionary.profile.followingLabel}`}
+              >
+                <p className="text-[18px] font-semibold leading-tight">{profile.followingCount}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followingLabel}</p>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 pl-2">
+            <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+            {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <ProfileLocation
+              profileLocation={locationPermission === "granted" ? profile.location : null}
+              locale={locale}
+              isOwnProfile
+              onSaveLocation={handleSaveLocation}
+              onClearLocation={handleClearLocation}
+              onMapOpenChange={handleLocationMapOpenChange}
+            />
+            {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
+              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+            >
+              {dictionary.profile.editProfile}
+            </button>
+            <button
+              type="button"
+              onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SHARE_SURFACE_ID })}
+              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+            >
+              {dictionary.profile.shareProfile}
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+      <BottomTabBar
+        activeRoute="mypage"
+        dictionary={dictionary}
+        locale={locale}
+      />
+    </main>
+  );
+}

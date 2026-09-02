@@ -24,15 +24,19 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>mingleauth</string>
-			</array>
+				<array>
+					<string>mingle</string>
+					<string>mingleprofile</string>
+					<string>mingleauth</string>
+				</array>
 		</dict>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
@@ -46,6 +50,12 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mingle uses your microphone for real-time speech translation.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Mingle uses your camera to scan profile QR codes.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Mingle uses your location only when you choose to add or update your profile location.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Mingle saves QR codes to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>
@@ -54,6 +64,8 @@
 	<string>$(NEXT_PUBLIC_SITE_HOST)</string>
 	<key>MingleDefaultWsURL</key>
 	<string>$(NEXT_PUBLIC_WS_URL)</string>
+	<key>MinglePushEnvironment</key>
+	<string>$(MINGLE_PUSH_ENVIRONMENT)</string>
 	<key>MingleLegacyWebAppBaseURL</key>
 	<string>$(MINGLE_LEGACY_SITE_URL)</string>
 	<key>MingleLegacyDefaultWsURL</key>

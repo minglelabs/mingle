@@ -1,6 +1,9 @@
 import AVFoundation
+import CoreLocation
 import Foundation
 import React
+import UIKit
+import UserNotifications
 
 final class MingleAudioSessionCoordinator {
     static let shared = MingleAudioSessionCoordinator()
@@ -235,6 +238,7 @@ class NativeSTTModule: RCTEventEmitter {
     private var wsPingTimer: DispatchSourceTimer?
     private var healthCheckTimer: DispatchSourceTimer?
     private var lastChunkCountSnapshot: Int64 = 0
+    private var activeConversationId: String?
     private var gracefulStopWorkItem: DispatchWorkItem?
     private var gracefulStopPending = false
     private let gracefulStopTimeoutMs = 5_000
@@ -451,19 +455,37 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func emitError(_ message: String) {
         NSLog("[NativeSTTModule] error=%@", message)
-        emit("error", payload: ["message": message])
+        var payload: [String: Any] = ["message": message]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("error", payload: payload)
     }
 
     private func emitStatus(_ status: String) {
-        emit("status", payload: ["status": status])
+        NSLog("[NativeSTTModule] status=%@ conversation=%@", status, activeConversationId ?? "unknown")
+        var payload: [String: Any] = ["status": status]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("status", payload: payload)
     }
 
     private func emitMessage(raw: String) {
-        emit("message", payload: ["raw": raw])
+        var payload: [String: Any] = ["raw": raw]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("message", payload: payload)
     }
 
     private func emitClose(_ reason: String) {
-        emit("close", payload: ["reason": reason])
+        NSLog("[NativeSTTModule] close reason=%@ conversation=%@", reason, activeConversationId ?? "unknown")
+        var payload: [String: Any] = ["reason": reason]
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("close", payload: payload)
     }
 
     private func resolveMicrophonePermissionStatus() -> String {
@@ -648,6 +670,7 @@ class NativeSTTModule: RCTEventEmitter {
         if let reason {
             emitClose(reason)
         }
+        activeConversationId = nil
     }
 
     private func beginGracefulStop() {
@@ -838,12 +861,12 @@ class NativeSTTModule: RCTEventEmitter {
     private func startSession(
         wsUrl: URL,
         wsUrlString: String,
+        conversationId: String,
         sttModel: String,
         aecEnabled: Bool,
         apiNamespace: String,
         releaseVariant: String,
         behaviorProfile: String,
-        sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
         sttSegmentationMode: String?,
         sonioxEndpointMaxDelayMs: Int?,
@@ -852,10 +875,11 @@ class NativeSTTModule: RCTEventEmitter {
         reject: @escaping RCTPromiseRejectBlock
     ) {
         isAecEnabled = aecEnabled
+        activeConversationId = conversationId.isEmpty ? nil : conversationId
         audioChunkCount = 0
         wsMessageCount = 0
-        NSLog("[NativeSTTModule] startSession ws=%@ model=%@ aec=%d",
-              wsUrlString, sttModel, aecEnabled ? 1 : 0)
+        NSLog("[NativeSTTModule] startSession conversation=%@ ws=%@ model=%@ aec=%d",
+              activeConversationId ?? "unknown", wsUrlString, sttModel, aecEnabled ? 1 : 0)
 
         do {
             try configureAudioSession(aecEnabled: aecEnabled)
@@ -951,9 +975,6 @@ class NativeSTTModule: RCTEventEmitter {
         if let sonioxEndpointTuningStep {
             configPayload["soniox_endpoint_tuning_step"] = sonioxEndpointTuningStep
         }
-        if !sonioxLanguageHints.isEmpty {
-            configPayload["soniox_language_hints"] = sonioxLanguageHints
-        }
         sendJson(configPayload)
 
         emitStatus("running")
@@ -986,12 +1007,10 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let conversationId = (options["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
@@ -1015,12 +1034,12 @@ class NativeSTTModule: RCTEventEmitter {
             startSession(
                 wsUrl: wsUrl,
                 wsUrlString: wsUrlString,
+                conversationId: conversationId,
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
                 apiNamespace: apiNamespace,
                 releaseVariant: releaseVariant,
                 behaviorProfile: behaviorProfile,
-                sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 sttSegmentationMode: sttSegmentationMode,
                 sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
@@ -1039,12 +1058,12 @@ class NativeSTTModule: RCTEventEmitter {
                         self.startSession(
                             wsUrl: wsUrl,
                             wsUrlString: wsUrlString,
+                            conversationId: conversationId,
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
                             apiNamespace: apiNamespace,
                             releaseVariant: releaseVariant,
                             behaviorProfile: behaviorProfile,
-                            sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             sttSegmentationMode: sttSegmentationMode,
                             sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
@@ -1084,6 +1103,14 @@ class NativeSTTModule: RCTEventEmitter {
     ) {
         let pendingText = options?["pendingText"] as? String ?? ""
         let pendingLanguage = options?["pendingLanguage"] as? String ?? "unknown"
+        let requestedConversationId = (options?["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !requestedConversationId.isEmpty,
+           let activeConversationId,
+           requestedConversationId != activeConversationId {
+            NSLog("[NativeSTTModule] ignored stale stop conversation=%@ active=%@", requestedConversationId, activeConversationId)
+            resolve(["ok": true])
+            return
+        }
 
         if isRunning {
             sendJson([
@@ -1151,10 +1178,18 @@ class NativeSTTModule: RCTEventEmitter {
 }
 
 @objc(NativeRuntimeConfigModule)
-class NativeRuntimeConfigModule: NSObject {
+class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
     private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
     private static let conversationRestoreConversationIdKey = "mingle.nativeConversationRestore.conversationId"
     private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
+    private static let pendingProfileLinkUrlKey = "mingle.nativeProfileLink.url"
+    private static let pendingProfileLinkSequenceKey = "mingle.nativeProfileLink.sequence"
+
+    private var locationManager: CLLocationManager?
+    private var pendingLocationPermissionResolve: RCTPromiseResolveBlock?
+    private var pendingLocationResolve: RCTPromiseResolveBlock?
+    private var pendingLocationReject: RCTPromiseRejectBlock?
+    private var locationTimeoutWorkItem: DispatchWorkItem?
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -1167,6 +1202,50 @@ class NativeRuntimeConfigModule: NSObject {
             return 0
         }
         return NSNumber(value: value)
+    }
+
+    private static func isProfileLinkURL(_ url: URL) -> Bool {
+        let scheme = (url.scheme ?? "").lowercased()
+        if scheme == "mingle" || scheme == "mingleprofile" {
+            return url.host?.lowercased() == "profile"
+        }
+        if scheme == "https" {
+            return url.path.split(separator: "/").first.map(String.init) == "p"
+        }
+        return false
+    }
+
+    static func recordIncomingProfileLink(_ url: URL) {
+        guard isProfileLinkURL(url) else { return }
+        let normalizedURL = url.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedURL.isEmpty else { return }
+
+        let defaults = UserDefaults.standard
+        let nextSequence = defaults.integer(forKey: pendingProfileLinkSequenceKey) + 1
+        defaults.set(normalizedURL, forKey: pendingProfileLinkUrlKey)
+        defaults.set(nextSequence, forKey: pendingProfileLinkSequenceKey)
+        let nonceHint = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "linkNonce" })?
+            .value?
+            .suffix(8) ?? ""
+        NSLog(
+            "[MingleProfileLink] native_record scheme=%@ sequence=%ld hasNonce=%@ nonceHint=%@",
+            (url.scheme ?? "").lowercased(),
+            nextSequence,
+            url.query?.contains("linkNonce=") == true ? "true" : "false",
+            String(nonceHint)
+        )
+    }
+
+    private static func pendingProfileLinkPayload() -> [String: Any]? {
+        guard let url = UserDefaults.standard.string(forKey: pendingProfileLinkUrlKey), !url.isEmpty else {
+            return nil
+        }
+        return [
+            "url": url,
+            "sequence": UserDefaults.standard.integer(forKey: pendingProfileLinkSequenceKey),
+        ]
     }
 
     private static func runtimeConfigPayload() -> [String: Any] {
@@ -1213,6 +1292,171 @@ class NativeRuntimeConfigModule: NSObject {
         resolve(Self.runtimeConfigPayload())
     }
 
+    private func locationPermissionStatus() -> String {
+        guard CLLocationManager.locationServicesEnabled() else { return "unavailable" }
+        let status: CLAuthorizationStatus
+        if #available(iOS 14.0, *) {
+            status = locationManager?.authorizationStatus ?? CLLocationManager.authorizationStatus()
+        } else {
+            status = CLLocationManager.authorizationStatus()
+        }
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return "granted"
+        case .notDetermined:
+            return "not_determined"
+        case .denied, .restricted:
+            return "blocked"
+        @unknown default:
+            return "unavailable"
+        }
+    }
+
+    private func locationPermissionPayload(_ override: String? = nil) -> [String: Any] {
+        [
+            "permission": override ?? locationPermissionStatus(),
+            "platform": "ios",
+        ]
+    }
+
+    @objc(checkLocationPermission:rejecter:)
+    func checkLocationPermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            resolve(self?.locationPermissionPayload() ?? ["permission": "unavailable", "platform": "ios"])
+        }
+    }
+
+    @objc(requestLocationPermission:rejecter:)
+    func requestLocationPermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                resolve(["permission": "unavailable", "platform": "ios"])
+                return
+            }
+            guard CLLocationManager.locationServicesEnabled() else {
+                resolve(self.locationPermissionPayload("unavailable"))
+                return
+            }
+            let status = self.locationPermissionStatus()
+            guard status == "not_determined" else {
+                resolve(self.locationPermissionPayload(status))
+                return
+            }
+
+            self.pendingLocationPermissionResolve = resolve
+            let manager = self.locationManager ?? CLLocationManager()
+            self.locationManager = manager
+            manager.delegate = self
+            manager.requestWhenInUseAuthorization()
+        }
+    }
+
+    @objc(getCurrentLocation:rejecter:)
+    func getCurrentLocation(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                reject("location_unavailable", "Location manager is unavailable", nil)
+                return
+            }
+            guard self.locationPermissionStatus() == "granted" else {
+                reject("location_permission", "Location permission is not granted", nil)
+                return
+            }
+            guard CLLocationManager.locationServicesEnabled() else {
+                reject("location_unavailable", "Location services are disabled", nil)
+                return
+            }
+
+            self.locationTimeoutWorkItem?.cancel()
+            self.pendingLocationResolve = resolve
+            self.pendingLocationReject = reject
+            let manager = self.locationManager ?? CLLocationManager()
+            self.locationManager = manager
+            manager.delegate = self
+            manager.desiredAccuracy = kCLLocationAccuracyKilometer
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, self.pendingLocationResolve != nil else { return }
+                self.pendingLocationResolve = nil
+                self.pendingLocationReject = nil
+                reject("location_timeout", "Timed out while getting current location", nil)
+            }
+            self.locationTimeoutWorkItem = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
+            manager.requestLocation()
+        }
+    }
+
+    private func resolvePendingLocationPermission() {
+        guard let resolve = pendingLocationPermissionResolve else { return }
+        pendingLocationPermissionResolve = nil
+        resolve(locationPermissionPayload())
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        resolvePendingLocationPermission()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        resolvePendingLocationPermission()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last, let resolve = pendingLocationResolve else { return }
+        locationTimeoutWorkItem?.cancel()
+        locationTimeoutWorkItem = nil
+        pendingLocationResolve = nil
+        pendingLocationReject = nil
+        resolve([
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "accuracy": location.horizontalAccuracy,
+            "provider": "core_location",
+            "receivedAtMs": Int(Date().timeIntervalSince1970 * 1000),
+        ])
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        guard let reject = pendingLocationReject else { return }
+        locationTimeoutWorkItem?.cancel()
+        locationTimeoutWorkItem = nil
+        pendingLocationResolve = nil
+        pendingLocationReject = nil
+        reject("location_failed", error.localizedDescription, error)
+    }
+
+    @objc(getPendingProfileLink:rejecter:)
+    func getPendingProfileLink(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        resolve(Self.pendingProfileLinkPayload() ?? NSNull())
+    }
+
+    @objc(clearPendingProfileLink:resolver:rejecter:)
+    func clearPendingProfileLink(
+        _ sequence: NSNumber,
+        resolver resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let expectedSequence = sequence.intValue
+        let currentSequence = defaults.integer(forKey: Self.pendingProfileLinkSequenceKey)
+        if expectedSequence <= 0 || expectedSequence == currentSequence {
+            defaults.removeObject(forKey: Self.pendingProfileLinkUrlKey)
+            defaults.removeObject(forKey: Self.pendingProfileLinkSequenceKey)
+        }
+        resolve(true)
+    }
+
     @objc(rememberConversationRestoreUrl:conversationId:createdAtMs:resolver:rejecter:)
     func rememberConversationRestoreUrl(
         _ url: String,
@@ -1246,5 +1490,182 @@ class NativeRuntimeConfigModule: NSObject {
         defaults.removeObject(forKey: Self.conversationRestoreConversationIdKey)
         defaults.removeObject(forKey: Self.conversationRestoreCreatedAtMsKey)
         resolve(true)
+    }
+
+    @objc(recordHistoryDebug:)
+    func recordHistoryDebug(_ payload: String) {
+        guard NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled") == "1" else {
+            return
+        }
+        let boundedPayload = String(payload.prefix(4_000))
+        NSLog("[MingleHistoryDebug] %@", boundedPayload)
+    }
+}
+
+@objc(NativePushNotificationModule)
+class NativePushNotificationModule: RCTEventEmitter {
+    private static let tokenKey = "mingle.nativePush.token"
+    private static let installationIdKey = "mingle.nativePush.installationId"
+    private static weak var sharedModule: NativePushNotificationModule?
+
+    private var pendingResolve: RCTPromiseResolveBlock?
+    private var pendingRegistrationTimeout: DispatchWorkItem?
+
+    override init() {
+        super.init()
+        Self.sharedModule = self
+    }
+
+    override static func requiresMainQueueSetup() -> Bool {
+        true
+    }
+
+    override func supportedEvents() -> [String]! {
+        ["registration", "opened"]
+    }
+
+    private static func installationId() -> String {
+        if let existing = UserDefaults.standard.string(forKey: installationIdKey), !existing.isEmpty {
+            return existing
+        }
+
+        let value = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(value, forKey: installationIdKey)
+        return value
+    }
+
+    private static func pushEnvironment() -> String {
+        let configured = NativeSTTModule.readRuntimeConfigValue("MinglePushEnvironment").lowercased()
+        return configured == "sandbox" ? "sandbox" : "production"
+    }
+
+    private static func cachedToken() -> String {
+        UserDefaults.standard.string(forKey: tokenKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func permissionName(_ settings: UNNotificationSettings) -> String {
+        switch settings.authorizationStatus {
+        case .authorized:
+            return "authorized"
+        case .provisional:
+            return "provisional"
+        case .denied:
+            return "denied"
+        case .ephemeral:
+            return "ephemeral"
+        case .notDetermined:
+            return "not_determined"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private static func registrationPayload(
+        token: String? = nil,
+        permission: String = "unknown"
+    ) -> [String: Any] {
+        [
+            "token": token ?? cachedToken(),
+            "installationId": installationId(),
+            "platform": "ios",
+            "environment": pushEnvironment(),
+            "permission": permission,
+        ]
+    }
+
+    private func finishRegistration(token: String? = nil, permission: String = "unknown") {
+        pendingRegistrationTimeout?.cancel()
+        pendingRegistrationTimeout = nil
+        let payload = Self.registrationPayload(token: token, permission: permission)
+        pendingResolve?(payload)
+        pendingResolve = nil
+        sendEvent(withName: "registration", body: payload)
+    }
+
+    private func readPermissionAndResolve(
+        _ resolve: @escaping RCTPromiseResolveBlock
+    ) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                resolve(Self.registrationPayload(permission: Self.permissionName(settings)))
+            }
+        }
+    }
+
+    @objc(registerForPushNotifications:rejecter:)
+    func registerForPushNotifications(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async {
+            UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .badge, .sound]
+            ) { [weak self] granted, _ in
+                DispatchQueue.main.async {
+                    guard let self else {
+                        resolve(Self.registrationPayload(permission: granted ? "authorized" : "denied"))
+                        return
+                    }
+                    guard granted else {
+                        self.readPermissionAndResolve(resolve)
+                        return
+                    }
+
+                    self.pendingResolve = resolve
+                    let timeout = DispatchWorkItem { [weak self] in
+                        guard let self else { return }
+                        self.finishRegistration(permission: "authorized")
+                    }
+                    self.pendingRegistrationTimeout?.cancel()
+                    self.pendingRegistrationTimeout = timeout
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: timeout)
+                    UIApplication.shared.registerForRemoteNotifications()
+
+                    // A cached token lets a returning user register immediately while
+                    // iOS refreshes the APNs token in the background.
+                    if !Self.cachedToken().isEmpty {
+                        self.finishRegistration(token: Self.cachedToken(), permission: "authorized")
+                    }
+                }
+            }
+        }
+    }
+
+    @objc(getRegistrationInfo:rejecter:)
+    func getRegistrationInfo(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                resolve(Self.registrationPayload(permission: Self.permissionName(settings)))
+            }
+        }
+    }
+
+    static func didRegisterForRemoteNotifications(_ deviceToken: Data) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        UserDefaults.standard.set(token, forKey: tokenKey)
+        DispatchQueue.main.async {
+            sharedModule?.finishRegistration(token: token, permission: "authorized")
+        }
+    }
+
+    static func didFailToRegisterForRemoteNotifications(_ error: Error) {
+        NSLog("[NativePushNotification] APNs registration failed: %@", error.localizedDescription)
+        DispatchQueue.main.async {
+            sharedModule?.finishRegistration(permission: "registration_failed")
+        }
+    }
+
+    static func didReceiveNotification(_ userInfo: [AnyHashable: Any]) {
+        let payload = userInfo.reduce(into: [String: Any]()) { result, entry in
+            guard let key = entry.key as? String else { return }
+            result[key] = entry.value
+        }
+        DispatchQueue.main.async {
+            sharedModule?.sendEvent(withName: "opened", body: payload)
+        }
     }
 }

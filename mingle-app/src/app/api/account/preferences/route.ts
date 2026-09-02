@@ -26,10 +26,12 @@ const MAX_ENDPOINT_TUNING_STEP = 4;
 const DEFAULT_ENDPOINT_TUNING_STEP = 2;
 const DEFAULT_SPEAKER_ENABLED = false;
 const DEFAULT_ECHO_ALLOWED = true;
+const DEFAULT_BUBBLE_DISPLAY_MODE = "expanded";
 const DEFAULT_AD_BANNER_POSITION = "bottom";
 const DEFAULT_INPUT_MODE = "voice";
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const INPUT_MODES = new Set(["voice", "text"]);
+const BUBBLE_DISPLAY_MODES = new Set(["expanded", "collapsed"]);
 const STT_SEGMENTATION_MODES = new Set(["fin", "end"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
@@ -43,6 +45,7 @@ type PreferencesBody = {
   inputMode?: unknown;
   speakerEnabled?: unknown;
   echoAllowed?: unknown;
+  bubbleDisplayMode?: unknown;
   sttSegmentationMode?: unknown;
 };
 
@@ -64,6 +67,7 @@ type UserPreferencesRecord = {
   demoInputMode: string | null;
   demoSpeakerEnabled: boolean | null;
   demoEchoAllowed: boolean | null;
+  demoBubbleDisplayMode: string | null;
   sttSegmentationMode: string | null;
 };
 
@@ -112,6 +116,14 @@ function normalizeInputMode(value: unknown): "voice" | "text" | null {
   const normalized = value.trim().toLowerCase();
   return INPUT_MODES.has(normalized)
     ? (normalized as "voice" | "text")
+    : null;
+}
+
+function normalizeBubbleDisplayMode(value: unknown): "expanded" | "collapsed" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return BUBBLE_DISPLAY_MODES.has(normalized)
+    ? (normalized as "expanded" | "collapsed")
     : null;
 }
 
@@ -269,6 +281,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoInputMode: true,
     demoSpeakerEnabled: true,
     demoEchoAllowed: true,
+    demoBubbleDisplayMode: true,
     sttSegmentationMode: true,
   } as const;
 
@@ -373,6 +386,8 @@ export async function GET(request: Request) {
     inputMode: normalizeInputMode(preferences?.demoInputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: preferences?.demoSpeakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
     echoAllowed: preferences?.demoEchoAllowed ?? DEFAULT_ECHO_ALLOWED,
+    bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
+      ?? DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: normalizeSttSegmentationMode(preferences?.sttSegmentationMode),
   });
   ensureTrackingContext(nextRequest, response, {
@@ -431,6 +446,7 @@ export async function PATCH(request: Request) {
   const nextInputMode = normalizeInputMode(body.inputMode);
   const nextSpeakerEnabled = normalizeBooleanPreference(body.speakerEnabled);
   const nextEchoAllowed = normalizeBooleanPreference(body.echoAllowed);
+  const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
   const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
   const hasNextSttSegmentationMode = hasValidSttSegmentationMode(body);
   if (
@@ -443,6 +459,7 @@ export async function PATCH(request: Request) {
     && nextInputMode === null
     && nextSpeakerEnabled === null
     && nextEchoAllowed === null
+    && nextBubbleDisplayMode === null
     && !hasNextSttSegmentationMode
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
@@ -458,6 +475,7 @@ export async function PATCH(request: Request) {
     ...(nextInputMode !== null ? { demoInputMode: nextInputMode } : {}),
     ...(nextSpeakerEnabled !== null ? { demoSpeakerEnabled: nextSpeakerEnabled } : {}),
     ...(nextEchoAllowed !== null ? { demoEchoAllowed: nextEchoAllowed } : {}),
+    ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
     ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
   };
 

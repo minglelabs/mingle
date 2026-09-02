@@ -5,6 +5,7 @@ import {
   type LegalDocumentLocale,
 } from "@/i18n/config";
 import {
+  MAX_STT_LANGUAGE_SELECTION,
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   type SttLanguageCode,
@@ -13,12 +14,35 @@ import {
 
 export type LanguageSelectorSortMode = "locale" | "alphabetical";
 
+export type LanguageSelectorSectionCopy = {
+  featured: string;
+  all: string;
+};
+
 export type LanguageSelectorItem = SttLanguageOption & {
   localizedName: string;
   nativeName: string;
   secondaryLabel: string;
   searchText: string;
 };
+
+export const LANGUAGE_SELECTOR_FEATURED_CODES = [
+  "en",
+  "es",
+  "ko",
+  "ja",
+  "zh-CN",
+  "fr",
+  "pt",
+] as const satisfies readonly SttLanguageCode[];
+
+export function resolveLanguageSelectorSectionCopy(rawLocale?: string): LanguageSelectorSectionCopy {
+  const normalizedLocale = rawLocale?.trim().toLowerCase() ?? "";
+  const isKorean = normalizedLocale === "ko" || normalizedLocale.startsWith("ko-");
+  return isKorean
+    ? { featured: "주요 언어", all: "전체 언어" }
+    : { featured: "Popular languages", all: "All languages" };
+}
 
 type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 
@@ -88,6 +112,65 @@ function sanitizeLanguageCodes(
   }
 
   return deduped;
+}
+
+export function resolveLanguageSelectorOwnSelectedLanguages(
+  roomSelectedLanguages: readonly string[],
+  viewerSelectedLanguages?: readonly string[],
+  limit = MAX_STT_LANGUAGE_SELECTION,
+): SttLanguageCode[] {
+  return sanitizeLanguageCodes(
+    viewerSelectedLanguages ?? roomSelectedLanguages,
+    limit,
+  );
+}
+
+// Optimistically recomputes the room's displayed language union after the
+// caller's OWN picks change, without waiting for the server's recomputed
+// union: adding a code always adds it to the union; removing one only drops
+// it if no OTHER member's prior attribution still holds it. Leaving a
+// just-removed code in the union until the server responds is what makes it
+// flash as "someone else picked this" for an instant, even when nobody else
+// actually did — see handleToggleSelectedLanguage / handleConversationSelectedLanguagesChange.
+export function resolveLanguageSelectorUnionAfterOwnLanguagesChange(args: {
+  previousUnion: readonly string[];
+  previousAttribution?: Record<string, readonly string[]>;
+  viewerUserId?: string | null;
+  previousOwnSelectedLanguages: readonly string[];
+  nextOwnSelectedLanguages: readonly string[];
+}): string[] {
+  const removedCodes = args.previousOwnSelectedLanguages.filter(
+    (code) => !args.nextOwnSelectedLanguages.includes(code),
+  );
+  const addedCodes = args.nextOwnSelectedLanguages.filter(
+    (code) => !args.previousOwnSelectedLanguages.includes(code),
+  );
+  const nextUnion = new Set(args.previousUnion);
+  addedCodes.forEach((code) => nextUnion.add(code));
+  removedCodes.forEach((code) => {
+    const otherHolders = (args.previousAttribution?.[code] ?? [])
+      .filter((memberId) => memberId !== args.viewerUserId);
+    if (otherHolders.length === 0) {
+      nextUnion.delete(code);
+    }
+  });
+  return [...nextUnion];
+}
+
+export function shouldDisableLanguageSelectorOption(args: {
+  disabled?: boolean;
+  isOwnSelected: boolean;
+  ownSelectedCount: number;
+  minLanguages?: number;
+  maxLanguages?: number;
+}): boolean {
+  if (args.disabled) return true;
+
+  const minLanguages = args.minLanguages ?? 1;
+  const maxLanguages = args.maxLanguages ?? MAX_STT_LANGUAGE_SELECTION;
+  return args.isOwnSelected
+    ? args.ownSelectedCount <= minLanguages
+    : args.ownSelectedCount >= maxLanguages;
 }
 
 export function resolveLanguageSelectorLocale(
@@ -181,6 +264,32 @@ export function filterLanguageSelectorItems(
   return items.filter((item) => item.searchText.includes(normalizedQuery));
 }
 
+/** Languages shown ahead of the alphabetical/locale-sorted rest of the picker --
+ * without this, a locale-collation quirk (e.g. Galician sorting before "가"/"a")
+ * can put a low-traffic language at the very top of the list, ahead of languages
+ * with far more speakers. Order here IS the display order within this bucket. */
+export const LANGUAGE_SELECTOR_PRIORITY_CODES: readonly SttLanguageCode[] = [
+  "en", "ko", "ja", "zh-CN", "zh-TW", "es", "fr", "de", "pt", "it", "ru", "ar", "hi", "th", "vi",
+];
+
+export function partitionLanguageSelectorItemsByPriority<T extends { code: string }>(
+  items: readonly T[],
+): { priorityItems: T[]; otherItems: T[] } {
+  const priorityRank = new Map<string, number>(
+    LANGUAGE_SELECTOR_PRIORITY_CODES.map((code, index) => [code, index]),
+  );
+
+  const priorityItems: T[] = [];
+  const otherItems: T[] = [];
+  for (const item of items) {
+    if (priorityRank.has(item.code)) priorityItems.push(item);
+    else otherItems.push(item);
+  }
+  priorityItems.sort((left, right) => priorityRank.get(left.code)! - priorityRank.get(right.code)!);
+
+  return { priorityItems, otherItems };
+}
+
 export function sortLanguageSelectorItems(
   items: readonly LanguageSelectorItem[],
   sortMode: LanguageSelectorSortMode,
@@ -206,6 +315,15 @@ export function sortLanguageSelectorItems(
   });
 
   return sorted;
+}
+
+export function buildLanguageSelectorFeaturedItems(
+  items: readonly LanguageSelectorItem[],
+): LanguageSelectorItem[] {
+  const itemsByCode = new Map(items.map((item) => [item.code, item]));
+  return LANGUAGE_SELECTOR_FEATURED_CODES
+    .map((code) => itemsByCode.get(code))
+    .filter((item): item is LanguageSelectorItem => Boolean(item));
 }
 
 export function isLanguageSelectorHistoryOpen(state: unknown): boolean {

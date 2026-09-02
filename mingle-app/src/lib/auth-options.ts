@@ -1,13 +1,15 @@
 import type { NextAuthOptions } from "next-auth";
-import type { Adapter } from "next-auth/adapters";
-// import AppleProvider from "next-auth/providers/apple";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
+import AppleProvider from "next-auth/providers/apple";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-// import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/apple-oauth";
+import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/apple-oauth";
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultHandle } from "@/lib/handles";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -15,7 +17,7 @@ function normalizeEmail(rawValue: unknown): string | null {
   return normalized || null;
 }
 
-function normalizeDisplayName(rawValue: unknown): string | null {
+function normalizeName(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
   const normalized = rawValue.trim();
   return normalized ? normalized.slice(0, 128) : null;
@@ -61,76 +63,76 @@ async function upsertUserForCredentialsSignIn(args: {
 }) {
   const idHint = normalizeUserId(args.idHint);
   const normalizedEmail = normalizeEmail(args.email);
-  const normalizedName = normalizeDisplayName(args.name);
+  const normalizedName = normalizeName(args.name);
   const normalizedExternalUserId = normalizeUserId(args.externalUserIdHint);
   const now = new Date();
+  const select = {
+    id: true,
+    name: true,
+    email: true,
+    externalUserId: true,
+  } as const;
 
   if (idHint) {
-    return prisma.user.upsert({
-      where: { id: idHint },
-      create: {
-        id: idHint,
-        email: normalizedEmail ?? undefined,
-        name: normalizedName ?? "Mingle User",
-        externalUserId: normalizedExternalUserId ?? idHint,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      },
-      update: {
-        email: normalizedEmail ?? undefined,
-        name: normalizedName ?? undefined,
-        externalUserId: normalizedExternalUserId ?? idHint,
-        lastSeenAt: now,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        externalUserId: true,
-      },
-    });
+    return createWithDefaultHandle(
+      { id: idHint, name: normalizedName, email: normalizedEmail },
+      (handle) => prisma.user.upsert({
+        where: { id: idHint },
+        create: {
+          id: idHint,
+          email: normalizedEmail ?? undefined,
+          name: normalizedName ?? "Mingle User",
+          handle,
+          externalUserId: normalizedExternalUserId ?? idHint,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          email: normalizedEmail ?? undefined,
+          externalUserId: normalizedExternalUserId ?? idHint,
+          lastSeenAt: now,
+        },
+        select,
+      }),
+    );
   }
 
   if (normalizedEmail) {
-    return prisma.user.upsert({
-      where: { email: normalizedEmail },
-      create: {
-        email: normalizedEmail,
+    return createWithDefaultHandle(
+      { name: normalizedName, email: normalizedEmail },
+      (handle) => prisma.user.upsert({
+        where: { email: normalizedEmail },
+        create: {
+          email: normalizedEmail,
+          name: normalizedName ?? "Mingle User",
+          handle,
+          externalUserId: normalizedExternalUserId ?? undefined,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          lastSeenAt: now,
+        },
+        select,
+      }),
+    );
+  }
+
+  return createWithDefaultHandle(
+    { id: normalizedExternalUserId, name: normalizedName },
+    (handle) => prisma.user.create({
+      data: {
         name: normalizedName ?? "Mingle User",
+        handle,
         externalUserId: normalizedExternalUserId ?? undefined,
         firstSeenAt: now,
         lastSeenAt: now,
       },
-      update: {
-        name: normalizedName ?? undefined,
-        lastSeenAt: now,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        externalUserId: true,
-      },
-    });
-  }
-
-  return prisma.user.create({
-    data: {
-      name: normalizedName ?? "Mingle User",
-      externalUserId: normalizedExternalUserId ?? undefined,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      externalUserId: true,
-    },
-  });
+      select,
+    }),
+  );
 }
 
-/*
 const APPLE_OAUTH_SECRET_REFRESH_SKEW_MS = 5 * 60 * 1000;
 const APPLE_PROVIDER_WHITE_LOGO = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%274%2032%20376.4%20449.4%27%3E%3Cpath%20fill%3D%27%23ffffff%27%20d%3D%27M318.7%20268.7c-.2-36.7%2016.4-64.4%2050-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3%2020.7-88.5%2020.7-15%200-49.4-19.7-76.4-19.7C63.3%20141.2%204%20184.8%204%20273.5q0%2039.3%2014.4%2081.2c12.8%2036.7%2059%20126.7%20107.2%20125.2%2025.2-.6%2043-17.9%2075.8-17.9%2031.8%200%2048.3%2017.9%2076.4%2017.9%2048.6-.7%2090.4-82.5%20102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4%2024.8-61.9%2024-72.5a106%20106%200%200%200-67.9%2034.9%2095.7%2095.7%200%200%200-25.6%2071.9c26.1%202%2049.9-11.4%2069.5-34.3z%27%2F%3E%3C%2Fsvg%3E";
 
@@ -206,7 +208,7 @@ function resolveAppleOAuthCredentialsWithRefresh(): AppleOAuthCredentials | null
     return null;
   }
 }
-*/
+
 const googleClientId = process.env.AUTH_GOOGLE_ID;
 const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
 const allowEmailAccountLinking = isFeatureEnabled(process.env.AUTH_ALLOW_EMAIL_ACCOUNT_LINKING, true);
@@ -287,25 +289,24 @@ function buildProviders(): NextAuthOptions["providers"] {
     }),
   ];
 
-  // Apple login is intentionally disabled for now.
-  // const appleOAuthCredentials = resolveAppleOAuthCredentialsWithRefresh();
-  // if (appleOAuthCredentials) {
-  //   providers.unshift(
-  //     AppleProvider({
-  //       clientId: appleOAuthCredentials.clientId,
-  //       clientSecret: appleOAuthCredentials.clientSecret,
-  //       allowDangerousEmailAccountLinking: allowEmailAccountLinking,
-  //       style: {
-  //         logo: APPLE_PROVIDER_WHITE_LOGO,
-  //         logoDark: APPLE_PROVIDER_WHITE_LOGO,
-  //         bg: "#000000",
-  //         text: "#ffffff",
-  //         bgDark: "#000000",
-  //         textDark: "#ffffff",
-  //       },
-  //     }),
-  //   );
-  // }
+  const appleOAuthCredentials = resolveAppleOAuthCredentialsWithRefresh();
+  if (appleOAuthCredentials) {
+    providers.unshift(
+      AppleProvider({
+        clientId: appleOAuthCredentials.clientId,
+        clientSecret: appleOAuthCredentials.clientSecret,
+        allowDangerousEmailAccountLinking: allowEmailAccountLinking,
+        style: {
+          logo: APPLE_PROVIDER_WHITE_LOGO,
+          logoDark: APPLE_PROVIDER_WHITE_LOGO,
+          bg: "#000000",
+          text: "#ffffff",
+          bgDark: "#000000",
+          textDark: "#ffffff",
+        },
+      }),
+    );
+  }
 
   if (googleClientId && googleClientSecret) {
     providers.unshift(
@@ -326,8 +327,7 @@ function buildProviders(): NextAuthOptions["providers"] {
 }
 
 export function isAppleOAuthConfigured(): boolean {
-  // return Boolean(resolveAppleOAuthCredentialsWithRefresh());
-  return false;
+  return Boolean(resolveAppleOAuthCredentialsWithRefresh());
 }
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -340,38 +340,24 @@ const authBaseUrl = (
   || process.env.NEXT_PUBLIC_SITE_URL
   || ""
 ).trim();
+// Keep authenticated users signed in until they explicitly sign out.
+// The long-lived JWT is still removed immediately by NextAuth signOut.
+const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 100;
 const useSecureOauthCookies = authBaseUrl.startsWith("https://");
-const oauthCookieSameSite = (useSecureOauthCookies ? "none" : "lax") as "none" | "lax";
 const oauthCookiePrefix = useSecureOauthCookies ? "__Secure-" : "";
-const oauthTransientCookieOptions = {
-  httpOnly: true,
-  sameSite: oauthCookieSameSite,
-  path: "/",
-  secure: useSecureOauthCookies,
-  maxAge: 60 * 15,
-};
 
-const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
-  adapter: PrismaAdapter(prisma) as Adapter,
-  debug: authDebugEnabled,
-  logger: {
-    error(code, metadata) {
-      console.error(`[nextauth:error] code=${String(code)} ${summarizeAuthLogMeta(metadata)}`);
-    },
-    warn(code) {
-      console.warn(`[nextauth:warn] code=${String(code)}`);
-    },
-    debug(code, metadata) {
-      if (!authDebugEnabled) return;
-      console.info(`[nextauth:debug] code=${String(code)} ${summarizeAuthLogMeta(metadata)}`);
-    },
-  },
-  session: {
-    // Keep JWT session strategy because native credential bridge sign-in relies on it.
-    strategy: "jwt",
-  },
-  cookies: {
-    // Apple returns OAuth callback via cross-site POST(form_post), so Lax cookies can be dropped.
+type OAuthCookieSameSite = "lax" | "none";
+
+function buildOAuthCookies(sameSite: OAuthCookieSameSite) {
+  const oauthTransientCookieOptions = {
+    httpOnly: true,
+    sameSite,
+    path: "/",
+    secure: useSecureOauthCookies,
+    maxAge: 60 * 15,
+  } as const;
+
+  return {
     callbackUrl: {
       name: `${oauthCookiePrefix}next-auth.callback-url`,
       options: oauthTransientCookieOptions,
@@ -388,35 +374,162 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
       name: `${oauthCookiePrefix}next-auth.nonce`,
       options: oauthTransientCookieOptions,
     },
+  };
+}
+
+function createNextAuthAdapter(): Adapter {
+  const adapter = PrismaAdapter(prisma) as Adapter;
+  return {
+    ...adapter,
+    createUser: async (data: Omit<AdapterUser, "id">) => {
+      const user = await createWithDefaultHandle(
+        { name: data.name, email: data.email },
+        (handle) => prisma.user.create({
+          data: {
+            ...data,
+            handle,
+          },
+        }),
+      );
+      return user as unknown as AdapterUser;
+    },
+  };
+}
+
+const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
+  adapter: createNextAuthAdapter(),
+  debug: authDebugEnabled,
+  logger: {
+    error(code, metadata) {
+      console.error(`[nextauth:error] code=${String(code)} ${summarizeAuthLogMeta(metadata)}`);
+    },
+    warn(code) {
+      console.warn(`[nextauth:warn] code=${String(code)}`);
+    },
+    debug(code, metadata) {
+      if (!authDebugEnabled) return;
+      console.info(`[nextauth:debug] code=${String(code)} ${summarizeAuthLogMeta(metadata)}`);
+    },
   },
+  session: {
+    // Keep JWT session strategy because native credential bridge sign-in relies on it.
+    strategy: "jwt",
+    maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+  },
+  // Google returns to this app with a top-level GET, so Lax is sufficient and
+  // avoids relying on cross-site cookie behavior in iOS ASWebAuthenticationSession.
+  // Apple uses form_post, so getAuthOptions("apple") swaps these cookies to None.
+  cookies: buildOAuthCookies("lax"),
   events: {
+    async createUser({ user }) {
+      const userId = normalizeUserId(user?.id);
+      if (!userId) return;
+
+      try {
+        await ensureSignupWelcomeOnboarding({
+          userId,
+          locale: "en",
+        });
+      } catch (error) {
+        console.error("[signup-welcome] OAuth onboarding failed", error);
+      }
+    },
     async signIn({ user }) {
       const userId = normalizeUserId(user?.id);
       if (!userId) return;
 
       const now = new Date();
       const email = normalizeEmail(user?.email);
-      const name = normalizeDisplayName(user?.name);
-      await prisma.user.upsert({
-        where: { id: userId },
-        create: {
-          id: userId,
-          email: email ?? undefined,
-          name: name ?? "Mingle User",
-          externalUserId: userId,
-          firstSeenAt: now,
-          lastSeenAt: now,
-        },
-        update: {
-          email: email ?? undefined,
-          name: name ?? undefined,
-          externalUserId: userId,
-          lastSeenAt: now,
-        },
-      });
+      const name = normalizeName(user?.name);
+      await createWithDefaultHandle(
+        { id: userId, name, email },
+        (handle) => prisma.user.upsert({
+          where: { id: userId },
+          create: {
+            id: userId,
+            email: email ?? undefined,
+            name: name ?? "Mingle User",
+            handle,
+            externalUserId: userId,
+            firstSeenAt: now,
+            lastSeenAt: now,
+          },
+          update: {
+            email: email ?? undefined,
+            externalUserId: userId,
+            lastSeenAt: now,
+            isActive: true,
+            deactivatedAt: null,
+          },
+        }),
+      );
     },
   },
   callbacks: {
+    async signIn({ user }) {
+      const userId = normalizeUserId(user?.id);
+      if (!userId) return true;
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          isDeleted: true,
+          scheduledDeleteAt: true,
+          withdrawnAt: true,
+        },
+      }).catch(() => null);
+
+      if (!dbUser) return true;
+
+      // Already dangled — deny login (next OAuth sign-in will create a fresh account
+      // because Account records were deleted during dangling)
+      if (dbUser.isDeleted) return false;
+
+      const now = new Date();
+
+      // Grace period has elapsed — dangle the account now and deny this login
+      if (dbUser.scheduledDeleteAt && dbUser.scheduledDeleteAt <= now) {
+        const garbageEmail = `__deleted_${userId}@mingle.internal`;
+        try {
+          await Promise.all([
+            // Remove OAuth account links so next sign-in creates a fresh account
+            prisma.account.deleteMany({ where: { userId } }),
+            // Anonymize the user record
+            prisma.user.update({
+              where: { id: userId },
+              data: {
+                isDeleted: true,
+                deletedAt: now,
+                isActive: false,
+                email: garbageEmail,
+                passwordHash: null,
+                externalUserId: null,
+                withdrawnAt: null,
+                scheduledDeleteAt: null,
+              },
+            }),
+          ]);
+        } catch {
+          // Best-effort — deny login even if anonymization partially fails
+        }
+        return false;
+      }
+
+      // Within grace period — restore the account (cancel withdrawal)
+      if (dbUser.scheduledDeleteAt && dbUser.scheduledDeleteAt > now) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            isActive: true,
+            deactivatedAt: null,
+            withdrawnAt: null,
+            scheduledDeleteAt: null,
+          },
+        }).catch(() => null);
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;
@@ -425,7 +538,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
         token.email = normalizeEmail(user.email) ?? user.email;
       }
       if (typeof user?.name === "string") {
-        token.name = normalizeDisplayName(user.name) ?? user.name;
+        token.name = normalizeName(user.name) ?? user.name;
       }
       const externalUserId = (user as { externalUserId?: unknown } | null)?.externalUserId;
       if (typeof externalUserId === "string" && externalUserId.trim()) {
@@ -453,9 +566,11 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
   },
 };
 
-export function getAuthOptions(): NextAuthOptions {
+export function getAuthOptions(oauthProvider?: string): NextAuthOptions {
+  const useAppleFormPostCookies = oauthProvider?.trim().toLowerCase() === "apple";
   return {
     ...authOptionsBase,
+    cookies: useAppleFormPostCookies ? buildOAuthCookies("none") : authOptionsBase.cookies,
     providers: buildProviders(),
   };
 }

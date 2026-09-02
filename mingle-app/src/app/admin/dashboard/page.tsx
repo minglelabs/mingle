@@ -6,7 +6,7 @@ import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
-  ADMIN_DASHBOARD_RANGE_OPTIONS,
+  ADMIN_DASHBOARD_PRESET_OPTIONS,
   type DashboardMetric,
   buildChartGeometry,
   buildCumulativeSeries,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/admin-dashboard-metrics";
 import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
 import { LineChartCard } from "./line-chart-card";
+import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
 
 export const dynamic = "force-dynamic";
@@ -97,40 +98,6 @@ function CumulativeChart({ metric }: { metric: DashboardMetric }) {
   );
 }
 
-function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
-  const dayKeys = metrics[0]?.points.map((point) => point.day) ?? [];
-  return (
-    <div className="overflow-x-auto rounded-xl border border-[#e5e3dc] bg-white shadow-sm">
-      <table className="w-full min-w-[640px] text-left text-sm">
-        <thead>
-          <tr className="border-b border-[#e5e3dc] bg-[#f4f3ee] text-xs font-semibold uppercase tracking-wide text-[#898781]">
-            <th className="px-3 py-2">날짜</th>
-            {metrics.map((metric) => (
-              <th className="px-3 py-2" key={metric.key}>{metric.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {dayKeys.map((day, rowIndex) => (
-            <tr className="border-b border-[#ece9e0] last:border-0" key={day}>
-              <td className="px-3 py-1.5 font-medium text-[#0b0b0b]" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {day}
-              </td>
-              {metrics.map((metric) => {
-                const value = metric.points[rowIndex]?.value ?? null;
-                return (
-                  <td className="px-3 py-1.5 text-[#52514e]" key={metric.key} style={{ fontVariantNumeric: "tabular-nums" }}>
-                    {formatMetricDisplayValue(value, metric.kind)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
   if (!(await isAdminAuthenticated())) {
@@ -139,8 +106,9 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
 
   const params = await searchParams;
   const days = normalizeDashboardDays(takeFirst(params.days));
+  const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
   const range = resolveAdminDashboardRange(new Date(), days);
-  const metrics = await loadAdminDashboardMetrics(range);
+  const metrics = await loadAdminDashboardMetrics(range, { forceRefresh });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
   return (
@@ -157,7 +125,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </div>
       </header>
 
-      <RangeNav options={ADMIN_DASHBOARD_RANGE_OPTIONS} activeDays={days} />
+      <RangeNav presetOptions={ADMIN_DASHBOARD_PRESET_OPTIONS} activeDays={days} />
 
       <section className="mx-auto mt-6 w-full max-w-6xl px-4">
         <h2 className="mb-2 text-sm font-semibold text-[#52514e]">일자별 추이</h2>

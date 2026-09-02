@@ -22,4 +22,4 @@ if [[ ! -f "$LOCAL_CONFIG" ]]; then
 fi
 
 # Starts devbox-specific tunnels using selected local config.
-ngrok start --config "$GLOBAL_CONFIG" --config "$LOCAL_CONFIG" devbox_web devbox_stt "$@"
+ngrok start --config "$GLOBAL_CONFIG" --config "$LOCAL_CONFIG" devbox_web devbox_stt devbox_messaging "$@"

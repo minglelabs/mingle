@@ -51,6 +51,7 @@ function readCookieValue(request: Request, cookieName: string): string {
 export function resolveTrackingExternalUserId(request: Request): string {
   return sanitizeRequestIdentityValue(
     request.headers.get("x-mingle-user-id")
+    || request.headers.get("x-posthog-distinct-id")
     || readCookieValue(request, "mingle_uid")
     || null,
   );
@@ -126,6 +127,22 @@ export async function findUserIdForIdentity(identity: SessionUserIdentity): Prom
   }
 
   return null;
+}
+
+// For write paths that already have a tracking-cookie-derived user id (e.g.
+// analytics upserts) but must attribute the write to a logged-in account
+// when one exists, rather than the tracking cookie. A logged-in session may
+// belong to a different browser/device than the one that set the tracking
+// cookie, so the cookie-derived id can never be trusted over a real session.
+export async function resolveSessionAwareUserId(args: {
+  session: { user?: { id?: unknown; email?: unknown } } | null;
+  fallbackUserId: string;
+}): Promise<string> {
+  const sessionIdentity = normalizeSessionUserIdentity(args.session);
+  if (!sessionIdentity.id && !sessionIdentity.email) {
+    return args.fallbackUserId;
+  }
+  return (await findUserIdForIdentity(sessionIdentity)) || args.fallbackUserId;
 }
 
 export async function resolveOrCreateUserIdForRequest(args: {

@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 
+import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from "@/components/conversation-list.logic";
+
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
+  buildLanguageSelectorFeaturedItems,
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
   clearLanguageSelectorHistoryState,
   filterLanguageSelectorItems,
   isLanguageSelectorHistoryOpen,
+  LANGUAGE_SELECTOR_PRIORITY_CODES,
+  partitionLanguageSelectorItemsByPriority,
   registerDeselectedLanguageCode,
   resolveDefaultLanguageSelectorSortMode,
+  resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorShowsSortToggle,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
   sanitizeRecentLanguageCodes,
+  shouldDisableLanguageSelectorOption,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorItem,
@@ -36,7 +44,7 @@ describe("language-selector.logic", () => {
       .toContain("Chinese Simplified");
     expect(items.find((item) => item.code === "zh-TW")?.secondaryLabel)
       .toContain("Chinese Traditional");
-    expect(items.some((item) => item.code === "zh")).toBe(false);
+    expect(items.some((item) => (item.code as string) === "zh")).toBe(false);
   });
 
   it("filters by English and native language names", () => {
@@ -118,6 +126,20 @@ describe("language-selector.logic", () => {
     ).toEqual(["ko", "ja", "de"]);
   });
 
+  it("keeps featured profile languages in the requested fixed order", () => {
+    const items = buildLanguageSelectorItems("ko-KR");
+
+    expect(buildLanguageSelectorFeaturedItems(items).map((item) => item.code)).toEqual([
+      "en",
+      "es",
+      "ko",
+      "ja",
+      "zh-CN",
+      "fr",
+      "pt",
+    ]);
+  });
+
   it("defaults to alphabetical sorting only when locale data is missing", () => {
     expect(resolveDefaultLanguageSelectorSortMode("fallback")).toBe("alphabetical");
     expect(resolveDefaultLanguageSelectorSortMode("ui")).toBe("locale");
@@ -140,6 +162,74 @@ describe("language-selector.logic", () => {
     const clearedState = clearLanguageSelectorHistoryState(state);
     expect(isLanguageSelectorHistoryOpen(clearedState)).toBe(false);
     expect(clearedState.keep).toBe(1);
+  });
+
+  it("preserves the active conversation route in a nested selector history entry", () => {
+    const state = buildLanguageSelectorHistoryState({
+      [CONVERSATION_HISTORY_ROUTE_STATE_KEY]: "conversation-a",
+    });
+
+    expect(state[CONVERSATION_HISTORY_ROUTE_STATE_KEY]).toBe("conversation-a");
+    expect(isLanguageSelectorHistoryOpen(state)).toBe(true);
+  });
+
+  it("preserves an explicitly empty viewer selection instead of replacing it with the room union", () => {
+    expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], [])).toEqual([]);
+    expect(resolveLanguageSelectorOwnSelectedLanguages(["en", "ko"], undefined)).toEqual(["en", "ko"]);
+  });
+
+  it("drops a code the caller unchecked from the union when no other member holds it", () => {
+    // Regression: leaving the union untouched until the server responds made
+    // a solo-picked language flash as "someone else picked this" (blue) for
+    // an instant before finally disappearing.
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["en", "ko"],
+      previousAttribution: { en: ["viewer-1"], ko: ["viewer-1"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: ["en", "ko"],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion).toEqual(["en"]);
+  });
+
+  it("keeps a code the caller unchecked in the union when another member still holds it", () => {
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["en", "ko"],
+      previousAttribution: { en: ["viewer-1"], ko: ["viewer-1", "friend-2"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: ["en", "ko"],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion).toEqual(["en", "ko"]);
+  });
+
+  it("adds a newly checked code to the union without touching untouched codes", () => {
+    const nextUnion = resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+      previousUnion: ["ko"],
+      previousAttribution: { ko: ["friend-2"] },
+      viewerUserId: "viewer-1",
+      previousOwnSelectedLanguages: [],
+      nextOwnSelectedLanguages: ["en"],
+    });
+
+    expect(nextUnion.sort()).toEqual(["en", "ko"]);
+  });
+
+  it("applies language limits to the viewer's own picks rather than the room union", () => {
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: false,
+      ownSelectedCount: 0,
+    })).toBe(false);
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: true,
+      ownSelectedCount: 1,
+    })).toBe(true);
+    expect(shouldDisableLanguageSelectorOption({
+      isOwnSelected: false,
+      ownSelectedCount: 5,
+    })).toBe(true);
   });
 
   it("sanitizes deselected language history", () => {
@@ -176,5 +266,96 @@ describe("language-selector.logic", () => {
     expect(
       buildLanguageSelectorButtonCodes(["en", "ko", "zh-CN", "ja"], ["fr", "de", "es"]),
     ).toEqual(["en", "ko", "zh-CN", "ja", "fr"]);
+  });
+
+  describe("partitionLanguageSelectorItemsByPriority", () => {
+    it("pulls priority-language codes into their own bucket, in a fixed priority order", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician galego",
+        },
+        {
+          code: "ja",
+          flag: "🇯🇵",
+          englishName: "Japanese",
+          localizedName: "Japanese",
+          nativeName: "日本語",
+          secondaryLabel: "Japanese / 日本語",
+          searchText: "japanese nihongo",
+        },
+        {
+          code: "en",
+          flag: "🇺🇸",
+          englishName: "English",
+          localizedName: "English",
+          nativeName: "English",
+          secondaryLabel: "English",
+          searchText: "english",
+        },
+      ];
+
+      const { priorityItems, otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      // "en" ranks before "ja" in LANGUAGE_SELECTOR_PRIORITY_CODES, so priority
+      // order wins even though the input order (and any alphabetical sort) would
+      // put "ja" first -- this is the fix for a low-traffic language like Galician
+      // outranking major languages at the top of the picker.
+      expect(priorityItems.map((item) => item.code)).toEqual(["en", "ja"]);
+      expect(otherItems.map((item) => item.code)).toEqual(["gl"]);
+    });
+
+    it("leaves the incoming order of non-priority items untouched", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "bg",
+          flag: "🇧🇬",
+          englishName: "Bulgarian",
+          localizedName: "Bulgarian",
+          nativeName: "Български",
+          secondaryLabel: "Bulgarian / Български",
+          searchText: "bulgarian",
+        },
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician",
+        },
+      ];
+      expect(items.some((item) => (LANGUAGE_SELECTOR_PRIORITY_CODES as readonly string[]).includes(item.code)))
+        .toBe(false);
+
+      const { otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      expect(otherItems.map((item) => item.code)).toEqual(["bg", "gl"]);
+    });
+
+    it("returns an empty priority bucket when nothing in the list is a priority language", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician",
+        },
+      ];
+
+      const { priorityItems, otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      expect(priorityItems).toEqual([]);
+      expect(otherItems.map((item) => item.code)).toEqual(["gl"]);
+    });
   });
 });

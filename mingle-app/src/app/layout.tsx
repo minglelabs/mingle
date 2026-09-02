@@ -1,11 +1,17 @@
 import type { Metadata, Viewport } from "next";
+import { getServerSession } from "next-auth";
 import { Analytics } from "@vercel/analytics/next";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
+import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
+import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
+import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { TtsSettingsProvider } from "@/context/tts-settings";
+import { getAuthOptions } from "@/lib/auth-options";
+import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
 import "./globals.css";
 
@@ -65,49 +71,61 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const session = await getServerSession(getAuthOptions());
+  const postHogConfig = resolvePostHogBrowserConfig();
+
   return (
     <html lang={DEFAULT_LOCALE}>
       <body className="antialiased">
+        <AppLocalePreferenceSync />
         <TtsSettingsProvider>
-          <AuthSessionProvider>
-            <MobileCanvasShell>{children}</MobileCanvasShell>
-            <Toaster
-              position="bottom-center"
-              closeButton={false}
-              offset={{ bottom: TOAST_BOTTOM_OFFSET }}
-              mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
-              icons={{
-                success: (
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                    <Check className="h-3 w-3" strokeWidth={3} />
-                  </span>
-                ),
-                error: (
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                    <AlertCircle className="h-3 w-3" strokeWidth={2.5} />
-                  </span>
-                ),
-                loading: <Loader2 className="h-4 w-4 animate-spin text-amber-500" />,
-              }}
-              toastOptions={{
-                classNames: {
-                  toast: "!rounded-full !border !border-gray-200 !bg-white !px-4 !py-2.5 !shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)] !gap-2 !min-h-0",
-                  content: "!flex !items-center !gap-2",
-                  title: "!text-[14px] !font-medium !text-gray-800",
-                  icon: "!m-0 !h-auto !w-auto",
-                  success: "!text-gray-800",
-                  error: "!text-gray-800",
-                  loading: "!text-gray-800",
-                  default: "!text-gray-800",
-                },
-                duration: 2200,
-              }}
-            />
+          <AuthSessionProvider session={session}>
+            <PostHogAnalyticsProvider
+              projectToken={postHogConfig?.projectToken ?? null}
+              host={postHogConfig?.host ?? null}
+            >
+              <MobileCanvasShell>
+                {children}
+                <NativeProfileLinkOverlay />
+              </MobileCanvasShell>
+              <Toaster
+                position="bottom-center"
+                closeButton={false}
+                offset={{ bottom: TOAST_BOTTOM_OFFSET }}
+                mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
+                icons={{
+                  success: (
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    </span>
+                  ),
+                  error: (
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                      <AlertCircle className="h-3 w-3" strokeWidth={2.5} />
+                    </span>
+                  ),
+                  loading: <Loader2 className="h-4 w-4 animate-spin text-amber-500" />,
+                }}
+                toastOptions={{
+                  classNames: {
+                    toast: "!rounded-full !border !border-gray-200 !bg-white !px-4 !py-2.5 !shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)] !gap-2 !min-h-0",
+                    content: "!flex !items-center !gap-2",
+                    title: "!text-[14px] !font-medium !text-gray-800",
+                    icon: "!m-0 !h-auto !w-auto",
+                    success: "!text-gray-800",
+                    error: "!text-gray-800",
+                    loading: "!text-gray-800",
+                    default: "!text-gray-800",
+                  },
+                  duration: 2200,
+                }}
+              />
+            </PostHogAnalyticsProvider>
           </AuthSessionProvider>
         </TtsSettingsProvider>
         <Analytics />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Loader2, Mic, Search } from "lucide-react";
+import { ChevronLeft, Search } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   useCallback,
@@ -14,26 +14,32 @@ import {
 import {
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
+  buildLanguageSelectorFeaturedItems,
   filterLanguageSelectorItems,
   registerDeselectedLanguageCode,
+  resolveLanguageSelectorOwnSelectedLanguages,
   sanitizeRecentLanguageCodes,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
+  resolveLanguageSelectorSectionCopy,
   resolveLanguageSelectorShowsSortToggle,
+  shouldDisableLanguageSelectorOption,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import LanguageFlag from "@/components/language-flag";
+import LanguageRowAvatarStack, {
+  type LanguageRowAttributionMember,
+} from "@/components/LivePhoneDemo/language-row-avatar-stack";
+import SlideSurface from "@/components/slide-surface";
+import { buildClientApiPath } from "@/lib/api-contract";
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
 const RECENT_LANGUAGE_CODES_STORAGE_KEY =
   "mingle_live_phone_demo_recent_language_selector_codes_v1";
-const RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY =
-  "mingle_live_phone_demo_recent_speech_language_selector_codes_v1";
-
-type LanguageSelectorTab = "speech" | "translation";
 
 function readRecentLanguageCodes(storageKey: string): string[] {
   if (typeof window === "undefined") return [];
@@ -51,25 +57,41 @@ interface LanguageSelectorProps {
   isOpen: boolean;
   onClose: () => void;
   selectedLanguages: string[];
-  speechLanguages: string[];
-  translationLanguagesLinked: boolean;
   onToggleLanguage: (code: string) => void;
-  onToggleSpeechLanguage: (code: string) => void;
-  onTranslationLanguagesLinkedChange: (translationLanguagesLinked: boolean) => void;
   uiLocale?: string;
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
   triggerRef?: RefObject<HTMLElement | null>;
-  sttControl?: {
-    isReady: boolean;
-    isConnecting: boolean;
-    isLimitReached: boolean;
-    showRipple: boolean;
-    rippleScale: number;
-    startLabel: string;
-    stopLabel: string;
-    onToggle: () => void;
-    onPointerDown?: () => void;
+  // Only present for multi-member rooms — drives the small per-row avatar
+  // attribution ("who picked this"). Solo rooms pass nothing and no avatar
+  // UI renders.
+  conversationId?: string;
+  selectedLanguagesAttribution?: Record<string, string[]>;
+  // The viewer's OWN picks, as opposed to `selectedLanguages` (the room
+  // union). Only a language the viewer picked themselves renders as
+  // "selected" (amber); a language that's only in the union because another
+  // member picked it renders in a distinct, non-amber state instead, so
+  // amber always means "I chose this." Solo rooms pass nothing — own and
+  // union are the same list there, so it falls back to `selectedLanguages`.
+  viewerSelectedLanguages?: string[];
+}
+
+function isConversationMemberRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseLanguageRowAttributionMember(value: unknown): LanguageRowAttributionMember | null {
+  if (!isConversationMemberRecord(value) || typeof value.userId !== "string" || !value.userId.trim()) {
+    return null;
+  }
+  const finiteOrNull = (input: unknown) => (typeof input === "number" && Number.isFinite(input) ? input : null);
+  return {
+    userId: value.userId.trim(),
+    image: typeof value.image === "string" && value.image.trim() ? value.image.trim() : null,
+    imageCropScale: finiteOrNull(value.imageCropScale),
+    imageCropX: finiteOrNull(value.imageCropX),
+    imageCropY: finiteOrNull(value.imageCropY),
+    name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : null,
   };
 }
 
@@ -77,16 +99,14 @@ export default function LanguageSelector({
   isOpen,
   onClose,
   selectedLanguages,
-  speechLanguages,
-  translationLanguagesLinked,
   onToggleLanguage,
-  onToggleSpeechLanguage,
-  onTranslationLanguagesLinkedChange,
   uiLocale,
   copy,
   disabled,
   triggerRef,
-  sttControl,
+  conversationId,
+  selectedLanguagesAttribution,
+  viewerSelectedLanguages,
 }: LanguageSelectorProps) {
   const titleId = useId();
   const recentStripRef = useRef<HTMLDivElement | null>(null);
@@ -94,15 +114,18 @@ export default function LanguageSelector({
   const pendingRecentChipVisibilityCodeRef = useRef<string | null>(null);
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
-  const speechLanguagesRef = useRef<string[]>(speechLanguages);
+  const ownSelectedLanguagesRef = useRef<string[]>(
+    resolveLanguageSelectorOwnSelectedLanguages(selectedLanguages, viewerSelectedLanguages),
+  );
+  const [attributionMembersById, setAttributionMembersById] = useState<
+    Map<string, LanguageRowAttributionMember>
+  >(new Map());
+  const hasAttribution = Boolean(
+    selectedLanguagesAttribution && Object.keys(selectedLanguagesAttribution).length > 0,
+  );
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<LanguageSelectorTab>("speech");
   const [recentTranslationLanguageCodes, setRecentTranslationLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(RECENT_LANGUAGE_CODES_STORAGE_KEY),
-  );
-  const [recentSpeechLanguageCodes, setRecentSpeechLanguageCodes] = useState<string[]>(() =>
-    readRecentLanguageCodes(RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY),
   );
   const localeInfo = useMemo(() => resolveLanguageSelectorLocale(uiLocale), [uiLocale]);
   const defaultSortMode = useMemo(
@@ -118,17 +141,30 @@ export default function LanguageSelector({
     () => buildLanguageSelectorItems(localeInfo.locale),
     [localeInfo.locale],
   );
-  const filteredItems = useMemo(() => {
+  const featuredLanguageItems = useMemo(
+    () => buildLanguageSelectorFeaturedItems(languageItems),
+    [languageItems],
+  );
+  const filteredFeaturedItems = useMemo(() => (
+    filterLanguageSelectorItems(featuredLanguageItems, query)
+  ), [featuredLanguageItems, query]);
+  const filteredLanguageItems = useMemo(() => {
     const visibleItems = filterLanguageSelectorItems(languageItems, query);
     return sortLanguageSelectorItems(visibleItems, sortMode, localeInfo.locale);
   }, [languageItems, localeInfo.locale, query, sortMode]);
-  const isTranslationSelectionLinked = activeTab === "translation" && translationLanguagesLinked;
-  const activeSelectedLanguages = activeTab === "speech" || translationLanguagesLinked
-    ? speechLanguages
-    : selectedLanguages;
-  const recentLanguageCodes = activeTab === "speech" || translationLanguagesLinked
-    ? recentSpeechLanguageCodes
-    : recentTranslationLanguageCodes;
+  const languageSectionCopy = useMemo(
+    () => resolveLanguageSelectorSectionCopy(localeInfo.locale),
+    [localeInfo.locale],
+  );
+  const activeSelectedLanguages = selectedLanguages;
+  const activeOwnSelectedLanguages = useMemo(
+    () => resolveLanguageSelectorOwnSelectedLanguages(
+      selectedLanguages,
+      viewerSelectedLanguages,
+    ),
+    [selectedLanguages, viewerSelectedLanguages],
+  );
+  const recentLanguageCodes = recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
     const itemMap = new Map<string, (typeof languageItems)[number]>(
       languageItems.map((item) => [item.code, item]),
@@ -178,16 +214,9 @@ export default function LanguageSelector({
       strip.scrollLeft += chipRect.right - (stripRect.right - edgePadding);
     }
   }, []);
-  const atMax = activeSelectedLanguages.length >= MAX_LANGS;
-  const atMin = activeSelectedLanguages.length <= MIN_LANGS;
-
   useEffect(() => {
-    selectedLanguagesRef.current = selectedLanguages;
-  }, [selectedLanguages]);
-
-  useEffect(() => {
-    speechLanguagesRef.current = speechLanguages;
-  }, [speechLanguages]);
+    ownSelectedLanguagesRef.current = activeOwnSelectedLanguages;
+  }, [activeOwnSelectedLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -202,6 +231,48 @@ export default function LanguageSelector({
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    // Deliberately NOT gated on `hasAttribution`: that prop can still be
+    // catching up from a stale conversation-list cache/fetch on first open
+    // (e.g. a room created seconds ago via "message this person"), and
+    // `hasAttribution` flipping true later doesn't retroactively backfill a
+    // fetch this effect already decided to skip. Fetching unconditionally
+    // whenever the screen is open just means solo rooms do one harmless
+    // extra request for a member list nothing ends up rendering (hasAttribution
+    // still gates the actual avatar stack in renderLanguageOption).
+    if (!isOpen || !conversationId) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          buildClientApiPath(`/conversations/${conversationId}/members`),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("language_selector_members_load_failed");
+        const payload: unknown = await response.json();
+        const rawMembers = isConversationMemberRecord(payload) && Array.isArray(payload.members)
+          ? payload.members
+          : [];
+        if (cancelled) return;
+        const nextMembersById = new Map<string, LanguageRowAttributionMember>();
+        for (const rawMember of rawMembers) {
+          const member = parseLanguageRowAttributionMember(rawMember);
+          if (member) nextMembersById.set(member.userId, member);
+        }
+        setAttributionMembersById(nextMembersById);
+      } catch {
+        if (!cancelled) setAttributionMembersById(new Map());
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, isOpen]);
 
   useEffect(() => {
     setSortMode(defaultSortMode);
@@ -220,12 +291,6 @@ export default function LanguageSelector({
   }, [selectedLanguages]);
 
   useEffect(() => {
-    setRecentSpeechLanguageCodes((currentCodes) =>
-      syncDeselectedLanguageCodes(speechLanguages, currentCodes),
-    );
-  }, [speechLanguages]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
 
     try {
@@ -237,19 +302,6 @@ export default function LanguageSelector({
       // Ignore storage failures for the recent-language chip strip.
     }
   }, [recentTranslationLanguageCodes]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem(
-        RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY,
-        JSON.stringify(recentSpeechLanguageCodes),
-      );
-    } catch {
-      // Ignore storage failures for the recent-language chip strip.
-    }
-  }, [recentSpeechLanguageCodes]);
 
   useEffect(() => {
     const pendingCode = pendingRecentChipVisibilityCodeRef.current;
@@ -281,57 +333,35 @@ export default function LanguageSelector({
   }, [isOpen, requestClose]);
 
   const handleToggleRequest = useCallback((code: string) => {
-    if (activeTab === "translation" && translationLanguagesLinked) return;
-
     pendingRecentChipVisibilityCodeRef.current = code;
-    const tab = activeTab;
-    const currentSelectedLanguages = tab === "speech"
-      ? speechLanguagesRef.current
-      : selectedLanguagesRef.current;
-    const isSelected = currentSelectedLanguages.includes(code);
-    const isDisabled =
-      disabled
-      || (!isSelected && currentSelectedLanguages.length >= MAX_LANGS)
-      || (isSelected && currentSelectedLanguages.length <= MIN_LANGS);
+    const currentOwnSelectedLanguages = ownSelectedLanguagesRef.current;
+    const isOwnSelected = currentOwnSelectedLanguages.includes(code);
+    const isDisabled = shouldDisableLanguageSelectorOption({
+      disabled,
+      isOwnSelected,
+      ownSelectedCount: currentOwnSelectedLanguages.length,
+      minLanguages: MIN_LANGS,
+      maxLanguages: MAX_LANGS,
+    });
     if (isDisabled) return;
 
-    const nextSelectedLanguages = isSelected
-      ? currentSelectedLanguages.filter((languageCode) => languageCode !== code)
-      : [...currentSelectedLanguages, code];
-    if (tab === "speech") {
-      speechLanguagesRef.current = nextSelectedLanguages;
+    const nextOwnSelectedLanguages = isOwnSelected
+      ? currentOwnSelectedLanguages.filter((languageCode) => languageCode !== code)
+      : [...currentOwnSelectedLanguages, code];
+    ownSelectedLanguagesRef.current = nextOwnSelectedLanguages;
+
+    if (isOwnSelected) {
+      setRecentTranslationLanguageCodes((currentCodes) =>
+        registerDeselectedLanguageCode(code, currentCodes),
+      );
     } else {
-      selectedLanguagesRef.current = nextSelectedLanguages;
+      setRecentTranslationLanguageCodes((currentCodes) =>
+        syncDeselectedLanguageCodes(nextOwnSelectedLanguages, currentCodes),
+      );
     }
 
-    if (isSelected) {
-      if (tab === "speech") {
-        setRecentSpeechLanguageCodes((currentCodes) =>
-          registerDeselectedLanguageCode(code, currentCodes),
-        );
-      } else {
-        setRecentTranslationLanguageCodes((currentCodes) =>
-          registerDeselectedLanguageCode(code, currentCodes),
-        );
-      }
-    } else {
-      if (tab === "speech") {
-        setRecentSpeechLanguageCodes((currentCodes) =>
-          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
-        );
-      } else {
-        setRecentTranslationLanguageCodes((currentCodes) =>
-          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
-        );
-      }
-    }
-
-    if (tab === "speech") {
-      onToggleSpeechLanguage(code);
-    } else {
-      onToggleLanguage(code);
-    }
-  }, [activeTab, disabled, onToggleLanguage, onToggleSpeechLanguage, translationLanguagesLinked]);
+    onToggleLanguage(code);
+  }, [disabled, onToggleLanguage]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -340,33 +370,124 @@ export default function LanguageSelector({
     searchInputRef.current.blur();
   }, []);
 
+  const renderLanguageOption = (lang: (typeof languageItems)[number]) => {
+    const isSelected = activeSelectedLanguages.includes(lang.code);
+    const isOwnSelected = activeOwnSelectedLanguages.includes(lang.code);
+    // Amber means "I picked this." A language only in the union because
+    // another member picked it gets a distinct sky-blue state instead, never
+    // amber — see the `viewerSelectedLanguages` prop doc.
+    const isOthersOnlySelected = isSelected && !isOwnSelected;
+    const isDisabled = shouldDisableLanguageSelectorOption({
+      disabled,
+      isOwnSelected,
+      ownSelectedCount: activeOwnSelectedLanguages.length,
+      minLanguages: MIN_LANGS,
+      maxLanguages: MAX_LANGS,
+    });
+
+    return (
+      <button
+        key={lang.code}
+        type="button"
+        onClick={() => handleToggleRequest(lang.code)}
+        disabled={isDisabled}
+        className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
+          isOwnSelected
+            ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+            : isOthersOnlySelected
+              ? "border-sky-300 bg-sky-50/95 shadow-[0_16px_32px_rgba(14,165,233,0.1)]"
+              : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+        } ${
+          isDisabled && !isSelected
+            ? "cursor-not-allowed opacity-45"
+          : isDisabled && isSelected
+            ? "cursor-not-allowed opacity-80"
+              : isSelected
+                ? "hover:-translate-y-[1px] hover:shadow-[0_18px_38px_rgba(245,158,11,0.14)]"
+                : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+        }`}
+      >
+        <span
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
+            isOwnSelected
+              ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
+              : isOthersOnlySelected
+                ? "border-sky-200 bg-white shadow-[0_6px_14px_rgba(14,165,233,0.08)]"
+                : "border-[#e5dfd5] bg-[#faf7f1]"
+          }`}
+        >
+          <LanguageFlag language={lang.code} className="text-[2rem] leading-none" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
+            {lang.localizedName}
+          </span>
+          <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
+            {lang.secondaryLabel}
+          </span>
+        </span>
+        {hasAttribution ? (
+          <LanguageRowAvatarStack
+            memberIds={selectedLanguagesAttribution?.[lang.code] ?? []}
+            membersById={attributionMembersById}
+          />
+        ) : null}
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+            isOwnSelected
+              ? "border-amber-500 bg-amber-500 text-white"
+              : isOthersOnlySelected
+                ? "border-sky-500 bg-sky-500 text-white"
+                : "border-slate-300 text-transparent"
+          }`}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className={`h-4 w-4 ${isSelected ? "text-white" : "text-transparent"}`}
+            fill="none"
+          >
+            <path
+              d="M5.5 12.5L10 17L18.5 8.5"
+              stroke="currentColor"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+    );
+  };
+
   if (!isOpen || typeof document === "undefined") return null;
 
   // The active room itself is portaled above the conversation list, so this
   // selector must sit above that body-level room overlay as well.
   const overlay = (
-    <div
-      className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      style={{ zIndex: 140 }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          requestClose();
-        }
-      }}
+    <SlideSurface
+      open={isOpen}
+      onClose={requestClose}
+      ariaLabel={copy.languageSelectorTitle}
+      nativeBackPriority={40}
+      className="fixed inset-0 z-[140] flex min-h-0 w-full flex-col bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
       <div
-        className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDownCapture={(event) => {
-          dismissSearchFocus(event.target);
-        }}
-        onTouchStartCapture={(event) => {
-          dismissSearchFocus(event.target);
+        className="flex h-full w-full justify-center"
+        onPointerDown={(event) => dismissSearchFocus(event.target)}
+        onTouchStart={(event) => dismissSearchFocus(event.target)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            requestClose();
+          }
         }}
       >
+        <div
+          className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
+          onClick={(event) => event.stopPropagation()}
+        >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
             aria-hidden="true"
@@ -388,7 +509,7 @@ export default function LanguageSelector({
               {copy.languageSelectorTitle}
             </p>
             <div className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-end text-[0.92rem] font-semibold tracking-[-0.01em] text-slate-500">
-              {activeSelectedLanguages.length}/{MAX_LANGS}
+              {activeOwnSelectedLanguages.length}/{MAX_LANGS}
             </div>
           </div>
 
@@ -401,11 +522,15 @@ export default function LanguageSelector({
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
                     const isSelected = activeSelectedLanguages.includes(lang.code);
-                    const isDisabled =
-                      disabled
-                      || isTranslationSelectionLinked
-                      || (!isSelected && atMax)
-                      || (isSelected && atMin);
+                    const isOwnSelected = activeOwnSelectedLanguages.includes(lang.code);
+                    const isOthersOnlySelected = isSelected && !isOwnSelected;
+                    const isDisabled = shouldDisableLanguageSelectorOption({
+                      disabled,
+                      isOwnSelected,
+                      ownSelectedCount: activeOwnSelectedLanguages.length,
+                      minLanguages: MIN_LANGS,
+                      maxLanguages: MAX_LANGS,
+                    });
 
                     return (
                       <button
@@ -416,126 +541,32 @@ export default function LanguageSelector({
                         type="button"
                         onClick={() => handleToggleRequest(lang.code)}
                         disabled={isDisabled}
-                        aria-pressed={isSelected}
+                        aria-pressed={isOwnSelected}
                         aria-label={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         title={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition ${
-                          isSelected
+                          isOwnSelected
                             ? "border-2 border-amber-400 bg-white shadow-[0_14px_28px_rgba(245,158,11,0.14)]"
-                            : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+                            : isOthersOnlySelected
+                              ? "border-2 border-sky-300 bg-white shadow-[0_14px_28px_rgba(14,165,233,0.12)]"
+                              : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
-                            ? `cursor-not-allowed ${isTranslationSelectionLinked ? "opacity-80" : "opacity-50"}`
+                            ? "cursor-not-allowed opacity-50"
                             : isSelected
                               ? "hover:-translate-y-[1px] hover:shadow-[0_16px_30px_rgba(245,158,11,0.18)]"
                               : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
                         }`}
                       >
-                        <span
-                          className={`text-[2rem] leading-none ${
-                            isSelected ? "" : "opacity-70"
-                          }`}
-                        >
-                          {lang.flag}
-                        </span>
+                        <LanguageFlag
+                          language={lang.code}
+                          className={`text-[2rem] leading-none ${isSelected ? "" : "opacity-70"}`}
+                        />
                       </button>
                     );
                   })}
                 </div>
               </div>
-            ) : null}
-
-            <div className="rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("speech")}
-                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
-                    activeTab === "speech"
-                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  aria-pressed={activeTab === "speech"}
-                >
-                  {copy.languageSelectorSpeechTabLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("translation")}
-                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
-                    activeTab === "translation"
-                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  aria-pressed={activeTab === "translation"}
-                >
-                  {copy.languageSelectorTranslationTabLabel}
-                </button>
-              </div>
-            </div>
-
-            {activeTab === "speech" && sttControl ? (
-              <div className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                <button
-                  type="button"
-                  onPointerDown={sttControl.onPointerDown}
-                  onClick={sttControl.onToggle}
-                  disabled={sttControl.isConnecting}
-                  aria-label={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
-                  title={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
-                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-                >
-                  {sttControl.showRipple ? (
-                    <span
-                      className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                      style={{ transform: `scale(${sttControl.rippleScale})`, opacity: 0.22 }}
-                    />
-                  ) : null}
-
-                  {sttControl.isReady ? (
-                    <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                  ) : null}
-
-                  <span
-                    className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                      sttControl.isLimitReached
-                        ? "bg-gray-300"
-                        : sttControl.isReady
-                          ? "bg-red-500"
-                          : sttControl.isConnecting
-                            ? "bg-gray-300"
-                            : "bg-gradient-to-br from-amber-400 to-orange-500"
-                    }`}
-                  >
-                    {sttControl.isConnecting ? (
-                      <Loader2 size={16} className="animate-spin text-white" />
-                    ) : sttControl.isReady ? (
-                      <span
-                        aria-hidden
-                        className="rounded-[3px] bg-white"
-                        style={{ width: "10px", height: "10px" }}
-                      />
-                    ) : (
-                      <Mic size={16} className="text-white" />
-                    )}
-                  </span>
-                </button>
-                <span className="min-w-0 flex-1 text-[0.83rem] font-semibold leading-snug tracking-[-0.01em] text-slate-700">
-                  {copy.languageSelectorSpeechRestartHintLabel}
-                </span>
-              </div>
-            ) : activeTab === "translation" ? (
-              <label className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-[0.88rem] font-semibold tracking-[-0.01em] text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                <input
-                  type="checkbox"
-                  checked={translationLanguagesLinked}
-                  onChange={(event) => {
-                    onTranslationLanguagesLinkedChange(event.currentTarget.checked);
-                  }}
-                  className="h-5 w-5 rounded border-[#cfc7b9] text-amber-500 accent-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                />
-                <span>{copy.languageSelectorTranslationSameLanguagesLabel}</span>
-              </label>
             ) : null}
 
             <div className="flex items-stretch gap-3">
@@ -606,89 +637,40 @@ export default function LanguageSelector({
             paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           }}
         >
-          {filteredItems.length === 0 ? (
+          <p className="px-1 pb-1 pt-4 text-[0.78rem] leading-5 text-slate-500">
+            {copy.languageSelectorDescription}
+          </p>
+          {filteredFeaturedItems.length === 0 && filteredLanguageItems.length === 0 ? (
             <div className="flex h-full min-h-[240px] items-center justify-center px-6 text-center text-sm text-slate-500">
               {copy.languageSelectorNoResultsLabel}
             </div>
           ) : (
-            <div className="space-y-3 py-4">
-              {filteredItems.map((lang) => {
-                const isSelected = activeSelectedLanguages.includes(lang.code);
-                const isDisabled =
-                  disabled
-                  || isTranslationSelectionLinked
-                  || (!isSelected && atMax)
-                  || (isSelected && atMin);
+            <div className="space-y-5 pb-4 pt-3">
+              {filteredFeaturedItems.length > 0 ? (
+                <section aria-labelledby="conversation-featured-language-heading" className="space-y-2">
+                  <h3 id="conversation-featured-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                    {languageSectionCopy.featured}
+                  </h3>
+                  <div className="space-y-2">
+                    {filteredFeaturedItems.map(renderLanguageOption)}
+                  </div>
+                </section>
+              ) : null}
 
-                return (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    onClick={() => handleToggleRequest(lang.code)}
-                    disabled={isDisabled}
-                    className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
-                      isSelected
-                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
-                        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
-                    } ${
-                      isDisabled && !isSelected
-                        ? "cursor-not-allowed opacity-45"
-                      : isDisabled && isSelected
-                        ? "cursor-not-allowed opacity-80"
-                          : isSelected
-                            ? "hover:-translate-y-[1px] hover:shadow-[0_18px_38px_rgba(245,158,11,0.14)]"
-                            : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
-                        isSelected
-                          ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
-                          : "border-[#e5dfd5] bg-[#faf7f1]"
-                      }`}
-                    >
-                      <span className="text-[2rem] leading-none">{lang.flag}</span>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
-                        {lang.localizedName}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
-                        {lang.secondaryLabel}
-                      </span>
-                    </span>
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
-                        isSelected
-                          ? "border-amber-500 bg-amber-500 text-white"
-                          : "border-slate-300 text-transparent"
-                      }`}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className={`h-4 w-4 ${
-                          isSelected ? "text-white" : "text-transparent"
-                        }`}
-                        fill="none"
-                      >
-                        <path
-                          d="M5.5 12.5L10 17L18.5 8.5"
-                          stroke="currentColor"
-                          strokeWidth="3.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                  </button>
-                );
-              })}
+              <section aria-labelledby="conversation-all-language-heading" className="space-y-2">
+                <h3 id="conversation-all-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                  {languageSectionCopy.all}
+                </h3>
+                <div className="space-y-2">
+                  {filteredLanguageItems.map(renderLanguageOption)}
+                </div>
+              </section>
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
   return createPortal(overlay, document.body);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_LOCALES, getDictionary } from "@/i18n";
+import { PRIMARY_UI_LANGUAGE_OPTIONS, SUPPORTED_LOCALES, getDictionary } from "@/i18n";
 import { localeDictionaries } from "@/i18n/dictionaries/catalog";
 import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 
@@ -16,6 +16,72 @@ const LIVE_DEMO_PREFERENCE_LABEL_KEYS = [
   "sttSegmentationModeFinLabel",
 ] as const;
 
+const NEW_CONVERSATION_LABELS: Record<(typeof PRIMARY_UI_LOCALES)[number], {
+  newConversationButtonLabel: string;
+  startAloneOptionLabel: string;
+}> = {
+  ko: {
+    newConversationButtonLabel: "새 대화방 만들기",
+    startAloneOptionLabel: "혼자 쓰는 대화방",
+  },
+  en: {
+    newConversationButtonLabel: "Create a new chat",
+    startAloneOptionLabel: "Your own room",
+  },
+  ja: {
+    newConversationButtonLabel: "新しいチャットを作成",
+    startAloneOptionLabel: "自分用チャット",
+  },
+  "zh-CN": {
+    newConversationButtonLabel: "新建聊天",
+    startAloneOptionLabel: "专属房间",
+  },
+  "zh-TW": {
+    newConversationButtonLabel: "新增聊天",
+    startAloneOptionLabel: "專屬房間",
+  },
+  fr: {
+    newConversationButtonLabel: "Nouvelle discussion",
+    startAloneOptionLabel: "Espace personnel",
+  },
+  de: {
+    newConversationButtonLabel: "Neuer Chat",
+    startAloneOptionLabel: "Eigener Chat",
+  },
+  es: {
+    newConversationButtonLabel: "Nuevo chat",
+    startAloneOptionLabel: "Chat personal",
+  },
+  pt: {
+    newConversationButtonLabel: "Novo chat",
+    startAloneOptionLabel: "Chat pessoal",
+  },
+  it: {
+    newConversationButtonLabel: "Nuova chat",
+    startAloneOptionLabel: "Chat personale",
+  },
+  ru: {
+    newConversationButtonLabel: "Новый чат",
+    startAloneOptionLabel: "Личный чат",
+  },
+  ar: {
+    newConversationButtonLabel: "محادثة جديدة",
+    startAloneOptionLabel: "غرفتك الخاصة",
+  },
+  hi: {
+    newConversationButtonLabel: "नई चैट",
+    startAloneOptionLabel: "निजी चैट",
+  },
+  th: {
+    newConversationButtonLabel: "แชทใหม่",
+    startAloneOptionLabel: "ห้องส่วนตัว",
+  },
+  vi: {
+    newConversationButtonLabel: "Chat mới",
+    startAloneOptionLabel: "Chat riêng",
+  },
+};
+
 describe("getDictionary", () => {
   it("returns dedicated dictionaries for the expanded locale catalog", () => {
     expect(getDictionary("pl").account.title).toBe("Konto");
@@ -30,10 +96,12 @@ describe("getDictionary", () => {
       expect(dictionary.demo.textSizeLabel).toBeTruthy();
       expect(dictionary.demo.translationModelLabel).toBeTruthy();
       expect(dictionary.demo.adBannerPositionBottomLabel).toBeTruthy();
-      expect(dictionary.conversations.searchPlaceholder).toBeTruthy();
-      expect(dictionary.conversations.newConversationButtonLabel).toBeTruthy();
-      expect(dictionary.conversations.switchLiveRoomToastLabel).toBeTruthy();
+      expect(dictionary.conversations?.searchPlaceholder).toBeTruthy();
+      expect(dictionary.conversations?.newConversationButtonLabel).toBeTruthy();
+      expect(dictionary.conversations?.switchLiveRoomToastLabel).toBeTruthy();
+      expect(dictionary.conversations?.inviteFriendsPageTitle).toBeTruthy();
       expect(dictionary.livePhoneDemo.composer.sendMessageLabel).toBeTruthy();
+      expect(dictionary.livePhoneDemo.composer.blockedComposerMessage).toBeTruthy();
       expect(dictionary.livePhoneDemo.copyActions.copiedToastLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.feedback.categoryLabels.feedback).toBeTruthy();
       expect(dictionary.livePhoneDemo.ttsAction.playPronunciationLabel).toBeTruthy();
@@ -62,5 +130,46 @@ describe("getDictionary", () => {
     expect(polishDictionary.versionPolicy.checkingTitle).toBe("Checking version");
     expect(polishDictionary.versionPolicy.updateButtonLabel).toBe("Aktualizacja");
     expect(polishDictionary.livePhoneDemo.composer.sendMessageLabel).toBe("Send message");
+  });
+
+  it("provides localized copy for the app language and social profile surfaces", () => {
+    expect(PRIMARY_UI_LANGUAGE_OPTIONS).toHaveLength(15);
+
+    for (const option of PRIMARY_UI_LANGUAGE_OPTIONS) {
+      const dictionary = getDictionary(option.code);
+
+      expect(dictionary.profile.appLanguageTitle).toBeTruthy();
+      expect(dictionary.profile.appLanguageDescription).toBeTruthy();
+      expect(dictionary.profile.profileShareCopyLinkLabel).toBeTruthy();
+      expect(dictionary.profile.settingsLoadError).toBeTruthy();
+      expect(dictionary.profile.messageAction).toBeTruthy();
+      expect(dictionary.profile.messageError).toBeTruthy();
+      expect(dictionary.profile.noFollowersLabel).toBeTruthy();
+      expect(dictionary.profile.noFollowingLabel).toBeTruthy();
+      expect(dictionary.profile.profileShareQrInstruction).toBeTruthy();
+      expect(dictionary.connect.searchPlaceholder).toBeTruthy();
+      expect(dictionary.connect.clearSearchLabel).toBeTruthy();
+    }
+  });
+
+  it("localizes new conversation creation labels for every primary UI locale", () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const conversations = getDictionary(locale).conversations;
+      const expected = NEW_CONVERSATION_LABELS[locale];
+
+      expect(conversations?.newConversationButtonLabel, `${locale}.newConversationButtonLabel`)
+        .toBe(expected.newConversationButtonLabel);
+      expect(conversations?.startAloneOptionLabel, `${locale}.startAloneOptionLabel`)
+        .toBe(expected.startAloneOptionLabel);
+    }
+  });
+
+  it("uses English for new supplemental copy outside the 15 primary UI locales", () => {
+    const dictionary = getDictionary("pl");
+
+    expect(dictionary.conversations?.startAloneOptionLabel).toBe("Your own room");
+    expect(dictionary.livePhoneDemo.composer.blockedComposerMessage).toBe("This user is blocked.");
+    expect(dictionary.profile.messageAction).toBe("Message");
+    expect(dictionary.profile.profileShareQrInstruction).toBe("Place the profile QR code inside the frame.");
   });
 });

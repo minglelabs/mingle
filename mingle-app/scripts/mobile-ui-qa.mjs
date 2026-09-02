@@ -950,15 +950,6 @@ async function invokeQaMethod(driver, methodName, ...args) {
   }, methodName, args);
 }
 
-async function invokeConversationListQaMethod(driver, methodName, ...args) {
-  return await driver.execute((nextMethodName, nextArgs) => {
-    const qaWindow = window.__MINGLE_CONVERSATION_LIST_QA__;
-    const candidate = qaWindow?.[nextMethodName];
-    if (typeof candidate !== 'function') return null;
-    return candidate(...nextArgs);
-  }, methodName, args);
-}
-
 async function invokeConversationListQaAsyncMethod(driver, methodName, ...args) {
   return await driver.executeAsync((nextMethodName, nextArgs, done) => {
     const qaWindow = window.__MINGLE_CONVERSATION_LIST_QA__;
@@ -1080,7 +1071,12 @@ async function resetConversationListRouteForQa(driver) {
   await driver.execute(() => {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete('conversation');
-    window.history.replaceState(window.history.state, '', nextUrl.toString());
+    const nextState = window.history.state && typeof window.history.state === 'object'
+      ? { ...window.history.state }
+      : {};
+    delete nextState.conversationId;
+    nextState.__MINGLE_CONVERSATION_HISTORY_ROUTE__ = null;
+    window.history.replaceState(nextState, '', nextUrl.toString());
     window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
     return true;
   });
@@ -1862,7 +1858,16 @@ async function runIosCases(driver, reportDir, options) {
         assert(resetList?.activeConversationId === null, 'The iOS QA flow could not reset back to the conversation list before opening a room.', resetList);
 
         const before = await ensureConversationRoom(driver);
+        const beforeListSnapshot = await waitFor(async () => {
+          const snapshot = await getConversationListQaSnapshot(driver);
+          return snapshot?.activeConversationId ? snapshot : null;
+        }, 'the conversation-list room identity to settle before the edge-swipe navigation test', 15000, 250);
+        const conversationId = beforeListSnapshot.activeConversationId;
         assert(before?.routePathname === '/ko/conversations', 'The iOS room was not active before the edge-swipe navigation test.', before);
+        assert(conversationId, 'The iOS conversation-list bridge did not expose the active room before the edge-swipe navigation test.', {
+          before,
+          beforeListSnapshot,
+        });
         const historyStateBeforeBack = await waitFor(async () => {
           const state = await driver.execute(() => ({
             href: window.location.href,
@@ -1896,12 +1901,17 @@ async function runIosCases(driver, reportDir, options) {
         let afterEdgeHistoryState = null;
         let fallbackForwardAction = null;
         let afterForward = null;
+        let afterForwardListSnapshot = null;
 
         try {
+          afterForwardListSnapshot = await waitFor(async () => {
+            const snapshot = await getConversationListQaSnapshot(driver);
+            return snapshot?.activeConversationId === conversationId ? snapshot : null;
+          }, 'the iOS forward edge-swipe to restore the conversation room state', 10000, 500);
           afterForward = await waitFor(async () => {
             const snapshot = await getQaSnapshot(driver);
             return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
-          }, 'the iOS forward edge-swipe to restore the room', 10000, 500);
+          }, 'the iOS forward edge-swipe room runtime to become available', 10000, 500);
         } catch {
           afterEdgeHistoryState = await getStampedNativeHistoryState(driver);
           fallbackForwardAction = await driver.execute(() => {
@@ -1914,34 +1924,108 @@ async function runIosCases(driver, reportDir, options) {
             return 'history-forward';
           });
           restoredBy = 'history-forward-fallback';
+          afterForwardListSnapshot = await waitFor(async () => {
+            const snapshot = await getConversationListQaSnapshot(driver);
+            return snapshot?.activeConversationId === conversationId ? snapshot : null;
+          }, 'the iOS forward history fallback to restore the conversation room state', 15000, 500);
           afterForward = await waitFor(async () => {
             const snapshot = await getQaSnapshot(driver);
             return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
-          }, 'the iOS forward history fallback to restore the room', 15000, 500);
+          }, 'the iOS forward history fallback room runtime to become available', 15000, 500);
         }
 
-        assert(afterForward?.menuOpen === false, 'The iOS forward edge-swipe restored an overlay instead of the room.', {
+        assert(afterForwardListSnapshot?.activeConversationId === conversationId, 'The iOS forward edge-swipe did not restore the same conversation room.', {
           resetList,
           before,
+          beforeListSnapshot,
           historyStateBeforeBack,
           afterBack,
           afterBackHistoryState,
           afterEdgeHistoryState,
           fallbackForwardAction,
           restoredBy,
+          afterForwardListSnapshot,
           afterForward,
         });
+        assert(afterForward?.menuOpen === false, 'The iOS forward edge-swipe restored an overlay instead of the room.', {
+          resetList,
+          before,
+          beforeListSnapshot,
+          historyStateBeforeBack,
+          afterBack,
+          afterBackHistoryState,
+          afterEdgeHistoryState,
+          fallbackForwardAction,
+          restoredBy,
+          afterForwardListSnapshot,
+          afterForward,
+        });
+
+        const stalePopstateReplay = await driver.execute(() => {
+          const currentState = window.history.state && typeof window.history.state === 'object'
+            ? { ...window.history.state }
+            : {};
+          delete currentState.conversationId;
+          currentState.__MINGLE_CONVERSATION_HISTORY_ROUTE__ = null;
+          window.dispatchEvent(new PopStateEvent('popstate', { state: currentState }));
+          return {
+            href: window.location.href,
+            historyState: window.history.state,
+          };
+        });
+        const afterStalePopstateReplay = await waitFor(async () => {
+          const snapshot = await getConversationListQaSnapshot(driver);
+          return snapshot?.activeConversationId === conversationId ? snapshot : null;
+        }, 'the restored room to ignore a stale list popstate replay', 5000, 250);
+        assert(afterStalePopstateReplay?.activeConversationId === conversationId, 'A stale list popstate replay closed the restored room.', {
+          resetList,
+          before,
+          beforeListSnapshot,
+          historyStateBeforeBack,
+          afterBack,
+          afterBackHistoryState,
+          afterEdgeHistoryState,
+          fallbackForwardAction,
+          restoredBy,
+          afterForwardListSnapshot,
+          afterForward,
+          stalePopstateReplay,
+          afterStalePopstateReplay,
+        });
+
+        const repeatedSwipeCycles = [];
+        for (let cycle = 1; cycle <= 2; cycle += 1) {
+          await delay(500);
+          await performIosEdgeSwipe(driver, 'back');
+          const repeatedBack = await waitFor(async () => {
+            const snapshot = await getConversationListQaSnapshot(driver);
+            return snapshot?.activeConversationId === null ? snapshot : null;
+          }, `the iOS repeated swipe cycle ${cycle} to return to the conversation list`, 10000, 500);
+
+          await delay(500);
+          await performIosEdgeSwipe(driver, 'forward');
+          const repeatedForward = await waitFor(async () => {
+            const snapshot = await getConversationListQaSnapshot(driver);
+            return snapshot?.activeConversationId === conversationId ? snapshot : null;
+          }, `the iOS repeated swipe cycle ${cycle} to restore the same conversation room`, 10000, 500);
+          repeatedSwipeCycles.push({ cycle, repeatedBack, repeatedForward });
+        }
 
         return {
           resetList,
           before,
+          beforeListSnapshot,
           historyStateBeforeBack,
           afterBack,
           afterBackHistoryState,
           afterEdgeHistoryState,
           fallbackForwardAction,
           restoredBy,
+          afterForwardListSnapshot,
           afterForward,
+          stalePopstateReplay,
+          afterStalePopstateReplay,
+          repeatedSwipeCycles,
         };
       }),
     }));

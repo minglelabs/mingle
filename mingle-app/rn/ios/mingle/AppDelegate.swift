@@ -2,6 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import UserNotifications
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -14,6 +15,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    UNUserNotificationCenter.current().delegate = self
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -35,7 +38,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
+    if let launchURL = launchOptions?[.url] as? URL {
+      NativeRuntimeConfigModule.recordIncomingProfileLink(launchURL)
+    }
+
     return true
+  }
+
+  func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    NativePushNotificationModule.didRegisterForRemoteNotifications(deviceToken)
+  }
+
+  func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    NativePushNotificationModule.didFailToRegisterForRemoteNotifications(error)
   }
 
   func application(
@@ -43,6 +64,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+    NativeRuntimeConfigModule.recordIncomingProfileLink(url)
     return RCTLinkingManager.application(app, open: url, options: options)
   }
 
@@ -51,11 +73,36 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
+    if let webpageURL = userActivity.webpageURL {
+      NativeRuntimeConfigModule.recordIncomingProfileLink(webpageURL)
+    }
     return RCTLinkingManager.application(
       application,
       continue: userActivity,
       restorationHandler: restorationHandler
     )
+  }
+
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    // Keep APNs delivery and background notifications intact, but do not show
+    // a banner, sound, or badge update while the conversation is already open.
+    completionHandler([])
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    NativePushNotificationModule.didReceiveNotification(response.notification.request.content.userInfo)
+    completionHandler()
   }
 }
 

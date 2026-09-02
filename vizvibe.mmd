@@ -2,7 +2,7 @@ flowchart TD
     %% === PROJECT GOALS ===
     %% Ultimate Goal: Mingle - 소셜링 중심의 실시간 번역 앱으로 외국인과 깊이 있는 대화 가능하게
     %% Current Goal: Mingle 프리토타입 검증 및 핵심 기능 구현
-    %% @lastActive: mingle_stt_flyio_migration
+    %% @lastActive: follow_list_screen_swipe_tab_navigation
 
     %% === START ===
     %% @project_start [start, closed]
@@ -1393,14 +1393,50 @@ flowchart TD
     %% @mingle_ios_device_signing_account_setup [human-task, opened]
     mingle_ios_device_signing_account_setup("실기기 서명 계정 연결 필요<br/><sub>Xcode Accounts에 Apple ID를 연결하고<br/>개발 프로비저닝 프로필을 생성해야<br/>install-ios-device 스크립트로 iPhone에<br/>설치/실행을 완료할 수 있음</sub>")
 
+    %% @onboarding_language_and_birthdate_flow_revamp [ai-task, closed, 2026-08-17, ai]
+    onboarding_language_and_birthdate_flow_revamp("온보딩 언어/생년월일 및 가입 개편<br/><sub>가입 전 언어 선택→생년월일(12세 이상) 확인 후<br/>로그인 화면 진입 플로우로 전면 개편하고<br/>이메일 가입 단순화 및 로그인 후 프로필 동기화</sub>")
+
+    %% @admin_dashboard_cache_policy_and_flush_support [ai-task, closed, 2026-08-18, ai]
+    admin_dashboard_cache_policy_and_flush_support("대시보드 당일 실시간 쿼리 및 캐시 초기화<br/><sub>당일 데이터의 실시간 변동을 반영하기 위해<br/>오늘 날짜 캐시 저장을 제외하고 실시간 계산하며<br/>전체 캐시 삭제 및 강제 재계산 기능/버튼 추가</sub>")
+
+    %% @mypage_account_deactivation_support [ai-task, closed, 2026-08-18, ai]
+    mypage_account_deactivation_support("마이페이지 회원 비활성화 및 15개 국어 i18n<br/><sub>햄버거 메뉴 내 로그아웃 하단에 비활성화 버튼 추가,<br/>확인 모달 UI(비활성화/로그아웃만 하기) 및 API 구현,<br/>15개 언어 번역 카피 및 DB 마이그레이션 파일 추가</sub>")
+
+    %% @nextjs_build_type_errors_fix [ai-task, closed, 2026-08-18, ai]
+    nextjs_build_type_errors_fix("Next.js 빌드 타입 에러 해결<br/><sub>mingle-home 이메일 가입 버튼 키 이름 수정 및<br/>알림/언어선택/사전 테스트의 TS 컴파일 오류를<br/>수정하여 next build TypeScript 검증 통과</sub>")
+
+    %% @deactivate_client_api_path_endpoint_fix [ai-task, closed, 2026-08-18, ai]
+    deactivate_client_api_path_endpoint_fix("회원 비활성화 API 경로 및 네임스페이스 라우트 보완<br/><sub>buildClientApiPath 중복 /api 접두사 버그(/account/deactivate)를 수정하고<br/>버전별 네임스페이스(iOS/Android v1.1.0~v2.0.0) 라우트를 연결해<br/>모바일 및 웹 클라이언트에서 200 정상 응답 처리</sub>")
+
+    %% @deactivate_signout_redirect_to_auth_home_fix [ai-task, closed, 2026-08-18, ai]
+    deactivate_signout_redirect_to_auth_home_fix("로그아웃/비활성화 시 홈 로그인 화면 리다이렉트 전환<br/><sub>비활성화/로그아웃 후 mypage 탭에 머무는 현상을 해결하기 위해<br/>signOutCallbackUrl을 홈(/locale)으로 전환하고 window.location.replace로<br/>로그인/온보딩 화면으로 즉시 완전 전환되도록 개선</sub>")
+
+    %% @deactivated_user_exclusion_from_search_and_follow_stats [ai-task, closed, 2026-08-18, ai]
+    deactivated_user_exclusion_from_search_and_follow_stats("비활성화 계정 검색 및 팔로워/팔로잉 집계 제외<br/><sub>탐색 탭 검색(isActive: true) 및 팔로워/팔로잉 목록/수 카운트 시<br/>비활성화된 계정을 제외하도록 Prisma 쿼리 조건을 보완하여<br/>비활성화 유저가 타인에게 노출되지 않도록 완전 격리</sub>")
+
+    %% @deactivated_reactivation_on_signin_and_self_profile_fix [ai-task, closed, 2026-08-18, ai]
+    deactivated_reactivation_on_signin_and_self_profile_fix("재로그인 시 자동 재활성화 및 자기 프로필 조회 버그 수정<br/><sub>signIn 이벤트 upsert update에 isActive: true 재설정 추가,<br/>getUserProfile에서 isActive 필터 제거(자기 프로필은 필터 불필요),<br/>재로그인 후 handle/언어 초기화 및 팔로우 수 0 표시 현상 해결</sub>")
+
+    %% @follow_list_screen_swipe_tab_navigation [ai-task, closed, 2026-08-18, ai]
+    follow_list_screen_swipe_tab_navigation("팔로워/팔로잉 탭 스와이프 전환 및 엣지 백 제스처 분리<br/><sub>좌측 32px 엣지 스와이프는 전체 화면 닫기/뒤로가기 유지,<br/>그 외 화면 영역 좌우 수평 스와이프로 팔로워↔팔로잉 탭 전환 지원,<br/>수직 스크롤 간섭 방지 판정 적용</sub>")
+
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        mingle_stt_flyio_migration
+        follow_list_screen_swipe_tab_navigation
     end
 
     %% === STYLES ===
     %% Start node (closed, purple)
     style project_start fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:2px
+    style onboarding_language_and_birthdate_flow_revamp fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style admin_dashboard_cache_policy_and_flush_support fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style mypage_account_deactivation_support fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style nextjs_build_type_errors_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivate_client_api_path_endpoint_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivate_signout_redirect_to_auth_home_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivated_user_exclusion_from_search_and_follow_stats fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivated_reactivation_on_signin_and_self_profile_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style follow_list_screen_swipe_tab_navigation fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Ultimate Goal (opened, green)
     style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

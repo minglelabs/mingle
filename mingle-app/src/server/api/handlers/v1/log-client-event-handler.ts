@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client/index'
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import {
   createTrackedEventLog,
@@ -8,6 +10,7 @@ import {
   sanitizeNonNegativeInt,
   upsertTrackedUser,
 } from '@/lib/app-analytics'
+import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -19,6 +22,13 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
+import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import {
+  isMessageSenderBlockedInConversation,
+  listChannelMemberUserIdsBySessionKey,
+  materializePendingConversationInvitees,
+} from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -27,6 +37,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_session_stopped',
   'stt_turn_started',
   'stt_turn_finalized',
+  'conversation_hydration_order_preserved',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
@@ -188,14 +199,25 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const userId = await upsertTrackedUser({ tracking, clientContext })
+    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
+    const session = await getServerSession(getAuthOptions())
+    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
-      const shouldIgnoreDueToConversationClear = await shouldSkipFinalizedTurnPersistence({
-        clientMessageId,
-        sessionKey: tracking.sessionKey,
-      })
+      const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
+        shouldSkipFinalizedTurnPersistence({
+          clientMessageId,
+          sessionKey: tracking.sessionKey,
+        }),
+        // Defense in depth behind the client's own composer/mic gating — a
+        // block between the two members of this room means neither side's
+        // messages should persist any more, even from a stale client.
+        isMessageSenderBlockedInConversation({
+          sessionKey: tracking.sessionKey,
+          userId,
+        }),
+      ])
 
       const messageMetadata: Prisma.JsonObject = {
         clientMessageId,
@@ -220,7 +242,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear) {
+      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
         const message = await prisma.appMessage.upsert({
           where: {
             sessionKey_clientMessageId: {
@@ -262,6 +284,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           },
           select: {
             id: true,
+            createdAt: true,
           },
         })
         messageId = message.id
@@ -325,6 +348,56 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation auto title generation failed:', error)
         }
+
+        // An invitee gets no DB record and can't see the room at all until
+        // this, the owner's first real message — see
+        // pendingInviteeUserIds' doc comment. Must run before the
+        // notify below, so a freshly-materialized member's push actually
+        // reaches them. Passing this message's own createdAt keeps THIS
+        // message itself already bubble-attributed as multi-member — see
+        // materializePendingConversationInvitees's joinedAt doc comment.
+        let committedMemberUserIds: string[] | null = null
+        try {
+          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          if (Array.isArray(committedMemberUserIds)) {
+            console.info('[conversation-message] membership-ready', {
+              messageId,
+              memberCount: committedMemberUserIds.length,
+            })
+          }
+        } catch (error) {
+          console.error('Materializing pending conversation invitees failed:', error)
+        }
+
+        // If this was the first message in a pending-invite room, use the
+        // member IDs returned from the committed materialization transaction.
+        // Otherwise, use the current membership snapshot for an already-live
+        // room. In both cases the list fan-out is based on a stable member set.
+        const memberUserIds = committedMemberUserIds
+          ?? await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
+        try {
+          // Lets any other member's already-open room — and their conversation
+          // LIST screen — pick this up without waiting on their own poll cycle.
+          // The publish helper absorbs transport failures, but awaiting it here
+          // keeps the request alive long enough for the messaging service to
+          // receive the event instead of dropping it after the response ends.
+          await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+        } catch (error) {
+          console.error('Conversation realtime notification failed:', error)
+        }
+        if (messageId) {
+          try {
+            await sendPushNotificationForConversationMessage({
+              messageId,
+              sessionKey: tracking.sessionKey,
+              sourceText,
+              senderUserId: userId,
+              memberUserIds,
+            })
+          } catch (error) {
+            console.error('Conversation message push failed:', error)
+          }
+        }
       }
     }
 
@@ -353,6 +426,14 @@ export async function handleLogClientEventV1(request: NextRequest) {
       eventType,
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
+
+    if (eventType === 'conversation_hydration_order_preserved') {
+      // The event is already persisted in AppEventLog. Keep this diagnostic
+      // out of the warning stream and never print session keys or user ids.
+      console.info('[conversation-order] hydration timestamp drift preserved', {
+        metadata: clientMetadata,
+      })
+    }
 
     return response
   } catch (error) {

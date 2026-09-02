@@ -93,8 +93,8 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 67
-def appVersionName = "1.1.4"
+def appVersionCode = 96
+def appVersionName = "2.0.1"
 
 def normalizeRuntimeConfigValue = { String value ->
     if (value == null) {
@@ -102,6 +102,9 @@ def normalizeRuntimeConfigValue = { String value ->
     }
 
     def trimmed = value.trim()
+    if (trimmed.equalsIgnoreCase("null")) {
+        return ""
+    }
     if (trimmed.length() >= 2) {
         def hasMatchingSingleQuotes = trimmed.startsWith("'") && trimmed.endsWith("'")
         def hasMatchingDoubleQuotes = trimmed.startsWith("\"") && trimmed.endsWith("\"")
@@ -153,7 +156,75 @@ def loadOptionalProperties = { File propertiesFile ->
     return properties
 }
 
+def repoRootDir = new File(rootProject.projectDir, "../../../").canonicalFile
+def findMainWorktreeRoot = {
+    try {
+        def process = new ProcessBuilder("git", "-C", repoRootDir.absolutePath, "worktree", "list", "--porcelain")
+            .redirectErrorStream(true)
+            .start()
+        def output = process.inputStream.getText("UTF-8")
+        if (process.waitFor() != 0) {
+            return null
+        }
+
+        def worktreePath = null
+        for (line in output.readLines()) {
+            if (line.startsWith("worktree ")) {
+                worktreePath = line.substring("worktree ".length()).trim()
+            } else if (line == "branch refs/heads/main" && worktreePath != null) {
+                return new File(worktreePath).canonicalFile
+            }
+        }
+    } catch (Exception ignored) {
+        // Gradle should still work when git is unavailable.
+    }
+    return null
+}
+
+def worktreePropertyKeys = [
+    "DEVBOX_WORKTREE_NAME",
+    "DEVBOX_ROOT_DIR",
+    "DEVBOX_PROFILE",
+    "DEVBOX_WEB_PORT",
+    "DEVBOX_STT_PORT",
+    "DEVBOX_MESSAGING_PORT",
+    "DEVBOX_METRO_PORT",
+    "DEVBOX_NGROK_API_PORT",
+    "DEVBOX_SITE_URL",
+    "DEVBOX_RN_WS_URL",
+    "DEVBOX_RN_MESSAGING_WS_URL",
+    "DEVBOX_PUBLIC_WS_URL",
+    "DEVBOX_PUBLIC_MESSAGING_WS_URL",
+    "DEVBOX_TEST_API_BASE_URL",
+    "DEVBOX_TEST_WS_URL",
+    "NEXT_PUBLIC_SITE_URL",
+    "NEXTAUTH_URL",
+    "NEXT_PUBLIC_WS_PORT",
+    "NEXT_PUBLIC_WS_URL",
+    "NEXT_PUBLIC_MESSAGING_WS_URL",
+    "MINGLE_MESSAGING_URL",
+    "MINGLE_TEST_API_BASE_URL",
+    "MINGLE_TEST_WS_URL",
+] as Set
+
 def repoDevboxEnvProperties = loadOptionalProperties(new File(rootProject.projectDir, "../../../.devbox.env"))
+def repoLocalEnvProperties = loadOptionalProperties(new File(rootProject.projectDir, "../../../mingle-app/.env.local"))
+def repoRootEnvProperties = loadOptionalProperties(new File(rootProject.projectDir, "../../../.env.local"))
+def mainWorktreeRoot = findMainWorktreeRoot()
+def mainRootEnvProperties = mainWorktreeRoot == null
+    ? new Properties()
+    : loadOptionalProperties(new File(mainWorktreeRoot, ".env.local"))
+def repoDevboxWorktreeProperties = new Properties()
+repoDevboxEnvProperties.each { key, value ->
+    if (worktreePropertyKeys.contains(String.valueOf(key))) {
+        repoDevboxWorktreeProperties.setProperty(String.valueOf(key), String.valueOf(value))
+    }
+}
+def repoRuntimeEnvProperties = new Properties()
+repoRuntimeEnvProperties.putAll(repoLocalEnvProperties)
+repoRuntimeEnvProperties.putAll(repoRootEnvProperties)
+repoRuntimeEnvProperties.putAll(mainRootEnvProperties)
+repoRuntimeEnvProperties.putAll(repoDevboxWorktreeProperties)
 
 def readSigningValue = { List<Properties> propertySources, String envKey, String propertyKey ->
     def value = normalizeRuntimeConfigValue(System.getenv(envKey))
@@ -204,18 +275,22 @@ def quoteBuildConfigString = { String value ->
     return "\"${escaped}\""
 }
 
-def runtimeSiteUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_SITE_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_SITE_URL", "DEVBOX_SITE_URL"], "https://mingle-1-1-4-production.up.railway.app")
-def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_WS_URL", "DEVBOX_RN_WS_URL"], "wss://mingle-1-1-4-production.up.railway.app/stt")
-def legacyProductionSiteUrl = readEnvOrPropertyOrDefault("MINGLE_API_FALLBACK_SITE_URL", repoDevboxEnvProperties, ["RN_WEB_APP_FALLBACK_BASE_URL", "MINGLE_LEGACY_SITE_URL"], "https://mingle-1-1-4-production.up.railway.app")
-def legacyProductionWsUrl = readEnvOrPropertyOrDefault("MINGLE_STT_FALLBACK_WS_URL", repoDevboxEnvProperties, ["RN_DEFAULT_WS_FALLBACK_URL", "MINGLE_LEGACY_WS_URL"], "wss://mingle-1-1-4-production.up.railway.app/stt")
-def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.1.4")
+def runtimeSiteUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_SITE_URL", repoRuntimeEnvProperties, ["NEXT_PUBLIC_SITE_URL", "DEVBOX_SITE_URL"], "https://mingle-2-0-0-production.up.railway.app")
+def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoRuntimeEnvProperties, ["NEXT_PUBLIC_WS_URL", "DEVBOX_RN_WS_URL"], "wss://mingle-2-0-0-production.up.railway.app/stt")
+def legacyProductionSiteUrl = readEnvOrPropertyOrDefault("MINGLE_API_FALLBACK_SITE_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_SITE_URL", "RN_WEB_APP_FALLBACK_BASE_URL", "MINGLE_LEGACY_SITE_URL"], "https://mingle-1-1-4-production.up.railway.app")
+def legacyProductionWsUrl = readEnvOrPropertyOrDefault("MINGLE_STT_FALLBACK_WS_URL", repoRuntimeEnvProperties, ["DEVBOX_RN_FALLBACK_WS_URL", "RN_DEFAULT_WS_FALLBACK_URL", "MINGLE_LEGACY_WS_URL"], "wss://mingle-1-1-4-production.up.railway.app/stt")
+def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoRuntimeEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v2.0.1")
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
-def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoDevboxEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "bottom")
-def runtimeAdBannerHeightPx = readEnvOrPropertyOrDefault("RN_AD_BANNER_HEIGHT_PX", repoDevboxEnvProperties, ["RN_AD_BANNER_HEIGHT_PX", "NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX"], "50")
-def runtimeAdmobAppIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_APP_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_APP_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_APP_ID_ANDROID"], "ca-app-pub-7057041881494735~1471126891")
-def runtimeAdmobBannerUnitIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_BANNER_UNIT_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_BANNER_UNIT_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID"], "ca-app-pub-7057041881494735/6522262692")
-def runtimeQaBridgeEnabled = readEnvOrPropertyOrDefault("RN_QA_BRIDGE_ENABLED", repoDevboxEnvProperties, ["RN_QA_BRIDGE_ENABLED", "NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED"], "0")
+def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoRuntimeEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "bottom")
+def runtimeAdBannerHeightPx = readEnvOrPropertyOrDefault("RN_AD_BANNER_HEIGHT_PX", repoRuntimeEnvProperties, ["RN_AD_BANNER_HEIGHT_PX", "NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX"], "50")
+def runtimeAdmobAppIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_APP_ID_ANDROID", repoRuntimeEnvProperties, ["RN_ADMOB_APP_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_APP_ID_ANDROID"], "ca-app-pub-7057041881494735~1471126891")
+def runtimeAdmobBannerUnitIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_BANNER_UNIT_ID_ANDROID", repoRuntimeEnvProperties, ["RN_ADMOB_BANNER_UNIT_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID"], "ca-app-pub-7057041881494735/6522262692")
+def runtimeQaBridgeEnabled = readEnvOrPropertyOrDefault("RN_QA_BRIDGE_ENABLED", repoRuntimeEnvProperties, ["RN_QA_BRIDGE_ENABLED", "NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED"], "0")
+def runtimeFirebaseProjectId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_PROJECT_ID", repoRuntimeEnvProperties, ["MINGLE_FIREBASE_PROJECT_ID"], "")
+def runtimeFirebaseApplicationId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_APPLICATION_ID", repoRuntimeEnvProperties, ["MINGLE_FIREBASE_APPLICATION_ID"], "")
+def runtimeFirebaseApiKey = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_API_KEY", repoRuntimeEnvProperties, ["MINGLE_FIREBASE_API_KEY"], "")
+def runtimeFirebaseMessagingSenderId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_MESSAGING_SENDER_ID", repoRuntimeEnvProperties, ["MINGLE_FIREBASE_MESSAGING_SENDER_ID"], "")
 if (!(runtimeAdmobAppIdAndroid ==~ /^ca-app-pub-\d+~\d+$/)) {
     throw new GradleException("Invalid RN_ADMOB_APP_ID_ANDROID resolved for Android runtime: ${runtimeAdmobAppIdAndroid}")
 }
@@ -298,6 +373,10 @@ android {
         buildConfigField "String", "MINGLE_AD_BANNER_HEIGHT_PX", quoteBuildConfigString(runtimeAdBannerHeightPx)
         buildConfigField "String", "MINGLE_AD_BANNER_UNIT_ID_ANDROID", quoteBuildConfigString(runtimeAdmobBannerUnitIdAndroid)
         buildConfigField "String", "MINGLE_QA_BRIDGE_ENABLED", quoteBuildConfigString(runtimeQaBridgeEnabled)
+        buildConfigField "String", "MINGLE_FIREBASE_PROJECT_ID", quoteBuildConfigString(runtimeFirebaseProjectId)
+        buildConfigField "String", "MINGLE_FIREBASE_APPLICATION_ID", quoteBuildConfigString(runtimeFirebaseApplicationId)
+        buildConfigField "String", "MINGLE_FIREBASE_API_KEY", quoteBuildConfigString(runtimeFirebaseApiKey)
+        buildConfigField "String", "MINGLE_FIREBASE_MESSAGING_SENDER_ID", quoteBuildConfigString(runtimeFirebaseMessagingSenderId)
     }
     signingConfigs {
         debug {
@@ -332,6 +411,8 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

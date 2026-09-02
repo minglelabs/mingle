@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockUserFindUnique,
   mockUserCreate,
+  mockEnsureSignupWelcomeOnboarding,
 } = vi.hoisted(() => ({
   mockUserFindUnique: vi.fn(),
   mockUserCreate: vi.fn(),
+  mockEnsureSignupWelcomeOnboarding: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -15,6 +17,10 @@ vi.mock("@/lib/prisma", () => ({
       create: mockUserCreate,
     },
   },
+}));
+
+vi.mock("@/lib/signup-welcome-onboarding", () => ({
+  ensureSignupWelcomeOnboarding: mockEnsureSignupWelcomeOnboarding,
 }));
 
 import { POST } from "@/app/api/auth/signup/route";
@@ -34,6 +40,11 @@ function makeInvalidJsonRequest(): Request {
     body: "{",
   });
 }
+
+const validSignupDetails = {
+  primaryLanguages: ["ko"],
+  birthDate: "2000-01-01",
+};
 
 describe("/api/auth/signup route", () => {
   beforeEach(() => {
@@ -97,6 +108,7 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "Member",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
@@ -118,6 +130,7 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "  Member Name  ",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
@@ -134,17 +147,26 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "  New Member  ",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
     expect(response.status).toBe(201);
     expect(json).toEqual({ ok: true, created: true });
+    expect(mockEnsureSignupWelcomeOnboarding).toHaveBeenCalledWith({
+      userId: "user_new",
+      locale: "ko",
+    });
     expect(mockUserCreate).toHaveBeenCalledTimes(1);
     const createCall = mockUserCreate.mock.calls[0]?.[0] as {
       data: {
         email: string;
         name: string;
         passwordHash: string;
+        nationality: string;
+        primaryLanguages: string[];
+        defaultConversationLanguages: string[];
+        birthDate: Date;
         firstSeenAt: Date;
         lastSeenAt: Date;
       };
@@ -152,8 +174,32 @@ describe("/api/auth/signup route", () => {
     expect(createCall.data.email).toBe("member@example.com");
     expect(createCall.data.name).toBe("New Member");
     expect(createCall.data.passwordHash.startsWith("pbkdf2_sha256$")).toBe(true);
+    expect(createCall.data.nationality).toBe("ko");
+    expect(createCall.data.primaryLanguages).toEqual(["ko"]);
+    expect(createCall.data.defaultConversationLanguages).toEqual(["ko", "en", "ja"]);
+    expect((createCall.data as { defaultDisplayLanguage?: string | null }).defaultDisplayLanguage).toBe("ko");
+    expect(createCall.data.birthDate).toEqual(new Date("2000-01-01T00:00:00.000Z"));
     expect(createCall.data.firstSeenAt).toBeInstanceOf(Date);
     expect(createCall.data.lastSeenAt).toBeInstanceOf(Date);
+  });
+
+  it("seeds defaultConversationLanguages from a non-default primary language (e.g. Portuguese)", async () => {
+    mockUserFindUnique.mockResolvedValue(null);
+    mockUserCreate.mockResolvedValue({ id: "user_pt" });
+
+    await POST(makeJsonRequest({
+      email: "pessoa@example.com",
+      name: "Pessoa",
+      password: "password123",
+      primaryLanguages: ["pt"],
+      birthDate: "2000-01-01",
+    }));
+
+    const createCall = mockUserCreate.mock.calls[0]?.[0] as {
+      data: { defaultConversationLanguages: string[] };
+    };
+    expect(createCall.data.defaultConversationLanguages).toContain("pt");
+    expect(createCall.data.defaultConversationLanguages[0]).toBe("pt");
   });
 
   it("returns 409 when create hits email unique constraint race", async () => {
@@ -164,6 +210,7 @@ describe("/api/auth/signup route", () => {
       email: "member@example.com",
       name: "Member",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 

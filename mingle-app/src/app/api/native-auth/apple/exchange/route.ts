@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createNativeAuthBridgeToken, resolveNativeAuthRequestId, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultHandle } from "@/lib/handles";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 export const runtime = "nodejs";
 
@@ -260,20 +262,27 @@ async function upsertNativeAppleUser(args: {
   appleSubject: string;
   email: string;
   name: string;
-}) {
+}): Promise<{
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+  created: boolean;
+}> {
   const now = new Date();
   const externalUserId = `apple:${args.appleSubject}`.slice(0, 128);
-  const displayName = args.name || "Mingle User";
+  const name = args.name || "Mingle User";
 
   const existingByExternal = await prisma.user.findUnique({
     where: { externalUserId },
     select: { id: true, email: true, name: true },
   });
   if (existingByExternal) {
-    return prisma.user.update({
+    const user = await prisma.user.update({
       where: { id: existingByExternal.id },
       data: {
-        name: displayName,
+        name: existingByExternal.name ? undefined : name,
         email: args.email || undefined,
         lastSeenAt: now,
       },
@@ -283,18 +292,19 @@ async function upsertNativeAppleUser(args: {
         email: true,
       },
     });
+    return { user, created: false };
   }
 
   if (args.email) {
     const existingByEmail = await prisma.user.findUnique({
       where: { email: args.email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (existingByEmail) {
-      return prisma.user.update({
+      const user = await prisma.user.update({
         where: { id: existingByEmail.id },
         data: {
-          name: displayName,
+          name: existingByEmail.name ? undefined : name,
           externalUserId,
           lastSeenAt: now,
         },
@@ -304,23 +314,29 @@ async function upsertNativeAppleUser(args: {
           email: true,
         },
       });
+      return { user, created: false };
     }
   }
 
-  return prisma.user.create({
-    data: {
-      name: displayName,
-      email: args.email || undefined,
-      externalUserId,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  const user = await createWithDefaultHandle(
+    { name: name, email: args.email, id: externalUserId },
+    (handle) => prisma.user.create({
+      data: {
+        name: name,
+        handle,
+        email: args.email || undefined,
+        externalUserId,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    }),
+  );
+  return { user, created: true };
 }
 
 export async function POST(request: NextRequest) {
@@ -382,11 +398,22 @@ export async function POST(request: NextRequest) {
     email: string | null;
   };
   try {
-    user = await upsertNativeAppleUser({
+    const upserted = await upsertNativeAppleUser({
       appleSubject: tokenPayload.sub,
       email,
       name,
     });
+    user = upserted.user;
+    if (upserted.created) {
+      try {
+        await ensureSignupWelcomeOnboarding({
+          userId: user.id,
+          locale: "en",
+        });
+      } catch (error) {
+        console.error("[signup-welcome] native Apple onboarding failed", error);
+      }
+    }
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
     console.error(`[native-auth/apple/exchange] user upsert failed reason=${reason}`);

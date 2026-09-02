@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
+  buildConversationHistoryState,
   buildConversationRequestIdentityHeaders,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
+  CONVERSATION_HISTORY_ROUTE_STATE_KEY,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   createMutationVersionTracker,
@@ -16,6 +18,10 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveMountedConversationIds,
+  resolveConversationHistoryRoute,
+  resolveConversationHistoryNavigationDirection,
+  readConversationHistoryRouteFromState,
   resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
   tryAcquireConversationCreateLock,
@@ -32,6 +38,9 @@ function buildConversationSummary(
     title: overrides.title || "Conversation (1)",
     status: overrides.status || "paused",
     sessionKey: overrides.sessionKey || "session-1",
+    isMultiMember: overrides.isMultiMember ?? false,
+    isBlockedCounterpart: overrides.isBlockedCounterpart ?? false,
+    otherMembers: overrides.otherMembers ?? [],
     selectedLanguages: overrides.selectedLanguages || ["en", "ko"],
     latestMessagePreview: Object.prototype.hasOwnProperty.call(overrides, "latestMessagePreview")
       ? overrides.latestMessagePreview
@@ -125,6 +134,37 @@ describe("conversation-list logic", () => {
     const closed = mergeSearchOverlayHistoryState(opened, false);
     expect(closed).toEqual({ foo: "bar" });
     expect(isSearchOverlayHistoryOpen(closed)).toBe(false);
+  });
+
+  it("prefers the committed history entry over a stale popstate route", () => {
+    const roomState = buildConversationHistoryState("conv-1", {
+      nativeIndex: 2,
+    });
+    const listState = buildConversationHistoryState(null, {
+      nativeIndex: 1,
+    });
+
+    expect(resolveConversationHistoryRoute(listState, roomState, null)).toBe("conv-1");
+    expect(resolveConversationHistoryRoute(null, listState, "conv-1")).toBeNull();
+    expect(readConversationHistoryRouteFromState(roomState)).toBe("conv-1");
+    expect(readConversationHistoryRouteFromState(listState)).toBeNull();
+  });
+
+  it("classifies room history transitions before React state catches up", () => {
+    expect(resolveConversationHistoryNavigationDirection("conv-1", null)).toBe("back");
+    expect(resolveConversationHistoryNavigationDirection(null, "conv-1")).toBe("forward");
+    expect(resolveConversationHistoryNavigationDirection(null, null)).toBe("unknown");
+    expect(resolveConversationHistoryNavigationDirection("conv-1", "conv-1")).toBe("unknown");
+  });
+
+  it("preserves unrelated history state while removing legacy room metadata from list entries", () => {
+    expect(buildConversationHistoryState(null, {
+      keep: true,
+      conversationId: "legacy-room",
+    })).toEqual({
+      keep: true,
+      [CONVERSATION_HISTORY_ROUTE_STATE_KEY]: null,
+    });
   });
 
   it("orders conversations by latest finalized message time before fallback timestamps", () => {
@@ -305,6 +345,45 @@ describe("conversation-list logic", () => {
       deletingActive,
       live,
     ], new Set(["conv-deleting"]))).toBe(live);
+  });
+
+  it("keeps a hidden live room mounted after the visible room closes", () => {
+    expect(resolveMountedConversationIds(null, "conv-live")).toEqual(["conv-live"]);
+    expect(resolveMountedConversationIds("conv-live", "conv-live")).toEqual(["conv-live"]);
+    expect(resolveMountedConversationIds("conv-visible", "conv-live")).toEqual([
+      "conv-visible",
+      "conv-live",
+    ]);
+  });
+
+  it("restores the cached native STT conversation instead of the first active room", () => {
+    const firstActive = buildConversationSummary({
+      id: "conv-first",
+      status: "active",
+      pausedAt: null,
+    });
+    const cachedActive = buildConversationSummary({
+      id: "conv-cached",
+      status: "active",
+      pausedAt: null,
+    });
+
+    expect(findNativeSttRestoreConversation([
+      firstActive,
+      cachedActive,
+    ], new Set(), "conv-cached")).toBe(cachedActive);
+  });
+
+  it("does not restore an unrelated active room when the cached owner is missing", () => {
+    const active = buildConversationSummary({
+      id: "conv-active",
+      status: "active",
+      pausedAt: null,
+    });
+
+    expect(findNativeSttRestoreConversation([
+      active,
+    ], new Set(), "conv-missing")).toBeNull();
   });
 
   it("keeps row actions touch-safe and avatar long-press safe", () => {

@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
 import { hashPassword, isValidEmail, normalizeEmail, validatePassword } from "@/lib/email-password-auth";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultHandle } from "@/lib/handles";
+import {
+  isOldEnoughForSignup,
+  parseBirthDate,
+} from "@/lib/birth-date";
+import {
+  MAX_STT_LANGUAGE_SELECTION,
+  deriveDefaultConversationLanguages,
+  sanitizeSttLanguageSelection,
+} from "@/lib/stt-languages";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 type SignupPayload = {
   email?: unknown;
   name?: unknown;
   password?: unknown;
+  primaryLanguages?: unknown;
+  birthDate?: unknown;
 };
 
 function normalizeName(rawValue: unknown): string {
@@ -42,6 +55,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_password" }, { status: 400 });
   }
 
+  let primaryLanguages = sanitizeSttLanguageSelection(payload?.primaryLanguages);
+  if (primaryLanguages.length === 0) {
+    primaryLanguages = ["en"];
+  }
+
+  let birthDate: Date | null = null;
+  if (payload?.birthDate !== undefined && payload?.birthDate !== null) {
+    birthDate = parseBirthDate(payload.birthDate);
+    if (!birthDate) {
+      return NextResponse.json({ error: "invalid_birth_date" }, { status: 400 });
+    }
+    const birthDateParts = {
+      year: birthDate.getUTCFullYear(),
+      month: birthDate.getUTCMonth() + 1,
+      day: birthDate.getUTCDate(),
+    };
+    if (!isOldEnoughForSignup(birthDateParts)) {
+      return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+    }
+  } else {
+    birthDate = parseBirthDate("2000-01-01");
+  }
+
   const passwordHash = hashPassword(password);
   const now = new Date();
   const existing = await prisma.user.findUnique({
@@ -57,15 +93,31 @@ export async function POST(request: Request) {
   }
 
   try {
-    await prisma.user.create({
+    const createdUser = await createWithDefaultHandle({ name, email }, (handle) => prisma.user.create({
       data: {
         email,
         name,
+        handle,
         passwordHash,
+        nationality: primaryLanguages[0] ?? null,
+        primaryLanguages,
+        defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),
+        defaultDisplayLanguage: primaryLanguages[0] ?? null,
+        birthDate,
         firstSeenAt: now,
         lastSeenAt: now,
       },
-    });
+      select: { id: true },
+    }));
+
+    try {
+      await ensureSignupWelcomeOnboarding({
+        userId: createdUser.id,
+        locale: primaryLanguages[0] ?? "en",
+      });
+    } catch (error) {
+      console.error("[signup-welcome] email signup onboarding failed", error);
+    }
   } catch (error: unknown) {
     if (isPrismaUniqueConstraintError(error)) {
       return NextResponse.json({ error: "email_already_registered" }, { status: 409 });

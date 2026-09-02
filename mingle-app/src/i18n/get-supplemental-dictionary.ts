@@ -7,12 +7,16 @@ import { getConversationCopy } from "@/i18n/conversations";
 import { getVersionPolicyCopy } from "@/i18n/get-version-policy-copy";
 import { resolveLivePhoneDemoComposerCopy } from "@/i18n/live-phone-demo-composer-copy";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
-import type { AppDictionary } from "@/i18n/types";
+import { getPrimaryUiCopy } from "@/i18n/primary-ui-copy";
+import type { AppDictionary, DeepPartial } from "@/i18n/types";
 
 export function getSupplementalDictionary(
   locale: AppLocale,
-): Pick<AppDictionary, "conversations" | "livePhoneDemo" | "versionPolicy"> {
+): DeepPartial<AppDictionary> {
+  const primaryUiCopy = getPrimaryUiCopy(locale);
+
   return {
+    connect: primaryUiCopy.connect,
     conversations: getConversationCopy(locale),
     livePhoneDemo: {
       composer: resolveLivePhoneDemoComposerCopy(locale),
@@ -22,6 +26,7 @@ export function getSupplementalDictionary(
       nativeAppUpdate: resolveNativeAppUpdateCopy(locale),
       silenceSliderUpgrade: getSilenceSliderUpgradeCopy(locale),
     },
+    profile: primaryUiCopy.profile,
     versionPolicy: getVersionPolicyCopy(locale),
   };
 }

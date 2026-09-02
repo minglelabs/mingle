@@ -27,6 +27,8 @@ describe('RN WebView layout helpers', () => {
     expect(isLiveDemoPathname('/ko')).toBe(true)
     expect(isLiveDemoPathname('/en/translator')).toBe(true)
     expect(isLiveDemoPathname('/ja/conversations')).toBe(true)
+    expect(isLiveDemoPathname('/ko/mypage')).toBe(true)
+    expect(isLiveDemoPathname('/ko/mypage/share')).toBe(true)
     expect(isLiveDemoPathname('/pl')).toBe(true)
     expect(isLiveDemoPathname('/he/translator')).toBe(true)
     expect(isLiveDemoPathname('/ko/account')).toBe(false)

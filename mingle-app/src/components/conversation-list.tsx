@@ -2,10 +2,17 @@
 
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
-import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
+import NotificationPanel from "@/components/notification-panel";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
+import SlideSurface from "@/components/slide-surface";
+import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   forwardRef,
   lazy,
@@ -20,26 +27,58 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Trash2, UserRound } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
 import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
+import { resolveLivePhoneDemoConversationLeaveCopy } from "@/components/LivePhoneDemo/live-phone-demo.leave-copy";
 import {
+  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
+  LS_KEY_PENDING_BIRTH_DATE,
+  LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+  LS_KEY_PENDING_DISCOVERY_SOURCE,
+  LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
+  DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
+  clearPendingBirthDate,
+  clearPendingDiscoverySource,
   normalizeLivePhoneDemoAdBannerPosition,
+  readPendingBirthDate,
+  readPendingDiscoverySource,
+  readPersistedBooleanPreference,
+  readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import LanguageOnboardingModal, {
+  type LanguageOnboardingConfirmPayload,
+} from "@/components/LivePhoneDemo/LanguageOnboardingModal";
 import {
+  resolveLanguageSelectorOwnSelectedLanguages,
+  resolveLanguageSelectorUnionAfterOwnLanguagesChange,
+} from "@/components/LivePhoneDemo/language-selector.logic";
+import {
+  formatBirthDate,
+} from "@/lib/birth-date";
+import {
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
+  shouldAutoOpenLanguageOnboarding,
+} from "@/components/LivePhoneDemo/language-onboarding.logic";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
-  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
+  sanitizeSttLanguageUnion,
 } from "@/lib/stt-languages";
 import {
   NATIVE_UI_EVENT,
@@ -48,6 +87,7 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import {
   buildConversationRequestIdentityHeaders,
+  buildConversationHistoryState,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
@@ -63,7 +103,12 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveMountedConversationIds,
   resolveConversationDisplayMessageCount,
+  resolveConversationHistoryNavigationDirection,
+  resolveConversationHistoryRoute,
+  readConversationHistoryRouteFromState,
+  type ConversationHistoryNavigationDirection,
   type TooltipPos,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -73,19 +118,45 @@ import {
   isAbortLikeMutationError,
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
+import NativePushRegistration from "@/components/native-push-registration";
+import {
+  readConversationListCache,
+  readConversationListMemoryCache,
+  resolveConversationListInitialState,
+  writeConversationListCache,
+  type CachedConversationLocalStats,
+  type ConversationListCacheIdentity,
+} from "@/components/conversation-list-cache";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
+  postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import {
+  postNativeBannerZone,
+  resolveConversationListNativeBannerZone,
+  shouldReassertNativeAuthBannerZone,
+} from "@/lib/native-banner-zone";
 import {
   readNativeQaBridgeAuthority,
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
+import {
+  consumeSlideSurfaceHistoryForScope,
+  pushSlideSurfaceHistory,
+  readSlideSurfaceHistory,
+  readSlideSurfaceHistoryForScope,
+  replaceSlideSurfaceHistory,
+} from "@/lib/slide-surface-history";
+import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
@@ -93,6 +164,9 @@ const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
+const CONVERSATION_SURFACE_SCOPE = "conversation";
+const CONVERSATION_NOTIFICATIONS_SURFACE_ID = "notifications";
+const CONVERSATION_PROFILE_SURFACE_ID = "profile";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
@@ -100,10 +174,6 @@ const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
-const CONVERSATION_OVERLAY_TRANSITION = {
-  duration: 0.28,
-  ease: [0.22, 1, 0.36, 1] as const,
-};
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
@@ -112,6 +182,7 @@ const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
+const CONVERSATION_CREATE_BUTTON_HEIGHT_PX = 72;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -119,9 +190,16 @@ let recentSearchesSnapshotRaw = "__initial__";
 type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
-type ConversationOverlayTransitionState = {
-  enterMode: ConversationOverlayEnterMode;
-  exitMode: ConversationOverlayExitMode;
+type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
+type ConversationHistoryPopStateTarget = {
+  conversationId: string | null;
+};
+type ConversationHistoryPopStateTransition = ConversationHistoryPopStateTarget & {
+  direction: ConversationHistoryNavigationDirection;
+};
+type PendingDirectConversationNavigation = {
+  token: number;
+  profileUserId: string;
 };
 
 type ConversationListWindow = Window & {
@@ -151,10 +229,7 @@ type ConversationListQaEnsureRoomResult = {
   action: "active" | "opened-existing" | "created";
 };
 
-type ConversationLocalStats = {
-  usageSec: number;
-  messageCount: number;
-};
+type ConversationLocalStats = CachedConversationLocalStats;
 
 declare global {
   interface Window {
@@ -165,31 +240,6 @@ declare global {
   }
 }
 
-const conversationOverlayVariants: Variants = {
-  initial: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.enterMode === "animate"
-      ? { x: "100%" }
-      : { x: "0%" }
-  ),
-  active: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "0%",
-    transition: transitionState.enterMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  retained: (transitionState: ConversationOverlayTransitionState) => ({
-    x: "100%",
-    transition: transitionState.exitMode === "animate"
-      ? CONVERSATION_OVERLAY_TRANSITION
-      : { duration: 0 },
-  }),
-  exit: (transitionState: ConversationOverlayTransitionState) => (
-    transitionState.exitMode === "animate"
-      ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
-      : { x: "0%", transition: { duration: 0 } }
-  ),
-};
-
 interface ConversationItem {
   id: string;
   title: string;
@@ -198,10 +248,22 @@ interface ConversationItem {
   timeLabel: string;
   statsLabel: string;
   statsFullLabel: string;
+  unreadMessageCount: number;
+  unreadMessageLabel: string;
   status: "active" | "paused";
   statusLabel: string;
   avatarSrc: string;
   avatarAlt: string;
+  // Real counterpart photo(s) for the room, in join order. Empty for solo
+  // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
+  // (the generated diarization avatar) instead.
+  otherMembers: ConversationChannelOtherMember[];
+  isBlockedCounterpart: boolean;
+  // Whether the delete-vs-leave row menu action applies: a solo room keeps
+  // "delete" (deletes for the owner, the only real member), a 2+-member
+  // room switches to "leave" (removes just the caller's own membership, see
+  // leaveConversationChannel).
+  isMultiMember: boolean;
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -210,7 +272,8 @@ interface ConversationItem {
   selectedLanguages: string[];
   speechLanguages: string[];
   translationLanguagesLinked: boolean;
-  languageFlags: string;
+  languageCodes: string[];
+  isInterimPreview: boolean;
 }
 
 type ConversationRowActionMenuState = {
@@ -356,6 +419,89 @@ function isNativeAppRuntime(): boolean {
     && typeof window.ReactNativeWebView?.postMessage === "function";
 }
 
+function readPendingDefaultConversationLanguages(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES);
+    if (!rawValue) return [];
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue));
+  } catch {
+    return [];
+  }
+}
+
+function readPendingPrimaryLanguages(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_PENDING_PRIMARY_LANGUAGES);
+    if (!rawValue) return [];
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue));
+  } catch {
+    return [];
+  }
+}
+
+type ProfileLanguagePreferencesPayload = {
+  primaryLanguages?: unknown;
+  defaultConversationLanguages?: unknown;
+};
+
+type ResolvedOnboardingLanguagePreferences = {
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
+  patch: {
+    primaryLanguages?: string[];
+    defaultConversationLanguages?: string[];
+  };
+};
+
+function resolveOnboardingLanguagePreferences(
+  profile: ProfileLanguagePreferencesPayload,
+  pendingPrimaryLanguages: readonly string[],
+  pendingDefaultConversationLanguages: readonly string[],
+): ResolvedOnboardingLanguagePreferences {
+  const serverPrimaryLanguages = sanitizeSttLanguageSelection(profile.primaryLanguages);
+  const serverDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    profile.defaultConversationLanguages,
+  );
+  const fallbackPrimaryLanguages = sanitizeSttLanguageSelection(pendingPrimaryLanguages);
+  const fallbackDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    pendingDefaultConversationLanguages,
+  );
+  const primaryLanguages = serverPrimaryLanguages.length > 0
+    ? serverPrimaryLanguages
+    : fallbackPrimaryLanguages;
+  const defaultConversationLanguages = serverDefaultConversationLanguages.length > 0
+    ? serverDefaultConversationLanguages
+    : fallbackDefaultConversationLanguages;
+
+  return {
+    primaryLanguages,
+    defaultConversationLanguages,
+    patch: {
+      ...(serverPrimaryLanguages.length === 0 && primaryLanguages.length > 0
+        ? { primaryLanguages }
+        : {}),
+      ...(serverDefaultConversationLanguages.length === 0 && defaultConversationLanguages.length > 0
+        ? { defaultConversationLanguages }
+        : {}),
+    },
+  };
+}
+
+function clearPendingLanguagePreferences(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES);
+    window.localStorage.removeItem(LS_KEY_PENDING_PRIMARY_LANGUAGES);
+  } catch {
+    // Keep the marker when storage is temporarily unavailable so the next authenticated launch retries.
+  }
+}
+
 function shouldSkipCreateConversationMicWarmup(): boolean {
   if (typeof window === "undefined") return false;
   if (!isNativeAppRuntime()) return false;
@@ -437,10 +583,6 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
     } catch {
       translationLanguagesLinked = true;
     }
-    if (translationLanguagesLinked) {
-      selectedLanguages = [...speechLanguages];
-    }
-
     const hasUtterances = typeof utterancesRaw === "string" && utterancesRaw.trim().length > 0;
     const hasUsage = typeof usageRaw === "string" && usageRaw.trim().length > 0 && usageRaw.trim() !== "0";
     const hasSessionKey = sessionKey.length > 0;
@@ -599,9 +741,34 @@ function buildConversationOverlayUrl(conversationId: string): string | null {
   try {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
+    // A tab-root marker disables native cross-tab gestures. Remove it as soon
+    // as the user explicitly enters a conversation so room back/forward
+    // gestures remain available within the conversations tab.
+    nextUrl.searchParams.delete(NATIVE_TAB_ROOT_QUERY_KEY);
+    nextUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
     return nextUrl.toString();
   } catch {
     return null;
+  }
+}
+
+function clearNativeTabRootFromCurrentHistoryEntry(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) !== "1") return;
+
+    // The tab-root marker is only a boundary for the tab switch itself. Once
+    // the user explicitly opens a room, convert the current list entry back
+    // into an ordinary in-tab entry so room -> list -> room forward navigation
+    // remains available.
+    currentUrl.searchParams.delete(NATIVE_TAB_ROOT_QUERY_KEY);
+    currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
+    window.history.replaceState(window.history.state, "", currentUrl.toString());
+    notifyLocationSearchSync();
+  } catch {
+    // Ignore history synchronization failures in restricted environments.
   }
 }
 
@@ -627,17 +794,80 @@ function notifyLocationSearchSync(): void {
   }
 }
 
-function replaceConversationOverlayUrl(conversationId: string | null): void {
+function summarizeConversationHistoryDebugState(state: unknown): Record<string, unknown> {
+  if (state === null) return { kind: "null" };
+  if (typeof state === "undefined") return { kind: "undefined" };
+  if (typeof state !== "object" || Array.isArray(state)) {
+    return { kind: typeof state };
+  }
+
+  const record = state as Record<string, unknown>;
+  const nativeNavigationIndex = record.__MINGLE_NATIVE_NAV_INDEX__;
+  return {
+    kind: "object",
+    conversationId: typeof record.conversationId === "string" ? record.conversationId : null,
+    conversationRoute: readConversationHistoryRouteFromState(state),
+    nativeNavigationIndex:
+      typeof nativeNavigationIndex === "number" && Number.isFinite(nativeNavigationIndex)
+        ? nativeNavigationIndex
+        : null,
+    searchOverlayOpen: record.__mingleConversationSearchOpen === true,
+  };
+}
+
+function postConversationHistoryDebug(
+  event: string,
+  details: Record<string, unknown> = {},
+): void {
+  if (typeof window === "undefined") return;
+  if (!readNativeQaBridgeAuthority(window)) return;
+
+  const payload = {
+    event,
+    timestamp: Date.now(),
+    url: window.location.href,
+    historyLength: window.history.length,
+    historyState: summarizeConversationHistoryDebugState(window.history.state),
+    ...details,
+  };
+
+  try {
+    console.warn("[MingleHistoryDebug]", payload);
+    window.ReactNativeWebView?.postMessage(JSON.stringify({
+      type: "native_history_debug",
+      payload,
+    }));
+  } catch {
+    // Diagnostic logging must never affect navigation.
+  }
+}
+
+function replaceConversationOverlayUrl(
+  conversationId: string | null,
+  reason = "unspecified",
+): void {
   if (typeof window === "undefined") return;
 
   try {
+    const previousUrl = window.location.href;
+    const previousState = window.history.state;
     const nextUrl = new URL(window.location.href);
     if (conversationId) {
       nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
     } else {
       nextUrl.searchParams.delete(CONVERSATION_QUERY_KEY);
     }
-    window.history.replaceState(window.history.state, "", nextUrl.toString());
+    window.history.replaceState(
+      buildConversationHistoryState(conversationId, window.history.state),
+      "",
+      nextUrl.toString(),
+    );
+    postConversationHistoryDebug("replace-conversation-overlay-url", {
+      reason,
+      requestedConversationId: conversationId,
+      previousUrl,
+      previousState: summarizeConversationHistoryDebugState(previousState),
+    });
     notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
@@ -723,10 +953,23 @@ function mapConversationSummaryToItem(
   labels: {
     activeStatusLabel: string;
     pausedStatusLabel: string;
+    unreadMessagesLabel?: string;
   },
   localStats: ConversationLocalStats = EMPTY_CONVERSATION_LOCAL_STATS,
+  interimPreview?: LatestUtterancePayload,
 ): ConversationItem {
   const title = conversation.title;
+  const normalizedInterimPreview = interimPreview?.preview.trim() || "";
+  const latestMessagePreview = normalizedInterimPreview || conversation.latestMessagePreview || "";
+  const latestMessageAt = interimPreview?.createdAt.trim() || conversation.latestMessageAt || conversation.createdAt;
+  const latestSpeaker = interimPreview?.speaker?.trim() || conversation.latestSpeaker || null;
+  const latestSpeakerAvatarSeed = interimPreview?.speakerAvatarSeed?.trim()
+    || conversation.latestSpeakerAvatarSeed
+    || null;
+  const latestSpeakerAvatarIndex = typeof interimPreview?.speakerAvatarIndex === "number"
+    && Number.isInteger(interimPreview.speakerAvatarIndex)
+    ? interimPreview.speakerAvatarIndex
+    : conversation.latestSpeakerAvatarIndex ?? null;
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
     : "";
@@ -734,7 +977,7 @@ function mapConversationSummaryToItem(
   const messageCountLabel = formatLivePhoneDemoMessageCount(
     resolveConversationDisplayMessageCount(conversation, localStats.messageCount),
   );
-  const selectedLanguages = sanitizeSttLanguageSelection(
+  const selectedLanguages = sanitizeSttLanguageUnion(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
   );
@@ -743,37 +986,45 @@ function mapConversationSummaryToItem(
     selectedLanguages,
   );
   const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
-  const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
-  const languageFlags = effectiveSelectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
+  // A room union may contain more than one member's five-language personal
+  // limit. Keep the list-row preview compact; the room picker and translation
+  // pipeline still receive the complete union.
+  const languageCodes = selectedLanguages.slice(0, 5);
   const avatar = getSpeakerAvatar(
-    conversation.latestSpeaker || conversation.sessionKey,
-    conversation.latestSpeakerAvatarSeed || conversation.id,
-    conversation.latestSpeakerAvatarIndex ?? undefined,
+    latestSpeaker || conversation.sessionKey,
+    latestSpeakerAvatarSeed || conversation.id,
+    latestSpeakerAvatarIndex ?? undefined,
   );
 
   return {
     id: conversation.id,
     title,
-    preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
-    previewFullText: conversation.latestMessagePreview || "",
+    preview: truncateConversationPreview(latestMessagePreview),
+    previewFullText: latestMessagePreview,
     timeLabel: timeLabelsReady
-      ? formatConversationTime(conversation.latestMessageAt || conversation.createdAt, locale)
+      ? formatConversationTime(latestMessageAt, locale)
       : "",
     statsLabel: `${usageDurationLabel} · ${messageCountLabel}`,
     statsFullLabel: `STT ${usageDurationLabel}, ${messageCountLabel}`,
+    unreadMessageCount: Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
+    unreadMessageLabel: labels.unreadMessagesLabel || "Unread messages",
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
+    otherMembers: conversation.otherMembers,
+    isBlockedCounterpart: conversation.isBlockedCounterpart,
+    isMultiMember: conversation.isMultiMember,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     pausedAt: conversation.pausedAt,
-    selectedLanguages: effectiveSelectedLanguages,
+    selectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
-    languageFlags,
+    languageCodes,
+    isInterimPreview: Boolean(normalizedInterimPreview),
   };
 }
 
@@ -936,6 +1187,14 @@ function readCachedNativeSttStatus(): string | null {
   return typeof cached === "string" ? cached.trim().toLowerCase() : null;
 }
 
+function readCachedNativeSttConversationId(): string | null {
+  if (typeof window === "undefined") return null;
+  const cached = (window as Window & {
+    __MINGLE_LAST_NATIVE_STT_CONVERSATION_ID?: unknown;
+  }).__MINGLE_LAST_NATIVE_STT_CONVERSATION_ID;
+  return typeof cached === "string" && cached.trim() ? cached.trim() : null;
+}
+
 function isNativeSttStatusLive(status: string | null): boolean {
   return status === "running"
     || status === "ready"
@@ -962,6 +1221,132 @@ function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
     left: rect.left,
     width: rect.width,
   }, window.innerHeight);
+}
+
+// Corner-anchored overlap positions for a multi-member room's collage,
+// capped at 4 visible photos — same "up to 4, overlapping" idea as
+// LanguageRowAvatarStack (LivePhoneDemo/language-row-avatar-stack.tsx), but
+// arranged in a fixed square so the room avatar keeps the exact footprint a
+// solo room's generated avatar already occupies in the row, instead of
+// growing wider the more members a room has.
+const CONVERSATION_AVATAR_CLUSTER_LAYOUT: Record<number, Array<{ top: string; left: string }>> = {
+  2: [
+    { top: "0%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+  3: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "19%" },
+  ],
+  4: [
+    { top: "0%", left: "0%" },
+    { top: "0%", left: "38%" },
+    { top: "38%", left: "0%" },
+    { top: "38%", left: "38%" },
+  ],
+};
+const CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX = 34;
+
+function ConversationRoomAvatar({ item }: { item: ConversationItem }) {
+  const otherMembers = item.otherMembers;
+
+  // Solo room (no other real member yet, or a legacy/demo session): keep the
+  // existing generated per-speaker-turn avatar.
+  if (otherMembers.length === 0) {
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={item.avatarSrc}
+          alt={item.avatarAlt}
+          className="h-14 w-14 rounded-full bg-white object-cover"
+          width={56}
+          height={56}
+          draggable={false}
+          style={CONVERSATION_AVATAR_IMAGE_STYLE}
+          unoptimized
+        />
+      </div>
+    );
+  }
+
+  // Exactly one other real member: show their real photo, same framing as
+  // the generated-avatar case (and the same 56px photo pattern used for a
+  // room member row in conversation-participants-panel.tsx).
+  if (otherMembers.length === 1) {
+    const member = otherMembers[0];
+    return (
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+          {member.image && !item.isBlockedCounterpart ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={member.image}
+              alt={item.title}
+              width={56}
+              height={56}
+              className="h-full w-full object-cover"
+              style={{
+                transform: buildProfileImageTransform(56, {
+                  scale: member.imageCropScale,
+                  x: member.imageCropX,
+                  y: member.imageCropY,
+                }),
+              }}
+            />
+          ) : (
+            <UserRound size={28} className="text-gray-400" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2+ other members: KakaoTalk-style overlapping photo cluster, capped at 4
+  // slots. A 5th+ member simply isn't shown — matches the "up to 4" spec
+  // without adding a separate overflow affordance the request didn't ask for.
+  const clusterMembers = otherMembers.slice(0, 4);
+  const layout = CONVERSATION_AVATAR_CLUSTER_LAYOUT[clusterMembers.length]
+    ?? CONVERSATION_AVATAR_CLUSTER_LAYOUT[4];
+
+  return (
+    <div className="relative h-14 w-14 shrink-0" title={item.title}>
+      {clusterMembers.map((member, index) => {
+        const position = layout[index] ?? layout[layout.length - 1];
+        return (
+          <span
+            key={member.userId}
+            className="absolute flex items-center justify-center overflow-hidden rounded-full border-2 border-white bg-gray-100"
+            style={{
+              top: position.top,
+              left: position.left,
+              width: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              height: CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX,
+              zIndex: index + 1,
+            }}
+          >
+            {member.image && !item.isBlockedCounterpart ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.image}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{
+                  transform: buildProfileImageTransform(CONVERSATION_AVATAR_CLUSTER_ITEM_SIZE_PX, {
+                    scale: member.imageCropScale,
+                    x: member.imageCropX,
+                    y: member.imageCropY,
+                  }),
+                }}
+              />
+            ) : (
+              <UserRound size={16} className="text-gray-400" aria-hidden="true" />
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function ConversationRow({
@@ -1047,45 +1432,54 @@ function ConversationRow({
       className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
-      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-        <Image
-          src={item.avatarSrc}
-          alt={item.avatarAlt}
-          className="h-14 w-14 rounded-full bg-white object-cover"
-          width={56}
-          height={56}
-          draggable={false}
-          style={CONVERSATION_AVATAR_IMAGE_STYLE}
-          unoptimized
-        />
-      </div>
+      <ConversationRoomAvatar item={item} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
-            {item.languageFlags ? (
-              <span className="shrink-0 text-[1rem] leading-none" aria-hidden>
-                {item.languageFlags}
+            {item.languageCodes.length > 0 ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
+                {item.languageCodes.map((language, index) => (
+                  <LanguageFlag
+                    key={`${language}-${index}`}
+                    language={language}
+                    className="text-[1rem] leading-none"
+                  />
+                ))}
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 flex-col items-end leading-none">
-            <span className="text-[12px] text-gray-400">{item.timeLabel}</span>
-            <span
-              className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
-              title={item.statsFullLabel}
-            >
-              {item.statsLabel}
-            </span>
+          <div className="flex shrink-0 items-start gap-2">
+            {item.unreadMessageCount > 0 ? (
+              <span
+                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+              >
+                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
+              </span>
+            ) : null}
+            <div className="flex flex-col items-end leading-none">
+              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
+                {item.timeLabel}
+              </span>
+              <span
+                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
+                title={item.statsFullLabel}
+              >
+                {item.statsLabel}
+              </span>
+            </div>
           </div>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
           <p
-            className="truncate text-[13px] text-gray-500"
+            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
             title={item.previewFullText || undefined}
           >
             {item.preview || "\u00A0"}
+            {item.isInterimPreview && item.preview ? "…" : null}
           </p>
           {item.status === "active" ? (
             <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
@@ -1122,8 +1516,16 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   actionDisabled = false,
 }, ref) {
   const [query, setQuery] = useState("");
+  // The panel this input lives in slides in from the right via a CSS
+  // transform (see SlideSurface's SURFACE_TRANSITION, 0.32s) — the
+  // browser-drawn text caret tracks that transform in real time, so
+  // focusing immediately on open makes the caret visibly travel from the
+  // right edge to its resting position instead of just appearing there.
+  // Keep the caret itself invisible (but the input still genuinely
+  // focused, so iOS still treats this as gesture-triggered and opens the
+  // keyboard) until the slide settles.
+  const [caretHidden, setCaretHidden] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const touchStartXRef = useRef<number | null>(null);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
     readStoredRecentSearches,
@@ -1158,22 +1560,31 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   useEffect(() => {
     if (!open) {
       blurInput();
+      setCaretHidden(false);
       return;
     }
+
+    // transitionMode "instant" means the panel is already in its resting
+    // position (no slide to hide the caret from).
+    const shouldHideCaret = transitionMode !== "instant";
+    setCaretHidden(shouldHideCaret);
 
     focusInput();
     const animationFrameId = window.requestAnimationFrame(() => {
       focusInput();
     });
+    // 340ms: just past SlideSurface's SURFACE_TRANSITION.duration (0.32s),
+    // so the caret reappears only once the slide has actually settled.
     const timeoutId = window.setTimeout(() => {
       focusInput();
-    }, 220);
+      setCaretHidden(false);
+    }, shouldHideCaret ? 340 : 220);
 
     return () => {
       window.cancelAnimationFrame(animationFrameId);
       window.clearTimeout(timeoutId);
     };
-  }, [blurInput, focusInput, open]);
+  }, [blurInput, focusInput, open, transitionMode]);
 
   const persistRecentSearch = useCallback((rawValue: string) => {
     const normalized = normalizeSearchTerm(rawValue);
@@ -1230,122 +1641,115 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   const hasQuery = normalizeSearchTerm(query).length > 0;
 
   return (
-    <div
-      className="absolute inset-0 z-40 flex flex-col bg-white transition-transform duration-300 ease-in-out"
-      style={{
-        transform: open ? "translateX(0)" : "translateX(100%)",
-        pointerEvents: open ? "auto" : "none",
-        transitionDuration: transitionMode === "animate" ? undefined : "0ms",
-      }}
-      aria-hidden={!open}
-      onTouchStart={(event) => {
-        touchStartXRef.current = event.touches[0]?.clientX ?? null;
-      }}
-      onTouchEnd={(event) => {
-        const startX = touchStartXRef.current;
-        const endX = event.changedTouches[0]?.clientX ?? startX ?? 0;
-        touchStartXRef.current = null;
-
-        if (startX !== null && endX - startX > 60) {
-          dismissSearch();
-        }
-      }}
+    <SlideSurface
+      open={open}
+      onClose={dismissSearch}
+      ariaLabel={copy.searchButtonLabel}
+      nativeBackPriority={20}
+      transitionMode={transitionMode}
+      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      style={{ touchAction: "pan-y" }}
+      stopPropagation
     >
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
-        <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
-          <Search size={16} className="shrink-0 text-gray-400" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
-            enterKeyHint="search"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={dismissSearch}
-          className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+      <div className="flex h-full min-h-0 flex-col">
+        <form
+          onSubmit={handleSubmit}
+          className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          }}
         >
-          {copy.cancelAction}
-        </button>
-      </form>
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+            <Search size={16} className="shrink-0 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={copy.searchPlaceholder}
+              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+                caretHidden ? "caret-transparent" : ""
+              }`}
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={dismissSearch}
+            className="shrink-0 text-[15px] font-medium text-[#7c3aed]"
+          >
+            {copy.cancelAction}
+          </button>
+        </form>
 
-      <div className="flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        {hasQuery ? (
-          filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-[14px]">{copy.noSearchResults}</p>
-            </div>
-          ) : (
-            <div className="pt-2">
-              {filtered.map((item, index) => (
-                <div key={item.id}>
-                  <ConversationRow
-                    item={item}
-                    disabled={actionDisabled}
-                    onSelect={handleResultSelect}
-                  />
-                  {index < filtered.length - 1 && (
-                    <div className="mx-4 h-px bg-gray-100" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <section className="px-4 pb-4 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
-                {copy.recentSearchesTitle}
-              </h2>
-              {recentSearches.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleClearRecentSearches}
-                  className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
-                >
-                  {copy.clearRecentSearchesAction}
-                </button>
-              ) : null}
-            </div>
-            {recentSearches.length === 0 ? (
-              <p className="px-1 py-3 text-[14px] text-gray-400">
-                {copy.noRecentSearches}
-              </p>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          {hasQuery ? (
+            filtered.length === 0 ? (
+              <div className="flex flex-col items-center py-16 text-gray-400">
+                <p className="text-[14px]">{copy.noSearchResults}</p>
+              </div>
             ) : (
-              <div className="space-y-1">
-                {recentSearches.map((recentSearch) => (
-                  <button
-                    key={recentSearch}
-                    type="button"
-                    onClick={() => handleRecentSearchSelect(recentSearch)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <Search size={16} className="text-gray-400" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
-                      {recentSearch}
-                    </span>
-                  </button>
+              <div className="pt-2">
+                {filtered.map((item, index) => (
+                  <div key={item.id}>
+                    <ConversationRow
+                      item={item}
+                      disabled={actionDisabled}
+                      onSelect={handleResultSelect}
+                    />
+                    {index < filtered.length - 1 && (
+                      <div className="mx-4 h-px bg-gray-100" />
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </section>
-        )}
+            )
+          ) : (
+            <section className="px-4 pb-4 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold tracking-[0.08em] text-slate-500">
+                  {copy.recentSearchesTitle}
+                </h2>
+                {recentSearches.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearRecentSearches}
+                    className="shrink-0 text-[13px] font-medium text-[#7c3aed]"
+                  >
+                    {copy.clearRecentSearchesAction}
+                  </button>
+                ) : null}
+              </div>
+              {recentSearches.length === 0 ? (
+                <p className="px-1 py-3 text-[14px] text-gray-400">
+                  {copy.noRecentSearches}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {recentSearches.map((recentSearch) => (
+                    <button
+                      key={recentSearch}
+                      type="button"
+                      onClick={() => handleRecentSearchSelect(recentSearch)}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50 active:bg-gray-100"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <Search size={16} className="text-gray-400" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] text-slate-800">
+                        {recentSearch}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </SlideSurface>
   );
 });
 
@@ -1355,6 +1759,9 @@ type ConversationListProps = {
   initialConversations: ConversationChannelSummary[];
   initialConversationsRequireRefresh?: boolean;
   initialConversationIdToOpen?: string | null;
+  initialPrimaryLanguage?: string | null;
+  initialPrimaryLanguages?: string[];
+  initialDefaultConversationLanguages?: string[];
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
@@ -1374,6 +1781,9 @@ export default function ConversationList({
   initialConversations,
   initialConversationsRequireRefresh = false,
   initialConversationIdToOpen = null,
+  initialPrimaryLanguage = null,
+  initialPrimaryLanguages = [],
+  initialDefaultConversationLanguages = [],
   initialNativeUi = false,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
@@ -1386,13 +1796,41 @@ export default function ConversationList({
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+  const authenticatedUserId = typeof session?.user?.id === "string"
+    ? session.user.id.trim()
+    : "";
+  const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
+    apiNamespace: clientApiNamespace,
+    authenticatedUserId,
+    externalUserId: initialTrackingExternalUserId,
+  }), [authenticatedUserId, initialTrackingExternalUserId]);
+  const [initialWarmSnapshot] = useState(() => {
+    if (
+      !initialNativeUi
+      || initialConversations.length > 0
+      || sessionStatus !== "authenticated"
+    ) {
+      return null;
+    }
+    return readConversationListMemoryCache(conversationCacheIdentity);
+  });
+  const initialListState = resolveConversationListInitialState({
+    initialConversations,
+    initialConversationsRequireRefresh,
+    warmSnapshot: initialWarmSnapshot,
+  });
   const initialConversationToOpen = initialConversationIdToOpen
-    ? initialConversations.find((conversation) => conversation.id === initialConversationIdToOpen) ?? null
+    ? initialListState.conversations.find(
+        (conversation) => conversation.id === initialConversationIdToOpen,
+      ) ?? null
     : null;
   const copy = useMemo(
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
   );
+  const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -1401,35 +1839,164 @@ export default function ConversationList({
     () => resolveLivePhoneDemoConversationDeleteCopy(locale),
     [locale],
   );
+  const leaveConversationCopy = useMemo(
+    () => resolveLivePhoneDemoConversationLeaveCopy(locale),
+    [locale],
+  );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
+  const [conversationSurfaceHistory, setConversationSurfaceHistory] = useState(() => (
+    typeof window === "undefined"
+      ? []
+      : readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE)
+  ));
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
-    initialConversations.length === 0,
+    !initialListState.hasSnapshot,
   );
   const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
   const [isRefreshingConversations, setIsRefreshingConversations] = useState(false);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
-    [...initialConversations].sort(compareConversationRecency),
+    [...initialListState.conversations].sort(compareConversationRecency),
   );
-  const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>({});
+  const normalizedInitialPrimaryLanguage = initialPrimaryLanguage?.trim() || null;
+  const normalizedInitialPrimaryLanguages = sanitizeSttLanguageSelection(
+    initialPrimaryLanguages,
+    normalizedInitialPrimaryLanguage ? [normalizedInitialPrimaryLanguage] : [],
+  );
+  const normalizedInitialDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    initialDefaultConversationLanguages,
+  );
+  const [defaultSelectedLanguages, setDefaultSelectedLanguages] = useState<string[]>(() => (
+    normalizedInitialDefaultConversationLanguages.length > 0
+      ? normalizedInitialDefaultConversationLanguages
+      : deriveDefaultConversationLanguages(normalizedInitialPrimaryLanguage, locale)
+  ));
+  const defaultConversationLanguagesSyncVersionRef = useRef(0);
+  const defaultSelectedLanguagesRef = useRef<string[]>(defaultSelectedLanguages);
+  useEffect(() => {
+    defaultSelectedLanguagesRef.current = defaultSelectedLanguages;
+  }, [defaultSelectedLanguages]);
+  const [preferredDisplayLanguages, setPreferredDisplayLanguages] = useState<string[]>(
+    normalizedInitialPrimaryLanguages,
+  );
+  const preferredDisplayLanguage = preferredDisplayLanguages[0] ?? null;
+  useEffect(() => {
+    const needsProfileHydration = (
+      normalizedInitialPrimaryLanguages.length === 0
+      || normalizedInitialDefaultConversationLanguages.length === 0
+    );
+    if (!needsProfileHydration || sessionStatus !== "authenticated") return;
+
+    const controller = new AbortController();
+    const hydrationVersion = defaultConversationLanguagesSyncVersionRef.current;
+    void fetch(buildClientApiPath("/profile"), {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json() as {
+          nationality?: unknown;
+          primaryLanguages?: unknown;
+          defaultConversationLanguages?: unknown;
+        };
+      })
+      .then((profile) => {
+        if (!profile || hydrationVersion !== defaultConversationLanguagesSyncVersionRef.current) return;
+        const profileLanguages = Array.isArray(profile.primaryLanguages)
+          ? profile.primaryLanguages
+          : profile.nationality;
+        const normalizedProfileLanguages = sanitizeSttLanguageSelection(profileLanguages);
+        setPreferredDisplayLanguages(normalizedProfileLanguages);
+
+        const storedDefaultLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
+        const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
+        setDefaultSelectedLanguages(
+          storedDefaultLanguages.length > 0
+            ? storedDefaultLanguages
+            : pendingDefaultLanguages.length > 0
+              ? pendingDefaultLanguages
+              : deriveDefaultConversationLanguages(normalizedProfileLanguages, locale),
+        );
+      })
+      .catch(() => {
+        // The conversation UI can fall back to the utterance source language.
+      });
+
+    return () => controller.abort();
+  }, [locale, normalizedInitialDefaultConversationLanguages.length, normalizedInitialPrimaryLanguages.length, sessionStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleDefaultConversationLanguagesSync = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      const nextLanguages = sanitizeSttLanguageSelection(
+        Array.isArray(detail)
+          ? detail
+          : detail && typeof detail === "object" && Array.isArray((detail as { languages?: unknown }).languages)
+            ? (detail as { languages: unknown[] }).languages
+            : [],
+      );
+      if (nextLanguages.length > 0) {
+        defaultConversationLanguagesSyncVersionRef.current += 1;
+        defaultSelectedLanguagesRef.current = nextLanguages;
+        setDefaultSelectedLanguages(nextLanguages);
+      }
+    };
+
+    window.addEventListener(
+      DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
+      handleDefaultConversationLanguagesSync as EventListener,
+    );
+    return () => window.removeEventListener(
+      DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
+      handleDefaultConversationLanguagesSync as EventListener,
+    );
+  }, []);
+  const [conversationInterimPreviews, setConversationInterimPreviews] = useState<
+    Record<string, LatestUtterancePayload>
+  >({});
+  const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>(
+    initialListState.localStats,
+  );
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
+  const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>("resolving");
+  const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
-  const [timeLabelsReady, setTimeLabelsReady] = useState(false);
+  const [timeLabelsReady, setTimeLabelsReady] = useState(initialListState.timeLabelsReady);
   const [rowActionMenu, setRowActionMenu] = useState<ConversationRowActionMenuState | null>(null);
   const [renameDialogConversationId, setRenameDialogConversationId] = useState<string | null>(null);
   const [renameConversationValue, setRenameConversationValue] = useState("");
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  // The row-removal confirm dialog covers both delete (solo room, deletes
+  // for the owner) and leave (shared room, removes just the caller) — this
+  // decides which copy/handler applies for whichever conversation is
+  // currently targeted by deleteDialogConversationId.
+  const deleteDialogTargetIsMultiMember = useMemo(
+    () => conversations.some((conversation) => conversation.id === deleteDialogConversationId && conversation.isMultiMember),
+    [conversations, deleteDialogConversationId],
+  );
+  const notificationSurfaceOpen = conversationSurfaceHistory.some(
+    (entry) => entry.id === CONVERSATION_NOTIFICATIONS_SURFACE_ID,
+  );
+  const conversationProfileSurface = [...conversationSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+  const conversationProfileId = conversationProfileSurface?.value ?? null;
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1447,12 +2014,34 @@ export default function ConversationList({
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
   const nativeSttRestoreAttemptedRef = useRef(false);
+  const nativeTabRootRestoreHandledRef = useRef<string | null>(null);
   // Track the last conversation ID manually closed by the user (conversationId-scoped).
-  // native STT restore, route-sync open, and popstate-open will not re-open this ID.
+  // Native STT restore must not re-open it automatically, but an explicit browser
+  // history forward to the room must still restore it.
   const suppressNativeSttRestoreConversationIdRef = useRef<string | null>(null);
+  // A popstate event is the browser's explicit back/forward signal. Keep its
+  // latest room/list target separate from the STT suppression flag so a forward
+  // gesture is never mistaken for an automatic native restore.
+  const conversationHistoryPopStateTargetRef = useRef<ConversationHistoryPopStateTarget | null>(null);
+  // Capture the transition before the location store's bubble-phase listener
+  // can synchronously re-render and run route-sync. This is the authoritative
+  // ownership record for an iOS back/forward gesture.
+  const conversationHistoryPopStateTransitionRef = useRef<ConversationHistoryPopStateTransition | null>(null);
+  // The app-driven back button closes the overlay before calling history.back().
+  // Keep route-sync from rewriting that still-current room entry into a list
+  // entry before the browser finishes the history navigation.
+  const pendingConversationHistoryBackRef = useRef(false);
+  const pendingConversationOpenAfterHistoryBackRef = useRef<string | null>(null);
+  // Direct-message navigation starts on a profile surface but must preserve
+  // the participant/menu history underneath it. Keep this guard alive through
+  // the iOS history-settle window so a delayed replay cannot reopen the profile.
+  const pendingDirectConversationNavigationRef = useRef<PendingDirectConversationNavigation | null>(null);
+  const directConversationNavigationTokenRef = useRef(0);
+  const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
+  const hasConversationListSnapshotRef = useRef(initialListState.hasSnapshot);
   const initialTrackingIdentityRef = useRef({
     externalUserId: initialTrackingExternalUserId.trim(),
     sessionKey: initialTrackingSessionKey.trim(),
@@ -1462,6 +2051,7 @@ export default function ConversationList({
   const isImportingLegacyConversationRef = useRef(false);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
+  const routeConversationHydrationRef = useRef<string | null>(null);
   const pullRefreshStartYRef = useRef<number | null>(null);
   const pullRefreshTrackingRef = useRef(false);
   const viewportWidthPx = useViewportWidthPx();
@@ -1503,7 +2093,93 @@ export default function ConversationList({
         ? runtimeNativeConversationBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
-  const conversationListFooterPaddingBottom = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+  const conversationListScrollPaddingBottomPx = CONVERSATION_CREATE_BUTTON_HEIGHT_PX + 20;
+
+  useEffect(() => {
+    if (languageOnboardingPhase !== "ready") return;
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+
+    const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
+    const pendingPrimaryLanguages = readPendingPrimaryLanguages();
+    const pendingBirthDate = readPendingBirthDate();
+    const pendingDiscoverySource = readPendingDiscoverySource();
+
+    if (pendingDefaultLanguages.length === 0 && !pendingBirthDate && !pendingDiscoverySource) return;
+
+    const onboardingPrimaryLanguages = pendingPrimaryLanguages.length > 0
+      ? pendingPrimaryLanguages
+      : pendingDefaultLanguages.slice(0, 1);
+
+    let cancelled = false;
+
+    const syncPendingLanguagePreferences = async () => {
+      try {
+        const profileResponse = await fetch(buildClientApiPath("/profile"), {
+          cache: "no-store",
+        });
+        if (!profileResponse.ok) return;
+
+        const profile = await profileResponse.json() as ProfileLanguagePreferencesPayload;
+        if (cancelled) return;
+
+        const resolvedPreferences = resolveOnboardingLanguagePreferences(
+          profile,
+          onboardingPrimaryLanguages,
+          pendingDefaultLanguages,
+        );
+
+        const patchPayload: Record<string, unknown> = {
+          ...resolvedPreferences.patch,
+        };
+        if (pendingBirthDate) {
+          patchPayload.birthDate = pendingBirthDate;
+        }
+        if (pendingDiscoverySource) {
+          patchPayload.discoverySource = pendingDiscoverySource;
+        }
+
+        if (Object.keys(patchPayload).length === 0) {
+          defaultConversationLanguagesSyncVersionRef.current += 1;
+          setPreferredDisplayLanguages(resolvedPreferences.primaryLanguages);
+          setDefaultSelectedLanguages(resolvedPreferences.defaultConversationLanguages);
+          clearPendingLanguagePreferences();
+          clearPendingBirthDate();
+          clearPendingDiscoverySource();
+          return;
+        }
+
+        const saveResponse = await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchPayload),
+        });
+        if (!saveResponse.ok || cancelled) return;
+
+        const savedProfile = await saveResponse.json() as ProfileLanguagePreferencesPayload;
+        if (cancelled) return;
+
+        const savedPreferences = resolveOnboardingLanguagePreferences(
+          savedProfile,
+          resolvedPreferences.primaryLanguages,
+          resolvedPreferences.defaultConversationLanguages,
+        );
+        defaultConversationLanguagesSyncVersionRef.current += 1;
+        setPreferredDisplayLanguages(savedPreferences.primaryLanguages);
+        setDefaultSelectedLanguages(savedPreferences.defaultConversationLanguages);
+        clearPendingLanguagePreferences();
+        clearPendingBirthDate();
+        clearPendingDiscoverySource();
+      } catch {
+        // Keep the pending marker so a later authenticated launch can retry the claim.
+      }
+    };
+
+    void syncPendingLanguagePreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -1511,21 +2187,25 @@ export default function ConversationList({
         conversation,
         locale,
         timeLabelsReady,
-        copy,
+        {
+          ...copy,
+          unreadMessagesLabel: copy.notificationsUnreadSectionLabel,
+        },
         conversationLocalStats[conversation.id],
+        conversationInterimPreviews[conversation.id],
       )
     )),
-    [conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+    [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+  );
+  const unreadConversationMessageCount = useMemo(
+    () => conversations.reduce(
+      (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
+      0,
+    ),
+    [conversations],
   );
   const mountedConversationIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (activeConversation?.id) {
-      ids.add(activeConversation.id);
-    }
-    if (liveConversationId) {
-      ids.add(liveConversationId);
-    }
-    return [...ids];
+    return resolveMountedConversationIds(activeConversation?.id, liveConversationId);
   }, [activeConversation?.id, liveConversationId]);
   const mountedConversations = useMemo(() => (
     mountedConversationIds
@@ -1535,10 +2215,6 @@ export default function ConversationList({
   const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
   const conversationSelectionDisabled = isCreatingConversation || isImportingLegacyConversation;
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
-  const defaultSelectedLanguages = useMemo(
-    () => deriveDefaultSttLanguagesForLocale(locale),
-    [locale],
-  );
   const effectivePullRefreshOffsetPx = isRefreshingConversations
     ? LIST_PULL_REFRESH_TRIGGER_PX
     : pullRefreshDistance;
@@ -1632,17 +2308,67 @@ export default function ConversationList({
   }, [setSearchOverlayVisible]);
 
   const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
-    const response = await fetch(buildConversationApiPath(), {
-      cache: "no-store",
-      headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-    });
+    const response = await fetch(
+      initialNativeUi
+        ? buildConversationApiPath("?view=native-list")
+        : buildConversationApiPath(),
+      {
+        cache: "no-store",
+        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+    );
     const nextConversations = await readConversationListResponse(response);
+    const nextLocalStats = buildConversationLocalStatsSnapshot(nextConversations);
+    hasConversationListSnapshotRef.current = true;
+    writeConversationListCache(
+      conversationCacheIdentity,
+      nextConversations,
+      nextLocalStats,
+    );
+    setConversationLocalStats((current) => (
+      areConversationLocalStatsSnapshotsEqual(current, nextLocalStats)
+        ? current
+        : nextLocalStats
+    ));
     setConversations((current) => (
       options?.replaceCurrent
         ? replaceConversationLists(current, nextConversations)
         : mergeConversationLists(current, nextConversations)
     ));
     return nextConversations;
+  }, [conversationCacheIdentity, initialNativeUi]);
+
+  const hydrateConversationSummary = useCallback(async (conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId) {
+      throw new Error("conversation_id_required");
+    }
+
+    const response = await fetch(
+      buildConversationApiPath(`/${encodeURIComponent(normalizedConversationId)}`),
+      {
+        cache: "no-store",
+        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+    );
+    return readConversationResponse(response);
+  }, []);
+
+  const markConversationAsRead = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId) return;
+
+    void fetch(buildConversationApiPath(`/${normalizedConversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+      body: JSON.stringify({ markRead: true }),
+    }).catch(() => {
+      // A failed read marker is harmless; the next list refresh will keep the
+      // server-side unread count until the room can be opened successfully.
+    });
   }, []);
 
   const triggerPullToRefresh = useCallback(async () => {
@@ -1725,7 +2451,7 @@ export default function ConversationList({
 
   const handleConversationDeleted = useCallback((conversationId: string) => {
     deletingConversationIdsRef.current.add(conversationId);
-    replaceConversationOverlayUrl(null);
+    replaceConversationOverlayUrl(null, "conversation-deleted");
     postNativeBannerZone("hidden");
     setOverlayExitMode("instant");
     setAutoStartConversationId((current) => (
@@ -1779,7 +2505,16 @@ export default function ConversationList({
     roomManagementCopy.renameErrorToastLabel,
   ]);
 
-  const handleDeleteConversationFromList = useCallback(async () => {
+  // Solo room -> DELETE (deletes for the owner, the only real member).
+  // Shared room -> POST .../leave (removes just the caller's own
+  // membership, see leaveConversationChannel). Branches internally rather
+  // than duplicating the function, same as handleDeleteConversationConfirm
+  // in LivePhoneDemo.tsx: the STT-stop guard, in-flight tracking
+  // (deletingConversationIdsRef — every race-protection check keyed off it
+  // elsewhere applies equally either way), and local-state eviction
+  // (handleConversationDeleted) are identical regardless of which action
+  // removed the room.
+  const handleRemoveConversationFromList = useCallback(async () => {
     if (isDeletingConversation || !deleteDialogConversationId) return;
 
     setIsDeletingConversation(true);
@@ -1791,37 +2526,47 @@ export default function ConversationList({
           roomRef.prepareForDeletion?.();
           await roomRef.stopRecording({ deferRunningStateChange: true, discardPendingFinalization: true });
         } catch {
-          // Ignore stop races and continue deleting the room.
+          // Ignore stop races and continue removing the room.
         }
       }
 
-      const response = await fetch(buildConversationApiPath(`/${deleteDialogConversationId}`), {
-        method: "DELETE",
-        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-      });
-      const body = await response.json().catch(() => ({})) as { deletedConversationId?: string; error?: string };
+      const response = await fetch(
+        buildConversationApiPath(`/${deleteDialogConversationId}${deleteDialogTargetIsMultiMember ? "/leave" : ""}`),
+        {
+          method: deleteDialogTargetIsMultiMember ? "POST" : "DELETE",
+          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        },
+      );
+      const body = await response.json().catch(() => ({})) as {
+        deletedConversationId?: string;
+        leftConversationId?: string;
+        error?: string;
+      };
+      const removedConversationId = body.deletedConversationId || body.leftConversationId;
       if (response.status === 404) {
         handleConversationDeleted(deleteDialogConversationId);
         setDeleteDialogConversationId(null);
         return;
       }
-      if (!response.ok || !body.deletedConversationId) {
-        throw new Error(body.error || "conversation_delete_failed");
+      if (!response.ok || !removedConversationId) {
+        throw new Error(body.error || (deleteDialogTargetIsMultiMember ? "conversation_leave_failed" : "conversation_delete_failed"));
       }
 
-      handleConversationDeleted(body.deletedConversationId);
+      handleConversationDeleted(removedConversationId);
       setDeleteDialogConversationId(null);
     } catch {
       deletingConversationIdsRef.current.delete(deleteDialogConversationId);
-      window.alert(deleteConversationCopy.errorToastLabel);
+      window.alert(deleteDialogTargetIsMultiMember ? leaveConversationCopy.errorToastLabel : deleteConversationCopy.errorToastLabel);
     } finally {
       setIsDeletingConversation(false);
     }
   }, [
     deleteConversationCopy.errorToastLabel,
     deleteDialogConversationId,
+    deleteDialogTargetIsMultiMember,
     handleConversationDeleted,
     isDeletingConversation,
+    leaveConversationCopy.errorToastLabel,
   ]);
 
   const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
@@ -1830,6 +2575,14 @@ export default function ConversationList({
     } else {
       conversationRoomRefs.current.delete(conversationId);
     }
+  }, []);
+
+  const handleConversationSurfaceRequestClose = useCallback((conversationId: string) => {
+    const roomRef = conversationRoomRefs.current.get(conversationId);
+    if (roomRef?.requestCloseTopmostOverlay()) {
+      return false;
+    }
+    return true;
   }, []);
 
   const applyRunningConversationState = useCallback((
@@ -1871,7 +2624,10 @@ export default function ConversationList({
     }
 
     const currentLiveRoom = conversationRoomRefs.current.get(currentLiveConversationId);
-    await currentLiveRoom?.stopRecording({ deferRunningStateChange: true });
+    await currentLiveRoom?.stopRecording({
+      deferRunningStateChange: true,
+      forceNativeStop: isNativeAppRuntime(),
+    });
     return { switchedFromLiveConversation: true };
   }, []);
 
@@ -1891,6 +2647,14 @@ export default function ConversationList({
 
     const previousRunning = getDerivedConversationRunningState(conversationId);
     if (previousRunning === isRunning) {
+      conversationRunningStateRef.current.set(conversationId, isRunning);
+      if (isRunning) {
+        setLiveConversationId(conversationId);
+      } else {
+        setLiveConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+      }
       return;
     }
     conversationRunningStateRef.current.set(conversationId, isRunning);
@@ -2006,13 +2770,62 @@ export default function ConversationList({
       });
   }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
+  const persistUserDefaultConversationLanguages = useCallback((
+    conversationId: string,
+    nextLanguages: string[],
+    previousLanguages: string[],
+    expectedVersion: number,
+  ) => {
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+
+    void fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultConversationLanguages: nextLanguages }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Default conversation language update failed (${response.status})`);
+        }
+        return await response.json() as {
+          defaultConversationLanguages?: unknown;
+        };
+      })
+      .then((profile) => {
+        if (defaultConversationLanguagesSyncVersionRef.current !== expectedVersion) return;
+
+        const savedLanguages = sanitizeSttLanguageSelection(
+          profile.defaultConversationLanguages,
+          nextLanguages,
+        );
+        defaultSelectedLanguagesRef.current = savedLanguages;
+        setDefaultSelectedLanguages(savedLanguages);
+      })
+      .catch((error: unknown) => {
+        const stale = defaultConversationLanguagesSyncVersionRef.current !== expectedVersion;
+        logConversationMutationFailure({
+          label: "selected-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildClientApiPath("/profile"),
+          error,
+          stale,
+        });
+        if (stale) return;
+
+        defaultSelectedLanguagesRef.current = [...previousLanguages];
+        setDefaultSelectedLanguages(previousLanguages);
+      });
+  }, [authenticatedUserId, sessionStatus]);
+
   const handleConversationSelectedLanguagesChange = useCallback((
     conversationId: string,
     nextSelectedLanguages: string[],
   ) => {
+    const currentDefaultLanguages = defaultSelectedLanguagesRef.current;
     const normalizedSelectedLanguages = sanitizeSttLanguageSelection(
       nextSelectedLanguages,
-      defaultSelectedLanguages,
+      currentDefaultLanguages,
     );
     if (normalizedSelectedLanguages.length === 0) {
       return;
@@ -2023,20 +2836,48 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+    const previousSelectedLanguages = sanitizeSttLanguageUnion(
       previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
+      currentDefaultLanguages,
     );
-    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
+    const previousViewerSelectedLanguages = resolveLanguageSelectorOwnSelectedLanguages(
+      previousSelectedLanguages,
+      previousConversation.viewerSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked =
+      previousConversation.translationLanguagesLinked !== false;
+    const previousDefaultLanguages = [...currentDefaultLanguages];
+    const nextDefaultLanguagesVersion = defaultConversationLanguagesSyncVersionRef.current + 1;
+    defaultConversationLanguagesSyncVersionRef.current = nextDefaultLanguagesVersion;
+    defaultSelectedLanguagesRef.current = [...normalizedSelectedLanguages];
+    setDefaultSelectedLanguages(normalizedSelectedLanguages);
 
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    // For a multi-member room this is the caller's own next pick, not the
+    // room union. Naively leaving the union untouched here (as before) made
+    // a language the caller just unchecked stay in the union until the PATCH
+    // resolved — reading as "someone else picked this" (blue) for an instant
+    // even when nobody else did. Reuse the same optimistic-union recompute
+    // handleToggleSelectedLanguage already does for the in-room toggle, so
+    // this stays correct without duplicating that logic.
+    const optimisticUnion = previousConversation.isMultiMember
+      ? resolveLanguageSelectorUnionAfterOwnLanguagesChange({
+          previousUnion: previousSelectedLanguages,
+          previousAttribution: previousConversation.selectedLanguagesAttribution,
+          viewerUserId: authenticatedUserId,
+          previousOwnSelectedLanguages: previousViewerSelectedLanguages,
+          nextOwnSelectedLanguages: normalizedSelectedLanguages,
+        })
+      : [...normalizedSelectedLanguages];
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
         ? {
             ...conversation,
-            selectedLanguages: [...normalizedSelectedLanguages],
+            selectedLanguages: optimisticUnion,
+            viewerSelectedLanguages: [...normalizedSelectedLanguages],
             translationLanguagesLinked: false,
           }
         : conversation
@@ -2052,8 +2893,20 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
-        setConversations((current) => upsertConversation(current, nextConversation));
+        if (languageSettingsSyncVersionRef.current.get(conversationId) === nextVersion) {
+          setConversations((current) => upsertConversation(current, nextConversation));
+        }
+        // Speech-language and translation-link mutations share the room
+        // version guard, but they do not invalidate this successful
+        // selected-language change. The user default has its own version guard.
+        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
+          persistUserDefaultConversationLanguages(
+            conversationId,
+            normalizedSelectedLanguages,
+            previousDefaultLanguages,
+            nextDefaultLanguagesVersion,
+          );
+        }
       })
       .catch((error: unknown) => {
         const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
@@ -2065,12 +2918,17 @@ export default function ConversationList({
           error,
           stale,
         });
+        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
+          defaultSelectedLanguagesRef.current = [...previousDefaultLanguages];
+          setDefaultSelectedLanguages(previousDefaultLanguages);
+        }
         if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
                 ...conversation,
                 selectedLanguages: [...previousSelectedLanguages],
+                viewerSelectedLanguages: [...previousViewerSelectedLanguages],
                 translationLanguagesLinked: previousTranslationLanguagesLinked,
               }
             : conversation
@@ -2078,7 +2936,7 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [defaultSelectedLanguages]);
+  }, [authenticatedUserId, persistUserDefaultConversationLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,
@@ -2101,12 +2959,6 @@ export default function ConversationList({
       previousConversation.speechLanguages,
       previousConversation.selectedLanguages,
     );
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
-    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
@@ -2115,9 +2967,6 @@ export default function ConversationList({
         ? {
             ...conversation,
             speechLanguages: [...normalizedSpeechLanguages],
-            ...(previousTranslationLanguagesLinked
-              ? { selectedLanguages: [...normalizedSpeechLanguages] }
-              : {}),
           }
         : conversation
     )));
@@ -2151,9 +3000,6 @@ export default function ConversationList({
             ? {
                 ...conversation,
                 speechLanguages: [...previousSpeechLanguages],
-                ...(previousTranslationLanguagesLinked
-                  ? { selectedLanguages: [...previousSelectedLanguages] }
-                  : {}),
               }
             : conversation
         )));
@@ -2171,19 +3017,7 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
     const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-    const speechLanguages = sanitizeSttLanguageSelection(
-      previousConversation.speechLanguages,
-      previousSelectedLanguages,
-    );
-    const nextSelectedLanguages =
-      nextTranslationLanguagesLinked || previousTranslationLanguagesLinked
-        ? speechLanguages
-        : previousSelectedLanguages;
 
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
@@ -2192,7 +3026,6 @@ export default function ConversationList({
       conversation.id === conversationId
         ? {
             ...conversation,
-            selectedLanguages: [...nextSelectedLanguages],
             translationLanguagesLinked: nextTranslationLanguagesLinked,
           }
         : conversation
@@ -2226,7 +3059,6 @@ export default function ConversationList({
           conversation.id === conversationId
             ? {
                 ...conversation,
-                selectedLanguages: [...previousSelectedLanguages],
                 translationLanguagesLinked: previousTranslationLanguagesLinked,
               }
             : conversation
@@ -2234,22 +3066,143 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [defaultSelectedLanguages]);
+  }, []);
+
+  const handleConversationDefaultDisplayLanguageChange = useCallback((
+    conversationId: string,
+    nextDefaultDisplayLanguage: string | null,
+  ) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const normalizedDefaultDisplayLanguage = nextDefaultDisplayLanguage
+      ? sanitizeSttLanguageSelection([nextDefaultDisplayLanguage])[0] ?? null
+      : null;
+    if (nextDefaultDisplayLanguage && !normalizedDefaultDisplayLanguage) return;
+
+    const previousDefaultDisplayLanguage = previousConversation.defaultDisplayLanguage ?? null;
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
+          }
+        : conversation
+    )));
+
+    void fetch(buildConversationApiPath(`/${conversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+      body: JSON.stringify({ defaultDisplayLanguage: normalizedDefaultDisplayLanguage }),
+    })
+      .then(readConversationResponse)
+      .then((nextConversation) => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "default-display-language",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                defaultDisplayLanguage: previousDefaultDisplayLanguage,
+              }
+            : conversation
+        )));
+      });
+  }, []);
+
+  const clearConversationInterimPreview = useCallback((conversationId: string) => {
+    setConversationInterimPreviews((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, conversationId)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
+
+  const handleConversationLatestUtterancePreviewChange = useCallback((
+    conversationId: string,
+    payload: LatestUtterancePayload | null,
+  ) => {
+    if (!payload) {
+      clearConversationInterimPreview(conversationId);
+      return;
+    }
+
+    const normalizedPreview = payload.preview.trim();
+    if (!normalizedPreview) return;
+    const normalizedCreatedAt = payload.createdAt.trim();
+    if (!normalizedCreatedAt) return;
+    const normalizedSpeaker = payload.speaker?.trim() || undefined;
+    const normalizedSpeakerAvatarSeed = payload.speakerAvatarSeed?.trim() || undefined;
+    const normalizedSpeakerAvatarIndex = typeof payload.speakerAvatarIndex === "number"
+      && Number.isInteger(payload.speakerAvatarIndex)
+      ? payload.speakerAvatarIndex
+      : undefined;
+    const nextPreview: LatestUtterancePayload = {
+      preview: normalizedPreview,
+      createdAt: normalizedCreatedAt,
+      ...(normalizedSpeaker ? { speaker: normalizedSpeaker } : {}),
+      ...(normalizedSpeakerAvatarSeed ? { speakerAvatarSeed: normalizedSpeakerAvatarSeed } : {}),
+      ...(typeof normalizedSpeakerAvatarIndex === "number"
+        ? { speakerAvatarIndex: normalizedSpeakerAvatarIndex }
+        : {}),
+    };
+
+    setConversationInterimPreviews((current) => {
+      const previous = current[conversationId];
+      if (
+        previous?.preview === nextPreview.preview
+        && previous.createdAt === nextPreview.createdAt
+        && previous.speaker === nextPreview.speaker
+        && previous.speakerAvatarSeed === nextPreview.speakerAvatarSeed
+        && previous.speakerAvatarIndex === nextPreview.speakerAvatarIndex
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [conversationId]: nextPreview,
+      };
+    });
+  }, [clearConversationInterimPreview]);
 
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
-    payload: {
-      preview: string;
-      createdAt: string;
-      speaker?: string;
-      speakerAvatarSeed?: string;
-      speakerAvatarIndex?: number;
-    },
+    payload: LatestUtterancePayload,
   ) => {
     const normalizedPreview = payload.preview.trim();
     if (!normalizedPreview) return;
     const normalizedCreatedAt = payload.createdAt.trim();
     if (!normalizedCreatedAt) return;
+
+    clearConversationInterimPreview(conversationId);
+
+    const isActiveConversation = activeConversationRef.current?.id === conversationId;
+    if (isActiveConversation) {
+      markConversationAsRead(conversationId);
+    }
 
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== conversationId) {
@@ -2266,17 +3219,148 @@ export default function ConversationList({
           typeof payload.speakerAvatarIndex === "number" && Number.isInteger(payload.speakerAvatarIndex)
             ? payload.speakerAvatarIndex
             : conversation.latestSpeakerAvatarIndex ?? null,
+        ...(isActiveConversation ? { unreadMessageCount: 0 } : {}),
       };
     }).sort(compareConversationRecency));
+  }, [clearConversationInterimPreview, markConversationAsRead]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncConversationSurfaceHistory = () => {
+      const nextHistory = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      const pendingNavigation = pendingDirectConversationNavigationRef.current;
+      if (pendingNavigation) {
+        const filteredHistory = nextHistory.filter((entry) => (
+          entry.id !== CONVERSATION_PROFILE_SURFACE_ID
+          || entry.value !== pendingNavigation.profileUserId
+        ));
+        if (filteredHistory.length !== nextHistory.length) {
+          setConversationSurfaceHistory(filteredHistory);
+          return;
+        }
+      }
+      setConversationSurfaceHistory(nextHistory);
+    };
+
+    window.addEventListener("popstate", syncConversationSurfaceHistory);
+    return () => window.removeEventListener("popstate", syncConversationSurfaceHistory);
+  }, []);
+
+  const openConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    pushSlideSurfaceHistory({
+      scope: CONVERSATION_SURFACE_SCOPE,
+      ...entry,
+    });
+    setConversationSurfaceHistory(readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE));
+  }, []);
+
+  const closeConversationSurface = useCallback((entry: {
+    id: string;
+    value?: string;
+  }) => {
+    if (typeof window !== "undefined") {
+      const currentEntries = readSlideSurfaceHistoryForScope(
+        CONVERSATION_SURFACE_SCOPE,
+        window.history.state,
+      );
+      const currentEntry = currentEntries[currentEntries.length - 1];
+      if (
+        currentEntry?.id === entry.id
+        && (entry.value === undefined || currentEntry.value === entry.value)
+      ) {
+        window.history.back();
+        return;
+      }
+    }
+
+    setConversationSurfaceHistory((current) => {
+      const entryIndex = [...current].reverse().findIndex((candidate) => (
+        candidate.id === entry.id
+        && (entry.value === undefined || candidate.value === entry.value)
+      ));
+      if (entryIndex < 0) return current;
+      const actualIndex = current.length - 1 - entryIndex;
+      return current.filter((_candidate, index) => index !== actualIndex);
+    });
+  }, []);
+
+  const clearConversationSurfaceHistory = useCallback(() => {
+    if (typeof window !== "undefined") {
+      replaceSlideSurfaceHistory(readSlideSurfaceHistory(window.history.state).filter((entry) => (
+        entry.scope !== CONVERSATION_SURFACE_SCOPE
+      )));
+    }
+    setConversationSurfaceHistory([]);
   }, []);
 
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
 
+  const openConversationProfile = useCallback((userId: string) => {
+    if (pendingDirectConversationNavigationRef.current) return;
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    postNativeBannerZone("hidden");
+    openConversationSurface({
+      id: CONVERSATION_PROFILE_SURFACE_ID,
+      value: normalizedUserId,
+    });
+  }, [openConversationSurface]);
+
+  const openNotifications = useCallback(() => {
+    postNativeBannerZone("hidden");
+    openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+  }, [openConversationSurface]);
+
+  // Reuses invite-friends-screen.tsx's picker (see its conversationId prop)
+  // in "add to this room" mode instead of a bespoke invite UI.
+  const openInviteMembers = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId || typeof window === "undefined") return;
+
+    const path = buildPathWithCurrentSearchParams(`/${locale}/conversations/add-members`);
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("conversation", normalizedConversationId);
+    router.push(`${url.pathname}${url.search}`);
+  }, [locale, router]);
+
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Give every conversation-list history entry an explicit screen marker.
+    // iOS can deliver a delayed popstate while the visible WebView snapshot is
+    // already on the next entry; the marker lets the handlers use the entry
+    // that caused the gesture instead of guessing from the transient URL.
+    if (readConversationHistoryRouteFromState(window.history.state) === undefined) {
+      replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
+    }
+
+    let hasConfirmedLanguageOnboarding = false;
+    try {
+      hasConfirmedLanguageOnboarding = readPersistedBooleanPreference(
+        window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
+        false,
+      );
+    } catch {
+      hasConfirmedLanguageOnboarding = false;
+    }
+
+    setLanguageOnboardingPhase(
+      shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
+        ? "selection"
+        : "ready",
+    );
   }, []);
 
   useEffect(() => {
@@ -2300,6 +3384,32 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(buildClientApiPath("/notifications?limit=1"), { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("notification_count_load_failed");
+        return response.json() as Promise<{ unreadCount?: unknown }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const nextUnreadCount = typeof payload.unreadCount === "number" ? payload.unreadCount : 0;
+        setUnreadNotificationCount(Math.max(0, Math.floor(nextUnreadCount)));
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadNotificationCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2330,6 +3440,17 @@ export default function ConversationList({
   }, [conversations]);
 
   useEffect(() => {
+    if (sessionStatus !== "unauthenticated") return;
+
+    // Do not leave the previous account's rows available underneath the
+    // authentication gate or merge them into the next authenticated refresh.
+    setConversations([]);
+    setConversationInterimPreviews({});
+    setConversationLocalStats({});
+    setUnreadNotificationCount(0);
+  }, [sessionStatus]);
+
+  useEffect(() => {
     refreshConversationLocalStats(conversations);
   }, [conversations, refreshConversationLocalStats]);
 
@@ -2353,20 +3474,6 @@ export default function ConversationList({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!initialConversationIdToOpen) return;
-    if (activeConversation || isHydratingConversations) return;
-    if (conversations.some((conversation) => conversation.id === initialConversationIdToOpen)) return;
-    if (readConversationIdFromLocation() !== initialConversationIdToOpen) return;
-    replaceConversationOverlayUrl(null);
-  }, [
-    activeConversation,
-    conversations,
-    initialConversationIdToOpen,
-    isHydratingConversations,
-  ]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
     if (!isNativeAppRuntime()) return;
     const cachedNativeSttStatus = nativeSttStatus ?? readCachedNativeSttStatus();
     if (activeConversation || liveConversationId) {
@@ -2377,6 +3484,77 @@ export default function ConversationList({
     }
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
+
+    const cachedNativeSttConversationId = readCachedNativeSttConversationId();
+    const hiddenNativeSttConversation = isNativeSttStatusLive(cachedNativeSttStatus)
+      ? findNativeSttRestoreConversation(
+          conversations,
+          deletingConversationIdsRef.current,
+          cachedNativeSttConversationId,
+        )
+      : null;
+
+    // A live native session is authoritative for one specific room. The list
+    // can briefly render without that room while hydration is catching up;
+    // never infer that every other active room is stale in that window.
+    if (
+      isNativeSttStatusLive(cachedNativeSttStatus)
+      && cachedNativeSttConversationId
+      && !hiddenNativeSttConversation
+    ) {
+      return;
+    }
+
+    const shouldStayOnConversationList = (() => {
+      const currentUrl = new URL(window.location.href);
+      const isExplicitTabRoot = currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
+      const shouldSkipConversationRestore = currentUrl.searchParams.get(
+        NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY,
+      ) === "1";
+      if (!shouldSkipConversationRestore && !isExplicitTabRoot) {
+        return false;
+      }
+
+      const currentHref = currentUrl.toString();
+      if (
+        isExplicitTabRoot
+        && !shouldSkipConversationRestore
+        && nativeTabRootRestoreHandledRef.current === currentHref
+      ) {
+        return true;
+      }
+
+      if (shouldSkipConversationRestore) {
+        currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
+      }
+      const nextHref = currentUrl.toString();
+      if (nextHref !== window.location.href) {
+        window.history.replaceState(window.history.state, "", nextHref);
+        notifyLocationSearchSync();
+      }
+      if (isExplicitTabRoot) {
+        nativeTabRootRestoreHandledRef.current = nextHref;
+      }
+      return true;
+    })();
+    if (shouldStayOnConversationList) {
+      // Consume any stale remount hint as well. The user explicitly selected
+      // the list tab, so reopening the live room would violate that action.
+      takeNativeRemountRestoreConversation();
+      nativeSttRestoreAttemptedRef.current = true;
+      if (
+        hiddenNativeSttConversation
+        && suppressNativeSttRestoreConversationIdRef.current !== hiddenNativeSttConversation.id
+      ) {
+        // The hidden room mounts with an idle React state before its cached
+        // native status is applied. Keep a false sentinel so that its initial
+        // callback cannot PATCH the live conversation to paused; the first
+        // native running callback will promote it back to active.
+        conversationRunningStateRef.current.set(hiddenNativeSttConversation.id, false);
+        setLiveConversationId(hiddenNativeSttConversation.id);
+      }
+      return;
+    }
 
     const restoreConversationId = takeNativeRemountRestoreConversation();
     const explicitRestoreConversation = restoreConversationId
@@ -2414,6 +3592,7 @@ export default function ConversationList({
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
+        cachedNativeSttConversationId,
       );
       if (
         restoreConversation
@@ -2511,13 +3690,50 @@ export default function ConversationList({
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
-    if (showSearch) {
+    postNativeBannerZone(resolveConversationListNativeBannerZone({
+      isAuthenticated: sessionStatus === "authenticated",
+      hasActiveConversation: Boolean(activeConversation),
+      isSearchOpen: showSearch,
+      isListOverlayOpen: Boolean(
+        isCreateChoiceModalOpen
+        || rowActionMenu
+        || renameDialogConversationId
+        || deleteDialogConversationId
+        || languageOnboardingModalOpen
+        || notificationSurfaceOpen
+        || conversationProfileId
+      ),
+    }));
+  }, [
+    activeConversation,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isCreateChoiceModalOpen,
+    languageOnboardingModalOpen,
+    notificationSurfaceOpen,
+    renameDialogConversationId,
+    rowActionMenu,
+    sessionStatus,
+    showSearch,
+  ]);
+
+  useEffect(() => {
+    if (!isNativeAppRuntime() || sessionStatus === "authenticated") return;
+    const nativeClientBuild = new URLSearchParams(window.location.search).get("nativeClientBuild");
+    if (!shouldReassertNativeAuthBannerZone(nativeClientBuild)) return;
+
+    // Builds before 68 can restore the list banner after the authentication
+    // gate has already hidden it. Reassert the server-known auth state until
+    // login succeeds so deployed web code also protects existing TestFlight builds.
+    postNativeBannerZone("hidden");
+    const intervalId = window.setInterval(() => {
       postNativeBannerZone("hidden");
-      return;
-    }
-    if (activeConversation) return;
-    postNativeBannerZone("list");
-  }, [activeConversation, showSearch]);
+    }, 250);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [sessionStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2536,12 +3752,43 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
+    if (
+      !initialNativeUi
+      || initialConversations.length > 0
+      || initialWarmSnapshot !== null
+      || sessionStatus !== "authenticated"
+    ) {
+      return;
+    }
+
+    const cached = readConversationListCache(conversationCacheIdentity);
+    if (!cached) return;
+
+    conversationsRef.current = cached.conversations;
+    hasConversationListSnapshotRef.current = true;
+    setConversations(cached.conversations);
+    setConversationLocalStats(cached.localStats);
+    refreshConversationLocalStats(cached.conversations);
+    setTimeLabelsReady(true);
+    setIsHydratingConversations(false);
+  }, [
+    conversationCacheIdentity,
+    initialConversations.length,
+    initialNativeUi,
+    initialWarmSnapshot,
+    refreshConversationLocalStats,
+    sessionStatus,
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
     let timeoutId: number | null = null;
 
     const shouldRefreshInitialConversations = initialConversationsRequireRefresh
-      || initialConversations.length === 0;
+      || initialConversations.length === 0
+      || sessionStatus === "authenticated";
     if (!shouldRefreshInitialConversations) {
+      hasConversationListSnapshotRef.current = true;
       refreshConversationLocalStats(conversationsRef.current);
       setIsHydratingConversations(false);
       return () => {
@@ -2564,6 +3811,10 @@ export default function ConversationList({
         });
     };
 
+    if (sessionStatus === "authenticated" && !hasConversationListSnapshotRef.current) {
+      setIsHydratingConversations(true);
+    }
+
     if (initialConversationsRequireRefresh && initialConversations.length > 0) {
       timeoutId = window.setTimeout(runRefresh, 250);
     } else {
@@ -2581,6 +3832,97 @@ export default function ConversationList({
     initialConversationsRequireRefresh,
     refreshConversationList,
     refreshConversationLocalStats,
+    sessionStatus,
+  ]);
+
+  // Live sync for the LIST screen itself: a new message landing in ANY room
+  // this user belongs to should update its preview/ordering here without a
+  // manual refresh, not just inside an already-open room — mirrors
+  // use-realtime-stt.ts's per-room version of the same pattern, just scoped
+  // to this user's own list:<userId> topic on mingle-stt's event bus
+  // instead of one room's sessionKey. A long-interval poll is the fallback
+  // for whenever the socket is down or push is unconfigured.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const openSocket = async () => {
+      if (cancelled) return;
+      try {
+        const response = await fetch(buildConversationApiPath("/list-realtime-token"), {
+          cache: "no-store",
+          headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        });
+        if (!response.ok || cancelled) return;
+        const payload = await response.json() as { token?: string | null };
+        const token = payload.token;
+        const wsBase = getConversationEventsWsUrl();
+        if (!token || !wsBase || cancelled) return;
+
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+        socket.onmessage = () => {
+          void refreshConversationList();
+        };
+        socket.onclose = () => {
+          if (cancelled) return;
+          clearReconnectTimer();
+          reconnectTimer = window.setTimeout(openSocket, 5_000);
+        };
+      } catch {
+        // Realtime push failed to set up — the poll fallback below still runs.
+      }
+    };
+
+    void openSocket();
+
+    const pollIntervalMs = 20_000;
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshConversationList();
+    }, pollIntervalMs);
+
+    return () => {
+      cancelled = true;
+      clearReconnectTimer();
+      window.clearInterval(pollTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  }, [refreshConversationList]);
+
+  useEffect(() => {
+    if (
+      !initialNativeUi
+      || isHydratingConversations
+      || sessionStatus !== "authenticated"
+    ) {
+      return;
+    }
+
+    writeConversationListCache(
+      conversationCacheIdentity,
+      conversations,
+      conversationLocalStats,
+    );
+  }, [
+    conversationCacheIdentity,
+    conversationLocalStats,
+    conversations,
+    initialNativeUi,
+    isHydratingConversations,
+    sessionStatus,
   ]);
 
   useEffect(() => {
@@ -2698,8 +4040,16 @@ export default function ConversationList({
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
-    // Mark this conversation as manually closed so native STT restore,
-    // route-sync open, and popstate-open do not re-open it automatically.
+    // Mark this conversation as closed so native STT restore and non-history
+    // route-sync cannot re-open it automatically. An explicit history-forward
+    // popstate consumes this guard and restores the room.
+    postConversationHistoryDebug("close-conversation-overlay", {
+      conversationId: conversation.id,
+      animateExit: options?.animateExit === true,
+      replaceUrl: shouldReplaceUrl,
+      activeConversationId: activeConversationRef.current?.id ?? null,
+      suppressionBefore: suppressNativeSttRestoreConversationIdRef.current,
+    });
     suppressNativeSttRestoreConversationIdRef.current = conversation.id;
     if (activeConversationRef.current?.id === conversation.id) {
       activeConversationRef.current = null;
@@ -2708,7 +4058,7 @@ export default function ConversationList({
     postNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
-      replaceConversationOverlayUrl(null);
+      replaceConversationOverlayUrl(null, "close-conversation-overlay");
     }
 
     setOverlayExitMode(exitMode);
@@ -2735,10 +4085,26 @@ export default function ConversationList({
     const enterMode = options?.enterMode ?? "animate";
     const syncHistory = options?.syncHistory ?? "push";
     const clearSuppression = options?.clearManualCloseSuppression ?? (syncHistory === "push");
+    const suppressionBefore = suppressNativeSttRestoreConversationIdRef.current;
+
+    if (syncHistory === "push") {
+      conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
+      pendingConversationHistoryBackRef.current = false;
+    }
 
     if (clearSuppression) {
       suppressNativeSttRestoreConversationIdRef.current = null;
     }
+
+    postConversationHistoryDebug("open-conversation-summary", {
+      conversationId: conversation.id,
+      syncHistory,
+      enterMode,
+      clearManualCloseSuppression: clearSuppression,
+      suppressionBefore,
+      activeConversationId: activeConversationRef.current?.id ?? null,
+    });
 
     postNativeBannerZone("hidden");
     closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
@@ -2748,8 +4114,17 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
-    activeConversationRef.current = conversation;
-    setActiveConversation(conversation);
+    const openedConversation = conversation.unreadMessageCount
+      ? { ...conversation, unreadMessageCount: 0 }
+      : conversation;
+    activeConversationRef.current = openedConversation;
+    setActiveConversation(openedConversation);
+    setConversations((current) => current.map((currentConversation) => (
+      currentConversation.id === conversation.id
+        ? { ...currentConversation, unreadMessageCount: 0 }
+        : currentConversation
+    )));
+    markConversationAsRead(conversation.id);
 
     // Perform history sync here (not in an effect) so that restore / popstate-open
     // paths do not redundantly push duplicate ?conversation= entries.
@@ -2758,16 +4133,118 @@ export default function ConversationList({
       const nextUrl = buildConversationOverlayUrl(conversation.id);
       if (nextUrl && currentConversationId !== conversation.id) {
         if (syncHistory === "push") {
-          window.history.pushState({ conversationId: conversation.id }, "", nextUrl);
+          clearNativeTabRootFromCurrentHistoryEntry();
+          window.history.pushState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
         } else {
-          window.history.replaceState(window.history.state, "", nextUrl);
+          window.history.replaceState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
         }
         notifyLocationSearchSync();
+      } else if (nextUrl && currentConversationId === conversation.id) {
+        const currentHistoryRoute = readConversationHistoryRouteFromState(window.history.state);
+        if (currentHistoryRoute !== conversation.id) {
+          window.history.replaceState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
+          notifyLocationSearchSync();
+        }
       }
     }
 
-    return conversation;
-  }, [closeSearchOverlay]);
+    return openedConversation;
+  }, [closeSearchOverlay, markConversationAsRead]);
+
+  const startDirectConversationFromProfile = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    if (!conversation.id || pendingDirectConversationNavigationRef.current) return;
+
+    const surfaceEntries = readSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+    const profileEntry = [...surfaceEntries]
+      .reverse()
+      .find((entry) => entry.id === CONVERSATION_PROFILE_SURFACE_ID);
+    const profileUserId = profileEntry
+      ? profileEntry.value ?? conversationProfileId ?? ""
+      : conversationProfileId ?? "";
+    const currentConversation = activeConversationRef.current;
+    const currentConversationId = currentConversation?.id ?? readConversationIdFromLocation();
+    const isCurrentConversation = currentConversationId === conversation.id;
+    const token = directConversationNavigationTokenRef.current + 1;
+    directConversationNavigationTokenRef.current = token;
+    pendingDirectConversationNavigationRef.current = {
+      token,
+      profileUserId,
+    };
+
+    if (directConversationNavigationReleaseTimerRef.current !== null) {
+      window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      directConversationNavigationReleaseTimerRef.current = null;
+    }
+
+    try {
+      // Consume the profile and every conversation-owned parent surface. This
+      // removes notification/profile entries before the menu depth is reset.
+      await consumeSlideSurfaceHistoryForScope(CONVERSATION_SURFACE_SCOPE);
+      clearConversationSurfaceHistory();
+
+      const currentRoomRef = currentConversationId
+        ? conversationRoomRefs.current.get(currentConversationId)
+        : null;
+      await currentRoomRef?.resetNavigationOverlays();
+
+      if (isCurrentConversation) {
+        // Continuing the room that is already visible does not need a route
+        // entry. Close only the profile/menu surfaces and reveal that room.
+        setConversations((current) => upsertConversation(current, conversation));
+        return;
+      }
+
+      if (currentRoomRef?.isSttSessionRunning()) {
+        await currentRoomRef.stopRecording({ deferRunningStateChange: true });
+      }
+
+      if (currentConversation) {
+        // The current room entry is now the canonical list entry. The next
+        // openConversationSummary call will push exactly one room entry above
+        // it, producing [conversation list] -> [conversation room].
+        closeConversationOverlay(currentConversation, {
+          animateExit: false,
+          replaceUrl: true,
+        });
+      } else if (currentConversationId) {
+        activeConversationRef.current = null;
+        replaceConversationOverlayUrl(null, "direct-conversation-stack-reset");
+        setActiveConversation((current) => (
+          current?.id === currentConversationId ? null : current
+        ));
+      }
+
+      setConversations((current) => upsertConversation(current, conversation));
+      await openConversationSummary(conversation, {
+        enterMode: "instant",
+        syncHistory: "push",
+      });
+    } finally {
+      if (directConversationNavigationReleaseTimerRef.current !== null) {
+        window.clearTimeout(directConversationNavigationReleaseTimerRef.current);
+      }
+      directConversationNavigationReleaseTimerRef.current = window.setTimeout(() => {
+        if (pendingDirectConversationNavigationRef.current?.token === token) {
+          pendingDirectConversationNavigationRef.current = null;
+        }
+        directConversationNavigationReleaseTimerRef.current = null;
+      }, DIRECT_CONVERSATION_NAVIGATION_GUARD_MS);
+    }
+  }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
   const handleCreateConversation = useCallback(async () => {
@@ -2916,6 +4393,19 @@ export default function ConversationList({
     setRowActionMenu(null);
     suppressRowActionMenuUntilRef.current = Date.now() + ROW_ACTION_LONG_PRESS_DELAY_MS + 120;
 
+    // The overlay is hidden before history.back() settles. Android WebView can
+    // therefore deliver a row tap while the old room entry is still current;
+    // the delayed popstate would immediately close that newly opened room and
+    // make the first tap look ignored. Preserve the tap and replay it after
+    // the history transition commits.
+    if (pendingConversationHistoryBackRef.current) {
+      pendingConversationOpenAfterHistoryBackRef.current = matchedConversation.id;
+      postConversationHistoryDebug("queue-conversation-open-after-back", {
+        conversationId: matchedConversation.id,
+      });
+      return;
+    }
+
     try {
       await openConversationSummary(matchedConversation);
     } catch (error) {
@@ -2987,25 +4477,92 @@ export default function ConversationList({
   const handleCloseActiveConversation = useCallback(async () => {
     if (!activeConversation || isCreatingConversation) return;
 
+    const closingConversation = activeConversation;
+
+    // Closing the room is only a visual navigation action. A running room is
+    // retained in mountedConversations through liveConversationId, so its STT
+    // hook, native owner, message queue, and translations continue while the
+    // conversation list is visible. Explicit Stop, room deletion/leave, room
+    // switching, sign-out, and app teardown remain the session boundaries.
+
     const currentConversationId = readConversationIdFromLocation();
     if (
       typeof window !== "undefined"
-      && currentConversationId === activeConversation.id
+      && currentConversationId === closingConversation.id
       && window.history.length > 1
     ) {
       postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
-      closeConversationOverlay(activeConversation, { animateExit: true });
+      pendingConversationHistoryBackRef.current = true;
+      closeConversationOverlay(closingConversation, { animateExit: true });
       window.history.back();
       return;
     }
 
-    closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
+    closeConversationOverlay(closingConversation, { animateExit: true, replaceUrl: true });
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
+  useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      (activeConversation && !isCreatingConversation)
+      || showSearch
+      || notificationSurfaceOpen
+      || conversationProfileId
+      || rowActionMenu
+      || renameDialogConversationId
+      || deleteDialogConversationId
+      || languageOnboardingModalOpen
+    );
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [
+    activeConversation,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isCreatingConversation,
+    languageOnboardingModalOpen,
+    notificationSurfaceOpen,
+    renameDialogConversationId,
+    rowActionMenu,
+    showSearch,
+  ]);
+
   useEffect(() => registerNativeBackHandler(() => {
+    if (conversationProfileId) {
+      closeConversationSurface({
+        id: CONVERSATION_PROFILE_SURFACE_ID,
+        value: conversationProfileId,
+      });
+      return true;
+    }
+    if (notificationSurfaceOpen) {
+      closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+      return true;
+    }
     if (showSearch && !activeConversation) {
       closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
+      return true;
+    }
+    if (rowActionMenu) {
+      setRowActionMenu(null);
+      return true;
+    }
+    if (renameDialogConversationId) {
+      if (!isRenamingConversation) {
+        setRenameDialogConversationId(null);
+        setRenameConversationValue("");
+      }
+      return true;
+    }
+    if (deleteDialogConversationId) {
+      if (!isDeletingConversation) {
+        setDeleteDialogConversationId(null);
+      }
+      return true;
+    }
+    if (languageOnboardingModalOpen) {
       return true;
     }
     if (!activeConversation || isCreatingConversation) return false;
@@ -3014,31 +4571,227 @@ export default function ConversationList({
   }, 5), [
     activeConversation,
     closeConversationOverlay,
+    closeConversationSurface,
     closeSearchOverlay,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isDeletingConversation,
+    isRenamingConversation,
     isCreatingConversation,
+    languageOnboardingModalOpen,
+    notificationSurfaceOpen,
+    renameDialogConversationId,
+    rowActionMenu,
     showSearch,
   ]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // This listener must run in the capture phase. The location store also
+    // listens to popstate and can synchronously flush a React render before
+    // the normal bubble-phase handlers run. Recording the destination here
+    // prevents route-sync from mistaking an explicit forward gesture for a
+    // native-STT restore and replacing the room entry with a list entry.
+    const handlePopStateCapture = (event: PopStateEvent) => {
+      const activeConversationId = activeConversationRef.current?.id ?? null;
+      const currentRouteConversationId = readConversationIdFromLocation();
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
+      const direction = resolveConversationHistoryNavigationDirection(
+        activeConversationId,
+        historyTargetConversationId,
+      );
+
+      conversationHistoryPopStateTransitionRef.current = {
+        conversationId: historyTargetConversationId,
+        direction,
+      };
+      conversationHistoryPopStateTargetRef.current = {
+        conversationId: historyTargetConversationId,
+      };
+      postConversationHistoryDebug("popstate-capture", {
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId,
+        direction,
+      });
+    };
+
+    window.addEventListener("popstate", handlePopStateCapture, true);
+    return () => {
+      window.removeEventListener("popstate", handlePopStateCapture, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const capturedHistoryTransition = conversationHistoryPopStateTransitionRef.current;
     if (activeConversation) {
+      const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
+      if (
+        pendingHistoryTarget?.conversationId === activeConversation.id
+        && routeConversationId === activeConversation.id
+      ) {
+        conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
+      }
       routeSyncConversationIdRef.current = null;
       return;
     }
 
-    if (!routeConversationId) {
+    // The room was just deleted/left by this client (see handleConversationDeleted)
+    // — the URL racing back to it (e.g. the leave flow's requestCloseMenuPanel
+    // doing a multi-step history.go() that lands on an older history entry
+    // which still has this room's ?conversation= id) is stale history, not a
+    // real "failed to open." Clear it instead of hydrating/alerting.
+    if (routeConversationId && deletingConversationIdsRef.current.has(routeConversationId)) {
+      if (readConversationIdFromLocation() === routeConversationId) {
+        replaceConversationOverlayUrl(null, "route-sync-deleting-conversation");
+      }
       routeSyncConversationIdRef.current = null;
       return;
     }
-    if (routeSyncConversationIdRef.current === routeConversationId) return;
+
+    const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
+    if (!routeConversationId) {
+      // A native gesture can deliver the popstate target before the URL store
+      // catches up. Keep the explicit target alive so a stale room URL cannot
+      // trigger the native-STT suppression cleanup path and rewrite that room
+      // history entry into another list entry.
+      if (
+        pendingHistoryTarget?.conversationId
+        || (
+          capturedHistoryTransition?.direction === "forward"
+          && capturedHistoryTransition.conversationId
+        )
+      ) return;
+      routeSyncConversationIdRef.current = null;
+      conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
+      pendingConversationHistoryBackRef.current = false;
+
+      const queuedConversationId = pendingConversationOpenAfterHistoryBackRef.current;
+      pendingConversationOpenAfterHistoryBackRef.current = null;
+      if (queuedConversationId) {
+        const queuedConversation = conversationsRef.current.find(
+          (conversation) => conversation.id === queuedConversationId,
+        );
+        if (queuedConversation) {
+          window.setTimeout(() => {
+            void openConversationSummary(queuedConversation, {
+              enterMode: "animate",
+              syncHistory: "push",
+            }).catch((error: unknown) => {
+              const aborted = isAbortLikeMutationError(error);
+              logConversationMutationFailure({
+                label: "route-open",
+                conversationId: queuedConversation.id,
+                error,
+                aborted,
+              });
+              if (!aborted) window.alert(copy.openErrorMessage);
+            });
+          }, 0);
+        }
+      }
+      return;
+    }
+    // If the URL still describes the previous screen, wait for the browser's
+    // history commit instead of treating the room query as an automatic/native
+    // restore. The popstate handler has already recorded the intended target.
+    if (pendingHistoryTarget && pendingHistoryTarget.conversationId !== routeConversationId) {
+      return;
+    }
+    // During a native edge swipe the URL can temporarily still describe the
+    // source entry. Wait for the destination rather than running automatic
+    // restore/suppression logic against that stale room URL.
+    if (
+      capturedHistoryTransition
+      && capturedHistoryTransition.direction !== "unknown"
+      && capturedHistoryTransition.conversationId !== routeConversationId
+    ) {
+      return;
+    }
+    const isHistoryRestore = pendingHistoryTarget?.conversationId
+      === routeConversationId
+      || (
+        capturedHistoryTransition?.direction === "forward"
+        && capturedHistoryTransition.conversationId === routeConversationId
+      );
+    if (routeSyncConversationIdRef.current === routeConversationId && !isHistoryRestore) return;
     if (isCreatingConversation || isImportingLegacyConversation) return;
+    // A freshly-created room can be present in the URL before the list refresh
+    // has returned it. Do not treat that normal hydration window as a missing
+    // room, and do not open another surface against a stale list snapshot.
+    if (isHydratingConversations) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
-    if (!matchedConversation) return;
+    if (!matchedConversation) {
+      if (routeConversationHydrationRef.current === routeConversationId) return;
 
-    // User manually closed this conversation — clean up URL instead of re-opening via route-sync.
-    if (suppressNativeSttRestoreConversationIdRef.current === routeConversationId) {
+      routeConversationHydrationRef.current = routeConversationId;
+      void hydrateConversationSummary(routeConversationId)
+        .then((hydratedConversation) => {
+          if (readConversationIdFromLocation() !== routeConversationId) return;
+
+          setConversations((current) => upsertConversation(current, hydratedConversation));
+          routeSyncConversationIdRef.current = routeConversationId;
+          return openConversationSummary(hydratedConversation, {
+            enterMode: "instant",
+            syncHistory: "none",
+            clearManualCloseSuppression: isHistoryRestore,
+          });
+        })
+        .catch((error: unknown) => {
+          routeSyncConversationIdRef.current = null;
+          if (readConversationIdFromLocation() === routeConversationId) {
+            replaceConversationOverlayUrl(null, "route-conversation-hydration-failed");
+          }
+          const aborted = isAbortLikeMutationError(error);
+          logConversationMutationFailure({
+            label: "route-hydrate",
+            conversationId: routeConversationId,
+            error,
+            aborted,
+          });
+          if (aborted) return;
+          window.alert(copy.openErrorMessage);
+        })
+        .finally(() => {
+          if (routeConversationHydrationRef.current === routeConversationId) {
+            routeConversationHydrationRef.current = null;
+          }
+        });
+      return;
+    }
+
+    if (isHistoryRestore) {
+      conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
+    }
+
+    // A room URL that appears without a popstate is still an automatic/native
+    // restore. Keep the manual-close guard for that path, while allowing an
+    // explicit browser forward gesture to restore the room below.
+    if (
+      !isHistoryRestore
+      && suppressNativeSttRestoreConversationIdRef.current === routeConversationId
+    ) {
+      if (pendingConversationHistoryBackRef.current) return;
+      postConversationHistoryDebug("route-sync-suppression-branch", {
+        routeConversationId,
+        pendingHistoryTarget: pendingHistoryTarget?.conversationId ?? null,
+        capturedHistoryTransition,
+        activeConversationId: activeConversationRef.current?.id ?? null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        routeSyncConversationId: routeSyncConversationIdRef.current,
+      });
       routeSyncConversationIdRef.current = routeConversationId;
-      replaceConversationOverlayUrl(null);
+      replaceConversationOverlayUrl(null, "route-sync-native-stt-suppression");
       return;
     }
 
@@ -3046,10 +4799,11 @@ export default function ConversationList({
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
       syncHistory: "none", // URL already reflects the route-sync target; no push needed
+      clearManualCloseSuppression: isHistoryRestore,
     }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
-        replaceConversationOverlayUrl(null);
+        replaceConversationOverlayUrl(null, "route-sync-open-failed");
       }
       const aborted = isAbortLikeMutationError(error);
       logConversationMutationFailure({
@@ -3065,7 +4819,9 @@ export default function ConversationList({
     activeConversation,
     conversations,
     copy.openErrorMessage,
+    hydrateConversationSummary,
     isCreatingConversation,
+    isHydratingConversations,
     isImportingLegacyConversation,
     mutatingConversationId,
     openConversationSummary,
@@ -3097,12 +4853,42 @@ export default function ConversationList({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       const currentActiveConversation = activeConversationRef.current;
       const currentRouteConversationId = readConversationIdFromLocation();
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
+      postConversationHistoryDebug("popstate-close-handler", {
+        handler: "close",
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId: currentActiveConversation?.id ?? null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        pendingHistoryTarget: conversationHistoryPopStateTargetRef.current?.conversationId ?? null,
+      });
+      pendingConversationHistoryBackRef.current = false;
+
+      // Use the current history entry's explicit route marker when available.
+      // During an iOS edge-swipe, the WebView URL and a delayed popstate event
+      // can briefly describe an older entry; recording the settled entry keeps
+      // that stale list event from closing a room that was just restored.
+      const isRoomHistoryTransition = (
+        currentActiveConversation
+          && historyTargetConversationId !== currentActiveConversation.id
+      ) || (
+        !currentActiveConversation
+          && historyTargetConversationId !== null
+      );
+      conversationHistoryPopStateTargetRef.current = isRoomHistoryTransition
+        ? { conversationId: historyTargetConversationId }
+        : null;
 
       if (!currentActiveConversation) return;
-      if (currentRouteConversationId === currentActiveConversation.id) return;
+      if (historyTargetConversationId === currentActiveConversation.id) return;
 
       const animateExit = pendingHistoryCloseAnimationRef.current === "animate"
         || consumeNativeHistoryCloseAnimationFlag();
@@ -3114,43 +4900,82 @@ export default function ConversationList({
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [closeConversationOverlay]);
+  }, [closeConversationOverlay, copy.openErrorMessage, openConversationSummary]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       if (activeConversationRef.current) return;
 
       const currentRouteConversationId = readConversationIdFromLocation();
-      if (!currentRouteConversationId) return;
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
+      postConversationHistoryDebug("popstate-open-handler", {
+        handler: "open",
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId: null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        pendingHistoryTarget: conversationHistoryPopStateTargetRef.current?.conversationId ?? null,
+      });
+      if (!historyTargetConversationId) return;
       if (isCreatingConversationRef.current || isImportingLegacyConversationRef.current) return;
 
       const matchedConversation = conversationsRef.current.find(
-        (conversation) => conversation.id === currentRouteConversationId,
+        (conversation) => conversation.id === historyTargetConversationId,
       );
       if (!matchedConversation) return;
 
-      // User manually closed this conversation — clean up URL instead of re-opening via popstate.
-      if (suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId) {
-        routeSyncConversationIdRef.current = currentRouteConversationId;
-        replaceConversationOverlayUrl(null);
-        return;
+      const isHistoryRestore = conversationHistoryPopStateTargetRef.current?.conversationId
+        === historyTargetConversationId;
+      if (isHistoryRestore && currentRouteConversationId === historyTargetConversationId) {
+        conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
       }
 
-      routeSyncConversationIdRef.current = currentRouteConversationId;
+      const isExplicitSuppressedRestore = (
+        !isHistoryRestore
+        && suppressNativeSttRestoreConversationIdRef.current === historyTargetConversationId
+      );
+
+      postConversationHistoryDebug("popstate-open-decision", {
+        handler: "open",
+        currentRouteConversationId,
+        historyTargetConversationId,
+        isHistoryRestore,
+        isExplicitSuppressedRestore,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        activeConversationId: null,
+      });
+
+      // A forward popstate is an explicit request to restore the room. If the
+      // capture-phase target was unavailable for any reason, clear the close
+      // guard and continue opening the room. Never replace the current room
+      // entry with a list URL here; that mutates the native history stack.
+      if (isExplicitSuppressedRestore) {
+        conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
+      }
+
+      routeSyncConversationIdRef.current = historyTargetConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
         syncHistory: "none", // popstate already updated the URL; no push needed
+        clearManualCloseSuppression: isHistoryRestore || isExplicitSuppressedRestore,
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
-        if (readConversationIdFromLocation() === currentRouteConversationId) {
-          replaceConversationOverlayUrl(null);
+        if (readConversationIdFromLocation() === historyTargetConversationId) {
+          replaceConversationOverlayUrl(null, "popstate-open-failed");
         }
         const aborted = isAbortLikeMutationError(error);
         logConversationMutationFailure({
           label: "popstate-open",
-          conversationId: currentRouteConversationId,
+          conversationId: historyTargetConversationId,
           error,
           aborted,
         });
@@ -3170,8 +4995,177 @@ export default function ConversationList({
     resetPullRefresh();
   }, [activeConversation, resetPullRefresh]);
 
+  const handleLanguageOnboardingConfirm = useCallback(async (
+    payload: LanguageOnboardingConfirmPayload | string,
+  ) => {
+    const languageCode = typeof payload === "string" ? payload : payload.language;
+    const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
+    const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
+    const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
+
+    // Seed the room's default output languages from the chosen app language the
+    // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
+    // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
+    const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
+    const normalizedPrimaryLanguages = sanitizeSttLanguageSelection(
+      [languageCode],
+      normalizedTargets.slice(0, 1),
+    );
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
+      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
+      window.localStorage.setItem(
+        LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+        JSON.stringify(normalizedTargets),
+      );
+      window.localStorage.setItem(
+        LS_KEY_PENDING_PRIMARY_LANGUAGES,
+        JSON.stringify(normalizedPrimaryLanguages),
+      );
+      if (formattedBirthDate) {
+        window.localStorage.setItem(LS_KEY_PENDING_BIRTH_DATE, formattedBirthDate);
+      }
+      if (discoverySource) {
+        window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
+      }
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    let savedPrimaryLanguages: string[] = normalizedPrimaryLanguages;
+    let savedDefaultLanguages: string[] = normalizedTargets;
+    if (sessionStatus === "authenticated") {
+      try {
+        const profileResponse = await fetch(buildClientApiPath("/profile"), {
+          cache: "no-store",
+        });
+        if (!profileResponse.ok) return;
+
+        const profile = await profileResponse.json() as ProfileLanguagePreferencesPayload;
+        let resolvedPreferences = resolveOnboardingLanguagePreferences(
+          profile,
+          normalizedPrimaryLanguages,
+          normalizedTargets,
+        );
+
+        const patchPayload: Record<string, unknown> = {
+          ...resolvedPreferences.patch,
+        };
+        if (formattedBirthDate) {
+          patchPayload.birthDate = formattedBirthDate;
+        }
+        if (discoverySource) {
+          patchPayload.discoverySource = discoverySource;
+        }
+
+        if (Object.keys(patchPayload).length > 0) {
+          const saveResponse = await fetch(buildClientApiPath("/profile"), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patchPayload),
+          });
+          if (!saveResponse.ok) return;
+
+          const savedProfile = await saveResponse.json() as ProfileLanguagePreferencesPayload;
+          resolvedPreferences = resolveOnboardingLanguagePreferences(
+            savedProfile,
+            resolvedPreferences.primaryLanguages,
+            resolvedPreferences.defaultConversationLanguages,
+          );
+        }
+
+        savedPrimaryLanguages = resolvedPreferences.primaryLanguages;
+        savedDefaultLanguages = resolvedPreferences.defaultConversationLanguages;
+        clearPendingLanguagePreferences();
+        clearPendingBirthDate();
+        clearPendingDiscoverySource();
+      } catch {
+        return;
+      }
+    }
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    defaultConversationLanguagesSyncVersionRef.current += 1;
+    setPreferredDisplayLanguages(savedPrimaryLanguages);
+    setDefaultSelectedLanguages(savedDefaultLanguages);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT, {
+        detail: savedDefaultLanguages,
+      }));
+    }
+
+    const nextUiLocale = resolveUiLocaleForLanguage(savedDefaultLanguages[0] ?? languageCode);
+    storeAppLocale(nextUiLocale);
+    if (nextUiLocale !== locale) {
+      setLanguageOnboardingPhase("locale-switching");
+      window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
+      return;
+    }
+
+    setLanguageOnboardingPhase("ready");
+  }, [locale, sessionStatus]);
+
+  const languageOnboardingDefaultLanguage = useMemo(() => {
+    const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
+    const persisted = readPersistedLivePhoneDemoPreferences(fallbackLanguages);
+    return resolveOnboardingDefaultLanguage(persisted.selectedLanguages, locale);
+    // Recompute from localStorage each time the modal opens, so a reopen after an
+    // earlier confirm (without a full page reload) reflects the latest saved choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, languageOnboardingModalOpen]);
+  const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "resolving"
+    || languageOnboardingPhase === "locale-switching"
+    || (languageOnboardingPhase === "ready" && sessionStatus === "loading");
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+
+      <NativePushRegistration />
+
+      {shouldShowLanguageBootstrapShell ? (
+        <div
+          className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
+          role="status"
+          aria-live="polite"
+          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+        >
+          <div className="flex flex-col items-center gap-5">
+            <MingleWordmark />
+            <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
+          </div>
+        </div>
+      ) : null}
+
+      {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
+        <div
+          className="absolute inset-0 z-[200] flex min-h-0 w-full overflow-hidden bg-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label={dictionary.profile.authTitle}
+        >
+          <Suspense
+            fallback={(
+              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+                <Loader2 size={24} className="animate-spin" aria-hidden />
+              </div>
+            )}
+          >
+            <MingleHome
+              authOnly
+              dictionary={dictionary}
+              appleOAuthEnabled={appleOAuthEnabled}
+              googleOAuthEnabled={googleOAuthEnabled}
+              locale={locale}
+            />
+          </Suspense>
+        </div>
+      ) : null}
 
       {isClientReady ? (
         <SearchOverlay
@@ -3195,14 +5189,32 @@ export default function ConversationList({
       >
         <MingleWordmark />
 
-        <button
-          type="button"
-          onClick={handleOpenSearch}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
-          aria-label={copy.searchButtonLabel}
-        >
-          <Search size={22} strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleOpenSearch}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+            aria-label={copy.searchButtonLabel}
+          >
+            <Search size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={openNotifications}
+            className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+            aria-label={notificationCopy.buttonLabel}
+          >
+            <Bell size={22} strokeWidth={2} />
+            {unreadNotificationCount > 0 ? (
+              <span
+                className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white"
+                aria-label={`${unreadNotificationCount} ${notificationCopy.unreadSectionLabel}`}
+              >
+                {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </header>
 
       <div
@@ -3210,7 +5222,7 @@ export default function ConversationList({
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
-          paddingBottom: "20px",
+          paddingBottom: `${conversationListScrollPaddingBottomPx}px`,
         }}
         onTouchStart={(event) => {
           if (showSearch || activeConversation || isRefreshingConversations) return;
@@ -3335,16 +5347,21 @@ export default function ConversationList({
         </div>
       </div>
 
-      <footer className="shrink-0">
+      <div
+        className="absolute inset-x-0 z-20"
+        style={{
+          bottom: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
+        }}
+      >
         <button
           type="button"
-          onClick={handleCreateConversation}
+          onClick={() => setIsCreateChoiceModalOpen(true)}
           disabled={actionDisabled}
           className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
           style={{
-            minHeight: "72px",
-            paddingBottom: conversationListFooterPaddingBottom,
+            minHeight: `${CONVERSATION_CREATE_BUTTON_HEIGHT_PX}px`,
+            paddingBottom: "16px",
             backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
           }}
         >
@@ -3353,10 +5370,8 @@ export default function ConversationList({
               isCreatingConversation ? "opacity-0" : "opacity-100"
             }`}
           >
-            <>
-              <span>{copy.newConversationButtonLabel}</span>
-              <ArrowRight size={18} strokeWidth={2.4} />
-            </>
+            <span>{copy.newConversationButtonLabel}</span>
+            <ArrowRight size={18} strokeWidth={2.4} />
           </span>
           {isCreatingConversation ? (
             <span className="absolute inset-0 flex items-center justify-center">
@@ -3364,7 +5379,14 @@ export default function ConversationList({
             </span>
           ) : null}
         </button>
-      </footer>
+      </div>
+
+      <BottomTabBar
+        activeRoute="conversations"
+        dictionary={dictionary}
+        locale={locale}
+        unreadConversationMessageCount={unreadConversationMessageCount}
+      />
 
       {isClientReady && typeof document !== "undefined"
         ? createPortal(
@@ -3412,8 +5434,17 @@ export default function ConversationList({
                     }}
                     className="flex w-full items-center justify-between rounded-b-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
                   >
-                    <span>{deleteConversationCopy.menuItemLabel}</span>
-                    <Trash2 className="h-4 w-4 shrink-0 text-slate-400" />
+                    {rowActionMenu.item.isMultiMember ? (
+                      <>
+                        <span>{leaveConversationCopy.menuItemLabel}</span>
+                        <LogOut className="h-4 w-4 shrink-0 text-slate-400" />
+                      </>
+                    ) : (
+                      <>
+                        <span>{deleteConversationCopy.menuItemLabel}</span>
+                        <Trash2 className="h-4 w-4 shrink-0 text-slate-400" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>,
@@ -3424,17 +5455,18 @@ export default function ConversationList({
                 const isVisible = activeConversation?.id === conversation.id;
 
                 return (
-                  <motion.div
+                  <SlideSurface
                     key={conversation.id}
-                    custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                    variants={conversationOverlayVariants}
-                    initial="initial"
-                    animate={isVisible ? "active" : "retained"}
-                    exit="exit"
+                    open={isVisible}
+                    onClose={() => void handleCloseActiveConversation()}
+                    onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
+                    ariaLabel={conversation.title}
+                    role="main"
+                    nativeBackPriority={4}
                     className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
                       isVisible ? "" : "pointer-events-none"
                     }`}
-                    aria-hidden={!isVisible}
+                    style={{ touchAction: "pan-y" }}
                   >
                     <Suspense
                       fallback={(
@@ -3454,16 +5486,25 @@ export default function ConversationList({
                         locale={locale}
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
+                        onOpenProfile={openConversationProfile}
+                        onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}
                         conversationTitle={conversation.title}
+                        isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
+                        preferredDisplayLanguage={preferredDisplayLanguage}
+                        preferredDisplayLanguages={preferredDisplayLanguages}
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
                         initialSelectedLanguages={conversation.selectedLanguages}
+                        initialOwnSelectedLanguages={conversation.viewerSelectedLanguages}
+                        selectedLanguagesAttribution={conversation.selectedLanguagesAttribution}
                         initialSpeechLanguages={conversation.speechLanguages}
                         initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
+                        initialDefaultDisplayLanguage={conversation.defaultDisplayLanguage ?? null}
                         autoStartOnMount={conversation.id === autoStartConversationId}
                         onAutoStartHandled={() => {
                           setAutoStartConversationId((current) => (
@@ -3479,6 +5520,9 @@ export default function ConversationList({
                         onLatestUtteranceChange={(payload) => {
                           handleConversationLatestUtteranceChange(conversation.id, payload);
                         }}
+                        onLatestUtterancePreviewChange={(payload) => {
+                          handleConversationLatestUtterancePreviewChange(conversation.id, payload);
+                        }}
                         onConversationStatsChange={(payload) => {
                           handleConversationStatsChange(conversation.id, payload);
                         }}
@@ -3491,12 +5535,38 @@ export default function ConversationList({
                         onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
                           handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
                         }}
+                        onDefaultDisplayLanguageChange={(defaultDisplayLanguage) => {
+                          handleConversationDefaultDisplayLanguageChange(conversation.id, defaultDisplayLanguage);
+                        }}
                       />
                     </Suspense>
-                  </motion.div>
+                  </SlideSurface>
                 );
               })}
             </AnimatePresence>
+            <NotificationPanel
+              open={notificationSurfaceOpen}
+              enabled={sessionStatus === "authenticated"}
+              locale={locale}
+              dictionary={dictionary}
+              onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
+              onOpenProfile={openConversationProfile}
+              onUnreadCountChange={setUnreadNotificationCount}
+            />
+            <PublicUserProfileScreen
+              dictionary={dictionary}
+              locale={locale}
+              userId={conversationProfileId ?? ""}
+              open={Boolean(conversationProfileId)}
+              onStartDirectConversation={startDirectConversationFromProfile}
+              onClose={() => {
+                if (!conversationProfileId) return;
+                closeConversationSurface({
+                  id: CONVERSATION_PROFILE_SURFACE_ID,
+                  value: conversationProfileId,
+                });
+              }}
+            />
           </>,
           document.body,
         )
@@ -3594,15 +5664,15 @@ export default function ConversationList({
               transition={{ duration: 0.2, ease: "easeOut" }}
               role="dialog"
               aria-modal="true"
-              aria-label={deleteConversationCopy.dialogTitle}
+              aria-label={deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
               onClick={(event) => event.stopPropagation()}
               className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
             >
               <p className="text-sm font-semibold text-gray-900">
-                {deleteConversationCopy.dialogTitle}
+                {deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogTitle : deleteConversationCopy.dialogTitle}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                {deleteConversationCopy.dialogMessage}
+                {deleteDialogTargetIsMultiMember ? leaveConversationCopy.dialogMessage : deleteConversationCopy.dialogMessage}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
@@ -3614,25 +5684,87 @@ export default function ConversationList({
                   disabled={isDeletingConversation}
                   className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {deleteConversationCopy.cancelLabel}
+                  {deleteDialogTargetIsMultiMember ? leaveConversationCopy.cancelLabel : deleteConversationCopy.cancelLabel}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    void handleDeleteConversationFromList();
+                    void handleRemoveConversationFromList();
                   }}
                   disabled={isDeletingConversation}
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
                 >
-                  {isDeletingConversation
-                    ? deleteConversationCopy.deletingLabel
-                    : deleteConversationCopy.confirmLabel}
+                  {deleteDialogTargetIsMultiMember
+                    ? (isDeletingConversation ? leaveConversationCopy.leavingLabel : leaveConversationCopy.confirmLabel)
+                    : (isDeletingConversation ? deleteConversationCopy.deletingLabel : deleteConversationCopy.confirmLabel)}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+        {isCreateChoiceModalOpen ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+            onClick={() => setIsCreateChoiceModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={copy.newConversationButtonLabel}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+            >
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    void handleCreateConversation();
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-gray-300 text-[15px] font-semibold text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {copy.startAloneOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    router.push(buildPathWithCurrentSearchParams(`/${locale}/conversations/new-group`));
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl text-[15px] font-semibold text-white transition-colors"
+                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+                >
+                  {copy.inviteFriendsOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateChoiceModalOpen(false)}
+                  className="mt-1 inline-flex h-10 items-center justify-center rounded-lg text-[14px] font-medium text-gray-500 transition-colors hover:bg-gray-100"
+                >
+                  {copy.cancelAction}
                 </button>
               </div>
             </motion.div>
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {languageOnboardingModalOpen ? (
+        <LanguageOnboardingModal
+          dismissible={false}
+          initialLanguage={languageOnboardingDefaultLanguage}
+          uiLocale={locale}
+          onConfirm={handleLanguageOnboardingConfirm}
+        />
+      ) : null}
     </main>
   );
 }

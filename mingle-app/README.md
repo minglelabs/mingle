@@ -376,8 +376,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Railway deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional compatibility fallback override; device builds default to the current Railway web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional compatibility fallback override; device builds default to the current Railway STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.3`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.1.3`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.0.0`; Android uses `android/v2.0.1`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.0.0`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -397,6 +397,14 @@ Server client version policy is managed through env values.
   - If the iOS min version env is missing or has an invalid semver, the API fails closed with `force_update`.
   - If Android env is empty, the API falls back to the iOS env once.
   - If `LATEST_VERSION` is empty or invalid, the API falls back to `RECOMMENDED_BELOW_VERSION`, then to `MIN_SUPPORTED_VERSION`.
+
+Profile QR links use the immutable user ID in an HTTPS `/p/{userId}` path. The web route shows an install prompt and does not render a profile in the browser. Configure app-link metadata with:
+
+- `ANDROID_APP_LINK_PACKAGE_NAME`
+- `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` (comma-separated Google Play app-signing certificate fingerprints)
+- `IOS_ASSOCIATED_DOMAINS_APP_ID` (Apple Team ID plus the native bundle ID)
+
+The iOS association file is served at `/.well-known/apple-app-site-association`, and the Android association file is served at `/.well-known/assetlinks.json`. The first release uses a link re-open or QR re-scan after installation instead of storing deferred deep-link state.
 
 Example (`.env.local`):
 

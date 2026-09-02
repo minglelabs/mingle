@@ -20,6 +20,11 @@ import {
   normalizeSelectableTranslationModel,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_BUBBLE_DISPLAY_MODE,
+  normalizeLivePhoneDemoBubbleDisplayMode,
+  type LivePhoneDemoBubbleDisplayMode,
+} from './live-phone-demo.bubble-display'
 
 const MIN_TEXT_SIZE_LEVEL = 1
 const MAX_TEXT_SIZE_LEVEL = 5
@@ -40,6 +45,7 @@ export type AccountPreferencesResponse = {
   inputMode?: unknown
   speakerEnabled?: unknown
   echoAllowed?: unknown
+  bubbleDisplayMode?: unknown
   sttSegmentationMode?: unknown
 }
 
@@ -53,6 +59,7 @@ export interface LivePhoneDemoAccountPreferences {
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
   echoAllowed: boolean
+  bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
   sttSegmentationMode: SttSegmentationMode | null
 }
 
@@ -66,6 +73,7 @@ export interface AccountPreferencesPatchBody {
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
   echoAllowed: boolean
+  bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
   sttSegmentationMode: SttSegmentationMode | null
 }
 
@@ -153,6 +161,8 @@ export function buildHydratedAccountPreferences(
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
     echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
+    bubbleDisplayMode: normalizeLivePhoneDemoBubbleDisplayMode(body?.bubbleDisplayMode)
+      || DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: normalizeSttSegmentationMode(body?.sttSegmentationMode) ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
   }
 }
@@ -170,6 +180,7 @@ export function buildAccountPreferencesPatchBody(
     inputMode: preferences.inputMode,
     speakerEnabled: preferences.speakerEnabled,
     echoAllowed: preferences.echoAllowed,
+    bubbleDisplayMode: preferences.bubbleDisplayMode,
     sttSegmentationMode: preferences.sttSegmentationMode,
   }
 }
@@ -187,6 +198,7 @@ export function serializeAccountPreferencesSyncState(
     preferences.inputMode,
     preferences.speakerEnabled ? '1' : '0',
     preferences.echoAllowed ? '1' : '0',
+    preferences.bubbleDisplayMode,
     preferences.sttSegmentationMode ?? '',
   ].join(':')
 }
