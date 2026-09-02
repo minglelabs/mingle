@@ -377,6 +377,7 @@
         right: clamp(38px, 5vw, 88px);
         width: clamp(590px, 55vw, 920px);
         height: clamp(510px, 65vh, 700px);
+        padding: 0 clamp(18px, 2vw, 32px);
       }
 
       .slide-market-grid {
@@ -392,7 +393,7 @@
         position: relative;
         min-height: 0;
         overflow: hidden;
-        padding: clamp(22px, 2.3vw, 34px);
+        padding: clamp(14px, 1.6vw, 22px) clamp(6px, 0.8vw, 12px) 0;
         border: 0;
         border-radius: 0;
         background: transparent;
@@ -418,17 +419,19 @@
       .slide-market-category-title {
         position: relative;
         z-index: 1;
+        width: 100%;
         margin: 0;
         color: var(--market-accent);
-        font-size: clamp(1.32rem, 1.8vw, 2rem);
+        font-size: clamp(1.55rem, 2.15vw, 2.35rem);
         font-weight: 850;
         line-height: 1.12;
         letter-spacing: -0.04em;
+        text-align: center;
       }
 
       .slide-market-logo-cloud {
         position: absolute;
-        inset: 28% 9% 9%;
+        inset: 20% 2% 0;
       }
 
       .slide-market-logo {
@@ -442,7 +445,7 @@
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 16px 30px rgba(66, 49, 15, 0.15);
         object-fit: contain;
-        transform: translate(-50%, -50%) rotate(var(--r));
+        transform: translate(-50%, -50%) rotate(var(--r)) scale(1.15);
       }
 
       .slide-side-media--hellotalk-primary {
@@ -1924,6 +1927,7 @@
       html.is-mobile-viewport .slide-side-media--market {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
+        padding: 0 6px;
       }
 
       html.is-mobile-viewport .slide-market-grid {
@@ -1931,21 +1935,21 @@
       }
 
       html.is-mobile-viewport .slide-market-category {
-        padding: 16px 11px 10px;
+        padding: 8px 4px 0;
       }
 
       html.is-mobile-viewport .slide-market-category-title {
-        font-size: clamp(0.98rem, 3.65vw, 1.25rem);
+        font-size: clamp(1.15rem, 4.4vw, 1.5rem);
         line-height: 1.15;
       }
 
       html.is-mobile-viewport .slide-market-logo-cloud {
-        inset: 32% 5% 7%;
+        inset: 24% 1% 0;
       }
 
       html.is-mobile-viewport .slide-market-logo {
-        width: clamp(32px, 10vw, 52px);
-        height: clamp(32px, 10vw, 52px);
+        width: clamp(36px, 10.8vw, 58px);
+        height: clamp(36px, 10.8vw, 58px);
         padding: 5px;
         border-radius: 12px;
       }

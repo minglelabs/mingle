@@ -442,3 +442,11 @@
 - User impact: Viewers could focus on the panel decoration instead of quickly scanning the category names and the services grouped beneath them.
 - Resolution: Removed category backgrounds, rounded-card treatment, shadows, glow ornaments, and corner dots. Kept the 2x2 placement, category names, per-category title colors, and irregular icon clouds as the only visual structure.
 - Tests: Rechecked the market slide at desktop and mobile sizes, confirmed all 14 local icons load, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After simplifying the market slide to names and icons, category labels were left-aligned, the overall grid sat too close to the viewport edge, and the icon clouds left too much unused space inside each 2x2 area.
+- User impact: The category groups felt visually unbalanced and the service icons had less emphasis than the market comparison needed.
+- Resolution: Centered every category title, added balanced outer padding around the market grid, reduced the internal category and icon-cloud insets, and increased the title and icon scale while preserving the irregular positions and responsive 2x2 layout.
+- Tests: Verified all four titles use centered alignment, all 14 local icons load, the `04 / 07` counter remains correct, page three remains centered, and the layout has no body overflow at desktop and mobile sizes.
