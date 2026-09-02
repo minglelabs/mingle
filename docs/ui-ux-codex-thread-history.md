@@ -418,3 +418,11 @@
 - User impact: Viewers could not immediately distinguish between wanting to make foreign friends and wanting to learn a foreign language, which weakened the problem framing in the short presentation.
 - Resolution: Added a centered third slide with the `문제` kicker and `닭 vs 달걀 문제` title. Added a responsive two-column goal layout with larger type, separate accent treatments, gradient key-color bars, soft tinted panels, and mobile sizing that preserves the side-by-side comparison. Updated the static page counter to six slides; the existing slide navigation continues to derive the final count from the slide elements.
 - Tests: Verified six top-level `.slide` elements, confirmed the requested page order and text, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR goal slide kicker alignment follow-up
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new third slide used centered content, but the absolutely positioned `문제` kicker still inherited the default left anchor from the generic slide-copy style.
+- User impact: The kicker appeared on the left while the title and two goal cards were centered, creating a visible alignment inconsistency at the top of the slide.
+- Resolution: Centered the goal slide kicker independently with a 50% anchor and horizontal translation. The rule applies across desktop and mobile layouts.
+- Tests: Rechecked the third-slide DOM layout and ran `git diff --check`.
