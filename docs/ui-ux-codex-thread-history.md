@@ -426,3 +426,11 @@
 - User impact: The kicker appeared on the left while the title and two goal cards were centered, creating a visible alignment inconsistency at the top of the slide.
 - Resolution: Centered the goal slide kicker independently with a 50% anchor and horizontal translation. The rule applies across desktop and mobile layouts.
 - Tests: Rechecked the third-slide DOM layout and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market comparison slide
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a market-context page showing that multiple product categories already address parts of the foreign-friend and language-learning problem. A plain competitor list would not communicate the breadth of the market or keep the slide visually scannable.
+- User impact: Without a compact market map, viewers could miss the distinction between language exchange, sincere voice conversation, global dating, and offline meetups, as well as the competitive context for Mingle.
+- Resolution: Added a fourth slide with a left-aligned `시장` message and a right-side 2x2 category grid. Each category uses a distinct key color, soft tinted panel, and irregularly scattered local service icons without divider lines. Grouped K Friends, HelloTalk, Tandem, Hilokal, and Yeetalk under `언어교환`; Maum, Connecting, and Wakie under `진솔한 음성 대화`; Meeff, Azar, Tinder, and Yubo under `글로벌 데이팅`; and Timeleft and Meetup under `오프라인 모임`. Added local app artwork assets and updated the presentation count to seven slides.
+- Tests: Verified the page-four text, category counts, local image loading, and `04 / 07` counter in the local browser at desktop and mobile sizes. Confirmed no viewport overflow and ran `git diff --check`.

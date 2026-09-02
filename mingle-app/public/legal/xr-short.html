@@ -175,6 +175,20 @@
         line-height: 1.12;
       }
 
+      .slide-copy--market {
+        width: min(42vw, 560px);
+        max-width: min(42vw, 560px);
+        margin-top: clamp(124px, calc(30vh - 112px), 196px);
+        justify-items: start;
+        text-align: left;
+      }
+
+      .slide-copy--market .slide-title {
+        font-size: clamp(2.8rem, 5vw, 5.6rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
       .slide-goal-columns {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -356,6 +370,121 @@
         top: clamp(48px, 8vh, 108px);
         right: clamp(76px, 10vw, 156px);
         display: block;
+      }
+
+      .slide-side-media--market {
+        top: clamp(84px, 11vh, 132px);
+        right: clamp(38px, 5vw, 88px);
+        width: clamp(590px, 55vw, 920px);
+        height: clamp(510px, 65vh, 700px);
+      }
+
+      .slide-market-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 1.4vw, 22px);
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-market-category {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        padding: clamp(22px, 2.3vw, 34px);
+        border: 0;
+        border-radius: clamp(24px, 2.4vw, 34px);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.38)),
+          var(--market-tint);
+        box-shadow: 0 22px 48px rgba(66, 49, 15, 0.11);
+      }
+
+      .slide-market-category::before {
+        position: absolute;
+        top: -22%;
+        right: -12%;
+        width: 48%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        content: "";
+        background: radial-gradient(circle, var(--market-glow) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      .slide-market-category::after {
+        position: absolute;
+        top: clamp(24px, 2.3vw, 34px);
+        right: clamp(24px, 2.3vw, 34px);
+        width: clamp(10px, 0.7vw, 14px);
+        height: clamp(10px, 0.7vw, 14px);
+        border-radius: 50%;
+        content: "";
+        background: var(--market-accent);
+        box-shadow: 0 0 0 7px var(--market-halo), 0 10px 20px var(--market-shadow);
+      }
+
+      .slide-market-category--language {
+        --market-accent: #6366f1;
+        --market-glow: rgba(99, 102, 241, 0.28);
+        --market-halo: rgba(99, 102, 241, 0.12);
+        --market-shadow: rgba(99, 102, 241, 0.2);
+        --market-tint: rgba(99, 102, 241, 0.11);
+      }
+
+      .slide-market-category--voice {
+        --market-accent: #ef765e;
+        --market-glow: rgba(239, 118, 94, 0.26);
+        --market-halo: rgba(239, 118, 94, 0.12);
+        --market-shadow: rgba(239, 118, 94, 0.2);
+        --market-tint: rgba(239, 118, 94, 0.12);
+      }
+
+      .slide-market-category--dating {
+        --market-accent: #db2777;
+        --market-glow: rgba(219, 39, 119, 0.24);
+        --market-halo: rgba(219, 39, 119, 0.12);
+        --market-shadow: rgba(219, 39, 119, 0.2);
+        --market-tint: rgba(219, 39, 119, 0.1);
+      }
+
+      .slide-market-category--offline {
+        --market-accent: #159570;
+        --market-glow: rgba(21, 149, 112, 0.24);
+        --market-halo: rgba(21, 149, 112, 0.12);
+        --market-shadow: rgba(21, 149, 112, 0.2);
+        --market-tint: rgba(21, 149, 112, 0.1);
+      }
+
+      .slide-market-category-title {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        color: var(--market-accent);
+        font-size: clamp(1.32rem, 1.8vw, 2rem);
+        font-weight: 850;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+      }
+
+      .slide-market-logo-cloud {
+        position: absolute;
+        inset: 28% 9% 9%;
+      }
+
+      .slide-market-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(5px, 0.45vw, 8px);
+        border-radius: clamp(14px, 1.35vw, 21px);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 16px 30px rgba(66, 49, 15, 0.15);
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r));
       }
 
       .slide-side-media--hellotalk-primary {
@@ -1817,6 +1946,61 @@
         gap: clamp(20px, 3vh, 30px);
       }
 
+      html.is-mobile-viewport .slide-shell--market {
+        gap: clamp(18px, 2.8vh, 28px);
+      }
+
+      html.is-mobile-viewport .slide-copy--market {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        justify-items: start;
+        text-align: left;
+      }
+
+      html.is-mobile-viewport .slide-copy--market .slide-title {
+        font-size: clamp(2.35rem, 10.1vw, 3.7rem);
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-side-media--market {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-market-grid {
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-category {
+        padding: 16px 11px 10px;
+        border-radius: 20px;
+      }
+
+      html.is-mobile-viewport .slide-market-category::after {
+        top: 18px;
+        right: 18px;
+        width: 9px;
+        height: 9px;
+        box-shadow: 0 0 0 5px var(--market-halo), 0 7px 14px var(--market-shadow);
+      }
+
+      html.is-mobile-viewport .slide-market-category-title {
+        font-size: clamp(0.98rem, 3.65vw, 1.25rem);
+        line-height: 1.15;
+      }
+
+      html.is-mobile-viewport .slide-market-logo-cloud {
+        inset: 32% 5% 7%;
+      }
+
+      html.is-mobile-viewport .slide-market-logo {
+        width: clamp(32px, 10vw, 52px);
+        height: clamp(32px, 10vw, 52px);
+        padding: 5px;
+        border-radius: 12px;
+      }
+
       html.is-mobile-viewport .slide-copy--goal-split .slide-title {
         font-size: clamp(2.16rem, 9.2vw, 3.35rem);
       }
@@ -1912,6 +2096,10 @@
         display: block;
         flex: 0 1 auto;
         transform: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--market {
+        height: clamp(340px, 49vh, 460px);
       }
 
       html.is-mobile-viewport .slide-side-media--brand-collage,
@@ -2409,6 +2597,52 @@
           </article>
         </section>
         <section class="slide">
+          <article class="slide-shell slide-shell--market">
+            <div class="slide-copy slide-copy--market">
+              <p class="slide-kicker">시장</p>
+              <h1 class="slide-title"><span>수많은 서비스가</span><br/><span>이에 도전합니다</span></h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market" aria-hidden="true">
+              <div class="slide-market-grid">
+                <section class="slide-market-category slide-market-category--language">
+                  <h2 class="slide-market-category-title">언어교환</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 17%; --y: 45%; --s: clamp(56px, 4.5vw, 76px); --r: -10deg" src="./assets/logo-market-kfriends.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 42%; --y: 71%; --s: clamp(52px, 4.2vw, 70px); --r: 7deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 64%; --y: 40%; --s: clamp(54px, 4.3vw, 72px); --r: -5deg" src="./assets/logo-market-tandem.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 84%; --y: 70%; --s: clamp(52px, 4.1vw, 68px); --r: 11deg" src="./assets/logo-market-hilokal.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 25%; --y: 84%; --s: clamp(48px, 3.8vw, 64px); --r: -4deg" src="./assets/logo-market-yeetalk.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 21%; --y: 58%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 42%; --s: clamp(54px, 4.3vw, 72px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 72%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--dating">
+                  <h2 class="slide-market-category-title">글로벌 데이팅</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 17%; --y: 52%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 75%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 47%; --s: clamp(56px, 4.5vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 74%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 모임</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 28%; --y: 62%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 76%; --y: 70%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">해결책</p>
@@ -2477,7 +2711,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 06</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 07</div>
       </div>
     </main>
 
