@@ -474,3 +474,11 @@
 - User impact: The scale comparison understated several competitors and made the source scope of the figures ambiguous. The similarly named Kfriends entry could also distract from the more relevant KOF competitor.
 - Resolution: Recalculated the rounded figures using public Android and iOS indicators where available: HelloTalk `약 7,000만+`, Tandem `약 3,500만+`, Yeetalk `약 1,100만`, K-Friends `약 450만`, Hilokal `약 170만`, and KOF `약 60만`. Replaced the Bibimbap Story Kfriends artwork with a local KOF icon, added a platform-scope caption, and increased the app-name and estimate type sizes while preserving the six-item horizontal row. KOF is marked as Google Play-based because no matching Apple App Store listing was found.
 - Tests: Verified page `04 / 08` at desktop and mobile sizes, confirmed the six apps remain in descending order, confirmed all local images load, checked the page-five 3/4/2 category layout for regression, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market title and spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The market page title needed to explain the broader connection-market problem, while the scattered competitor icons sat too far below their category labels.
+- User impact: The message was less specific than intended, and the large vertical gaps weakened the visual relationship between each category and its services.
+- Resolution: Replaced the market title with the requested two-line statement about abundant services and recurring language barriers. Reduced the category logo-cloud inset for the three-column market row on desktop and mobile, preserving the irregular icon positions and centered layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the exact title text and three category titles, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.

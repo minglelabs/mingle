@@ -211,7 +211,7 @@
       }
 
       .slide-copy--market-categories .slide-title {
-        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        font-size: clamp(2.1rem, 3.9vw, 4rem);
         line-height: 1.12;
         white-space: nowrap;
       }
@@ -499,6 +499,10 @@
       .slide-market-logo-cloud {
         position: absolute;
         inset: 20% 2% 0;
+      }
+
+      .slide-market-grid--categories .slide-market-logo-cloud {
+        inset: 0 2% 0;
       }
 
       .slide-market-logo {
@@ -2065,12 +2069,6 @@
         text-align: center;
       }
 
-      html.is-mobile-viewport .slide-copy--market-categories .slide-title {
-        font-size: clamp(2.05rem, 9.2vw, 3.3rem);
-        line-height: 1.1;
-        white-space: nowrap;
-      }
-
       html.is-mobile-viewport .slide-side-media--market {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
@@ -2120,7 +2118,7 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo-cloud {
-        inset: 24% 0 0;
+        inset: 0;
       }
 
       html.is-mobile-viewport .slide-market-logo {
@@ -2254,6 +2252,13 @@
       html.is-mobile-viewport .slide-shell--has-side-media .slide-title {
         font-size: clamp(1.5rem, 6.25vw, 2.25rem);
         line-height: 1.18;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-copy--market-categories .slide-title {
+        font-size: clamp(1.15rem, 5.1vw, 2rem);
+        line-height: 1.1;
+        letter-spacing: -0.05em;
+        white-space: nowrap;
       }
 
       html.is-mobile-viewport .slide-shell--has-side-media .slide-body {
@@ -2831,32 +2836,32 @@
           <article class="slide-shell slide-shell--market slide-shell--market-categories">
             <div class="slide-copy slide-copy--market slide-copy--market-categories">
               <p class="slide-kicker">시장</p>
-              <h1 class="slide-title"><span>수많은 서비스가</span><br/><span>이에 도전합니다</span></h1>
+              <h1 class="slide-title"><span>외국인과의 연결을 제공하는 서비스는 많지만</span><br/><span>언어 장벽에 막히는 경우가 다반사입니다.</span></h1>
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
               <div class="slide-market-grid slide-market-grid--categories">
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 21%; --y: 58%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 55%; --y: 42%; --s: clamp(54px, 4.3vw, 72px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 83%; --y: 72%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 21%; --y: 50%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 30%; --s: clamp(54px, 4.3vw, 72px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 62%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--dating">
                   <h2 class="slide-market-category-title">글로벌 데이팅</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 17%; --y: 52%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 43%; --y: 75%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 67%; --y: 47%; --s: clamp(56px, 4.5vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 88%; --y: 74%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 17%; --y: 42%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 62%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 35%; --s: clamp(56px, 4.5vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 60%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 28%; --y: 62%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 76%; --y: 70%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 28%; --y: 50%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 76%; --y: 58%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
                   </div>
                 </section>
               </div>
