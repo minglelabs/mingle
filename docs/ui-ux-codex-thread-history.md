@@ -690,3 +690,11 @@
 - User impact: The slide showed the use-case heading and screenshot, but did not explain the kinds of people already finding practical value in Mingle.
 - Resolution: Added the requested lower-left body copy describing an African young man who found interpreter work with Mingle despite limited English and a person who appears to guide Japanese tourists around Seoul.
 - Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the body copy sits below the left-aligned title, confirmed the image and caption remain visible, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline meetup competitor coverage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/logo-market-couchsurfing.jpg`
+- Issue: The offline-meetup category on the market pages represented the space with only Timeleft and Meetup.
+- User impact: The category understated the breadth of established services used to connect travelers and locals in person.
+- Resolution: Added the Couchsurfing app icon to the offline-meetup logo cloud on pages five and nine, using the same scattered presentation and a slightly larger scale for the prominent competitor.
+- Tests: Verified pages `05 / 17` and `09 / 17` at desktop and mobile sizes, confirmed all three offline-meetup icons load on both pages, confirmed the icons stay within the viewport, and found no browser console warnings or errors.
