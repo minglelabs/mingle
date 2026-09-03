@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Match iOS Picture in Picture preview to conversation bubbles
+
+- **Surface:** The native iOS Picture in Picture conversation preview after the density and orientation update.
+- **Issue:** The preview still carried speaker identity data even though PiP should be content-only. It could keep only one message when two short messages fit, used trailing truncation instead of visible line wrapping, and did not preserve the room bubble language treatment: flags, the original-language marker, per-language translation rows, interim translation feedback, bubble colors, and left/right alignment.
+- **Diagnosis:** The bridge sent one flattened text string per utterance, so Swift could not reproduce the expanded bubble structure. Message selection classified each candidate with a fixed line limit rather than measuring the complete bubble stack, and the native text renderer used `byTruncatingTail`, which produced ellipses at the edge of the available rectangle.
+- **Resolution:** Remove speaker/handle data from the PiP bridge. Send original text, original/display language, translation entries with interim state, and own-message alignment. Render each preview item as a compact bubble with the existing white/amber background treatment, the counterpart sharp top-left corner, a language flag, an original-language quote badge, and stacked translation rows without internal dividers or extra per-language margins. Use a height-based recent-message packing pass so the preview keeps two short messages when they fit and drops older messages only when the complete bubble stack does not fit. Switch native text drawing to character/word wrapping without trailing truncation; an in-progress translation shows `...` explicitly, while ordinary long text wraps onto additional lines.
+- **Interaction:** Collapsed mode keeps the selected display language in one bubble row. Expanded mode shows the original row followed by available translation rows, including a compact `...` row for translations that are still pending. The preview remains read-only and non-scrollable; message count and font size continue to adapt to the selected mode and the actual rendered content.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances to `100`.
+- **Testing notes:** Verify iPhone 14 with one to four short messages, two messages that previously collapsed to one, long Korean/Latin/CJK text, explicit newlines, collapsed and expanded modes, original and translated flags, missing/interim/partial translations, own-message amber alignment, counterpart white alignment, and no visible speaker handle or trailing truncation.
+
 ## 2026-09-03 - Correct iOS Picture in Picture orientation and message density
 
 - **Surface:** The native iOS conversation Picture in Picture preview shown after the startup fix.

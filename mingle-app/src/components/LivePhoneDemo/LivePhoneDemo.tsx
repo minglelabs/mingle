@@ -8,7 +8,7 @@ import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversati
 import SlideSurface from '@/components/slide-surface'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
-import ChatBubble from './ChatBubble'
+import ChatBubble, { resolveOriginalDisplayLanguage } from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
@@ -37,6 +37,7 @@ import {
   sanitizeSttLanguageSelection,
   sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -224,50 +225,146 @@ const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
 function normalizeNativePipLanguageKey(rawLanguage: string): string {
-  const canonical = canonicalizeSttLanguageCode(rawLanguage)
-  return canonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
+  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
+  if (canonical) return canonical.toLowerCase()
+
+  const sttCanonical = canonicalizeSttLanguageCode(rawLanguage)
+  return sttCanonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
+}
+
+function findNativePipRecordKey<T>(
+  record: Record<string, T> | undefined,
+  language: string,
+): string | null {
+  const targetKey = normalizeNativePipLanguageKey(language)
+  if (!targetKey) return null
+
+  return Object.keys(record || {}).find((candidate) => (
+    normalizeNativePipLanguageKey(candidate) === targetKey
+  )) || null
 }
 
 function findNativePipTranslationText(
   utterance: Utterance,
   language: string,
 ): string {
-  const targetKey = normalizeNativePipLanguageKey(language)
-  if (!targetKey) return ''
-
-  const matchingLanguage = Object.keys(utterance.translations || {}).find((candidate) => (
-    normalizeNativePipLanguageKey(candidate) === targetKey
-  ))
+  const matchingLanguage = findNativePipRecordKey(utterance.translations, language)
   const text = matchingLanguage ? utterance.translations[matchingLanguage] : ''
   return typeof text === 'string' ? text.trim() : ''
+}
+
+function resolveNativePipOriginalLanguage(
+  utterance: Utterance,
+  roomLanguageOrder: readonly string[] = [],
+): string {
+  return resolveOriginalDisplayLanguage(
+    utterance.originalLang,
+    [
+      ...(utterance.targetLanguages || []),
+      ...Object.keys(utterance.translations || {}),
+      ...Object.keys(utterance.translationFinalized || {}),
+    ],
+    roomLanguageOrder,
+  )
+}
+
+function resolveNativePipTargetLanguages(
+  utterance: Utterance,
+  originalDisplayLanguage: string,
+): string[] {
+  const originalKey = normalizeNativePipLanguageKey(originalDisplayLanguage)
+  const hasGenericChineseSource = normalizeNativePipLanguageKey(utterance.originalLang) === 'zh'
+  const targetLanguages: string[] = []
+  const seen = new Set<string>()
+  const candidates = [
+    ...(utterance.targetLanguages || []),
+    ...Object.keys(utterance.translations || {}),
+    ...Object.keys(utterance.translationFinalized || {}),
+  ]
+
+  for (const rawLanguage of candidates) {
+    const language = rawLanguage.trim()
+    const languageKey = normalizeNativePipLanguageKey(language)
+    if (
+      !language
+      || !languageKey
+      || seen.has(languageKey)
+      || languageKey === originalKey
+      || (hasGenericChineseSource && languageKey === 'zh')
+    ) {
+      continue
+    }
+
+    seen.add(languageKey)
+    targetLanguages.push(language)
+  }
+
+  return targetLanguages
+}
+
+function resolveNativePipDisplayLanguage(
+  utterance: Utterance,
+  requestedDisplayLanguage: string | null,
+  originalDisplayLanguage: string,
+  targetLanguages: readonly string[],
+): string {
+  const requestedKey = normalizeNativePipLanguageKey(requestedDisplayLanguage || originalDisplayLanguage)
+  if (
+    !requestedKey
+    || requestedKey === normalizeNativePipLanguageKey(originalDisplayLanguage)
+    || requestedKey === normalizeNativePipLanguageKey(utterance.originalLang)
+  ) {
+    return originalDisplayLanguage
+  }
+
+  return targetLanguages.find((language) => (
+    normalizeNativePipLanguageKey(language) === requestedKey
+  )) || originalDisplayLanguage
+}
+
+function resolveNativePipTranslations(
+  utterance: Utterance,
+  targetLanguages: readonly string[],
+) {
+  return targetLanguages.map((language) => {
+    const text = findNativePipTranslationText(utterance, language)
+    const matchingFinalizedKey = findNativePipRecordKey(utterance.translationFinalized, language)
+    const finalized = matchingFinalizedKey
+      ? utterance.translationFinalized?.[matchingFinalizedKey]
+      : undefined
+
+    return {
+      language,
+      text,
+      isInterim: !text || finalized === false,
+    }
+  })
 }
 
 function resolveNativePipMessageText(
   utterance: Utterance,
   displayMode: LivePhoneDemoBubbleDisplayMode,
   displayLanguage: string | null,
+  roomLanguageOrder: readonly string[] = [],
 ): string {
   const originalText = utterance.originalText.trim()
+  const originalDisplayLanguage = resolveNativePipOriginalLanguage(utterance, roomLanguageOrder)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, originalDisplayLanguage)
+  const resolvedDisplayLanguage = resolveNativePipDisplayLanguage(
+    utterance,
+    displayLanguage,
+    originalDisplayLanguage,
+    targetLanguages,
+  )
+
   if (displayMode === 'collapsed') {
-    const originalLanguageKey = normalizeNativePipLanguageKey(utterance.originalLang)
-    const displayLanguageKey = normalizeNativePipLanguageKey(displayLanguage || utterance.originalLang)
-    if (!displayLanguageKey || displayLanguageKey === originalLanguageKey) return originalText
-    return findNativePipTranslationText(utterance, displayLanguageKey) || originalText
+    if (resolvedDisplayLanguage === originalDisplayLanguage) return originalText
+    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || '...'
   }
 
   const lines = [originalText]
   const seenTexts = new Set(lines)
-  const orderedLanguages = [
-    ...(utterance.targetLanguages || []),
-    ...Object.keys(utterance.translations || {}),
-  ]
-  const seenLanguages = new Set<string>()
-
-  for (const language of orderedLanguages) {
-    const languageKey = normalizeNativePipLanguageKey(language)
-    if (!languageKey || seenLanguages.has(languageKey)) continue
-    seenLanguages.add(languageKey)
-
+  for (const language of targetLanguages) {
     const text = findNativePipTranslationText(utterance, language)
     if (!text || seenTexts.has(text)) continue
     seenTexts.add(text)
@@ -5489,17 +5586,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     messages: displayUtterances
       .filter((utterance) => utterance.originalText.trim())
       .slice(-4)
-      .map((utterance) => ({
-        id: utterance.id,
-        speaker: (utterance.speakerName || utterance.speaker || '').trim().slice(0, 80) || undefined,
-        text: resolveNativePipMessageText(
+      .map((utterance) => {
+        const originalLanguage = resolveNativePipOriginalLanguage(
           utterance,
-          bubbleDisplayMode,
+          normalizedDisplayLanguageOptions,
+        )
+        const targetLanguages = resolveNativePipTargetLanguages(utterance, originalLanguage)
+        const displayLanguage = resolveNativePipDisplayLanguage(
+          utterance,
           resolvedDefaultDisplayLanguage,
-        ).slice(0, 600),
-        isInterim: draftUtteranceIds.has(utterance.id),
-      })),
-  }), [bubbleDisplayMode, conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, resolvedDefaultDisplayLanguage, roomManagementCopy])
+          originalLanguage,
+          targetLanguages,
+        )
+
+        return {
+          id: utterance.id,
+          text: resolveNativePipMessageText(
+            utterance,
+            bubbleDisplayMode,
+            resolvedDefaultDisplayLanguage,
+            normalizedDisplayLanguageOptions,
+          ),
+          originalText: utterance.originalText.trim(),
+          originalLanguage,
+          displayLanguage,
+          translations: resolveNativePipTranslations(utterance, targetLanguages),
+          isOwn: Boolean(
+            viewerUserId
+            && utterance.speakerUserId
+            && utterance.speakerUserId === viewerUserId,
+          ),
+          isInterim: draftUtteranceIds.has(utterance.id),
+        }
+      }),
+  }), [bubbleDisplayMode, conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
 
   useEffect(() => {
     nativePipStateRef.current = nativePipState

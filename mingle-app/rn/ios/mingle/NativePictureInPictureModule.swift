@@ -26,21 +26,31 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let requiredStablePossibleChecks = 3
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
-    private static let previewContentInset: CGFloat = 24
-    private static let previewBubbleHorizontalPadding: CGFloat = 16
-    private static let previewBubbleVerticalPadding: CGFloat = 7
+    private static let previewContentInset: CGFloat = 22
+    private static let previewBubbleHorizontalPadding: CGFloat = 18
+    private static let previewBubbleVerticalPadding: CGFloat = 8
     private static let previewBubbleGap: CGFloat = 8
+    private static let previewLanguageBadgeWidth: CGFloat = 38
+    private static let previewLanguageTextGap: CGFloat = 6
+    private static let previewMaximumBubbleWidthRatio: CGFloat = 0.96
     private static let previewMaximumMessageCount = 4
-    private static let previewMaximumSingleMessageLines = 4
+    private static let previewMaximumSingleMessageLines = 5
     private static let previewMinimumFontSize: CGFloat = 22
+
+    private struct PreviewLanguageRow {
+        let language: String
+        let text: String
+        let isOriginal: Bool
+        let isInterim: Bool
+    }
 
     private struct PreviewMessageLayout {
         let message: PictureInPictureMessage
+        let rows: [PreviewLanguageRow]
         let messageFont: UIFont
-        let speakerFont: UIFont?
-        let speakerHeight: CGFloat
-        let speakerGap: CGFloat
-        let textHeight: CGFloat
+        let bubbleWidth: CGFloat
+        let textWidth: CGFloat
+        let rowHeights: [CGFloat]
         let bubbleHeight: CGFloat
     }
 
@@ -581,14 +591,12 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             context.fill(bounds)
 
             let contentRect = bounds.insetBy(dx: Self.previewContentInset, dy: Self.previewContentInset)
-            let textWidth = contentRect.width - Self.previewBubbleHorizontalPadding * 2
             let maxMessageCount = state.displayMode == .expanded ? 2 : Self.previewMaximumMessageCount
-            let maxLinesPerMessage = state.displayMode == .expanded ? 2 : 1
             let messages = selectPreviewMessages(
                 state.messages,
-                textWidth: textWidth,
+                availableSize: contentRect.size,
                 maxMessageCount: maxMessageCount,
-                maxLinesPerMessage: maxLinesPerMessage
+                displayMode: state.displayMode
             )
 
             if messages.isEmpty {
@@ -597,71 +605,80 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                     in: contentRect.insetBy(dx: 24, dy: 0),
                     font: .systemFont(ofSize: 22, weight: .medium),
                     color: UIColor(red: 0.42, green: 0.42, blue: 0.46, alpha: 1),
-                    alignment: .center
+                    alignment: .center,
+                    lineBreakMode: .byWordWrapping
                 )
                 return
             }
 
             let messageFontSize = resolvePreviewMessageFontSize(
                 messages,
-                textWidth: textWidth,
-                availableHeight: contentRect.height,
-                maxLinesPerMessage: maxLinesPerMessage
+                availableSize: contentRect.size,
+                displayMode: state.displayMode
             )
             let layouts = makePreviewMessageLayouts(
                 messages,
                 fontSize: messageFontSize,
-                textWidth: textWidth,
-                maxLinesPerMessage: maxLinesPerMessage
+                availableWidth: contentRect.width,
+                displayMode: state.displayMode
             )
             let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
                 + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
             var cardY = max(contentRect.minY, contentRect.maxY - totalHeight)
 
             for layout in layouts {
+                let cardX = layout.message.isOwn
+                    ? contentRect.maxX - layout.bubbleWidth
+                    : contentRect.minX
                 let cardRect = CGRect(
-                    x: contentRect.minX,
+                    x: cardX,
                     y: cardY,
-                    width: contentRect.width,
+                    width: layout.bubbleWidth,
                     height: layout.bubbleHeight
                 )
-                UIColor.white.setFill()
-                UIBezierPath(roundedRect: cardRect, cornerRadius: 14).fill()
+                drawBubbleBackground(in: cardRect, isOwn: layout.message.isOwn)
 
-                if layout.message.isInterim {
-                    UIColor(red: 1, green: 0.72, blue: 0.2, alpha: 1).setStroke()
-                    let border = UIBezierPath(roundedRect: cardRect.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 13.25)
-                    border.lineWidth = 1.5
-                    border.stroke()
-                }
-
-                var textY = cardRect.minY + Self.previewBubbleVerticalPadding
-                if let speakerFont = layout.speakerFont {
-                    drawText(
-                        layout.message.speaker,
+                var rowY = cardRect.minY + Self.previewBubbleVerticalPadding
+                for (index, row) in layout.rows.enumerated() {
+                    let rowHeight = layout.rowHeights[index]
+                    drawLanguageBadge(
+                        row.language,
+                        isOriginal: row.isOriginal,
                         in: CGRect(
                             x: cardRect.minX + Self.previewBubbleHorizontalPadding,
-                            y: textY,
-                            width: textWidth,
-                            height: layout.speakerHeight
+                            y: rowY,
+                            width: Self.previewLanguageBadgeWidth,
+                            height: rowHeight
                         ),
-                        font: speakerFont,
-                        color: UIColor(red: 0.42, green: 0.42, blue: 0.46, alpha: 1)
+                        fontSize: layout.messageFont.pointSize
                     )
-                    textY += layout.speakerHeight + layout.speakerGap
-                }
 
-                drawText(
-                    layout.message.text,
-                    in: CGRect(
-                        x: cardRect.minX + Self.previewBubbleHorizontalPadding,
-                        y: textY,
-                        width: textWidth,
-                        height: layout.textHeight
-                    ),
-                    font: layout.messageFont,
-                    color: UIColor(red: 0.12, green: 0.12, blue: 0.15, alpha: 1)
-                )
+                    let textRect = CGRect(
+                        x: cardRect.minX
+                            + Self.previewBubbleHorizontalPadding
+                            + Self.previewLanguageBadgeWidth
+                            + Self.previewLanguageTextGap,
+                        y: rowY,
+                        width: layout.textWidth,
+                        height: rowHeight
+                    )
+                    let textColor: UIColor
+                    if row.isOriginal {
+                        textColor = UIColor(red: 0.07, green: 0.09, blue: 0.12, alpha: 1)
+                    } else if row.isInterim {
+                        textColor = UIColor(red: 0.42, green: 0.42, blue: 0.46, alpha: 1)
+                    } else {
+                        textColor = UIColor(red: 0.22, green: 0.25, blue: 0.30, alpha: 1)
+                    }
+                    drawText(
+                        previewRenderedText(for: row),
+                        in: textRect,
+                        font: layout.messageFont,
+                        color: textColor,
+                        lineBreakMode: .byCharWrapping
+                    )
+                    rowY += rowHeight
+                }
 
                 cardY += layout.bubbleHeight + Self.previewBubbleGap
             }
@@ -670,31 +687,21 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
     private func selectPreviewMessages(
         _ messages: [PictureInPictureMessage],
-        textWidth: CGFloat,
+        availableSize: CGSize,
         maxMessageCount: Int,
-        maxLinesPerMessage: Int
+        displayMode: PictureInPictureDisplayMode
     ) -> [PictureInPictureMessage] {
         let recentMessages = Array(messages.suffix(maxMessageCount))
         guard let latestMessage = recentMessages.last else { return [] }
 
-        let classificationFont = UIFont.systemFont(
-            ofSize: maxLinesPerMessage > 1 ? 28 : 32,
-            weight: .semibold
-        )
         var selectedMessages = [latestMessage]
-
-        // Keep the newest message visible at a readable size. If it needs more
-        // lines than the current display mode allows, do not squeeze older
-        // messages into the same preview.
-        guard previewLineCount(latestMessage.text, font: classificationFont, width: textWidth)
-            <= maxLinesPerMessage else {
-            return selectedMessages
-        }
-
         for message in recentMessages.dropLast().reversed() {
-            guard selectedMessages.count < maxMessageCount,
-                  previewLineCount(message.text, font: classificationFont, width: textWidth)
-                    <= maxLinesPerMessage else {
+            let candidateMessages = [message] + selectedMessages
+            guard previewMessageSetFits(
+                candidateMessages,
+                availableSize: availableSize,
+                displayMode: displayMode
+            ) else {
                 break
             }
             selectedMessages.insert(message, at: 0)
@@ -703,45 +710,55 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         return selectedMessages
     }
 
+    private func previewMessageSetFits(
+        _ messages: [PictureInPictureMessage],
+        availableSize: CGSize,
+        displayMode: PictureInPictureDisplayMode
+    ) -> Bool {
+        let fontSize = resolvePreviewMessageFontSize(
+            messages,
+            availableSize: availableSize,
+            displayMode: displayMode
+        )
+        let layouts = makePreviewMessageLayouts(
+            messages,
+            fontSize: fontSize,
+            availableWidth: availableSize.width,
+            displayMode: displayMode
+        )
+        let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
+            + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
+        return totalHeight <= availableSize.height
+    }
+
     private func resolvePreviewMessageFontSize(
         _ messages: [PictureInPictureMessage],
-        textWidth: CGFloat,
-        availableHeight: CGFloat,
-        maxLinesPerMessage: Int
+        availableSize: CGSize,
+        displayMode: PictureInPictureDisplayMode
     ) -> CGFloat {
         let maximumFontSize: CGFloat
         switch messages.count {
         case 1:
-            maximumFontSize = 52
+            maximumFontSize = 58
         case 2:
-            maximumFontSize = 44
+            maximumFontSize = 50
         case 3:
-            maximumFontSize = 38
+            maximumFontSize = 44
         default:
-            maximumFontSize = 34
+            maximumFontSize = 40
         }
 
         var fontSize = maximumFontSize
-
         while fontSize >= Self.previewMinimumFontSize {
-            let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-            if messages.count > 1,
-               messages.contains(where: {
-                   previewLineCount($0.text, font: messageFont, width: textWidth) > maxLinesPerMessage
-               }) {
-                fontSize -= 1
-                continue
-            }
-
             let layouts = makePreviewMessageLayouts(
                 messages,
                 fontSize: fontSize,
-                textWidth: textWidth,
-                maxLinesPerMessage: maxLinesPerMessage
+                availableWidth: availableSize.width,
+                displayMode: displayMode
             )
             let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
                 + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
-            if totalHeight <= availableHeight {
+            if totalHeight <= availableSize.height {
                 return fontSize
             }
             fontSize -= 1
@@ -753,46 +770,292 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private func makePreviewMessageLayouts(
         _ messages: [PictureInPictureMessage],
         fontSize: CGFloat,
-        textWidth: CGFloat,
-        maxLinesPerMessage: Int
+        availableWidth: CGFloat,
+        displayMode: PictureInPictureDisplayMode
     ) -> [PreviewMessageLayout] {
         let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let maximumBubbleWidth = max(1, availableWidth * Self.previewMaximumBubbleWidthRatio)
+        let maximumLinesPerRow = messages.count == 1
+            ? Self.previewMaximumSingleMessageLines
+            : 2
 
         return messages.map { message in
-            let speakerFont = message.speaker.isEmpty
-                ? nil
-                : UIFont.systemFont(ofSize: max(11, min(14, fontSize * 0.42)), weight: .semibold)
-            let speakerHeight = speakerFont?.lineHeight ?? 0
-            let speakerGap: CGFloat = speakerFont == nil ? 0 : 3
-            let maxTextLines = messages.count == 1
-                ? Self.previewMaximumSingleMessageLines
-                : maxLinesPerMessage
-            let textHeight = measuredTextHeight(
-                message.text,
-                font: messageFont,
-                width: textWidth,
-                maximumLines: maxTextLines
+            let rows = makePreviewLanguageRows(for: message, displayMode: displayMode)
+            let widestRow = rows.map { row in
+                measuredTextWidth(previewRenderedText(for: row), font: messageFont)
+            }.max() ?? 0
+            let requestedBubbleWidth = widestRow
+                + Self.previewBubbleHorizontalPadding * 2
+                + Self.previewLanguageBadgeWidth
+                + Self.previewLanguageTextGap
+            let bubbleWidth = min(
+                maximumBubbleWidth,
+                max(140, ceil(requestedBubbleWidth))
             )
-            let verticalPadding = Self.previewBubbleVerticalPadding * 2
-            let speakerContentHeight = speakerHeight + speakerGap
-            let bubbleContentHeight = verticalPadding + speakerContentHeight + textHeight
-            let bubbleHeight = ceil(bubbleContentHeight)
+            let textWidth = max(
+                1,
+                bubbleWidth
+                    - Self.previewBubbleHorizontalPadding * 2
+                    - Self.previewLanguageBadgeWidth
+                    - Self.previewLanguageTextGap
+            )
+            let rowHeights = rows.map { row in
+                measuredTextHeight(
+                    previewRenderedText(for: row),
+                    font: messageFont,
+                    width: textWidth,
+                    maximumLines: maximumLinesPerRow
+                )
+            }
+            let bubbleHeight = ceil(
+                rowHeights.reduce(CGFloat.zero, +)
+                    + Self.previewBubbleVerticalPadding * 2
+            )
 
             return PreviewMessageLayout(
                 message: message,
+                rows: rows,
                 messageFont: messageFont,
-                speakerFont: speakerFont,
-                speakerHeight: speakerHeight,
-                speakerGap: speakerGap,
-                textHeight: textHeight,
+                bubbleWidth: bubbleWidth,
+                textWidth: textWidth,
+                rowHeights: rowHeights,
                 bubbleHeight: bubbleHeight
             )
         }
     }
 
-    private func previewLineCount(_ text: String, font: UIFont, width: CGFloat) -> Int {
-        let measuredHeight = measuredTextHeight(text, font: font, width: width)
-        return max(1, Int(ceil(measuredHeight / font.lineHeight)))
+    private func makePreviewLanguageRows(
+        for message: PictureInPictureMessage,
+        displayMode: PictureInPictureDisplayMode
+    ) -> [PreviewLanguageRow] {
+        let originalLanguage = message.originalLanguage.isEmpty ? "unknown" : message.originalLanguage
+        let originalKey = normalizePreviewLanguageKey(originalLanguage)
+
+        if displayMode == .collapsed {
+            let displayLanguage = message.displayLanguage.isEmpty
+                ? originalLanguage
+                : message.displayLanguage
+            let displayKey = normalizePreviewLanguageKey(displayLanguage)
+            if displayKey == originalKey || displayKey.isEmpty {
+                return [PreviewLanguageRow(
+                    language: originalLanguage,
+                    text: message.text.isEmpty ? message.originalText : message.text,
+                    isOriginal: true,
+                    isInterim: message.isInterim
+                )]
+            }
+
+            if let translation = message.translations.first(where: {
+                normalizePreviewLanguageKey($0.language) == displayKey
+            }) {
+                return [PreviewLanguageRow(
+                    language: translation.language,
+                    text: translation.text,
+                    isOriginal: false,
+                    isInterim: translation.isInterim
+                )]
+            }
+
+            return [PreviewLanguageRow(
+                language: originalLanguage,
+                text: message.originalText.isEmpty ? message.text : message.originalText,
+                isOriginal: true,
+                isInterim: message.isInterim
+            )]
+        }
+
+        var rows = [PreviewLanguageRow(
+            language: originalLanguage,
+            text: message.originalText.isEmpty ? message.text : message.originalText,
+            isOriginal: true,
+            isInterim: message.isInterim
+        )]
+        var seenLanguages = Set([originalKey])
+        for translation in message.translations {
+            let languageKey = normalizePreviewLanguageKey(translation.language)
+            if languageKey.isEmpty || seenLanguages.contains(languageKey) { continue }
+            seenLanguages.insert(languageKey)
+            rows.append(PreviewLanguageRow(
+                language: translation.language,
+                text: translation.text,
+                isOriginal: false,
+                isInterim: translation.isInterim
+            ))
+        }
+        return rows
+    }
+
+    private func previewRenderedText(for row: PreviewLanguageRow) -> String {
+        let text = row.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if row.isOriginal {
+            return text
+        }
+        if row.isInterim {
+            return text.isEmpty ? "..." : "\(text) ..."
+        }
+        return text.isEmpty ? "..." : text
+    }
+
+    private func normalizePreviewLanguageKey(_ rawLanguage: String) -> String {
+        let normalized = rawLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "-")
+            .lowercased()
+        guard !normalized.isEmpty else { return "" }
+
+        switch normalized {
+        case "zh-cn", "zh-hans", "zh-sg": return "zh-cn"
+        case "zh-tw", "zh-hant", "zh-hk", "zh-mo": return "zh-tw"
+        default: return normalized.split(separator: "-").first.map(String.init) ?? normalized
+        }
+    }
+
+    private func previewFlag(for rawLanguage: String) -> String {
+        let normalized = rawLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "-")
+            .lowercased()
+        switch normalized {
+        case "zh-tw", "zh-hant", "zh-hk", "zh-mo": return "🇹🇼"
+        case "zh-cn", "zh-hans", "zh-sg", "zh": return "🇨🇳"
+        case "en-gb", "en-au", "en-nz": return "🇬🇧"
+        case "en": return "🇺🇸"
+        case "pt-br": return "🇧🇷"
+        case "pt": return "🇵🇹"
+        case "es-mx": return "🇲🇽"
+        case "es": return "🇪🇸"
+        case "ko": return "🇰🇷"
+        case "ja": return "🇯🇵"
+        case "fr": return "🇫🇷"
+        case "de": return "🇩🇪"
+        case "it": return "🇮🇹"
+        case "ru": return "🇷🇺"
+        case "ar": return "🇸🇦"
+        case "hi": return "🇮🇳"
+        case "vi": return "🇻🇳"
+        case "th": return "🇹🇭"
+        case "id": return "🇮🇩"
+        case "tr": return "🇹🇷"
+        case "nl": return "🇳🇱"
+        case "pl": return "🇵🇱"
+        case "uk": return "🇺🇦"
+        case "he": return "🇮🇱"
+        case "sv": return "🇸🇪"
+        case "da": return "🇩🇰"
+        case "no": return "🇳🇴"
+        case "fi": return "🇫🇮"
+        case "el": return "🇬🇷"
+        case "cs": return "🇨🇿"
+        case "ro": return "🇷🇴"
+        case "hu": return "🇭🇺"
+        case "fa": return "🇮🇷"
+        case "ur": return "🇵🇰"
+        case "bn": return "🇧🇩"
+        case "ms": return "🇲🇾"
+        case "tl", "fil": return "🇵🇭"
+        case "af": return "🇿🇦"
+        default: return "🌐"
+        }
+    }
+
+    private func drawLanguageBadge(
+        _ language: String,
+        isOriginal: Bool,
+        in rect: CGRect,
+        fontSize: CGFloat
+    ) {
+        let flagFont = UIFont.systemFont(ofSize: max(22, min(34, fontSize * 0.72)))
+        drawText(
+            previewFlag(for: language),
+            in: rect,
+            font: flagFont,
+            color: .black,
+            alignment: .center,
+            lineBreakMode: .byClipping
+        )
+
+        guard isOriginal else { return }
+        let badgeSize = max(16, min(23, fontSize * 0.38))
+        let badgeRect = CGRect(
+            x: rect.maxX - badgeSize * 0.82,
+            y: rect.midY - badgeSize * 0.68,
+            width: badgeSize,
+            height: badgeSize
+        )
+        UIColor.white.setFill()
+        UIBezierPath(ovalIn: badgeRect).fill()
+        UIColor(red: 0.72, green: 0.73, blue: 0.76, alpha: 1).setStroke()
+        let badgeBorder = UIBezierPath(ovalIn: badgeRect.insetBy(dx: 0.5, dy: 0.5))
+        badgeBorder.lineWidth = 1
+        badgeBorder.stroke()
+        drawText(
+            "“",
+            in: badgeRect.offsetBy(dx: 0, dy: -1),
+            font: .systemFont(ofSize: max(10, badgeSize * 0.7), weight: .bold),
+            color: UIColor(red: 0.12, green: 0.12, blue: 0.15, alpha: 1),
+            alignment: .center,
+            lineBreakMode: .byClipping
+        )
+    }
+
+    private func drawBubbleBackground(in rect: CGRect, isOwn: Bool) {
+        let backgroundColor = isOwn
+            ? UIColor(red: 1, green: 0.986, blue: 0.92, alpha: 1)
+            : UIColor.white
+        backgroundColor.setFill()
+        makeBubblePath(in: rect, isOwn: isOwn).fill()
+    }
+
+    private func makeBubblePath(in rect: CGRect, isOwn: Bool) -> UIBezierPath {
+        let radius = min(20, rect.height / 2)
+        guard !isOwn else {
+            return UIBezierPath(roundedRect: rect, cornerRadius: radius)
+        }
+
+        let topLeftRadius: CGFloat = min(3, rect.height / 2)
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: rect.minX + topLeftRadius, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        path.addArc(
+            withCenter: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
+            radius: radius,
+            startAngle: -.pi / 2,
+            endAngle: 0,
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+        path.addArc(
+            withCenter: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: 0,
+            endAngle: .pi / 2,
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
+        path.addArc(
+            withCenter: CGPoint(x: rect.minX + radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: .pi / 2,
+            endAngle: .pi,
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeftRadius))
+        path.addArc(
+            withCenter: CGPoint(x: rect.minX + topLeftRadius, y: rect.minY + topLeftRadius),
+            radius: topLeftRadius,
+            startAngle: .pi,
+            endAngle: .pi * 1.5,
+            clockwise: true
+        )
+        path.close()
+        return path
+    }
+
+    private func measuredTextWidth(_ text: String, font: UIFont) -> CGFloat {
+        text
+            .components(separatedBy: .newlines)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
     }
 
     private func measuredTextHeight(
@@ -819,7 +1082,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         font: UIFont,
         color: UIColor,
         alignment: NSTextAlignment = .left,
-        lineBreakMode: NSLineBreakMode = .byTruncatingTail
+        lineBreakMode: NSLineBreakMode = .byCharWrapping
     ) {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = alignment
@@ -1009,20 +1272,52 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     }
 }
 
+private struct PictureInPictureTranslation {
+    let language: String
+    let text: String
+    let isInterim: Bool
+
+    init?(dictionary: NSDictionary) {
+        let language = (dictionary["language"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !language.isEmpty else { return nil }
+
+        self.language = language
+        self.text = (dictionary["text"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.isInterim = dictionary["isInterim"] as? Bool ?? false
+    }
+}
+
 private struct PictureInPictureMessage {
     let id: String
-    let speaker: String
     let text: String
+    let originalText: String
+    let originalLanguage: String
+    let displayLanguage: String
+    let translations: [PictureInPictureTranslation]
+    let isOwn: Bool
     let isInterim: Bool
 
     init?(dictionary: NSDictionary) {
         let id = (dictionary["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let text = (dictionary["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !id.isEmpty, !text.isEmpty else { return nil }
+        let originalText = (dictionary["originalText"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !id.isEmpty, !text.isEmpty || !originalText.isEmpty else { return nil }
 
         self.id = id
-        self.speaker = (dictionary["speaker"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.text = text
+        self.originalText = originalText.isEmpty ? text : originalText
+        self.originalLanguage = (dictionary["originalLanguage"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.displayLanguage = (dictionary["displayLanguage"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.translations = ((dictionary["translations"] as? [Any]) ?? []).compactMap { rawTranslation in
+            guard let translationDictionary = rawTranslation as? NSDictionary else { return nil }
+            return PictureInPictureTranslation(dictionary: translationDictionary)
+        }
+        self.isOwn = dictionary["isOwn"] as? Bool ?? false
         self.isInterim = dictionary["isInterim"] as? Bool ?? false
     }
 }

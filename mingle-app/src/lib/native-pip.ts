@@ -1,7 +1,17 @@
+export type NativePipTranslation = {
+  language: string
+  text: string
+  isInterim?: boolean
+}
+
 export type NativePipMessage = {
   id: string
-  speaker?: string
   text: string
+  originalText: string
+  originalLanguage: string
+  displayLanguage: string
+  translations: NativePipTranslation[]
+  isOwn?: boolean
   isInterim?: boolean
 }
 
