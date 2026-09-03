@@ -763,6 +763,14 @@
 - Resolution: Added page nineteen with left-aligned goal copy, two slightly overlapping K-Friends mobile screenshots, and a compact caption pairing the K-Friends logo with `Kfriends 앱 화면. 2년에 한 번씩 업데이트.`. Shifted the existing business, vision, recruitment, and Q&A pages to follow it and updated the initial page counter to twenty-four.
 - Tests: Verified the new screenshots and logo load locally, confirmed the two images overlap slightly in the right-side media area, checked the caption at desktop and mobile sizes, confirmed the page counter and total slide count are twenty-four, and confirmed no horizontal viewport overflow.
 
+## 2026-09-03 — Short XR K-Friends screenshot sizing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The two K-Friends screenshots on page nineteen were smaller than the neighboring mobile-screen examples and their decorative rotations made the composition feel unstable.
+- User impact: The evidence screens were harder to inspect and the right-side visual did not match the deck's established phone-screen treatment.
+- Resolution: Matched the screenshot height to the page-seventeen mobile-screen scale, removed the rotations, and retained only a slight horizontal overlap between the two images on desktop and mobile.
+- Tests: Rechecked page `19 / 24` at desktop and mobile sizes, confirmed the images remain fully visible with a small overlap, and confirmed no horizontal viewport overflow.
+
 ## 2026-09-03 — Short XR smart download QR and closing alignment
 
 - Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`

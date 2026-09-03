@@ -1045,9 +1045,9 @@
       }
 
       .slide-side-media--kfriends-goal {
-        top: clamp(64px, 8vh, 100px);
-        right: clamp(64px, 8vw, 128px);
-        width: clamp(360px, 33vw, 460px);
+        top: clamp(30px, 4vh, 48px);
+        right: clamp(40px, 5vw, 80px);
+        width: clamp(460px, 40vw, 560px);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -1057,15 +1057,15 @@
       .slide-kfriends-goal-gallery {
         position: relative;
         width: 100%;
-        height: clamp(360px, 49vh, 500px);
+        height: min(70vh, 520px);
       }
 
       .slide-kfriends-goal-image {
         position: absolute;
         display: block;
-        height: clamp(330px, 43vh, 440px);
+        height: min(70vh, 520px);
         width: auto;
-        max-width: 62%;
+        max-width: none;
         object-fit: contain;
         border-radius: clamp(18px, 1.8vw, 28px);
         background: #fff;
@@ -1073,16 +1073,16 @@
       }
 
       .slide-kfriends-goal-image--version-history {
-        left: 12%;
-        top: clamp(28px, 4vh, 52px);
-        transform: rotate(-6deg);
+        left: 7%;
+        top: 18px;
+        transform: none;
         z-index: 1;
       }
 
       .slide-kfriends-goal-image--story {
-        right: 12%;
+        right: 7%;
         top: 0;
-        transform: rotate(5deg);
+        transform: none;
         z-index: 2;
       }
 
@@ -3097,22 +3097,22 @@
       }
 
       html.is-mobile-viewport .slide-kfriends-goal-gallery {
-        height: clamp(280px, 39vh, 340px);
+        height: min(46vh, 390px);
       }
 
       html.is-mobile-viewport .slide-kfriends-goal-image {
-        height: clamp(250px, 34vh, 300px);
-        max-width: 62%;
+        height: min(46vh, 390px);
+        max-width: none;
         border-radius: 18px;
       }
 
       html.is-mobile-viewport .slide-kfriends-goal-image--version-history {
-        left: 12%;
-        top: 26px;
+        left: 3%;
+        top: 18px;
       }
 
       html.is-mobile-viewport .slide-kfriends-goal-image--story {
-        right: 12%;
+        right: 3%;
       }
 
       html.is-mobile-viewport .slide-kfriends-goal-caption {
