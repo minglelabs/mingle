@@ -6,7 +6,7 @@
 - **Issue:** A conversation room could not remain visible while the user used another app. The room is rendered in a WebView, while iOS does not allow an arbitrary transparent or interactive app window over other apps. System Picture in Picture accepts video/sample-buffer content, but its floating surface is not a scrollable chat UI.
 - **Resolution:** Add an iOS-only Picture in Picture action to the room header. The WebView remains the normal room surface and sends the current room title, status, and latest four original utterances to React Native. Swift draws a compact read-only 16:9 preview and feeds it as `CMSampleBuffer` frames to `AVSampleBufferDisplayLayer` and `AVPictureInPictureController`.
 - **Interaction:** An explicit in-app button starts Picture in Picture. New final or interim transcript changes update the preview. Picture in Picture does not support scrolling, chat controls, translation selection, or composing; closing it leaves the WebView room intact. The action is shown only in the native iOS runtime.
-- **Data change:** None. No API namespace or mobile-version change. Existing `UIBackgroundModes=audio` remains the background capability declaration.
+- **Data change:** None. The iOS app release is version `2.0.3` with namespace `ios/v2.0.3`; existing `UIBackgroundModes=audio` remains the background capability declaration.
 - **Testing notes:** Verify on a physical iOS device because Picture in Picture is unsupported or limited in the simulator. Cover a signed-in room, an empty room, final and interim messages, room switching and cleanup, Picture in Picture close, background/foreground transitions, long localized text, and App Store review eligibility for a read-only live snapshot preview rather than conventional media playback.
 
 ## 2026-09-03 - Wait for the iOS Picture in Picture preview to become renderable
@@ -15,7 +15,7 @@
 - **Issue:** The first implementation enqueued the preview frame and checked `isPictureInPicturePossible` in the same main-queue turn. On a physical iOS 26 device, the sample-buffer renderer had not finished accepting the first frame yet, so the app showed its own `Picture in Picture unavailable` alert even though the device supported Picture in Picture.
 - **User impact:** Tapping the visible Picture in Picture button appeared to fail every time, making the new floating conversation preview unusable.
 - **Resolution:** Mark snapshot frames for immediate display, wait briefly and retry until the controller reports that Picture in Picture is possible, and resolve or reject the bridge promise from the native start/failed delegate callbacks. Cancel pending retries cleanly when the room closes or Picture in Picture stops.
-- **Data change:** None. No API namespace, database migration, or conversation data change is required. The iOS app remains on version `2.0.2` with namespace `ios/v2.0.2`.
+- **Data change:** None. No database migration or conversation data change is required. The iOS app is version `2.0.3` with namespace `ios/v2.0.3`.
 - **Testing notes:** Build and install a signed Release build on a physical iOS 26 device, tap Picture in Picture from a room with and without messages, and confirm that the preview opens without the unavailable alert. Also verify explicit stop, room cleanup, and the existing no-scroll/read-only interaction boundary.
 
 ## 2026-09-02 - Clarify new conversation-room creation labels

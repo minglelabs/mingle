@@ -19,14 +19,14 @@ function readWorkspaceFile(relativePath: string): string {
 }
 
 describe('runtime fallback contract', () => {
-  it('keeps the iOS 2.0.2 Railway endpoints in the native runtime config', () => {
+  it('keeps the iOS 2.0.3 Railway endpoints in the native runtime config', () => {
     const projectFile = readWorkspaceFile('ios/mingle.xcodeproj/project.pbxproj');
     const infoPlist = readWorkspaceFile('ios/mingle/Info.plist');
     const nativeSttModule = readWorkspaceFile('ios/mingle/NativeSTTModule.swift');
 
     expect(projectFile).toContain('NEXT_PUBLIC_SITE_URL = "https://mingle-2-0-0-production.up.railway.app";');
     expect(projectFile).toContain('NEXT_PUBLIC_WS_URL = "wss://mingle-2-0-0-production.up.railway.app/stt";');
-    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.2;');
+    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.0.3;');
     expect(infoPlist).toContain('<key>MingleDefaultWsURL</key>');
     expect(infoPlist).toContain('<string>$(NEXT_PUBLIC_WS_URL)</string>');
 

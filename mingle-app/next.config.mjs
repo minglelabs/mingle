@@ -38,14 +38,14 @@ const nextConfig = {
         source: "/api/ios/v2.0.1/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
-      // iOS 2.0.2 keeps the v2.0.0 server contract while using its own
+      // iOS 2.0.3 keeps the v2.0.0 server contract while using its own
       // versioned namespace, so existing production API behavior is preserved.
       {
-        source: "/api/ios/v2.0.2",
+        source: "/api/ios/v2.0.3",
         destination: "/api/ios/v2.0.0",
       },
       {
-        source: "/api/ios/v2.0.2/:path*",
+        source: "/api/ios/v2.0.3/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
     ];
