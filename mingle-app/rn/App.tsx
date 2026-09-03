@@ -169,6 +169,11 @@ type NativeLocationModule = {
     receivedAtMs?: unknown;
   }>;
 };
+type NativePictureInPictureModule = {
+  start?: (options: Record<string, unknown>) => Promise<unknown>;
+  update?: (options: Record<string, unknown>) => void;
+  stop?: (options: Record<string, unknown>) => Promise<unknown>;
+};
 type NativeAdModule = {
   default?: (() => {
     initialize?: () => Promise<unknown>;
@@ -806,6 +811,11 @@ type NativeQaSetSttStatusCommand = {
   };
 };
 
+type NativePictureInPictureCommand = {
+  type: 'native_pip_start' | 'native_pip_update' | 'native_pip_stop';
+  payload?: Record<string, unknown>;
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -826,7 +836,8 @@ type WebViewCommand =
   | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
-  | NativeQaSetSttStatusCommand;
+  | NativeQaSetSttStatusCommand
+  | NativePictureInPictureCommand;
 
 type NativeSttEvent =
   | {
@@ -3585,6 +3596,41 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_qr_save') {
       void handleNativeQrSave(parsed.payload);
+      return;
+    }
+
+    if (
+      parsed.type === 'native_pip_start'
+      || parsed.type === 'native_pip_update'
+      || parsed.type === 'native_pip_stop'
+    ) {
+      if (Platform.OS !== 'ios') return;
+
+      const pictureInPictureModule = (NativeModules as {
+        NativePictureInPictureModule?: NativePictureInPictureModule;
+      }).NativePictureInPictureModule;
+      if (!pictureInPictureModule) return;
+
+      if (parsed.type === 'native_pip_start') {
+        if (typeof pictureInPictureModule.start !== 'function') return;
+        void pictureInPictureModule.start(parsed.payload ?? {}).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (__DEV__) {
+            console.warn(`[NativePiP] start failed: ${message}`);
+          }
+          Alert.alert('Picture in Picture unavailable', message);
+        });
+      } else if (parsed.type === 'native_pip_update') {
+        pictureInPictureModule.update?.(parsed.payload ?? {});
+      } else {
+        if (typeof pictureInPictureModule.stop !== 'function') return;
+        void pictureInPictureModule.stop(parsed.payload ?? {}).catch((error: unknown) => {
+          if (__DEV__) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[NativePiP] stop failed: ${message}`);
+          }
+        });
+      }
       return;
     }
 

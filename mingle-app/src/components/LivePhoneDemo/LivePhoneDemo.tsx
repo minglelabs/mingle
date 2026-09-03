@@ -3,7 +3,7 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import SlideSurface from '@/components/slide-surface'
 import { toast } from 'sonner'
@@ -167,6 +167,7 @@ import {
 import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { postNativePipCommand, type NativePipState } from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
 import {
   buildNativeRemountRestoreUrl,
@@ -1718,6 +1719,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
+  const nativePipStateRef = useRef<NativePipState | null>(null)
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
@@ -1853,6 +1855,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
   })
+  const isNativeIosPipAvailable = isNativeAppRuntime && isNativeIosAppRuntime()
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -5421,6 +5424,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+  const nativePipState = useMemo<NativePipState>(() => ({
+    conversationId: conversationId?.trim() || '',
+    title: (displayConversationTitle || conversationTitle || '').trim().slice(0, 120),
+    statusLabel: isSttSessionRunning
+      ? roomManagementCopy.pictureInPictureLiveLabel
+      : roomManagementCopy.pictureInPicturePausedLabel,
+    emptyLabel: roomManagementCopy.pictureInPictureEmptyLabel,
+    messages: displayUtterances
+      .filter((utterance) => utterance.originalText.trim())
+      .slice(-4)
+      .map((utterance) => ({
+        id: utterance.id,
+        speaker: (utterance.speakerName || utterance.speaker || '').trim().slice(0, 80) || undefined,
+        text: utterance.originalText.trim().slice(0, 600),
+        isInterim: draftUtteranceIds.has(utterance.id),
+      })),
+  }), [conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, roomManagementCopy])
+
+  useEffect(() => {
+    nativePipStateRef.current = nativePipState
+    if (!isNativeIosPipAvailable || !nativePipState.conversationId) return
+
+    postNativePipCommand({
+      type: 'native_pip_update',
+      payload: nativePipState,
+    })
+  }, [isNativeIosPipAvailable, nativePipState])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || !conversationId?.trim()) return
+
+    const scopedConversationId = conversationId.trim()
+    return () => {
+      postNativePipCommand({
+        type: 'native_pip_stop',
+        payload: { conversationId: scopedConversationId },
+      })
+    }
+  }, [conversationId, isNativeIosPipAvailable])
+
+  const handleNativePipStart = useCallback(() => {
+    const state = nativePipStateRef.current
+    if (!state?.conversationId) return
+
+    postNativePipCommand({
+      type: 'native_pip_start',
+      payload: state,
+    })
+  }, [])
+
   const displayUtteranceIds = useMemo(
     () => displayUtterances.map((utterance) => utterance.id),
     [displayUtterances],
@@ -5864,6 +5917,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
+            {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
+              <button
+                data-qa="live-demo-picture-in-picture-button"
+                type="button"
+                onClick={handleNativePipStart}
+                aria-label={roomManagementCopy.pictureInPictureButtonLabel}
+                title={roomManagementCopy.pictureInPictureButtonLabel}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              >
+                <PictureInPicture2 size={17} strokeWidth={2} />
+              </button>
+            ) : null}
             {showMenuButton ? (
               <div className="relative">
                 <button
