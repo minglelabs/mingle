@@ -658,3 +658,11 @@
 - User impact: The single screenshot communicated one example but did not make the broader cross-service demand visually concrete.
 - Resolution: Added Roblox and Discord mobile UI screens behind the Xiaohongshu PIP screenshot, keeping Xiaohongshu visually on top. Added the requested left-bottom body copy, including the statement that a user is already using Mingle with Roblox and that users sometimes want Mingle for content without subtitles.
 - Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed all three images load with the intended z-order, confirmed the body copy remains under the left title, confirmed the caption remains under the image collage, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline and work translation reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed to acknowledge translation demand beyond social and content use cases, including offline and work contexts.
+- User impact: The presentation ended the add-on subtitle examples without signaling that Mingle is also being considered for practical offline and workplace interpretation.
+- Resolution: Extended page sixteen's left body copy with Discord interest and the broader no-subtitle-content demand, added `로블록스, 디스코드와도 함께 사용` to the right-side caption, and added a seventeenth left-aligned slide with the `고객 반응` kicker and requested title. Updated the static page counter to `01 / 17`.
+- Tests: Verified pages `16 / 17` and `17 / 17` at desktop and mobile sizes, confirmed page sixteen's three-line caption remains below the collage, confirmed page seventeen's left alignment and exact title, confirmed no viewport overflow, and found no browser console warnings or errors.
