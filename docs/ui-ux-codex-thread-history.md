@@ -650,3 +650,11 @@
 - User impact: The customer-proof sequence did not show that Mingle can accompany picture-in-picture viewing outside a dedicated socialing service.
 - Resolution: Added a sixteenth left-aligned slide with the `고객 반응` kicker, the requested title, the attached Xiaohongshu PIP screenshot on the right, and a centered two-line explanation below it. Updated the static page counter to `01 / 16`.
 - Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed the attached image loads, confirmed the caption remains below the image, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle use-case collage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/roblox-mobile-home.jpg`, `mingle-app/public/legal/assets/discord-mobile-chat.png`
+- Issue: The add-on subtitle demand page needed to show that the use case extends beyond Xiaohongshu to other mobile-first services, including an active Roblox use case and interest in Discord.
+- User impact: The single screenshot communicated one example but did not make the broader cross-service demand visually concrete.
+- Resolution: Added Roblox and Discord mobile UI screens behind the Xiaohongshu PIP screenshot, keeping Xiaohongshu visually on top. Added the requested left-bottom body copy, including the statement that a user is already using Mingle with Roblox and that users sometimes want Mingle for content without subtitles.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed all three images load with the intended z-order, confirmed the body copy remains under the left title, confirmed the caption remains under the image collage, confirmed no viewport overflow, and found no browser console warnings or errors.

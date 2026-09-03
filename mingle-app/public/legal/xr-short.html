@@ -854,23 +854,53 @@
       }
 
       .slide-side-media--addon-subtitles {
-        top: clamp(44px, 7vh, 84px);
-        right: clamp(46px, 7vw, 108px);
-        width: clamp(280px, 28vw, 380px);
+        top: clamp(30px, 4vh, 56px);
+        right: clamp(30px, 4vw, 72px);
+        width: clamp(410px, 38vw, 540px);
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: clamp(10px, 1.2vw, 18px);
       }
 
-      .slide-addon-subtitle-image {
+      .slide-addon-subtitle-gallery {
+        position: relative;
+        width: 100%;
+        height: min(65vh, 520px);
+      }
+
+      .slide-addon-subtitle-gallery-image {
+        position: absolute;
         display: block;
         width: auto;
-        height: min(65vh, 520px);
         max-width: 100%;
         object-fit: contain;
         border-radius: clamp(18px, 1.7vw, 26px);
         box-shadow: 0 22px 48px rgba(45, 42, 30, 0.16);
+      }
+
+      .slide-addon-subtitle-gallery-image--roblox {
+        left: 0;
+        bottom: clamp(8px, 1.4vw, 18px);
+        height: min(52vh, 420px);
+        transform: rotate(-7deg);
+        z-index: 1;
+      }
+
+      .slide-addon-subtitle-gallery-image--discord {
+        right: 0;
+        bottom: clamp(4px, 1vw, 14px);
+        height: min(52vh, 420px);
+        transform: rotate(7deg);
+        z-index: 2;
+      }
+
+      .slide-addon-subtitle-gallery-image--xiaohongshu {
+        top: 0;
+        left: 50%;
+        height: min(65vh, 520px);
+        transform: translateX(-50%);
+        z-index: 3;
       }
 
       .slide-addon-subtitle-caption {
@@ -882,6 +912,10 @@
         line-height: 1.38;
         letter-spacing: -0.03em;
         text-align: center;
+      }
+
+      .slide-copy--addon-subtitles .slide-addon-subtitle-body {
+        max-width: min(100%, 600px);
       }
 
       .slide-side-media--user-reactions .slide-solution-points {
@@ -2669,8 +2703,27 @@
         gap: clamp(8px, 1.3vh, 12px);
       }
 
-      html.is-mobile-viewport .slide-addon-subtitle-image {
+      html.is-mobile-viewport .slide-addon-subtitle-gallery {
         height: min(48vh, 430px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--roblox {
+        left: 0;
+        bottom: 8px;
+        height: min(40vh, 340px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--discord {
+        right: 0;
+        bottom: 4px;
+        height: min(40vh, 340px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--xiaohongshu {
+        height: min(48vh, 430px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image {
         max-width: 100%;
       }
 
@@ -3516,13 +3569,29 @@
               <h1 class="slide-title">이외에도 애드온 자막 수요를<br/>
                 정말 많이 발견했습니다
               </h1>
+              <p class="slide-body slide-addon-subtitle-body">
+                실제로 로블록스와 밍글을 함께 사용 중인 유저도 있었고,<br/>
+                이외에도 자막이 없는 콘텐츠에도 밍글을 활용하고 싶어하는 수요가 종종 있었습니다.
+              </p>
             </div>
             <div class="slide-side-media slide-side-media--addon-subtitles">
-              <img
-                class="slide-addon-subtitle-image"
-                src="./assets/xiaohongshu-pip-mingle.png"
-                alt="샤오홍슈 라이브 스트리밍을 PIP로 실행한 화면과 밍글 자막"
-              />
+              <div class="slide-addon-subtitle-gallery">
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--roblox"
+                  src="./assets/roblox-mobile-home.jpg"
+                  alt="Roblox 모바일 홈 화면"
+                />
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--discord"
+                  src="./assets/discord-mobile-chat.png"
+                  alt="Discord 모바일 채팅 화면"
+                />
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--xiaohongshu"
+                  src="./assets/xiaohongshu-pip-mingle.png"
+                  alt="샤오홍슈 라이브 스트리밍을 PIP로 실행한 화면과 밍글 자막"
+                />
+              </div>
               <p class="slide-addon-subtitle-caption">
                 샤오홍슈 라이브 스트리밍을<br/>
                 PIP로 실행해서 밍글 자막과 함께 시청
