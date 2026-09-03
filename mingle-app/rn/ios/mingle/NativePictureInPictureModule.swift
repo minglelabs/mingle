@@ -26,6 +26,19 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let requiredStablePossibleChecks = 3
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
+    private static let previewBubbleHorizontalPadding: CGFloat = 18
+    private static let previewBubbleVerticalPadding: CGFloat = 8
+    private static let previewBubbleGap: CGFloat = 8
+
+    private struct PreviewMessageLayout {
+        let message: PictureInPictureMessage
+        let messageFont: UIFont
+        let speakerFont: UIFont?
+        let speakerHeight: CGFloat
+        let speakerGap: CGFloat
+        let textHeight: CGFloat
+        let bubbleHeight: CGFloat
+    }
 
     private let displayLayerHostView = PictureInPictureSampleBufferView(frame: .zero)
     private var displayLayer: AVSampleBufferDisplayLayer {
@@ -563,89 +576,225 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             backgroundColor.setFill()
             context.fill(bounds)
 
-            let headerRect = CGRect(x: 28, y: 22, width: bounds.width - 56, height: 54)
+            let headerRect = CGRect(x: 24, y: 14, width: bounds.width - 48, height: 46)
             drawText(
                 "Mingle",
-                in: CGRect(x: headerRect.minX, y: headerRect.minY, width: 170, height: 24),
-                font: .systemFont(ofSize: 22, weight: .bold),
+                in: CGRect(x: headerRect.minX, y: headerRect.minY, width: 140, height: 18),
+                font: .systemFont(ofSize: 15, weight: .bold),
                 color: UIColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1)
             )
             drawText(
                 state.title.isEmpty ? "Conversation" : state.title,
-                in: CGRect(x: headerRect.minX, y: headerRect.minY + 28, width: 500, height: 20),
-                font: .systemFont(ofSize: 13, weight: .medium),
+                in: CGRect(x: headerRect.minX, y: headerRect.minY + 20, width: 560, height: 18),
+                font: .systemFont(ofSize: 12, weight: .medium),
                 color: UIColor(red: 0.38, green: 0.38, blue: 0.42, alpha: 1)
             )
 
             let statusLabel = state.statusLabel.isEmpty ? "Live" : state.statusLabel
             let statusWidth = min(150, max(72, statusLabel.size(withAttributes: [
-                .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
             ]).width + 28))
             let statusRect = CGRect(
-                x: bounds.width - 28 - statusWidth,
-                y: headerRect.minY + 4,
+                x: bounds.width - 24 - statusWidth,
+                y: headerRect.minY + 7,
                 width: statusWidth,
-                height: 28
+                height: 25
             )
             UIColor(red: 0.9, green: 0.96, blue: 0.92, alpha: 1).setFill()
-            UIBezierPath(roundedRect: statusRect, cornerRadius: 14).fill()
+            UIBezierPath(roundedRect: statusRect, cornerRadius: 12.5).fill()
             drawText(
                 statusLabel,
-                in: statusRect.insetBy(dx: 12, dy: 5),
-                font: .systemFont(ofSize: 12, weight: .semibold),
+                in: statusRect.insetBy(dx: 10, dy: 4),
+                font: .systemFont(ofSize: 11, weight: .semibold),
                 color: UIColor(red: 0.1, green: 0.46, blue: 0.25, alpha: 1),
                 alignment: .center
             )
 
-            if state.messages.isEmpty {
+            let contentRect = CGRect(
+                x: 24,
+                y: 74,
+                width: bounds.width - 48,
+                height: bounds.height - 94
+            )
+            let textWidth = contentRect.width - Self.previewBubbleHorizontalPadding * 2
+            let messages = selectPreviewMessages(state.messages, textWidth: textWidth)
+
+            if messages.isEmpty {
                 drawText(
                     state.emptyLabel.isEmpty ? "No messages yet." : state.emptyLabel,
-                    in: CGRect(x: 50, y: 250, width: bounds.width - 100, height: 40),
-                    font: .systemFont(ofSize: 17, weight: .medium),
+                    in: contentRect.insetBy(dx: 24, dy: 0),
+                    font: .systemFont(ofSize: 22, weight: .medium),
                     color: UIColor(red: 0.42, green: 0.42, blue: 0.46, alpha: 1),
                     alignment: .center
                 )
                 return
             }
 
-            let cardX: CGFloat = 28
-            let cardWidth = bounds.width - 56
-            let cardHeight: CGFloat = 94
-            let cardGap: CGFloat = 8
-            let firstCardY: CGFloat = 96
+            let messageFontSize = resolvePreviewMessageFontSize(
+                messages,
+                textWidth: textWidth,
+                availableHeight: contentRect.height
+            )
+            let layouts = makePreviewMessageLayouts(
+                messages,
+                fontSize: messageFontSize,
+                textWidth: textWidth
+            )
+            let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
+                + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
+            var cardY = contentRect.minY + max(0, (contentRect.height - totalHeight) / 2)
 
-            for (index, message) in state.messages.enumerated() {
-                let cardY = firstCardY + CGFloat(index) * (cardHeight + cardGap)
-                let cardRect = CGRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
+            for layout in layouts {
+                let cardRect = CGRect(
+                    x: contentRect.minX,
+                    y: cardY,
+                    width: contentRect.width,
+                    height: layout.bubbleHeight
+                )
                 UIColor.white.setFill()
-                UIBezierPath(roundedRect: cardRect, cornerRadius: 18).fill()
+                UIBezierPath(roundedRect: cardRect, cornerRadius: 14).fill()
 
-                if message.isInterim {
+                if layout.message.isInterim {
                     UIColor(red: 1, green: 0.72, blue: 0.2, alpha: 1).setStroke()
-                    let border = UIBezierPath(roundedRect: cardRect.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 17.25)
+                    let border = UIBezierPath(roundedRect: cardRect.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 13.25)
                     border.lineWidth = 1.5
                     border.stroke()
                 }
 
-                let speaker = message.speaker.isEmpty ? "" : message.speaker
-                if !speaker.isEmpty {
+                var textY = cardRect.minY + Self.previewBubbleVerticalPadding
+                if let speakerFont = layout.speakerFont {
                     drawText(
-                        speaker,
-                        in: CGRect(x: cardRect.minX + 18, y: cardRect.minY + 12, width: cardRect.width - 36, height: 18),
-                        font: .systemFont(ofSize: 12, weight: .semibold),
+                        layout.message.speaker,
+                        in: CGRect(
+                            x: cardRect.minX + Self.previewBubbleHorizontalPadding,
+                            y: textY,
+                            width: textWidth,
+                            height: layout.speakerHeight
+                        ),
+                        font: speakerFont,
                         color: UIColor(red: 0.42, green: 0.42, blue: 0.46, alpha: 1)
                     )
+                    textY += layout.speakerHeight + layout.speakerGap
                 }
 
-                let textY = speaker.isEmpty ? cardRect.minY + 18 : cardRect.minY + 33
                 drawText(
-                    message.text,
-                    in: CGRect(x: cardRect.minX + 18, y: textY, width: cardRect.width - 36, height: 48),
-                    font: .systemFont(ofSize: 15, weight: .medium),
+                    layout.message.text,
+                    in: CGRect(
+                        x: cardRect.minX + Self.previewBubbleHorizontalPadding,
+                        y: textY,
+                        width: textWidth,
+                        height: layout.textHeight
+                    ),
+                    font: layout.messageFont,
                     color: UIColor(red: 0.12, green: 0.12, blue: 0.15, alpha: 1)
                 )
+
+                cardY += layout.bubbleHeight + Self.previewBubbleGap
             }
         }
+    }
+
+    private func selectPreviewMessages(
+        _ messages: [PictureInPictureMessage],
+        textWidth: CGFloat
+    ) -> [PictureInPictureMessage] {
+        let recentMessages = Array(messages.suffix(3))
+        guard let latestMessage = recentMessages.last else { return [] }
+
+        let classificationFont = UIFont.systemFont(ofSize: 24, weight: .semibold)
+        var selectedMessages = [latestMessage]
+
+        // Keep the preview compact when the latest messages fit on one line.
+        // As soon as a recent message needs wrapping, show only the latest one
+        // so its text can grow instead of shrinking into a tiny card.
+        guard previewLineCount(
+            latestMessage.text,
+            font: classificationFont,
+            width: textWidth
+        ) == 1 else {
+            return selectedMessages
+        }
+
+        for message in recentMessages.dropLast().reversed() {
+            guard selectedMessages.count < 3,
+                  previewLineCount(message.text, font: classificationFont, width: textWidth) == 1 else {
+                break
+            }
+            selectedMessages.insert(message, at: 0)
+        }
+
+        return selectedMessages
+    }
+
+    private func resolvePreviewMessageFontSize(
+        _ messages: [PictureInPictureMessage],
+        textWidth: CGFloat,
+        availableHeight: CGFloat
+    ) -> CGFloat {
+        let maximumFontSize: CGFloat = messages.count == 1 ? 34 : messages.count == 2 ? 30 : 27
+        var fontSize = maximumFontSize
+
+        while fontSize >= 18 {
+            let layouts = makePreviewMessageLayouts(
+                messages,
+                fontSize: fontSize,
+                textWidth: textWidth
+            )
+            let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
+                + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
+            if totalHeight <= availableHeight {
+                return fontSize
+            }
+            fontSize -= 1
+        }
+
+        return 18
+    }
+
+    private func makePreviewMessageLayouts(
+        _ messages: [PictureInPictureMessage],
+        fontSize: CGFloat,
+        textWidth: CGFloat
+    ) -> [PreviewMessageLayout] {
+        let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+
+        return messages.map { message in
+            let speakerFont = message.speaker.isEmpty
+                ? nil
+                : UIFont.systemFont(ofSize: max(11, min(14, fontSize * 0.42)), weight: .semibold)
+            let speakerHeight = speakerFont?.lineHeight ?? 0
+            let speakerGap: CGFloat = speakerFont == nil ? 0 : 3
+            let textHeight = measuredTextHeight(message.text, font: messageFont, width: textWidth)
+            let verticalPadding = Self.previewBubbleVerticalPadding * 2
+            let speakerContentHeight = speakerHeight + speakerGap
+            let bubbleContentHeight = verticalPadding + speakerContentHeight + textHeight
+            let bubbleHeight = ceil(bubbleContentHeight)
+
+            return PreviewMessageLayout(
+                message: message,
+                messageFont: messageFont,
+                speakerFont: speakerFont,
+                speakerHeight: speakerHeight,
+                speakerGap: speakerGap,
+                textHeight: textHeight,
+                bubbleHeight: bubbleHeight
+            )
+        }
+    }
+
+    private func previewLineCount(_ text: String, font: UIFont, width: CGFloat) -> Int {
+        let measuredHeight = measuredTextHeight(text, font: font, width: width)
+        return max(1, Int(ceil(measuredHeight / font.lineHeight)))
+    }
+
+    private func measuredTextHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font],
+            context: nil
+        )
+        return max(font.lineHeight, ceil(rect.height))
     }
 
     private func drawText(
@@ -653,11 +802,12 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         in rect: CGRect,
         font: UIFont,
         color: UIColor,
-        alignment: NSTextAlignment = .left
+        alignment: NSTextAlignment = .left,
+        lineBreakMode: NSLineBreakMode = .byTruncatingTail
     ) {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = alignment
-        paragraphStyle.lineBreakMode = .byTruncatingTail
+        paragraphStyle.lineBreakMode = lineBreakMode
         (text as NSString).draw(
             in: rect,
             withAttributes: [
@@ -709,8 +859,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             return nil
         }
 
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
+        // UIGraphicsImageRenderer already returns an upright CGImage. Flipping
+        // its context here would make the PiP preview appear upside down.
         context.interpolationQuality = .high
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 

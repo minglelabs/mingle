@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Correct iOS Picture in Picture orientation and message density
+
+- **Surface:** The native iOS conversation Picture in Picture preview shown after the startup fix.
+- **Issue:** The preview rendered vertically inverted. It also reserved too much space for a four-card layout, which made the latest conversation text very small and left large empty areas when fewer messages were available.
+- **Diagnosis:** The `CGImage` produced by `UIGraphicsImageRenderer` was flipped again while copying it into the sample-buffer pixel buffer. The fixed card height and four-message loop did not adapt to the actual text length or the available 16:9 canvas.
+- **Resolution:** Remove the extra pixel-buffer flip. Select up to the latest three messages when they fit on one line at a readable size; if the latest message or a recent predecessor needs wrapping, keep only the latest message. Calculate the largest font size that fits, shrink speaker labels and bubble padding, and vertically center the resulting compact stack.
+- **Interaction:** PiP remains a read-only, non-scrollable preview. Short recent messages can appear together, while long or wrapped content receives the space of one large message bubble.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; only the build number advances for device verification.
+- **Testing notes:** Verify upright text on the physical iOS 26 device with zero, one, two, and three short messages; a long wrapped message; interim text; long speaker names; and repeated preview updates.
+
 ## 2026-09-03 - Make iOS Picture in Picture startup reliable after repeated taps
 
 - **Surface:** iOS conversation-room Picture in Picture action and its native start feedback.
