@@ -723,6 +723,22 @@
 - Resolution: Added the source deck's `팀원 구합니다` page and `감사합니다. Q & A` page as pages twenty-two and twenty-three, including the original closing links and store badges. Updated the static page counter to `01 / 23`.
 - Tests: Verified pages `22 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the recruitment copy and all closing links/badges render, confirmed local assets load, and confirmed no viewport overflow.
 
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
 ## 2026-09-03 — Short XR customer experience category row refinement
 
 - Surface: `mingle-app/public/legal/xr-short.html`
