@@ -746,3 +746,11 @@
 - User impact: The category map felt too spread across the page while the individual services appeared too small.
 - Resolution: Changed the page-eighteen desktop summary to a centered four-plus-three flex layout, enlarged category titles and app icons, and kept each category's icons in a compact horizontal row. Preserved a responsive two-column/four-row mobile layout with the final category centered.
 - Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed four categories in the first desktop row and three in the second, confirmed seven categories and 11 local icons load, confirmed all per-category icon rows are horizontal, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — XR Venn diagram asset correction
+
+- Surface: `mingle-app/public/legal/xr.html`, `mingle-app/public/legal/xr-short.html`, and `mingle-app/public/legal/assets/business-venndiagram.png`
+- Issue: The Venn diagram used an earlier image containing a typo.
+- User impact: The same incorrect diagram appeared on the corresponding Venn page in both the full and shortened XR decks.
+- Resolution: Replaced the shared Venn diagram asset with the corrected attached image, so both decks update through their existing single-image page without changing the business matrix page or any other slide.
+- Tests: Verified the corrected asset matches the attached PNG byte-for-byte, confirmed it loads on the Venn page in both decks, confirmed the matrix asset remains unchanged, and confirmed no viewport overflow.
