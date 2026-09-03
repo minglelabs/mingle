@@ -530,3 +530,11 @@
 - User impact: The requirement comparison felt sparse, and the distinction between sentence segmentation and multi-speaker separation was not visible.
 - Resolution: Reworked the ninth slide into a compact four-column desktop grid with narrower cards, kept a single readable column on mobile, and split the former `발화 분리` item into `발화 분리 — 문장 단위로 끊어주질 않음` and `발화자 분리 — 여럿이 말해도 분리가 안됨`.
 - Tests: Verified page `09 / 13` at desktop and mobile sizes, confirmed all eight labels and descriptions in order, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven flow arrow was drawn across most of both goal cards, used a gradient, and did not visually stay within the space between the two goals.
+- User impact: The arrow competed with the goal copy and made the intended right-to-left transition feel imprecise.
+- Resolution: Changed the arrow to a solid red stroke and recalculated its path from the right card's inner-left 10% point to the left card's inner-right 10% point. The geometry is recalculated on load and viewport changes so the relationship remains correct across desktop and mobile layouts.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the solid red stroke and endpoint alignment against both goal boxes, confirmed no viewport overflow, and found no browser console warnings or errors.
