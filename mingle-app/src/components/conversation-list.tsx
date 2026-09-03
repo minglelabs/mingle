@@ -3338,18 +3338,6 @@ export default function ConversationList({
     openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
   }, [openConversationSurface]);
 
-  // Reuses invite-friends-screen.tsx's picker (see its conversationId prop)
-  // in "add to this room" mode instead of a bespoke invite UI.
-  const openInviteMembers = useCallback((conversationId: string) => {
-    const normalizedConversationId = conversationId.trim();
-    if (!normalizedConversationId || typeof window === "undefined") return;
-
-    const path = buildPathWithCurrentSearchParams(`/${locale}/conversations/add-members`);
-    const url = new URL(path, window.location.origin);
-    url.searchParams.set("conversation", normalizedConversationId);
-    router.push(`${url.pathname}${url.search}`);
-  }, [locale, router]);
-
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
@@ -5512,7 +5500,6 @@ export default function ConversationList({
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
                         onOpenProfile={openConversationProfile}
-                        onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}
