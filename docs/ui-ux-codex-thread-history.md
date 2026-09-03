@@ -698,3 +698,11 @@
 - User impact: The category understated the breadth of established services used to connect travelers and locals in person.
 - Resolution: Added the Couchsurfing app icon to the offline-meetup logo cloud on pages five and nine, using the same scattered presentation and a slightly larger scale for the prominent competitor.
 - Tests: Verified pages `05 / 17` and `09 / 17` at desktop and mobile sizes, confirmed all three offline-meetup icons load on both pages, confirmed the icons stay within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR seven customer experience categories
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a single summary page showing the seven concrete user experiences Mingle plans to address individually.
+- User impact: The preceding customer-reaction pages demonstrated demand through examples, but did not make the full set of target experiences easy to scan in one view.
+- Resolution: Added an eighteenth centered slide with the `고객` kicker and requested two-line title. Added seven transparent category areas with one to three irregularly scattered service icons each: online cultural exchange, voice-call services, add-on subtitles, offline meetups, tourist-facing offline response, tourist information/consultation/reservations, and multilingual meetings. Added local App Store artwork for Immersive Translate, Caplo, Konest, Fresha, and Gangnam Unni, and reused the existing HelloTalk, K-Friends, Discord, Couchsurfing, Google Translate, and Cuckoo assets.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed all seven category titles and 11 icons load, confirmed the title and category labels are centered, and confirmed no horizontal viewport overflow.

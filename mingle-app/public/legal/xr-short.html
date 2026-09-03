@@ -217,6 +217,18 @@
         white-space: nowrap;
       }
 
+      .slide-copy--market-categories.slide-copy--customer-experiences {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        gap: clamp(14px, 2.4vh, 24px);
+      }
+
+      .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
+        font-size: clamp(1.9rem, 2.8vw, 3.1rem);
+        line-height: 1.16;
+        white-space: nowrap;
+      }
+
       .slide-shell--market-overview {
         flex-direction: column;
         align-items: center;
@@ -515,6 +527,10 @@
         padding: 0;
       }
 
+      .slide-side-media--market-categories--seven {
+        height: clamp(390px, 52vh, 430px);
+      }
+
       .slide-market-grid--categories {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         grid-template-rows: minmax(0, 1fr);
@@ -545,6 +561,29 @@
 
       .slide-market-grid--categories-compact .slide-market-logo-cloud {
         inset: 0 1% 0;
+      }
+
+      .slide-market-grid--categories-seven {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: repeat(3, minmax(0, 1fr));
+        gap: clamp(8px, 1vw, 14px);
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category-title {
+        font-size: clamp(1.05rem, 1.45vw, 1.65rem);
+      }
+
+      .slide-market-grid--categories.slide-market-grid--categories-seven .slide-market-logo-cloud {
+        inset: 27% 1% 0;
+      }
+
+      .slide-market-grid--categories-seven .slide-market-logo {
+        width: clamp(60px, 5vw, 76px);
+        height: clamp(60px, 5vw, 76px);
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category:last-child {
+        grid-column: 2;
       }
 
       .slide-shell--ai-requirements {
@@ -668,6 +707,22 @@
 
       .slide-market-category--offline {
         --market-accent: #159570;
+      }
+
+      .slide-market-category--addon {
+        --market-accent: #a855f7;
+      }
+
+      .slide-market-category--tourist {
+        --market-accent: #f59e0b;
+      }
+
+      .slide-market-category--travel {
+        --market-accent: #0f8a83;
+      }
+
+      .slide-market-category--meeting {
+        --market-accent: #2563eb;
       }
 
       .slide-market-category-title {
@@ -2365,6 +2420,12 @@
         text-align: center;
       }
 
+      html.is-mobile-viewport .slide-copy--market-categories.slide-copy--customer-experiences {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        gap: clamp(10px, 1.7vh, 16px);
+      }
+
       html.is-mobile-viewport .slide-side-media--market {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
@@ -2393,6 +2454,10 @@
 
       html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--language {
         height: clamp(360px, 48vh, 420px);
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--seven {
+        height: clamp(470px, 58vh, 520px);
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-four {
@@ -2425,6 +2490,25 @@
 
       html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-category-title {
         font-size: clamp(0.78rem, 3.4vw, 1rem);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(4, minmax(0, 1fr));
+        gap: 6px 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category {
+        padding: 8px 0 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category-title {
+        font-size: clamp(0.68rem, 3.05vw, 0.9rem);
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories.slide-market-grid--categories-seven .slide-market-logo-cloud {
+        inset: 18% 1% 0;
       }
 
       html.is-mobile-viewport .slide-market-logo-cloud {
@@ -2469,6 +2553,19 @@
         height: clamp(50px, 14.1vw, 66px);
         padding: 3px;
         border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-logo {
+        width: clamp(38px, 10.7vw, 48px);
+        height: clamp(38px, 10.7vw, 48px);
+        padding: 3px;
+        border-radius: 8px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category:last-child {
+        grid-column: 1 / -1;
+        width: 50%;
+        justify-self: center;
       }
 
       html.is-mobile-viewport .slide-shell--ai-requirements {
@@ -2666,6 +2763,13 @@
         line-height: 1.1;
         letter-spacing: -0.05em;
         white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
+        font-size: clamp(1.05rem, 4.25vw, 1.55rem);
+        line-height: 1.15;
+        letter-spacing: -0.05em;
+        white-space: normal;
       }
 
       html.is-mobile-viewport .slide-shell--has-side-media .slide-body {
@@ -3682,6 +3786,66 @@
             </div>
           </article>
         </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories slide-shell--customer-experiences">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories slide-copy--customer-experiences">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">정리하면 구체적인 유저 경험은 일곱가지 존재합니다<br/>
+                일곱가지고 이를 다 하나씩 각개격파 할 생각입니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--seven" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-seven">
+                <section class="slide-market-category slide-market-category--language">
+                  <h2 class="slide-market-category-title">온라인 문화교류</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 31%; --y: 46%; --s: clamp(68px, 5.8vw, 88px); --r: -8deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 68%; --y: 57%; --s: clamp(68px, 5.8vw, 88px); --r: 7deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">보이스톡 서비스</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: -5deg" src="./assets/logo-discord.png" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--addon">
+                  <h2 class="slide-market-category-title">애드온 자막</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 31%; --y: 47%; --s: clamp(68px, 5.8vw, 88px); --r: -7deg" src="./assets/logo-market-immersive-translate.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 68%; --y: 58%; --s: clamp(68px, 5.8vw, 88px); --r: 8deg" src="./assets/logo-market-caplo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 만남</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 50%; --y: 54%; --s: clamp(74px, 6vw, 92px); --r: -6deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--tourist">
+                  <h2 class="slide-market-category-title">관광객 오프라인 응대</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: 6deg" src="./assets/logo-google-translate.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--travel">
+                  <h2 class="slide-market-category-title">관광지 정보/상담/예약</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 21%; --y: 47%; --s: clamp(64px, 5.5vw, 84px); --r: -8deg" src="./assets/logo-market-konest.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 62%; --s: clamp(64px, 5.5vw, 84px); --r: 5deg" src="./assets/logo-market-fresha.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 79%; --y: 47%; --s: clamp(64px, 5.5vw, 84px); --r: 9deg" src="./assets/logo-market-gangnam-unnie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--meeting">
+                  <h2 class="slide-market-category-title">다국어 회의</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: -5deg" src="./assets/logo-cuckoo.png" alt="" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
       </div>
       <div class="page-controls" aria-label="페이지 이동">
         <button class="page-home-button" id="page-home-button" type="button" aria-label="처음으로 이동">
@@ -3690,7 +3854,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 17</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div>
       </div>
     </main>
 
