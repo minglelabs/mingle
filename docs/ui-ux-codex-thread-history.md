@@ -586,3 +586,11 @@
 - User impact: The direction cue could be read as an incomplete or uneven arrow, reducing the clarity of the right-to-left flow between the two messages.
 - Resolution: Expanded the arrowhead rise and drop to approximately twice their previous angles while keeping the arrow's position, solid red color, curved stem, and inner-edge endpoints unchanged. Updated the static SVG fallback to match the responsive JavaScript-generated geometry.
 - Tests: Verified page `07 / 12` at desktop and mobile sizes, confirmed both arrowhead wings are visibly separated from the stem, confirmed the arrow remains centered between the goal cards, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement bar color separation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The requirement cards on pages nine and ten shared an orange-to-red gradient bar, so the problem and solution pages did not have distinct visual states.
+- User impact: The problem/solution contrast was weaker, and the gradient added unnecessary visual noise to each card's left edge.
+- Resolution: Removed the gradient from the shared bar style. Page nine now uses a solid red bar (`#dc2626`), while page ten uses the solid primary brand accent (`var(--accent)`) so the two pages remain visually related but clearly differentiated.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed all nine bars on each page use solid colors with no background image, confirmed the expected red and accent RGB values, confirmed no viewport overflow, and found no browser console warnings or errors.
