@@ -554,3 +554,11 @@
 - User impact: The 3x3 comparison lost the compact card rhythm established on the earlier page, and the larger cards made the requirement groups feel too spread out.
 - Resolution: Constrained the shared requirement grid to a centered maximum width of 810px. This keeps the three-column desktop cards at approximately their previous 260px width while preserving the 3x3 structure and letting the mobile layout continue to use the full responsive content width.
 - Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed centered desktop cards at approximately 261px each, confirmed three rows and three columns on desktop, confirmed all nine cards remain full-width and readable on mobile, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow vertical alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After the arrow endpoints were shortened to the inner edges of the two goal cards, the arrow remained anchored near the cards' top edge instead of sitting at the visual center of the lower content.
+- User impact: The arrow looked disconnected from the two messages and made the intended right-to-left flow cue feel top-heavy.
+- Resolution: Centered the arrow element vertically against the goal-card row with a 50% anchor and vertical translation. Updated the SVG path baseline and control points so the red arrow stroke itself, including its head, sits at the cards' vertical midpoint across responsive sizes.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the arrow center matches the goal-card center, confirmed the short red path and inner-edge endpoints remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.

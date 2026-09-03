@@ -333,13 +333,14 @@
 
       .slide-goal-arrow {
         position: absolute;
-        top: clamp(4px, 0.8vw, 10px);
+        top: 50%;
         left: 0;
         z-index: 3;
         width: 100%;
         height: clamp(68px, 8vw, 92px);
         overflow: visible;
         pointer-events: none;
+        transform: translateY(-50%);
       }
 
       .slide-goal-arrow path {
@@ -2463,7 +2464,7 @@
       }
 
       html.is-mobile-viewport .slide-goal-arrow {
-        top: 4px;
+        top: 50%;
         height: 68px;
       }
 
@@ -3155,8 +3156,8 @@
                   <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를 못해도</span><br/>대화가 통한다!</h2>
                 </article>
                 <svg class="slide-goal-arrow" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                  <path d="M 570 30 C 530 0 470 0 430 30" />
-                  <path d="M 430 30 L 478 6 M 430 30 L 486 42" />
+                  <path d="M 570 50 C 530 20 470 20 430 50" />
+                  <path d="M 430 50 L 478 26 M 430 50 L 486 62" />
                 </svg>
               </div>
             </div>
@@ -3213,13 +3214,13 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">소셜링 상황의 빡센 요구사항들을<br/>기존의 AI로는 충족할 수 없었습니다</h1>
+              <h1 class="slide-title">소셜링 상황의 빡센 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">지속 번역</h2>
-                  <p class="slide-ai-requirement-description">버튼을 눌러야 해서 대화가 자꾸 끊김</p>
+                  <p class="slide-ai-requirement-description">버튼 누르느라 대화 자꾸 끊김</p>
                 </article>
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">음성 인식</h2>
@@ -3487,8 +3488,8 @@
           const endX = toViewBoxX(leftRect.right - leftRect.width * 0.1);
           const startX = toViewBoxX(rightRect.left + rightRect.width * 0.1);
           const span = Math.max(startX - endX, 1);
-          const baseY = 30;
-          const controlY = 0;
+          const baseY = 50;
+          const controlY = 20;
           const controlOffset = span * 0.28;
           const format = (value) => value.toFixed(2);
 
