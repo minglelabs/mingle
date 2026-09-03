@@ -624,5 +624,13 @@
 - Surface: `mingle-app/public/legal/xr-short.html`
 - Issue: The short presentation needed to show the initial workaround of keeping a voice-conversation service open alongside Mingle before presenting the final integrated experience.
 - User impact: The story moved from the requirement solution directly to the final video, leaving the practical two-service usage step unexplained.
-- Resolution: Added a new thirteenth slide after the video slide with the `밍글` kicker and the requested title, reusing the original page-fourteen HelloTalk Voiceroom and Mingle image stack from `xr.html`. Updated the static page counter to `01 / 13`; the runtime counter continues to derive its total from the slide count.
+- Resolution: Added a new thirteenth slide after the video slide with the `밍글` kicker and the requested title, reusing the original page-fourteen HelloTalk Voiceroom and Mingle image stack from `xr.html`. The runtime counter derives its total from the slide count.
 - Tests: Verified page `13 / 13` at desktop and mobile sizes, confirmed both local images load and the stacked layout stays within the slide, confirmed the page counter and total slide count, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to follow the two-service workaround with direct customer evidence from people who had tried Mingle.
+- User impact: The presentation lacked a concise proof point showing why the experience was positively received after the workaround and feature comparison.
+- Resolution: Added a new fourteenth slide after the voice-conversation bridge page with the `고객 반응` kicker, the requested title, and three right-side reaction cards based on the original page-fifteen response layout from `xr.html`. Replaced the source reactions with the requested continuous-translation, cross-language comprehension, and speech-recognition statements, and updated the static page counter to `01 / 14`.
+- Tests: Verified page `14 / 14` at desktop and mobile sizes, confirmed all three reaction cards and their exact text render in the right-side stack, confirmed the card stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
