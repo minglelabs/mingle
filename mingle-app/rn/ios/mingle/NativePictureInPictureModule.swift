@@ -26,9 +26,13 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let requiredStablePossibleChecks = 3
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
-    private static let previewBubbleHorizontalPadding: CGFloat = 18
-    private static let previewBubbleVerticalPadding: CGFloat = 8
+    private static let previewContentInset: CGFloat = 24
+    private static let previewBubbleHorizontalPadding: CGFloat = 16
+    private static let previewBubbleVerticalPadding: CGFloat = 7
     private static let previewBubbleGap: CGFloat = 8
+    private static let previewMaximumMessageCount = 4
+    private static let previewMaximumSingleMessageLines = 4
+    private static let previewMinimumFontSize: CGFloat = 22
 
     private struct PreviewMessageLayout {
         let message: PictureInPictureMessage
@@ -576,48 +580,16 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             backgroundColor.setFill()
             context.fill(bounds)
 
-            let headerRect = CGRect(x: 24, y: 14, width: bounds.width - 48, height: 46)
-            drawText(
-                "Mingle",
-                in: CGRect(x: headerRect.minX, y: headerRect.minY, width: 140, height: 18),
-                font: .systemFont(ofSize: 15, weight: .bold),
-                color: UIColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1)
-            )
-            drawText(
-                state.title.isEmpty ? "Conversation" : state.title,
-                in: CGRect(x: headerRect.minX, y: headerRect.minY + 20, width: 560, height: 18),
-                font: .systemFont(ofSize: 12, weight: .medium),
-                color: UIColor(red: 0.38, green: 0.38, blue: 0.42, alpha: 1)
-            )
-
-            let statusLabel = state.statusLabel.isEmpty ? "Live" : state.statusLabel
-            let statusWidth = min(150, max(72, statusLabel.size(withAttributes: [
-                .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
-            ]).width + 28))
-            let statusRect = CGRect(
-                x: bounds.width - 24 - statusWidth,
-                y: headerRect.minY + 7,
-                width: statusWidth,
-                height: 25
-            )
-            UIColor(red: 0.9, green: 0.96, blue: 0.92, alpha: 1).setFill()
-            UIBezierPath(roundedRect: statusRect, cornerRadius: 12.5).fill()
-            drawText(
-                statusLabel,
-                in: statusRect.insetBy(dx: 10, dy: 4),
-                font: .systemFont(ofSize: 11, weight: .semibold),
-                color: UIColor(red: 0.1, green: 0.46, blue: 0.25, alpha: 1),
-                alignment: .center
-            )
-
-            let contentRect = CGRect(
-                x: 24,
-                y: 74,
-                width: bounds.width - 48,
-                height: bounds.height - 94
-            )
+            let contentRect = bounds.insetBy(dx: Self.previewContentInset, dy: Self.previewContentInset)
             let textWidth = contentRect.width - Self.previewBubbleHorizontalPadding * 2
-            let messages = selectPreviewMessages(state.messages, textWidth: textWidth)
+            let maxMessageCount = state.displayMode == .expanded ? 2 : Self.previewMaximumMessageCount
+            let maxLinesPerMessage = state.displayMode == .expanded ? 2 : 1
+            let messages = selectPreviewMessages(
+                state.messages,
+                textWidth: textWidth,
+                maxMessageCount: maxMessageCount,
+                maxLinesPerMessage: maxLinesPerMessage
+            )
 
             if messages.isEmpty {
                 drawText(
@@ -633,16 +605,18 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             let messageFontSize = resolvePreviewMessageFontSize(
                 messages,
                 textWidth: textWidth,
-                availableHeight: contentRect.height
+                availableHeight: contentRect.height,
+                maxLinesPerMessage: maxLinesPerMessage
             )
             let layouts = makePreviewMessageLayouts(
                 messages,
                 fontSize: messageFontSize,
-                textWidth: textWidth
+                textWidth: textWidth,
+                maxLinesPerMessage: maxLinesPerMessage
             )
             let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
                 + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
-            var cardY = contentRect.minY + max(0, (contentRect.height - totalHeight) / 2)
+            var cardY = max(contentRect.minY, contentRect.maxY - totalHeight)
 
             for layout in layouts {
                 let cardRect = CGRect(
@@ -696,28 +670,31 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
     private func selectPreviewMessages(
         _ messages: [PictureInPictureMessage],
-        textWidth: CGFloat
+        textWidth: CGFloat,
+        maxMessageCount: Int,
+        maxLinesPerMessage: Int
     ) -> [PictureInPictureMessage] {
-        let recentMessages = Array(messages.suffix(3))
+        let recentMessages = Array(messages.suffix(maxMessageCount))
         guard let latestMessage = recentMessages.last else { return [] }
 
-        let classificationFont = UIFont.systemFont(ofSize: 24, weight: .semibold)
+        let classificationFont = UIFont.systemFont(
+            ofSize: maxLinesPerMessage > 1 ? 28 : 32,
+            weight: .semibold
+        )
         var selectedMessages = [latestMessage]
 
-        // Keep the preview compact when the latest messages fit on one line.
-        // As soon as a recent message needs wrapping, show only the latest one
-        // so its text can grow instead of shrinking into a tiny card.
-        guard previewLineCount(
-            latestMessage.text,
-            font: classificationFont,
-            width: textWidth
-        ) == 1 else {
+        // Keep the newest message visible at a readable size. If it needs more
+        // lines than the current display mode allows, do not squeeze older
+        // messages into the same preview.
+        guard previewLineCount(latestMessage.text, font: classificationFont, width: textWidth)
+            <= maxLinesPerMessage else {
             return selectedMessages
         }
 
         for message in recentMessages.dropLast().reversed() {
-            guard selectedMessages.count < 3,
-                  previewLineCount(message.text, font: classificationFont, width: textWidth) == 1 else {
+            guard selectedMessages.count < maxMessageCount,
+                  previewLineCount(message.text, font: classificationFont, width: textWidth)
+                    <= maxLinesPerMessage else {
                 break
             }
             selectedMessages.insert(message, at: 0)
@@ -729,16 +706,38 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private func resolvePreviewMessageFontSize(
         _ messages: [PictureInPictureMessage],
         textWidth: CGFloat,
-        availableHeight: CGFloat
+        availableHeight: CGFloat,
+        maxLinesPerMessage: Int
     ) -> CGFloat {
-        let maximumFontSize: CGFloat = messages.count == 1 ? 34 : messages.count == 2 ? 30 : 27
+        let maximumFontSize: CGFloat
+        switch messages.count {
+        case 1:
+            maximumFontSize = 52
+        case 2:
+            maximumFontSize = 44
+        case 3:
+            maximumFontSize = 38
+        default:
+            maximumFontSize = 34
+        }
+
         var fontSize = maximumFontSize
 
-        while fontSize >= 18 {
+        while fontSize >= Self.previewMinimumFontSize {
+            let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+            if messages.count > 1,
+               messages.contains(where: {
+                   previewLineCount($0.text, font: messageFont, width: textWidth) > maxLinesPerMessage
+               }) {
+                fontSize -= 1
+                continue
+            }
+
             let layouts = makePreviewMessageLayouts(
                 messages,
                 fontSize: fontSize,
-                textWidth: textWidth
+                textWidth: textWidth,
+                maxLinesPerMessage: maxLinesPerMessage
             )
             let totalHeight = layouts.reduce(CGFloat.zero) { $0 + $1.bubbleHeight }
                 + CGFloat(max(0, layouts.count - 1)) * Self.previewBubbleGap
@@ -748,13 +747,14 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             fontSize -= 1
         }
 
-        return 18
+        return Self.previewMinimumFontSize
     }
 
     private func makePreviewMessageLayouts(
         _ messages: [PictureInPictureMessage],
         fontSize: CGFloat,
-        textWidth: CGFloat
+        textWidth: CGFloat,
+        maxLinesPerMessage: Int
     ) -> [PreviewMessageLayout] {
         let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
 
@@ -764,7 +764,15 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                 : UIFont.systemFont(ofSize: max(11, min(14, fontSize * 0.42)), weight: .semibold)
             let speakerHeight = speakerFont?.lineHeight ?? 0
             let speakerGap: CGFloat = speakerFont == nil ? 0 : 3
-            let textHeight = measuredTextHeight(message.text, font: messageFont, width: textWidth)
+            let maxTextLines = messages.count == 1
+                ? Self.previewMaximumSingleMessageLines
+                : maxLinesPerMessage
+            let textHeight = measuredTextHeight(
+                message.text,
+                font: messageFont,
+                width: textWidth,
+                maximumLines: maxTextLines
+            )
             let verticalPadding = Self.previewBubbleVerticalPadding * 2
             let speakerContentHeight = speakerHeight + speakerGap
             let bubbleContentHeight = verticalPadding + speakerContentHeight + textHeight
@@ -787,14 +795,22 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         return max(1, Int(ceil(measuredHeight / font.lineHeight)))
     }
 
-    private func measuredTextHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+    private func measuredTextHeight(
+        _ text: String,
+        font: UIFont,
+        width: CGFloat,
+        maximumLines: Int? = nil
+    ) -> CGFloat {
         let rect = (text as NSString).boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: font],
             context: nil
         )
-        return max(font.lineHeight, ceil(rect.height))
+        let measuredHeight = max(font.lineHeight, ceil(rect.height))
+        guard let maximumLines else { return measuredHeight }
+
+        return min(measuredHeight, ceil(font.lineHeight * CGFloat(maximumLines)))
     }
 
     private func drawText(
@@ -1013,6 +1029,7 @@ private struct PictureInPictureMessage {
 
 private struct PictureInPictureState {
     let conversationId: String
+    let displayMode: PictureInPictureDisplayMode
     let title: String
     let statusLabel: String
     let emptyLabel: String
@@ -1030,11 +1047,18 @@ private struct PictureInPictureState {
         }
 
         self.conversationId = conversationId
+        let rawDisplayMode = (dictionary["displayMode"] as? String)?.lowercased()
+        self.displayMode = PictureInPictureDisplayMode(rawValue: rawDisplayMode ?? "") ?? .collapsed
         self.title = (dictionary["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.statusLabel = (dictionary["statusLabel"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.emptyLabel = (dictionary["emptyLabel"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.messages = Array(messages.suffix(4))
     }
+}
+
+private enum PictureInPictureDisplayMode: String {
+    case expanded
+    case collapsed
 }
 
 private enum PictureInPictureError: LocalizedError {

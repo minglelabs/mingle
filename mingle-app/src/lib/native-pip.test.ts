@@ -29,6 +29,7 @@ describe('native Picture in Picture bridge', () => {
       type: 'native_pip_update',
       payload: {
         conversationId: 'conversation-1',
+        displayMode: 'collapsed',
         title: 'Test room',
         statusLabel: 'Live',
         emptyLabel: 'No messages yet.',

@@ -223,6 +223,60 @@ const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
+function normalizeNativePipLanguageKey(rawLanguage: string): string {
+  const canonical = canonicalizeSttLanguageCode(rawLanguage)
+  return canonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
+}
+
+function findNativePipTranslationText(
+  utterance: Utterance,
+  language: string,
+): string {
+  const targetKey = normalizeNativePipLanguageKey(language)
+  if (!targetKey) return ''
+
+  const matchingLanguage = Object.keys(utterance.translations || {}).find((candidate) => (
+    normalizeNativePipLanguageKey(candidate) === targetKey
+  ))
+  const text = matchingLanguage ? utterance.translations[matchingLanguage] : ''
+  return typeof text === 'string' ? text.trim() : ''
+}
+
+function resolveNativePipMessageText(
+  utterance: Utterance,
+  displayMode: LivePhoneDemoBubbleDisplayMode,
+  displayLanguage: string | null,
+): string {
+  const originalText = utterance.originalText.trim()
+  if (displayMode === 'collapsed') {
+    const originalLanguageKey = normalizeNativePipLanguageKey(utterance.originalLang)
+    const displayLanguageKey = normalizeNativePipLanguageKey(displayLanguage || utterance.originalLang)
+    if (!displayLanguageKey || displayLanguageKey === originalLanguageKey) return originalText
+    return findNativePipTranslationText(utterance, displayLanguageKey) || originalText
+  }
+
+  const lines = [originalText]
+  const seenTexts = new Set(lines)
+  const orderedLanguages = [
+    ...(utterance.targetLanguages || []),
+    ...Object.keys(utterance.translations || {}),
+  ]
+  const seenLanguages = new Set<string>()
+
+  for (const language of orderedLanguages) {
+    const languageKey = normalizeNativePipLanguageKey(language)
+    if (!languageKey || seenLanguages.has(languageKey)) continue
+    seenLanguages.add(languageKey)
+
+    const text = findNativePipTranslationText(utterance, language)
+    if (!text || seenTexts.has(text)) continue
+    seenTexts.add(text)
+    lines.push(text)
+  }
+
+  return lines.join('\n')
+}
+
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
   message: string
@@ -5426,6 +5480,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }), [liveUtterances, utterances])
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
+    displayMode: bubbleDisplayMode,
     title: (displayConversationTitle || conversationTitle || '').trim().slice(0, 120),
     statusLabel: isSttSessionRunning
       ? roomManagementCopy.pictureInPictureLiveLabel
@@ -5437,10 +5492,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .map((utterance) => ({
         id: utterance.id,
         speaker: (utterance.speakerName || utterance.speaker || '').trim().slice(0, 80) || undefined,
-        text: utterance.originalText.trim().slice(0, 600),
+        text: resolveNativePipMessageText(
+          utterance,
+          bubbleDisplayMode,
+          resolvedDefaultDisplayLanguage,
+        ).slice(0, 600),
         isInterim: draftUtteranceIds.has(utterance.id),
       })),
-  }), [conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, roomManagementCopy])
+  }), [bubbleDisplayMode, conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, resolvedDefaultDisplayLanguage, roomManagementCopy])
 
   useEffect(() => {
     nativePipStateRef.current = nativePipState

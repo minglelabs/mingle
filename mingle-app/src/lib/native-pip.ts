@@ -7,6 +7,7 @@ export type NativePipMessage = {
 
 export type NativePipState = {
   conversationId: string
+  displayMode: 'expanded' | 'collapsed'
   title: string
   statusLabel: string
   emptyLabel: string
