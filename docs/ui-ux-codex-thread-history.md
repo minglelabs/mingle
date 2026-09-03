@@ -578,3 +578,11 @@
 - User impact: Viewers had to mentally remap the requirement pairs instead of scanning the problem and solution pages in the same sequence.
 - Resolution: Reordered page nine to match page ten exactly: continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value. Preserved the page-nine title and descriptions already customized by the user.
 - Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed the nine title sequences match exactly, confirmed the desktop 3x3 grids and mobile single-column layout remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrowhead visibility
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven arrow was correctly positioned at the goal-card center, but its arrowhead wings were too narrow and one wing visually blended into the curved stem.
+- User impact: The direction cue could be read as an incomplete or uneven arrow, reducing the clarity of the right-to-left flow between the two messages.
+- Resolution: Expanded the arrowhead rise and drop to approximately twice their previous angles while keeping the arrow's position, solid red color, curved stem, and inner-edge endpoints unchanged. Updated the static SVG fallback to match the responsive JavaScript-generated geometry.
+- Tests: Verified page `07 / 12` at desktop and mobile sizes, confirmed both arrowhead wings are visibly separated from the stem, confirmed the arrow remains centered between the goal cards, confirmed no viewport overflow, and found no browser console warnings or errors.
