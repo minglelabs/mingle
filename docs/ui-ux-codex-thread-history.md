@@ -506,3 +506,11 @@
 - User impact: The transition from the market and cause slides to the proposed translation service lacked a concrete explanation of the technical and cost barriers.
 - Resolution: Added a centered ninth slide with the requested problem kicker and title, followed by seven compact requirement cards covering continuous translation, speech recognition, multilingual ability, real-time translation, language switching, speaker separation, and price. The cards use a responsive three-column layout on desktop and a readable single-column layout on mobile.
 - Tests: Verified page `09 / 12` at desktop and mobile sizes, confirmed all seven labels and descriptions, confirmed the title is centered, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI cost and performance page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new AI requirement page needed a follow-up explanation of why existing translation services still fall short on price and practical conversation performance.
+- User impact: The presentation moved directly from the seven requirement gaps to the solution without showing concrete examples of the current service limitations.
+- Resolution: Added a new tenth slide based on page nine of `xr.html`, preserving its original cause kicker, title, and four service cards for Felo Translator, Google Translator, Apple Translator, and Papago. The existing responsive tool-card styles are reused, and the page counter now reflects 13 total slides.
+- Tests: Verified page `10 / 13` at desktop and mobile sizes, confirmed all four service logos and descriptions load, confirmed the title and card stack remain within the viewport, and found no browser console warnings or errors.
