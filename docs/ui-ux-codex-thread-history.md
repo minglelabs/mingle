@@ -779,6 +779,14 @@
 - Resolution: Moved the version-history screen to the right and kept the story app screen on the left with the foreground z-index, preserving the slight overlap and existing scale at desktop and mobile sizes.
 - Tests: Verified page `19 / 24` at desktop and mobile sizes, confirmed the story screen is left and in front of the version-history screen, and confirmed no horizontal viewport overflow.
 
+## 2026-09-03 — Short XR video start time and caption default
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve YouTube demonstration needed to begin later in the source video, without showing YouTube captions by default.
+- User impact: Viewers could see the demonstration begin before the intended moment and could get duplicate captions alongside Mingle's translated output.
+- Resolution: Changed the embedded video start time to 57 seconds and added YouTube's `cc_load_policy=0` parameter so captions remain off on initial playback.
+- Tests: Confirmed the page-twelve iframe source contains `start=57` and `cc_load_policy=0`, and confirmed the embed retains inline playback and the existing playback-rate initialization.
+
 ## 2026-09-03 — Short XR smart download QR and closing alignment
 
 - Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
