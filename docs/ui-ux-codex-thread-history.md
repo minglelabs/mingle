@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Prioritize complete iOS PiP bubbles over message count
+
+- **Surface:** The native iOS Picture in Picture conversation preview after the bubble-style rendering update.
+- **Issue:** A message could wrap to a third line in the source content, but the PiP preview reserved space for at most two lines whenever more than one message was visible. The result was a clipped bubble rather than a complete message. Short own messages were also right-aligned even though the compact PiP layout is easier to scan with one consistent left edge.
+- **Diagnosis:** The native layout measured each language row with a fixed line-count cap before calculating the bubble height. The drawing pass then used that capped height, so additional wrapped lines had no drawable space. Message ownership was also still used for horizontal placement.
+- **Resolution:** Measure every rendered row at its full wrapped height using the same character-wrapping paragraph style used by the drawing pass. Select recent messages by the complete measured stack, dropping older bubbles when the stack cannot fit before rendering. Preserve the largest font size that fits the selected complete bubbles. Anchor every bubble to the left content edge while retaining the existing own-message color treatment.
+- **Interaction:** A long message receives all of its visible wrapped lines; the preview does not replace ordinary overflow with an ellipsis. The PiP surface remains read-only and non-scrollable, and collapsed/expanded language-row behavior is unchanged.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this layout fix.
+- **Testing notes:** Verify one message with three or more wrapped lines, two messages with mixed short/long text, explicit newlines, collapsed and expanded language rows, interim translation dots, own/other bubble colors, and consistent left alignment on iPhone 14.
+
 ## 2026-09-03 - Match iOS Picture in Picture preview to conversation bubbles
 
 - **Surface:** The native iOS Picture in Picture conversation preview after the density and orientation update.

@@ -34,7 +34,6 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let previewLanguageTextGap: CGFloat = 6
     private static let previewMaximumBubbleWidthRatio: CGFloat = 0.96
     private static let previewMaximumMessageCount = 4
-    private static let previewMaximumSingleMessageLines = 5
     private static let previewMinimumFontSize: CGFloat = 22
 
     private struct PreviewLanguageRow {
@@ -627,9 +626,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             var cardY = max(contentRect.minY, contentRect.maxY - totalHeight)
 
             for layout in layouts {
-                let cardX = layout.message.isOwn
-                    ? contentRect.maxX - layout.bubbleWidth
-                    : contentRect.minX
+                let cardX = contentRect.minX
                 let cardRect = CGRect(
                     x: cardX,
                     y: cardY,
@@ -775,9 +772,6 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     ) -> [PreviewMessageLayout] {
         let messageFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
         let maximumBubbleWidth = max(1, availableWidth * Self.previewMaximumBubbleWidthRatio)
-        let maximumLinesPerRow = messages.count == 1
-            ? Self.previewMaximumSingleMessageLines
-            : 2
 
         return messages.map { message in
             let rows = makePreviewLanguageRows(for: message, displayMode: displayMode)
@@ -803,8 +797,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                 measuredTextHeight(
                     previewRenderedText(for: row),
                     font: messageFont,
-                    width: textWidth,
-                    maximumLines: maximumLinesPerRow
+                    width: textWidth
                 )
             }
             let bubbleHeight = ceil(
@@ -1061,19 +1054,20 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private func measuredTextHeight(
         _ text: String,
         font: UIFont,
-        width: CGFloat,
-        maximumLines: Int? = nil
+        width: CGFloat
     ) -> CGFloat {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byCharWrapping
         let rect = (text as NSString).boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font],
+            attributes: [
+                .font: font,
+                .paragraphStyle: paragraphStyle,
+            ],
             context: nil
         )
-        let measuredHeight = max(font.lineHeight, ceil(rect.height))
-        guard let maximumLines else { return measuredHeight }
-
-        return min(measuredHeight, ceil(font.lineHeight * CGFloat(maximumLines)))
+        return max(font.lineHeight, ceil(rect.height))
     }
 
     private func drawText(
