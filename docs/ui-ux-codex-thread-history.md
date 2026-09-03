@@ -771,6 +771,14 @@
 - Resolution: Matched the screenshot height to the page-seventeen mobile-screen scale, removed the rotations, and retained only a slight horizontal overlap between the two images on desktop and mobile.
 - Tests: Rechecked page `19 / 24` at desktop and mobile sizes, confirmed the images remain fully visible with a small overlap, and confirmed no horizontal viewport overflow.
 
+## 2026-09-03 — Short XR K-Friends screenshot order refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The K-Friends version-history screen was on the left, while the user wanted the app screen to lead the composition from the left.
+- User impact: The visual emphasis did not follow the intended reading order for the competing app evidence.
+- Resolution: Moved the version-history screen to the right and kept the story app screen on the left with the foreground z-index, preserving the slight overlap and existing scale at desktop and mobile sizes.
+- Tests: Verified page `19 / 24` at desktop and mobile sizes, confirmed the story screen is left and in front of the version-history screen, and confirmed no horizontal viewport overflow.
+
 ## 2026-09-03 — Short XR smart download QR and closing alignment
 
 - Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
