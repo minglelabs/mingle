@@ -417,6 +417,15 @@
         max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
       }
 
+      .slide-copy--addon-subtitles {
+        max-width: min(52rem, calc(100% - clamp(260px, 23vw, 340px)));
+      }
+
+      .slide-copy--addon-subtitles .slide-title {
+        font-size: clamp(2.2rem, 3.8vw, 4.4rem);
+        line-height: 1.16;
+      }
+
       .slide-copy--with-reason-media {
         max-width: min(56rem, calc(100% - clamp(420px, 42vw, 660px)));
       }
@@ -842,6 +851,37 @@
         width: clamp(300px, 30vw, 680px);
         top: clamp(180px, 20vh, 300px);
         right: clamp(100px, 12vw, 150px);
+      }
+
+      .slide-side-media--addon-subtitles {
+        top: clamp(44px, 7vh, 84px);
+        right: clamp(46px, 7vw, 108px);
+        width: clamp(280px, 28vw, 380px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(10px, 1.2vw, 18px);
+      }
+
+      .slide-addon-subtitle-image {
+        display: block;
+        width: auto;
+        height: min(65vh, 520px);
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: clamp(18px, 1.7vw, 26px);
+        box-shadow: 0 22px 48px rgba(45, 42, 30, 0.16);
+      }
+
+      .slide-addon-subtitle-caption {
+        width: 100%;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(1rem, 1.35vw, 1.24rem);
+        font-weight: 650;
+        line-height: 1.38;
+        letter-spacing: -0.03em;
+        text-align: center;
       }
 
       .slide-side-media--user-reactions .slide-solution-points {
@@ -2208,6 +2248,16 @@
         text-align: left;
       }
 
+      html.is-mobile-viewport .slide-copy--addon-subtitles {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-copy--addon-subtitles .slide-title {
+        font-size: clamp(1.5rem, 6.25vw, 2.25rem);
+        line-height: 1.18;
+      }
+
       html.is-mobile-viewport .slide-copy--center {
         justify-items: center;
         text-align: center;
@@ -2608,6 +2658,25 @@
         display: grid;
         place-items: center;
         height: clamp(266px, 46vh, 410px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--addon-subtitles {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: flex;
+        align-items: center;
+        gap: clamp(8px, 1.3vh, 12px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-image {
+        height: min(48vh, 430px);
+        max-width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-caption {
+        font-size: clamp(0.94rem, 3.4vw, 1.08rem);
+        line-height: 1.35;
       }
 
       html.is-mobile-viewport .slide-short-video {
@@ -3440,6 +3509,27 @@
             </div>
           </article>
         </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media slide-copy--addon-subtitles">
+              <p class="slide-kicker">고객 반응</p>
+              <h1 class="slide-title">이외에도 애드온 자막 수요를<br/>
+                정말 많이 발견했습니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--addon-subtitles">
+              <img
+                class="slide-addon-subtitle-image"
+                src="./assets/xiaohongshu-pip-mingle.png"
+                alt="샤오홍슈 라이브 스트리밍을 PIP로 실행한 화면과 밍글 자막"
+              />
+              <p class="slide-addon-subtitle-caption">
+                샤오홍슈 라이브 스트리밍을<br/>
+                PIP로 실행해서 밍글 자막과 함께 시청
+              </p>
+            </div>
+          </article>
+        </section>
       </div>
       <div class="page-controls" aria-label="페이지 이동">
         <button class="page-home-button" id="page-home-button" type="button" aria-label="처음으로 이동">
@@ -3448,7 +3538,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 15</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 16</div>
       </div>
     </main>
 

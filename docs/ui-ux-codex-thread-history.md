@@ -642,3 +642,11 @@
 - User impact: Positive reactions were presented without a concrete usage signal showing repeated, habitual behavior.
 - Resolution: Added a new fifteenth slide after the reaction-card page using the original page-seventeen layout from `xr.html`. Changed its kicker to `고객 반응`, preserved the original title and usage evidence, and reused the HelloTalk Voiceroom and Mingle image stack. Updated the static page counter to `01 / 15`.
 - Tests: Verified page `15 / 15` at desktop and mobile sizes, confirmed the requested kicker, title, usage copy, and both local images render, confirmed the image stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle demand page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/xiaohongshu-pip-mingle.png`
+- Issue: The short presentation needed to show demand for using Mingle as an add-on subtitle layer over an unrelated live-streaming service.
+- User impact: The customer-proof sequence did not show that Mingle can accompany picture-in-picture viewing outside a dedicated socialing service.
+- Resolution: Added a sixteenth left-aligned slide with the `고객 반응` kicker, the requested title, the attached Xiaohongshu PIP screenshot on the right, and a centered two-line explanation below it. Updated the static page counter to `01 / 16`.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed the attached image loads, confirmed the caption remains below the image, confirmed no viewport overflow, and found no browser console warnings or errors.
