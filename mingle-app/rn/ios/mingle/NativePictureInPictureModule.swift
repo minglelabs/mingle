@@ -7,6 +7,16 @@ import QuartzCore
 import React
 import UIKit
 
+private final class PictureInPictureSampleBufferView: UIView {
+    override class var layerClass: AnyClass {
+        AVSampleBufferDisplayLayer.self
+    }
+
+    var sampleBufferDisplayLayer: AVSampleBufferDisplayLayer {
+        layer as! AVSampleBufferDisplayLayer
+    }
+}
+
 @objc(NativePictureInPictureModule)
 final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
     private static let renderSize = CGSize(width: 960, height: 540)
@@ -16,7 +26,10 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
 
-    private let displayLayer = AVSampleBufferDisplayLayer()
+    private let displayLayerHostView = PictureInPictureSampleBufferView(frame: .zero)
+    private var displayLayer: AVSampleBufferDisplayLayer {
+        displayLayerHostView.sampleBufferDisplayLayer
+    }
     private var pictureInPictureController: AVPictureInPictureController?
     private var activeConversationId: String?
     private var latestState: PictureInPictureState?
@@ -186,6 +199,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
         activeConversationId = state.conversationId
         latestState = state
+        attachDisplayLayerToActiveWindow()
         displayLayer.videoGravity = .resizeAspect
         displayLayer.bounds = CGRect(origin: .zero, size: Self.renderSize)
         displayLayer.preventsDisplaySleepDuringVideoPlayback = true
@@ -364,6 +378,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         activeConversationId = nil
         latestState = nil
         displayLayer.preventsDisplaySleepDuringVideoPlayback = false
+        detachDisplayLayerFromActiveWindow()
         releasePictureInPictureAudioSessionIfNeeded()
 
         if #available(iOS 17.0, *) {
@@ -371,6 +386,63 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         } else {
             displayLayer.flushAndRemoveImage()
         }
+    }
+
+    private func attachDisplayLayerToActiveWindow() {
+        guard let rootView = activeRootView() else {
+            NSLog("[NativePictureInPictureModule] could not attach display layer: no active root view")
+            return
+        }
+
+        if displayLayerHostView.superview !== rootView {
+            displayLayerHostView.removeFromSuperview()
+            rootView.insertSubview(displayLayerHostView, at: 0)
+        }
+
+        // AVKit expects the sample-buffer layer to belong to an active view
+        // hierarchy. Keep this host offscreen so it does not cover the WebView;
+        // PiP receives the same layer as its content source.
+        displayLayerHostView.isHidden = false
+        displayLayerHostView.alpha = 0.01
+        displayLayerHostView.isUserInteractionEnabled = false
+        displayLayerHostView.frame = CGRect(
+            x: -Self.renderSize.width,
+            y: -Self.renderSize.height,
+            width: Self.renderSize.width,
+            height: Self.renderSize.height
+        )
+
+        NSLog(
+            "[NativePictureInPictureModule] attached display layer host root=%@ hostFrame=%@ layerFrame=%@",
+            String(describing: type(of: rootView)),
+            String(describing: displayLayerHostView.frame),
+            String(describing: displayLayer.frame)
+        )
+    }
+
+    private func detachDisplayLayerFromActiveWindow() {
+        displayLayerHostView.removeFromSuperview()
+    }
+
+    private func activeRootView() -> UIView? {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .sorted { lhs, rhs in
+                lhs.activationState.rawValue > rhs.activationState.rawValue
+            }
+
+        for scene in scenes {
+            if let keyWindow = scene.windows.first(where: { $0.isKeyWindow }),
+               let rootView = keyWindow.rootViewController?.viewIfLoaded {
+                return rootView
+            }
+            if let firstWindow = scene.windows.first(where: { !$0.isHidden }),
+               let rootView = firstWindow.rootViewController?.viewIfLoaded {
+                return rootView
+            }
+        }
+
+        return nil
     }
 
     private func acquirePictureInPictureAudioSession() throws {
