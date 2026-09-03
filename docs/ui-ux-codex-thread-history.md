@@ -754,3 +754,11 @@
 - User impact: The same incorrect diagram appeared on the corresponding Venn page in both the full and shortened XR decks.
 - Resolution: Replaced the shared Venn diagram asset with the corrected attached image, so both decks update through their existing single-image page without changing the business matrix page or any other slide.
 - Tests: Verified the corrected asset matches the attached PNG byte-for-byte, confirmed it loads on the Venn page in both decks, confirmed the matrix asset remains unchanged, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR smart download QR and closing alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
+- Issue: The opening and closing QR codes led to the general landing page, requiring an extra tap before a viewer could install Mingle.
+- User impact: Scanning the QR code did not take iOS and Android viewers directly to their respective app stores, and the closing slide did not visually center its Q&A title within the left content area.
+- Resolution: Added a QR-only smart-link route that detects iOS or Android from request headers and redirects directly to the matching store, with the normal landing page as the unknown-platform fallback. Repointed the QR asset and both QR anchors to that route, placed the Mingle app icon above each QR code, and centered the page-twenty-three Q&A composition within its left column.
+- Tests: Verified iOS, Android, client-hint, and fallback redirect destinations with route tests; confirmed the QR asset encodes the smart-link route; and verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes with the icon, QR, title alignment, and no viewport overflow.
