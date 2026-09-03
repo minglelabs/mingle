@@ -707,6 +707,14 @@
 - Resolution: Added an eighteenth centered slide with the `고객` kicker and requested two-line title. Added seven transparent category areas with one to three irregularly scattered service icons each: online cultural exchange, voice-call services, add-on subtitles, offline meetups, tourist-facing offline response, tourist information/consultation/reservations, and multilingual meetings. Added local App Store artwork for Immersive Translate, Caplo, Konest, Fresha, and Gangnam Unni, and reused the existing HelloTalk, K-Friends, Discord, Couchsurfing, Google Translate, and Cuckoo assets.
 - Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed all seven category titles and 11 icons load, confirmed the title and category labels are centered, and confirmed no horizontal viewport overflow.
 
+## 2026-09-03 — Short XR vision and business model continuation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation stopped after the seven customer experience categories and did not carry the source deck's vision and business model conclusion.
+- User impact: Viewers could not continue from the customer summary into the stated AI-native SNS goal and the two business model diagrams.
+- Resolution: Added the source deck's ultimate-goal slide followed by the business Venn diagram and business matrix as pages nineteen through twenty-one. Reused the existing local business diagram assets and updated the static page counter to `01 / 21`.
+- Tests: Verified pages `19 / 21`, `20 / 21`, and `21 / 21` at desktop and mobile sizes, confirmed the vision text and both diagram images render, confirmed the images stay within the slide, and confirmed no viewport overflow.
+
 ## 2026-09-03 — Short XR customer experience category row refinement
 
 - Surface: `mingle-app/public/legal/xr-short.html`
