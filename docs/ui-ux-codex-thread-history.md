@@ -610,3 +610,11 @@
 - User impact: Viewers would begin at the default video position instead of the intended 43-second context.
 - Resolution: Added YouTube's embed-compatible `start=43` parameter to the existing `/embed/Esq6htnQj98` source while preserving the inline-playback and related-video settings.
 - Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe keeps video ID `Esq6htnQj98` and resolves `start=43`, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR default video playback rate
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve video needed to begin at the requested 43-second point and play at a faster default speed for the presentation flow.
+- User impact: Viewers would otherwise need to manually change the YouTube playback speed every time they started the video.
+- Resolution: Enabled the YouTube IFrame Player API for the short-video iframe, set the page origin dynamically for both local HTTP previews and production, and apply a `1.5x` playback rate in the player's ready callback. The existing `start=43` position remains unchanged.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe retains video ID `Esq6htnQj98`, resolves `start=43`, includes `enablejsapi=1` and the current HTTP origin, confirmed the YouTube API initializes, and confirmed no viewport overflow.

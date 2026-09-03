@@ -3355,12 +3355,12 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">밍글</p>
-              <h1 class="slide-title">그래서 이를 모두 해결한<br/>통번역 앱을 만들어 봤습니다</h1>
+              <h1 class="slide-title">먼저 요구사항을 모두 해결한<br/>통번역 앱부터 만들어봤습니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--ai-solution-proof slide-side-media--mingle-solution-proof">
               <iframe
                 class="slide-short-video"
-                src="https://www.youtube.com/embed/Esq6htnQj98?playsinline=1&rel=0&start=43"
+                src="https://www.youtube.com/embed/Esq6htnQj98?playsinline=1&rel=0&start=43&enablejsapi=1"
                 title="Mingle short video"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 referrerpolicy="strict-origin-when-cross-origin"
@@ -3402,6 +3402,50 @@
 
       track.innerHTML = "";
       track.append(lastClone, ...baseSlides, firstClone);
+
+      const shortVideos = Array.from(track.querySelectorAll(".slide-short-video"));
+      const DEFAULT_VIDEO_PLAYBACK_RATE = 1.5;
+      let youtubePlayersInitialized = false;
+
+      function initializeShortVideoPlayers() {
+        if (!window.YT?.Player || youtubePlayersInitialized) {
+          return;
+        }
+
+        youtubePlayersInitialized = true;
+
+        shortVideos.forEach((videoFrame) => {
+          new window.YT.Player(videoFrame, {
+            events: {
+              onReady(event) {
+                event.target.setPlaybackRate(DEFAULT_VIDEO_PLAYBACK_RATE);
+              }
+            }
+          });
+        });
+      }
+
+      if (shortVideos.length > 0) {
+        shortVideos.forEach((videoFrame) => {
+          const videoSource = new URL(videoFrame.src, window.location.href);
+
+          if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+            videoSource.searchParams.set("origin", window.location.origin);
+          }
+
+          videoFrame.src = videoSource.toString();
+        });
+
+        window.onYouTubeIframeAPIReady = initializeShortVideoPlayers;
+
+        if (window.YT?.Player) {
+          initializeShortVideoPlayers();
+        } else {
+          const youtubeApiScript = document.createElement("script");
+          youtubeApiScript.src = "https://www.youtube.com/iframe_api";
+          document.head.append(youtubeApiScript);
+        }
+      }
 
       const allSlides = Array.from(track.querySelectorAll(".slide"));
       const DESKTOP_TAP_DURATION_MS = 260;
