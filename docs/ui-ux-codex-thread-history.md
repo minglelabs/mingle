@@ -602,3 +602,11 @@
 - User impact: The problem/solution distinction felt less crisp, and the solution cards did not convey a calm, reliable finish.
 - Resolution: Replaced the solution-page bars with a solid blue solution accent (`#2563eb`) while keeping the problem-page bars solid red and removing gradients from both states.
 - Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed page nine uses solid `rgb(220, 38, 38)` bars and page ten uses solid `rgb(37, 99, 235)` bars, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR video start position
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve Mingle video needed to open at the relevant moment from the shared YouTube link, but the watch-page `t=43s` syntax is not the correct parameter for an embedded player.
+- User impact: Viewers would begin at the default video position instead of the intended 43-second context.
+- Resolution: Added YouTube's embed-compatible `start=43` parameter to the existing `/embed/Esq6htnQj98` source while preserving the inline-playback and related-video settings.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe keeps video ID `Esq6htnQj98` and resolves `start=43`, and confirmed no viewport overflow.
