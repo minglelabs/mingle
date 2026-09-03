@@ -224,8 +224,8 @@
       }
 
       .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
-        font-size: clamp(1.9rem, 2.8vw, 3.1rem);
-        line-height: 1.16;
+        font-size: clamp(2.4rem, 4.2vw, 4.4rem);
+        line-height: 1.12;
         white-space: nowrap;
       }
 
@@ -528,7 +528,7 @@
       }
 
       .slide-side-media--market-categories--seven {
-        height: clamp(390px, 52vh, 430px);
+        height: clamp(300px, 44vh, 350px);
       }
 
       .slide-market-grid--categories {
@@ -564,26 +564,52 @@
       }
 
       .slide-market-grid--categories-seven {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        grid-template-rows: repeat(3, minmax(0, 1fr));
+        display: flex;
+        flex-wrap: wrap;
+        align-content: stretch;
+        justify-content: center;
         gap: clamp(8px, 1vw, 14px);
       }
 
       .slide-market-grid--categories-seven .slide-market-category-title {
-        font-size: clamp(1.05rem, 1.45vw, 1.65rem);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 2.3em;
+        font-size: clamp(1.15rem, 1.65vw, 1.8rem);
+        line-height: 1.12;
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category {
+        flex: 0 0 calc(25% - 12px);
+        align-self: stretch;
       }
 
       .slide-market-grid--categories.slide-market-grid--categories-seven .slide-market-logo-cloud {
-        inset: 27% 1% 0;
+        position: static;
+        inset: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(3px, 0.45vw, 7px);
+        min-height: 0;
+        margin-top: clamp(4px, 0.7vw, 9px);
       }
 
       .slide-market-grid--categories-seven .slide-market-logo {
-        width: clamp(60px, 5vw, 76px);
-        height: clamp(60px, 5vw, 76px);
+        position: static;
+        left: auto;
+        top: auto;
+        flex: 0 0 auto;
+        width: clamp(52px, 5.6vw, 82px);
+        height: clamp(52px, 5.6vw, 82px);
+        transform: rotate(var(--r)) scale(1.08);
       }
 
-      .slide-market-grid--categories-seven .slide-market-category:last-child {
-        grid-column: 2;
+      .slide-market-grid--categories-seven .slide-market-category--triple .slide-market-logo {
+        width: clamp(42px, 4.2vw, 62px);
+        height: clamp(42px, 4.2vw, 62px);
       }
 
       .slide-shell--ai-requirements {
@@ -2457,7 +2483,7 @@
       }
 
       html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--seven {
-        height: clamp(470px, 58vh, 520px);
+        height: clamp(390px, 50vh, 430px);
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-four {
@@ -2493,9 +2519,10 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-seven {
+        display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-template-rows: repeat(4, minmax(0, 1fr));
-        gap: 6px 10px;
+        gap: 8px 10px;
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category {
@@ -2503,7 +2530,8 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category-title {
-        font-size: clamp(0.68rem, 3.05vw, 0.9rem);
+        min-height: 2.3em;
+        font-size: clamp(0.82rem, 3.7vw, 1.1rem);
         white-space: nowrap;
       }
 
@@ -2556,10 +2584,20 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-logo {
-        width: clamp(38px, 10.7vw, 48px);
-        height: clamp(38px, 10.7vw, 48px);
+        position: static;
+        left: auto;
+        top: auto;
+        flex: 0 0 auto;
+        width: clamp(42px, 12.2vw, 52px);
+        height: clamp(42px, 12.2vw, 52px);
         padding: 3px;
         border-radius: 8px;
+        transform: rotate(var(--r)) scale(1.08);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category--triple .slide-market-logo {
+        width: clamp(30px, 9.6vw, 40px);
+        height: clamp(30px, 9.6vw, 40px);
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category:last-child {
@@ -2766,8 +2804,8 @@
       }
 
       html.is-mobile-viewport .slide-shell--market-categories .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
-        font-size: clamp(1.05rem, 4.25vw, 1.55rem);
-        line-height: 1.15;
+        font-size: clamp(1.55rem, 7.2vw, 2.4rem);
+        line-height: 1.16;
         letter-spacing: -0.05em;
         white-space: normal;
       }
@@ -3680,7 +3718,7 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">고객 반응</p>
+              <p class="slide-kicker">고객</p>
               <h1 class="slide-title">밍글을 접해본 유저들의<br/>
                 반응은 긍정적입니다
               </h1>
@@ -3699,7 +3737,7 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">고객 반응</p>
+              <p class="slide-kicker">고객</p>
               <h1 class="slide-title">이들 중 일부는<br/>
                 벌써 밍글에 의존합니다
               </h1>
@@ -3727,7 +3765,7 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media slide-copy--addon-subtitles">
-              <p class="slide-kicker">고객 반응</p>
+              <p class="slide-kicker">고객</p>
               <h1 class="slide-title">이외에도 애드온 자막 수요를<br/>
                 정말 많이 발견했습니다
               </h1>
@@ -3765,7 +3803,7 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media slide-copy--offline-work">
-              <p class="slide-kicker">고객 반응</p>
+              <p class="slide-kicker">고객</p>
               <h1 class="slide-title">오프라인/업무용 통번역으로<br/>
                 사용하시는 분들도 많습니다
               </h1>
@@ -3796,50 +3834,50 @@
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--seven" aria-hidden="true">
               <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-seven">
-                <section class="slide-market-category slide-market-category--language">
+                <section class="slide-market-category slide-market-category--language slide-market-category--pair">
                   <h2 class="slide-market-category-title">온라인 문화교류</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 31%; --y: 46%; --s: clamp(68px, 5.8vw, 88px); --r: -8deg" src="./assets/logo-hellotalk.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 68%; --y: 57%; --s: clamp(68px, 5.8vw, 88px); --r: 7deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--r: 7deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">보이스톡 서비스</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: -5deg" src="./assets/logo-discord.png" alt="" />
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-discord.png" alt="" />
                   </div>
                 </section>
-                <section class="slide-market-category slide-market-category--addon">
+                <section class="slide-market-category slide-market-category--addon slide-market-category--pair">
                   <h2 class="slide-market-category-title">애드온 자막</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 31%; --y: 47%; --s: clamp(68px, 5.8vw, 88px); --r: -7deg" src="./assets/logo-market-immersive-translate.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 68%; --y: 58%; --s: clamp(68px, 5.8vw, 88px); --r: 8deg" src="./assets/logo-market-caplo.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: -7deg" src="./assets/logo-market-immersive-translate.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 8deg" src="./assets/logo-market-caplo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 만남</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 54%; --s: clamp(74px, 6vw, 92px); --r: -6deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: -6deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--tourist">
-                  <h2 class="slide-market-category-title">관광객 오프라인 응대</h2>
+                  <h2 class="slide-market-category-title">오프라인 관광객 응대</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: 6deg" src="./assets/logo-google-translate.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 6deg" src="./assets/logo-google-translate.jpg" alt="" />
                   </div>
                 </section>
-                <section class="slide-market-category slide-market-category--travel">
+                <section class="slide-market-category slide-market-category--travel slide-market-category--triple">
                   <h2 class="slide-market-category-title">관광지 정보/상담/예약</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 21%; --y: 47%; --s: clamp(64px, 5.5vw, 84px); --r: -8deg" src="./assets/logo-market-konest.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 62%; --s: clamp(64px, 5.5vw, 84px); --r: 5deg" src="./assets/logo-market-fresha.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 79%; --y: 47%; --s: clamp(64px, 5.5vw, 84px); --r: 9deg" src="./assets/logo-market-gangnam-unnie.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-market-konest.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 5deg" src="./assets/logo-market-fresha.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 9deg" src="./assets/logo-market-gangnam-unnie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--meeting">
                   <h2 class="slide-market-category-title">다국어 회의</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 53%; --s: clamp(74px, 6vw, 92px); --r: -5deg" src="./assets/logo-cuckoo.png" alt="" />
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-cuckoo.png" alt="" />
                   </div>
                 </section>
               </div>

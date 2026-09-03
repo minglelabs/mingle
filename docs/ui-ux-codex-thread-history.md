@@ -706,3 +706,11 @@
 - User impact: The preceding customer-reaction pages demonstrated demand through examples, but did not make the full set of target experiences easy to scan in one view.
 - Resolution: Added an eighteenth centered slide with the `고객` kicker and requested two-line title. Added seven transparent category areas with one to three irregularly scattered service icons each: online cultural exchange, voice-call services, add-on subtitles, offline meetups, tourist-facing offline response, tourist information/consultation/reservations, and multilingual meetings. Added local App Store artwork for Immersive Translate, Caplo, Konest, Fresha, and Gangnam Unni, and reused the existing HelloTalk, K-Friends, Discord, Couchsurfing, Google Translate, and Cuckoo assets.
 - Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed all seven category titles and 11 icons load, confirmed the title and category labels are centered, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR customer experience category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The seven-category customer summary used one desktop row, which made each category narrow and reduced the readability of its label and app icons.
+- User impact: The category map felt too spread across the page while the individual services appeared too small.
+- Resolution: Changed the page-eighteen desktop summary to a centered four-plus-three flex layout, enlarged category titles and app icons, and kept each category's icons in a compact horizontal row. Preserved a responsive two-column/four-row mobile layout with the final category centered.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed four categories in the first desktop row and three in the second, confirmed seven categories and 11 local icons load, confirmed all per-category icon rows are horizontal, and confirmed no horizontal viewport overflow.
