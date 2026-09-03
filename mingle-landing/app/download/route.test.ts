@@ -39,6 +39,40 @@ describe('download smart link', () => {
     expect(response.headers.get('location')).toBe(ANDROID_STORE_URL)
   })
 
+  it('redirects Galaxy Tab visitors to Google Play', () => {
+    const response = GET(
+      createRequest(
+        'Mozilla/5.0 (Linux; Android 15; SM-X920) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36',
+      ),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe(ANDROID_STORE_URL)
+  })
+
+  it('redirects macOS visitors to the App Store web page', () => {
+    const response = GET(
+      createRequest(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15',
+        '"macOS"',
+      ),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe(IOS_STORE_URL)
+  })
+
+  it('redirects iPad desktop-mode visitors to the App Store', () => {
+    const response = GET(
+      createRequest(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+      ),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe(IOS_STORE_URL)
+  })
+
   it('uses the platform client hint when the user agent is not specific', () => {
     const response = GET(createRequest('Mozilla/5.0', '"iOS"'))
 
@@ -46,8 +80,10 @@ describe('download smart link', () => {
     expect(response.headers.get('location')).toBe(IOS_STORE_URL)
   })
 
-  it('falls back to the normal landing page for unknown platforms', () => {
-    const response = GET(createRequest('Mozilla/5.0 (X11; Linux x86_64)'))
+  it('falls back to the normal landing page for Windows visitors', () => {
+    const response = GET(
+      createRequest('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36'),
+    )
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('https://mingle-landing.vercel.app/normal')

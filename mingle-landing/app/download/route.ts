@@ -15,7 +15,11 @@ function resolveStoreUrl(request: NextRequest): string | null {
     return ANDROID_STORE_URL
   }
 
-  if (/\b(?:iPhone|iPad|iPod|iOS)\b/i.test(deviceInfo) || /Macintosh.*Mobile/i.test(deviceInfo)) {
+  if (
+    /\b(?:iPhone|iPad|iPod|iOS)\b/i.test(deviceInfo) ||
+    /Macintosh.*Mobile/i.test(deviceInfo) ||
+    /\b(?:Macintosh|Mac OS X|MacIntel|MacPPC|Mac68K|macOS)\b/i.test(deviceInfo)
+  ) {
     return IOS_STORE_URL
   }
 
