@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Keep iOS PiP text size stable and show live utterance progress
+
+- **Surface:** The native iOS Picture in Picture preview during a long in-progress speech turn.
+- **Issue:** The preview changed font size as the number and height of bubbles changed, which made the reading scale unstable. An interim translation also added a trailing `...` or showed only a placeholder while the live utterance continued, even though the current source text was already available.
+- **Diagnosis:** The native packer used font reduction as its first response to a growing bubble stack. Interim translation markers were appended to any non-empty partial translation, and a missing target translation in collapsed mode had no useful live-text fallback.
+- **Resolution:** Use a fixed 42pt preview font for the normal layout. Re-evaluate recent suffixes at that size and drop the oldest bubble before changing text size; only one unusually long latest bubble may use an emergency smaller floor to avoid clipping. Render non-empty interim text exactly as received, and fall back to the growing original text in collapsed mode until a target translation has content. Keep that fallback in the bridge payload as well, so the native layer never receives a placeholder for an available live source.
+- **Interaction:** The latest in-progress message remains visible and updates without waiting for finalization. Expanded mode continues to expose an empty pending translation as `...`, while ordinary partial text is not decorated with an extra suffix. The PiP surface remains read-only and non-scrollable.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this stable-density policy.
+- **Testing notes:** Verify stable 42pt text with four short messages, removal of the oldest bubble as the latest message grows, collapsed-mode original fallback while translation is pending, partial translation updates without an added ellipsis, expanded pending rows, and a very long single message on iPhone 14.
+
 ## 2026-09-03 - Drop older iOS PiP bubbles before shrinking text too far
 
 - **Surface:** The live native iOS Picture in Picture preview while a new speech turn is still being recognized.

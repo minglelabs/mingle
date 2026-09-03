@@ -359,7 +359,10 @@ function resolveNativePipMessageText(
 
   if (displayMode === 'collapsed') {
     if (resolvedDisplayLanguage === originalDisplayLanguage) return originalText
-    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || '...'
+    // Keep the live source visible until the selected translation has text.
+    // The native renderer uses the original-language badge for this fallback,
+    // so an in-progress utterance is never hidden behind a placeholder.
+    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || originalText
   }
 
   const lines = [originalText]
