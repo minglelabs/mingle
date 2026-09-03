@@ -682,3 +682,11 @@
 - User impact: The visual felt heavier than page sixteen, and the salon and foreign-tourist use case was not explained below the screenshot.
 - Resolution: Removed the decorative border radius and shadow, reduced the screenshot scale, and added the caption `미용실 사장님들이 외국인 관광객 대면할 때 많이 사용` below the image while keeping the image as a plain right-side visual.
 - Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the image and caption stay within the slide, confirmed the caption remains below the image, confirmed no horizontal overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work customer evidence copy
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The offline and workplace translation page needed concrete examples to support its customer-reaction claim.
+- User impact: The slide showed the use-case heading and screenshot, but did not explain the kinds of people already finding practical value in Mingle.
+- Resolution: Added the requested lower-left body copy describing an African young man who found interpreter work with Mingle despite limited English and a person who appears to guide Japanese tourists around Seoul.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the body copy sits below the left-aligned title, confirmed the image and caption remain visible, confirmed no viewport overflow, and found no browser console warnings or errors.
