@@ -482,3 +482,11 @@
 - User impact: The message was less specific than intended, and the large vertical gaps weakened the visual relationship between each category and its services.
 - Resolution: Replaced the market title with the requested two-line statement about abundant services and recurring language barriers. Reduced the category logo-cloud inset for the three-column market row on desktop and mobile, preserving the irregular icon positions and centered layout.
 - Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the exact title text and three category titles, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR goal resolution and flow cue
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new solution pages needed a clearer visual distinction between the language-learning goal that translation removes and the resulting conversation flow from that solved state.
+- User impact: The original second goal looked equally active on the first solution page, and the relationship between the updated right-side message and the left-side social goal was not immediately apparent on the following page.
+- Resolution: Added the existing `xr.html`-style red cross treatment to the first solution page's language-learning goal, reduced that goal's text opacity, and overlaid a large `통번역 제공` badge at its right edge. Added a large curved right-to-left arrow across the second solution page while preserving the two-column goal content and responsive layout.
+- Tests: Verified pages `06 / 10` and `07 / 10` at desktop and mobile sizes, confirmed the cross, badge, and arrow render without viewport overflow, confirmed the updated right-side message remains visible, and checked for browser console warnings or errors.

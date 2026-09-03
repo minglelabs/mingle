@@ -297,6 +297,60 @@
         color: var(--goal-text-accent);
       }
 
+      .slide-goal--crossed .slide-goal-text {
+        opacity: 0.5;
+      }
+
+      .slide-goal-badge {
+        position: absolute;
+        top: 50%;
+        right: clamp(10px, 1.5vw, 20px);
+        z-index: 12;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(10px, 1vw, 16px) clamp(14px, 1.4vw, 24px);
+        border: 3px solid rgba(255, 255, 255, 0.78);
+        border-radius: 999px;
+        color: #fff;
+        font-size: clamp(1.35rem, 2.2vw, 2.4rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
+        white-space: nowrap;
+        background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+        box-shadow: 0 12px 24px rgba(185, 28, 28, 0.26);
+        transform: translateY(-50%) rotate(-5deg);
+      }
+
+      .slide-goal-columns--flow .slide-goal {
+        z-index: 1;
+      }
+
+      .slide-goal-columns--flow {
+        position: relative;
+      }
+
+      .slide-goal-arrow {
+        position: absolute;
+        top: clamp(4px, 0.8vw, 10px);
+        left: 0;
+        z-index: 3;
+        width: 100%;
+        height: clamp(68px, 8vw, 92px);
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .slide-goal-arrow path {
+        fill: none;
+        stroke: url(#goal-arrow-gradient);
+        stroke-width: 11;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 8px 12px rgba(220, 38, 38, 0.2));
+      }
+
       .slide-copy--center .slide-kicker {
         left: 50%;
         transform: translateX(-50%);
@@ -2211,6 +2265,19 @@
         word-break: keep-all;
       }
 
+      html.is-mobile-viewport .slide-goal-badge {
+        right: 8px;
+        padding: 8px 10px;
+        border-width: 2px;
+        border-radius: 13px;
+        font-size: clamp(0.9rem, 3.8vw, 1.2rem);
+      }
+
+      html.is-mobile-viewport .slide-goal-arrow {
+        top: 4px;
+        height: 68px;
+      }
+
       html.is-mobile-viewport .slide-copy--toc {
         gap: clamp(20px, 4vh, 34px);
       }
@@ -2836,7 +2903,7 @@
           <article class="slide-shell slide-shell--market slide-shell--market-categories">
             <div class="slide-copy slide-copy--market slide-copy--market-categories">
               <p class="slide-kicker">시장</p>
-              <h1 class="slide-title"><span>외국인과의 연결을 제공하는 서비스는 많지만</span><br/><span>언어 장벽에 막히는 경우가 다반사입니다.</span></h1>
+              <h1 class="slide-title"><span>외국인과의 연결을 제공하는 다른 서비스들도</span><br/><span>언어 장벽에 막히는 경우가 대부분입니다.</span></h1>
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
               <div class="slide-market-grid slide-market-grid--categories">
@@ -2870,12 +2937,56 @@
         </section>
         <section class="slide">
           <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">하나를 아예 해소시켜 버리면 어떨까?!</h1>
+              <div class="slide-goal-columns">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right slide-goal--crossed">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
+                  <div class="slide-cross-mark" aria-hidden="true"></div>
+                  <span class="slide-goal-badge">통번역 제공</span>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">편하게 대화에만 집중할 수 있지 않을까?!</h1>
+              <div class="slide-goal-columns slide-goal-columns--flow">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를 못해도</span><br/>대화가 통한다!</h2>
+                </article>
+                <svg class="slide-goal-arrow" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="goal-arrow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#f97316" />
+                      <stop offset="100%" stop-color="#dc2626" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M 920 30 C 760 0 410 0 165 30" />
+                  <path d="M 165 30 L 224 4 M 165 30 L 236 40" />
+                </svg>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">해결책</p>
               <h1 class="slide-title slide-title--quoted">
                 <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
-                <span class="slide-title-text">소셜링을 위한<br/>
-                실시간 통번역 서비스를 만들자</span>
+                <span class="slide-title-text">
+                  실시간 통번역을 제공하는<br/>외국인과의 대화 서비스
                 <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
               </h1>
             </div>
