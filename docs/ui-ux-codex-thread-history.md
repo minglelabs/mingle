@@ -634,3 +634,11 @@
 - User impact: The presentation lacked a concise proof point showing why the experience was positively received after the workaround and feature comparison.
 - Resolution: Added a new fourteenth slide after the voice-conversation bridge page with the `고객 반응` kicker, the requested title, and three right-side reaction cards based on the original page-fifteen response layout from `xr.html`. Replaced the source reactions with the requested continuous-translation, cross-language comprehension, and speech-recognition statements, and updated the static page counter to `01 / 14`.
 - Tests: Verified page `14 / 14` at desktop and mobile sizes, confirmed all three reaction cards and their exact text render in the right-side stack, confirmed the card stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer dependence page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed a follow-up page showing that some users had begun relying on Mingle during their regular HelloTalk conversations.
+- User impact: Positive reactions were presented without a concrete usage signal showing repeated, habitual behavior.
+- Resolution: Added a new fifteenth slide after the reaction-card page using the original page-seventeen layout from `xr.html`. Changed its kicker to `고객 반응`, preserved the original title and usage evidence, and reused the HelloTalk Voiceroom and Mingle image stack. Updated the static page counter to `01 / 15`.
+- Tests: Verified page `15 / 15` at desktop and mobile sizes, confirmed the requested kicker, title, usage copy, and both local images render, confirmed the image stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
