@@ -674,3 +674,11 @@
 - User impact: Page seventeen communicated the claim only as text, so the practical use case had less visual weight than the preceding add-on subtitle examples.
 - Resolution: Added the attached mobile screenshot as a right-side media element on page seventeen, using the same left-copy/right-visual composition as page sixteen while preserving the requested kicker and title.
 - Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the attached image loads, confirmed the title remains left-aligned and the image stays on the right on desktop, confirmed the mobile layout stacks without clipping, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work visual treatment refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seventeen screenshot was styled as a large rounded card and lacked the requested contextual caption.
+- User impact: The visual felt heavier than page sixteen, and the salon and foreign-tourist use case was not explained below the screenshot.
+- Resolution: Removed the decorative border radius and shadow, reduced the screenshot scale, and added the caption `미용실 사장님들이 외국인 관광객 대면할 때 많이 사용` below the image while keeping the image as a plain right-side visual.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the image and caption stay within the slide, confirmed the caption remains below the image, confirmed no horizontal overflow, and found no browser console warnings or errors.

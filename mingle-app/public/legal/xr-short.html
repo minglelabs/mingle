@@ -926,18 +926,30 @@
         top: clamp(30px, 4vh, 48px);
         right: clamp(40px, 5vw, 80px);
         width: clamp(300px, 32vw, 420px);
-        height: min(88vh, 650px);
+        height: auto;
         display: flex;
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
+        gap: clamp(10px, 1.2vw, 18px);
       }
 
       .slide-preview-image--offline-work {
         width: auto;
-        height: 100%;
+        height: min(70vh, 520px);
         max-width: 100%;
         object-fit: contain;
-        border-radius: clamp(22px, 2.4vw, 36px);
-        box-shadow: 0 24px 58px rgba(45, 42, 30, 0.16);
+      }
+
+      .slide-offline-work-caption {
+        width: 100%;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(1rem, 1.35vw, 1.24rem);
+        font-weight: 650;
+        line-height: 1.38;
+        letter-spacing: -0.03em;
+        text-align: center;
       }
 
       .slide-side-media--user-reactions .slide-solution-points {
@@ -2730,13 +2742,21 @@
         max-width: var(--mobile-content-width);
         height: auto;
         display: flex;
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
+        gap: clamp(8px, 1.3vh, 12px);
       }
 
       html.is-mobile-viewport .slide-side-media--offline-work .slide-preview-image--offline-work {
         width: auto;
-        height: min(50vh, 420px);
+        height: min(46vh, 390px);
         max-width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-offline-work-caption {
+        font-size: clamp(0.94rem, 3.4vw, 1.08rem);
+        line-height: 1.35;
       }
 
       html.is-mobile-viewport .slide-addon-subtitle-gallery {
@@ -3650,6 +3670,9 @@
                 src="./assets/offline-work-mingle.png"
                 alt="오프라인 및 업무용 통번역 수요를 보여주는 모바일 화면"
               />
+              <p class="slide-offline-work-caption">
+                미용실 사장님들이 외국인 관광객 대면할 때 많이 사용
+              </p>
             </div>
           </article>
         </section>
