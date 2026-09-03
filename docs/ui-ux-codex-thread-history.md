@@ -594,3 +594,11 @@
 - User impact: The problem/solution contrast was weaker, and the gradient added unnecessary visual noise to each card's left edge.
 - Resolution: Removed the gradient from the shared bar style. Page nine now uses a solid red bar (`#dc2626`), while page ten uses the solid primary brand accent (`var(--accent)`) so the two pages remain visually related but clearly differentiated.
 - Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed all nine bars on each page use solid colors with no background image, confirmed the expected red and accent RGB values, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR solution bar blue refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The solution page's yellow requirement bars felt too close to the warm page palette and did not provide enough contrast with the problem page's red bars.
+- User impact: The problem/solution distinction felt less crisp, and the solution cards did not convey a calm, reliable finish.
+- Resolution: Replaced the solution-page bars with a solid blue solution accent (`#2563eb`) while keeping the problem-page bars solid red and removing gradients from both states.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed page nine uses solid `rgb(220, 38, 38)` bars and page ten uses solid `rgb(37, 99, 235)` bars, confirmed no viewport overflow, and found no browser console warnings or errors.
