@@ -514,3 +514,11 @@
 - User impact: The presentation moved directly from the seven requirement gaps to the solution without showing concrete examples of the current service limitations.
 - Resolution: Added a new tenth slide based on page nine of `xr.html`, preserving its original cause kicker, title, and four service cards for Felo Translator, Google Translator, Apple Translator, and Papago. The existing responsive tool-card styles are reused, and the page counter now reflects 13 total slides.
 - Tests: Verified page `10 / 13` at desktop and mobile sizes, confirmed all four service logos and descriptions load, confirmed the title and card stack remain within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 8 icon scale refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The four-category service landscape page still felt sparse because its scattered app icons were too small for the available category areas.
+- User impact: The service clusters read as disconnected points, weakening the comparison between each category and the apps inside it.
+- Resolution: Increased the page-eight category icons to approximately 1.5 times their previous size while preserving their irregular positions, so the existing centers naturally produce tighter spacing. Applied the same scale increase to the responsive mobile layout while keeping the four-category page as a 2x2 grid.
+- Tests: Verified page `08 / 13` at desktop and mobile sizes, confirmed all 15 local icons load, checked that the enlarged clusters stay within their category areas and the viewport, and found no browser console warnings or errors.
