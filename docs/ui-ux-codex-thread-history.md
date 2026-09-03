@@ -570,3 +570,11 @@
 - User impact: The voice conversation, global dating, and offline meetup groups received less visual emphasis, and the relationship between each category and its services was weaker than on page eight.
 - Resolution: Reused page eight's enlarged icon scale, irregular positions, tighter cloud inset, and reduced category gap for page five while retaining its three-column layout and removing the language-exchange category from that copied structure. Synchronized the static page counter with the user's removal of the redundant former solution-proof page, bringing the current deck fallback count to 12.
 - Tests: Verified pages `05 / 12` and `08 / 12` at desktop and mobile sizes, confirmed page five contains only the three requested categories and nine local icons, confirmed page-five icon dimensions match page eight's corresponding groups, confirmed the three-category row remains centered and within the viewport, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement order alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The ninth-page problem cards used a different order from the corresponding solution cards on page ten, so related capabilities did not line up when the two pages were compared.
+- User impact: Viewers had to mentally remap the requirement pairs instead of scanning the problem and solution pages in the same sequence.
+- Resolution: Reordered page nine to match page ten exactly: continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value. Preserved the page-nine title and descriptions already customized by the user.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed the nine title sequences match exactly, confirmed the desktop 3x3 grids and mobile single-column layout remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
