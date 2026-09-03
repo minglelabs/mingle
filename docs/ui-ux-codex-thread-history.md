@@ -762,3 +762,11 @@
 - User impact: Scanning the QR code did not take iOS and Android viewers directly to their respective app stores, and the closing slide did not visually center its Q&A title within the left content area.
 - Resolution: Added a QR-only smart-link route that detects iOS or Android from request headers and redirects directly to the matching store, with the normal landing page as the unknown-platform fallback. Repointed the QR asset and both QR anchors to that route, placed the Mingle app icon above each QR code, and centered the page-twenty-three Q&A composition within its left column.
 - Tests: Verified iOS, Android, client-hint, and fallback redirect destinations with route tests; confirmed the QR asset encodes the smart-link route; and verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes with the icon, QR, title alignment, and no viewport overflow.
+
+## 2026-09-03 — Short XR QR label refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The Mingle app icon above the QR code appeared by itself without explaining what it represented.
+- User impact: The download visual on pages one and twenty-three felt disconnected, and the relationship between the icon and QR code was not immediately clear.
+- Resolution: Grouped the smaller Mingle app icon with the label `Mingle 다운로드 링크` above both QR codes and added a centered downward-pointing finger emoji between the label and QR code. Kept the compact treatment responsive for mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the label, icon, and pointer appear in the requested order, confirmed the Q&A title remains centered within the left column, and confirmed no viewport overflow.
