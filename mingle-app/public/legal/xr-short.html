@@ -525,6 +525,18 @@
         inset: 0 1% 0;
       }
 
+      .slide-market-grid--categories-compact {
+        gap: clamp(8px, 1.1vw, 14px);
+      }
+
+      .slide-market-grid--categories-compact .slide-market-category-title {
+        font-size: clamp(1.3rem, 1.8vw, 2rem);
+      }
+
+      .slide-market-grid--categories-compact .slide-market-logo-cloud {
+        inset: 0 1% 0;
+      }
+
       .slide-shell--ai-requirements {
         flex-direction: column;
         align-items: center;
@@ -2288,6 +2300,10 @@
         font-size: clamp(0.78rem, 3.4vw, 1rem);
       }
 
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-category-title {
+        font-size: clamp(0.78rem, 3.4vw, 1rem);
+      }
+
       html.is-mobile-viewport .slide-market-logo-cloud {
         inset: 24% 1% 0;
       }
@@ -2297,6 +2313,10 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo-cloud {
+        inset: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-logo-cloud {
         inset: 0;
       }
 
@@ -2315,6 +2335,13 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo {
+        width: clamp(50px, 14.1vw, 66px);
+        height: clamp(50px, 14.1vw, 66px);
+        padding: 3px;
+        border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-logo {
         width: clamp(50px, 14.1vw, 66px);
         height: clamp(50px, 14.1vw, 66px);
         padding: 3px;
@@ -3096,29 +3123,29 @@
               <h1 class="slide-title"><span>외국인과의 연결을 제공하는 다른 서비스들도</span><br/><span>언어 장벽에 막히는 경우가 대부분입니다.</span></h1>
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
-              <div class="slide-market-grid slide-market-grid--categories">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact">
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 21%; --y: 44%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 55%; --y: 30%; --s: clamp(54px, 4.3vw, 72px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 83%; --y: 52%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(72px, 5.7vw, 90px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(69px, 5.5vw, 86px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(72px, 5.7vw, 90px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--dating">
                   <h2 class="slide-market-category-title">글로벌 데이팅</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 17%; --y: 36%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 43%; --y: 52%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 67%; --y: 35%; --s: clamp(56px, 4.5vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 88%; --y: 52%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(69px, 5.5vw, 86px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 28%; --y: 44%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 76%; --y: 52%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 34%; --y: 46%; --s: clamp(72px, 5.9vw, 92px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 66%; --y: 54%; --s: clamp(72px, 5.9vw, 92px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
                   </div>
                 </section>
               </div>
@@ -3321,36 +3348,6 @@
         </section>
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">이 문제들은 AI 발전으로<br/>현재는 해결 가능합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--ai-solution-proof">
-              <div class="slide-tool-items">
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 비용</h2>
-                  </div>
-                  <p class="slide-tool-description">시간당 500원 이하</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">언어 능력</h2>
-                  </div>
-                  <p class="slide-tool-description">60개 국어 전문 통역가 수준</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">UI/UX의 유연함</h2>
-                  </div>
-                  <p class="slide-tool-description">언어 자동 감지 및 발화 분리</p>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-        <section class="slide">
-          <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">밍글</p>
               <h1 class="slide-title">그래서 이를 모두 해결한<br/>모바일 통번역 앱을 만듭니다</h1>
@@ -3375,7 +3372,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 13</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 12</div>
       </div>
     </main>
 
