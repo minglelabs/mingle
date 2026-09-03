@@ -507,7 +507,21 @@
       .slide-market-grid--categories {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         grid-template-rows: minmax(0, 1fr);
-        gap: clamp(14px, 2.5vw, 32px);
+        gap: clamp(10px, 1.5vw, 18px);
+      }
+
+      .slide-market-grid--categories-four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: clamp(8px, 1.1vw, 14px);
+      }
+
+      .slide-market-grid--categories-four .slide-market-category-title {
+        font-size: clamp(1.3rem, 1.8vw, 2rem);
+      }
+
+      .slide-market-grid--categories-four .slide-market-logo-cloud {
+        inset: 0 1% 0;
       }
 
       .slide-market-category {
@@ -2149,6 +2163,16 @@
         gap: 6px;
       }
 
+      html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--language {
+        height: clamp(360px, 48vh, 420px);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 8px 12px;
+      }
+
       html.is-mobile-viewport .slide-market-category {
         padding: 8px 4px 0;
       }
@@ -2167,11 +2191,19 @@
         white-space: nowrap;
       }
 
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-category-title {
+        font-size: clamp(0.78rem, 3.4vw, 1rem);
+      }
+
       html.is-mobile-viewport .slide-market-logo-cloud {
         inset: 24% 1% 0;
       }
 
       html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo-cloud {
+        inset: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo-cloud {
         inset: 0;
       }
 
@@ -2187,6 +2219,13 @@
         height: clamp(32px, 10.8vw, 50px);
         padding: 4px;
         border-radius: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo {
+        width: clamp(30px, 9.4vw, 44px);
+        height: clamp(30px, 9.4vw, 44px);
+        padding: 3px;
+        border-radius: 9px;
       }
 
       html.is-mobile-viewport .slide-shell--market-overview {
@@ -2910,25 +2949,25 @@
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 21%; --y: 50%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 21%; --y: 44%; --s: clamp(58px, 4.6vw, 78px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
                     <img class="slide-market-logo" style="--x: 55%; --y: 30%; --s: clamp(54px, 4.3vw, 72px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 83%; --y: 62%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 52%; --s: clamp(58px, 4.6vw, 78px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--dating">
                   <h2 class="slide-market-category-title">글로벌 데이팅</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 17%; --y: 42%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 43%; --y: 62%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 17%; --y: 36%; --s: clamp(58px, 4.6vw, 78px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 52%; --s: clamp(54px, 4.3vw, 72px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
                     <img class="slide-market-logo" style="--x: 67%; --y: 35%; --s: clamp(56px, 4.5vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 88%; --y: 60%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 52%; --s: clamp(56px, 4.5vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 28%; --y: 50%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 76%; --y: 58%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 28%; --y: 44%; --s: clamp(60px, 4.8vw, 80px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 76%; --y: 52%; --s: clamp(60px, 4.8vw, 80px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
                   </div>
                 </section>
               </div>
@@ -2975,6 +3014,53 @@
                   <path d="M 920 30 C 760 0 410 0 165 30" />
                   <path d="M 165 30 L 224 4 M 165 30 L 236 40" />
                 </svg>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title"><span>그렇다면 소셜링 서비스들이 지금까지</span><br/><span>통번역을 제공하지 못했던 이유는 뭘까?</span></h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--language" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-four">
+                <section class="slide-market-category slide-market-category--language">
+                  <h2 class="slide-market-category-title">언어교환</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 16%; --y: 35%; --s: clamp(48px, 3.8vw, 60px); --r: -7deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 48%; --y: 54%; --s: clamp(46px, 3.7vw, 58px); --r: 6deg" src="./assets/logo-market-tandem.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 82%; --y: 32%; --s: clamp(48px, 3.8vw, 60px); --r: -9deg" src="./assets/logo-market-yeetalk.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 25%; --y: 66%; --s: clamp(46px, 3.7vw, 58px); --r: 8deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 58%; --y: 71%; --s: clamp(44px, 3.6vw, 56px); --r: -6deg" src="./assets/logo-market-hilokal.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 84%; --y: 62%; --s: clamp(46px, 3.7vw, 58px); --r: 10deg" src="./assets/logo-market-kof.png" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(48px, 3.8vw, 60px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(46px, 3.7vw, 58px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(48px, 3.8vw, 60px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--dating">
+                  <h2 class="slide-market-category-title">글로벌 데이팅</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(48px, 3.8vw, 60px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(46px, 3.7vw, 58px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(46px, 3.7vw, 58px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(46px, 3.7vw, 58px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 모임</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 28%; --y: 44%; --s: clamp(48px, 3.9vw, 62px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 76%; --y: 54%; --s: clamp(48px, 3.9vw, 62px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                  </div>
+                </section>
               </div>
             </div>
           </article>
@@ -3048,7 +3134,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 08</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 11</div>
       </div>
     </main>
 

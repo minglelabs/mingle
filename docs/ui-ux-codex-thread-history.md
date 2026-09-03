@@ -490,3 +490,11 @@
 - User impact: The original second goal looked equally active on the first solution page, and the relationship between the updated right-side message and the left-side social goal was not immediately apparent on the following page.
 - Resolution: Added the existing `xr.html`-style red cross treatment to the first solution page's language-learning goal, reduced that goal's text opacity, and overlaid a large `통번역 제공` badge at its right edge. Added a large curved right-to-left arrow across the second solution page while preserving the two-column goal content and responsive layout.
 - Tests: Verified pages `06 / 10` and `07 / 10` at desktop and mobile sizes, confirmed the cross, badge, and arrow render without viewport overflow, confirmed the updated right-side message remains visible, and checked for browser console warnings or errors.
+
+## 2026-09-03 — Short XR cause and four-category market page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened presentation needed a centered cause page after the two goal slides, with the language-exchange category restored as the first part of the broader service landscape. The existing three-category market page also left more separation between categories and scattered icons than necessary.
+- User impact: The reason social-linking services have not provided translation was not stated before the presentation moved on, and the market comparison was less compact than the intended visual rhythm.
+- Resolution: Added a new eighth slide with the requested centered cause title and a four-column market row ordered as language exchange, sincere voice conversation, global dating, and offline meetups. Reused the six language-exchange app icons from the download proof page, reduced the fifth-page category gap, and tightened its irregular icon distribution while preserving the flat category treatment and key colors. The four-column row becomes a responsive 2x2 layout on mobile.
+- Tests: Verified pages `05 / 11` and `08 / 11` at desktop and mobile sizes, confirmed all category titles and 15 local icons load, confirmed the requested title and page order, confirmed no viewport overflow, and found no browser console warnings or errors.
