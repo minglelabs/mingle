@@ -546,3 +546,11 @@
 - User impact: Voice interpretation was missing from the requirement comparison, the price item used a negative label after the comparison shifted toward value, and the solution transition did not directly map the nine problem requirements to nine achievable capabilities.
 - Resolution: Added `음성 통역 — 텍스트밖에 출력 안됨` to page nine and renamed `비싼 가격` to `가성비`. Changed the shared requirement grid to three columns, producing a 3x3 layout for the nine desktop cards while retaining a single readable column on mobile. Replaced the former page-ten service-cost list with a copied requirement-card layout using the `해결책` kicker, the requested AI title, and the nine solution pairs for continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value.
 - Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed all nine labels and descriptions on both pages, confirmed the desktop cards form three equal columns and three rows, confirmed the exact solution title and kicker, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement card width refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: Changing the requirement grid from four columns to three left the full 1080px media width in place, so each card became substantially wider than the preceding requirement cards.
+- User impact: The 3x3 comparison lost the compact card rhythm established on the earlier page, and the larger cards made the requirement groups feel too spread out.
+- Resolution: Constrained the shared requirement grid to a centered maximum width of 810px. This keeps the three-column desktop cards at approximately their previous 260px width while preserving the 3x3 structure and letting the mobile layout continue to use the full responsive content width.
+- Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed centered desktop cards at approximately 261px each, confirmed three rows and three columns on desktop, confirmed all nine cards remain full-width and readable on mobile, confirmed no viewport overflow, and found no browser console warnings or errors.
