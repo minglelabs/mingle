@@ -23,6 +23,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let frameDuration = CMTime(value: 1, timescale: 30)
     private static let maximumStartAttempts = 80
     private static let startRetryDelay: TimeInterval = 0.05
+    private static let requiredStablePossibleChecks = 3
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
 
@@ -223,7 +224,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
     private func schedulePictureInPictureStart(
         for controller: AVPictureInPictureController,
-        attempt: Int
+        attempt: Int,
+        stablePossibleChecks: Int = 0
     ) {
         guard pictureInPictureController === controller,
               pendingStartResolve != nil else {
@@ -231,13 +233,15 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         }
 
         let isPossible = controller.isPictureInPicturePossible
+        let nextStablePossibleChecks = isPossible ? stablePossibleChecks + 1 : 0
         if attempt == 0 || attempt % 10 == 0 {
             let readiness = displayLayerReadiness
             let audioSession = AVAudioSession.sharedInstance()
             NSLog(
-                "[NativePictureInPictureModule] waiting for PiP attempt=%d possible=%d appState=%ld ready=%d layerStatus=%ld rendererStatus=%ld audioCategory=%@ audioMode=%@",
+                "[NativePictureInPictureModule] waiting for PiP attempt=%d possible=%d stableChecks=%d appState=%ld ready=%d layerStatus=%ld rendererStatus=%ld audioCategory=%@ audioMode=%@",
                 attempt,
                 isPossible ? 1 : 0,
+                nextStablePossibleChecks,
                 UIApplication.shared.applicationState.rawValue,
                 readiness.ready,
                 readiness.layerStatus,
@@ -247,11 +251,12 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             )
         }
 
-        if isPossible {
+        if isPossible && nextStablePossibleChecks >= Self.requiredStablePossibleChecks {
             startRetryWorkItem = nil
             let readiness = displayLayerReadiness
             NSLog(
-                "[NativePictureInPictureModule] starting PiP possible=1 ready=%d layerStatus=%ld rendererStatus=%ld",
+                "[NativePictureInPictureModule] starting PiP possible=1 stableChecks=%d ready=%d layerStatus=%ld rendererStatus=%ld",
+                nextStablePossibleChecks,
                 readiness.ready,
                 readiness.layerStatus,
                 readiness.rendererStatus
@@ -278,7 +283,11 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         let workItem = DispatchWorkItem { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.startRetryWorkItem = nil
-            self.schedulePictureInPictureStart(for: controller, attempt: attempt + 1)
+            self.schedulePictureInPictureStart(
+                for: controller,
+                attempt: attempt + 1,
+                stablePossibleChecks: nextStablePossibleChecks
+            )
         }
         startRetryWorkItem?.cancel()
         startRetryWorkItem = workItem
