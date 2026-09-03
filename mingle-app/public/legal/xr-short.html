@@ -555,14 +555,14 @@
         position: relative;
         top: auto;
         right: auto;
-        width: min(1180px, 100%);
+        width: min(1080px, 100%);
         height: auto;
         padding: 0;
       }
 
       .slide-ai-requirements-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: clamp(10px, 1.1vw, 14px);
         width: 100%;
       }
@@ -590,7 +590,7 @@
       }
 
       .slide-ai-requirement:nth-child(7) {
-        grid-column: 2;
+        grid-column: auto;
       }
 
       .slide-ai-requirement-title,
@@ -3244,7 +3244,11 @@
                 </article>
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">발화 분리</h2>
-                  <p class="slide-ai-requirement-description">발화 및 발화자 분리가 안됨</p>
+                  <p class="slide-ai-requirement-description">문장 단위로 끊어주질 않음</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화자 분리</h2>
+                  <p class="slide-ai-requirement-description">여럿이 말해도 분리가 안됨</p>
                 </article>
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">비싼 가격</h2>

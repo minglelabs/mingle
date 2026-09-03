@@ -522,3 +522,11 @@
 - User impact: The service clusters read as disconnected points, weakening the comparison between each category and the apps inside it.
 - Resolution: Increased the page-eight category icons to approximately 1.5 times their previous size while preserving their irregular positions, so the existing centers naturally produce tighter spacing. Applied the same scale increase to the responsive mobile layout while keeping the four-category page as a 2x2 grid.
 - Tests: Verified page `08 / 13` at desktop and mobile sizes, confirmed all 15 local icons load, checked that the enlarged clusters stay within their category areas and the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 9 compact requirement cards
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The eight AI requirement details became too wide and left excessive empty space after the speaker-separation item was split into separate speech and speaker separation gaps.
+- User impact: The requirement comparison felt sparse, and the distinction between sentence segmentation and multi-speaker separation was not visible.
+- Resolution: Reworked the ninth slide into a compact four-column desktop grid with narrower cards, kept a single readable column on mobile, and split the former `발화 분리` item into `발화 분리 — 문장 단위로 끊어주질 않음` and `발화자 분리 — 여럿이 말해도 분리가 안됨`.
+- Tests: Verified page `09 / 13` at desktop and mobile sizes, confirmed all eight labels and descriptions in order, confirmed no viewport overflow, and found no browser console warnings or errors.
