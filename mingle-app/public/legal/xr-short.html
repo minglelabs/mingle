@@ -524,6 +524,97 @@
         inset: 0 1% 0;
       }
 
+      .slide-shell--ai-requirements {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: clamp(18px, 3.2vh, 30px);
+        padding-inline: clamp(40px, 6vw, 96px);
+      }
+
+      .slide-copy--ai-requirements {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(62px, calc(15vh - 28px), 106px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-copy--ai-requirements .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--ai-requirements .slide-title {
+        font-size: clamp(2.1rem, 3.9vw, 4rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-side-media--ai-requirements {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: min(1180px, 100%);
+        height: auto;
+        padding: 0;
+      }
+
+      .slide-ai-requirements-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(10px, 1.1vw, 14px);
+        width: 100%;
+      }
+
+      .slide-ai-requirement {
+        position: relative;
+        min-height: clamp(88px, 7.8vw, 108px);
+        padding: clamp(14px, 1.2vw, 18px) clamp(12px, 1vw, 16px) clamp(14px, 1.2vw, 18px)
+          clamp(34px, 2.5vw, 42px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 252, 246, 0.58) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-ai-requirement::before {
+        content: "";
+        position: absolute;
+        top: clamp(14px, 1.1vw, 18px);
+        bottom: clamp(14px, 1.1vw, 18px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #f97316 0%, #dc2626 100%);
+      }
+
+      .slide-ai-requirement:nth-child(7) {
+        grid-column: 2;
+      }
+
+      .slide-ai-requirement-title,
+      .slide-ai-requirement-description {
+        margin: 0;
+      }
+
+      .slide-ai-requirement-title {
+        font-size: clamp(1.12rem, 1.45vw, 1.42rem);
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-ai-requirement-description {
+        margin-top: clamp(6px, 0.65vw, 9px);
+        font-size: clamp(1rem, 1.28vw, 1.22rem);
+        font-weight: 600;
+        line-height: 1.34;
+        letter-spacing: -0.035em;
+        color: rgba(45, 42, 30, 0.72);
+      }
+
       .slide-market-category {
         position: relative;
         min-height: 0;
@@ -2228,6 +2319,64 @@
         border-radius: 9px;
       }
 
+      html.is-mobile-viewport .slide-shell--ai-requirements {
+        gap: clamp(16px, 2.8vh, 24px);
+        padding-inline: var(--mobile-slide-x);
+      }
+
+      html.is-mobile-viewport .slide-copy--ai-requirements {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title {
+        font-size: clamp(1.05rem, 4.45vw, 1.8rem);
+        line-height: 1.1;
+        letter-spacing: -0.055em;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-side-media--ai-requirements {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-ai-requirements-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement {
+        min-height: 0;
+        padding: 10px 10px 10px 24px;
+        border-radius: 14px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement::before {
+        top: 10px;
+        bottom: 10px;
+        left: 9px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement:nth-child(7) {
+        grid-column: auto;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement-title {
+        font-size: clamp(0.95rem, 3.35vw, 1.08rem);
+        line-height: 1.22;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement-description {
+        margin-top: 4px;
+        font-size: clamp(0.9rem, 3vw, 1.02rem);
+        line-height: 1.28;
+        letter-spacing: 0;
+      }
+
       html.is-mobile-viewport .slide-shell--market-overview {
         justify-content: flex-start;
         gap: clamp(22px, 3.2vh, 30px);
@@ -3066,6 +3215,46 @@
           </article>
         </section>
         <section class="slide">
+          <article class="slide-shell slide-shell--ai-requirements">
+            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">소셜링 상황의 빡센 요구사항들을<br/>기존의 AI로는 충족할 수 없었습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-requirements">
+              <div class="slide-ai-requirements-grid">
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">지속 번역</h2>
+                  <p class="slide-ai-requirement-description">버튼을 눌러야 해서 대화가 자꾸 끊김</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">음성 인식</h2>
+                  <p class="slide-ai-requirement-description">기본적인 말도 못알아들음</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">다국어 능력</h2>
+                  <p class="slide-ai-requirement-description">한국어 등 지원 안함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">실시간 번역</h2>
+                  <p class="slide-ai-requirement-description">배치 처리밖에 못함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">언어 스위칭</h2>
+                  <p class="slide-ai-requirement-description">언어 설정을 자꾸 바꿔줘야함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화 분리</h2>
+                  <p class="slide-ai-requirement-description">발화 및 발화자 분리가 안됨</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">비싼 가격</h2>
+                  <p class="slide-ai-requirement-description">시간당 3000원</p>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">해결책</p>
@@ -3134,7 +3323,7 @@
           </svg>
           <span>처음으로</span>
         </button>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 11</div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 12</div>
       </div>
     </main>
 
