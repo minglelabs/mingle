@@ -168,7 +168,13 @@ import {
 import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
-import { postNativePipCommand, type NativePipState } from '@/lib/native-pip'
+import {
+  NATIVE_PIP_WEB_EVENT,
+  NATIVE_PIP_WEB_STATE_KEY,
+  parseNativePipEvent,
+  postNativePipCommand,
+  type NativePipState,
+} from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
 import {
   buildNativeRemountRestoreUrl,
@@ -1874,6 +1880,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
   const nativePipStateRef = useRef<NativePipState | null>(null)
+  const nativePipActiveRef = useRef(false)
+  const nativePipConversationIdRef = useRef('')
+  const nativePipSttRunningRef = useRef(false)
+  const nativePipPlaybackRequestRef = useRef<boolean | null>(null)
+  const nativePipLastSyncedPlaybackStateRef = useRef<{
+    conversationId: string
+    playing: boolean
+  } | null>(null)
+  const nativePipPlaybackGenerationRef = useRef(0)
+  const nativePipPlaybackQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const nativePipStartRecordingRef = useRef<() => Promise<void>>(async () => {})
+  const nativePipStopRecordingRef = useRef<(
+    options?: { forceNativeStop?: boolean }
+  ) => Promise<void>>(async () => {})
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
@@ -2010,6 +2030,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
   })
   const isNativeIosPipAvailable = isNativeAppRuntime && isNativeIosAppRuntime()
+  nativePipConversationIdRef.current = conversationId?.trim() || ''
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -4050,6 +4071,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
+  nativePipSttRunningRef.current = isSttSessionRunning
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
   const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
@@ -5581,10 +5603,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
     displayMode: bubbleDisplayMode,
-    title: (displayConversationTitle || conversationTitle || '').trim().slice(0, 120),
-    statusLabel: isSttSessionRunning
-      ? roomManagementCopy.pictureInPictureLiveLabel
-      : roomManagementCopy.pictureInPicturePausedLabel,
     emptyLabel: roomManagementCopy.pictureInPictureEmptyLabel,
     messages: displayUtterances
       .filter((utterance) => utterance.originalText.trim())
@@ -5622,11 +5640,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           isInterim: draftUtteranceIds.has(utterance.id),
         }
       }),
-  }), [bubbleDisplayMode, conversationId, conversationTitle, displayConversationTitle, displayUtterances, draftUtteranceIds, isSttSessionRunning, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
+    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
+
+  nativePipStateRef.current = nativePipState
 
   useEffect(() => {
-    nativePipStateRef.current = nativePipState
-    if (!isNativeIosPipAvailable || !nativePipState.conversationId) return
+    if (!isNativeIosPipAvailable || !nativePipActiveRef.current || !nativePipState.conversationId) return
 
     postNativePipCommand({
       type: 'native_pip_update',
@@ -5639,6 +5658,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const scopedConversationId = conversationId.trim()
     return () => {
+      nativePipActiveRef.current = false
+      nativePipPlaybackRequestRef.current = null
+      nativePipPlaybackGenerationRef.current += 1
+      if (nativePipConversationIdRef.current === scopedConversationId) {
+        nativePipConversationIdRef.current = ''
+      }
       postNativePipCommand({
         type: 'native_pip_stop',
         payload: { conversationId: scopedConversationId },
@@ -5650,11 +5675,141 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const state = nativePipStateRef.current
     if (!state?.conversationId) return
 
+    nativePipLastSyncedPlaybackStateRef.current = null
     postNativePipCommand({
       type: 'native_pip_start',
       payload: state,
     })
   }, [])
+
+  const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
+    if (!isNativeIosPipAvailable) return
+    const nextConversationId = (scopedConversationId || nativePipConversationIdRef.current).trim()
+    if (!nextConversationId) return
+
+    const previous = nativePipLastSyncedPlaybackStateRef.current
+    if (previous?.conversationId === nextConversationId && previous.playing === playing) return
+
+    const posted = postNativePipCommand({
+      type: 'native_pip_playback_state',
+      payload: {
+        conversationId: nextConversationId,
+        playing,
+      },
+    })
+    if (posted) {
+      nativePipLastSyncedPlaybackStateRef.current = {
+        conversationId: nextConversationId,
+        playing,
+      }
+    }
+  }, [isNativeIosPipAvailable])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || typeof window === 'undefined') return
+
+    const handleNativePipEvent = (event: Event) => {
+      const detail = parseNativePipEvent((event as CustomEvent<unknown>).detail)
+      if (!detail) return
+
+      const currentConversationId = nativePipConversationIdRef.current
+      if (detail.conversationId && detail.conversationId !== currentConversationId) return
+
+      if (detail.type === 'started') {
+        if (!currentConversationId) return
+        if (!nativePipActiveRef.current) {
+          nativePipPlaybackGenerationRef.current += 1
+        }
+        nativePipActiveRef.current = true
+        nativePipLastSyncedPlaybackStateRef.current = null
+
+        const state = nativePipStateRef.current
+        if (state?.conversationId === currentConversationId) {
+          postNativePipCommand({
+            type: 'native_pip_update',
+            payload: state,
+          })
+        }
+        syncNativePipPlaybackState(nativePipSttRunningRef.current, currentConversationId)
+        return
+      }
+
+      if (detail.type === 'stopped' || detail.type === 'failed') {
+        nativePipActiveRef.current = false
+        nativePipPlaybackRequestRef.current = null
+        nativePipPlaybackGenerationRef.current += 1
+        nativePipLastSyncedPlaybackStateRef.current = null
+        return
+      }
+
+      if (!currentConversationId || detail.conversationId !== currentConversationId) return
+      if (!nativePipActiveRef.current) {
+        // Recover if a playback event arrives after a WebView reload but before
+        // the cached lifecycle event has been replayed.
+        nativePipActiveRef.current = true
+        nativePipPlaybackGenerationRef.current += 1
+      }
+      nativePipLastSyncedPlaybackStateRef.current = null
+
+      const desiredPlaying = detail.playing
+      if (nativePipPlaybackRequestRef.current === desiredPlaying) return
+      nativePipPlaybackRequestRef.current = desiredPlaying
+      const requestGeneration = nativePipPlaybackGenerationRef.current
+
+      nativePipPlaybackQueueRef.current = nativePipPlaybackQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          if (
+            !nativePipActiveRef.current
+            || nativePipPlaybackGenerationRef.current !== requestGeneration
+            || nativePipConversationIdRef.current !== currentConversationId
+          ) {
+            return
+          }
+
+          if (desiredPlaying) {
+            await nativePipStartRecordingRef.current()
+          } else {
+            await nativePipStopRecordingRef.current({ forceNativeStop: true })
+          }
+        })
+        .catch((error: unknown) => {
+          if (process.env.NODE_ENV !== 'production') {
+            const message = error instanceof Error ? error.message : String(error)
+            console.warn(`[NativePiP] STT playback control failed: ${message}`)
+          }
+        })
+        .finally(() => {
+          if (
+            !nativePipActiveRef.current
+            || nativePipPlaybackGenerationRef.current !== requestGeneration
+            || nativePipPlaybackRequestRef.current !== desiredPlaying
+          ) {
+            return
+          }
+          nativePipPlaybackRequestRef.current = null
+          syncNativePipPlaybackState(nativePipSttRunningRef.current, currentConversationId)
+        })
+    }
+
+    window.addEventListener(NATIVE_PIP_WEB_EVENT, handleNativePipEvent)
+    const cachedEvent = (window as unknown as Window & Record<string, unknown>)[NATIVE_PIP_WEB_STATE_KEY]
+    if (cachedEvent) {
+      handleNativePipEvent(new CustomEvent(NATIVE_PIP_WEB_EVENT, { detail: cachedEvent }))
+    }
+
+    return () => {
+      window.removeEventListener(NATIVE_PIP_WEB_EVENT, handleNativePipEvent)
+    }
+  }, [isNativeIosPipAvailable, syncNativePipPlaybackState])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || !nativePipActiveRef.current || !conversationId?.trim()) return
+    syncNativePipPlaybackState(isSttSessionRunning, conversationId.trim())
+  }, [conversationId, isNativeIosPipAvailable, isSttSessionRunning, syncNativePipPlaybackState])
+
+  nativePipStartRecordingRef.current = handleStartRecording
+  nativePipStopRecordingRef.current = handleStopRecording
 
   const displayUtteranceIds = useMemo(
     () => displayUtterances.map((utterance) => utterance.id),

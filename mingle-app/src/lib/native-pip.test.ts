@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { postNativePipCommand, type NativePipCommand } from './native-pip'
+import {
+  parseNativePipEvent,
+  postNativePipCommand,
+  type NativePipCommand,
+} from './native-pip'
 
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
 
@@ -30,8 +34,6 @@ describe('native Picture in Picture bridge', () => {
       payload: {
         conversationId: 'conversation-1',
         displayMode: 'collapsed',
-        title: 'Test room',
-        statusLabel: 'Live',
         emptyLabel: 'No messages yet.',
         messages: [],
       },
@@ -39,6 +41,23 @@ describe('native Picture in Picture bridge', () => {
 
     expect(postNativePipCommand(command)).toBe(true)
     expect(postMessage).toHaveBeenCalledWith(JSON.stringify(command))
+  })
+
+  it('parses lifecycle and playback events from the native bridge', () => {
+    expect(parseNativePipEvent({
+      type: 'started',
+      conversationId: ' conversation-1 ',
+    })).toEqual({ type: 'started', conversationId: 'conversation-1' })
+    expect(parseNativePipEvent({
+      type: 'playback_control',
+      conversationId: 'conversation-1',
+      playing: false,
+    })).toEqual({
+      type: 'playback_control',
+      conversationId: 'conversation-1',
+      playing: false,
+    })
+    expect(parseNativePipEvent({ type: 'playback_control', playing: true })).toBeNull()
   })
 
   it('returns false when the native bridge is unavailable or throws', () => {

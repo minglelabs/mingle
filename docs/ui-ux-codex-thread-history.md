@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Connect iOS PiP playback controls to the STT lifecycle
+
+- **Surface:** The iOS system Picture in Picture controls for the live conversation preview.
+- **Issue:** PiP exposed play and pause controls even though the preview was a live snapshot stream, so pressing them did not affect the room's microphone session and could leave the control state misleading.
+- **Diagnosis:** The native sample-buffer playback delegate intentionally treated the preview as always playing. The WebView had no lifecycle event channel for native PiP callbacks and could not route a system playback request through the existing STT start/stop pipeline.
+- **Resolution:** Use the native playback delegate to emit scoped `started`, `stopped`, `failed`, and `playback_control` events through React Native. Forward the latest event into the WebView with a cached replay path for WebView reloads. Route PiP pause to the existing graceful STT stop (including pending-turn finalization) and PiP play to the existing STT start flow. Sync the native PiP playback state after successful starts, graceful stops, microphone permission failures, transport/audio errors, and other STT state changes.
+- **Interaction:** Pausing PiP stops recognition gracefully while leaving the last preview frame visible. Playing PiP starts a new STT session; it does not resume a partially captured audio buffer. The PiP window stays open and remains read-only/non-scrollable. Stale native callbacks and queued playback requests are ignored when the controller or conversation has changed.
+- **Data change:** None. No API, database, migration, or version change is required; the iOS app remains version `2.0.3` with namespace `ios/v2.0.3`.
+- **Testing notes:** Verify play/pause from PiP on a physical iOS 26 device with an idle room, an active STT session, an in-progress utterance, a denied microphone permission, and an audio/transport failure. Confirm the last frame remains after pause, a new session starts after play, and a stale callback cannot affect a replacement PiP controller.
+
 ## 2026-09-03 - Keep iOS PiP text size stable and show live utterance progress
 
 - **Surface:** The native iOS Picture in Picture preview during a long in-progress speech turn.

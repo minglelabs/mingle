@@ -18,7 +18,8 @@ private final class PictureInPictureSampleBufferView: UIView {
 }
 
 @objc(NativePictureInPictureModule)
-final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
+final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
+    private static let nativeEventName = "pictureInPicture"
     private static let renderSize = CGSize(width: 960, height: 540)
     private static let frameDuration = CMTime(value: 1, timescale: 30)
     private static let maximumStartAttempts = 80
@@ -70,9 +71,31 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private var startTimeoutWorkItem: DispatchWorkItem?
     private var frameRefreshTimer: DispatchSourceTimer?
     private var hasPictureInPictureAudioSession = false
+    private var hasListeners = false
+    private var isPictureInPicturePlaybackPaused = false
+    private var hasEnqueuedFrame = false
+    private var needsPausedFrameRefresh = false
+    private var lastBackpressureLogAt = Date.distantPast
+
+    override func supportedEvents() -> [String]! {
+        [Self.nativeEventName]
+    }
+
+    override func startObserving() {
+        hasListeners = true
+    }
+
+    override func stopObserving() {
+        hasListeners = false
+    }
+
+    private func emitNativeEvent(_ payload: [String: Any]) {
+        guard hasListeners else { return }
+        sendEvent(withName: Self.nativeEventName, body: payload)
+    }
 
     @objc
-    static func requiresMainQueueSetup() -> Bool {
+    override static func requiresMainQueueSetup() -> Bool {
         true
     }
 
@@ -109,7 +132,33 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             guard let self else { return }
             guard self.activeConversationId == state.conversationId else { return }
             self.latestState = state
-            self.render(state: state)
+            // The refresh timer supplies the next frame while PiP is playing.
+            // When paused, render immediately so finalized text can replace the
+            // last snapshot without resuming playback.
+            if self.isPictureInPicturePlaybackPaused {
+                self.needsPausedFrameRefresh = !self.render(state: state)
+            }
+        }
+    }
+
+    @objc(setPlaybackState:)
+    func setPlaybackState(_ options: NSDictionary) {
+        let requestedConversationId = (options["conversationId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !requestedConversationId.isEmpty,
+              let playing = options["playing"] as? Bool else {
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.activeConversationId == requestedConversationId else {
+                return
+            }
+            self.isPictureInPicturePlaybackPaused = !playing
+            if playing {
+                self.needsPausedFrameRefresh = false
+            }
         }
     }
 
@@ -162,7 +211,9 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                 return
             }
             latestState = state
-            render(state: state)
+            if isPictureInPicturePlaybackPaused {
+                needsPausedFrameRefresh = !render(state: state)
+            }
             resolve(["ok": true, "active": true])
             return
         }
@@ -180,7 +231,9 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             // A start request is already waiting for iOS. Keep the newest frame
             // and resolve this duplicate tap without replacing the real request.
             latestState = state
-            render(state: state)
+            if isPictureInPicturePlaybackPaused {
+                needsPausedFrameRefresh = !render(state: state)
+            }
             resolve(["ok": true, "pending": true])
             return
         }
@@ -230,6 +283,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
         activeConversationId = state.conversationId
         latestState = state
+        isPictureInPicturePlaybackPaused = false
+        needsPausedFrameRefresh = false
         attachDisplayLayerToActiveWindow()
         displayLayer.videoGravity = .resizeAspect
         displayLayer.bounds = CGRect(origin: .zero, size: Self.renderSize)
@@ -263,9 +318,10 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         }
 
         let isPossible = controller.isPictureInPicturePossible
-        let nextStablePossibleChecks = isPossible ? stablePossibleChecks + 1 : 0
+        let readiness = displayLayerReadiness
+        let isReady = readiness.ready == 1
+        let nextStablePossibleChecks = isPossible && isReady ? stablePossibleChecks + 1 : 0
         if attempt == 0 || attempt % 10 == 0 {
-            let readiness = displayLayerReadiness
             let audioSession = AVAudioSession.sharedInstance()
             NSLog(
                 "[NativePictureInPictureModule] waiting for PiP attempt=%d possible=%d stableChecks=%d appState=%ld ready=%d layerStatus=%ld rendererStatus=%ld audioCategory=%@ audioMode=%@",
@@ -281,9 +337,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             )
         }
 
-        if isPossible && nextStablePossibleChecks >= Self.requiredStablePossibleChecks {
+        if isPossible && isReady && nextStablePossibleChecks >= Self.requiredStablePossibleChecks {
             startRetryWorkItem = nil
-            let readiness = displayLayerReadiness
             NSLog(
                 "[NativePictureInPictureModule] starting PiP possible=1 stableChecks=%d ready=%d layerStatus=%ld rendererStatus=%ld",
                 nextStablePossibleChecks,
@@ -299,14 +354,22 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         guard attempt < Self.maximumStartAttempts else {
             let readiness = displayLayerReadiness
             NSLog(
-                "[NativePictureInPictureModule] PiP remained unavailable possible=0 ready=%d layerStatus=%ld rendererStatus=%ld rendererError=%@",
+                "[NativePictureInPictureModule] PiP remained unavailable possible=%d ready=%d layerStatus=%ld rendererStatus=%ld rendererError=%@",
+                isPossible ? 1 : 0,
                 readiness.ready,
                 readiness.layerStatus,
                 readiness.rendererStatus,
                 readiness.error
             )
+            if let conversationId = activeConversationId {
+                emitNativeEvent([
+                    "type": "failed",
+                    "conversationId": conversationId,
+                    "message": PictureInPictureError.notPossible.localizedDescription,
+                ])
+            }
             rejectPendingStart(with: PictureInPictureError.notPossible)
-            clearPictureInPictureState()
+            clearPictureInPictureState(for: controller)
             return
         }
 
@@ -339,8 +402,15 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             }
 
             NSLog("[NativePictureInPictureModule] PiP start delegate timed out")
+            if let conversationId = self.activeConversationId {
+                self.emitNativeEvent([
+                    "type": "failed",
+                    "conversationId": conversationId,
+                    "message": PictureInPictureError.notPossible.localizedDescription,
+                ])
+            }
             self.rejectPendingStart(with: PictureInPictureError.notPossible)
-            self.clearPictureInPictureState()
+            self.clearPictureInPictureState(for: controller)
         }
         startTimeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(
@@ -371,7 +441,12 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                   let state = self.latestState else {
                 return
             }
-            self.render(state: state)
+            if self.isPictureInPicturePlaybackPaused {
+                guard self.needsPausedFrameRefresh else { return }
+                self.needsPausedFrameRefresh = !self.render(state: state)
+            } else {
+                _ = self.render(state: state)
+            }
         }
         frameRefreshTimer = timer
         timer.resume()
@@ -410,12 +485,22 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         reject?("native_pip_start_failed", error.localizedDescription, error)
     }
 
-    private func clearPictureInPictureState() {
+    private func clearPictureInPictureState(for controller: AVPictureInPictureController? = nil) {
+        if let controller {
+            guard let currentController = pictureInPictureController,
+                  currentController === controller else {
+                NSLog("[NativePictureInPictureModule] ignored stale PiP state cleanup")
+                return
+            }
+        }
         cancelStartScheduling()
         stopFrameRefreshTimer()
         pictureInPictureController = nil
         activeConversationId = nil
         latestState = nil
+        isPictureInPicturePlaybackPaused = false
+        hasEnqueuedFrame = false
+        needsPausedFrameRefresh = false
         displayLayer.preventsDisplaySleepDuringVideoPlayback = false
         detachDisplayLayerFromActiveWindow()
         releasePictureInPictureAudioSessionIfNeeded()
@@ -531,24 +616,47 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         NSLog("[NativePictureInPictureModule] PiP audio session released")
     }
 
-    private func render(state: PictureInPictureState) {
+    @discardableResult
+    private func render(state: PictureInPictureState) -> Bool {
         guard let sampleBuffer = makeSampleBuffer(from: makePreviewImage(state: state)) else {
             NSLog("[NativePictureInPictureModule] failed to make a sample buffer")
-            return
+            return false
         }
 
         if #available(iOS 17.0, *) {
             let renderer = displayLayer.sampleBufferRenderer
             if renderer.status == .failed {
                 renderer.flush(removingDisplayedImage: false, completionHandler: nil)
+                hasEnqueuedFrame = false
+            }
+            guard renderer.isReadyForMoreMediaData else {
+                logBackpressureIfNeeded(rendererStatus: renderer.status.rawValue)
+                return false
             }
             renderer.enqueue(sampleBuffer)
         } else {
             if displayLayer.status == .failed {
                 displayLayer.flush()
+                hasEnqueuedFrame = false
+            }
+            guard displayLayer.isReadyForMoreMediaData else {
+                logBackpressureIfNeeded(rendererStatus: displayLayer.status.rawValue)
+                return false
             }
             displayLayer.enqueue(sampleBuffer)
         }
+        hasEnqueuedFrame = true
+        return true
+    }
+
+    private func logBackpressureIfNeeded(rendererStatus: Int) {
+        let now = Date()
+        guard now.timeIntervalSince(lastBackpressureLogAt) >= 1 else { return }
+        lastBackpressureLogAt = now
+        NSLog(
+            "[NativePictureInPictureModule] display layer backpressure rendererStatus=%ld",
+            rendererStatus
+        )
     }
 
     private var displayLayerReadiness: (
@@ -559,14 +667,14 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     ) {
         if #available(iOS 17.0, *) {
             let renderer = displayLayer.sampleBufferRenderer
-            let ready: Int
+            let readyForDisplay: Int
             if #available(iOS 17.4, *) {
-                ready = displayLayer.isReadyForDisplay ? 1 : 0
+                readyForDisplay = displayLayer.isReadyForDisplay ? 1 : 0
             } else {
-                ready = renderer.status == .rendering ? 1 : 0
+                readyForDisplay = renderer.status == .rendering ? 1 : 0
             }
             return (
-                ready: ready,
+                ready: hasEnqueuedFrame && renderer.status != .failed && readyForDisplay == 1 ? 1 : 0,
                 layerStatus: displayLayer.status.rawValue,
                 rendererStatus: renderer.status.rawValue,
                 error: renderer.error?.localizedDescription ?? "none"
@@ -574,7 +682,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         }
 
         return (
-            ready: displayLayer.status == .rendering ? 1 : 0,
+            ready: hasEnqueuedFrame && displayLayer.status == .rendering ? 1 : 0,
             layerStatus: displayLayer.status.rawValue,
             rendererStatus: displayLayer.status.rawValue,
             error: displayLayer.error?.localizedDescription ?? "none"
@@ -1187,11 +1295,27 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     // MARK: - AVPictureInPictureSampleBufferPlaybackDelegate
 
     func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
+        _ controller: AVPictureInPictureController,
         setPlaying playing: Bool
     ) {
-        // The preview is a live snapshot stream. PiP play/pause controls do not
-        // change the WebView's STT session, so the current frame remains visible.
+        guard self.pictureInPictureController === controller,
+              let conversationId = activeConversationId else {
+            return
+        }
+        isPictureInPicturePlaybackPaused = !playing
+        if playing {
+            needsPausedFrameRefresh = false
+        }
+        NSLog(
+            "[NativePictureInPictureModule] PiP playback control playing=%d conversation=%@",
+            playing ? 1 : 0,
+            conversationId
+        )
+        emitNativeEvent([
+            "type": "playback_control",
+            "conversationId": conversationId,
+            "playing": playing,
+        ])
     }
 
     func pictureInPictureControllerTimeRangeForPlayback(
@@ -1201,9 +1325,10 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     }
 
     func pictureInPictureControllerIsPlaybackPaused(
-        _ pictureInPictureController: AVPictureInPictureController
+        _ controller: AVPictureInPictureController
     ) -> Bool {
-        false
+        guard self.pictureInPictureController === controller else { return false }
+        return isPictureInPicturePlaybackPaused
     }
 
     func pictureInPictureController(
@@ -1230,30 +1355,60 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
+        _ controller: AVPictureInPictureController
     ) {
+        guard self.pictureInPictureController === controller,
+              let conversationId = activeConversationId else {
+            NSLog("[NativePictureInPictureModule] ignored stale PiP did-start callback")
+            return
+        }
+        isPictureInPicturePlaybackPaused = false
+        needsPausedFrameRefresh = false
         NSLog("[NativePictureInPictureModule] PiP did start")
+        emitNativeEvent([
+            "type": "started",
+            "conversationId": conversationId,
+        ])
         resolvePendingStart(with: ["ok": true, "active": true])
     }
 
     func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
+        _ controller: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
+        guard self.pictureInPictureController === controller,
+              let conversationId = activeConversationId else {
+            NSLog("[NativePictureInPictureModule] ignored stale PiP failed-to-start callback")
+            return
+        }
         NSLog(
             "[NativePictureInPictureModule] PiP failed to start: %@",
             error.localizedDescription
         )
+        emitNativeEvent([
+            "type": "failed",
+            "conversationId": conversationId,
+            "message": error.localizedDescription,
+        ])
         rejectPendingStart(
             with: PictureInPictureError.nativeStartFailed(error.localizedDescription)
         )
-        clearPictureInPictureState()
+        clearPictureInPictureState(for: controller)
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
+        _ controller: AVPictureInPictureController
     ) {
-        clearPictureInPictureState()
+        guard self.pictureInPictureController === controller,
+              let conversationId = activeConversationId else {
+            NSLog("[NativePictureInPictureModule] ignored stale PiP did-stop callback")
+            return
+        }
+        emitNativeEvent([
+            "type": "stopped",
+            "conversationId": conversationId,
+        ])
+        clearPictureInPictureState(for: controller)
     }
 
     func pictureInPictureController(
@@ -1317,8 +1472,6 @@ private struct PictureInPictureMessage {
 private struct PictureInPictureState {
     let conversationId: String
     let displayMode: PictureInPictureDisplayMode
-    let title: String
-    let statusLabel: String
     let emptyLabel: String
     let messages: [PictureInPictureMessage]
 
@@ -1336,8 +1489,6 @@ private struct PictureInPictureState {
         self.conversationId = conversationId
         let rawDisplayMode = (dictionary["displayMode"] as? String)?.lowercased()
         self.displayMode = PictureInPictureDisplayMode(rawValue: rawDisplayMode ?? "") ?? .collapsed
-        self.title = (dictionary["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        self.statusLabel = (dictionary["statusLabel"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.emptyLabel = (dictionary["emptyLabel"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.messages = Array(messages.suffix(4))
     }
