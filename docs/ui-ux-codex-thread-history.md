@@ -755,6 +755,14 @@
 - Resolution: Replaced the shared Venn diagram asset with the corrected attached image, so both decks update through their existing single-image page without changing the business matrix page or any other slide.
 - Tests: Verified the corrected asset matches the attached PNG byte-for-byte, confirmed it loads on the Venn page in both decks, confirmed the matrix asset remains unchanged, and confirmed no viewport overflow.
 
+## 2026-09-03 — Short XR K-Friends acquisition goal slide
+
+- Surface: `mingle-app/public/legal/xr-short.html` and the two new K-Friends screenshot assets under `mingle-app/public/legal/assets/`
+- Issue: The deck needed a concrete first-goal slide explaining the plan to absorb K-Friends users, supported by evidence from the competing app's product screens.
+- User impact: The strategic goal lacked a visual anchor and the age of K-Friends' product updates was not immediately visible.
+- Resolution: Added page nineteen with left-aligned goal copy, two slightly overlapping K-Friends mobile screenshots, and a compact caption pairing the K-Friends logo with `Kfriends 앱 화면. 2년에 한 번씩 업데이트.`. Shifted the existing business, vision, recruitment, and Q&A pages to follow it and updated the initial page counter to twenty-four.
+- Tests: Verified the new screenshots and logo load locally, confirmed the two images overlap slightly in the right-side media area, checked the caption at desktop and mobile sizes, confirmed the page counter and total slide count are twenty-four, and confirmed no horizontal viewport overflow.
+
 ## 2026-09-03 — Short XR smart download QR and closing alignment
 
 - Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
