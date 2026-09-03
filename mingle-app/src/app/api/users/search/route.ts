@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
+import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
+import { captureMingleEvent } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -80,6 +83,30 @@ export async function GET(request: NextRequest) {
       },
     },
   });
+
+  try {
+    const [requestContext, searchProperties] = await Promise.all([
+      buildPostHogRequestContext(request, userId),
+      buildSearchAnalyticsProperties(query),
+    ]);
+    captureMingleEvent({
+      distinctId: requestContext.distinctId,
+      event: "mingle_user_search_api_request",
+      properties: {
+        ...searchProperties,
+        result_count: users.length,
+        account_id_digest: requestContext.accountIdDigest,
+        tracking_source: requestContext.trackingSource,
+        client_platform: requestContext.clientPlatform,
+        api_namespace: requestContext.apiNamespace,
+        app_version: requestContext.appVersion,
+      },
+    });
+  } catch (error) {
+    console.warn("[posthog] user search analytics failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   return NextResponse.json({
     users: users.map(({ followerRelations, ...user }) => ({
