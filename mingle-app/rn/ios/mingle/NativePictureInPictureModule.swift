@@ -34,6 +34,10 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private static let previewLanguageTextGap: CGFloat = 6
     private static let previewMaximumBubbleWidthRatio: CGFloat = 0.96
     private static let previewMaximumMessageCount = 4
+    // Keep the preview readable before trading away older bubbles. A single
+    // exceptionally long message may still use the smaller render floor so
+    // the latest bubble remains complete.
+    private static let previewMinimumReadableFontSize: CGFloat = 30
     private static let previewMinimumFontSize: CGFloat = 22
 
     private struct PreviewLanguageRow {
@@ -613,7 +617,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             let messageFontSize = resolvePreviewMessageFontSize(
                 messages,
                 availableSize: contentRect.size,
-                displayMode: state.displayMode
+                displayMode: state.displayMode,
+                minimumFontSize: Self.previewMinimumFontSize
             )
             let layouts = makePreviewMessageLayouts(
                 messages,
@@ -691,20 +696,26 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         let recentMessages = Array(messages.suffix(maxMessageCount))
         guard let latestMessage = recentMessages.last else { return [] }
 
-        var selectedMessages = [latestMessage]
-        for message in recentMessages.dropLast().reversed() {
-            let candidateMessages = [message] + selectedMessages
+        // Try the largest recent suffix first. If it would force the text
+        // below the readable floor, remove the oldest bubble and try again.
+        // This keeps the newest in-progress message visible while old bubbles
+        // disappear as soon as the available space is genuinely needed.
+        for messageCount in stride(from: recentMessages.count, through: 1, by: -1) {
+            let candidateMessages = Array(recentMessages.suffix(messageCount))
             guard previewMessageSetFits(
                 candidateMessages,
                 availableSize: availableSize,
                 displayMode: displayMode
             ) else {
-                break
+                continue
             }
-            selectedMessages.insert(message, at: 0)
+            return candidateMessages
         }
 
-        return selectedMessages
+        // The latest bubble is always retained. The render pass can lower
+        // its font below the readable floor when one unusually long message
+        // needs the extra room to remain complete.
+        return [latestMessage]
     }
 
     private func previewMessageSetFits(
@@ -715,7 +726,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         let fontSize = resolvePreviewMessageFontSize(
             messages,
             availableSize: availableSize,
-            displayMode: displayMode
+            displayMode: displayMode,
+            minimumFontSize: Self.previewMinimumReadableFontSize
         )
         let layouts = makePreviewMessageLayouts(
             messages,
@@ -731,7 +743,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private func resolvePreviewMessageFontSize(
         _ messages: [PictureInPictureMessage],
         availableSize: CGSize,
-        displayMode: PictureInPictureDisplayMode
+        displayMode: PictureInPictureDisplayMode,
+        minimumFontSize: CGFloat
     ) -> CGFloat {
         let maximumFontSize: CGFloat
         switch messages.count {
@@ -746,7 +759,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         }
 
         var fontSize = maximumFontSize
-        while fontSize >= Self.previewMinimumFontSize {
+        while fontSize >= minimumFontSize {
             let layouts = makePreviewMessageLayouts(
                 messages,
                 fontSize: fontSize,
@@ -761,7 +774,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             fontSize -= 1
         }
 
-        return Self.previewMinimumFontSize
+        return minimumFontSize
     }
 
     private func makePreviewMessageLayouts(

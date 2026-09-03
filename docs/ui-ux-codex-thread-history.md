@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Drop older iOS PiP bubbles before shrinking text too far
+
+- **Surface:** The live native iOS Picture in Picture preview while a new speech turn is still being recognized.
+- **Issue:** As the active message grew, older bubbles could remain visible until the turn was finalized or until the layout had already reduced the preview text to an unnecessarily small size. The fixed 16:9 surface should prioritize a complete, readable current bubble over retaining historical bubbles.
+- **Diagnosis:** The previous packing pass accepted any complete suffix that fit down to the renderer's absolute font floor. That allowed a multi-bubble stack to consume the available height while the in-progress turn was still changing. The selection rule did not express a separate readability threshold.
+- **Resolution:** Evaluate the recent suffix from largest to smallest on every state update, using a 30pt readable-font floor. When the full suffix would cross that floor, remove the oldest bubble and retry (`4 → 3 → 2 → 1`). The final render still uses the largest font that fits, and only a single unusually long latest message may use the smaller absolute floor to keep its wrapped content complete.
+- **Interaction:** Interim transcript growth and interim translation rows participate in the same measurement, so the preview can shed older bubbles before finalization. The latest message remains visible, ordinary text continues to wrap without truncation, and the surface remains read-only and non-scrollable.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this density policy.
+- **Testing notes:** Verify a long in-progress utterance while three or four prior bubbles are visible, confirm older bubbles disappear before the text becomes too small, check that the latest bubble stays complete, and cover collapsed/expanded rows and interim translation updates on iPhone 14.
+
 ## 2026-09-03 - Prioritize complete iOS PiP bubbles over message count
 
 - **Surface:** The native iOS Picture in Picture conversation preview after the bubble-style rendering update.
