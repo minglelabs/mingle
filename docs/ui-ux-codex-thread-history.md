@@ -618,3 +618,11 @@
 - User impact: Viewers would otherwise need to manually change the YouTube playback speed every time they started the video.
 - Resolution: Enabled the YouTube IFrame Player API for the short-video iframe, set the page origin dynamically for both local HTTP previews and production, and apply a `1.5x` playback rate in the player's ready callback. The existing `start=43` position remains unchanged.
 - Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe retains video ID `Esq6htnQj98`, resolves `start=43`, includes `enablejsapi=1` and the current HTTP origin, confirmed the YouTube API initializes, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR voice conversation bridge page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to show the initial workaround of keeping a voice-conversation service open alongside Mingle before presenting the final integrated experience.
+- User impact: The story moved from the requirement solution directly to the final video, leaving the practical two-service usage step unexplained.
+- Resolution: Added a new thirteenth slide after the video slide with the `밍글` kicker and the requested title, reusing the original page-fourteen HelloTalk Voiceroom and Mingle image stack from `xr.html`. Updated the static page counter to `01 / 13`; the runtime counter continues to derive its total from the slide count.
+- Tests: Verified page `13 / 13` at desktop and mobile sizes, confirmed both local images load and the stacked layout stays within the slide, confirmed the page counter and total slide count, confirmed no viewport overflow, and found no browser console warnings or errors.
