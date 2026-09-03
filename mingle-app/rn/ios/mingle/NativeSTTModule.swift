@@ -28,6 +28,7 @@ final class MingleAudioSessionCoordinator {
     private let lock = NSLock()
     private var sttOwners: Int = 0
     private var ttsOwners: Int = 0
+    private var pipOwners: Int = 0
     private var pendingDeactivationWorkItem: DispatchWorkItem?
 
     private init() {}
@@ -146,6 +147,21 @@ final class MingleAudioSessionCoordinator {
         }
     }
 
+    func acquirePiP() {
+        withLock {
+            cancelPendingDeactivationLocked(reason: "acquire_pip")
+            pipOwners += 1
+        }
+    }
+
+    func releasePiP() {
+        withLock {
+            if pipOwners > 0 {
+                pipOwners -= 1
+            }
+        }
+    }
+
     func scheduleDeactivateAudioSessionIfIdle(trigger: String, delayMs: Int? = nil) {
         var workItemToSchedule: DispatchWorkItem?
         let policy = resolveDeactivationPolicy(delayMsOverride: delayMs)
@@ -153,12 +169,13 @@ final class MingleAudioSessionCoordinator {
 
         withLock {
             cancelPendingDeactivationLocked(reason: "schedule_deactivate_\(trigger)")
-            if sttOwners != 0 || ttsOwners != 0 {
+            if sttOwners != 0 || ttsOwners != 0 || pipOwners != 0 {
                 NSLog(
-                    "[MingleAudioSessionCoordinator] skip deactivate trigger=%@ owners stt=%d tts=%d routeProfile=%@ outputs=[%@]",
+                    "[MingleAudioSessionCoordinator] skip deactivate trigger=%@ owners stt=%d tts=%d pip=%d routeProfile=%@ outputs=[%@]",
                     trigger,
                     sttOwners,
                     ttsOwners,
+                    pipOwners,
                     policy.outputProfile.rawValue,
                     routeLabel
                 )
@@ -169,7 +186,9 @@ final class MingleAudioSessionCoordinator {
                 guard let self else { return }
                 let shouldDeactivate = self.withLock {
                     self.pendingDeactivationWorkItem = nil
-                    return self.sttOwners == 0 && self.ttsOwners == 0
+                    return self.sttOwners == 0
+                        && self.ttsOwners == 0
+                        && self.pipOwners == 0
                 }
                 guard shouldDeactivate else { return }
                 do {

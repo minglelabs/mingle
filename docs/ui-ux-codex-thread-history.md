@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-03 - Make iOS Picture in Picture startup reliable after repeated taps
+
+- **Surface:** iOS conversation-room Picture in Picture action and its native start feedback.
+- **Issue:** The button could appear unresponsive while iOS was evaluating the sample-buffer source. Repeated taps replaced the pending native request, and the final request could show the same generic unavailable alert after a delay.
+- **Diagnosis:** The custom sample-buffer source did not explicitly keep an active playback audio session while no STT/TTS session was running. The native bridge also had no in-flight start guard, and it only supplied a single snapshot frame.
+- **Resolution:** Acquire a coordinated PiP audio-session lease, keep the latest preview alive with a low-rate frame refresh timer, and coalesce duplicate taps for the same conversation instead of cancelling and replacing the pending start. Add diagnostic logs for app state, audio session, renderer readiness, and `isPictureInPicturePossible` without logging conversation text.
+- **Interaction:** The PiP window remains a read-only, non-scrollable 16:9 snapshot. Repeated taps during startup no longer create duplicate native attempts or duplicate unavailable alerts.
+- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; only the build number advances for device/TestFlight verification.
+- **Testing notes:** Unlock the physical iOS 26 device, open Mingle (not another installed app), tap PiP once, and confirm the window appears. Also test an empty room, an active STT/TTS session, repeated taps, explicit stop, background/foreground transitions, and PiP close.
+
 ## 2026-09-03 - iOS conversation Picture in Picture preview
 
 - **Surface:** Live conversation-room header and the iOS system Picture in Picture window.

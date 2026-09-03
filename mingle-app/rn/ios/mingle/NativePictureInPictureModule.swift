@@ -11,9 +11,10 @@ import UIKit
 final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
     private static let renderSize = CGSize(width: 960, height: 540)
     private static let frameDuration = CMTime(value: 1, timescale: 30)
-    private static let maximumStartAttempts = 40
+    private static let maximumStartAttempts = 80
     private static let startRetryDelay: TimeInterval = 0.05
-    private static let startDelegateTimeout: TimeInterval = 2
+    private static let startDelegateTimeout: TimeInterval = 5
+    private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
 
     private let displayLayer = AVSampleBufferDisplayLayer()
     private var pictureInPictureController: AVPictureInPictureController?
@@ -23,6 +24,8 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     private var pendingStartReject: RCTPromiseRejectBlock?
     private var startRetryWorkItem: DispatchWorkItem?
     private var startTimeoutWorkItem: DispatchWorkItem?
+    private var frameRefreshTimer: DispatchSourceTimer?
+    private var hasPictureInPictureAudioSession = false
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -120,11 +123,43 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             return
         }
 
+        if pendingStartResolve != nil {
+            guard activeConversationId == state.conversationId else {
+                reject(
+                    "native_pip_start_failed",
+                    PictureInPictureError.anotherConversationIsActive.localizedDescription,
+                    PictureInPictureError.anotherConversationIsActive
+                )
+                return
+            }
+
+            // A start request is already waiting for iOS. Keep the newest frame
+            // and resolve this duplicate tap without replacing the real request.
+            latestState = state
+            render(state: state)
+            resolve(["ok": true, "pending": true])
+            return
+        }
+
         if pictureInPictureController != nil {
             clearPictureInPictureState()
         }
 
-        guard AVPictureInPictureController.isPictureInPictureSupported() else {
+        let isSupported = AVPictureInPictureController.isPictureInPictureSupported()
+        let audioSession = AVAudioSession.sharedInstance()
+        let audioOwners = MingleAudioSessionCoordinator.shared.snapshot()
+        NSLog(
+            "[NativePictureInPictureModule] start request supported=%d appState=%ld audioCategory=%@ audioMode=%@ audioOtherPlaying=%d owners stt=%d tts=%d",
+            isSupported ? 1 : 0,
+            UIApplication.shared.applicationState.rawValue,
+            audioSession.category.rawValue,
+            audioSession.mode.rawValue,
+            audioSession.isOtherAudioPlaying ? 1 : 0,
+            audioOwners.stt,
+            audioOwners.tts
+        )
+
+        guard isSupported else {
             reject(
                 "native_pip_start_failed",
                 PictureInPictureError.notSupported.localizedDescription,
@@ -133,7 +168,22 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             return
         }
 
-        cancelPendingStart()
+        do {
+            try acquirePictureInPictureAudioSession()
+        } catch {
+            NSLog(
+                "[NativePictureInPictureModule] failed to prepare audio session: %@",
+                error.localizedDescription
+            )
+            reject(
+                "native_pip_start_failed",
+                PictureInPictureError.audioSessionFailed(error.localizedDescription).localizedDescription,
+                error
+            )
+            clearPictureInPictureState()
+            return
+        }
+
         activeConversationId = state.conversationId
         latestState = state
         displayLayer.videoGravity = .resizeAspect
@@ -153,6 +203,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
         pendingStartResolve = resolve
         pendingStartReject = reject
+        startFrameRefreshTimer()
         schedulePictureInPictureStart(for: controller, attempt: 0)
     }
 
@@ -165,7 +216,24 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             return
         }
 
-        if controller.isPictureInPicturePossible {
+        let isPossible = controller.isPictureInPicturePossible
+        if attempt == 0 || attempt % 10 == 0 {
+            let readiness = displayLayerReadiness
+            let audioSession = AVAudioSession.sharedInstance()
+            NSLog(
+                "[NativePictureInPictureModule] waiting for PiP attempt=%d possible=%d appState=%ld ready=%d layerStatus=%ld rendererStatus=%ld audioCategory=%@ audioMode=%@",
+                attempt,
+                isPossible ? 1 : 0,
+                UIApplication.shared.applicationState.rawValue,
+                readiness.ready,
+                readiness.layerStatus,
+                readiness.rendererStatus,
+                audioSession.category.rawValue,
+                audioSession.mode.rawValue
+            )
+        }
+
+        if isPossible {
             startRetryWorkItem = nil
             let readiness = displayLayerReadiness
             NSLog(
@@ -235,6 +303,32 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         startTimeoutWorkItem = nil
     }
 
+    private func startFrameRefreshTimer() {
+        frameRefreshTimer?.cancel()
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now() + Self.frameRefreshInterval,
+            repeating: Self.frameRefreshInterval,
+            leeway: .milliseconds(50)
+        )
+        timer.setEventHandler { [weak self] in
+            guard let self,
+                  self.pictureInPictureController != nil,
+                  let state = self.latestState else {
+                return
+            }
+            self.render(state: state)
+        }
+        frameRefreshTimer = timer
+        timer.resume()
+    }
+
+    private func stopFrameRefreshTimer() {
+        frameRefreshTimer?.cancel()
+        frameRefreshTimer = nil
+    }
+
     private func cancelPendingStart() {
         cancelStartScheduling()
         guard let resolve = pendingStartResolve else {
@@ -265,16 +359,65 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
 
     private func clearPictureInPictureState() {
         cancelStartScheduling()
+        stopFrameRefreshTimer()
         pictureInPictureController = nil
         activeConversationId = nil
         latestState = nil
         displayLayer.preventsDisplaySleepDuringVideoPlayback = false
+        releasePictureInPictureAudioSessionIfNeeded()
 
         if #available(iOS 17.0, *) {
             displayLayer.sampleBufferRenderer.flush(removingDisplayedImage: true, completionHandler: nil)
         } else {
             displayLayer.flushAndRemoveImage()
         }
+    }
+
+    private func acquirePictureInPictureAudioSession() throws {
+        guard !hasPictureInPictureAudioSession else { return }
+
+        let coordinator = MingleAudioSessionCoordinator.shared
+        coordinator.acquirePiP()
+
+        do {
+            let session = AVAudioSession.sharedInstance()
+            let owners = coordinator.snapshot()
+
+            // Do not replace the play-and-record session while STT/TTS owns it.
+            // A standalone visual PiP still needs an active playback session so
+            // AVKit can keep the sample-buffer source alive across app changes.
+            if owners.stt == 0 && owners.tts == 0 {
+                try session.setCategory(
+                    .playback,
+                    mode: .moviePlayback,
+                    options: [.mixWithOthers]
+                )
+            }
+            try session.setActive(true, options: [])
+            hasPictureInPictureAudioSession = true
+
+            NSLog(
+                "[NativePictureInPictureModule] PiP audio session active category=%@ mode=%@ owners stt=%d tts=%d",
+                session.category.rawValue,
+                session.mode.rawValue,
+                owners.stt,
+                owners.tts
+            )
+        } catch {
+            coordinator.releasePiP()
+            coordinator.scheduleDeactivateAudioSessionIfIdle(trigger: "pip_prepare_failed")
+            throw error
+        }
+    }
+
+    private func releasePictureInPictureAudioSessionIfNeeded() {
+        guard hasPictureInPictureAudioSession else { return }
+
+        hasPictureInPictureAudioSession = false
+        let coordinator = MingleAudioSessionCoordinator.shared
+        coordinator.releasePiP()
+        coordinator.scheduleDeactivateAudioSessionIfIdle(trigger: "pip_release")
+        NSLog("[NativePictureInPictureModule] PiP audio session released")
     }
 
     private func render(state: PictureInPictureState) {
@@ -667,6 +810,7 @@ private enum PictureInPictureError: LocalizedError {
     case notSupported
     case notPossible
     case anotherConversationIsActive
+    case audioSessionFailed(String)
     case nativeStartFailed(String)
 
     var errorDescription: String? {
@@ -677,6 +821,8 @@ private enum PictureInPictureError: LocalizedError {
             return "Picture in Picture is not available in the current app state."
         case .anotherConversationIsActive:
             return "Another conversation is already shown in Picture in Picture."
+        case .audioSessionFailed(let message):
+            return "Picture in Picture could not prepare audio: \(message)"
         case .nativeStartFailed(let message):
             return "Picture in Picture could not start: \(message)"
         }
