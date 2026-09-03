@@ -770,3 +770,11 @@
 - User impact: The download visual on pages one and twenty-three felt disconnected, and the relationship between the icon and QR code was not immediately clear.
 - Resolution: Grouped the smaller Mingle app icon with the label `Mingle 다운로드 링크` above both QR codes and added a centered downward-pointing finger emoji between the label and QR code. Kept the compact treatment responsive for mobile viewports.
 - Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the label, icon, and pointer appear in the requested order, confirmed the Q&A title remains centered within the left column, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR QR label typography refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The QR label `Mingle 다운로드 링크` was too small and visually heavier than the adjacent app icon and QR treatment.
+- User impact: The download callout was less readable at a glance and felt overly bold on both desktop and mobile layouts.
+- Resolution: Increased the label size and reduced its font weight for pages one and twenty-three, with a responsive mobile size that remains within the existing QR media column.
+- Tests: Verified the label typography at desktop and mobile viewport sizes and confirmed no horizontal overflow or QR layout shift.
