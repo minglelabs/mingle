@@ -11,11 +11,18 @@ import UIKit
 final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
     private static let renderSize = CGSize(width: 960, height: 540)
     private static let frameDuration = CMTime(value: 1, timescale: 30)
+    private static let maximumStartAttempts = 40
+    private static let startRetryDelay: TimeInterval = 0.05
+    private static let startDelegateTimeout: TimeInterval = 2
 
     private let displayLayer = AVSampleBufferDisplayLayer()
     private var pictureInPictureController: AVPictureInPictureController?
     private var activeConversationId: String?
     private var latestState: PictureInPictureState?
+    private var pendingStartResolve: RCTPromiseResolveBlock?
+    private var pendingStartReject: RCTPromiseRejectBlock?
+    private var startRetryWorkItem: DispatchWorkItem?
+    private var startTimeoutWorkItem: DispatchWorkItem?
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -43,16 +50,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                 return
             }
 
-            do {
-                let result = try self.startPictureInPicture(with: state)
-                resolve(result)
-            } catch {
-                reject(
-                    "native_pip_start_failed",
-                    error.localizedDescription,
-                    error
-                )
-            }
+            self.startPictureInPicture(with: state, resolve: resolve, reject: reject)
         }
     }
 
@@ -90,6 +88,7 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
                 return
             }
 
+            self.cancelPendingStart()
             if let controller = self.pictureInPictureController,
                controller.isPictureInPictureActive {
                 controller.stopPictureInPicture()
@@ -100,25 +99,46 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         }
     }
 
-    private func startPictureInPicture(with state: PictureInPictureState) throws -> [String: Any] {
+    private func startPictureInPicture(
+        with state: PictureInPictureState,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
         if let controller = pictureInPictureController,
            controller.isPictureInPictureActive {
             guard activeConversationId == state.conversationId else {
-                throw PictureInPictureError.anotherConversationIsActive
+                reject(
+                    "native_pip_start_failed",
+                    PictureInPictureError.anotherConversationIsActive.localizedDescription,
+                    PictureInPictureError.anotherConversationIsActive
+                )
+                return
             }
             latestState = state
             render(state: state)
-            return ["ok": true, "active": true]
+            resolve(["ok": true, "active": true])
+            return
+        }
+
+        if pictureInPictureController != nil {
+            clearPictureInPictureState()
         }
 
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
-            throw PictureInPictureError.notSupported
+            reject(
+                "native_pip_start_failed",
+                PictureInPictureError.notSupported.localizedDescription,
+                PictureInPictureError.notSupported
+            )
+            return
         }
 
-        pictureInPictureController = nil
+        cancelPendingStart()
         activeConversationId = state.conversationId
         latestState = state
         displayLayer.videoGravity = .resizeAspect
+        displayLayer.bounds = CGRect(origin: .zero, size: Self.renderSize)
+        displayLayer.preventsDisplaySleepDuringVideoPlayback = true
         render(state: state)
 
         let contentSource = AVPictureInPictureController.ContentSource(
@@ -131,19 +151,124 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
         controller.canStartPictureInPictureAutomaticallyFromInline = false
         pictureInPictureController = controller
 
-        guard controller.isPictureInPicturePossible else {
-            clearPictureInPictureState()
-            throw PictureInPictureError.notPossible
+        pendingStartResolve = resolve
+        pendingStartReject = reject
+        schedulePictureInPictureStart(for: controller, attempt: 0)
+    }
+
+    private func schedulePictureInPictureStart(
+        for controller: AVPictureInPictureController,
+        attempt: Int
+    ) {
+        guard pictureInPictureController === controller,
+              pendingStartResolve != nil else {
+            return
         }
 
-        controller.startPictureInPicture()
-        return ["ok": true, "active": false]
+        if controller.isPictureInPicturePossible {
+            startRetryWorkItem = nil
+            let readiness = displayLayerReadiness
+            NSLog(
+                "[NativePictureInPictureModule] starting PiP possible=1 ready=%d layerStatus=%ld rendererStatus=%ld",
+                readiness.ready,
+                readiness.layerStatus,
+                readiness.rendererStatus
+            )
+            controller.startPictureInPicture()
+            schedulePictureInPictureStartTimeout(for: controller)
+            return
+        }
+
+        guard attempt < Self.maximumStartAttempts else {
+            let readiness = displayLayerReadiness
+            NSLog(
+                "[NativePictureInPictureModule] PiP remained unavailable possible=0 ready=%d layerStatus=%ld rendererStatus=%ld rendererError=%@",
+                readiness.ready,
+                readiness.layerStatus,
+                readiness.rendererStatus,
+                readiness.error
+            )
+            rejectPendingStart(with: PictureInPictureError.notPossible)
+            clearPictureInPictureState()
+            return
+        }
+
+        let workItem = DispatchWorkItem { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            self.startRetryWorkItem = nil
+            self.schedulePictureInPictureStart(for: controller, attempt: attempt + 1)
+        }
+        startRetryWorkItem?.cancel()
+        startRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.startRetryDelay,
+            execute: workItem
+        )
+    }
+
+    private func schedulePictureInPictureStartTimeout(for controller: AVPictureInPictureController) {
+        startTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self, weak controller] in
+            guard let self,
+                  let controller,
+                  self.pictureInPictureController === controller,
+                  !controller.isPictureInPictureActive,
+                  self.pendingStartResolve != nil else {
+                return
+            }
+
+            NSLog("[NativePictureInPictureModule] PiP start delegate timed out")
+            self.rejectPendingStart(with: PictureInPictureError.notPossible)
+            self.clearPictureInPictureState()
+        }
+        startTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.startDelegateTimeout,
+            execute: workItem
+        )
+    }
+
+    private func cancelStartScheduling() {
+        startRetryWorkItem?.cancel()
+        startRetryWorkItem = nil
+        startTimeoutWorkItem?.cancel()
+        startTimeoutWorkItem = nil
+    }
+
+    private func cancelPendingStart() {
+        cancelStartScheduling()
+        guard let resolve = pendingStartResolve else {
+            pendingStartReject = nil
+            return
+        }
+
+        pendingStartResolve = nil
+        pendingStartReject = nil
+        resolve(["ok": true, "cancelled": true])
+    }
+
+    private func resolvePendingStart(with result: [String: Any]) {
+        cancelStartScheduling()
+        let resolve = pendingStartResolve
+        pendingStartResolve = nil
+        pendingStartReject = nil
+        resolve?(result)
+    }
+
+    private func rejectPendingStart(with error: PictureInPictureError) {
+        cancelStartScheduling()
+        let reject = pendingStartReject
+        pendingStartResolve = nil
+        pendingStartReject = nil
+        reject?("native_pip_start_failed", error.localizedDescription, error)
     }
 
     private func clearPictureInPictureState() {
+        cancelStartScheduling()
         pictureInPictureController = nil
         activeConversationId = nil
         latestState = nil
+        displayLayer.preventsDisplaySleepDuringVideoPlayback = false
 
         if #available(iOS 17.0, *) {
             displayLayer.sampleBufferRenderer.flush(removingDisplayedImage: true, completionHandler: nil)
@@ -170,6 +295,36 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             }
             displayLayer.enqueue(sampleBuffer)
         }
+    }
+
+    private var displayLayerReadiness: (
+        ready: Int,
+        layerStatus: Int,
+        rendererStatus: Int,
+        error: String
+    ) {
+        if #available(iOS 17.0, *) {
+            let renderer = displayLayer.sampleBufferRenderer
+            let ready: Int
+            if #available(iOS 17.4, *) {
+                ready = displayLayer.isReadyForDisplay ? 1 : 0
+            } else {
+                ready = renderer.status == .rendering ? 1 : 0
+            }
+            return (
+                ready: ready,
+                layerStatus: displayLayer.status.rawValue,
+                rendererStatus: renderer.status.rawValue,
+                error: renderer.error?.localizedDescription ?? "none"
+            )
+        }
+
+        return (
+            ready: displayLayer.status == .rendering ? 1 : 0,
+            layerStatus: displayLayer.status.rawValue,
+            rendererStatus: displayLayer.status.rawValue,
+            error: displayLayer.error?.localizedDescription ?? "none"
+        )
     }
 
     private func makePreviewImage(state: PictureInPictureState) -> UIImage {
@@ -364,6 +519,23 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
             return nil
         }
 
+        guard let sampleBuffer else { return nil }
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(
+            sampleBuffer,
+            createIfNecessary: true
+        ),
+           CFArrayGetCount(attachments) > 0 {
+            let attachment = unsafeBitCast(
+                CFArrayGetValueAtIndex(attachments, 0),
+                to: CFMutableDictionary.self
+            )
+            CFDictionarySetValue(
+                attachment,
+                Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
+            )
+        }
+
         return sampleBuffer
     }
 
@@ -405,6 +577,33 @@ final class NativePictureInPictureModule: NSObject, AVPictureInPictureSampleBuff
     }
 
     // MARK: - AVPictureInPictureControllerDelegate
+
+    func pictureInPictureControllerWillStartPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        NSLog("[NativePictureInPictureModule] PiP will start")
+    }
+
+    func pictureInPictureControllerDidStartPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        NSLog("[NativePictureInPictureModule] PiP did start")
+        resolvePendingStart(with: ["ok": true, "active": true])
+    }
+
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        failedToStartPictureInPictureWithError error: Error
+    ) {
+        NSLog(
+            "[NativePictureInPictureModule] PiP failed to start: %@",
+            error.localizedDescription
+        )
+        rejectPendingStart(
+            with: PictureInPictureError.nativeStartFailed(error.localizedDescription)
+        )
+        clearPictureInPictureState()
+    }
 
     func pictureInPictureControllerDidStopPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
@@ -468,6 +667,7 @@ private enum PictureInPictureError: LocalizedError {
     case notSupported
     case notPossible
     case anotherConversationIsActive
+    case nativeStartFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -477,6 +677,8 @@ private enum PictureInPictureError: LocalizedError {
             return "Picture in Picture is not available in the current app state."
         case .anotherConversationIsActive:
             return "Another conversation is already shown in Picture in Picture."
+        case .nativeStartFailed(let message):
+            return "Picture in Picture could not start: \(message)"
         }
     }
 }
