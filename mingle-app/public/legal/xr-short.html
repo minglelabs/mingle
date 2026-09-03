@@ -918,6 +918,28 @@
         max-width: min(100%, 600px);
       }
 
+      .slide-copy--offline-work {
+        max-width: min(54rem, calc(100% - clamp(360px, 28vw, 420px)));
+      }
+
+      .slide-side-media--offline-work {
+        top: clamp(30px, 4vh, 48px);
+        right: clamp(40px, 5vw, 80px);
+        width: clamp(300px, 32vw, 420px);
+        height: min(88vh, 650px);
+        display: flex;
+        justify-content: center;
+      }
+
+      .slide-preview-image--offline-work {
+        width: auto;
+        height: 100%;
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: clamp(22px, 2.4vw, 36px);
+        box-shadow: 0 24px 58px rgba(45, 42, 30, 0.16);
+      }
+
       .slide-side-media--user-reactions .slide-solution-points {
         grid-auto-rows: minmax(clamp(94px, 8.6vw, 118px), auto);
       }
@@ -2703,6 +2725,20 @@
         gap: clamp(8px, 1.3vh, 12px);
       }
 
+      html.is-mobile-viewport .slide-side-media--offline-work {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: flex;
+        justify-content: center;
+      }
+
+      html.is-mobile-viewport .slide-side-media--offline-work .slide-preview-image--offline-work {
+        width: auto;
+        height: min(50vh, 420px);
+        max-width: 100%;
+      }
+
       html.is-mobile-viewport .slide-addon-subtitle-gallery {
         height: min(48vh, 430px);
       }
@@ -3570,9 +3606,8 @@
                 정말 많이 발견했습니다
               </h1>
               <p class="slide-body slide-addon-subtitle-body">
-                실제로 로블록스와 밍글을 함께 사용 중인 유저도 있었고,<br/>
-                디스코드에서도 밍글을 함께 사용하고 싶어하는 유저가 있었습니다.<br/>
-                이외에도 자막이 없는 콘텐츠에도 밍글을 활용하고 싶어하는 수요가 종종 있었습니다.
+                샤오홍슈, 로블록스, 디스코드와 함께 밍글을 사용하는 유저들이 있습니다.<br/>
+                이외에도 자막이 없는 콘텐츠를 볼 때 밍글을 활용하고 싶어하는 수요가 종종 있었습니다.
               </p>
             </div>
             <div class="slide-side-media slide-side-media--addon-subtitles">
@@ -3603,11 +3638,18 @@
         </section>
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--with-side-media slide-copy--offline-work">
               <p class="slide-kicker">고객 반응</p>
               <h1 class="slide-title">오프라인/업무용 통번역으로<br/>
                 사용하시는 분들도 많습니다
               </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--offline-work">
+              <img
+                class="slide-preview-image slide-preview-image--offline-work"
+                src="./assets/offline-work-mingle.png"
+                alt="오프라인 및 업무용 통번역 수요를 보여주는 모바일 화면"
+              />
             </div>
           </article>
         </section>

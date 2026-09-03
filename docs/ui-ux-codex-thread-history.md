@@ -666,3 +666,11 @@
 - User impact: The presentation ended the add-on subtitle examples without signaling that Mingle is also being considered for practical offline and workplace interpretation.
 - Resolution: Extended page sixteen's left body copy with Discord interest and the broader no-subtitle-content demand, added `로블록스, 디스코드와도 함께 사용` to the right-side caption, and added a seventeenth left-aligned slide with the `고객 반응` kicker and requested title. Updated the static page counter to `01 / 17`.
 - Tests: Verified pages `16 / 17` and `17 / 17` at desktop and mobile sizes, confirmed page sixteen's three-line caption remains below the collage, confirmed page seventeen's left alignment and exact title, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work media proof page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/offline-work-mingle.png`
+- Issue: The offline and workplace translation reaction page needed a concrete visual proof point alongside its left-aligned message.
+- User impact: Page seventeen communicated the claim only as text, so the practical use case had less visual weight than the preceding add-on subtitle examples.
+- Resolution: Added the attached mobile screenshot as a right-side media element on page seventeen, using the same left-copy/right-visual composition as page sixteen while preserving the requested kicker and title.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the attached image loads, confirmed the title remains left-aligned and the image stays on the right on desktop, confirmed the mobile layout stacks without clipping, confirmed no viewport overflow, and found no browser console warnings or errors.
