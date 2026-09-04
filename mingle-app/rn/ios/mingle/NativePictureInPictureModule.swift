@@ -27,6 +27,10 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
     private static let requiredStablePossibleChecks = 3
     private static let startDelegateTimeout: TimeInterval = 5
     private static let frameRefreshInterval = DispatchTimeInterval.milliseconds(300)
+    // AVKit can deliver a playback pause request while it is dismissing the
+    // PiP window. Give the lifecycle delegate a short chance to identify that
+    // dismissal before forwarding an intentional pause to STT.
+    private static let pausePlaybackControlConfirmationDelay = DispatchTimeInterval.milliseconds(250)
     private static let previewContentInset: CGFloat = 22
     private static let previewBubbleHorizontalPadding: CGFloat = 18
     private static let previewBubbleVerticalPadding: CGFloat = 8
@@ -70,9 +74,12 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
     private var startRetryWorkItem: DispatchWorkItem?
     private var startTimeoutWorkItem: DispatchWorkItem?
     private var frameRefreshTimer: DispatchSourceTimer?
+    private var pendingPausedPlaybackControlWorkItem: DispatchWorkItem?
+    private var pausedPlaybackControlGeneration = 0
     private var hasPictureInPictureAudioSession = false
     private var hasListeners = false
     private var isPictureInPicturePlaybackPaused = false
+    private var isPictureInPictureStopping = false
     private var hasEnqueuedFrame = false
     private var needsPausedFrameRefresh = false
     private var lastBackpressureLogAt = Date.distantPast
@@ -187,6 +194,8 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
             self.cancelPendingStart()
             if let controller = self.pictureInPictureController,
                controller.isPictureInPictureActive {
+                self.isPictureInPictureStopping = true
+                self.cancelPendingPausedPlaybackControl()
                 controller.stopPictureInPicture()
             } else {
                 self.clearPictureInPictureState()
@@ -283,7 +292,9 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
 
         activeConversationId = state.conversationId
         latestState = state
+        cancelPendingPausedPlaybackControl()
         isPictureInPicturePlaybackPaused = false
+        isPictureInPictureStopping = false
         needsPausedFrameRefresh = false
         attachDisplayLayerToActiveWindow()
         displayLayer.videoGravity = .resizeAspect
@@ -457,6 +468,42 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
         frameRefreshTimer = nil
     }
 
+    private func cancelPendingPausedPlaybackControl() {
+        pendingPausedPlaybackControlWorkItem?.cancel()
+        pendingPausedPlaybackControlWorkItem = nil
+        pausedPlaybackControlGeneration += 1
+    }
+
+    private func schedulePausedPlaybackControl(
+        for controller: AVPictureInPictureController,
+        conversationId: String
+    ) {
+        cancelPendingPausedPlaybackControl()
+        let generation = pausedPlaybackControlGeneration
+        let workItem = DispatchWorkItem { [weak self, weak controller] in
+            guard let self,
+                  let controller,
+                  self.pausedPlaybackControlGeneration == generation,
+                  self.pictureInPictureController === controller,
+                  !self.isPictureInPictureStopping,
+                  controller.isPictureInPictureActive,
+                  self.activeConversationId == conversationId else {
+                return
+            }
+            self.pendingPausedPlaybackControlWorkItem = nil
+            self.emitNativeEvent([
+                "type": "playback_control",
+                "conversationId": conversationId,
+                "playing": false,
+            ])
+        }
+        pendingPausedPlaybackControlWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.pausePlaybackControlConfirmationDelay,
+            execute: workItem
+        )
+    }
+
     private func cancelPendingStart() {
         cancelStartScheduling()
         guard let resolve = pendingStartResolve else {
@@ -495,10 +542,12 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
         }
         cancelStartScheduling()
         stopFrameRefreshTimer()
+        cancelPendingPausedPlaybackControl()
         pictureInPictureController = nil
         activeConversationId = nil
         latestState = nil
         isPictureInPicturePlaybackPaused = false
+        isPictureInPictureStopping = false
         hasEnqueuedFrame = false
         needsPausedFrameRefresh = false
         displayLayer.preventsDisplaySleepDuringVideoPlayback = false
@@ -1302,20 +1351,30 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
               let conversationId = activeConversationId else {
             return
         }
+        guard !isPictureInPictureStopping else {
+            NSLog("[NativePictureInPictureModule] ignored playback control while PiP is stopping")
+            return
+        }
         isPictureInPicturePlaybackPaused = !playing
         if playing {
+            cancelPendingPausedPlaybackControl()
             needsPausedFrameRefresh = false
+            NSLog(
+                "[NativePictureInPictureModule] PiP playback control playing=1 conversation=%@",
+                conversationId
+            )
+            emitNativeEvent([
+                "type": "playback_control",
+                "conversationId": conversationId,
+                "playing": true,
+            ])
+            return
         }
         NSLog(
-            "[NativePictureInPictureModule] PiP playback control playing=%d conversation=%@",
-            playing ? 1 : 0,
+            "[NativePictureInPictureModule] PiP pause request pending confirmation conversation=%@",
             conversationId
         )
-        emitNativeEvent([
-            "type": "playback_control",
-            "conversationId": conversationId,
-            "playing": playing,
-        ])
+        schedulePausedPlaybackControl(for: controller, conversationId: conversationId)
     }
 
     func pictureInPictureControllerTimeRangeForPlayback(
@@ -1354,6 +1413,18 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
         NSLog("[NativePictureInPictureModule] PiP will start")
     }
 
+    func pictureInPictureControllerWillStopPictureInPicture(
+        _ controller: AVPictureInPictureController
+    ) {
+        guard self.pictureInPictureController === controller else {
+            NSLog("[NativePictureInPictureModule] ignored stale PiP will-stop callback")
+            return
+        }
+        isPictureInPictureStopping = true
+        cancelPendingPausedPlaybackControl()
+        NSLog("[NativePictureInPictureModule] PiP will stop; preserving STT playback state")
+    }
+
     func pictureInPictureControllerDidStartPictureInPicture(
         _ controller: AVPictureInPictureController
     ) {
@@ -1362,7 +1433,9 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
             NSLog("[NativePictureInPictureModule] ignored stale PiP did-start callback")
             return
         }
+        cancelPendingPausedPlaybackControl()
         isPictureInPicturePlaybackPaused = false
+        isPictureInPictureStopping = false
         needsPausedFrameRefresh = false
         NSLog("[NativePictureInPictureModule] PiP did start")
         emitNativeEvent([
@@ -1381,6 +1454,8 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
             NSLog("[NativePictureInPictureModule] ignored stale PiP failed-to-start callback")
             return
         }
+        isPictureInPictureStopping = true
+        cancelPendingPausedPlaybackControl()
         NSLog(
             "[NativePictureInPictureModule] PiP failed to start: %@",
             error.localizedDescription
@@ -1404,6 +1479,8 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
             NSLog("[NativePictureInPictureModule] ignored stale PiP did-stop callback")
             return
         }
+        isPictureInPictureStopping = true
+        cancelPendingPausedPlaybackControl()
         emitNativeEvent([
             "type": "stopped",
             "conversationId": conversationId,

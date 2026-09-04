@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-04 - Preserve iOS STT when closing Picture in Picture
+
+- **Surface:** The iOS system Picture in Picture close action for a live conversation preview.
+- **Issue:** The PiP playback delegate could send `setPlaying(false)` while the user dismissed the PiP window with its system close action. The app treated every false value as an explicit pause and force-stopped native STT, even though closing the read-only preview should leave the room's live recognition session intact.
+- **Resolution:** Track the native PiP stopping lifecycle and defer a false playback-control event briefly. If `willStopPictureInPicture` or the completed stop lifecycle arrives, cancel the deferred pause event; only a PiP window that remains active after that confirmation interval forwards pause to STT. Keep play events immediate, and reset the guard for a newly started controller.
+- **Interaction:** The PiP play/pause control still starts and gracefully stops STT. The system X close action dismisses only the PiP preview; the microphone, transcript stream, and conversation continue running. The preview remains read-only and non-scrollable.
+- **Data contract:** No Prisma migration, mobile version, API namespace, or server change is required.
+- **Testing notes:** On a physical iOS device, start STT, open PiP, then close it with X while continuing to speak. Confirm transcripts continue. Separately press PiP pause and confirm graceful STT stop, then press play and confirm a new STT session starts.
+
 ## 2026-09-03 - Connect iOS PiP playback controls to the STT lifecycle
 
 - **Surface:** The iOS system Picture in Picture controls for the live conversation preview.
