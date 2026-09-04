@@ -5,7 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
+import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
+import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
+import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -906,7 +909,7 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language'
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -971,6 +974,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'conversation-management'
     || value === 'participants'
     || value === 'display-language'
+    || value === 'invite'
 }
 
 function resolveMenuScreenForDepth(
@@ -980,6 +984,7 @@ function resolveMenuScreenForDepth(
   if (depth <= 1) return 'root'
   if (depth >= 3) {
     if (preferredScreen === 'display-language') return 'display-language'
+    if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
@@ -987,6 +992,24 @@ function resolveMenuScreenForDepth(
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
+}
+
+// A route round trip (e.g. returning from the invite screen's add-members
+// page) remounts this component fresh on whatever history entry the browser
+// already landed on. Reading that up front — the same fields popstate syncs
+// from — lets the very first render already show the right menu screen,
+// instead of painting closed and correcting a frame later.
+function readInitialMenuHistoryDepth(): { depth: number; screen: LivePhoneDemoMenuScreen } {
+  if (typeof window === 'undefined') return { depth: 0, screen: 'root' }
+  const state = window.history.state
+  if (!state || typeof state !== 'object') return { depth: 0, screen: 'root' }
+  const rawDepth = (state as Record<string, unknown>)[MENU_HISTORY_STATE_KEY]
+  const depth = typeof rawDepth === 'number' ? Math.max(0, Math.min(3, rawDepth)) : 0
+  const rawScreen = (state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY]
+  return {
+    depth,
+    screen: resolveMenuScreenForDepth(depth, isLivePhoneDemoMenuScreen(rawScreen) ? rawScreen : undefined),
+  }
 }
 
 function buildMenuHistoryState(
@@ -1048,6 +1071,10 @@ interface LivePhoneDemoProps {
   onLimitReached?: () => void
   enableAutoTTS?: boolean
   uiLocale: string
+  // Only needed to embed InviteFriendsScreen as the 'invite' menu screen
+  // (see handleInviteFromParticipantsPanel) — everything else in this
+  // component uses its own per-label props instead of a full dictionary.
+  dictionary: AppDictionary
   usageLimitReachedLabel: string
   usageLimitRetryHintLabel: string
   connectingLabel: string
@@ -1119,11 +1146,6 @@ interface LivePhoneDemoProps {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
   onOpenProfile?: (userId: string) => void
-  // Invoked when the participants panel's invite button is tapped — the
-  // panel itself has no router, so navigating to the invite-picker screen
-  // (see invite-friends-screen.tsx, reused in "add to this room" mode) is
-  // the caller's job, same as onConversationDeleted above.
-  onInvite?: () => void
   // True when this is a 2-real-member room and a block exists between the
   // viewer and the other member (either direction) — see
   // ConversationChannelSummary.isBlockedCounterpart. KakaoTalk-style: the
@@ -1452,6 +1474,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLimitReached,
   enableAutoTTS = false,
   uiLocale,
+  dictionary,
   usageLimitReachedLabel,
   usageLimitRetryHintLabel,
   connectingLabel,
@@ -1511,7 +1534,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSpeechLanguagesChange,
   onDefaultDisplayLanguageChange,
   onOpenProfile,
-  onInvite,
   isBlockedCounterpart = false,
   isMultiMember = false,
 }, ref) {
@@ -1621,8 +1643,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const bubbleDisplayCopy = useMemo(() => resolveLivePhoneDemoBubbleDisplayCopy(uiLocale), [uiLocale])
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
+  const [menuOpen, setMenuOpen] = useState(() => readInitialMenuHistoryDepth().depth > 0)
+  const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>(() => readInitialMenuHistoryDepth().screen)
   const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
   // Display-language is a second-level surface opened directly from the room
   // menu. The conversation-management page remains an independent surface.
@@ -1748,7 +1770,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
-  const menuHistoryDepthRef = useRef(0)
+  const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
   const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
   const langSelectorHistoryTargetOpenRef = useRef<boolean | null>(null)
@@ -1770,7 +1792,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
   const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
-  const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
+  // A mount that starts with the menu already open (restored from
+  // history.state — see readInitialMenuHistoryDepth) isn't the user
+  // "opening" the menu, so it shouldn't play the slide-in entrance: both
+  // SlideSurface layers below (the sheet itself and its sub-screen surface)
+  // otherwise always animate in from off-screen on mount regardless of
+  // their initial `open` value, which is what turned a restored participants
+  // panel into a room -> root menu -> participants flip-through. Any real,
+  // live depth change still resets this to 'animate' via
+  // applyMenuNavigationDepth's screenTransitionMode.
+  const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>(() => (
+    readInitialMenuHistoryDepth().depth > 0 ? 'instant' : 'animate'
+  ))
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
@@ -2852,6 +2885,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'participants')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  // The invite picker used to be a separate route (openInviteMembers pushing
+  // to /conversations/add-members), which meant returning from it always
+  // remounted this whole room fresh — see readInitialMenuHistoryDepth's doc
+  // comment for the flash/loading-screen fallout that caused. Making it one
+  // more depth-3 screen under 'participants' means opening and closing it is
+  // just another pushMenuHistoryEntry/requestMenuBackStep pair, exactly like
+  // feedback/conversation-management/display-language already work: no route
+  // change, no remount, no network round trip either way.
+  const handleInviteFromParticipantsPanel = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'participants') return
+    pushMenuHistoryEntry(3, 'invite')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
   const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
     pushMenuHistoryEntry(2, 'display-language')
@@ -3864,6 +3910,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     // Demo animation states
     isDemoAnimating,
@@ -5776,6 +5823,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances.length,
   ])
 
+  // Membership/invites are deliberately server-authoritative, never
+  // optimistic (docs/local-first-conversation-plan.md, client-SoT branch):
+  // leaveNotices/inviteNotices only exist once the one-shot mount hydration
+  // resolves, so painting the transcript before then can show a message with
+  // no accompanying "X invited Y" notice for an invite that already
+  // succeeded server-side, which then pops in a moment later. Hold real
+  // rooms (not the marketing demo) in the same loading state the outer
+  // Suspense fallback already shows until that first hydration settles, so
+  // what's shown is the complete state from the first frame.
+  if (headerMode === 'conversation' && isInitialServerHydrationPending) {
+    return (
+      <PhoneFrame>
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+          <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+        </div>
+      </PhoneFrame>
+    )
+  }
+
   return (
     <PhoneFrame>
       <div
@@ -5886,6 +5952,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         <SlideSurface
           open={menuOpen}
+          transitionMode={menuScreenTransitionMode}
           onClose={requestMenuBackStep}
           ariaLabel={menuLabel}
           nativeBackPriority={9}
@@ -6623,6 +6690,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <SlideSurface
                       open={menuOpen && menuScreen !== 'root'}
+                      transitionMode={menuScreenTransitionMode}
                       onClose={requestMenuBackStep}
                       onRequestClose={handleMenuSurfaceRequestClose}
                       ariaLabel={menuLabel}
@@ -6978,9 +7046,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onBack={requestMenuBackStep}
                         conversationId={conversationId}
                         inviteButtonLabel={participantsCopy.inviteButtonLabel}
-                        onInvite={onInvite}
+                        onInvite={handleInviteFromParticipantsPanel}
                       />
                     </motion.section>
+
+                    <SlideSurface
+                      open={menuOpen && menuScreen === 'invite'}
+                      transitionMode={menuScreenTransitionMode}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={participantsCopy.inviteButtonLabel}
+                      nativeBackPriority={40}
+                      className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
+                    >
+                      {conversationId ? (
+                        <InviteFriendsScreen
+                          active={menuScreen === 'invite'}
+                          dictionary={dictionary}
+                          locale={resolveAppSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE}
+                          conversationId={conversationId}
+                          onRequestClose={requestMenuBackStep}
+                        />
+                      ) : null}
+                    </SlideSurface>
 
                     <SlideSurface
                       open={menuOpen && menuScreen === 'display-language'}

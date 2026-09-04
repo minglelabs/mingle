@@ -88,7 +88,6 @@ type MingleHomeProps = {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>;
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
-  onInvite?: () => void;
   isBlockedCounterpart?: boolean;
   isMultiMember?: boolean;
 };
@@ -1919,6 +1918,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
+          dictionary={props.dictionary}
           usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}
@@ -1983,7 +1983,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
-          onInvite={props.onInvite}
           isBlockedCounterpart={props.isBlockedCounterpart}
           isMultiMember={props.isMultiMember}
         />
