@@ -1,5 +1,22 @@
 # UI/UX Codex Thread History
 
+## 2026-09-04 - Hide anonymous tracking rows from user search
+
+- **Surface:** Connect user search, search-result history restoration, and the session search cache.
+- **Issue:** Anonymous tracking rows used an automatically generated `anon_...` handle and the fallback name `Mingle 사용자`. A broad query such as `a` could therefore consume result slots and make real users harder to find; an older cached search could also briefly restore those rows after the server-side fix.
+- **Resolution:** Exclude the reserved `anon_` handle prefix in the shared user-search API, which covers the versioned Android/iOS search routes. Sanitize both newly written and previously stored Connect search snapshots, including the browser history snapshot, so anonymous rows are not rendered while a fresh response is pending. Existing follower/following relationship lists are unchanged.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Search for a broad value such as `a` and a name-like value such as `Mingle`, verify anonymous rows never appear and real users still fill the available result slots, then return to Connect or recreate the tab with an old cached snapshot and verify the anonymous row is removed.
+
+## 2026-09-04 - Add OS filters to the admin dashboard
+
+- **Surface:** Service dashboard date controls, daily charts, cumulative charts, and the metrics table.
+- **Issue:** The dashboard could be filtered only by date range, so Android and iOS usage could not be compared without manually querying the underlying data.
+- **Resolution:** Add an OS segmented filter with `전체` as the default and `Android`/`iOS` options. Date-range changes preserve the selected OS, and selecting an OS preserves the selected date range. The existing all-platform cache remains in use for the default view; filtered views calculate from source rows because the daily cache has no OS dimension.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify the default dashboard is `전체`, switching OS preserves the date range, charts/table values change consistently, invalid `platform` query values fall back to `전체`, filtered views do not show the all-platform cache refresh action, and long date ranges remain usable on narrow admin screens.
+
 ## 2026-09-01 - Render language-selector member avatars local-first
 
 - **Surface:** The shared-room language selector, its per-language attribution avatar stacks, and the conversation-list-to-room handoff.
@@ -8,7 +25,6 @@
 - **Resolution:** Add an API-namespace, account/tracking-identity, and conversation-scoped member-profile cache with a seven-day bounded snapshot. Seed the selector immediately from cached profiles plus the already-hydrated counterpart profiles and signed-in viewer profile, then revalidate the member endpoint in the background. A failed revalidation now keeps the local snapshot; a successful response replaces and persists the authoritative member profile set.
 - **Boundary:** Profile image URLs remain remote assets and may still be fetched by the browser when its image cache is cold. This change removes the blocking member/DB request from the first render and preserves the last known URL/crop metadata; it does not copy image bytes into IndexedDB or alter membership/privacy rules.
 - **Data change:** None. No Prisma migration, API namespace change, native-code change, or mobile rebuild is required.
-- **Testing notes:** Verify a shared room shows both attribution avatars immediately on a second selector open, the first open uses the room snapshot while the member request is pending, an offline/failed revalidation keeps the prior avatars, account/API namespace/conversation caches remain isolated, and a changed profile arrives after background revalidation on iOS and Android.
 
 ## 2026-09-02 - Clarify new conversation-room creation labels
 

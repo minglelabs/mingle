@@ -1,6 +1,7 @@
 "use client";
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
@@ -13,8 +14,14 @@ import {
 } from "@/components/connect-search-cache";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
-import { formatHandle } from "@/lib/handles";
+import { formatHandle, isAnonymousTrackingHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { captureMingleClientEvent } from "@/lib/posthog-client";
+import {
+  buildSearchAnalyticsProperties,
+  digestAnalyticsValue,
+  type SearchAnalyticsProperties,
+} from "@/lib/search-analytics";
 import {
   consumeSlideSurfaceHistoryForScope,
   pushSlideSurfaceHistory,
@@ -63,7 +70,7 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
 
   return {
     query: rawSnapshot.query,
-    results: rawSnapshot.results,
+    results: rawSnapshot.results.filter((result) => !isAnonymousTrackingHandle(result.handle)),
   };
 }
 
@@ -110,12 +117,32 @@ function resolveSearchCopy(dictionary: AppDictionary) {
   };
 }
 
+function buildConnectTrackingHeaders(): Record<string, string> {
+  const clientPlatform = clientApiNamespace.startsWith("android/")
+    ? "android"
+    : clientApiNamespace.startsWith("ios/")
+      ? "ios"
+      : "web";
+
+  return {
+    "x-mingle-user-id": getOrCreateTrackingUserId(),
+    "x-mingle-api-namespace": clientApiNamespace,
+    "x-mingle-client-platform": clientPlatform,
+  };
+}
+
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
+  const searchRequestSequenceRef = useRef(0);
+  const lastSearchContextRef = useRef<{
+    query: string;
+    sequence: number;
+    properties: SearchAnalyticsProperties;
+  } | null>(null);
   const isMountedRef = useRef(false);
   const initialHistorySnapshotRef = useRef<ConnectSearchHistorySnapshot | null>(null);
   const hydratedCacheIdentityRef = useRef("");
@@ -175,6 +202,12 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     if (followInFlightIds.has(user.id)) return;
 
     const nextIsFollowing = !user.isFollowing;
+    const normalizedSearchQuery = normalizedQuery;
+    const resultIndex = results.findIndex((candidate) => candidate.id === user.id);
+    const searchContext = lastSearchContextRef.current?.query === normalizedSearchQuery
+      ? lastSearchContextRef.current
+      : null;
+    const followStartedAt = performance.now();
     setFollowError(false);
     setFollowInFlightIds((current) => new Set(current).add(user.id));
     setResults((current) => current.map((candidate) => (
@@ -184,12 +217,43 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     )));
 
     try {
+      const [targetUserDigest, searchProperties] = await Promise.all([
+        digestAnalyticsValue(user.id),
+        searchContext?.properties
+          ? Promise.resolve(searchContext.properties)
+          : buildSearchAnalyticsProperties(normalizedSearchQuery),
+      ]);
+      captureMingleClientEvent("mingle_connect_follow_clicked", {
+        action: nextIsFollowing ? "follow" : "unfollow",
+        target_user_digest: targetUserDigest,
+        result_index: resultIndex >= 0 ? resultIndex : null,
+        result_count: results.length,
+        search_sequence: searchContext?.sequence ?? 0,
+        has_search_context: Boolean(searchContext),
+        ...searchProperties,
+      });
+
       const response = await fetch(
         buildClientApiPath(`/users/${encodeURIComponent(user.id)}/follow`),
-        { method: nextIsFollowing ? "POST" : "DELETE" },
+        {
+          method: nextIsFollowing ? "POST" : "DELETE",
+          headers: buildConnectTrackingHeaders(),
+        },
       );
       if (!response.ok) throw new Error("follow_update_failed");
+      captureMingleClientEvent("mingle_connect_follow_completed", {
+        action: nextIsFollowing ? "follow" : "unfollow",
+        target_user_digest: targetUserDigest,
+        success: true,
+        http_status: response.status,
+        duration_ms: Math.max(0, Math.round(performance.now() - followStartedAt)),
+      });
     } catch {
+      captureMingleClientEvent("mingle_connect_follow_completed", {
+        action: nextIsFollowing ? "follow" : "unfollow",
+        success: false,
+        duration_ms: Math.max(0, Math.round(performance.now() - followStartedAt)),
+      });
       setFollowError(true);
       setResults((current) => current.map((candidate) => (
         candidate.id === user.id
@@ -203,7 +267,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         return next;
       });
     }
-  }, [followInFlightIds]);
+  }, [followInFlightIds, normalizedQuery, results]);
 
   useEffect(() => {
     const syncConnectSurfaceHistory = () => {
@@ -374,34 +438,71 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     if (!normalizedQuery) return;
 
     const timeoutId = window.setTimeout(() => {
+      const searchSequence = ++searchRequestSequenceRef.current;
+      const searchStartedAt = performance.now();
       setSearchingQuery(normalizedQuery);
       setSearchError(false);
       setSearchErrorQuery("");
 
-      void fetch(buildClientApiPath(`/users/search?q=${encodeURIComponent(normalizedQuery)}`), {
-        cache: "no-store",
-      })
-        .then(async (response) => {
+      void (async () => {
+        const searchProperties = await buildSearchAnalyticsProperties(normalizedQuery);
+        captureMingleClientEvent("mingle_connect_search_requested", {
+          search_sequence: searchSequence,
+          ...searchProperties,
+        });
+
+        let httpStatus: number | null = null;
+        try {
+          const response = await fetch(
+            buildClientApiPath(`/users/search?q=${encodeURIComponent(normalizedQuery)}`),
+            {
+              cache: "no-store",
+              headers: buildConnectTrackingHeaders(),
+            },
+          );
+          httpStatus = response.status;
           if (!response.ok) throw new Error("user_search_failed");
-          return response.json() as Promise<{ users?: UserSearchResult[] }>;
-        })
-        .then((payload) => {
+          const payload = await response.json() as { users?: UserSearchResult[] };
+          const users = Array.isArray(payload.users)
+            ? payload.users.filter((user) => !isAnonymousTrackingHandle(user.handle))
+            : [];
+          captureMingleClientEvent("mingle_connect_search_completed", {
+            search_sequence: searchSequence,
+            success: true,
+            http_status: httpStatus,
+            result_count: users.length,
+            duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
+            ...searchProperties,
+          });
+
           if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
-          setResults(Array.isArray(payload.users) ? payload.users : []);
+          setResults(users);
           setResultsQuery(normalizedQuery);
-        })
-        .catch(() => {
+          lastSearchContextRef.current = {
+            query: normalizedQuery,
+            sequence: searchSequence,
+            properties: searchProperties,
+          };
+        } catch {
+          captureMingleClientEvent("mingle_connect_search_completed", {
+            search_sequence: searchSequence,
+            success: false,
+            http_status: httpStatus,
+            result_count: 0,
+            duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
+            ...searchProperties,
+          });
           if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
           setResults([]);
           setResultsQuery("");
           setSearchError(true);
           setSearchErrorQuery(normalizedQuery);
-        })
-        .finally(() => {
+        } finally {
           if (requestSequenceRef.current === requestSequence && isMountedRef.current) {
             setSearchingQuery("");
           }
-        });
+        }
+      })();
     }, 220);
 
     return () => window.clearTimeout(timeoutId);

@@ -3,17 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
+  ADMIN_DASHBOARD_PLATFORM_OPTIONS,
   ADMIN_DASHBOARD_MAX_DAYS,
+  type AdminDashboardPlatform,
   type AdminDashboardRange,
 } from "@/lib/admin-dashboard-metrics";
 import { clearDashboardCacheAction } from "./actions";
 
+function buildDashboardHref(days: AdminDashboardRange, platform: AdminDashboardPlatform): string {
+  const params = new URLSearchParams({ days: String(days) });
+  if (platform !== "all") params.set("platform", platform);
+  return `/admin/dashboard?${params.toString()}`;
+}
+
 export function RangeNav({
   presetOptions,
   activeDays,
+  activePlatform,
 }: {
   presetOptions: readonly AdminDashboardRange[];
   activeDays: AdminDashboardRange;
+  activePlatform: AdminDashboardPlatform;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -51,7 +61,14 @@ export function RangeNav({
     setCustomInput("");
     setCustomError(null);
     startTransition(() => {
-      router.push(`/admin/dashboard?days=${option}`);
+      router.push(buildDashboardHref(option, activePlatform));
+    });
+  };
+
+  const handlePlatformClick = (platform: AdminDashboardPlatform) => {
+    if (platform === activePlatform) return;
+    startTransition(() => {
+      router.push(buildDashboardHref(activeDays, platform));
     });
   };
 
@@ -68,7 +85,7 @@ export function RangeNav({
     setCustomError(null);
     if (parsed === activeDays) return;
     startTransition(() => {
-      router.push(`/admin/dashboard?days=${parsed}`);
+      router.push(buildDashboardHref(parsed, activePlatform));
     });
   };
 
@@ -77,6 +94,29 @@ export function RangeNav({
   return (
     <div className="mx-auto mt-6 flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4">
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-[#52514e]">OS</span>
+          <nav className="flex items-center gap-2" aria-label="OS 선택">
+            {ADMIN_DASHBOARD_PLATFORM_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={busy}
+                aria-pressed={option.value === activePlatform}
+                onClick={() => handlePlatformClick(option.value)}
+                className={[
+                  "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                  option.value === activePlatform
+                    ? "border-[#b45309] bg-[#f59e0b] text-white"
+                    : "border-[#e5e3dc] bg-white text-[#52514e] hover:bg-[#f4f3ee]",
+                ].join(" ")}
+              >
+                {option.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         <nav className="flex items-center gap-2" aria-label="기간 선택">
           {presetOptions.map((option) => (
             <button
@@ -147,31 +187,38 @@ export function RangeNav({
         {errorMessage ? (
           <span className="text-xs text-red-600">{errorMessage}</span>
         ) : null}
+        {activePlatform !== "all" ? (
+          <span className="text-xs text-[#898781]">사용자별 최근 확인 OS 기준</span>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={handleClearCacheAndRefresh}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e5e3dc] bg-white px-3 text-xs font-semibold text-[#52514e] transition hover:bg-[#f4f3ee] disabled:cursor-not-allowed disabled:opacity-60"
-          title={`현재 ${activeDays}일 기간의 캐시를 비우고 재계산합니다 (오늘·어제 제외, 시간이 다소 소요될 수 있습니다).`}
-        >
-          <svg
-            className={["h-3.5 w-3.5 text-[#898781]", isRefreshing ? "animate-spin" : ""].join(" ")}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        {activePlatform === "all" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleClearCacheAndRefresh}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e5e3dc] bg-white px-3 text-xs font-semibold text-[#52514e] transition hover:bg-[#f4f3ee] disabled:cursor-not-allowed disabled:opacity-60"
+            title={`현재 ${activeDays}일 기간의 캐시를 비우고 재계산합니다 (오늘·어제 제외, 시간이 다소 소요될 수 있습니다).`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          캐시 비우고 다시 계산
-        </button>
+            <svg
+              className={["h-3.5 w-3.5 text-[#898781]", isRefreshing ? "animate-spin" : ""].join(" ")}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            캐시 비우고 다시 계산
+          </button>
+        ) : (
+          <span className="text-xs text-[#898781]">OS별 조회는 실시간 계산</span>
+        )}
       </div>
     </div>
   );

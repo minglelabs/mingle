@@ -31,16 +31,26 @@ not.
 
 ## Event scope and privacy
 
-Server events are sent only after the corresponding `AppEventLog` write
-succeeds. They include existing STT/TTS and hydration events plus explicit
-message-sent and conversation-created/reused product events. Browser events
+Existing server analytics events are sent only after the corresponding
+`AppEventLog` write succeeds. They include existing STT/TTS and hydration
+events plus explicit message-sent and conversation-created/reused product
+events. Browser events
 include app open, safe screen names, email signup completion, pageview,
 pageleave, click/change/submit autocapture, heatmaps, rage/dead clicks, Web
 Vitals, and session replay.
 
+Connect diagnostics also record debounced search requests and completions,
+Connect follow clicks and completions, and server-side search/follow API
+actions. These events include result counts, timing, input shape, and a
+SHA-256 digest of the normalized search query. A single Latin, Hangul, kana, or
+CJK character is included only as a one-character diagnostic token so repeated
+letter searches can be identified. Account and target user IDs are sent only
+as SHA-256 digests.
+
 It deliberately excludes source text, translated text, full URLs and query
 parameters, IP addresses, user-agent strings, session keys, access tokens, and
-arbitrary client metadata. Server GeoIP enrichment is disabled. Browser
+arbitrary client metadata. It does not send raw search text, names, or handles.
+Server GeoIP enrichment is disabled. Browser
 autocapture masks all text and element attributes. Session replay masks all
 text, inputs, and element attributes; disables console, request/response body,
 header, and canvas capture; and strips query strings and URL fragments before

@@ -139,6 +139,27 @@ describe("connect search cache", () => {
     });
   });
 
+  it("removes anonymous tracking users from cached search results", () => {
+    const identity = {
+      apiNamespace: "ios/v2.0.0",
+      authenticatedUserId: "user-1",
+    };
+    const storageKey = "mingle:connect-search-cache:v1:ios%2Fv2.0.0:user-1";
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      savedAt: Date.now(),
+      query: "a",
+      results: [
+        buildSearchResult(),
+        { ...buildSearchResult(), id: "anon-user", handle: "anon_mtb662yd_3j2l0q283" },
+      ],
+      resultsReady: true,
+    }));
+
+    const cached = cache.readConnectSearchCache(identity);
+
+    expect(cached?.results.map((result) => result.id)).toEqual(["user-2"]);
+  });
+
   it("clears the cached query when the search field is cleared", () => {
     const identity = {
       apiNamespace: "ios/v2.0.0",
