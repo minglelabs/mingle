@@ -107,6 +107,14 @@
 - **Resolution:** Mark snapshot frames for immediate display, wait briefly and retry until the controller reports that Picture in Picture is possible, and resolve or reject the bridge promise from the native start/failed delegate callbacks. Cancel pending retries cleanly when the room closes or Picture in Picture stops.
 - **Data change:** None. No database migration or conversation data change is required. The iOS app is version `2.0.2` with namespace `ios/v2.0.2`.
 - **Testing notes:** Build and install a signed Release build on a physical iOS 26 device, tap Picture in Picture from a room with and without messages, and confirm that the preview opens without the unavailable alert. Also verify explicit stop, room cleanup, and the existing no-scroll/read-only interaction boundary.
+## 2026-09-04 - Add OS filters to the admin dashboard
+
+- **Surface:** Service dashboard date controls, daily charts, cumulative charts, and the metrics table.
+- **Issue:** The dashboard could be filtered only by date range, so Android and iOS usage could not be compared without manually querying the underlying data.
+- **Resolution:** Add an OS segmented filter with `전체` as the default and `Android`/`iOS` options. Date-range changes preserve the selected OS, and selecting an OS preserves the selected date range. The existing all-platform cache remains in use for the default view; filtered views calculate from source rows because the daily cache has no OS dimension.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify the default dashboard is `전체`, switching OS preserves the date range, charts/table values change consistently, invalid `platform` query values fall back to `전체`, filtered views do not show the all-platform cache refresh action, and long date ranges remain usable on narrow admin screens.
 
 ## 2026-09-02 - Clarify new conversation-room creation labels
 
