@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
+import { ANONYMOUS_HANDLE_PREFIX } from "@/lib/handles";
 import { prisma } from "@/lib/prisma";
 import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
@@ -54,6 +55,11 @@ export async function GET(request: NextRequest) {
       isActive: true,
       AND: [
         { id: { not: userId } },
+        {
+          NOT: {
+            handle: { startsWith: ANONYMOUS_HANDLE_PREFIX, mode: "insensitive" },
+          },
+        },
         {
           blockingRelations: {
             none: { blockedId: userId },
