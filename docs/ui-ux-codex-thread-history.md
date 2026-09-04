@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-04 - Add OS filters to the admin dashboard
+
+- **Surface:** Service dashboard date controls, daily charts, cumulative charts, and the metrics table.
+- **Issue:** The dashboard could be filtered only by date range, so Android and iOS usage could not be compared without manually querying the underlying data.
+- **Resolution:** Add an OS segmented filter with `전체` as the default and `Android`/`iOS` options. Date-range changes preserve the selected OS, and selecting an OS preserves the selected date range. The existing all-platform cache remains in use for the default view; filtered views calculate from source rows because the daily cache has no OS dimension.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify the default dashboard is `전체`, switching OS preserves the date range, charts/table values change consistently, invalid `platform` query values fall back to `전체`, filtered views do not show the all-platform cache refresh action, and long date ranges remain usable on narrow admin screens.
+
 ## 2026-09-02 - Clarify new conversation-room creation labels
 
 - **Surface:** Conversation-list create action and the modal that chooses between a solo conversation room and inviting friends.

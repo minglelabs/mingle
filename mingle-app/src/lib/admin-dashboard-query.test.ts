@@ -173,6 +173,25 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(6);
   });
 
+  it("calculates a platform-filtered view from source rows without using the all-platform cache", async () => {
+    const dayKey = "2026-08-02";
+    setRawMetricResults(dayKey);
+
+    const metrics = await loadAdminDashboardMetrics(makeRange([dayKey]), { platform: "android" });
+
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    for (const [query, ...params] of mocks.queryRawUnsafe.mock.calls) {
+      expect(query as string).toContain('"latest_client_platform" = $3');
+      expect(params[2]).toBe("android");
+    }
+    expect(metrics[0].points[0].value).toBe(5);
+    expect(metrics[1].points[0].value).toBe(4);
+    expect(metrics[4].points[0].value).toBe(100);
+  });
+
   it("forceRefresh deletes only cacheable days and recalculates everything, persisting only cacheable days", async () => {
     const today = resolveTodayKey(new Date());
     const yesterday = shiftDayKey(today, -1);
