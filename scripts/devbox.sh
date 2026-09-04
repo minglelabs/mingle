@@ -2693,7 +2693,7 @@ detect_ios_coredevice_id() {
   require_cmd jq
 
   local devices_json=""
-  devices_json="$(mktemp "${TMPDIR:-/tmp}/mingle-devicectl-list.XXXXXX.json")"
+  devices_json="$(mktemp "${TMPDIR:-/tmp}/mingle-devicectl-list.XXXXXX")"
   if xcrun devicectl list devices --json-output "$devices_json" >/dev/null 2>&1; then
     if [[ -n "$requested_udid" ]]; then
       # Resolve the requested physical UDID directly. The list command can
