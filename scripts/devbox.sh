@@ -2696,12 +2696,11 @@ detect_ios_coredevice_id() {
   devices_json="$(mktemp "${TMPDIR:-/tmp}/mingle-devicectl-list.XXXXXX.json")"
   if xcrun devicectl list devices --json-output "$devices_json" >/dev/null 2>&1; then
     if [[ -n "$requested_udid" ]]; then
-      # Only return a requested device when CoreDevice reports an active tunnel.
-      # A paired-but-unavailable device cannot be used for uninstall/install.
+      # Resolve the requested physical UDID directly. The list command can
+      # briefly report a stale tunnel state while device info is reachable.
       jq -r --arg udid "$requested_udid" '
         .result.devices[]?
         | select(.hardwareProperties.udid == $udid)
-        | select(.connectionProperties.tunnelState == "connected")
         | .identifier
       ' "$devices_json" | head -n 1
       return 0
@@ -2993,6 +2992,11 @@ run_ios_mobile_install() {
     fi
     # Fallback for environments where only xcodebuild destination id is visible.
     coredevice_id="$destination_udid"
+  fi
+
+  if [[ -n "$requested_udid" ]]; then
+    xcrun devicectl device info details --device "$coredevice_id" >/dev/null 2>&1 || \
+      die "requested iOS device is not reachable through CoreDevice: $requested_udid"
   fi
 
   require_cmd xcodebuild
