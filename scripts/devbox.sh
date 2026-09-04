@@ -33,7 +33,7 @@ RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 ANDROID_LOCAL_PROPERTIES_FILE="$ROOT_DIR/mingle-app/rn/android/local.properties"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.1"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.2"
 ANDROID_RN_REQUIRED_API_NAMESPACE="android/v2.0.1"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
@@ -2687,7 +2687,37 @@ ensure_cloudflared_named_bridge() {
 }
 
 detect_ios_coredevice_id() {
+  local requested_udid="${1:-}"
+
   command -v xcrun >/dev/null 2>&1 || return 1
+  require_cmd jq
+
+  local devices_json=""
+  devices_json="$(mktemp "${TMPDIR:-/tmp}/mingle-devicectl-list.XXXXXX")"
+  if xcrun devicectl list devices --json-output "$devices_json" >/dev/null 2>&1; then
+    if [[ -n "$requested_udid" ]]; then
+      # Resolve the requested physical UDID directly. The list command can
+      # briefly report a stale tunnel state while device info is reachable.
+      jq -r --arg udid "$requested_udid" '
+        .result.devices[]?
+        | select(.hardwareProperties.udid == $udid)
+        | .identifier
+      ' "$devices_json" | head -n 1
+      return 0
+    fi
+
+    jq -r '
+      .result.devices[]?
+      | select(.connectionProperties.tunnelState == "connected")
+      | .identifier
+    ' "$devices_json" | head -n 1
+    return 0
+  fi
+
+  if [[ -n "$requested_udid" ]]; then
+    return 1
+  fi
+
   xcrun devicectl list devices 2>/dev/null | awk '
       /connected|available \(paired\)/ {
         if (match($0, /[0-9A-F-]{20,40}/)) {
@@ -2696,11 +2726,7 @@ detect_ios_coredevice_id() {
             print id
             exit
           }
-          if (first == "") first = id
         }
-      }
-      END {
-        if (first != "") print first
       }
     ' | head -n 1
 }
@@ -2959,10 +2985,18 @@ run_ios_mobile_install() {
     log "iOS device not detected; skipping iOS build/install"
     return 0
   fi
-  coredevice_id="$(detect_ios_coredevice_id || true)"
+  coredevice_id="$(detect_ios_coredevice_id "$requested_udid" || true)"
   if [[ -z "$coredevice_id" ]]; then
+    if [[ -n "$requested_udid" ]]; then
+      die "requested iOS device is not connected to CoreDevice: $requested_udid"
+    fi
     # Fallback for environments where only xcodebuild destination id is visible.
     coredevice_id="$destination_udid"
+  fi
+
+  if [[ -n "$requested_udid" ]]; then
+    xcrun devicectl device info details --device "$coredevice_id" >/dev/null 2>&1 || \
+      die "requested iOS device is not reachable through CoreDevice: $requested_udid"
   fi
 
   require_cmd xcodebuild
@@ -2995,7 +3029,15 @@ run_ios_mobile_install() {
   mkdir -p "$(dirname "$derived_data_path")"
   [[ -d "$workspace_path" ]] || die "RN iOS workspace not found: $workspace_path"
 
-  log "building iOS app ($configuration) for destination: $destination_udid"
+  local xcode_destination="$destination_udid"
+  if [[ -n "$requested_udid" ]]; then
+    # CoreDevice can install a signed generic iOS build even when Xcode's
+    # destination list has not surfaced a paired wireless device yet.
+    xcode_destination="generic/platform=iOS"
+    log "building iOS app ($configuration) as a generic device build for CoreDevice: $coredevice_id"
+  else
+    log "building iOS app ($configuration) for destination: $destination_udid"
+  fi
   if [[ "$runtime_qa_bridge_enabled" == "1" ]]; then
     log "iOS QA bridge is enabled for this install"
   fi
@@ -3015,7 +3057,7 @@ run_ios_mobile_install() {
       -workspace "$workspace_path" \
       -scheme mingle \
       -configuration "$configuration" \
-      -destination "id=$destination_udid" \
+      -destination "$xcode_destination" \
       -derivedDataPath "$derived_data_path" \
       -xcconfig "$RN_IOS_RUNTIME_XCCONFIG" \
       build

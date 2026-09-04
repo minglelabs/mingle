@@ -38,6 +38,25 @@ const nextConfig = {
         source: "/api/ios/v2.0.1/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
+      // iOS 2.0.2 keeps the v2.0.0 server contract while using its own
+      // versioned namespace, so existing production API behavior is preserved.
+      {
+        source: "/api/ios/v2.0.2",
+        destination: "/api/ios/v2.0.0",
+      },
+      {
+        source: "/api/ios/v2.0.2/:path*",
+        destination: "/api/ios/v2.0.0/:path*",
+      },
+      // Preserve the prior beta namespace for device builds already installed.
+      {
+        source: "/api/ios/v2.0.3",
+        destination: "/api/ios/v2.0.0",
+      },
+      {
+        source: "/api/ios/v2.0.3/:path*",
+        destination: "/api/ios/v2.0.0/:path*",
+      },
     ];
   },
   turbopack: {

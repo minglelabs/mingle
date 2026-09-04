@@ -62,6 +62,10 @@ describe('STT language catalog', () => {
 
   it('returns flags for canonical and aliased language codes', () => {
     expect(getSttLanguageFlag('af')).toBe('🇿🇦')
+    expect(getSttLanguageFlag('en-US')).toBe('🇺🇸')
+    expect(getSttLanguageFlag('ko-KR')).toBe('🇰🇷')
+    expect(getSttLanguageFlag('ja-JP')).toBe('🇯🇵')
+    expect(getSttLanguageFlag('fr-FR')).toBe('🇫🇷')
     expect(getSttLanguageFlag('zh')).toBe('🇨🇳')
     expect(getSttLanguageFlag('zh-TW')).toBe('🇹🇼')
     expect(getSttLanguageFlag('fil-PH')).toBe('🇵🇭')

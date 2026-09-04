@@ -3,7 +3,7 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -11,7 +11,7 @@ import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
-import ChatBubble from './ChatBubble'
+import ChatBubble, { resolveOriginalDisplayLanguage } from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
@@ -40,6 +40,7 @@ import {
   sanitizeSttLanguageSelection,
   sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -170,6 +171,13 @@ import {
 import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import {
+  NATIVE_PIP_WEB_EVENT,
+  NATIVE_PIP_WEB_STATE_KEY,
+  parseNativePipEvent,
+  postNativePipCommand,
+  type NativePipState,
+} from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
 import {
   buildNativeRemountRestoreUrl,
@@ -224,6 +232,159 @@ const VOICE_MODE_START_LABEL = 'Start'
 const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
+
+function normalizeNativePipLanguageKey(rawLanguage: string): string {
+  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
+  if (canonical) return canonical.toLowerCase()
+
+  const sttCanonical = canonicalizeSttLanguageCode(rawLanguage)
+  return sttCanonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
+}
+
+function findNativePipRecordKey<T>(
+  record: Record<string, T> | undefined,
+  language: string,
+): string | null {
+  const targetKey = normalizeNativePipLanguageKey(language)
+  if (!targetKey) return null
+
+  return Object.keys(record || {}).find((candidate) => (
+    normalizeNativePipLanguageKey(candidate) === targetKey
+  )) || null
+}
+
+function findNativePipTranslationText(
+  utterance: Utterance,
+  language: string,
+): string {
+  const matchingLanguage = findNativePipRecordKey(utterance.translations, language)
+  const text = matchingLanguage ? utterance.translations[matchingLanguage] : ''
+  return typeof text === 'string' ? text.trim() : ''
+}
+
+function resolveNativePipOriginalLanguage(
+  utterance: Utterance,
+  roomLanguageOrder: readonly string[] = [],
+): string {
+  return resolveOriginalDisplayLanguage(
+    utterance.originalLang,
+    [
+      ...(utterance.targetLanguages || []),
+      ...Object.keys(utterance.translations || {}),
+      ...Object.keys(utterance.translationFinalized || {}),
+    ],
+    roomLanguageOrder,
+  )
+}
+
+function resolveNativePipTargetLanguages(
+  utterance: Utterance,
+  originalDisplayLanguage: string,
+): string[] {
+  const originalKey = normalizeNativePipLanguageKey(originalDisplayLanguage)
+  const hasGenericChineseSource = normalizeNativePipLanguageKey(utterance.originalLang) === 'zh'
+  const targetLanguages: string[] = []
+  const seen = new Set<string>()
+  const candidates = [
+    ...(utterance.targetLanguages || []),
+    ...Object.keys(utterance.translations || {}),
+    ...Object.keys(utterance.translationFinalized || {}),
+  ]
+
+  for (const rawLanguage of candidates) {
+    const language = rawLanguage.trim()
+    const languageKey = normalizeNativePipLanguageKey(language)
+    if (
+      !language
+      || !languageKey
+      || seen.has(languageKey)
+      || languageKey === originalKey
+      || (hasGenericChineseSource && languageKey === 'zh')
+    ) {
+      continue
+    }
+
+    seen.add(languageKey)
+    targetLanguages.push(language)
+  }
+
+  return targetLanguages
+}
+
+function resolveNativePipDisplayLanguage(
+  utterance: Utterance,
+  requestedDisplayLanguage: string | null,
+  originalDisplayLanguage: string,
+  targetLanguages: readonly string[],
+): string {
+  const requestedKey = normalizeNativePipLanguageKey(requestedDisplayLanguage || originalDisplayLanguage)
+  if (
+    !requestedKey
+    || requestedKey === normalizeNativePipLanguageKey(originalDisplayLanguage)
+    || requestedKey === normalizeNativePipLanguageKey(utterance.originalLang)
+  ) {
+    return originalDisplayLanguage
+  }
+
+  return targetLanguages.find((language) => (
+    normalizeNativePipLanguageKey(language) === requestedKey
+  )) || originalDisplayLanguage
+}
+
+function resolveNativePipTranslations(
+  utterance: Utterance,
+  targetLanguages: readonly string[],
+) {
+  return targetLanguages.map((language) => {
+    const text = findNativePipTranslationText(utterance, language)
+    const matchingFinalizedKey = findNativePipRecordKey(utterance.translationFinalized, language)
+    const finalized = matchingFinalizedKey
+      ? utterance.translationFinalized?.[matchingFinalizedKey]
+      : undefined
+
+    return {
+      language,
+      text,
+      isInterim: !text || finalized === false,
+    }
+  })
+}
+
+function resolveNativePipMessageText(
+  utterance: Utterance,
+  displayMode: LivePhoneDemoBubbleDisplayMode,
+  displayLanguage: string | null,
+  roomLanguageOrder: readonly string[] = [],
+): string {
+  const originalText = utterance.originalText.trim()
+  const originalDisplayLanguage = resolveNativePipOriginalLanguage(utterance, roomLanguageOrder)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, originalDisplayLanguage)
+  const resolvedDisplayLanguage = resolveNativePipDisplayLanguage(
+    utterance,
+    displayLanguage,
+    originalDisplayLanguage,
+    targetLanguages,
+  )
+
+  if (displayMode === 'collapsed') {
+    if (resolvedDisplayLanguage === originalDisplayLanguage) return originalText
+    // Keep the live source visible until the selected translation has text.
+    // The native renderer uses the original-language badge for this fallback,
+    // so an in-progress utterance is never hidden behind a placeholder.
+    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || originalText
+  }
+
+  const lines = [originalText]
+  const seenTexts = new Set(lines)
+  for (const language of targetLanguages) {
+    const text = findNativePipTranslationText(utterance, language)
+    if (!text || seenTexts.has(text)) continue
+    seenTexts.add(text)
+    lines.push(text)
+  }
+
+  return lines.join('\n')
+}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -1740,6 +1901,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
+  const nativePipStateRef = useRef<NativePipState | null>(null)
+  const nativePipActiveRef = useRef(false)
+  const nativePipConversationIdRef = useRef('')
+  const nativePipSttRunningRef = useRef(false)
+  const nativePipPlaybackRequestRef = useRef<boolean | null>(null)
+  const nativePipLastSyncedPlaybackStateRef = useRef<{
+    conversationId: string
+    playing: boolean
+  } | null>(null)
+  const nativePipPlaybackGenerationRef = useRef(0)
+  const nativePipPlaybackQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const nativePipStartRecordingRef = useRef<() => Promise<void>>(async () => {})
+  const nativePipStopRecordingRef = useRef<(
+    options?: { forceNativeStop?: boolean }
+  ) => Promise<void>>(async () => {})
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
@@ -1886,6 +2062,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
   })
+  const isNativeIosPipAvailable = isNativeAppRuntime && isNativeIosAppRuntime()
+  nativePipConversationIdRef.current = conversationId?.trim() || ''
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -3940,6 +4118,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
+  nativePipSttRunningRef.current = isSttSessionRunning
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
   const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
@@ -5468,6 +5647,217 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+  const nativePipState = useMemo<NativePipState>(() => ({
+    conversationId: conversationId?.trim() || '',
+    displayMode: bubbleDisplayMode,
+    emptyLabel: roomManagementCopy.pictureInPictureEmptyLabel,
+    messages: displayUtterances
+      .filter((utterance) => utterance.originalText.trim())
+      .slice(-4)
+      .map((utterance) => {
+        const originalLanguage = resolveNativePipOriginalLanguage(
+          utterance,
+          normalizedDisplayLanguageOptions,
+        )
+        const targetLanguages = resolveNativePipTargetLanguages(utterance, originalLanguage)
+        const displayLanguage = resolveNativePipDisplayLanguage(
+          utterance,
+          resolvedDefaultDisplayLanguage,
+          originalLanguage,
+          targetLanguages,
+        )
+
+        return {
+          id: utterance.id,
+          text: resolveNativePipMessageText(
+            utterance,
+            bubbleDisplayMode,
+            resolvedDefaultDisplayLanguage,
+            normalizedDisplayLanguageOptions,
+          ),
+          originalText: utterance.originalText.trim(),
+          originalLanguage,
+          displayLanguage,
+          translations: resolveNativePipTranslations(utterance, targetLanguages),
+          isOwn: Boolean(
+            viewerUserId
+            && utterance.speakerUserId
+            && utterance.speakerUserId === viewerUserId,
+          ),
+          isInterim: draftUtteranceIds.has(utterance.id),
+        }
+      }),
+    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
+
+  nativePipStateRef.current = nativePipState
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || !nativePipActiveRef.current || !nativePipState.conversationId) return
+
+    postNativePipCommand({
+      type: 'native_pip_update',
+      payload: nativePipState,
+    })
+  }, [isNativeIosPipAvailable, nativePipState])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || !conversationId?.trim()) return
+
+    const scopedConversationId = conversationId.trim()
+    return () => {
+      nativePipActiveRef.current = false
+      nativePipPlaybackRequestRef.current = null
+      nativePipPlaybackGenerationRef.current += 1
+      if (nativePipConversationIdRef.current === scopedConversationId) {
+        nativePipConversationIdRef.current = ''
+      }
+      postNativePipCommand({
+        type: 'native_pip_stop',
+        payload: { conversationId: scopedConversationId },
+      })
+    }
+  }, [conversationId, isNativeIosPipAvailable])
+
+  const handleNativePipStart = useCallback(() => {
+    const state = nativePipStateRef.current
+    if (!state?.conversationId) return
+
+    nativePipLastSyncedPlaybackStateRef.current = null
+    postNativePipCommand({
+      type: 'native_pip_start',
+      payload: state,
+    })
+  }, [])
+
+  const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
+    if (!isNativeIosPipAvailable) return
+    const nextConversationId = (scopedConversationId || nativePipConversationIdRef.current).trim()
+    if (!nextConversationId) return
+
+    const previous = nativePipLastSyncedPlaybackStateRef.current
+    if (previous?.conversationId === nextConversationId && previous.playing === playing) return
+
+    const posted = postNativePipCommand({
+      type: 'native_pip_playback_state',
+      payload: {
+        conversationId: nextConversationId,
+        playing,
+      },
+    })
+    if (posted) {
+      nativePipLastSyncedPlaybackStateRef.current = {
+        conversationId: nextConversationId,
+        playing,
+      }
+    }
+  }, [isNativeIosPipAvailable])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || typeof window === 'undefined') return
+
+    const handleNativePipEvent = (event: Event) => {
+      const detail = parseNativePipEvent((event as CustomEvent<unknown>).detail)
+      if (!detail) return
+
+      const currentConversationId = nativePipConversationIdRef.current
+      if (detail.conversationId && detail.conversationId !== currentConversationId) return
+
+      if (detail.type === 'started') {
+        if (!currentConversationId) return
+        if (!nativePipActiveRef.current) {
+          nativePipPlaybackGenerationRef.current += 1
+        }
+        nativePipActiveRef.current = true
+        nativePipLastSyncedPlaybackStateRef.current = null
+
+        const state = nativePipStateRef.current
+        if (state?.conversationId === currentConversationId) {
+          postNativePipCommand({
+            type: 'native_pip_update',
+            payload: state,
+          })
+        }
+        syncNativePipPlaybackState(nativePipSttRunningRef.current, currentConversationId)
+        return
+      }
+
+      if (detail.type === 'stopped' || detail.type === 'failed') {
+        nativePipActiveRef.current = false
+        nativePipPlaybackRequestRef.current = null
+        nativePipPlaybackGenerationRef.current += 1
+        nativePipLastSyncedPlaybackStateRef.current = null
+        return
+      }
+
+      if (!currentConversationId || detail.conversationId !== currentConversationId) return
+      if (!nativePipActiveRef.current) {
+        // Recover if a playback event arrives after a WebView reload but before
+        // the cached lifecycle event has been replayed.
+        nativePipActiveRef.current = true
+        nativePipPlaybackGenerationRef.current += 1
+      }
+      nativePipLastSyncedPlaybackStateRef.current = null
+
+      const desiredPlaying = detail.playing
+      if (nativePipPlaybackRequestRef.current === desiredPlaying) return
+      nativePipPlaybackRequestRef.current = desiredPlaying
+      const requestGeneration = nativePipPlaybackGenerationRef.current
+
+      nativePipPlaybackQueueRef.current = nativePipPlaybackQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          if (
+            !nativePipActiveRef.current
+            || nativePipPlaybackGenerationRef.current !== requestGeneration
+            || nativePipConversationIdRef.current !== currentConversationId
+          ) {
+            return
+          }
+
+          if (desiredPlaying) {
+            await nativePipStartRecordingRef.current()
+          } else {
+            await nativePipStopRecordingRef.current({ forceNativeStop: true })
+          }
+        })
+        .catch((error: unknown) => {
+          if (process.env.NODE_ENV !== 'production') {
+            const message = error instanceof Error ? error.message : String(error)
+            console.warn(`[NativePiP] STT playback control failed: ${message}`)
+          }
+        })
+        .finally(() => {
+          if (
+            !nativePipActiveRef.current
+            || nativePipPlaybackGenerationRef.current !== requestGeneration
+            || nativePipPlaybackRequestRef.current !== desiredPlaying
+          ) {
+            return
+          }
+          nativePipPlaybackRequestRef.current = null
+          syncNativePipPlaybackState(nativePipSttRunningRef.current, currentConversationId)
+        })
+    }
+
+    window.addEventListener(NATIVE_PIP_WEB_EVENT, handleNativePipEvent)
+    const cachedEvent = (window as unknown as Window & Record<string, unknown>)[NATIVE_PIP_WEB_STATE_KEY]
+    if (cachedEvent) {
+      handleNativePipEvent(new CustomEvent(NATIVE_PIP_WEB_EVENT, { detail: cachedEvent }))
+    }
+
+    return () => {
+      window.removeEventListener(NATIVE_PIP_WEB_EVENT, handleNativePipEvent)
+    }
+  }, [isNativeIosPipAvailable, syncNativePipPlaybackState])
+
+  useEffect(() => {
+    if (!isNativeIosPipAvailable || !nativePipActiveRef.current || !conversationId?.trim()) return
+    syncNativePipPlaybackState(isSttSessionRunning, conversationId.trim())
+  }, [conversationId, isNativeIosPipAvailable, isSttSessionRunning, syncNativePipPlaybackState])
+
+  nativePipStartRecordingRef.current = handleStartRecording
+  nativePipStopRecordingRef.current = handleStopRecording
+
   const displayUtteranceIds = useMemo(
     () => displayUtterances.map((utterance) => utterance.id),
     [displayUtterances],
@@ -5930,6 +6320,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
+            {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
+              <button
+                data-qa="live-demo-picture-in-picture-button"
+                type="button"
+                onClick={handleNativePipStart}
+                aria-label={roomManagementCopy.pictureInPictureButtonLabel}
+                title={roomManagementCopy.pictureInPictureButtonLabel}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              >
+                <PictureInPicture2 size={17} strokeWidth={2} />
+              </button>
+            ) : null}
             {showMenuButton ? (
               <div className="relative">
                 <button
