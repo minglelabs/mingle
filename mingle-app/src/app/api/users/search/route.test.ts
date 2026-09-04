@@ -87,6 +87,11 @@ describe("/api/users/search route", () => {
         isActive: true,
         AND: [
           { id: { not: "user_123" } },
+          {
+            NOT: {
+              handle: { startsWith: "anon_", mode: "insensitive" },
+            },
+          },
           { blockingRelations: { none: { blockedId: "user_123" } } },
           { blockedByRelations: { none: { blockerId: "user_123" } } },
           {

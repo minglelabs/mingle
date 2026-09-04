@@ -14,7 +14,7 @@ import {
 } from "@/components/connect-search-cache";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
-import { formatHandle } from "@/lib/handles";
+import { formatHandle, isAnonymousTrackingHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
@@ -70,7 +70,7 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
 
   return {
     query: rawSnapshot.query,
-    results: rawSnapshot.results,
+    results: rawSnapshot.results.filter((result) => !isAnonymousTrackingHandle(result.handle)),
   };
 }
 
@@ -463,7 +463,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           httpStatus = response.status;
           if (!response.ok) throw new Error("user_search_failed");
           const payload = await response.json() as { users?: UserSearchResult[] };
-          const users = Array.isArray(payload.users) ? payload.users : [];
+          const users = Array.isArray(payload.users)
+            ? payload.users.filter((user) => !isAnonymousTrackingHandle(user.handle))
+            : [];
           captureMingleClientEvent("mingle_connect_search_completed", {
             search_sequence: searchSequence,
             success: true,

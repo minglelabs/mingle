@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-09-04 - Hide anonymous tracking rows from user search
+
+- **Surface:** Connect user search, search-result history restoration, and the session search cache.
+- **Issue:** Anonymous tracking rows used an automatically generated `anon_...` handle and the fallback name `Mingle 사용자`. A broad query such as `a` could therefore consume result slots and make real users harder to find; an older cached search could also briefly restore those rows after the server-side fix.
+- **Resolution:** Exclude the reserved `anon_` handle prefix in the shared user-search API, which covers the versioned Android/iOS search routes. Sanitize both newly written and previously stored Connect search snapshots, including the browser history snapshot, so anonymous rows are not rendered while a fresh response is pending. Existing follower/following relationship lists are unchanged.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Search for a broad value such as `a` and a name-like value such as `Mingle`, verify anonymous rows never appear and real users still fill the available result slots, then return to Connect or recreate the tab with an old cached snapshot and verify the anonymous row is removed.
+
 ## 2026-09-04 - Add OS filters to the admin dashboard
 
 - **Surface:** Service dashboard date controls, daily charts, cumulative charts, and the metrics table.
