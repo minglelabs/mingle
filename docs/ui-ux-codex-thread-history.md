@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-04 - Normalize language flags in iOS Picture in Picture
+
+- **Surface:** The language badge rendered beside every original or translated row in the native iOS Picture in Picture conversation preview.
+- **Issue:** PiP used a small native-only switch over raw language strings. Regional BCP-47 tags such as `en-US`, `ko-KR`, `ja-JP`, and `fr-FR` did not match its base-language entries and therefore appeared as the generic globe despite having a valid flag in the normal conversation UI.
+- **Resolution:** Port the normal conversation UI's language canonicalization rules and complete STT flag catalog to the PiP renderer. The native preview now normalizes separators, aliases (`fil`, `iw`, `nb`, `zh-Hant`, and similar tags), partial script/region tags, and base-language fallbacks before choosing a flag. Unsupported or missing language data still uses the globe intentionally.
+- **Cross-surface diagnosis:** The ordinary WebView conversation screen already uses the shared `canonicalizeTranslationLanguageCode` and `getSttLanguageFlag` path, which resolves the regional tags above. Its globe is therefore not this PiP mapping bug; it represents missing or unsupported source-language values such as `unknown` arriving during an interim/fallback STT path or from an older hydrated message. Capture an affected language value before changing that intentional fallback behavior.
+- **Interaction:** PiP continues to be read-only. Flags match the normal conversation catalog while the compact native preview keeps its single-emoji presentation.
+- **Data change:** Re-version the current iOS release to `2.0.2` and its required namespace to `ios/v2.0.2`. The server rewrites that namespace to the existing `ios/v2.0.0` contract and retains `ios/v2.0.3` only for already-installed beta device builds. No Prisma migration is required.
+- **Testing notes:** Verify PiP rows for `en-US`, `ko-KR`, `ja-JP`, `fr-FR`, `zh-Hant`, `fil-PH`, and an unsupported value. Confirm the first six show their catalog flags and the unsupported value remains a globe. Verify the native app and WebView both use `ios/v2.0.2`.
+
 ## 2026-09-04 - Preserve iOS STT when closing Picture in Picture
 
 - **Surface:** The iOS system Picture in Picture close action for a live conversation preview.
@@ -16,7 +26,7 @@
 - **Diagnosis:** The native sample-buffer playback delegate intentionally treated the preview as always playing. The WebView had no lifecycle event channel for native PiP callbacks and could not route a system playback request through the existing STT start/stop pipeline.
 - **Resolution:** Use the native playback delegate to emit scoped `started`, `stopped`, `failed`, and `playback_control` events through React Native. Forward the latest event into the WebView with a cached replay path for WebView reloads. Route PiP pause to the existing graceful STT stop (including pending-turn finalization) and PiP play to the existing STT start flow. Sync the native PiP playback state after successful starts, graceful stops, microphone permission failures, transport/audio errors, and other STT state changes.
 - **Interaction:** Pausing PiP stops recognition gracefully while leaving the last preview frame visible. Playing PiP starts a new STT session; it does not resume a partially captured audio buffer. The PiP window stays open and remains read-only/non-scrollable. Stale native callbacks and queued playback requests are ignored when the controller or conversation has changed.
-- **Data change:** None. No API, database, migration, or version change is required; the iOS app remains version `2.0.3` with namespace `ios/v2.0.3`.
+- **Data change:** None. No API, database, migration, or version change is required; the iOS app remains version `2.0.2` with namespace `ios/v2.0.2`.
 - **Testing notes:** Verify play/pause from PiP on a physical iOS 26 device with an idle room, an active STT session, an in-progress utterance, a denied microphone permission, and an audio/transport failure. Confirm the last frame remains after pause, a new session starts after play, and a stale callback cannot affect a replacement PiP controller.
 
 ## 2026-09-03 - Keep iOS PiP text size stable and show live utterance progress
@@ -26,7 +36,7 @@
 - **Diagnosis:** The native packer used font reduction as its first response to a growing bubble stack. Interim translation markers were appended to any non-empty partial translation, and a missing target translation in collapsed mode had no useful live-text fallback.
 - **Resolution:** Use a fixed 42pt preview font for the normal layout. Re-evaluate recent suffixes at that size and drop the oldest bubble before changing text size; only one unusually long latest bubble may use an emergency smaller floor to avoid clipping. Render non-empty interim text exactly as received, and fall back to the growing original text in collapsed mode until a target translation has content. Keep that fallback in the bridge payload as well, so the native layer never receives a placeholder for an available live source.
 - **Interaction:** The latest in-progress message remains visible and updates without waiting for finalization. Expanded mode continues to expose an empty pending translation as `...`, while ordinary partial text is not decorated with an extra suffix. The PiP surface remains read-only and non-scrollable.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this stable-density policy.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this stable-density policy.
 - **Testing notes:** Verify stable 42pt text with four short messages, removal of the oldest bubble as the latest message grows, collapsed-mode original fallback while translation is pending, partial translation updates without an added ellipsis, expanded pending rows, and a very long single message on iPhone 14.
 
 ## 2026-09-03 - Drop older iOS PiP bubbles before shrinking text too far
@@ -36,7 +46,7 @@
 - **Diagnosis:** The previous packing pass accepted any complete suffix that fit down to the renderer's absolute font floor. That allowed a multi-bubble stack to consume the available height while the in-progress turn was still changing. The selection rule did not express a separate readability threshold.
 - **Resolution:** Evaluate the recent suffix from largest to smallest on every state update, using a 30pt readable-font floor. When the full suffix would cross that floor, remove the oldest bubble and retry (`4 → 3 → 2 → 1`). The final render still uses the largest font that fits, and only a single unusually long latest message may use the smaller absolute floor to keep its wrapped content complete.
 - **Interaction:** Interim transcript growth and interim translation rows participate in the same measurement, so the preview can shed older bubbles before finalization. The latest message remains visible, ordinary text continues to wrap without truncation, and the surface remains read-only and non-scrollable.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this density policy.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this density policy.
 - **Testing notes:** Verify a long in-progress utterance while three or four prior bubbles are visible, confirm older bubbles disappear before the text becomes too small, check that the latest bubble stays complete, and cover collapsed/expanded rows and interim translation updates on iPhone 14.
 
 ## 2026-09-03 - Prioritize complete iOS PiP bubbles over message count
@@ -46,7 +56,7 @@
 - **Diagnosis:** The native layout measured each language row with a fixed line-count cap before calculating the bubble height. The drawing pass then used that capped height, so additional wrapped lines had no drawable space. Message ownership was also still used for horizontal placement.
 - **Resolution:** Measure every rendered row at its full wrapped height using the same character-wrapping paragraph style used by the drawing pass. Select recent messages by the complete measured stack, dropping older bubbles when the stack cannot fit before rendering. Preserve the largest font size that fits the selected complete bubbles. Anchor every bubble to the left content edge while retaining the existing own-message color treatment.
 - **Interaction:** A long message receives all of its visible wrapped lines; the preview does not replace ordinary overflow with an ellipsis. The PiP surface remains read-only and non-scrollable, and collapsed/expanded language-row behavior is unchanged.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances for this layout fix.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this layout fix.
 - **Testing notes:** Verify one message with three or more wrapped lines, two messages with mixed short/long text, explicit newlines, collapsed and expanded language rows, interim translation dots, own/other bubble colors, and consistent left alignment on iPhone 14.
 
 ## 2026-09-03 - Match iOS Picture in Picture preview to conversation bubbles
@@ -56,7 +66,7 @@
 - **Diagnosis:** The bridge sent one flattened text string per utterance, so Swift could not reproduce the expanded bubble structure. Message selection classified each candidate with a fixed line limit rather than measuring the complete bubble stack, and the native text renderer used `byTruncatingTail`, which produced ellipses at the edge of the available rectangle.
 - **Resolution:** Remove speaker/handle data from the PiP bridge. Send original text, original/display language, translation entries with interim state, and own-message alignment. Render each preview item as a compact bubble with the existing white/amber background treatment, the counterpart sharp top-left corner, a language flag, an original-language quote badge, and stacked translation rows without internal dividers or extra per-language margins. Use a height-based recent-message packing pass so the preview keeps two short messages when they fit and drops older messages only when the complete bubble stack does not fit. Switch native text drawing to character/word wrapping without trailing truncation; an in-progress translation shows `...` explicitly, while ordinary long text wraps onto additional lines.
 - **Interaction:** Collapsed mode keeps the selected display language in one bubble row. Expanded mode shows the original row followed by available translation rows, including a compact `...` row for translations that are still pending. The preview remains read-only and non-scrollable; message count and font size continue to adapt to the selected mode and the actual rendered content.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; the device verification build advances to `100`.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances to `100`.
 - **Testing notes:** Verify iPhone 14 with one to four short messages, two messages that previously collapsed to one, long Korean/Latin/CJK text, explicit newlines, collapsed and expanded modes, original and translated flags, missing/interim/partial translations, own-message amber alignment, counterpart white alignment, and no visible speaker handle or trailing truncation.
 
 ## 2026-09-03 - Correct iOS Picture in Picture orientation and message density
@@ -67,7 +77,7 @@
 - **Resolution:** Remove the extra pixel-buffer flip. The preview now uses the full 16:9 canvas for recent messages only, aligns the newest message at the bottom, and selects up to four compact messages or up to two expanded messages. If recent text needs additional wrapping, older messages are removed before reducing the font; the largest fitting font is then used with compact bubble padding.
 - **Display state:** The native preview follows the selected bubble display mode. Collapsed mode shows the selected display language only; expanded mode includes the available translation lines in each message and uses a smaller message-count cap.
 - **Interaction:** PiP remains a read-only, non-scrollable preview. Short recent messages can appear together, while long or wrapped content receives the space of one large message bubble.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; only the build number advances for device verification.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; only the build number advances for device verification.
 - **Testing notes:** Verify the physical iOS 26 device with zero, one, two, three, and four short messages; collapsed and expanded display modes; a selected translated language; long wrapped text; interim text; long speaker names; and repeated preview updates.
 
 ## 2026-09-03 - Make iOS Picture in Picture startup reliable after repeated taps
@@ -77,7 +87,7 @@
 - **Diagnosis:** The custom sample-buffer source did not explicitly keep an active playback audio session while no STT/TTS session was running. The native bridge also had no in-flight start guard, it only supplied a single snapshot frame, and its `AVSampleBufferDisplayLayer` was not attached to the active UIKit view hierarchy. The iOS 26 device log then showed the source becoming supported and `isPictureInPicturePossible=YES`, but `startPictureInPicture()` was called while the controller status was still transiently prohibited (`status=0`), so the request failed before the delegate callback.
 - **Resolution:** Acquire a coordinated PiP audio-session lease, keep the latest preview alive with a low-rate frame refresh timer, coalesce duplicate taps for the same conversation instead of cancelling and replacing the pending start, host the sample-buffer layer in an offscreen native view attached to the active root view, and require three consecutive possible checks before starting PiP. Add diagnostic logs for app state, audio session, renderer readiness, and `isPictureInPicturePossible` without logging conversation text.
 - **Interaction:** The PiP window remains a read-only, non-scrollable 16:9 snapshot. Repeated taps during startup no longer create duplicate native attempts or duplicate unavailable alerts.
-- **Data change:** None. The iOS app remains version `2.0.3` with namespace `ios/v2.0.3`; only the build number advances for device/TestFlight verification.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; only the build number advances for device/TestFlight verification.
 - **Testing notes:** Unlock the physical iOS 26 device, open Mingle (not another installed app), tap PiP once, and confirm the window appears. Also test an empty room, an active STT/TTS session, repeated taps, explicit stop, background/foreground transitions, and PiP close.
 
 ## 2026-09-03 - iOS conversation Picture in Picture preview
@@ -86,7 +96,7 @@
 - **Issue:** A conversation room could not remain visible while the user used another app. The room is rendered in a WebView, while iOS does not allow an arbitrary transparent or interactive app window over other apps. System Picture in Picture accepts video/sample-buffer content, but its floating surface is not a scrollable chat UI.
 - **Resolution:** Add an iOS-only Picture in Picture action to the room header. The WebView remains the normal room surface and sends the current room title, status, and latest four original utterances to React Native. Swift draws a compact read-only 16:9 preview and feeds it as `CMSampleBuffer` frames to `AVSampleBufferDisplayLayer` and `AVPictureInPictureController`.
 - **Interaction:** An explicit in-app button starts Picture in Picture. New final or interim transcript changes update the preview. Picture in Picture does not support scrolling, chat controls, translation selection, or composing; closing it leaves the WebView room intact. The action is shown only in the native iOS runtime.
-- **Data change:** None. The iOS app release is version `2.0.3` with namespace `ios/v2.0.3`; existing `UIBackgroundModes=audio` remains the background capability declaration.
+- **Data change:** None. The iOS app release is version `2.0.2` with namespace `ios/v2.0.2`; existing `UIBackgroundModes=audio` remains the background capability declaration.
 - **Testing notes:** Verify on a physical iOS device because Picture in Picture is unsupported or limited in the simulator. Cover a signed-in room, an empty room, final and interim messages, room switching and cleanup, Picture in Picture close, background/foreground transitions, long localized text, and App Store review eligibility for a read-only live snapshot preview rather than conventional media playback.
 
 ## 2026-09-03 - Wait for the iOS Picture in Picture preview to become renderable
@@ -95,7 +105,7 @@
 - **Issue:** The first implementation enqueued the preview frame and checked `isPictureInPicturePossible` in the same main-queue turn. On a physical iOS 26 device, the sample-buffer renderer had not finished accepting the first frame yet, so the app showed its own `Picture in Picture unavailable` alert even though the device supported Picture in Picture.
 - **User impact:** Tapping the visible Picture in Picture button appeared to fail every time, making the new floating conversation preview unusable.
 - **Resolution:** Mark snapshot frames for immediate display, wait briefly and retry until the controller reports that Picture in Picture is possible, and resolve or reject the bridge promise from the native start/failed delegate callbacks. Cancel pending retries cleanly when the room closes or Picture in Picture stops.
-- **Data change:** None. No database migration or conversation data change is required. The iOS app is version `2.0.3` with namespace `ios/v2.0.3`.
+- **Data change:** None. No database migration or conversation data change is required. The iOS app is version `2.0.2` with namespace `ios/v2.0.2`.
 - **Testing notes:** Build and install a signed Release build on a physical iOS 26 device, tap Picture in Picture from a room with and without messages, and confirm that the preview opens without the unavailable alert. Also verify explicit stop, room cleanup, and the existing no-scroll/read-only interaction boundary.
 
 ## 2026-09-02 - Clarify new conversation-room creation labels

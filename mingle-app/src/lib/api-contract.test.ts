@@ -107,11 +107,11 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.1/conversations')
   })
 
-  it('accepts iOS 2.0.3 env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.3'
+  it('accepts iOS 2.0.2 env namespace values', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.2'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v2.0.3')
-    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.3/conversations')
+    expect(contract.clientApiNamespace).toBe('ios/v2.0.2')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.2/conversations')
   })
 
   it('accepts Android 2.0.1 env namespace values', async () => {
@@ -157,7 +157,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.1.4/translate/finalize',
     '/api/ios/v2.0.0/translate/finalize',
     '/api/ios/v2.0.1/translate/finalize',
-    '/api/ios/v2.0.3/translate/finalize',
+    '/api/ios/v2.0.2/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)

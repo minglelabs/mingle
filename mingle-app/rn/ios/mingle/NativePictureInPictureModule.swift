@@ -44,6 +44,42 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
     // emergency floor below only to avoid clipping its complete content.
     private static let previewMessageFontSize: CGFloat = 42
     private static let previewEmergencyMinimumFontSize: CGFloat = 22
+    // Keep this catalog aligned with the web app's
+    // `canonicalizeTranslationLanguageCode` and `STT_LANGUAGE_FLAG_MAP`.
+    // PiP receives raw STT/model language tags directly from the WebView, so
+    // regional BCP-47 tags need the same normalization before drawing a flag.
+    private static let previewLanguageAliases: [String: String] = [
+        "fil": "tl",
+        "in": "id",
+        "iw": "he",
+        "nb": "no",
+        "nn": "no",
+        "zh-cn": "zh-cn",
+        "zh-hans": "zh-cn",
+        "zh-sg": "zh-cn",
+        "zh-hk": "zh-tw",
+        "zh-mo": "zh-tw",
+        "zh-tw": "zh-tw",
+        "zh-hant": "zh-tw",
+    ]
+    private static let previewLanguageFlags: [String: String] = [
+        "af": "🇿🇦", "sq": "🇦🇱", "ar": "🇸🇦", "az": "🇦🇿",
+        "eu": "🇪🇸", "be": "🇧🇾", "bn": "🇧🇩", "bs": "🇧🇦",
+        "bg": "🇧🇬", "ca": "🇪🇸", "zh": "🇨🇳", "zh-cn": "🇨🇳",
+        "zh-tw": "🇹🇼", "hr": "🇭🇷", "cs": "🇨🇿", "da": "🇩🇰",
+        "nl": "🇳🇱", "en": "🇺🇸", "et": "🇪🇪", "fi": "🇫🇮",
+        "fr": "🇫🇷", "gl": "🇪🇸", "de": "🇩🇪", "el": "🇬🇷",
+        "gu": "🇮🇳", "he": "🇮🇱", "hi": "🇮🇳", "hu": "🇭🇺",
+        "id": "🇮🇩", "it": "🇮🇹", "ja": "🇯🇵", "kn": "🇮🇳",
+        "kk": "🇰🇿", "ko": "🇰🇷", "lv": "🇱🇻", "lt": "🇱🇹",
+        "mk": "🇲🇰", "ms": "🇲🇾", "ml": "🇮🇳", "mr": "🇮🇳",
+        "no": "🇳🇴", "fa": "🇮🇷", "pl": "🇵🇱", "pt": "🇵🇹",
+        "pa": "🇮🇳", "ro": "🇷🇴", "ru": "🇷🇺", "sr": "🇷🇸",
+        "sk": "🇸🇰", "sl": "🇸🇮", "es": "🇪🇸", "sw": "🇹🇿",
+        "sv": "🇸🇪", "tl": "🇵🇭", "ta": "🇮🇳", "te": "🇮🇳",
+        "th": "🇹🇭", "tr": "🇹🇷", "uk": "🇺🇦", "ur": "🇵🇰",
+        "vi": "🇻🇳", "cy": "🇬🇧",
+    ]
 
     private struct PreviewLanguageRow {
         let language: String
@@ -1058,52 +1094,40 @@ final class NativePictureInPictureModule: RCTEventEmitter, AVPictureInPictureSam
         }
     }
 
-    private func previewFlag(for rawLanguage: String) -> String {
+    private static func canonicalPreviewLanguageCode(_ rawLanguage: String) -> String {
         let normalized = rawLanguage
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "_", with: "-")
             .lowercased()
-        switch normalized {
-        case "zh-tw", "zh-hant", "zh-hk", "zh-mo": return "🇹🇼"
-        case "zh-cn", "zh-hans", "zh-sg", "zh": return "🇨🇳"
-        case "en-gb", "en-au", "en-nz": return "🇬🇧"
-        case "en": return "🇺🇸"
-        case "pt-br": return "🇧🇷"
-        case "pt": return "🇵🇹"
-        case "es-mx": return "🇲🇽"
-        case "es": return "🇪🇸"
-        case "ko": return "🇰🇷"
-        case "ja": return "🇯🇵"
-        case "fr": return "🇫🇷"
-        case "de": return "🇩🇪"
-        case "it": return "🇮🇹"
-        case "ru": return "🇷🇺"
-        case "ar": return "🇸🇦"
-        case "hi": return "🇮🇳"
-        case "vi": return "🇻🇳"
-        case "th": return "🇹🇭"
-        case "id": return "🇮🇩"
-        case "tr": return "🇹🇷"
-        case "nl": return "🇳🇱"
-        case "pl": return "🇵🇱"
-        case "uk": return "🇺🇦"
-        case "he": return "🇮🇱"
-        case "sv": return "🇸🇪"
-        case "da": return "🇩🇰"
-        case "no": return "🇳🇴"
-        case "fi": return "🇫🇮"
-        case "el": return "🇬🇷"
-        case "cs": return "🇨🇿"
-        case "ro": return "🇷🇴"
-        case "hu": return "🇭🇺"
-        case "fa": return "🇮🇷"
-        case "ur": return "🇵🇰"
-        case "bn": return "🇧🇩"
-        case "ms": return "🇲🇾"
-        case "tl", "fil": return "🇵🇭"
-        case "af": return "🇿🇦"
-        default: return "🌐"
+        guard !normalized.isEmpty else { return "" }
+
+        func resolve(_ candidate: String) -> String? {
+            if let alias = previewLanguageAliases[candidate] {
+                return alias
+            }
+            return previewLanguageFlags[candidate] == nil ? nil : candidate
         }
+
+        if let direct = resolve(normalized) {
+            return direct
+        }
+
+        let segments = normalized.split(separator: "-").map(String.init)
+        if segments.count > 2 {
+            for length in stride(from: segments.count - 1, through: 2, by: -1) {
+                if let partial = resolve(segments.prefix(length).joined(separator: "-")) {
+                    return partial
+                }
+            }
+        }
+
+        guard let base = segments.first else { return "" }
+        return resolve(base) ?? ""
+    }
+
+    private func previewFlag(for rawLanguage: String) -> String {
+        let canonical = Self.canonicalPreviewLanguageCode(rawLanguage)
+        return Self.previewLanguageFlags[canonical] ?? "🌐"
     }
 
     private func drawLanguageBadge(

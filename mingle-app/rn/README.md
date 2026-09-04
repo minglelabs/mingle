@@ -17,7 +17,7 @@ The RN app requires the following environment variables.
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, default: current Railway deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional compatibility fallback override; device builds default to the current Railway web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional compatibility fallback override; device builds default to the current Railway STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.0.3`, Android: `android/v2.0.1`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.0.2`, Android: `android/v2.0.1`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
