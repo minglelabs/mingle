@@ -997,9 +997,10 @@ function formatScrollDateLabel(createdAtMs: number, locale: string): string {
 function readScrollDateLabelAnchors(container: HTMLDivElement): ScrollDateLabelAnchor[] {
   const anchors: ScrollDateLabelAnchor[] = []
 
-  for (const child of Array.from(container.children)) {
-    if (!(child instanceof HTMLElement)) continue
-
+  // Query by attribute rather than walking container.children: message rows are
+  // wrapped in a spacing/key div (added for leave/invite notices), so the element
+  // carrying data-utterance-created-at is no longer a direct child of container.
+  for (const child of Array.from(container.querySelectorAll<HTMLElement>('[data-utterance-created-at]'))) {
     const createdAtMs = Number(child.dataset.utteranceCreatedAt || '')
     if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) continue
 
