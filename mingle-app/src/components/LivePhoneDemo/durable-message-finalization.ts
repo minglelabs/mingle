@@ -37,12 +37,22 @@ export type DurableFinalization = {
   attemptCount: number
 }
 type Update = { record: DurableFinalization; result: FinalizationResult | null; retrying: boolean }
+type FinalizationOwner = { consumers: number; generation: number }
+type FinalizationRun = { owner: FinalizationOwner; generation: number }
 const records = new Map<string, DurableFinalization>()
-const active = new Map<string, { record: DurableFinalization; promise: Promise<FinalizationResult | null>; controller: AbortController }>()
-const flushes = new Map<string, Promise<void>>()
-const owners = new Map<string, number>()
+const active = new Map<string, { record: DurableFinalization; run: FinalizationRun; promise: Promise<FinalizationResult | null>; controller: AbortController }>()
+const flushes = new Map<string, { run: FinalizationRun; promise: Promise<void> }>()
+const owners = new Map<string, FinalizationOwner>()
 const listeners = new Set<(update: Update) => void>()
 let loaded = false
+
+function ownerKey(ownerIdentity: string, apiNamespace: string): string {
+  return `${ownerIdentity}\u001f${apiNamespace}`
+}
+
+function currentRun(key: string, run: FinalizationRun): boolean {
+  return owners.get(key) === run.owner && run.owner.generation === run.generation
+}
 
 function storage(): Storage | null {
   try { return typeof window === 'undefined' ? null : window.localStorage } catch { return null }
@@ -153,16 +163,30 @@ export function restoreDurableFinalizationCache(ownerIdentity: string, apiNamesp
 }
 
 export function cancelActiveDurableFinalizations(ownerIdentity: string, apiNamespace: string): void {
-  for (const record of readDurableFinalizations(ownerIdentity, apiNamespace)) active.get(record.id)?.controller.abort()
+  const key = ownerKey(ownerIdentity, apiNamespace)
+  const owner = owners.get(key)
+  // Invalidate continuations as well as active requests. Otherwise an aborted
+  // worker (or a deferred replacement) can start the next message in its batch.
+  if (owner) owner.generation += 1
+  flushes.delete(key)
+  for (const delivery of active.values()) {
+    if (delivery.record.ownerIdentity === ownerIdentity && delivery.record.apiNamespace === apiNamespace) {
+      delivery.controller.abort()
+    }
+  }
 }
 
 export function retainDurableFinalizationOwner(ownerIdentity: string, apiNamespace: string): () => void {
-  const key = `${ownerIdentity}\u001f${apiNamespace}`
-  owners.set(key, (owners.get(key) || 0) + 1)
+  const key = ownerKey(ownerIdentity, apiNamespace)
+  const owner = owners.get(key) ?? { consumers: 0, generation: 0 }
+  owner.consumers += 1
+  owners.set(key, owner)
+  let released = false
   return () => {
-    const remaining = (owners.get(key) || 1) - 1
-    if (remaining > 0) owners.set(key, remaining)
-    else {
+    if (released) return
+    released = true
+    owner.consumers -= 1
+    if (owner.consumers === 0 && owners.get(key) === owner) {
       owners.delete(key)
       cancelActiveDurableFinalizations(ownerIdentity, apiNamespace)
     }
@@ -201,7 +225,7 @@ export function discardDurableFinalizations(ownerIdentity: string, apiNamespace:
 export async function adoptDurableFinalizations(fromOwner: string, toOwner: string, apiNamespace: string): Promise<void> {
   if (fromOwner === toOwner) return
   const jobs = readDurableFinalizations(fromOwner, apiNamespace)
-  for (const r of jobs) active.get(r.id)?.controller.abort()
+  cancelActiveDurableFinalizations(fromOwner, apiNamespace)
   await Promise.all(jobs.map(r => active.get(r.id)?.promise.catch(() => null)))
   for (const r of jobs) {
     if (records.get(r.id) !== r) continue
@@ -239,7 +263,7 @@ export function parseFinalizationResult(value: unknown, request: Record<string, 
   }
 }
 
-async function post(record: DurableFinalization, path: string, body: Record<string, unknown>, fetchImpl: FetchLike, signal: AbortSignal): Promise<unknown> {
+async function post(record: DurableFinalization, path: string, body: Record<string, unknown>, fetchImpl: FetchLike, signal: AbortSignal, canSend: () => boolean): Promise<unknown> {
   const controller = new AbortController()
   let rejectTimeout: (error: Error) => void = () => {}
   const abort = () => { controller.abort(); rejectTimeout(new Error('finalization_aborted')) }
@@ -247,7 +271,7 @@ async function post(record: DurableFinalization, path: string, body: Record<stri
   const timer = setTimeout(() => { controller.abort(); rejectTimeout(new Error('finalization_timeout')) }, REQUEST_TIMEOUT_MS)
   signal.addEventListener('abort', abort, { once: true })
   try {
-    if (signal.aborted || !current(record)) throw new Error('finalization_aborted')
+    if (signal.aborted || !canSend()) throw new Error('finalization_aborted')
     return await Promise.race([fetchImpl(apiPath(record, path), {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mingle-user-id': record.trackingUserId },
       body: JSON.stringify(body), signal: controller.signal,
@@ -262,13 +286,23 @@ async function post(record: DurableFinalization, path: string, body: Record<stri
 }
 
 export function deliverDurableFinalization(record: DurableFinalization, fetchImpl?: FetchLike): Promise<FinalizationResult | null> {
+  const owner = owners.get(ownerKey(record.ownerIdentity, record.apiNamespace))
+  if (!owner) return Promise.resolve(null)
+  return deliverForRun(record, { owner, generation: owner.generation }, fetchImpl)
+}
+
+function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchImpl?: FetchLike): Promise<FinalizationResult | null> {
+  const key = ownerKey(record.ownerIdentity, record.apiNamespace)
+  if (!currentRun(key, run) || !current(record)) return Promise.resolve(null)
   const existing = active.get(record.id)
-  if (existing) return existing.record === record ? existing.promise
-    : existing.promise.then(() => current(record) ? deliverDurableFinalization(record, fetchImpl) : null)
+  if (existing) return existing.record === record && existing.run.owner === run.owner
+    && existing.run.generation === run.generation && !existing.controller.signal.aborted ? existing.promise
+    : existing.promise.then(() => deliverForRun(record, run, fetchImpl))
   const controller = new AbortController()
+  const canSend = () => currentRun(key, run) && current(record) && !controller.signal.aborted
   const fetcher = fetchImpl ?? window.fetch.bind(window)
   const promise = (async () => {
-    if (!current(record)) return null
+    if (!canSend()) return null
     // Original delivery and translation are independent. A hung translation
     // cannot prevent the original from being acknowledged and persisted.
     await Promise.all([
@@ -276,32 +310,33 @@ export function deliverDurableFinalization(record: DurableFinalization, fetchImp
         if (record.sourceDelivered) return
         await post(record, 'log/client-event', {
           ...record.eventBody, translationPending: !!record.translationBody,
-        }, fetcher, controller.signal)
-        if (current(record) && !controller.signal.aborted) { record.sourceDelivered = true; persist() }
+        }, fetcher, controller.signal, canSend)
+        if (canSend()) { record.sourceDelivered = true; persist() }
       })(),
       (async () => {
         if (!record.translationBody || record.result) return
         const startedAt = Date.now()
-        const response = await post(record, 'translate/finalize', record.translationBody, fetcher, controller.signal)
+        const response = await post(record, 'translate/finalize', record.translationBody, fetcher, controller.signal, canSend)
         const result = parseFinalizationResult(response, record.translationBody)
-        if (current(record) && !controller.signal.aborted) {
+        if (canSend()) {
           record.result = result
           record.eventBody.totalDurationMs = Number(record.eventBody.sttDurationMs || 0) + Math.max(0, Date.now() - startedAt)
           persist(); notify(record)
         }
       })(),
     ].map(p => p.catch(() => null)))
-    if (!current(record) || controller.signal.aborted) return null
+    if (!canSend()) return null
     if (!record.sourceDelivered || (record.translationBody && !record.result)) throw new Error('finalization_incomplete')
     if (record.result) {
       await post(record, 'log/client-event', {
         ...record.eventBody, ...record.result, translationUpdate: true,
-      }, fetcher, controller.signal)
+      }, fetcher, controller.signal, canSend)
     }
-    if (current(record)) { records.delete(record.id); persist() }
+    if (!canSend()) return null
+    records.delete(record.id); persist()
     return record.result
   })().catch(() => {
-    if (current(record) && !controller.signal.aborted) {
+    if (canSend()) {
       record.attemptCount += 1
       record.nextAttemptAt = Date.now() + Math.min(60_000, 2_000 * 2 ** Math.min(record.attemptCount - 1, 5))
       persist()
@@ -309,20 +344,27 @@ export function deliverDurableFinalization(record: DurableFinalization, fetchImp
     }
     return null
   }).finally(() => { if (active.get(record.id)?.controller === controller) active.delete(record.id) })
-  active.set(record.id, { record, promise, controller })
+  active.set(record.id, { record, run, promise, controller })
   return promise
 }
 
 export function flushDurableFinalizations(ownerIdentity: string, apiNamespace: string, force = false): Promise<void> {
-  const key = `${ownerIdentity}\u001f${apiNamespace}`
+  const key = ownerKey(ownerIdentity, apiNamespace)
+  const owner = owners.get(key)
+  if (!owner) return Promise.resolve()
   const existing = flushes.get(key)
-  if (existing) return existing
+  if (existing && currentRun(key, existing.run)) return existing.promise
+  const run: FinalizationRun = { owner, generation: owner.generation }
+  const flush = { run, promise: Promise.resolve() }
   const due = readDurableFinalizations(ownerIdentity, apiNamespace)
     .filter(r => (force || r.nextAttemptAt <= Date.now()) && !pendingRemoval(r)).slice(0, 20)
   let index = 0
-  const promise = Promise.all([0, 1].map(async () => {
-    while (index < due.length) await deliverDurableFinalization(due[index++])
-  })).then(() => {}).finally(() => { flushes.delete(key) })
-  flushes.set(key, promise)
-  return promise
+  flushes.set(key, flush)
+  flush.promise = Promise.all([0, 1].map(async () => {
+    while (index < due.length && currentRun(key, run)) await deliverForRun(due[index++], run)
+  })).then(() => {}).finally(() => {
+    // A canceled run may finish after a new mount has already started recovery.
+    if (flushes.get(key) === flush) flushes.delete(key)
+  })
+  return flush.promise
 }

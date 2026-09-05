@@ -36,6 +36,17 @@ Both restart fixtures contained one earlier offline/reconnect control message an
 - Actual optimistic room-removal callback preserves delivery intent; rejected enqueue does not clear the room.
 - Collapsed-bubble original fallback, late source-only hydration, initial source/title behavior, translation-update push suppression, and message analytics suppression.
 
+## Post-review account-cancellation follow-up
+
+Code review after commit `cbbc5c51` found an additional cancellation gap not covered by the earlier device checks. With three pending messages and two active workers, releasing the last account consumer aborted the first two requests but allowed the worker to start message three. Deferred replacement work and an immediate same-account remount exposed related lifecycle races. Eight new checks reproduced failures against the previous implementation.
+
+Delivery now requires a retained account/API-namespace owner and a current owner-instance/cancellation-generation token. Each worker and request validates that token; cancellation invalidates pending continuations as well as active requests. The journal retains unsent data and completed stages for the original account's later recovery. Old flush cleanup cannot delete a replacement flush, repeated consumer cleanup is idempotent, and tracking adoption stops its source batch before moving records.
+
+- Final cancellation-follow-up run: **151 unit-test files / 1,342 tests passed**, including **31 durable-finalization tests** (11 additional cases), plus **6 script tests passed**. TypeScript no-emit checking, targeted ESLint, and diff whitespace checks passed.
+- New regression coverage: source-only and translated batches after last-owner release; stale flush/direct calls with no active original owner; recovery when that owner returns; other retained accounts and API namespaces; explicit cancellation/retry; immediate same-account remount and flush-slot isolation; repeated cleanup; deferred replacements after both release and explicit cancellation; tracking-batch adoption.
+- These are deterministic module tests with in-memory storage and mocked fetches. The earlier iOS/Android results above remain the device-test record; this follow-up did not log out either phone, send real messages, use voice input, rebuild native apps, or change production data.
+- Cancellation prevents subsequent client work and late client-state updates. It cannot retract a request already accepted by the server. Physical account-switch device testing and the other limits below remain outside certification.
+
 ## Cleanup
 
 - Removed only this run's temporary solo rooms: one iOS recovery room, one Android recovery/removal room, one Android rejected-removal room, and one empty Android cleanup room used to allow the normal room preference-sync path to finish. Authenticated GETs returned 404 for all four after deletion; their test messages are no longer accessible through the application. No existing user rooms/messages were deleted.

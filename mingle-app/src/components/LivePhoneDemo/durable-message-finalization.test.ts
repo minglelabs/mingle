@@ -22,6 +22,19 @@ describe('durable message finalization', () => {
   let jobs: Module
   let localStorage: Storage
   let fetcher: ReturnType<typeof vi.fn<typeof fetch>>
+  let releaseOwner: () => void
+  const releases: Array<() => void> = []
+  const retainOwner = (ownerIdentity = owner, apiNamespace = namespace) => {
+    const release = jobs.retainDurableFinalizationOwner(ownerIdentity, apiNamespace)
+    releases.push(release)
+    return release
+  }
+  const reloadJobs = async () => {
+    for (const release of releases.splice(0)) release()
+    vi.resetModules()
+    jobs = await import('./durable-message-finalization')
+    releaseOwner = retainOwner()
+  }
   beforeEach(async () => {
     vi.useFakeTimers()
     pendingRemoval.mockReset().mockReturnValue([])
@@ -35,10 +48,14 @@ describe('durable message finalization', () => {
     fetcher = vi.fn<typeof fetch>(async url => String(url).endsWith('translate/finalize')
       ? Response.json(translated) : new Response(null, { status: 204 }))
     vi.stubGlobal('window', { localStorage, fetch: fetcher })
-    vi.resetModules()
-    jobs = await import('./durable-message-finalization')
+    await reloadJobs()
   })
-  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+  afterEach(async () => {
+    for (const release of releases.splice(0)) release()
+    await vi.advanceTimersByTimeAsync(0)
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   it('writes the full original and translation intent synchronously before any request', () => {
     jobs.enqueueDurableFinalization(input())
@@ -56,8 +73,7 @@ describe('durable message finalization', () => {
     expect(JSON.parse(localStorage.getItem(journalKey)!)[0].sourceDelivered).toBe(true)
     jobs.cancelActiveDurableFinalizations(owner, namespace)
     await delivery
-    vi.resetModules()
-    jobs = await import('./durable-message-finalization')
+    await reloadJobs()
     fetcher.mockReset().mockImplementation(async url => String(url).endsWith('translate/finalize')
       ? Response.json(translated) : new Response(null, { status: 204 }))
     await jobs.flushDurableFinalizations(owner, namespace, true)
@@ -96,8 +112,7 @@ describe('durable message finalization', () => {
       ? Response.json(translated) : new Response(null, { status: bodyOf(init).translationUpdate ? 503 : 204 }))
     await jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
     expect(jobs.readDurableFinalizations(owner, namespace)[0].result).toMatchObject(translated)
-    vi.resetModules()
-    jobs = await import('./durable-message-finalization')
+    await reloadJobs()
     fetcher.mockClear().mockResolvedValue(new Response(null, { status: 204 }))
     await jobs.flushDurableFinalizations(owner, namespace, true)
     expect(fetcher).toHaveBeenCalledTimes(1)
@@ -130,6 +145,8 @@ describe('durable message finalization', () => {
   })
 
   it('does not flush a different account or API namespace', async () => {
+    retainOwner('user:two')
+    retainOwner(owner, 'android/v2.0.1')
     jobs.enqueueDurableFinalization(input())
     await jobs.flushDurableFinalizations('user:two', namespace, true)
     await jobs.flushDurableFinalizations(owner, 'android/v2.0.1', true)
@@ -137,8 +154,8 @@ describe('durable message finalization', () => {
   })
 
   it('keeps delivery alive when a room closes but the same-account list remains mounted', async () => {
-    const releaseList = jobs.retainDurableFinalizationOwner(owner, namespace)
-    const releaseRoom = jobs.retainDurableFinalizationOwner(owner, namespace)
+    const releaseList = releaseOwner
+    const releaseRoom = retainOwner()
     let resolve!: (response: Response) => void
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
       ? new Promise<Response>(r => { resolve = r }) : new Response(null, { status: 204 }))
@@ -151,12 +168,179 @@ describe('durable message finalization', () => {
   })
 
   it('aborts old-account work after the last account consumer unmounts', async () => {
-    const release = jobs.retainDurableFinalizationOwner(owner, namespace)
+    const release = releaseOwner
     fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
     const delivery = jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
     release()
     expect(await delivery).toBeNull()
     expect(jobs.readDurableFinalizations(owner, namespace)[0].sourceDelivered).toBe(false)
+  })
+
+  it.each([true, false])('stops the entire old-account batch, including queued messages (translation=%s)', async translate => {
+    const release = releaseOwner
+    for (const id of ['message-one', 'message-two', 'message-three']) {
+      jobs.enqueueDurableFinalization({ ...input(id), translationBody: translate ? input().translationBody : null })
+    }
+    fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
+    const flushing = jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(fetcher).toHaveBeenCalledTimes(translate ? 4 : 2)
+    release()
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json(translated) : new Response(null, { status: 204 }))
+    await flushing
+    expect(fetcher).toHaveBeenCalledTimes(translate ? 4 : 2)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(3)
+    expect(jobs.readDurableFinalizations(owner, namespace).every(r => !r.sourceDelivered && !r.result)).toBe(true)
+  })
+
+  it('blocks stale flush and direct delivery calls until the original account returns', async () => {
+    const release = releaseOwner
+    const record = jobs.enqueueDurableFinalization(input())
+    release()
+    const releaseOther = retainOwner('user:two')
+    await jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(await jobs.deliverDurableFinalization(record)).toBeNull()
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(1)
+
+    const other = jobs.enqueueDurableFinalization({ ...input('other-message'), ownerIdentity: 'user:two' })
+    await jobs.deliverDurableFinalization(other)
+    expect(jobs.readDurableFinalizations('user:two', namespace)).toEqual([])
+    releaseOther()
+    const releaseAgain = retainOwner()
+    await jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+    expect(fetcher.mock.calls.filter(([, init]) => bodyOf(init).clientMessageId === 'message-one')).toHaveLength(2)
+    releaseAgain()
+  })
+
+  it.each([
+    { otherOwner: 'user:two', otherNamespace: namespace },
+    { otherOwner: owner, otherNamespace: 'android/v2.0.1' },
+  ])('does not cancel another retained account/API scope: %j', async ({ otherOwner, otherNamespace }) => {
+    retainOwner(otherOwner, otherNamespace)
+    let finishOther!: (response: Response) => void
+    fetcher.mockImplementation(async (url, init) => {
+      if (!String(url).endsWith('translate/finalize')) return new Response(null, { status: 204 })
+      if (bodyOf(init).clientMessageId === 'other-message') {
+        return new Promise<Response>(resolve => { finishOther = resolve })
+      }
+      return new Promise<Response>(() => {})
+    })
+    const original = jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
+    const other = jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization({
+      ...input('other-message'), ownerIdentity: otherOwner, apiNamespace: otherNamespace,
+      translationBody: { ...input().translationBody, clientMessageId: 'other-message' },
+    }))
+    releaseOwner()
+    finishOther(Response.json(translated))
+    expect(await original).toBeNull()
+    expect(await other).toMatchObject(translated)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(1)
+    expect(jobs.readDurableFinalizations(otherOwner, otherNamespace)).toEqual([])
+  })
+
+  it('cancels a batch explicitly without losing its queued jobs or blocking a later retry', async () => {
+    const release = releaseOwner
+    for (const id of ['message-one', 'message-two', 'message-three']) jobs.enqueueDurableFinalization(input(id))
+    fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
+    const flushing = jobs.flushDurableFinalizations(owner, namespace, true)
+    jobs.cancelActiveDurableFinalizations(owner, namespace)
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json(translated) : new Response(null, { status: 204 }))
+    await flushing
+    expect(fetcher).toHaveBeenCalledTimes(4)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(3)
+    await jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+    release()
+  })
+
+  it('resumes on immediate same-account remount without reusing or deleting the old flush', async () => {
+    const release = releaseOwner
+    for (const id of ['message-one', 'message-two', 'message-three']) jobs.enqueueDurableFinalization(input(id))
+    fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
+    const oldFlush = jobs.flushDurableFinalizations(owner, namespace, true)
+    release()
+    const releaseAgain = retainOwner()
+    let finishLastSource!: (response: Response) => void
+    fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith('translate/finalize')) return Response.json(translated)
+      if (bodyOf(init).clientMessageId === 'message-three' && !bodyOf(init).translationUpdate) {
+        return new Promise<Response>(resolve => { finishLastSource = resolve })
+      }
+      return new Response(null, { status: 204 })
+    })
+    const newFlush = jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(newFlush).not.toBe(oldFlush)
+    await oldFlush
+    await vi.advanceTimersByTimeAsync(0)
+    expect(jobs.flushDurableFinalizations(owner, namespace, true)).toBe(newFlush)
+    finishLastSource(new Response(null, { status: 204 }))
+    await newFlush
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+    const updates = fetcher.mock.calls.map(([, init]) => bodyOf(init)).filter(body => body.translationUpdate)
+    expect(updates.map(body => body.clientMessageId).sort()).toEqual(['message-one', 'message-three', 'message-two'])
+    releaseAgain()
+  })
+
+  it('does not release another mounted consumer when one cleanup is called twice', async () => {
+    const releaseList = releaseOwner
+    const releaseRoom = retainOwner()
+    let finish!: (response: Response) => void
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? new Promise<Response>(resolve => { finish = resolve }) : new Response(null, { status: 204 }))
+    const delivery = jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
+    releaseRoom()
+    releaseRoom()
+    finish(Response.json(translated))
+    expect(await delivery).toMatchObject(translated)
+    releaseList()
+  })
+
+  it.each(['release', 'cancel'])('does not revive a deferred replacement delivery after owner %s', async action => {
+    fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
+    const original = jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
+    const replacement = jobs.enqueueDurableFinalization({
+      ...input(), utterance: { ...input().utterance, originalText: 'Updated' },
+    })
+    const deferred = jobs.deliverDurableFinalization(replacement)
+    if (action === 'release') {
+      releaseOwner()
+      retainOwner()
+    } else {
+      jobs.cancelActiveDurableFinalizations(owner, namespace)
+    }
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json(translated) : new Response(null, { status: 204 }))
+    await original
+    expect(await deferred).toBeNull()
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(1)
+    await jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+  })
+
+  it('stops the tracking-owner batch before adopting all pending jobs', async () => {
+    const fromOwner = 'tracking:tracking-one'
+    const releaseTracking = retainOwner(fromOwner)
+    const releaseAccount = releaseOwner
+    for (const id of ['message-one', 'message-two', 'message-three']) {
+      jobs.enqueueDurableFinalization({ ...input(id), ownerIdentity: fromOwner })
+    }
+    fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
+    const oldFlush = jobs.flushDurableFinalizations(fromOwner, namespace, true)
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json(translated) : new Response(null, { status: 204 }))
+    await jobs.adoptDurableFinalizations(fromOwner, owner, namespace)
+    await oldFlush
+    expect(fetcher).toHaveBeenCalledTimes(4)
+    expect(jobs.readDurableFinalizations(fromOwner, namespace)).toEqual([])
+    expect(jobs.readDurableFinalizations(owner, namespace)).toHaveLength(3)
+    await jobs.flushDurableFinalizations(owner, namespace, true)
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+    releaseTracking()
+    releaseAccount()
   })
 
   it('adopts tracking jobs without losing completed source delivery', async () => {
@@ -207,8 +391,7 @@ describe('durable message finalization', () => {
   it('rejects corrupt journal entries but restores a valid neighboring message', async () => {
     const valid = jobs.enqueueDurableFinalization(input())
     localStorage.setItem(journalKey, JSON.stringify([null, { ...valid, apiNamespace: '../bad' }, { ...valid, id: 'bad', translationBody: [] }, valid]))
-    vi.resetModules()
-    jobs = await import('./durable-message-finalization')
+    await reloadJobs()
     expect(jobs.readDurableFinalizations(owner, namespace).map((r: DurableFinalization) => r.id)).toEqual([valid.id])
   })
 })
