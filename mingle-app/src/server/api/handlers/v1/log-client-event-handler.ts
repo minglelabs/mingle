@@ -355,12 +355,14 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         }
 
-        try {
-          await maybeGenerateConversationTitleForSession({
-            sessionKey: tracking.sessionKey,
-          })
-        } catch (error) {
-          console.error('Conversation auto title generation failed:', error)
+        // The durable client first delivers the source, then patches the same
+        // message with translations. Do not delay source acknowledgement on AI.
+        if (body.translationPending !== true) {
+          try {
+            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+          } catch (error) {
+            console.error('Conversation auto title generation failed:', error)
+          }
         }
 
         // An invitee gets no DB record and can't see the room at all until
@@ -372,7 +374,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // materializePendingConversationInvitees's joinedAt doc comment.
         let committedMemberUserIds: string[] | null = null
         try {
-          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          if (body.translationUpdate !== true) {
+            committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          }
           if (Array.isArray(committedMemberUserIds)) {
             console.info('[conversation-message] membership-ready', {
               messageId,
@@ -399,7 +403,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
-        if (messageId) {
+        if (messageId && body.translationUpdate !== true) {
           try {
             await sendPushNotificationForConversationMessage({
               messageId,
@@ -438,6 +442,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
       sessionKey: tracking.sessionKey,
       messageId,
       eventType,
+      ...(body.translationUpdate === true ? { skipAnalyticsCapture: true } : {}),
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
 

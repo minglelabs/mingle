@@ -139,6 +139,12 @@ import {
   type ConversationMutationRecord,
 } from "@/components/conversation-mutation-queue";
 import {
+  adoptDurableFinalizations,
+  retainDurableFinalizationOwner,
+  discardDurableFinalizations,
+  flushDurableFinalizations,
+} from "@/components/LivePhoneDemo/durable-message-finalization";
+import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
@@ -2353,6 +2359,7 @@ export default function ConversationList({
         if (!acknowledged) return;
         advanceConversationListMutationRevision();
         if (record.kind === "remove") {
+          discardDurableFinalizations(record.ownerIdentity, conversationMutationIdentity.apiNamespace, record.conversationId);
           conversationRemovalRollbackRef.current.delete(record.conversationId);
           return;
         }
@@ -2535,6 +2542,31 @@ export default function ConversationList({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [flushPendingConversationMutations, sessionStatus]);
+
+  // Recovery must also run on a cold start straight into the list, without
+  // requiring the user to reopen the room containing the unfinished message.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+    const owner = `user:${authenticatedUserId}`;
+    const namespace = conversationMutationIdentity.apiNamespace;
+    const releaseOwner = retainDurableFinalizationOwner(owner, namespace);
+    let cancelled = false;
+    const retry = () => { void flushDurableFinalizations(owner, namespace); };
+    const resume = () => { void flushDurableFinalizations(owner, namespace, true); };
+    const visible = () => { if (document.visibilityState === "visible") resume(); };
+    void adoptDurableFinalizations(`tracking:${conversationMutationIdentity.externalUserId}`, owner, namespace)
+      .then(() => { if (!cancelled) resume(); });
+    const timer = window.setInterval(retry, 15_000);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", visible);
+      releaseOwner();
+    };
+  }, [authenticatedUserId, conversationMutationIdentity, sessionStatus]);
 
   const handleConversationStatsChange = useCallback((
     conversationId: string,

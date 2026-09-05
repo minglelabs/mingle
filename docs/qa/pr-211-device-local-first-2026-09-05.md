@@ -1,5 +1,7 @@
 # PR 211: non-voice device verification
 
+Follow-up: The two failures recorded in this initial run were subsequently addressed and retested on both devices. See [message recovery follow-up](pr-211-message-recovery-2026-09-05.md). The original observations below are retained as the reproduction baseline.
+
 ## Scope and environment
 
 - Tested commit: `0d147844`, branch `codex/messenger-client-sot-2.0.1`.

@@ -49,6 +49,17 @@ import {
   enqueueClientMessageOutboxRecord,
   flushClientMessageOutbox,
 } from './client-message-outbox'
+import {
+  adoptDurableFinalizations,
+  retainDurableFinalizationOwner,
+  deliverDurableFinalization,
+  discardDurableFinalizations,
+  enqueueDurableFinalization,
+  flushDurableFinalizations,
+  readDurableFinalizations,
+  restoreDurableFinalizationCache,
+  subscribeDurableFinalizations,
+} from './durable-message-finalization'
 
 export {
   buildStorageKey,
@@ -1420,6 +1431,7 @@ interface SubmitExternalUtteranceInput {
 }
 
 interface LocalFinalizeResult {
+  utterance: Utterance
   utteranceId: string
   text: string
   lang: string
@@ -2117,6 +2129,7 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
     && left.originalLang === right.originalLang
     && left.sourceLanguagesMixed === right.sourceLanguagesMixed
     && left.sourceTextHasForeignScript === right.sourceTextHasForeignScript
+    && left.translationStatus === right.translationStatus
     && areOptionalStringArraysEqual(left.targetLanguages, right.targetLanguages)
     && areOptionalRecordsEqual(left.translations, right.translations)
     && areOptionalRecordsEqual(left.translationFinalized, right.translationFinalized)
@@ -2343,6 +2356,15 @@ export function mergeServerHydrationUtteranceIntoStoreState(
     : {
         ...normalizedServerUtterance,
         createdAtMs: existingCreatedAtMs,
+        // Source delivery is now independent of translation. A raw server
+        // snapshot must not erase the final translation already rendered here.
+        ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
+          originalLang: normalizedServerUtterance.originalLang === 'unknown'
+            ? existingUtterance.originalLang : normalizedServerUtterance.originalLang,
+          translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
+          translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
+          translationStatus: existingUtterance.translationStatus,
+        } : {}),
       }
   const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)
   const basePriorities = removeTranslationPrioritiesForUtterance(
@@ -2796,6 +2818,7 @@ export default function useRealtimeSTT({
     userId: viewerUserId,
     trackingUserId: outboxTrackingUserId,
   }), [outboxTrackingUserId, viewerUserId])
+  const finalizationApiNamespace = resolveRuntimeApiNamespace()
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -2832,6 +2855,7 @@ export default function useRealtimeSTT({
     }
 
     try {
+      restoreDurableFinalizationCache(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)
       const stored = localStorage.getItem(buildStorageKey(LS_KEY_UTTERANCES, storageNamespace))
       if (stored) {
         const recent = parseRecentStoredUtterances(stored, LOAD_BATCH_SIZE)
@@ -2893,7 +2917,7 @@ export default function useRealtimeSTT({
         clearTimeout(fullStorageParseTimer)
       }
     }
-  }, [buildLocalUtteranceCache, persistLocalUtterancesSnapshot, storageNamespace])
+  }, [buildLocalUtteranceCache, clientMessageOutboxOwnerIdentity, finalizationApiNamespace, persistLocalUtterancesSnapshot, storageNamespace])
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
@@ -4202,6 +4226,11 @@ export default function useRealtimeSTT({
     if (!viewerUserId || typeof window === 'undefined') return
 
     let cancelled = false
+    void adoptDurableFinalizations(
+      trackingClientMessageOutboxOwnerIdentity, clientMessageOutboxOwnerIdentity, finalizationApiNamespace,
+    ).then(() => {
+      if (!cancelled) return flushDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, true)
+    })
     void adoptClientMessageOutboxRecords({
       fromOwnerIdentity: trackingClientMessageOutboxOwnerIdentity,
       toOwnerIdentity: clientMessageOutboxOwnerIdentity,
@@ -4216,17 +4245,19 @@ export default function useRealtimeSTT({
     return () => {
       cancelled = true
     }
-  }, [clientMessageOutboxOwnerIdentity, trackingClientMessageOutboxOwnerIdentity, viewerUserId])
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, trackingClientMessageOutboxOwnerIdentity, viewerUserId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const flushOutbox = (force = false) => {
+      void flushDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, force)
       void flushClientMessageOutbox({
         ownerIdentity: clientMessageOutboxOwnerIdentity,
         force,
       })
     }
+    const releaseOwner = retainDurableFinalizationOwner(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)
     const handleOnline = () => flushOutbox(true)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') flushOutbox(true)
@@ -4243,8 +4274,9 @@ export default function useRealtimeSTT({
       window.removeEventListener('online', handleOnline)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.clearInterval(retryTimer)
+      releaseOwner()
     }
-  }, [clientMessageOutboxOwnerIdentity])
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace])
 
   const synthesizeTtsViaApi = useCallback(async (text: string, language: string): Promise<Blob | null> => {
     const normalizedText = text.trim()
@@ -4340,34 +4372,35 @@ export default function useRealtimeSTT({
     }
   }, [requestTtsForRenderedTranslation, utterances])
 
-  const applyTranslationToUtterance = useCallback((
-    utteranceId: string,
-    translations: Record<string, string>,
-    priority: TranslationPriority,
-    markFinalized: boolean,
-    fallbackMatch?: TranslationApplyFallbackMatch,
-    options?: {
-      detectedSourceLanguage?: string
-      sourceLanguagesMixed?: boolean
-      sourceTextHasForeignScript?: boolean
-      selectedLanguages?: string[]
-      sourceText?: string
-    },
-  ) => {
-    setUtteranceStore((prev) => applyTranslationToUtteranceStoreState({
-      store: prev,
-      utteranceId,
-      translations,
-      priority,
-      markFinalized,
-      fallbackMatch,
-      detectedSourceLanguage: options?.detectedSourceLanguage,
-      sourceLanguagesMixed: options?.sourceLanguagesMixed,
-      sourceTextHasForeignScript: options?.sourceTextHasForeignScript,
-      selectedLanguages: options?.selectedLanguages,
-      sourceText: options?.sourceText,
-    }))
-  }, [])
+  useEffect(() => {
+    const apply = (record: ReturnType<typeof readDurableFinalizations>[number]) => {
+      if (record.ownerIdentity !== clientMessageOutboxOwnerIdentity || record.apiNamespace !== finalizationApiNamespace
+        || record.storageNamespace !== (storageNamespace || '')) return
+      // Preserve foreground playback timing: translation rendering must not
+      // wait for the following server write. Recovered/background jobs have no
+      // foreground controller and must never autoplay old messages.
+      const foreground = finalizedTurnTranslationControllersRef.current[record.utterance.id]
+      if (record.result && foreground && !foreground.signal.aborted && enableTtsRef.current) {
+        pendingFinalizedTtsUtteranceIdsRef.current.add(record.utterance.id)
+      }
+      const seq = ++translateSeqRef.current
+      setUtteranceStore(prev => {
+        let next = { ...prev, utterances: appendOrReplaceUtterance(prev.utterances, record.utterance) }
+        if (record.result) next = applyTranslationToUtteranceStoreState({
+          store: next, utteranceId: record.utterance.id,
+          translations: record.result.translations, priority: { kind: 'final', seq }, markFinalized: true,
+          detectedSourceLanguage: record.result.sourceLanguage,
+          sourceLanguagesMixed: record.result.sourceLanguagesMixed,
+          sourceTextHasForeignScript: record.result.sourceTextHasForeignScript,
+          selectedLanguages: record.utterance.targetLanguages,
+          sourceText: record.utterance.originalText,
+        })
+        return next
+      })
+    }
+    for (const record of readDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)) apply(record)
+    return subscribeDurableFinalizations(({ record }) => apply(record))
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, storageNamespace])
 
   const finalizePendingLocally = useCallback((
     rawText: string,
@@ -4457,6 +4490,7 @@ export default function useRealtimeSTT({
       nowMs: now,
     })
     return {
+      utterance: localPayload.utterance,
       utteranceId: localPayload.utteranceId,
       text: localPayload.text,
       lang: localPayload.language,
@@ -4514,143 +4548,75 @@ export default function useRealtimeSTT({
       speakerAvatarIndex?: number
     },
   ) => {
-    const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
-    const resolvedSpeaker = options?.speaker ?? localFinalizeResult.speaker
-    const resolvedSpeakerAvatarSeed = options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed
-    const resolvedSpeakerAvatarIndex = options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex
-    const seq = ++translateSeqRef.current
-    const requestStartedAt = Date.now()
+    const { utteranceId, text, lang, currentTurnPreviousState, utterance } = localFinalizeResult
     const targetLanguages = [...getCurrentTargetLanguages()]
-    const conversationClearSequence = conversationClearSequenceRef.current
-    const isStaleConversationFinalize = () => conversationClearSequenceRef.current !== conversationClearSequence
-
-    // 단일 언어 모드: 선택 언어가 1개인 경우
     const isSingleLanguageMode = targetLanguages.length === 1
-    const detectedLangNorm = normalizeTranslationLanguageKey(lang)
-    const selectedLangNorm = normalizeTranslationLanguageKey(targetLanguages[0] || '')
-
-    if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
-      // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
-      if (isStaleConversationFinalize()) return
-      void logClientEvent({
-        eventType: 'stt_turn_finalized',
-        clientMessageId: utteranceId,
-        sourceLanguage: lang,
-        sourceText: text,
-        translations: {},
-        sttDurationMs: options?.sttDurationMs,
-        totalDurationMs: options?.sttDurationMs ?? 0,
+    const skipTranslation = targetLanguages.length === 0 || (
+      isSingleLanguageMode
+      && normalizeTranslationLanguageKey(lang) === normalizeTranslationLanguageKey(targetLanguages[0])
+    )
+    const sessionKey = ensureSessionKey()
+    const clientContext = buildClientContextPayload(usageSec)
+    const recentTurns = buildRecentTurnContextPayload(utteranceId)
+    const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
+      text, sourceLanguage: lang, targetLanguages, isFinal: true,
+      sessionKey, clientContext, clientMessageId: utteranceId,
+      sttDurationMs: options?.sttDurationMs,
+      currentTurnPreviousState,
+      clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
+      ...(translationModel ? { translationModel } : {}),
+      ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
+    }
+    // Synchronous write-ahead journal: never clear the composer with the only
+    // copy of this message stranded behind a translation request.
+    const record = enqueueDurableFinalization({
+      ownerIdentity: clientMessageOutboxOwnerIdentity,
+      apiNamespace: finalizationApiNamespace,
+      trackingUserId: outboxTrackingUserId,
+      conversationId: conversationId || '',
+      storageNamespace: storageNamespace || '',
+      utterance: {
+        ...utterance,
+        speaker: options?.speaker ?? utterance.speaker,
+        speakerAvatarSeed: options?.speakerAvatarSeed ?? utterance.speakerAvatarSeed,
+        speakerAvatarIndex: options?.speakerAvatarIndex ?? utterance.speakerAvatarIndex,
+      },
+      translationBody,
+      eventBody: {
+        eventType: 'stt_turn_finalized', sessionKey, clientContext,
+        clientMessageId: utteranceId, sourceLanguage: lang, sourceText: text,
+        sttDurationMs: options?.sttDurationMs, totalDurationMs: options?.sttDurationMs ?? 0,
         metadata: {
-          reason: options?.reason || 'unknown',
-          singleLanguageMode: true,
-          skipTranslation: true,
-          speaker: resolvedSpeaker || null,
-          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
-          speakerAvatarIndex:
-            typeof resolvedSpeakerAvatarIndex === 'number'
-              ? resolvedSpeakerAvatarIndex
-              : null,
+          reason: options?.reason || 'unknown', singleLanguageMode: isSingleLanguageMode,
+          skipTranslation, hasInlineTts: false,
+          speaker: options?.speaker ?? localFinalizeResult.speaker ?? null,
+          speakerAvatarSeed: options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed ?? null,
+          speakerAvatarIndex: options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex ?? null,
         },
-        keepalive: true,
-      })
-      return
-    }
-
-    // 단일 언어 모드이지만 다른 언어 감지: 선택 언어로 번역 + TTS
-    // 다중 언어 모드: 기존 동작 유지
-    const ttsTargetLang = isSingleLanguageMode
-      ? (targetLanguages[0] || '')
-      : (targetLanguages.filter(l => l !== lang)[0] || '')
-    const effectiveTargetLanguages = isSingleLanguageMode
-      ? targetLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
-      : targetLanguages
-
-    // Reserve a TTS queue slot before the API call so playback order matches utterance order
-    if (enableTtsRef.current && ttsTargetLang) {
-      onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
-    }
-
+      },
+    })
+    const ttsTargetLang = skipTranslation ? '' : targetLanguages.filter(l => l !== lang)[0] || ''
+    if (enableTtsRef.current && ttsTargetLang) onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
     clearFinalizedTurnTranslationController(utteranceId)
     const controller = new AbortController()
+    const clearSequence = conversationClearSequenceRef.current
     finalizedTurnTranslationControllersRef.current[utteranceId] = controller
-
-    void translateViaApi(text, lang, effectiveTargetLanguages, {
-      signal: controller.signal,
-      ttsLanguage: ttsTargetLang,
-      enableTts: enableTtsRef.current,
-      isFinal: true,
-      clientMessageId: utteranceId,
-      currentTurnPreviousState,
-      excludeUtteranceId: utteranceId,
-      sttDurationMs: options?.sttDurationMs,
-    }).then(result => {
-      if (isStaleConversationFinalize()) {
-        if (enableTtsRef.current && ttsTargetLang) {
-          onTtsCanceledRef.current?.(utteranceId)
-        }
+    // A view's controller only gates playback. Durable delivery can resume on
+    // another screen or after restart without replaying historical speech.
+    void deliverDurableFinalization(record).then(result => {
+      if (controller.signal.aborted || clearSequence !== conversationClearSequenceRef.current) {
+        if (ttsTargetLang) onTtsCanceledRef.current?.(utteranceId)
         return
       }
-
-      const hasTranslations = Object.keys(result.translations).length > 0
-      if (hasTranslations) {
-        applyTranslationToUtterance(
-          utteranceId,
-          result.translations,
-          { kind: 'final', seq },
-          true,
-          {
-            sourceText: text,
-            sourceLanguage: lang,
-          },
-          {
-            detectedSourceLanguage: result.sourceLanguage,
-            sourceLanguagesMixed: result.sourceLanguagesMixed,
-            sourceTextHasForeignScript: result.sourceTextHasForeignScript,
-            selectedLanguages: targetLanguages,
-            sourceText: text,
-          },
-        )
-        if (enableTtsRef.current && ttsTargetLang) {
-          pendingFinalizedTtsUtteranceIdsRef.current.add(utteranceId)
-        }
-      } else if (enableTtsRef.current && ttsTargetLang) {
-        onTtsCanceledRef.current?.(utteranceId)
-      }
-
-      const translationLatencyMs = Math.max(0, Date.now() - requestStartedAt)
-      const totalDurationMs = (options?.sttDurationMs ?? 0) + translationLatencyMs
-      void logClientEvent({
-        eventType: 'stt_turn_finalized',
-        clientMessageId: utteranceId,
-        sourceLanguage: result.sourceLanguage || lang,
-        sourceText: text,
-        translations: result.translations,
-        sttDurationMs: options?.sttDurationMs,
-        totalDurationMs,
-        provider: result.provider,
-        infrastructureProvider: result.infrastructureProvider,
-        model: result.model,
-        translationPromptTokens: result.translationPromptTokens,
-        translationCompletionTokens: result.translationCompletionTokens,
-        translationTotalTokens: result.translationTotalTokens,
-        metadata: {
-          reason: options?.reason || 'unknown',
-          hasInlineTts: Boolean(result.ttsAudioBase64),
-          singleLanguageMode: isSingleLanguageMode,
-          speaker: resolvedSpeaker || null,
-          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
-          speakerAvatarIndex:
-            typeof resolvedSpeakerAvatarIndex === 'number'
-              ? resolvedSpeakerAvatarIndex
-              : null,
-        },
-        keepalive: true,
-      })
+      if ((!result || !Object.keys(result.translations).length) && ttsTargetLang) onTtsCanceledRef.current?.(utteranceId)
     }).finally(() => {
-      if (finalizedTurnTranslationControllersRef.current[utteranceId] !== controller) return
-      delete finalizedTurnTranslationControllersRef.current[utteranceId]
+      if (finalizedTurnTranslationControllersRef.current[utteranceId] === controller) {
+        delete finalizedTurnTranslationControllersRef.current[utteranceId]
+      }
     })
-  }, [applyTranslationToUtterance, clearFinalizedTurnTranslationController, getCurrentTargetLanguages, logClientEvent, translateViaApi])
+  }, [buildRecentTurnContextPayload, clearFinalizedTurnTranslationController, clientMessageOutboxOwnerIdentity,
+    conversationId, ensureSessionKey, finalizationApiNamespace, getCurrentTargetLanguages, outboxTrackingUserId,
+    storageNamespace, translationModel, usageSec])
 
   const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
     const text = normalizeSttTurnText(input.text)
@@ -4679,8 +4645,11 @@ export default function useRealtimeSTT({
     return localFinalizeResult.utteranceId
   }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
 
-  const clearConversationHistory = useCallback(() => {
+  const clearConversationHistory = useCallback((options?: { preservePendingDelivery?: boolean }) => {
     const wasActiveSession = hasActiveSessionRef.current
+    if (!options?.preservePendingDelivery) {
+      discardDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId || '')
+    }
 
     conversationClearSequenceRef.current += 1
     clearConnectionErrorResetTimer()
@@ -4725,6 +4694,9 @@ export default function useRealtimeSTT({
       })
     }
   }, [
+    clientMessageOutboxOwnerIdentity,
+    finalizationApiNamespace,
+    conversationId,
     clearAllFinalizedTurnTranslationControllers,
     clearConnectionErrorResetTimer,
     clearUtterancePersistTimer,
@@ -5409,8 +5381,11 @@ export default function useRealtimeSTT({
             ? recentFinalizedMatch.utteranceId
             : null
         )
-        let reusedSpeakerAvatarSeed: string | undefined
-        let reusedSpeakerAvatarIndex: number | undefined
+        const reusedUtterance = recentLocalReuseUtteranceId
+          ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)
+          : undefined
+        let reusedSpeakerAvatarSeed = reusedUtterance?.speakerAvatarSeed
+        let reusedSpeakerAvatarIndex = reusedUtterance?.speakerAvatarIndex
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
@@ -5462,6 +5437,13 @@ export default function useRealtimeSTT({
 
         finalizeTurnWithTranslation(
           {
+            utterance: {
+              ...finalizedPayload.utterance,
+              id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+              createdAtMs: (recentLocalReuseUtteranceId
+                ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)?.createdAtMs
+                : undefined) ?? finalizedPayload.utterance.createdAtMs,
+            },
             utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
             text: finalizedPayload.text,
             lang: finalizedPayload.language,

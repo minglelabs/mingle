@@ -4534,7 +4534,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         manualTtsRequestSeqRef.current += 1
         setPendingManualTtsTarget(null)
         forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
-        clearConversationHistory()
+        // A queued removal can still be rejected. Keep unsent messages in the
+        // journal until the list receives the actual deletion acknowledgement.
+        clearConversationHistory({ preservePendingDelivery: true })
         setDeleteConversationDialogOpen(false)
         requestCloseMenuPanel()
         toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)

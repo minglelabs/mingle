@@ -67,6 +67,13 @@ describe("createTrackedEventLog", () => {
     vi.clearAllMocks();
   });
 
+  it("updates translation metadata without counting another message send", async () => {
+    await createTrackedEventLog({ userId: "user-1", tracking, clientContext,
+      eventType: "stt_turn_finalized", messageId: "msg-1", metadata: { translations: { en: "Hello" } }, skipAnalyticsCapture: true });
+    expect(mockAppEventLogUpsert).toHaveBeenCalledOnce();
+    expect(mockCaptureMingleEvent).not.toHaveBeenCalled();
+  });
+
   it("upserts keyed on messageId + eventType so a retried finalize updates the same row atomically", async () => {
     await createTrackedEventLog({
       userId: "user-1",

@@ -107,6 +107,33 @@ describe("handleLogClientEventV1", () => {
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
   });
 
+  it("acknowledges the original without waiting for title AI while translation is pending", async () => {
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
+      method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translationPending: true }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).toHaveBeenCalledOnce();
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledOnce();
+    expect(mockMaybeGenerateConversationTitleForSession).not.toHaveBeenCalled();
+    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+  });
+
+  it("patches translations and refreshes the room without sending a second push", async () => {
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
+      method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert.mock.calls[0][0].where).toEqual({ sessionKey_clientMessageId: { sessionKey: "sess_123", clientMessageId: "durable_1" } });
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
+    expect(mockMaterializePendingConversationInvitees).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).not.toHaveBeenCalled();
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
+  });
+
   it("persists translation model and infrastructure provider for finalized turns", async () => {
     const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
       method: "POST",

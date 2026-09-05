@@ -445,6 +445,7 @@ export async function createTrackedEventLog(args: {
   sessionKey?: string | null;
   usageSec?: number | null;
   metadata?: Prisma.InputJsonValue;
+  skipAnalyticsCapture?: boolean;
 }) {
   const { userId, tracking, clientContext } = args;
   const usageSec = args.usageSec ?? clientContext.usageSec;
@@ -490,6 +491,10 @@ export async function createTrackedEventLog(args: {
   } else {
     await prisma.appEventLog.create({ data });
   }
+
+  // Translation enrichment updates the existing DB event but is not another
+  // message send. Keep the source-first protocol from doubling product metrics.
+  if (args.skipAnalyticsCapture) return;
 
   const postHogProperties = buildPostHogProperties({
     tracking,
