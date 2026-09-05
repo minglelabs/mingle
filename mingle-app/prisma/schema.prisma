@@ -550,7 +550,8 @@ model AppClientVersionPolicy {
 }
 
 model AdminDashboardDailyMetric {
-  day                DateTime @id @db.Date
+  day                DateTime @db.Date
+  platform           String   @default("all")
   signupCount        Int      @map("signup_count")
   dauCount           Int      @map("dau_count")
   messageCount       Int      @map("message_count")
@@ -563,5 +564,7 @@ model AdminDashboardDailyMetric {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
+  @@id([day, platform])
+  @@index([platform, day], map: "admin_dashboard_daily_metrics_platform_day_idx")
   @@map("admin_dashboard_daily_metrics")
 }

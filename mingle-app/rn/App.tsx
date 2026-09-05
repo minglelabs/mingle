@@ -27,6 +27,7 @@ import {
   startNativeStt,
   stopNativeStt,
 } from './src/nativeStt';
+import { addNativePipListener, type NativePipEvent } from './src/nativePip';
 import {
   isNativeSttServerReadyMessage,
   resolveNativeSttStatusAfterStart,
@@ -168,6 +169,12 @@ type NativeLocationModule = {
     provider?: unknown;
     receivedAtMs?: unknown;
   }>;
+};
+type NativePictureInPictureModule = {
+  start?: (options: Record<string, unknown>) => Promise<unknown>;
+  update?: (options: Record<string, unknown>) => void;
+  setPlaybackState?: (options: Record<string, unknown>) => void;
+  stop?: (options: Record<string, unknown>) => Promise<unknown>;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -513,6 +520,8 @@ const NATIVE_STT_EVENT = 'mingle:native-stt';
 const NATIVE_STT_MESSAGE_QUEUE_KEY = '__MINGLE_NATIVE_STT_MESSAGE_QUEUE';
 const NATIVE_STT_MESSAGE_QUEUE_LIMIT = 200;
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
+const NATIVE_PIP_EVENT = 'mingle:native-pip';
+const NATIVE_PIP_STATE_KEY = '__MINGLE_LAST_NATIVE_PIP_EVENT';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
@@ -806,6 +815,11 @@ type NativeQaSetSttStatusCommand = {
   };
 };
 
+type NativePictureInPictureCommand = {
+  type: 'native_pip_start' | 'native_pip_update' | 'native_pip_playback_state' | 'native_pip_stop';
+  payload?: Record<string, unknown>;
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -826,7 +840,8 @@ type WebViewCommand =
   | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
-  | NativeQaSetSttStatusCommand;
+  | NativeQaSetSttStatusCommand
+  | NativePictureInPictureCommand;
 
 type NativeSttEvent =
   | {
@@ -1382,6 +1397,7 @@ export function NativeAdBanner(props: {
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
   const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
     createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
@@ -2662,6 +2678,23 @@ function AppInner(): React.JSX.Element {
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
+  const emitNativePipToWeb = useCallback((payload: NativePipEvent) => {
+    latestNativePipEventRef.current = payload;
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    if (__DEV__) {
+      console.log(`[NativePiP→Web] ${serialized.slice(0, 160)}`);
+    }
+    const script = `window[${JSON.stringify(NATIVE_PIP_STATE_KEY)}] = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PIP_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const replayNativePipToWeb = useCallback(() => {
+    const latestEvent = latestNativePipEventRef.current;
+    if (latestEvent) emitNativePipToWeb(latestEvent);
+  }, [emitNativePipToWeb]);
+
   const flushPendingNativeSttMessagesToWeb = useCallback(() => {
     if (!isPageReadyRef.current) return;
     const pendingMessages = pendingNativeSttMessagesRef.current.splice(0);
@@ -3588,6 +3621,44 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (
+      parsed.type === 'native_pip_start'
+      || parsed.type === 'native_pip_update'
+      || parsed.type === 'native_pip_playback_state'
+      || parsed.type === 'native_pip_stop'
+    ) {
+      if (Platform.OS !== 'ios') return;
+
+      const pictureInPictureModule = (NativeModules as {
+        NativePictureInPictureModule?: NativePictureInPictureModule;
+      }).NativePictureInPictureModule;
+      if (!pictureInPictureModule) return;
+
+      if (parsed.type === 'native_pip_start') {
+        if (typeof pictureInPictureModule.start !== 'function') return;
+        void pictureInPictureModule.start(parsed.payload ?? {}).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (__DEV__) {
+            console.warn(`[NativePiP] start failed: ${message}`);
+          }
+          Alert.alert('Picture in Picture unavailable', message);
+        });
+      } else if (parsed.type === 'native_pip_update') {
+        pictureInPictureModule.update?.(parsed.payload ?? {});
+      } else if (parsed.type === 'native_pip_playback_state') {
+        pictureInPictureModule.setPlaybackState?.(parsed.payload ?? {});
+      } else {
+        if (typeof pictureInPictureModule.stop !== 'function') return;
+        void pictureInPictureModule.stop(parsed.payload ?? {}).catch((error: unknown) => {
+          if (__DEV__) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[NativePiP] stop failed: ${message}`);
+          }
+        });
+      }
+      return;
+    }
+
     if (parsed.type === 'native_location_check') {
       void handleNativeLocationCheck(parsed.payload?.requestId);
       return;
@@ -4066,6 +4137,21 @@ function AppInner(): React.JSX.Element {
   }, [emitToWeb]);
 
   useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const pipSub = addNativePipListener((event) => {
+      if (__DEV__) {
+        console.log(`[NativePiP] ${event.type}`);
+      }
+      emitNativePipToWeb(event);
+    });
+
+    return () => {
+      pipSub.remove();
+    };
+  }, [emitNativePipToWeb]);
+
+  useEffect(() => {
     const finishedSub = addNativeTtsListener('ttsPlaybackFinished', (event) => {
       const { utteranceId, playbackId } = resolveCurrentTtsIdentity(event);
       if (__DEV__) {
@@ -4169,6 +4255,7 @@ function AppInner(): React.JSX.Element {
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
     replayNativeSttStatusToWeb(nextUrl);
+    replayNativePipToWeb();
     flushPendingNativeSttMessagesToWeb();
     flushPendingQrScannerEventsToWeb();
     flushPendingNativeLocationEventsToWeb();
@@ -4236,7 +4323,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (!initialLoadSettledRef.current && activateWebFallback()) return;

@@ -80,9 +80,12 @@ describe("request user identity", () => {
     ))).toBe(false);
   });
 
-  it("resolves current conversation data only from the authenticated account", async () => {
+  it.each([
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3",
+    "android/v2.0.0", "android/v2.0.1",
+  ])("preserves authenticated conversation ownership for installed clients: %s", async namespace => {
     mockUserFindUnique.mockResolvedValue({ id: "user_session_real" });
-    const request = new NextRequest("https://mingle.example/api/ios/v2.0.0/conversations", {
+    const request = new NextRequest(`https://mingle.example/api/${namespace}/conversations`, {
       headers: { "x-mingle-user-id": "anon_device" },
     });
 

@@ -107,6 +107,13 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.1/conversations')
   })
 
+  it('accepts iOS 2.0.2 env namespace values', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.2'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v2.0.2')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v2.0.2/conversations')
+  })
+
   it('accepts Android 2.0.1 env namespace values', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v2.0.1'
     const contract = await loadApiContractModule()
@@ -150,6 +157,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.1.4/translate/finalize',
     '/api/ios/v2.0.0/translate/finalize',
     '/api/ios/v2.0.1/translate/finalize',
+    '/api/ios/v2.0.2/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)
@@ -177,6 +185,20 @@ describe('api-contract namespace guard', () => {
     stubBrowserRuntime({ search: '?apiNamespace=ios%2Fv1.0.6' })
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
+  })
+
+  it.each([
+    'ios/v2.0.0', 'ios/v2.0.1', 'ios/v2.0.2', 'ios/v2.0.3',
+    'android/v2.0.0', 'android/v2.0.1',
+  ])('keeps the installed app namespace when a newer server supplies the WebView: %s', async namespace => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.3'
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v2_0_0'
+    stubBrowserRuntime({ search: `?nativeUi=1&apiNamespace=${encodeURIComponent(namespace)}` })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe(namespace)
+    for (const endpoint of ['/conversations', '/account/preferences', '/log/client-event', '/translate/finalize'] as const) {
+      expect(contract.buildClientApiPath(endpoint)).toBe(`/api/${namespace}${endpoint}`)
+    }
   })
 
   it('allows Android query override when value is allow-listed', async () => {

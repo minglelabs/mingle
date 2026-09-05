@@ -446,14 +446,6 @@ export async function handleLogClientEventV1(request: NextRequest) {
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
 
-    if (eventType === 'conversation_hydration_order_preserved') {
-      // The event is already persisted in AppEventLog. Keep this diagnostic
-      // out of the warning stream and never print session keys or user ids.
-      console.info('[conversation-order] hydration timestamp drift preserved', {
-        metadata: clientMetadata,
-      })
-    }
-
     return response
   } catch (error) {
     console.error('Client event logging failed:', error)

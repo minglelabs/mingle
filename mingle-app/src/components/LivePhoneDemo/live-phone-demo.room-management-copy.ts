@@ -35,6 +35,10 @@ export type LivePhoneDemoRoomManagementCopy = {
   participantsErrorLabel: string
   participantsRetryLabel: string
   participantsInviteButtonLabel: string
+  pictureInPictureButtonLabel: string
+  pictureInPictureLiveLabel: string
+  pictureInPicturePausedLabel: string
+  pictureInPictureEmptyLabel: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
@@ -68,6 +72,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: '참여자 정보를 불러오지 못했습니다.',
     participantsRetryLabel: '다시 시도',
     participantsInviteButtonLabel: '초대',
+    pictureInPictureButtonLabel: '작은 창으로 보기',
+    pictureInPictureLiveLabel: '실시간',
+    pictureInPicturePausedLabel: '일시 정지',
+    pictureInPictureEmptyLabel: '아직 메시지가 없습니다.',
   },
   en: {
     menuItemLabel: 'Conversation management',
@@ -99,6 +107,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Could not load participants.',
     participantsRetryLabel: 'Try again',
     participantsInviteButtonLabel: 'Invite',
+    pictureInPictureButtonLabel: 'Open Picture in Picture',
+    pictureInPictureLiveLabel: 'Live',
+    pictureInPicturePausedLabel: 'Paused',
+    pictureInPictureEmptyLabel: 'No messages yet.',
   },
   ja: {
     menuItemLabel: '会話ルーム管理',
@@ -130,6 +142,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: '参加者情報を読み込めませんでした。',
     participantsRetryLabel: '再試行',
     participantsInviteButtonLabel: '招待',
+    pictureInPictureButtonLabel: 'ピクチャ・イン・ピクチャで表示',
+    pictureInPictureLiveLabel: 'ライブ',
+    pictureInPicturePausedLabel: '一時停止',
+    pictureInPictureEmptyLabel: 'メッセージはまだありません。',
   },
   'zh-CN': {
     menuItemLabel: '会话房间管理',
@@ -161,6 +177,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: '无法加载参与者信息。',
     participantsRetryLabel: '重试',
     participantsInviteButtonLabel: '邀请',
+    pictureInPictureButtonLabel: '以画中画显示',
+    pictureInPictureLiveLabel: '实时',
+    pictureInPicturePausedLabel: '已暂停',
+    pictureInPictureEmptyLabel: '还没有消息。',
   },
   'zh-TW': {
     menuItemLabel: '對話房間管理',
@@ -192,6 +212,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: '無法載入參與者資訊。',
     participantsRetryLabel: '重試',
     participantsInviteButtonLabel: '邀請',
+    pictureInPictureButtonLabel: '以子母畫面顯示',
+    pictureInPictureLiveLabel: '即時',
+    pictureInPicturePausedLabel: '已暫停',
+    pictureInPictureEmptyLabel: '尚無訊息。',
   },
   fr: {
     menuItemLabel: 'Gestion de la conversation',
@@ -223,6 +247,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Impossible de charger les participants.',
     participantsRetryLabel: 'Réessayer',
     participantsInviteButtonLabel: 'Inviter',
+    pictureInPictureButtonLabel: 'Ouvrir en image dans l’image',
+    pictureInPictureLiveLabel: 'En direct',
+    pictureInPicturePausedLabel: 'En pause',
+    pictureInPictureEmptyLabel: 'Aucun message pour le moment.',
   },
   de: {
     menuItemLabel: 'Verwaltung des Gesprächs',
@@ -254,6 +282,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Teilnehmer konnten nicht geladen werden.',
     participantsRetryLabel: 'Erneut versuchen',
     participantsInviteButtonLabel: 'Einladen',
+    pictureInPictureButtonLabel: 'Bild-in-Bild öffnen',
+    pictureInPictureLiveLabel: 'Live',
+    pictureInPicturePausedLabel: 'Pausiert',
+    pictureInPictureEmptyLabel: 'Noch keine Nachrichten.',
   },
   es: {
     menuItemLabel: 'Gestion de la conversacion',
@@ -285,6 +317,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'No se pudieron cargar los participantes.',
     participantsRetryLabel: 'Intentar de nuevo',
     participantsInviteButtonLabel: 'Invitar',
+    pictureInPictureButtonLabel: 'Abrir en imagen dentro de imagen',
+    pictureInPictureLiveLabel: 'En directo',
+    pictureInPicturePausedLabel: 'En pausa',
+    pictureInPictureEmptyLabel: 'Aún no hay mensajes.',
   },
   pt: {
     menuItemLabel: 'Gerenciamento da conversa',
@@ -316,6 +352,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Não foi possível carregar os participantes.',
     participantsRetryLabel: 'Tentar novamente',
     participantsInviteButtonLabel: 'Convidar',
+    pictureInPictureButtonLabel: 'Abrir em Picture in Picture',
+    pictureInPictureLiveLabel: 'Ao vivo',
+    pictureInPicturePausedLabel: 'Pausado',
+    pictureInPictureEmptyLabel: 'Ainda não há mensagens.',
   },
   it: {
     menuItemLabel: 'Gestione della conversazione',
@@ -347,6 +387,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Impossibile caricare i partecipanti.',
     participantsRetryLabel: 'Riprova',
     participantsInviteButtonLabel: 'Invita',
+    pictureInPictureButtonLabel: 'Apri in Picture in Picture',
+    pictureInPictureLiveLabel: 'In diretta',
+    pictureInPicturePausedLabel: 'In pausa',
+    pictureInPictureEmptyLabel: 'Nessun messaggio ancora.',
   },
   ru: {
     menuItemLabel: 'Управление разговором',
@@ -378,6 +422,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Не удалось загрузить участников.',
     participantsRetryLabel: 'Повторить',
     participantsInviteButtonLabel: 'Пригласить',
+    pictureInPictureButtonLabel: 'Открыть в режиме «Картинка в картинке»',
+    pictureInPictureLiveLabel: 'В эфире',
+    pictureInPicturePausedLabel: 'Пауза',
+    pictureInPictureEmptyLabel: 'Сообщений пока нет.',
   },
   ar: {
     menuItemLabel: 'إدارة المحادثة',
@@ -409,6 +457,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'تعذر تحميل المشاركين.',
     participantsRetryLabel: 'إعادة المحاولة',
     participantsInviteButtonLabel: 'دعوة',
+    pictureInPictureButtonLabel: 'فتح في صورة داخل صورة',
+    pictureInPictureLiveLabel: 'مباشر',
+    pictureInPicturePausedLabel: 'متوقف مؤقتًا',
+    pictureInPictureEmptyLabel: 'لا توجد رسائل بعد.',
   },
   hi: {
     menuItemLabel: 'बातचीत प्रबंधन',
@@ -440,6 +492,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'प्रतिभागियों को लोड नहीं किया जा सका।',
     participantsRetryLabel: 'फिर से कोशिश करें',
     participantsInviteButtonLabel: 'आमंत्रित करें',
+    pictureInPictureButtonLabel: 'पिक्चर इन पिक्चर में खोलें',
+    pictureInPictureLiveLabel: 'लाइव',
+    pictureInPicturePausedLabel: 'रुका हुआ',
+    pictureInPictureEmptyLabel: 'अभी कोई संदेश नहीं है।',
   },
   th: {
     menuItemLabel: 'จัดการห้องสนทนา',
@@ -471,6 +527,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'ไม่สามารถโหลดข้อมูลผู้เข้าร่วมได้',
     participantsRetryLabel: 'ลองอีกครั้ง',
     participantsInviteButtonLabel: 'เชิญ',
+    pictureInPictureButtonLabel: 'เปิดในโหมดภาพซ้อนภาพ',
+    pictureInPictureLiveLabel: 'ถ่ายทอดสด',
+    pictureInPicturePausedLabel: 'หยุดชั่วคราว',
+    pictureInPictureEmptyLabel: 'ยังไม่มีข้อความ',
   },
   vi: {
     menuItemLabel: 'Quan ly cuoc tro chuyen',
@@ -502,6 +562,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     participantsErrorLabel: 'Không thể tải danh sách người tham gia.',
     participantsRetryLabel: 'Thử lại',
     participantsInviteButtonLabel: 'Mời',
+    pictureInPictureButtonLabel: 'Mở ở chế độ hình trong hình',
+    pictureInPictureLiveLabel: 'Trực tiếp',
+    pictureInPicturePausedLabel: 'Đã tạm dừng',
+    pictureInPictureEmptyLabel: 'Chưa có tin nhắn.',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoRoomManagementCopy>
 

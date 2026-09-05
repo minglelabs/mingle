@@ -134,6 +134,28 @@ describe("handleLogClientEventV1", () => {
     expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
   });
 
+  it.each([
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3",
+    "android/v2.0.0", "android/v2.0.1",
+  ])("accepts the pre-local-first finalized payload without new flags: %s", async namespace => {
+    const response = await handleLogClientEventV1(new NextRequest(`https://example.com/api/${namespace}/log/client-event`, {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "old_client_1",
+        sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" },
+      }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(mockAppMessageUpsert).toHaveBeenCalledOnce();
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
+    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+    expect(mockCreateTrackedEventLog).not.toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
+  });
+
   it("persists translation model and infrastructure provider for finalized turns", async () => {
     const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
       method: "POST",
@@ -232,7 +254,6 @@ describe("handleLogClientEventV1", () => {
   });
 
   it("records hydration order diagnostics without creating another conversation message", async () => {
-    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const metadata = {
       conversationId: "conversation_123",
       trigger: "push",
@@ -267,11 +288,6 @@ describe("handleLogClientEventV1", () => {
         clientMetadata: metadata,
       },
     }));
-    expect(infoSpy).toHaveBeenCalledWith(
-      "[conversation-order] hydration timestamp drift preserved",
-      { metadata },
-    );
-    infoSpy.mockRestore();
   });
 
   it("notifies every real member's list topic, not just the room's own sessionKey", async () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdminDashboardDateRange } from "./admin-dashboard-metrics";
-import { parseDayKey, resolveTodayKey, shiftDayKey, startOfDayUtc } from "./admin-dashboard-metrics";
+import { parseDayKey, resolveAdminDashboardRange, resolveTodayKey, shiftDayKey, startOfDayUtc } from "./admin-dashboard-metrics";
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -48,6 +48,61 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
+  it("uses one indexed pre-range usage snapshot per active user instead of scanning all history", async () => {
+    const today = resolveTodayKey(new Date());
+    setRawMetricResults(today);
+
+    await loadAdminDashboardMetrics(makeRange([shiftDayKey(today, -1), today]));
+
+    const usageQuery = mocks.queryRawUnsafe.mock.calls[3][0] as string;
+    const baselineQuery = usageQuery.split("usage_before_start as materialized (")[1]
+      .split("usage_events as materialized (")[0];
+    expect(baselineQuery).toContain("from usage_users as uu");
+    expect(baselineQuery).toContain("cross join lateral (");
+    expect(baselineQuery).toContain('el."user_id" = uu."user_id"');
+    expect(baselineQuery).toContain('el."usage_sec" is not null');
+    expect(baselineQuery).toContain('el."created_at" < $1');
+    expect(baselineQuery).toContain('order by el."created_at" desc, el."id" desc');
+    expect(baselineQuery).toContain("limit 1");
+    expect(baselineQuery).not.toContain("distinct on");
+  });
+
+  it.each(["all", "android", "ios"] as const)(
+    "reuses all 28 historical cache days and queries only the latest two days for %s",
+    async (platform) => {
+      const range = resolveAdminDashboardRange(new Date(), 30);
+      const historicalDays = range.dayKeys.slice(0, -2);
+      mocks.findMany.mockResolvedValue(historicalDays.map((day) => ({
+        day: rawDay(day),
+        signupCount: 9,
+        dauCount: 8,
+        messageCount: 7,
+        usageSeconds: 6,
+        usageMetricVersion: 1,
+        sttAvgMs: null,
+        sttP95Ms: null,
+        translationAvgMs: null,
+        translationP95Ms: null,
+      })));
+      setRawMetricResults(range.dayKeys[29]);
+
+      const metrics = await loadAdminDashboardMetrics(range, { platform });
+
+      expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { day: { in: historicalDays.map(parseDayKey) }, platform },
+      }));
+      expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+      for (const [, start, end, selectedPlatform] of mocks.queryRawUnsafe.mock.calls) {
+        expect(start).toEqual(startOfDayUtc(range.dayKeys[28]));
+        expect(end).toEqual(range.rangeEnd);
+        expect(selectedPlatform).toBe(platform === "all" ? undefined : platform);
+      }
+      expect(metrics[0].points.slice(0, 28).map((point) => point.value)).toEqual(Array(28).fill(6));
+      expect(mocks.upsert).not.toHaveBeenCalled();
+      expect(mocks.deleteMany).not.toHaveBeenCalled();
+    },
+  );
+
   it("uses cached daily rows without querying source tables for historical days", async () => {
     const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
     mocks.findMany.mockResolvedValue(dayKeys.map((day, index) => ({
@@ -73,6 +128,39 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[3].points.map((point) => point.value)).toEqual([1, 2, 3]);
     expect(metrics[4].points.map((point) => point.value)).toEqual([5, 6, 7]);
     expect(metrics[4].secondarySeries?.points.map((point) => point.value)).toEqual([6, 7, 8]);
+  });
+
+  it("calculates a historical cache hole separately without recalculating cached days between it and today", async () => {
+    const range = resolveAdminDashboardRange(new Date(), 30);
+    const missingDay = range.dayKeys[3];
+    mocks.findMany.mockResolvedValue(range.dayKeys.slice(0, -2)
+      .filter((day) => day !== missingDay)
+      .map((day) => ({
+        day: rawDay(day), signupCount: 9, dauCount: 8, messageCount: 7,
+        usageSeconds: 6, usageMetricVersion: 1, sttAvgMs: null, sttP95Ms: null,
+        translationAvgMs: null, translationP95Ms: null,
+      })));
+    setRawMetricResults(missingDay);
+    setRawMetricResults(range.dayKeys[29]);
+
+    const metrics = await loadAdminDashboardMetrics(range, { platform: "android" });
+
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(12);
+    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(0, 6)) {
+      expect(start).toEqual(startOfDayUtc(missingDay));
+      expect(end).toEqual(startOfDayUtc(shiftDayKey(missingDay, 1)));
+    }
+    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(6)) {
+      expect(start).toEqual(startOfDayUtc(range.dayKeys[28]));
+      expect(end).toEqual(range.rangeEnd);
+    }
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].where.day_platform).toEqual({
+      day: rawDay(missingDay), platform: "android",
+    });
+    expect(metrics[0].points[3].value).toBe(5);
+    expect(metrics[0].points[4].value).toBe(6);
+    expect(mocks.deleteMany).not.toHaveBeenCalled();
   });
 
   it("calculates and stores every missing historical day", async () => {
@@ -173,14 +261,23 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(6);
   });
 
-  it("calculates a platform-filtered view from source rows without using the all-platform cache", async () => {
+  it("calculates and stores a missing platform-filtered cache row", async () => {
     const dayKey = "2026-08-02";
+    mocks.findMany.mockResolvedValue([]);
     setRawMetricResults(dayKey);
+    mocks.upsert.mockResolvedValue({});
 
     const metrics = await loadAdminDashboardMetrics(makeRange([dayKey]), { platform: "android" });
 
-    expect(mocks.findMany).not.toHaveBeenCalled();
-    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ platform: "android" }),
+    }));
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].where.day_platform).toEqual({
+      day: rawDay(dayKey),
+      platform: "android",
+    });
+    expect(mocks.upsert.mock.calls[0][0].create.platform).toBe("android");
     expect(mocks.deleteMany).not.toHaveBeenCalled();
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
     for (const [query, ...params] of mocks.queryRawUnsafe.mock.calls) {
@@ -190,6 +287,36 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(5);
     expect(metrics[1].points[0].value).toBe(4);
     expect(metrics[4].points[0].value).toBe(100);
+  });
+
+  it("uses platform-scoped historical cache while recalculating only recent days", async () => {
+    const today = resolveTodayKey(new Date());
+    const yesterday = shiftDayKey(today, -1);
+    const twoDaysAgo = shiftDayKey(today, -2);
+    const dayKeys = [twoDaysAgo, yesterday, today];
+
+    mocks.findMany.mockResolvedValue([{
+      day: rawDay(twoDaysAgo),
+      signupCount: 9,
+      dauCount: 8,
+      messageCount: 7,
+      usageSeconds: 6,
+      usageMetricVersion: 1,
+      sttAvgMs: null,
+      sttP95Ms: null,
+      translationAvgMs: null,
+      translationP95Ms: null,
+    }]);
+    setRawMetricResults(yesterday);
+
+    const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { platform: "ios" });
+
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ platform: "ios" }),
+    }));
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(metrics[0].points.map((point) => point.value)).toEqual([6, 5, 0]);
   });
 
   it("forceRefresh deletes only cacheable days and recalculates everything, persisting only cacheable days", async () => {
@@ -208,9 +335,10 @@ describe("loadAdminDashboardMetrics", () => {
     const deletedDays: Date[] = mocks.deleteMany.mock.calls[0][0].where.day.in;
     expect(deletedDays).toHaveLength(2);
     expect(mocks.upsert).toHaveBeenCalledTimes(2);
-    expect(mocks.upsert.mock.calls.map(([args]) => args.where.day)).toEqual([
-      rawDay("2026-08-02"),
-      rawDay("2026-08-03"),
+    expect(mocks.deleteMany.mock.calls[0][0].where.platform).toBe("all");
+    expect(mocks.upsert.mock.calls.map(([args]) => args.where.day_platform)).toEqual([
+      { day: rawDay("2026-08-02"), platform: "all" },
+      { day: rawDay("2026-08-03"), platform: "all" },
     ]);
     expect(metrics[0].points).toHaveLength(4);
   });
@@ -223,6 +351,19 @@ describe("clearAdminDashboardCache", () => {
     await clearAdminDashboardCache(dayKeys);
     expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
     expect(mocks.deleteMany.mock.calls[0][0].where.day.in).toHaveLength(3);
+    expect(mocks.deleteMany.mock.calls[0][0].where.platform).toBe("all");
+  });
+
+  it("deletes only the specified platform cache rows", async () => {
+    const dayKeys = ["2026-08-01", "2026-08-02"];
+    mocks.deleteMany.mockResolvedValue({ count: 2 });
+
+    await clearAdminDashboardCache(dayKeys, "android");
+
+    expect(mocks.deleteMany.mock.calls[0][0].where).toMatchObject({
+      platform: "android",
+      day: { in: [rawDay("2026-08-01"), rawDay("2026-08-02")] },
+    });
   });
 
   it("does nothing when given an empty array", async () => {
