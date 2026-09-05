@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-05 - Device QA exposes translation/delivery recovery gaps
+
+- **Scope:** Non-voice PR 211 verification on iPhone 11 Pro / iOS 18.6 and Galaxy S9 / Android 10, using Devbox, Cloudflare, and the production Vault environment. Temporary solo rooms isolated test writes. No service-branch modification.
+- **P1, interrupted translation:** Holding `/translate/finalize` unresolved, sending text, then terminating/relaunching the app leaves three local messages but only two server messages and an empty outbox on both devices. The interrupted message's original text survives in the bounded cache, but its translated-language bubble is blank and no delivery job is reconstructed. The outbox insertion currently occurs after translation resolves, leaving a durability gap before that point.
+- **P2, offline translation failure:** Rejecting API calls and sending text produces a durable original-message job. Reconnect delivers the original exactly once, but the server retains `unknown` source language and no translations. The outbox retries event persistence, not translation, and there is no durable translation recovery state.
+- **Recommended resolution:** Persist original-message delivery intent before the translation request, use stable idempotent message IDs, queue translation separately, resume both on restart, and show original text with an explicit pending/retry state whenever a translation is unavailable. These findings are documented, not fixed in this testing task.
+- **Passed paths:** Warm list/room display, language/slider stability under failed API calls, account preference propagation between rooms, queued rename/read preservation, rejected-rename rollback, pending-edit/delete ordering, draft/title restoration after process restart, cached avatar presentation, and native back navigation. Android older-history pagination reached 142 messages while its local cache remained capped at 100.
+- **Limitations:** Physical offline networking, voice paths, same-account concurrent devices, account switching, and full-history storage were not certified. One warmed iOS edge-swipe sample avoided hydration reentry; a process-restored room's return path performed a separate document navigation and is not a general flicker-free guarantee.
+- **Detailed report:** `docs/qa/pr-211-device-local-first-2026-09-05.md` includes evidence, ownership boundaries, scenario results, and cleanup scope.
+
 ## 2026-09-05 - Preserve explicit iOS installation targets in Devbox
 
 - **Surface:** USB device build/install workflow with multiple iPhones connected.
