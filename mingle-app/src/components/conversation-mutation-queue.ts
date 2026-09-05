@@ -89,10 +89,6 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function isNullableString(value: unknown): value is string | null | undefined {
-  return value === null || typeof value === "undefined" || typeof value === "string";
-}
-
 function normalizePatch(value: unknown): ConversationMutationPatch {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const candidate = value as Record<string, unknown>;
@@ -100,7 +96,8 @@ function normalizePatch(value: unknown): ConversationMutationPatch {
 
   if (typeof candidate.title === "string") patch.title = candidate.title.slice(0, 500);
   if (candidate.status === "active" || candidate.status === "paused") patch.status = candidate.status;
-  if (isStringArray(candidate.selectedLanguages)) patch.selectedLanguages = candidate.selectedLanguages.slice(0, 5);
+  // This is the shared room union, not one member's five-language selection.
+  if (isStringArray(candidate.selectedLanguages)) patch.selectedLanguages = [...candidate.selectedLanguages];
   if (candidate.selectedLanguagesAttribution && typeof candidate.selectedLanguagesAttribution === "object" && !Array.isArray(candidate.selectedLanguagesAttribution)) {
     const attribution: Record<string, string[]> = {};
     for (const [language, memberIds] of Object.entries(candidate.selectedLanguagesAttribution)) {
@@ -116,7 +113,7 @@ function normalizePatch(value: unknown): ConversationMutationPatch {
   if (typeof candidate.translationLanguagesLinked === "boolean") {
     patch.translationLanguagesLinked = candidate.translationLanguagesLinked;
   }
-  if (isNullableString(candidate.defaultDisplayLanguage)) {
+  if (candidate.defaultDisplayLanguage === null || typeof candidate.defaultDisplayLanguage === "string") {
     patch.defaultDisplayLanguage = candidate.defaultDisplayLanguage;
   }
   if (candidate.unreadMessageCount === null || (
@@ -345,7 +342,9 @@ export function enqueueConversationMutation(
     // A coalesced edit must roll back to the value that existed before the
     // first pending edit, not to the previous optimistic intermediate value.
     rollback: existing?.rollback ?? (input.rollback ? normalizePatch(input.rollback) : null),
-    createdAt: existing?.createdAt ?? updatedAt,
+    // A coalesced edit is the latest user action, including relative to
+    // other kinds that affect the same field (selected languages/linking).
+    createdAt: updatedAt,
     updatedAt,
     attemptCount: 0,
     nextAttemptAt: 0,
@@ -365,6 +364,13 @@ export function acknowledgeConversationMutation(
     return false;
   }
   conversationMutationMemory.delete(record.id);
+  if (record.kind === "remove") {
+    for (const [id, pending] of conversationMutationMemory) {
+      if (pending.ownerIdentity === record.ownerIdentity && pending.conversationId === record.conversationId) {
+        conversationMutationMemory.delete(id);
+      }
+    }
+  }
   persistMutations(identity);
   return true;
 }
@@ -450,17 +456,25 @@ async function performFlush(input: {
   onSuccess?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
   onPermanentFailure?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
 }): Promise<ConversationMutationFlushResult> {
-  const deliveredBefore = new Set<string>();
   const ownerIdentity = buildConversationMutationOwnerIdentity(input.identity);
   let delivered = 0;
   let attempts = 0;
 
   while (attempts < CONVERSATION_MUTATION_MAX_FLUSH_BATCH) {
     const now = input.now();
-    const records = readConversationMutationRecords(input.identity, now)
-      .filter((record) => input.force || record.nextAttemptAt <= now)
-      .slice(0, CONVERSATION_MUTATION_MAX_FLUSH_BATCH - attempts);
-    if (records.length === 0) break;
+    const pending = readConversationMutationRecords(input.identity, now);
+    const removingRooms = new Set(pending.filter((record) => record.kind === "remove").map((record) => record.conversationId));
+    // Removal supersedes room edits, but retain them until deletion succeeds
+    // so a rejected removal does not discard the user's unsaved settings.
+    const actionable = pending.filter((record) => record.kind === "remove" || !removingRooms.has(record.conversationId));
+    const blockedRooms = new Set<string>();
+    const first = actionable.find((record) => {
+      if (blockedRooms.has(record.conversationId)) return false;
+      blockedRooms.add(record.conversationId);
+      return input.force || record.nextAttemptAt <= now;
+    });
+    if (!first) break;
+    const records = [first];
 
     for (const record of records) {
       attempts += 1;
@@ -476,7 +490,6 @@ async function performFlush(input: {
           const acknowledged = acknowledgeConversationMutation(input.identity, record);
           if (acknowledged) {
             delivered += 1;
-            deliveredBefore.add(record.id);
           }
           await input.onSuccess?.(record, response, acknowledged);
           continue;
@@ -494,7 +507,13 @@ async function performFlush(input: {
           && response.status !== 408
           && response.status !== 429
         ) {
-          const acknowledged = acknowledgeConversationMutation(input.identity, record);
+          // A rejected removal must not discard the edits it superseded.
+          const current = conversationMutationMemory.get(record.id);
+          const acknowledged = current?.updatedAt === record.updatedAt && current?.body === record.body;
+          if (acknowledged) {
+            conversationMutationMemory.delete(record.id);
+            persistMutations(input.identity);
+          }
           await input.onPermanentFailure?.(record, response, acknowledged);
           continue;
         }
@@ -516,15 +535,13 @@ async function performFlush(input: {
       persistMutations(input.identity);
       // Preserve mutation order. A later setting must not pass an earlier
       // failed setting while the network is unavailable.
-      break;
+      return {
+        delivered,
+        retained: readConversationMutationRecords(input.identity, input.now()).length,
+      };
     }
 
     if (attempts >= CONVERSATION_MUTATION_MAX_FLUSH_BATCH) break;
-    if (readConversationMutationRecords(input.identity, input.now()).every((record) => (
-      record.nextAttemptAt > input.now() && !deliveredBefore.has(record.id)
-    ))) {
-      break;
-    }
   }
 
   return {

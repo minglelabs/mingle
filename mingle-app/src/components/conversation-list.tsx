@@ -2059,7 +2059,6 @@ export default function ConversationList({
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
   // Speech, translation, and link PATCHes all mutate one language setting surface.
   // Share a version counter so stale responses from any one kind cannot clobber another.
-  const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
   // User-controlled room metadata is durable locally before it is sent to the
   // server. The queue is intentionally separate from message delivery: these
   // mutations must be replayed in order and must also overlay stale list GETs.
@@ -3118,9 +3117,6 @@ export default function ConversationList({
     defaultSelectedLanguagesRef.current = [...normalizedSelectedLanguages];
     setDefaultSelectedLanguages(normalizedSelectedLanguages);
 
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
-
     const optimisticPatch: ConversationMutationPatch = {
       // Update both the caller's own picks and the visible room union. For a
       // shared room the union keeps languages held by another member while
@@ -3130,88 +3126,27 @@ export default function ConversationList({
       translationLanguagesLinked: false,
       ...(nextAttribution ? { selectedLanguagesAttribution: nextAttribution } : {}),
     };
-
-    // For a multi-member room this is the caller's own next pick, not the
-    // room union. Naively leaving the union untouched here (as before) made
-    // a language the caller just unchecked stay in the union until the PATCH
-    // resolved — reading as "someone else picked this" (blue) for an instant
-    // even when nobody else did. Reuse the same optimistic-union recompute
-    // handleToggleSelectedLanguage already does for the in-room toggle, so
-    // this stays correct without duplicating that logic.
-    const optimisticUnion = previousConversation.isMultiMember
-      ? resolveLanguageSelectorUnionAfterOwnLanguagesChange({
-          previousUnion: previousSelectedLanguages,
-          previousAttribution: previousConversation.selectedLanguagesAttribution,
-          viewerUserId: authenticatedUserId,
-          previousOwnSelectedLanguages: previousViewerSelectedLanguages,
-          nextOwnSelectedLanguages: normalizedSelectedLanguages,
-        })
-      : [...normalizedSelectedLanguages];
-
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            selectedLanguages: optimisticUnion,
-            viewerSelectedLanguages: [...normalizedSelectedLanguages],
-            translationLanguagesLinked: false,
-          }
-        : conversation
-    )));
-
-    void fetch(buildConversationApiPath(`/${conversationId}`), {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+    enqueueConversationMutationAndFlush({
+      conversationId,
+      kind: "selected-languages",
+      endpoint: buildConversationApiPath(`/${conversationId}`),
+      body: { selectedLanguages: normalizedSelectedLanguages },
+      patch: optimisticPatch,
+      rollback: {
+        selectedLanguages: previousSelectedLanguages,
+        viewerSelectedLanguages: previousViewerSelectedLanguages,
+        translationLanguagesLinked: previousTranslationLanguagesLinked,
+        ...(previousConversation.selectedLanguagesAttribution
+          ? { selectedLanguagesAttribution: previousConversation.selectedLanguagesAttribution }
+          : {}),
       },
-      body: JSON.stringify({ selectedLanguages: normalizedSelectedLanguages }),
-    })
-      .then(readConversationResponse)
-      .then((nextConversation) => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) === nextVersion) {
-          setConversations((current) => upsertConversation(current, nextConversation));
-        }
-        // Speech-language and translation-link mutations share the room
-        // version guard, but they do not invalidate this successful
-        // selected-language change. The user default has its own version guard.
-        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
-          persistUserDefaultConversationLanguages(
-            normalizedSelectedLanguages,
-            previousDefaultLanguages,
-            nextDefaultLanguagesVersion,
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-        logConversationMutationFailure({
-          label: "selected-languages",
-          conversationId,
-          method: "PATCH",
-          path: buildConversationApiPath(`/${conversationId}`),
-          error,
-          stale,
-        });
-        if (defaultConversationLanguagesSyncVersionRef.current === nextDefaultLanguagesVersion) {
-          defaultSelectedLanguagesRef.current = [...previousDefaultLanguages];
-          setDefaultSelectedLanguages(previousDefaultLanguages);
-        }
-        if (stale) return;
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                selectedLanguages: [...previousSelectedLanguages],
-                viewerSelectedLanguages: [...previousViewerSelectedLanguages],
-                translationLanguagesLinked: previousTranslationLanguagesLinked,
-              }
-            : conversation
-        )));
-        // Language sync failures inside an already-open room must not surface as
-        // "failed to open" — the optimistic rollback above is the visible signal.
-      });
-  }, [authenticatedUserId, persistUserDefaultConversationLanguages]);
+    });
+    persistUserDefaultConversationLanguages(
+      normalizedSelectedLanguages,
+      previousDefaultLanguages,
+      nextDefaultLanguagesVersion,
+    );
+  }, [authenticatedUserId, enqueueConversationMutationAndFlush, persistUserDefaultConversationLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,

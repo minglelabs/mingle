@@ -95,6 +95,79 @@ export type AccountPreferencesCacheSnapshot = {
 }
 
 const accountPreferencesMemoryCache = new Map<string, AccountPreferencesCacheSnapshot>()
+const accountPreferencesListeners = new Map<string, Set<() => void>>()
+const accountPreferencesFlushes = new Map<string, Promise<void>>()
+
+export function subscribeAccountPreferences(identity: AccountPreferencesCacheIdentity, listener: () => void): () => void {
+  const key = buildAccountPreferencesCacheKey(identity)
+  const listeners = accountPreferencesListeners.get(key) ?? new Set<() => void>()
+  listeners.add(listener)
+  accountPreferencesListeners.set(key, listeners)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) accountPreferencesListeners.delete(key)
+  }
+}
+
+// Callers may have a stale room snapshot. Apply only the fields the user
+// actually changed to the account's latest snapshot, never the whole room.
+export function commitAccountPreferencesEdit(
+  identity: AccountPreferencesCacheIdentity,
+  previous: LivePhoneDemoAccountPreferences,
+  next: LivePhoneDemoAccountPreferences,
+  isLegacyNamespace: boolean,
+): LivePhoneDemoAccountPreferences {
+  const cached = readCachedAccountPreferencesSnapshot(identity, isLegacyNamespace)
+  const merged = { ...(cached?.preferences ?? previous) }
+  let changed = false
+  for (const key of Object.keys(next) as (keyof LivePhoneDemoAccountPreferences)[]) {
+    if (Object.is(previous[key], next[key])) continue
+    Object.assign(merged, { [key]: next[key] })
+    changed = true
+  }
+  if (changed) writeCachedAccountPreferences(identity, merged, { pendingSync: true })
+  return merged
+}
+
+// One writer per account/namespace, shared by visible and background rooms.
+// Retries always read the durable latest intent, not the initiating room's ref.
+export function flushCachedAccountPreferences(input: {
+  identity: AccountPreferencesCacheIdentity
+  isLegacyNamespace: boolean
+  send: (preferences: LivePhoneDemoAccountPreferences) => Promise<void>
+}): Promise<void> {
+  const key = buildAccountPreferencesCacheKey(input.identity)
+  const active = accountPreferencesFlushes.get(key)
+  if (active) return active
+  const promise = Promise.resolve().then(async () => {
+    while (true) {
+      const snapshot = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+      if (!snapshot?.pendingSync) return
+      await input.send(snapshot.preferences)
+      const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+      if (!current) return
+      if (current.savedAt !== snapshot.savedAt) continue
+      writeCachedAccountPreferences(input.identity, current.preferences, { pendingSync: false })
+      return
+    }
+  }).finally(() => {
+    accountPreferencesFlushes.delete(key)
+  })
+  accountPreferencesFlushes.set(key, promise)
+  return promise
+}
+
+export function reconcileAccountPreferencesHydration(input: {
+  identity: AccountPreferencesCacheIdentity
+  preferences: LivePhoneDemoAccountPreferences
+  startedSavedAt: number | null
+  isLegacyNamespace: boolean
+}): AccountPreferencesCacheSnapshot {
+  const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+  if (current && (current.pendingSync || current.savedAt !== input.startedSavedAt)) return current
+  writeCachedAccountPreferences(input.identity, input.preferences, { pendingSync: false })
+  return readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)!
+}
 
 function normalizeIntegerPreference(
   value: unknown,
@@ -282,7 +355,7 @@ export function writeCachedAccountPreferences(
   const storageKey = buildAccountPreferencesCacheKey(identity)
   const previousRecord = accountPreferencesMemoryCache.get(storageKey)
   const record: AccountPreferencesCacheSnapshot = {
-    savedAt: Date.now(),
+    savedAt: Math.max(Date.now(), (previousRecord?.savedAt ?? 0) + 1),
     preferences,
     pendingSync: options?.pendingSync ?? previousRecord?.pendingSync ?? false,
   }
@@ -293,6 +366,7 @@ export function writeCachedAccountPreferences(
   } catch {
     // The process-wide cache still keeps room switches local-first.
   }
+  accountPreferencesListeners.get(storageKey)?.forEach((listener) => listener())
 }
 
 export function shouldApplyAccountPreferencesHydration(args: {

@@ -70,16 +70,18 @@ import {
 import {
   buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
+  commitAccountPreferencesEdit,
+  flushCachedAccountPreferences,
+  reconcileAccountPreferencesHydration,
+  subscribeAccountPreferences,
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
   readCachedAccountPreferencesSnapshot,
   resolveAccountPreferencesSyncRetryDelayMs,
   serializeAccountPreferencesSyncState,
-  shouldApplyAccountPreferencesHydration,
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
-  writeCachedAccountPreferences,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -193,7 +195,6 @@ const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
-const ACCOUNT_PREFERENCES_LOCAL_CACHE_DEBOUNCE_MS = 200
 const CONVERSATION_STATS_REPORT_INTERVAL_MS = 5_000
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
@@ -1826,7 +1827,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryAttemptRef = useRef(0)
-  const accountPreferencesCacheWriteTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncInFlightRef = useRef<Promise<void> | null>(null)
   const accountPreferencesSyncQueuedRef = useRef(false)
   const accountPreferencesSyncRunnerRef = useRef<() => void>(() => {})
@@ -1884,7 +1884,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
-  const accountPreferencesLocalRevisionRef = useRef(0)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
   )
@@ -1974,33 +1973,51 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const commitLocalAccountPreferences = useCallback((
     nextPreferences: LivePhoneDemoAccountPreferences,
   ) => {
-    accountPreferencesLocalRevisionRef.current += 1
-    accountPreferencesPendingSyncRef.current = true
-    latestAccountPreferencesRef.current = nextPreferences
-    if (accountPreferencesCacheWriteTimerRef.current !== null) {
-      window.clearTimeout(accountPreferencesCacheWriteTimerRef.current)
-    }
-    accountPreferencesCacheWriteTimerRef.current = window.setTimeout(() => {
-      accountPreferencesCacheWriteTimerRef.current = null
-      writeCachedAccountPreferences(
-        accountPreferencesCacheIdentity,
-        latestAccountPreferencesRef.current,
-        { pendingSync: true },
-      )
-    }, ACCOUNT_PREFERENCES_LOCAL_CACHE_DEBOUNCE_MS)
-    return nextPreferences
-  }, [accountPreferencesCacheIdentity])
-
-  useEffect(() => () => {
-    if (accountPreferencesCacheWriteTimerRef.current === null) return
-    window.clearTimeout(accountPreferencesCacheWriteTimerRef.current)
-    accountPreferencesCacheWriteTimerRef.current = null
-    writeCachedAccountPreferences(
+    const merged = commitAccountPreferencesEdit(
       accountPreferencesCacheIdentity,
       latestAccountPreferencesRef.current,
-      { pendingSync: accountPreferencesPendingSyncRef.current },
+      nextPreferences,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
     )
+    accountPreferencesPendingSyncRef.current = readCachedAccountPreferencesSnapshot(
+      accountPreferencesCacheIdentity,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+    )?.pendingSync === true
+    latestAccountPreferencesRef.current = merged
+    return merged
   }, [accountPreferencesCacheIdentity])
+
+  const applySharedAccountPreferences = useCallback((preferences: LivePhoneDemoAccountPreferences) => {
+    latestAccountPreferencesRef.current = preferences
+    setTextSizeLevel(preferences.textSizeLevel)
+    setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
+    setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    setTranslationModel(preferences.translationModel)
+    setBubbleDisplayMode(preferences.bubbleDisplayMode)
+    setAdBannerPosition(preferences.adBannerPosition)
+  }, [])
+
+  useEffect(() => {
+    const update = () => {
+      const snapshot = readCachedAccountPreferencesSnapshot(
+        accountPreferencesCacheIdentity,
+        isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+      )
+      if (!snapshot) return
+      accountPreferencesPendingSyncRef.current = snapshot.pendingSync
+      if (!snapshot.pendingSync) {
+        accountPreferencesLastSyncedStateKeyRef.current = serializeAccountPreferencesSyncState(snapshot.preferences)
+      }
+      applySharedAccountPreferences(snapshot.preferences)
+    }
+    const unsubscribe = subscribeAccountPreferences(accountPreferencesCacheIdentity, update)
+    // Close the render-to-subscribe gap without updating state in this effect.
+    let cancelled = false
+    queueMicrotask(() => { if (!cancelled) update() })
+    return () => { cancelled = true; unsubscribe() }
+  }, [accountPreferencesCacheIdentity, applySharedAccountPreferences])
 
   useEffect(() => {
     accountPreferencesComponentMountedRef.current = true
@@ -2476,8 +2493,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
-    const hydrationStartedAtLocalRevision = accountPreferencesLocalRevisionRef.current
-    const hydrationStartedWithPendingSync = accountPreferencesPendingSyncRef.current
+    const hydrationStartedSavedAt = readCachedAccountPreferencesSnapshot(
+      accountPreferencesCacheIdentity,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+    )?.savedAt ?? null
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
@@ -2504,41 +2523,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           body,
           isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
         )
-        const hydratedSyncStateKey = serializeAccountPreferencesSyncState(hydratedPreferences)
-        const currentLocalSyncStateKey = serializeAccountPreferencesSyncState(
-          latestAccountPreferencesRef.current,
-        )
-        const hydrationMatchesLocalState = hydratedSyncStateKey === currentLocalSyncStateKey
-        const shouldApplyHydration = hydrationMatchesLocalState
-          || (!hydrationStartedWithPendingSync && shouldApplyAccountPreferencesHydration({
-            hydrationStartedAtLocalRevision,
-            currentLocalRevision: accountPreferencesLocalRevisionRef.current,
-          }))
-
-        accountPreferencesLastSyncedStateKeyRef.current = hydratedSyncStateKey
-
-        if (shouldApplyHydration) {
-          accountPreferencesPendingSyncRef.current = false
-          latestAccountPreferencesRef.current = hydratedPreferences
-          writeCachedAccountPreferences(accountPreferencesCacheIdentity, hydratedPreferences, { pendingSync: false })
-          setTextSizeLevel(hydratedPreferences.textSizeLevel)
-          setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
-          setSttSegmentationMode(hydratedPreferences.sttSegmentationMode)
-          setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
-          setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
-          setTranslationModel(hydratedPreferences.translationModel)
-          setBubbleDisplayMode(hydratedPreferences.bubbleDisplayMode)
-          setAdBannerPosition(hydratedPreferences.adBannerPosition)
-          if (persistedInputModeRef.current === null) {
-            composerFocusRequestedRef.current = false
-            setIsComposerOpen(hydratedPreferences.inputMode === 'text')
-          }
-        } else {
-          writeCachedAccountPreferences(
-            accountPreferencesCacheIdentity,
-            latestAccountPreferencesRef.current,
-            { pendingSync: true },
-          )
+        const snapshot = reconcileAccountPreferencesHydration({
+          identity: accountPreferencesCacheIdentity,
+          preferences: hydratedPreferences,
+          startedSavedAt: hydrationStartedSavedAt,
+          isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+        })
+        accountPreferencesPendingSyncRef.current = snapshot.pendingSync
+        accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
+          ? null
+          : serializeAccountPreferencesSyncState(snapshot.preferences)
+        applySharedAccountPreferences(snapshot.preferences)
+        if (persistedInputModeRef.current === null) {
+          composerFocusRequestedRef.current = false
+          setIsComposerOpen(snapshot.preferences.inputMode === 'text')
         }
         setAccountPreferencesSuccessfulHydrationGeneration(hydrationGeneration)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -2558,6 +2556,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     accountPreferencesApiPath,
     accountPreferencesCacheIdentity,
+    applySharedAccountPreferences,
     clearAccountPreferencesSyncTimer,
     clearAccountPreferencesSyncRetryTimer,
     enableAccountPreferencesSync,
@@ -2601,45 +2600,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     clearAccountPreferencesSyncRetryTimer()
 
-    const currentPreferences = latestAccountPreferencesRef.current
-    const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
-    accountPreferencesPendingSyncRef.current = true
-    writeCachedAccountPreferences(accountPreferencesCacheIdentity, currentPreferences, { pendingSync: true })
-    const sessionKey = resolveConversationSessionKey()
-    const trackingUserId = getOrCreateTrackingUserId()
-
-    const syncPromise = fetch(accountPreferencesApiPath, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...buildTrackingRequestHeaders({
-          sessionKey,
-          trackingUserId,
-          nativeAppUpdate,
-        }),
+    const syncPromise = flushCachedAccountPreferences({
+      identity: accountPreferencesCacheIdentity,
+      isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+      send: async (currentPreferences) => {
+        const response = await fetch(accountPreferencesApiPath, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...buildTrackingRequestHeaders({
+              sessionKey: resolveConversationSessionKey(),
+              trackingUserId: getOrCreateTrackingUserId(),
+              nativeAppUpdate,
+            }),
+          },
+          body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
+        })
+        if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
       },
-      body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`account_preferences_patch_failed:${response.status}`)
-        }
+      .then(() => {
         clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
-        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
-        if (
-          serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
-          === currentSyncStateKey
-        ) {
-          accountPreferencesSyncQueuedRef.current = false
-          accountPreferencesPendingSyncRef.current = false
-          writeCachedAccountPreferences(
-            accountPreferencesCacheIdentity,
-            latestAccountPreferencesRef.current,
-            { pendingSync: false },
-          )
-        } else {
-          accountPreferencesSyncQueuedRef.current = true
-        }
+        accountPreferencesSyncQueuedRef.current = false
       })
       .catch(() => {
         // Keep the local-first state durable and retry even if the user does
