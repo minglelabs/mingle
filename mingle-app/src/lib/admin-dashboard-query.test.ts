@@ -173,14 +173,23 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(6);
   });
 
-  it("calculates a platform-filtered view from source rows without using the all-platform cache", async () => {
+  it("calculates and stores a missing platform-filtered cache row", async () => {
     const dayKey = "2026-08-02";
+    mocks.findMany.mockResolvedValue([]);
     setRawMetricResults(dayKey);
+    mocks.upsert.mockResolvedValue({});
 
     const metrics = await loadAdminDashboardMetrics(makeRange([dayKey]), { platform: "android" });
 
-    expect(mocks.findMany).not.toHaveBeenCalled();
-    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ platform: "android" }),
+    }));
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].where.day_platform).toEqual({
+      day: rawDay(dayKey),
+      platform: "android",
+    });
+    expect(mocks.upsert.mock.calls[0][0].create.platform).toBe("android");
     expect(mocks.deleteMany).not.toHaveBeenCalled();
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
     for (const [query, ...params] of mocks.queryRawUnsafe.mock.calls) {
@@ -190,6 +199,36 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[0].points[0].value).toBe(5);
     expect(metrics[1].points[0].value).toBe(4);
     expect(metrics[4].points[0].value).toBe(100);
+  });
+
+  it("uses platform-scoped historical cache while recalculating only recent days", async () => {
+    const today = resolveTodayKey(new Date());
+    const yesterday = shiftDayKey(today, -1);
+    const twoDaysAgo = shiftDayKey(today, -2);
+    const dayKeys = [twoDaysAgo, yesterday, today];
+
+    mocks.findMany.mockResolvedValue([{
+      day: rawDay(twoDaysAgo),
+      signupCount: 9,
+      dauCount: 8,
+      messageCount: 7,
+      usageSeconds: 6,
+      usageMetricVersion: 1,
+      sttAvgMs: null,
+      sttP95Ms: null,
+      translationAvgMs: null,
+      translationP95Ms: null,
+    }]);
+    setRawMetricResults(yesterday);
+
+    const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { platform: "ios" });
+
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ platform: "ios" }),
+    }));
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(metrics[0].points.map((point) => point.value)).toEqual([6, 5, 0]);
   });
 
   it("forceRefresh deletes only cacheable days and recalculates everything, persisting only cacheable days", async () => {
@@ -208,9 +247,10 @@ describe("loadAdminDashboardMetrics", () => {
     const deletedDays: Date[] = mocks.deleteMany.mock.calls[0][0].where.day.in;
     expect(deletedDays).toHaveLength(2);
     expect(mocks.upsert).toHaveBeenCalledTimes(2);
-    expect(mocks.upsert.mock.calls.map(([args]) => args.where.day)).toEqual([
-      rawDay("2026-08-02"),
-      rawDay("2026-08-03"),
+    expect(mocks.deleteMany.mock.calls[0][0].where.platform).toBe("all");
+    expect(mocks.upsert.mock.calls.map(([args]) => args.where.day_platform)).toEqual([
+      { day: rawDay("2026-08-02"), platform: "all" },
+      { day: rawDay("2026-08-03"), platform: "all" },
     ]);
     expect(metrics[0].points).toHaveLength(4);
   });
@@ -223,6 +263,19 @@ describe("clearAdminDashboardCache", () => {
     await clearAdminDashboardCache(dayKeys);
     expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
     expect(mocks.deleteMany.mock.calls[0][0].where.day.in).toHaveLength(3);
+    expect(mocks.deleteMany.mock.calls[0][0].where.platform).toBe("all");
+  });
+
+  it("deletes only the specified platform cache rows", async () => {
+    const dayKeys = ["2026-08-01", "2026-08-02"];
+    mocks.deleteMany.mockResolvedValue({ count: 2 });
+
+    await clearAdminDashboardCache(dayKeys, "android");
+
+    expect(mocks.deleteMany.mock.calls[0][0].where).toMatchObject({
+      platform: "android",
+      day: { in: [rawDay("2026-08-01"), rawDay("2026-08-02")] },
+    });
   });
 
   it("does nothing when given an empty array", async () => {

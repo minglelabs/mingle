@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-05 - Cache platform-filtered dashboard metrics
+
+- **Surface:** Service dashboard OS filters, daily charts, cumulative charts, metrics table, and cache refresh action.
+- **Issue:** The newly added Android/iOS filters bypassed the daily cache because the cache key had no OS dimension. Every filtered request therefore recalculated the entire selected date range, making the dashboard slow even when historical data was already cached.
+- **Resolution:** Extend the daily cache key from `day` to `day + platform`, preserving existing rows as the `all` platform. All three views now follow the same policy: always calculate today and yesterday, load existing historical rows, and calculate only historical dates whose selected-platform cache row is missing. Missing dates are grouped into contiguous ranges so unrelated cached dates are not recalculated. The refresh action clears only the selected platform's historical rows.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** Add a Prisma migration for the composite daily-metric key and platform index. No API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify repeated requests for each platform recalculate only today and yesterday, a first request fills missing historical rows, existing rows are reused, `전체` does not mix with Android/iOS rows, the cache refresh action is scoped to the selected platform, and invalid `platform` query values still fall back to `전체`.
+
 ## 2026-09-04 - Normalize language flags in iOS Picture in Picture
 
 - **Surface:** The language badge rendered beside every original or translated row in the native iOS Picture in Picture conversation preview.

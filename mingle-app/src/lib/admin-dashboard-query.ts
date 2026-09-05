@@ -9,6 +9,7 @@ import {
   formatDayKey,
   parseDayKey,
   resolveUncacheableDayKeys,
+  shiftDayKey,
   startOfDayUtc,
 } from "@/lib/admin-dashboard-metrics";
 
@@ -332,10 +333,48 @@ async function queryDailyMetricSnapshots(
   return snapshots;
 }
 
-async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<Map<string, CachedDailyMetric>> {
+function groupContiguousDayKeys(dayKeys: readonly string[]): string[][] {
+  const sortedDayKeys = [...new Set(dayKeys)].sort();
+  const groups: string[][] = [];
+
+  for (const dayKey of sortedDayKeys) {
+    const currentGroup = groups[groups.length - 1];
+    const previousDayKey = currentGroup?.[currentGroup.length - 1];
+    if (!currentGroup || !previousDayKey || shiftDayKey(previousDayKey, 1) !== dayKey) {
+      groups.push([dayKey]);
+    } else {
+      currentGroup.push(dayKey);
+    }
+  }
+
+  return groups;
+}
+
+async function queryDailyMetricSnapshotsForDays(
+  dayKeys: readonly string[],
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, DailyMetricSnapshot>> {
+  const groups = groupContiguousDayKeys(dayKeys);
+  const calculatedGroups = await Promise.all(
+    groups.map((group) => queryDailyMetricSnapshots(createCalculationRange(group), platform)),
+  );
+  const calculated = new Map<string, DailyMetricSnapshot>();
+  for (const groupSnapshots of calculatedGroups) {
+    for (const [dayKey, snapshot] of groupSnapshots) {
+      calculated.set(dayKey, snapshot);
+    }
+  }
+  return calculated;
+}
+
+async function loadCachedDailyMetrics(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, CachedDailyMetric>> {
   const rows = await prisma.adminDashboardDailyMetric.findMany({
     where: {
       day: { in: range.dayKeys.map(parseDayKey) },
+      platform,
     },
     select: {
       day: true,
@@ -358,9 +397,15 @@ async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<M
   );
 }
 
-function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: Date) {
+function snapshotToCacheRow(
+  dayKey: string,
+  snapshot: DailyMetricSnapshot,
+  platform: AdminDashboardPlatform,
+  now: Date,
+) {
   return {
     day: parseDayKey(dayKey),
+    platform,
     ...snapshot,
     usageMetricVersion: USAGE_METRIC_VERSION,
     createdAt: now,
@@ -371,6 +416,7 @@ function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: 
 async function persistDailyMetricSnapshots(
   snapshots: ReadonlyMap<string, DailyMetricSnapshot>,
   historicalDayKeys: readonly string[],
+  platform: AdminDashboardPlatform,
 ): Promise<void> {
   const now = new Date();
   await Promise.all(historicalDayKeys.map(async (dayKey) => {
@@ -378,8 +424,13 @@ async function persistDailyMetricSnapshots(
     if (!snapshot) return;
 
     await prisma.adminDashboardDailyMetric.upsert({
-      where: { day: parseDayKey(dayKey) },
-      create: snapshotToCacheRow(dayKey, snapshot, now),
+      where: {
+        day_platform: {
+          day: parseDayKey(dayKey),
+          platform,
+        },
+      },
+      create: snapshotToCacheRow(dayKey, snapshot, platform, now),
       update: {
         ...snapshot,
         usageMetricVersion: USAGE_METRIC_VERSION,
@@ -407,10 +458,16 @@ export type LoadAdminDashboardOptions = {
   platform?: AdminDashboardPlatform;
 };
 
-export async function clearAdminDashboardCache(cacheableDayKeys: readonly string[]): Promise<void> {
+export async function clearAdminDashboardCache(
+  cacheableDayKeys: readonly string[],
+  platform: AdminDashboardPlatform = "all",
+): Promise<void> {
   if (cacheableDayKeys.length === 0) return;
   await prisma.adminDashboardDailyMetric.deleteMany({
-    where: { day: { in: cacheableDayKeys.map(parseDayKey) } },
+    where: {
+      day: { in: cacheableDayKeys.map(parseDayKey) },
+      platform,
+    },
   });
 }
 
@@ -419,19 +476,6 @@ async function resolveDailyMetricSnapshots(
   options?: LoadAdminDashboardOptions,
 ): Promise<Map<string, DailyMetricSnapshot>> {
   const platform = options?.platform ?? "all";
-
-  // The daily cache has no platform dimension. Keep the existing cache behavior for
-  // the default all-platform view, and calculate filtered views from source rows so
-  // Android/iOS values never get mixed with an all-platform snapshot.
-  if (platform !== "all") {
-    const calculated = await queryDailyMetricSnapshots(range, platform);
-    return new Map(
-      range.dayKeys.map((dayKey) => [
-        dayKey,
-        calculated.get(dayKey) ?? { ...EMPTY_DAILY_METRIC },
-      ]),
-    );
-  }
 
   // 오늘 + 어제는 데이터가 완전히 집계되지 않을 수 있으므로 항상 실시간 집계한다.
   const uncacheableKeys = resolveUncacheableDayKeys(new Date(), ADMIN_DASHBOARD_TIME_ZONE);
@@ -444,11 +488,12 @@ async function resolveDailyMetricSnapshots(
     await prisma.adminDashboardDailyMetric.deleteMany({
       where: {
         day: { in: historicalDayKeys.map(parseDayKey) },
+        platform,
       },
     });
 
     if (historicalDayKeys.length > 0) {
-      await persistDailyMetricSnapshots(calculated, historicalDayKeys);
+      await persistDailyMetricSnapshots(calculated, historicalDayKeys, platform);
     }
 
     return new Map(
@@ -465,7 +510,7 @@ async function resolveDailyMetricSnapshots(
     ? await loadCachedDailyMetrics({
         ...range,
         dayKeys: cacheableDayKeysInRange,
-      })
+      }, platform)
     : new Map<string, CachedDailyMetric>();
 
   const missingCacheableDays = cacheableDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
@@ -473,11 +518,11 @@ async function resolveDailyMetricSnapshots(
   const daysToCalculate = [...missingCacheableDays, ...uncacheableDaysInRange];
 
   if (daysToCalculate.length > 0) {
-    const calculated = await queryDailyMetricSnapshots(createCalculationRange(daysToCalculate), platform);
+    const calculated = await queryDailyMetricSnapshotsForDays(daysToCalculate, platform);
     const daysToPersist = daysToCalculate.filter((dayKey) => !uncacheableKeys.has(dayKey));
 
     if (daysToPersist.length > 0) {
-      await persistDailyMetricSnapshots(calculated, daysToPersist);
+      await persistDailyMetricSnapshots(calculated, daysToPersist, platform);
     }
 
     for (const dayKey of missingCacheableDays) {
