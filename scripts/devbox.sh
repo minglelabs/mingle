@@ -2959,11 +2959,10 @@ run_ios_mobile_install() {
     log "iOS device not detected; skipping iOS build/install"
     return 0
   fi
-  coredevice_id="$(detect_ios_coredevice_id || true)"
-  if [[ -z "$coredevice_id" ]]; then
-    # Fallback for environments where only xcodebuild destination id is visible.
-    coredevice_id="$destination_udid"
-  fi
+  # devicectl accepts the hardware UDID used by xcodebuild. Never independently
+  # auto-detect the installation target: with multiple connected phones that
+  # can select a different device than the explicit --ios-udid build target.
+  coredevice_id="$destination_udid"
 
   require_cmd xcodebuild
   require_cmd xcrun

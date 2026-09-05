@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-09-05 - Preserve explicit iOS installation targets in Devbox
+
+- **Surface:** USB device build/install workflow with multiple iPhones connected.
+- **Issue:** `run_ios_mobile_install` honored `--ios-udid` for Xcode compilation but independently selected the first CoreDevice for uninstall/install/launch. This could overwrite an unrelated phone even when an explicit target was provided; the issue occurred during the local test setup.
+- **Resolution:** Use the same selected hardware UDID for every device operation. `devicectl` accepts that UDID directly, so there is no need for an independent first-device lookup. Verify the requested phone's model/OS before installation; do not reinstall or restore an unintended phone without the user's direction.
+- **Regression coverage:** Execute the installation function with mocked Xcode/device commands and an intentionally different auto-detected phone. Assert both normal and clean-install workflows use the explicit target for build, uninstall, install, and launch.
+- **Data and release impact:** Developer tooling only; no app/API version or database change.
+
 ## 2026-09-05 - Resolve PR 211 local-first synchronization races
 
 - **Scope:** Changes are confined to `codex/messenger-client-sot-2.0.1`, reviewed against `codex/messenger-tabs-device-test`. The service branch is not modified.

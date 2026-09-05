@@ -39,6 +39,44 @@ ${shellBody}
   ).trim();
 }
 
+for (const cleanInstall of [0, 1]) {
+  test(`iOS install keeps the explicit build target for all device operations (clean=${cleanInstall})`, () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-target-"));
+    const callsPath = path.join(tempDir, "calls.log");
+    fs.mkdirSync(path.join(tempDir, "mingle-app/rn/ios/mingle.xcworkspace"), { recursive: true });
+    runDevboxEval(`
+ROOT_DIR=${JSON.stringify(tempDir)}
+RN_APP_JSON_FILE="$ROOT_DIR/app.json"
+RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/runtime.xcconfig"
+DEVBOX_WORKTREE_NAME="target-test"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.1"
+require_cmd() { :; }
+ensure_rn_workspace_dependencies() { :; }
+ensure_ios_pods_if_needed() { :; }
+write_rn_ios_runtime_xcconfig() { :; }
+write_rn_mobile_ads_app_json() { :; }
+resolve_devbox_admob_app_id_ios() { printf 'test-ios'; }
+resolve_devbox_admob_app_id_android() { printf 'test-android'; }
+resolve_devbox_qa_bridge_enabled() { printf '0'; }
+resolve_ios_bundle_id() { printf 'com.example.test'; }
+detect_ios_coredevice_id() { printf 'WRONG-FIRST-CONNECTED-PHONE'; }
+detect_ios_xcode_destination_udid() { printf 'WRONG-AUTO-DETECTED-PHONE'; }
+xcodebuild() {
+  printf 'build %s\\n' "$*" >> ${JSON.stringify(callsPath)}
+  mkdir -p "$ROOT_DIR/.devbox-cache/ios/$DEVBOX_WORKTREE_NAME/Build/Products/Release-iphoneos/mingle.app"
+}
+xcrun() { printf 'device %s\\n' "$*" >> ${JSON.stringify(callsPath)}; }
+run_ios_mobile_install "00008030-000D45822298802E" "Release" "${cleanInstall}"
+`);
+    const calls = fs.readFileSync(callsPath, "utf8");
+    assert.match(calls, /-destination id=00008030-000D45822298802E/);
+    assert.match(calls, /device install app --device 00008030-000D45822298802E/);
+    assert.match(calls, /device process launch --device 00008030-000D45822298802E/);
+    if (cleanInstall) assert.match(calls, /device uninstall app --device 00008030-000D45822298802E/);
+    assert.doesNotMatch(calls, /WRONG-/);
+  });
+}
+
 test("shared devbox settings prefer the main worktree over local derived files", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-shared-setting-"));
   const mainEnvPath = path.join(tempDir, "main.env");
