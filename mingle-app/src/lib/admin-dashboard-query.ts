@@ -183,6 +183,9 @@ async function queryMessageCount(
  * window so the first day is not undercounted. A counter reset contributes zero.
  * This deliberately does not use app_messages duration fields: those are
  * per-turn client diagnostics and can be corrupted by a suspended/stale timer.
+ * Look up only the last pre-range snapshot per active user using the existing
+ * user/created_at/id index. DISTINCT ON over all earlier events can scan the
+ * entire log table even when only today and yesterday need recalculation.
  */
 async function queryUsageSeconds(
   range: AdminDashboardDateRange,
@@ -201,13 +204,17 @@ async function queryUsageSeconds(
        from usage_in_range
      ),
      usage_before_start as materialized (
-       select distinct on (el."user_id")
-         el."user_id", el."id", el."created_at", el."usage_sec"
-       from "app"."app_event_logs" as el
-       join usage_users as uu on uu."user_id" = el."user_id"
-       where el."usage_sec" is not null
-         and el."created_at" < $1
-       order by el."user_id", el."created_at" desc, el."id" desc
+       select baseline."user_id", baseline."id", baseline."created_at", baseline."usage_sec"
+       from usage_users as uu
+       cross join lateral (
+         select el."user_id", el."id", el."created_at", el."usage_sec"
+         from "app"."app_event_logs" as el
+         where el."user_id" = uu."user_id"
+           and el."usage_sec" is not null
+           and el."created_at" < $1
+         order by el."created_at" desc, el."id" desc
+         limit 1
+       ) as baseline
      ),
      usage_events as materialized (
        select "user_id", "id", "created_at", "usage_sec"
