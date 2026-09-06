@@ -7,7 +7,6 @@ const {
   mockAppEventLogFindFirst,
   mockCreateTrackedEventLog,
   mockEnsureTrackingContext,
-  mockUpsertTrackedUser,
   mockMaybeGenerateConversationTitleForSession,
   mockNotifyConversationMessage,
   mockSendPushNotificationForConversationMessage,
@@ -15,14 +14,13 @@ const {
   mockIsMessageSenderBlockedInConversation,
   mockListChannelMemberUserIdsBySessionKey,
   mockGetServerSession,
-  mockResolveSessionAwareUserId,
+  mockResolveUserIdForTrackedWrite,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockCreateTrackedEventLog: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
-  mockUpsertTrackedUser: vi.fn(),
   mockMaybeGenerateConversationTitleForSession: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
   mockSendPushNotificationForConversationMessage: vi.fn(),
@@ -30,7 +28,7 @@ const {
   mockIsMessageSenderBlockedInConversation: vi.fn(),
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
   mockGetServerSession: vi.fn(),
-  mockResolveSessionAwareUserId: vi.fn(),
+  mockResolveUserIdForTrackedWrite: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -42,7 +40,7 @@ vi.mock("@/lib/auth-options", () => ({
 }));
 
 vi.mock("@/lib/request-user-identity", () => ({
-  resolveSessionAwareUserId: mockResolveSessionAwareUserId,
+  resolveUserIdForTrackedWrite: mockResolveUserIdForTrackedWrite,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -67,7 +65,6 @@ vi.mock("@/lib/app-analytics", () => ({
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
     return Math.trunc(value);
   },
-  upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
 vi.mock("@/server/conversation-auto-title", () => ({
@@ -93,12 +90,12 @@ import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-even
 describe("handleLogClientEventV1", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnsureTrackingContext.mockReturnValue({ sessionKey: "sess_123" });
-    mockUpsertTrackedUser.mockResolvedValue("user_123");
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "anon_device",
+      sessionKey: "sess_123",
+    });
     mockGetServerSession.mockResolvedValue(null);
-    mockResolveSessionAwareUserId.mockImplementation(
-      async ({ fallbackUserId }: { fallbackUserId: string }) => fallbackUserId,
-    );
+    mockResolveUserIdForTrackedWrite.mockResolvedValue("user_123");
     mockAppMessageUpsert.mockResolvedValue({ id: "message_123", createdAt: new Date("2026-04-12T09:00:00.000Z") });
     mockAppMessageContentUpsert.mockResolvedValue({});
     mockAppEventLogFindFirst.mockResolvedValue(null);
@@ -108,6 +105,55 @@ describe("handleLogClientEventV1", () => {
     mockMaterializePendingConversationInvitees.mockResolvedValue(undefined);
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(false);
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
+  });
+
+  it("acknowledges the original without waiting for title AI while translation is pending", async () => {
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
+      method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translationPending: true }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).toHaveBeenCalledOnce();
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledOnce();
+    expect(mockMaybeGenerateConversationTitleForSession).not.toHaveBeenCalled();
+    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+  });
+
+  it("patches translations and refreshes the room without sending a second push", async () => {
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
+      method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert.mock.calls[0][0].where).toEqual({ sessionKey_clientMessageId: { sessionKey: "sess_123", clientMessageId: "durable_1" } });
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
+    expect(mockMaterializePendingConversationInvitees).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).not.toHaveBeenCalled();
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
+  });
+
+  it.each([
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3",
+    "android/v2.0.0", "android/v2.0.1",
+  ])("accepts the pre-local-first finalized payload without new flags: %s", async namespace => {
+    const response = await handleLogClientEventV1(new NextRequest(`https://example.com/api/${namespace}/log/client-event`, {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "old_client_1",
+        sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" },
+      }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(mockAppMessageUpsert).toHaveBeenCalledOnce();
+    expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
+    expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+    expect(mockCreateTrackedEventLog).not.toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
   });
 
   it("persists translation model and infrastructure provider for finalized turns", async () => {
@@ -452,10 +498,10 @@ describe("handleLogClientEventV1", () => {
     expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
   });
 
-  it("attributes a finalized turn to the account resolveSessionAwareUserId resolves, not the raw tracked id", async () => {
+  it("attributes a finalized turn to the canonical account resolver", async () => {
     const session = { user: { id: "user_session_real" } };
     mockGetServerSession.mockResolvedValue(session);
-    mockResolveSessionAwareUserId.mockResolvedValue("user_session_real");
+    mockResolveUserIdForTrackedWrite.mockResolvedValue("user_session_real");
 
     const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
       method: "POST",
@@ -485,9 +531,35 @@ describe("handleLogClientEventV1", () => {
     expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user_session_real" }),
     );
-    expect(mockResolveSessionAwareUserId).toHaveBeenCalledWith({
+    expect(mockResolveUserIdForTrackedWrite).toHaveBeenCalledWith(expect.objectContaining({
+      request,
       session,
-      fallbackUserId: "user_123",
+      tracking: expect.objectContaining({
+        externalUserId: "anon_device",
+        sessionKey: "sess_123",
+      }),
+    }));
+  });
+
+  it("rejects a current write when no canonical account can be resolved", async () => {
+    mockResolveUserIdForTrackedWrite.mockResolvedValue("");
+    const request = new NextRequest("https://example.com/api/ios/v2.0.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "client_message_unauthenticated",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: {},
+      }),
     });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "authenticated_user_required" });
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockCreateTrackedEventLog).not.toHaveBeenCalled();
   });
 });

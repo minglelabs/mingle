@@ -258,7 +258,7 @@ async function verifyAppleIdentityToken(idToken: string): Promise<AppleIdentityT
   return verifiedPayload;
 }
 
-async function upsertNativeAppleUser(args: {
+export async function upsertNativeAppleUser(args: {
   appleSubject: string;
   email: string;
   name: string;
@@ -273,6 +273,83 @@ async function upsertNativeAppleUser(args: {
   const now = new Date();
   const externalUserId = `apple:${args.appleSubject}`.slice(0, 128);
   const name = args.name || "Mingle User";
+  const accountKey = {
+    provider: "apple",
+    providerAccountId: args.appleSubject,
+  };
+
+  // The NextAuth Account relation is the durable OAuth identity. Native Apple
+  // sign-in used to rely only on User.externalUserId, which a later credentials
+  // bridge callback could overwrite with the internal User id.
+  const existingAccount = await prisma.account.findUnique({
+    where: {
+      provider_providerAccountId: accountKey,
+    },
+    select: {
+      user: {
+        select: { id: true, email: true, name: true },
+      },
+    },
+  });
+  if (existingAccount?.user) {
+    const user = await prisma.user.update({
+      where: { id: existingAccount.user.id },
+      data: {
+        name: existingAccount.user.name ? undefined : name,
+        email: args.email || undefined,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+    return { user, created: false };
+  }
+
+  const linkAccount = async (userId: string): Promise<string> => {
+    const linkedAccount = await prisma.account.upsert({
+      where: {
+        provider_providerAccountId: accountKey,
+      },
+      create: {
+        userId,
+        type: "oauth",
+        ...accountKey,
+      },
+      // Never transfer an existing provider identity to another User. The
+      // initial lookup handles existing links; this empty update is only an
+      // idempotent guard for repeated exchange requests.
+      update: {},
+      select: { userId: true },
+    });
+    return linkedAccount.userId;
+  };
+
+  const resolveLinkedUser = async (candidateUser: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  }) => {
+    const linkedUserId = await linkAccount(candidateUser.id);
+    if (linkedUserId === candidateUser.id) return candidateUser;
+
+    // A concurrent exchange may have inserted the provider link after our
+    // initial lookup. The Account relation wins; never issue a bridge token
+    // for a different candidate User.
+    return prisma.user.update({
+      where: { id: linkedUserId },
+      data: {
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+  };
 
   const existingByExternal = await prisma.user.findUnique({
     where: { externalUserId },
@@ -292,7 +369,7 @@ async function upsertNativeAppleUser(args: {
         email: true,
       },
     });
-    return { user, created: false };
+    return { user: await resolveLinkedUser(user), created: false };
   }
 
   if (args.email) {
@@ -314,7 +391,7 @@ async function upsertNativeAppleUser(args: {
           email: true,
         },
       });
-      return { user, created: false };
+      return { user: await resolveLinkedUser(user), created: false };
     }
   }
 
@@ -336,7 +413,8 @@ async function upsertNativeAppleUser(args: {
       },
     }),
   );
-  return { user, created: true };
+  const linkedUser = await resolveLinkedUser(user);
+  return { user: linkedUser, created: linkedUser.id === user.id };
 }
 
 export async function POST(request: NextRequest) {

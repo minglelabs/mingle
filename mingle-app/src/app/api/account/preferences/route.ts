@@ -11,6 +11,8 @@ import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
 } from "@/lib/translation-models";
+import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
@@ -344,10 +346,16 @@ export async function GET(request: Request) {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
   const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
-    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+    ...sessionIdentity,
+    externalUserId: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+      : "",
+    sessionKey: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingSessionKey(request) || tracking.sessionKey
+      : "",
   };
   logAccountPreferencesDebug("get_request", {
     headerExternalUserId: resolveTrackingExternalUserId(request) || null,
@@ -364,7 +372,10 @@ export async function GET(request: Request) {
   if (preferences) {
     await syncUserVersionContext(preferences.id, request);
   }
-  if (!preferences && identity.externalUserId) {
+  if (!preferences && hasIdentity(sessionIdentity)) {
+    return NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
+  }
+  if (!preferences && allowLegacyAnonymousUser && identity.externalUserId) {
     await upsertTrackedUser({
       tracking,
       clientContext: {
@@ -400,16 +411,25 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  if (!matchesExpectedAccount(request, session)) {
+    return NextResponse.json({ error: "account_changed" }, { status: 401 });
+  }
   const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
   const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
-    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+    ...sessionIdentity,
+    externalUserId: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+      : "",
+    sessionKey: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingSessionKey(request) || tracking.sessionKey
+      : "",
   };
   logAccountPreferencesDebug("patch_request", {
     headerExternalUserId: resolveTrackingExternalUserId(request) || null,
@@ -513,6 +533,10 @@ export async function PATCH(request: Request) {
     }
   }
 
+  if (hasIdentity(sessionIdentity)) {
+    return NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
+  }
+
   if (identity.externalUserId) {
     const result = await prisma.user.updateMany({
       where: { externalUserId: identity.externalUserId },
@@ -553,6 +577,10 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ ok: true });
       }
     }
+  }
+
+  if (!allowLegacyAnonymousUser) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const createdUserId = await upsertTrackedUser({

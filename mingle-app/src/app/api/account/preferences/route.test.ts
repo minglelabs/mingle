@@ -10,6 +10,7 @@ const {
   mockAppMessageFindFirst,
   mockEnsureTrackingContext,
   mockParseClientContext,
+  mockRequestAllowsLegacyAnonymousUser,
   mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockAppMessageFindFirst: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockParseClientContext: vi.fn(),
+  mockRequestAllowsLegacyAnonymousUser: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
 }));
 
@@ -53,9 +55,26 @@ vi.mock("@/lib/app-analytics", () => ({
   upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
+vi.mock("@/lib/request-user-identity", () => ({
+  requestAllowsLegacyAnonymousUser: mockRequestAllowsLegacyAnonymousUser,
+}));
+
 import { GET, PATCH } from "@/app/api/account/preferences/route";
 
 describe("/api/account/preferences route", () => {
+  it.each(["web", "native"])("rejects previous-account preferences in the %s handler", async variant => {
+    mockGetServerSession.mockResolvedValue({ user: { id: "new_account" } });
+    const handler = variant === "web" ? PATCH : (await import("@/server/api/controllers/shared/account-preferences-controller")).PATCH;
+    const response = await handler(new NextRequest("https://mingle.example/api/account/preferences", {
+      method: "PATCH", headers: { "Content-Type": "application/json", "x-mingle-expected-account-id": "old_account" },
+      body: JSON.stringify({ textSizeLevel: 5 }),
+    }));
+    expect(response.status).toBe(401);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+    expect(mockUserUpdateMany).not.toHaveBeenCalled();
+    expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppEventLogFindFirst.mockResolvedValue(null);
@@ -82,6 +101,17 @@ describe("/api/account/preferences route", () => {
     }));
     mockUserUpdate.mockResolvedValue({ id: "user_123" });
     mockUpsertTrackedUser.mockResolvedValue("seeded_user_id");
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(true);
+  });
+
+  it("rejects a current anonymous preferences request instead of creating a user", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(false);
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
+
+    expect(response.status).toBe(401);
+    expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
   });
 
   it("returns default preferences for fresh anonymous GET requests", async () => {

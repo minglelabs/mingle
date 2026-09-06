@@ -4407,6 +4407,7 @@ function AppInner(): React.JSX.Element {
             hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
             webviewDebuggingEnabled={shouldEnableNativeWebViewDebugging({
               isDebugBuild: __DEV__,
+              isQaBridgeEnabled: RUNTIME_QA_BRIDGE_ENABLED,
             })}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"

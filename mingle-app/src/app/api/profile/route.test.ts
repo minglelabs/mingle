@@ -61,6 +61,16 @@ describe("/api/profile route", () => {
     expect(mockUserFindUnique).not.toHaveBeenCalled();
   });
 
+  it("rejects a pending language edit from the previous account before touching the new profile", async () => {
+    const response = await PATCH(new NextRequest("https://mingle.example/api/profile", {
+      method: "PATCH", headers: { "Content-Type": "application/json", "x-mingle-expected-account-id": "previous_user" },
+      body: JSON.stringify({ defaultConversationLanguages: ["ko"] }),
+    }));
+    expect(response.status).toBe(401);
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
   it("returns the authenticated user's profile", async () => {
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",

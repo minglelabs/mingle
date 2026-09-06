@@ -39,6 +39,107 @@ ${shellBody}
   ).trim();
 }
 
+const iosInstallCases = [0, 1].flatMap(cleanInstall =>
+  [false, true].flatMap(explicitTarget =>
+    [false, true].map(hasCoreDeviceMapping => ({ cleanInstall, explicitTarget, hasCoreDeviceMapping })),
+  ),
+);
+for (const { cleanInstall, explicitTarget, hasCoreDeviceMapping } of iosInstallCases) {
+  test(`iOS install uses one selected phone (clean=${cleanInstall}, explicit=${explicitTarget}, mapping=${hasCoreDeviceMapping})`, () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-target-"));
+    const callsPath = path.join(tempDir, "calls.log");
+    fs.mkdirSync(path.join(tempDir, "mingle-app/rn/ios/mingle.xcworkspace"), { recursive: true });
+    runDevboxEval(`
+ROOT_DIR=${JSON.stringify(tempDir)}
+RN_APP_JSON_FILE="$ROOT_DIR/app.json"
+RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/runtime.xcconfig"
+DEVBOX_WORKTREE_NAME="target-test"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.0.2"
+require_cmd() { :; }
+ensure_rn_workspace_dependencies() { :; }
+ensure_ios_pods_if_needed() { :; }
+write_rn_ios_runtime_xcconfig() { :; }
+write_rn_mobile_ads_app_json() { :; }
+resolve_devbox_admob_app_id_ios() { printf 'test-ios'; }
+resolve_devbox_admob_app_id_android() { printf 'test-android'; }
+resolve_devbox_qa_bridge_enabled() { printf '0'; }
+resolve_ios_bundle_id() { printf 'com.example.test'; }
+detect_ios_coredevice_id() {
+  if [[ "\${1:-}" != "00008030-000D45822298802E" ]]; then
+    printf 'WRONG-FIRST-CONNECTED-PHONE'
+  elif [[ ${hasCoreDeviceMapping ? 1 : 0} -eq 1 ]]; then
+    printf 'MATCHED-COREDEVICE-ID'
+  fi
+}
+detect_ios_xcode_destination_udid() { printf '${explicitTarget ? "WRONG-AUTO-DETECTED-PHONE" : "00008030-000D45822298802E"}'; }
+xcodebuild() {
+  printf 'build %s\\n' "$*" >> ${JSON.stringify(callsPath)}
+  mkdir -p "$ROOT_DIR/.devbox-cache/ios/$DEVBOX_WORKTREE_NAME/Build/Products/Release-iphoneos/mingle.app"
+}
+xcrun() { printf 'device %s\\n' "$*" >> ${JSON.stringify(callsPath)}; }
+run_ios_mobile_install "${explicitTarget ? "00008030-000D45822298802E" : ""}" "Release" "${cleanInstall}"
+`);
+    const calls = fs.readFileSync(callsPath, "utf8");
+    const destination = explicitTarget ? "generic/platform=iOS" : "id=00008030-000D45822298802E";
+    const deviceId = hasCoreDeviceMapping ? "MATCHED-COREDEVICE-ID" : "00008030-000D45822298802E";
+    assert.ok(calls.includes(`-destination ${destination}`));
+    assert.ok(calls.includes(`device info details --device ${deviceId}`));
+    assert.ok(calls.includes(`device install app --device ${deviceId}`));
+    assert.ok(calls.includes(`device process launch --device ${deviceId}`));
+    if (cleanInstall) assert.ok(calls.includes(`device uninstall app --device ${deviceId}`));
+    else assert.doesNotMatch(calls, /device uninstall app/);
+    assert.doesNotMatch(calls, /WRONG-/);
+  });
+}
+
+test("iOS install stops before building or uninstalling when the chosen phone is unreachable", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-unreachable-"));
+  const callsPath = path.join(tempDir, "calls.log");
+  assert.throws(() => runDevboxEval(`
+detect_ios_coredevice_id() { :; }
+detect_ios_xcode_destination_udid() { printf 'WRONG-AUTO-DETECTED-PHONE'; }
+xcodebuild() { printf 'UNEXPECTED-BUILD\\n' >> ${JSON.stringify(callsPath)}; }
+xcrun() {
+  printf 'device %s\\n' "$*" >> ${JSON.stringify(callsPath)}
+  return 1
+}
+run_ios_mobile_install "00008030-000D45822298802E" "Release" "1"
+`), /selected iOS device is not reachable/);
+  assert.equal(
+    fs.readFileSync(callsPath, "utf8").trim(),
+    "device devicectl device info details --device 00008030-000D45822298802E",
+  );
+});
+
+test("CoreDevice lookup resolves the requested UDID despite stale tunnel state and never another phone", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-device-list-"));
+  const devicesPath = path.join(tempDir, "devices.json");
+  fs.writeFileSync(devicesPath, JSON.stringify({ result: { devices: [
+    { identifier: "WRONG-FIRST-PHONE", hardwareProperties: { udid: "other-udid" }, connectionProperties: { tunnelState: "connected" } },
+    { identifier: "MATCHED-COREDEVICE-ID", hardwareProperties: { udid: "requested-udid" }, connectionProperties: { tunnelState: "disconnected" } },
+  ] } }));
+  const output = runDevboxEval(`
+xcrun() {
+  [[ "$*" == "devicectl list devices --json-output "* ]] || return 1
+  cp ${JSON.stringify(devicesPath)} "$5"
+}
+printf '%s\\n' "$(detect_ios_coredevice_id requested-udid)"
+printf 'missing=%s\\n' "$(detect_ios_coredevice_id absent-udid)"
+`);
+  assert.equal(output, "MATCHED-COREDEVICE-ID\nmissing=");
+});
+
+test("an explicit CoreDevice lookup failure does not use the first connected phone fallback", () => {
+  const output = runDevboxEval(`
+xcrun() {
+  if [[ "$*" == *"--json-output"* ]]; then return 1; fi
+  printf 'OTHER-PHONE 11111111-1111-1111-1111-111111111111 connected'
+}
+if ! detect_ios_coredevice_id requested-udid; then printf 'lookup-failed'; fi
+`);
+  assert.equal(output, "lookup-failed");
+});
+
 test("shared devbox settings prefer the main worktree over local derived files", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-shared-setting-"));
   const mainEnvPath = path.join(tempDir, "main.env");

@@ -4,6 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import ChatBubble from './ChatBubble'
 
 describe('ChatBubble', () => {
+  it('shows the original with a pending label instead of a blank translated bubble after restart', () => {
+    const html = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'durable-pending', originalText: '보관된 원문', originalLang: 'ko',
+        targetLanguages: ['ko', 'en'], translations: {}, translationStatus: 'retrying' },
+      uiLocale: 'ko', preferredDisplayLanguage: 'en', defaultDisplayLanguage: 'en', bubbleDisplayMode: 'collapsed',
+    }))
+    expect(html).toContain('data-current-bubble-text-value')
+    expect(html).toContain('보관된 원문')
+    expect(html).toContain('번역 대기 중 · 원문 표시')
+  })
   afterEach(() => {
     vi.restoreAllMocks()
   })

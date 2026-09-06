@@ -187,6 +187,20 @@ describe('api-contract namespace guard', () => {
     expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
   })
 
+  it.each([
+    'ios/v2.0.0', 'ios/v2.0.1', 'ios/v2.0.2', 'ios/v2.0.3',
+    'android/v2.0.0', 'android/v2.0.1',
+  ])('keeps the installed app namespace when a newer server supplies the WebView: %s', async namespace => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.3'
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v2_0_0'
+    stubBrowserRuntime({ search: `?nativeUi=1&apiNamespace=${encodeURIComponent(namespace)}` })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe(namespace)
+    for (const endpoint of ['/conversations', '/account/preferences', '/log/client-event', '/translate/finalize'] as const) {
+      expect(contract.buildClientApiPath(endpoint)).toBe(`/api/${namespace}${endpoint}`)
+    }
+  })
+
   it('allows Android query override when value is allow-listed', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
     stubBrowserRuntime({ search: '?apiNs=android%2Fv1.0.6' })

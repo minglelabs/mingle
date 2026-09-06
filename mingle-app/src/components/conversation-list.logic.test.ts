@@ -11,6 +11,7 @@ import {
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   createMutationVersionTracker,
   findNativeSttRestoreConversation,
+  isConversationListRefreshCurrent,
   isSearchOverlayHistoryOpen,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
@@ -99,6 +100,15 @@ describe("conversation-list logic", () => {
 
     expect(lockRef.current).toBe(false);
     expect(tryAcquireConversationCreateLock(lockRef)).toBe(true);
+  });
+
+  it("mounts a background live room below the currently visible room", () => {
+    expect(resolveMountedConversationIds("room-visible", "room-live")).toEqual([
+      "room-live",
+      "room-visible",
+    ]);
+    expect(resolveMountedConversationIds("room-live", "room-live")).toEqual(["room-live"]);
+    expect(resolveMountedConversationIds("room-visible", null)).toEqual(["room-visible"]);
   });
 
   it("normalizes search terms and recent searches case-insensitively", () => {
@@ -298,6 +308,51 @@ describe("conversation-list logic", () => {
     ]);
   });
 
+  it("discards a list refresh when a room mutation changed while it was in flight", () => {
+    expect(isConversationListRefreshCurrent({
+      startedMutationRevision: 4,
+      currentMutationRevision: 4,
+    })).toBe(true);
+    expect(isConversationListRefreshCurrent({
+      startedMutationRevision: 4,
+      currentMutationRevision: 5,
+    })).toBe(false);
+  });
+
+  it("keeps the current list reference when a refresh contains no visible changes", () => {
+    const current = [
+      {
+        ...buildConversationSummary({
+        id: "conv-stable",
+        otherMembers: [{
+          userId: "user-2",
+          name: "Mina",
+          image: null,
+          imageCropScale: null,
+          imageCropX: null,
+          imageCropY: null,
+        }],
+        }),
+        selectedLanguagesAttribution: { ko: ["user-1"] },
+      },
+    ];
+    const identicalPayload = current.map((conversation) => ({
+      ...conversation,
+      selectedLanguages: [...(conversation.selectedLanguages ?? [])],
+      selectedLanguagesAttribution: { ko: ["user-1"] },
+      otherMembers: conversation.otherMembers.map((member) => ({ ...member })),
+    }));
+
+    expect(mergeConversationLists(current, identicalPayload)).toBe(current);
+    expect(replaceConversationLists(current, identicalPayload)).toBe(current);
+
+    const changedPayload = [{
+      ...identicalPayload[0],
+      unreadMessageCount: 1,
+    }];
+    expect(replaceConversationLists(current, changedPayload)).not.toBe(current);
+  });
+
   it("updates active and paused summary state without losing pause timestamps", () => {
     const current = buildConversationSummary({
       id: "conv-live",
@@ -351,8 +406,8 @@ describe("conversation-list logic", () => {
     expect(resolveMountedConversationIds(null, "conv-live")).toEqual(["conv-live"]);
     expect(resolveMountedConversationIds("conv-live", "conv-live")).toEqual(["conv-live"]);
     expect(resolveMountedConversationIds("conv-visible", "conv-live")).toEqual([
-      "conv-visible",
       "conv-live",
+      "conv-visible",
     ]);
   });
 

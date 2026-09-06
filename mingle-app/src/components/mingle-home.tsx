@@ -44,6 +44,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -53,12 +54,15 @@ type MingleHomeProps = {
   headerMode?: "default" | "conversation";
   onBack?: () => void;
   onConversationDeleted?: () => void;
+  onConversationTitleChange?: (title: string) => void | Promise<void>;
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>;
   conversationTitle?: string;
   conversationId?: string;
   preferredDisplayLanguage?: string | null;
   preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialOtherMembers?: ConversationChannelOtherMember[];
   initialSelectedLanguages?: string[];
   initialOwnSelectedLanguages?: string[];
   selectedLanguagesAttribution?: Record<string, string[]>;
@@ -1959,12 +1963,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          onConversationTitleChange={props.onConversationTitleChange}
+          onConversationRemoveRequested={props.onConversationRemoveRequested}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           preferredDisplayLanguage={props.preferredDisplayLanguage}
           preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialOtherMembers={props.initialOtherMembers}
           initialSelectedLanguages={props.initialSelectedLanguages}
           initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
           selectedLanguagesAttribution={props.selectedLanguagesAttribution}

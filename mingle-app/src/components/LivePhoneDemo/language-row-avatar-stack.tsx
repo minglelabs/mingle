@@ -1,14 +1,8 @@
 import { UserRound } from "lucide-react";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import type { ConversationMemberProfile } from "@/components/conversation-member-profile-cache";
 
-export type LanguageRowAttributionMember = {
-  userId: string;
-  image: string | null;
-  imageCropScale: number | null;
-  imageCropX: number | null;
-  imageCropY: number | null;
-  name: string | null;
-};
+export type LanguageRowAttributionMember = ConversationMemberProfile;
 
 type LanguageRowAvatarStackProps = {
   memberIds: readonly string[];

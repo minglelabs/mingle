@@ -45,6 +45,18 @@ export function releaseConversationCreateLock(lockRef: ConversationCreateLockRef
   lockRef.current = false;
 }
 
+export function resolveMountedConversationIds(
+  activeConversationId: string | null | undefined,
+  liveConversationId: string | null | undefined,
+): string[] {
+  const ids: string[] = [];
+  if (liveConversationId) ids.push(liveConversationId);
+  if (activeConversationId && activeConversationId !== liveConversationId) {
+    ids.push(activeConversationId);
+  }
+  return ids;
+}
+
 export function normalizeSearchTerm(rawValue: string): string {
   return rawValue.trim().replace(/\s+/g, " ");
 }
@@ -241,16 +253,6 @@ export function updateConversationSummaryStatus(
   };
 }
 
-export function resolveMountedConversationIds(
-  activeConversationId: string | null | undefined,
-  liveConversationId: string | null | undefined,
-): string[] {
-  const ids = new Set<string>();
-  if (activeConversationId) ids.add(activeConversationId);
-  if (liveConversationId) ids.add(liveConversationId);
-  return [...ids];
-}
-
 export function findNativeSttRestoreConversation(
   conversations: ConversationChannelSummary[],
   deletingConversationIds: ReadonlySet<string>,
@@ -271,6 +273,49 @@ export function findNativeSttRestoreConversation(
   )) ?? null;
 }
 
+function areConversationValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((value, index) => areConversationValuesEqual(value, right[index]));
+  }
+  if (
+    !left
+    || !right
+    || typeof left !== "object"
+    || typeof right !== "object"
+  ) {
+    return false;
+  }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every((key) => (
+    Object.prototype.hasOwnProperty.call(rightRecord, key)
+    && areConversationValuesEqual(leftRecord[key], rightRecord[key])
+  ));
+}
+
+export function areConversationListsEqual(
+  left: ConversationChannelSummary[],
+  right: ConversationChannelSummary[],
+): boolean {
+  return areConversationValuesEqual(left, right);
+}
+
+export function isConversationListRefreshCurrent(input: {
+  startedMutationRevision: number;
+  currentMutationRevision: number;
+}): boolean {
+  return input.startedMutationRevision === input.currentMutationRevision;
+}
+
 export function mergeConversationLists(
   current: ConversationChannelSummary[],
   incoming: ConversationChannelSummary[],
@@ -282,7 +327,8 @@ export function mergeConversationLists(
   for (const conversation of incoming) {
     merged.set(conversation.id, conversation);
   }
-  return [...merged.values()].sort(compareConversationRecency);
+  const next = [...merged.values()].sort(compareConversationRecency);
+  return areConversationListsEqual(current, next) ? current : next;
 }
 
 export function replaceConversationLists(
@@ -290,7 +336,7 @@ export function replaceConversationLists(
   incoming: ConversationChannelSummary[],
 ): ConversationChannelSummary[] {
   const currentById = new Map(current.map((conversation) => [conversation.id, conversation]));
-  return incoming.map((conversation) => {
+  const next = incoming.map((conversation) => {
     const previousConversation = currentById.get(conversation.id);
     if (!previousConversation) {
       return conversation;
@@ -310,6 +356,7 @@ export function replaceConversationLists(
         conversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
     };
   }).sort(compareConversationRecency);
+  return areConversationListsEqual(current, next) ? current : next;
 }
 
 export function calculateConversationRowTooltipPosForRect(

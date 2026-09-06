@@ -34,6 +34,8 @@ export type SttSegmentationMode = 'fin' | 'end'
 export const DEFAULT_STT_SEGMENTATION_MODE: SttSegmentationMode = 'end'
 export const DEFAULT_STT_SEGMENTATION_PREFERENCE: SttSegmentationMode | null = null
 export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom'
+export const ACCOUNT_PREFERENCES_SYNC_RETRY_BASE_MS = 2_000
+export const ACCOUNT_PREFERENCES_SYNC_RETRY_MAX_MS = 60_000
 
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
@@ -75,6 +77,96 @@ export interface AccountPreferencesPatchBody {
   echoAllowed: boolean
   bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
   sttSegmentationMode: SttSegmentationMode | null
+}
+
+const ACCOUNT_PREFERENCES_CACHE_KEY_PREFIX = 'mingle:account-preferences:v1'
+const ACCOUNT_PREFERENCES_CACHE_MAX_STALE_AGE_MS = 90 * 24 * 60 * 60 * 1000
+
+export type AccountPreferencesCacheIdentity = {
+  apiNamespace: string
+  userId?: string | null
+  trackingUserId?: string | null
+}
+
+export type AccountPreferencesCacheSnapshot = {
+  savedAt: number
+  preferences: LivePhoneDemoAccountPreferences
+  pendingSync: boolean
+}
+
+const accountPreferencesMemoryCache = new Map<string, AccountPreferencesCacheSnapshot>()
+const accountPreferencesListeners = new Map<string, Set<() => void>>()
+const accountPreferencesFlushes = new Map<string, Promise<void>>()
+
+export function subscribeAccountPreferences(identity: AccountPreferencesCacheIdentity, listener: () => void): () => void {
+  const key = buildAccountPreferencesCacheKey(identity)
+  const listeners = accountPreferencesListeners.get(key) ?? new Set<() => void>()
+  listeners.add(listener)
+  accountPreferencesListeners.set(key, listeners)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) accountPreferencesListeners.delete(key)
+  }
+}
+
+// Callers may have a stale room snapshot. Apply only the fields the user
+// actually changed to the account's latest snapshot, never the whole room.
+export function commitAccountPreferencesEdit(
+  identity: AccountPreferencesCacheIdentity,
+  previous: LivePhoneDemoAccountPreferences,
+  next: LivePhoneDemoAccountPreferences,
+  isLegacyNamespace: boolean,
+): LivePhoneDemoAccountPreferences {
+  const cached = readCachedAccountPreferencesSnapshot(identity, isLegacyNamespace)
+  const merged = { ...(cached?.preferences ?? previous) }
+  let changed = false
+  for (const key of Object.keys(next) as (keyof LivePhoneDemoAccountPreferences)[]) {
+    if (Object.is(previous[key], next[key])) continue
+    Object.assign(merged, { [key]: next[key] })
+    changed = true
+  }
+  if (changed) writeCachedAccountPreferences(identity, merged, { pendingSync: true })
+  return merged
+}
+
+// One writer per account/namespace, shared by visible and background rooms.
+// Retries always read the durable latest intent, not the initiating room's ref.
+export function flushCachedAccountPreferences(input: {
+  identity: AccountPreferencesCacheIdentity
+  isLegacyNamespace: boolean
+  send: (preferences: LivePhoneDemoAccountPreferences) => Promise<void>
+}): Promise<void> {
+  const key = buildAccountPreferencesCacheKey(input.identity)
+  const active = accountPreferencesFlushes.get(key)
+  if (active) return active
+  const promise = Promise.resolve().then(async () => {
+    while (true) {
+      const snapshot = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+      if (!snapshot?.pendingSync) return
+      await input.send(snapshot.preferences)
+      const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+      if (!current) return
+      if (current.savedAt !== snapshot.savedAt) continue
+      writeCachedAccountPreferences(input.identity, current.preferences, { pendingSync: false })
+      return
+    }
+  }).finally(() => {
+    accountPreferencesFlushes.delete(key)
+  })
+  accountPreferencesFlushes.set(key, promise)
+  return promise
+}
+
+export function reconcileAccountPreferencesHydration(input: {
+  identity: AccountPreferencesCacheIdentity
+  preferences: LivePhoneDemoAccountPreferences
+  startedSavedAt: number | null
+  isLegacyNamespace: boolean
+}): AccountPreferencesCacheSnapshot {
+  const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
+  if (current && (current.pendingSync || current.savedAt !== input.startedSavedAt)) return current
+  writeCachedAccountPreferences(input.identity, input.preferences, { pendingSync: false })
+  return readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)!
 }
 
 function normalizeIntegerPreference(
@@ -167,6 +259,123 @@ export function buildHydratedAccountPreferences(
   }
 }
 
+function buildAccountPreferencesCacheKey(identity: AccountPreferencesCacheIdentity): string {
+  const namespace = identity.apiNamespace.trim() || 'default'
+  const userId = identity.userId?.trim()
+  const trackingUserId = identity.trackingUserId?.trim()
+  const owner = userId
+    ? `user:${userId}`
+    : `tracking:${trackingUserId || 'anonymous'}`
+
+  return `${ACCOUNT_PREFERENCES_CACHE_KEY_PREFIX}:${encodeURIComponent(namespace)}:${encodeURIComponent(owner)}`
+}
+
+function normalizeAccountPreferencesCacheRecord(
+  value: unknown,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+  now = Date.now(),
+): AccountPreferencesCacheSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const candidate = value as Partial<AccountPreferencesCacheSnapshot>
+  if (
+    typeof candidate.savedAt !== 'number'
+    || !Number.isFinite(candidate.savedAt)
+    || candidate.savedAt > now + 60_000
+    || now - candidate.savedAt > ACCOUNT_PREFERENCES_CACHE_MAX_STALE_AGE_MS
+    || !candidate.preferences
+    || typeof candidate.preferences !== 'object'
+    || Array.isArray(candidate.preferences)
+  ) {
+    return null
+  }
+
+  return {
+    savedAt: candidate.savedAt,
+    pendingSync: candidate.pendingSync === true,
+    preferences: buildHydratedAccountPreferences(
+      candidate.preferences,
+      isLegacySonioxSilenceSliderNamespace,
+    ),
+  }
+}
+
+export function readCachedAccountPreferencesSnapshot(
+  identity: AccountPreferencesCacheIdentity,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+): AccountPreferencesCacheSnapshot | null {
+  if (typeof window === 'undefined') return null
+
+  const storageKey = buildAccountPreferencesCacheKey(identity)
+  const memoryRecord = normalizeAccountPreferencesCacheRecord(
+    accountPreferencesMemoryCache.get(storageKey),
+    isLegacySonioxSilenceSliderNamespace,
+  )
+  if (memoryRecord) return memoryRecord
+
+  accountPreferencesMemoryCache.delete(storageKey)
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKey)
+    if (!rawValue) return null
+
+    const storedRecord = normalizeAccountPreferencesCacheRecord(
+      JSON.parse(rawValue),
+      isLegacySonioxSilenceSliderNamespace,
+    )
+    if (!storedRecord) {
+      window.localStorage.removeItem(storageKey)
+      return null
+    }
+
+    accountPreferencesMemoryCache.set(storageKey, storedRecord)
+    return storedRecord
+  } catch {
+    return null
+  }
+}
+
+export function readCachedAccountPreferences(
+  identity: AccountPreferencesCacheIdentity,
+  isLegacySonioxSilenceSliderNamespace: boolean,
+): LivePhoneDemoAccountPreferences | null {
+  return readCachedAccountPreferencesSnapshot(
+    identity,
+    isLegacySonioxSilenceSliderNamespace,
+  )?.preferences ?? null
+}
+
+export function writeCachedAccountPreferences(
+  identity: AccountPreferencesCacheIdentity,
+  preferences: LivePhoneDemoAccountPreferences,
+  options?: { pendingSync?: boolean },
+): void {
+  if (typeof window === 'undefined') return
+
+  const storageKey = buildAccountPreferencesCacheKey(identity)
+  const previousRecord = accountPreferencesMemoryCache.get(storageKey)
+  const record: AccountPreferencesCacheSnapshot = {
+    savedAt: Math.max(Date.now(), (previousRecord?.savedAt ?? 0) + 1),
+    preferences,
+    pendingSync: options?.pendingSync ?? previousRecord?.pendingSync ?? false,
+  }
+  accountPreferencesMemoryCache.set(storageKey, record)
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(record))
+  } catch {
+    // The process-wide cache still keeps room switches local-first.
+  }
+  accountPreferencesListeners.get(storageKey)?.forEach((listener) => listener())
+}
+
+export function shouldApplyAccountPreferencesHydration(args: {
+  hydrationStartedAtLocalRevision: number
+  currentLocalRevision: number
+}): boolean {
+  return args.hydrationStartedAtLocalRevision === args.currentLocalRevision
+}
+
 export function buildAccountPreferencesPatchBody(
   preferences: LivePhoneDemoAccountPreferences,
 ): AccountPreferencesPatchBody {
@@ -214,6 +423,21 @@ export function shouldScheduleAccountPreferencesSync(args: {
   if (args.hydratedGeneration !== args.requestedHydrationGeneration) return false
 
   return serializeAccountPreferencesSyncState(args.currentPreferences) !== args.lastSyncedStateKey
+}
+
+export function resolveAccountPreferencesSyncRetryDelayMs(attemptCount: number): number {
+  return Math.min(
+    ACCOUNT_PREFERENCES_SYNC_RETRY_MAX_MS,
+    ACCOUNT_PREFERENCES_SYNC_RETRY_BASE_MS * (2 ** Math.max(0, attemptCount - 1)),
+  )
+}
+
+export function shouldRetryAccountPreferencesSync(args: {
+  allowSync: boolean
+  pendingSync: boolean
+  mounted: boolean
+}): boolean {
+  return args.allowSync && args.pendingSync && args.mounted
 }
 
 export function shouldSendTranslationModelPreference(args: {

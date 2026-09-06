@@ -34,7 +34,13 @@ import LanguageRowAvatarStack, {
   type LanguageRowAttributionMember,
 } from "@/components/LivePhoneDemo/language-row-avatar-stack";
 import SlideSurface from "@/components/slide-surface";
-import { buildClientApiPath } from "@/lib/api-contract";
+import {
+  mergeConversationMemberProfiles,
+  readConversationMemberProfileCache,
+  writeConversationMemberProfileCache,
+  type ConversationMemberProfile,
+} from "@/components/conversation-member-profile-cache";
+import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
@@ -74,6 +80,12 @@ interface LanguageSelectorProps {
   // amber always means "I chose this." Solo rooms pass nothing — own and
   // union are the same list there, so it falls back to `selectedLanguages`.
   viewerSelectedLanguages?: string[];
+  // Member profiles already present in the conversation-list/room snapshot.
+  // These are rendered immediately; the member endpoint remains a background
+  // revalidation source for changes made on another device.
+  initialMemberProfiles?: readonly ConversationMemberProfile[];
+  viewerUserId?: string | null;
+  trackingUserId?: string | null;
 }
 
 function isConversationMemberRecord(value: unknown): value is Record<string, unknown> {
@@ -107,6 +119,9 @@ export default function LanguageSelector({
   conversationId,
   selectedLanguagesAttribution,
   viewerSelectedLanguages,
+  initialMemberProfiles = [],
+  viewerUserId,
+  trackingUserId,
 }: LanguageSelectorProps) {
   const titleId = useId();
   const recentStripRef = useRef<HTMLDivElement | null>(null);
@@ -117,9 +132,22 @@ export default function LanguageSelector({
   const ownSelectedLanguagesRef = useRef<string[]>(
     resolveLanguageSelectorOwnSelectedLanguages(selectedLanguages, viewerSelectedLanguages),
   );
+  const memberProfileCacheIdentity = useMemo(() => ({
+    apiNamespace: clientApiNamespace,
+    conversationId: conversationId ?? "",
+    authenticatedUserId: viewerUserId,
+    trackingUserId,
+  }), [conversationId, trackingUserId, viewerUserId]);
+  const initialAttributionMembers = useMemo(() => {
+    const cachedMembers = readConversationMemberProfileCache(memberProfileCacheIdentity)?.members ?? [];
+    // A durable snapshot is the fastest known identity source on re-entry.
+    // The room snapshot fills a cold cache, while the no-store member request
+    // below remains the authoritative background revalidation.
+    return mergeConversationMemberProfiles(initialMemberProfiles, cachedMembers);
+  }, [initialMemberProfiles, memberProfileCacheIdentity]);
   const [attributionMembersById, setAttributionMembersById] = useState<
     Map<string, LanguageRowAttributionMember>
-  >(new Map());
+  >(() => new Map(initialAttributionMembers.map((member) => [member.userId, member])));
   const hasAttribution = Boolean(
     selectedLanguagesAttribution && Object.keys(selectedLanguagesAttribution).length > 0,
   );
@@ -219,6 +247,18 @@ export default function LanguageSelector({
   }, [activeOwnSelectedLanguages]);
 
   useEffect(() => {
+    if (initialAttributionMembers.length === 0) return;
+
+    setAttributionMembersById((currentMembers) => {
+      const nextMembers = new Map(currentMembers);
+      for (const member of initialAttributionMembers) {
+        nextMembers.set(member.userId, member);
+      }
+      return nextMembers;
+    });
+  }, [initialAttributionMembers]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     const previousBodyOverflow = document.body.style.overflow;
@@ -258,21 +298,27 @@ export default function LanguageSelector({
           ? payload.members
           : [];
         if (cancelled) return;
-        const nextMembersById = new Map<string, LanguageRowAttributionMember>();
+        const nextMembers: ConversationMemberProfile[] = [];
         for (const rawMember of rawMembers) {
           const member = parseLanguageRowAttributionMember(rawMember);
-          if (member) nextMembersById.set(member.userId, member);
+          if (member) nextMembers.push(member);
         }
+        const nextMembersById = new Map<string, LanguageRowAttributionMember>(
+          nextMembers.map((member) => [member.userId, member]),
+        );
         setAttributionMembersById(nextMembersById);
+        writeConversationMemberProfileCache(memberProfileCacheIdentity, nextMembers);
       } catch {
-        if (!cancelled) setAttributionMembersById(new Map());
+        // Keep the cached/snapshot profiles when the background refresh is
+        // unavailable. Local identity should never disappear because a
+        // revalidation request failed.
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [conversationId, isOpen]);
+  }, [conversationId, isOpen, memberProfileCacheIdentity]);
 
   useEffect(() => {
     setSortMode(defaultSortMode);

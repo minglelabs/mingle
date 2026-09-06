@@ -101,8 +101,9 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
 
 export function shouldEnableNativeWebViewDebugging(params: {
   isDebugBuild: boolean;
+  isQaBridgeEnabled: boolean;
 }): boolean {
-  return params.isDebugBuild;
+  return params.isDebugBuild || params.isQaBridgeEnabled;
 }
 
 type NativeRuntimeWebViewBannerPosition = 'top' | 'bottom';

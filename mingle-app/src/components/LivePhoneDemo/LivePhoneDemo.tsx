@@ -3,6 +3,7 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
+import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
@@ -16,6 +17,11 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
+import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
+import {
+  mergeConversationMemberProfiles,
+  type ConversationMemberProfile,
+} from '@/components/conversation-member-profile-cache'
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -66,12 +72,20 @@ import {
 import {
   buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
+  commitAccountPreferencesEdit,
+  flushCachedAccountPreferences,
+  reconcileAccountPreferencesHydration,
+  subscribeAccountPreferences,
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
+  readCachedAccountPreferencesSnapshot,
+  resolveAccountPreferencesSyncRetryDelayMs,
   serializeAccountPreferencesSyncState,
+  shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
   type AccountPreferencesResponse,
+  type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
   SttSegmentationMode,
   DEFAULT_STT_SEGMENTATION_MODE,
@@ -176,6 +190,7 @@ import {
   NATIVE_PIP_WEB_STATE_KEY,
   parseNativePipEvent,
   postNativePipCommand,
+  supportsNativePipNamespace,
   type NativePipState,
 } from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
@@ -190,6 +205,7 @@ const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
+const CONVERSATION_STATS_REPORT_INTERVAL_MS = 5_000
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
 const DEBUG_WEBVIEW_REMOUNT_MENU_LABEL = 'Remount WebView'
@@ -1274,12 +1290,15 @@ interface LivePhoneDemoProps {
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
+  onConversationTitleChange?: (title: string) => void | Promise<void>
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>
   conversationTitle?: string
   conversationId?: string
   preferredDisplayLanguage?: string | null
   preferredDisplayLanguages?: string[]
   sessionKeyOverride?: string
   storageNamespace?: string
+  initialOtherMembers?: ConversationChannelOtherMember[]
   initialSelectedLanguages?: string[]
   // The caller's OWN picks, distinct from initialSelectedLanguages (the room
   // union) once a room has 2+ members. Solo rooms: identical to the above.
@@ -1672,12 +1691,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   backButtonLabel = 'Back',
   onBack,
   onConversationDeleted,
+  onConversationTitleChange,
+  onConversationRemoveRequested,
   conversationTitle,
   conversationId,
   preferredDisplayLanguage,
   preferredDisplayLanguages,
   sessionKeyOverride,
   storageNamespace,
+  initialOtherMembers,
   initialSelectedLanguages,
   initialOwnSelectedLanguages,
   selectedLanguagesAttribution: initialSelectedLanguagesAttribution,
@@ -1703,6 +1725,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const { data: session } = useSession()
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
+  const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
+  const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
+    const otherMemberProfiles = (initialOtherMembers ?? []).map((member) => ({
+      userId: member.userId,
+      image: member.image,
+      imageCropScale: member.imageCropScale,
+      imageCropX: member.imageCropX,
+      imageCropY: member.imageCropY,
+      name: member.name,
+    }));
+    const viewerProfile = viewerUserId
+      ? [{
+          userId: viewerUserId,
+          image: viewerImage,
+          imageCropScale: null,
+          imageCropX: null,
+          imageCropY: null,
+          name: typeof session?.user?.name === 'string' ? session.user.name : null,
+        }]
+      : []
+    return mergeConversationMemberProfiles(otherMemberProfiles, viewerProfile)
+  }, [initialOtherMembers, session?.user?.name, viewerImage, viewerUserId])
+  const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
+    apiNamespace: clientApiNamespace,
+    userId: viewerUserId,
+    trackingUserId: accountPreferencesTrackingUserId,
+  }), [accountPreferencesTrackingUserId, viewerUserId])
+  const initialCachedAccountPreferencesSnapshot = useMemo(() => readCachedAccountPreferencesSnapshot(
+    accountPreferencesCacheIdentity,
+    isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+  ), [accountPreferencesCacheIdentity])
+  const initialCachedAccountPreferences = initialCachedAccountPreferencesSnapshot?.preferences ?? null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const blockedComposerMessageLabel = composerCopy.blockedComposerMessage
@@ -1813,14 +1867,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
-  const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
-  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
-  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(DEFAULT_STT_SEGMENTATION_PREFERENCE)
-  const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
-  const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
-  const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
-  const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(DEFAULT_BUBBLE_DISPLAY_MODE)
-  const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
+  const [textSizeLevel, setTextSizeLevel] = useState<number>(
+    initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
+  )
+  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(
+    initialCachedAccountPreferences?.sonioxManualFinalizeSilenceMs ?? DEFAULT_SONIOX_SILENCE_MS,
+  )
+  const [sttSegmentationMode, setSttSegmentationMode] = useState<SttSegmentationMode | null>(
+    initialCachedAccountPreferences?.sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
+  )
+  const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(
+    initialCachedAccountPreferences?.sonioxEndpointMaxDelayMs ?? DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+  )
+  const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(
+    initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+  )
+  const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
+    initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  )
+  const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
+    initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
+  )
+  const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(
+    initialCachedAccountPreferences?.adBannerPosition ?? null,
+  )
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
@@ -1933,6 +2003,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
+  const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
+  const accountPreferencesSyncRetryAttemptRef = useRef(0)
+  const accountPreferencesSyncInFlightRef = useRef<Promise<void> | null>(null)
+  const accountPreferencesSyncQueuedRef = useRef(false)
+  const accountPreferencesSyncRunnerRef = useRef<() => void>(() => {})
+  const accountPreferencesComponentMountedRef = useRef(true)
   const selectedLanguagesChangePendingRef = useRef(false)
   const speechLanguagesChangePendingRef = useRef(false)
   const selectedLanguagesRef = useRef<string[]>(selectedLanguages)
@@ -1986,6 +2062,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
+  const accountPreferencesPendingSyncRef = useRef(
+    initialCachedAccountPreferencesSnapshot?.pendingSync === true,
+  )
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
@@ -2006,17 +2085,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }, 1500)
   }, [])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
-    textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
-    sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
-    sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
-    sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
-    translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    adBannerPosition: null,
-    inputMode: DEFAULT_INPUT_MODE,
-    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
-    echoAllowed: DEFAULT_ECHO_ALLOWED,
-    bubbleDisplayMode: DEFAULT_BUBBLE_DISPLAY_MODE,
-    sttSegmentationMode: DEFAULT_STT_SEGMENTATION_PREFERENCE,
+    textSizeLevel: initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
+    sonioxManualFinalizeSilenceMs:
+      initialCachedAccountPreferences?.sonioxManualFinalizeSilenceMs ?? DEFAULT_SONIOX_SILENCE_MS,
+    sonioxEndpointMaxDelayMs:
+      initialCachedAccountPreferences?.sonioxEndpointMaxDelayMs ?? DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
+    sonioxEndpointTuningStep:
+      initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+    translationModel:
+      initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
+    inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
+    speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: initialCachedAccountPreferences?.echoAllowed ?? DEFAULT_ECHO_ALLOWED,
+    bubbleDisplayMode:
+      initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
+    sttSegmentationMode:
+      initialCachedAccountPreferences?.sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_PREFERENCE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
@@ -2062,8 +2147,66 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
   })
-  const isNativeIosPipAvailable = isNativeAppRuntime && isNativeIosAppRuntime()
+  const isNativeIosPipAvailable = isNativeAppRuntime
+    && isNativeIosAppRuntime()
+    && supportsNativePipNamespace(clientApiNamespace)
   nativePipConversationIdRef.current = conversationId?.trim() || ''
+
+  const commitLocalAccountPreferences = useCallback((
+    nextPreferences: LivePhoneDemoAccountPreferences,
+  ) => {
+    const merged = commitAccountPreferencesEdit(
+      accountPreferencesCacheIdentity,
+      latestAccountPreferencesRef.current,
+      nextPreferences,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+    )
+    accountPreferencesPendingSyncRef.current = readCachedAccountPreferencesSnapshot(
+      accountPreferencesCacheIdentity,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+    )?.pendingSync === true
+    latestAccountPreferencesRef.current = merged
+    return merged
+  }, [accountPreferencesCacheIdentity])
+
+  const applySharedAccountPreferences = useCallback((preferences: LivePhoneDemoAccountPreferences) => {
+    latestAccountPreferencesRef.current = preferences
+    setTextSizeLevel(preferences.textSizeLevel)
+    setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
+    setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    setTranslationModel(preferences.translationModel)
+    setBubbleDisplayMode(preferences.bubbleDisplayMode)
+    setAdBannerPosition(preferences.adBannerPosition)
+  }, [])
+
+  useEffect(() => {
+    const update = () => {
+      const snapshot = readCachedAccountPreferencesSnapshot(
+        accountPreferencesCacheIdentity,
+        isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+      )
+      if (!snapshot) return
+      accountPreferencesPendingSyncRef.current = snapshot.pendingSync
+      if (!snapshot.pendingSync) {
+        accountPreferencesLastSyncedStateKeyRef.current = serializeAccountPreferencesSyncState(snapshot.preferences)
+      }
+      applySharedAccountPreferences(snapshot.preferences)
+    }
+    const unsubscribe = subscribeAccountPreferences(accountPreferencesCacheIdentity, update)
+    // Close the render-to-subscribe gap without updating state in this effect.
+    let cancelled = false
+    queueMicrotask(() => { if (!cancelled) update() })
+    return () => { cancelled = true; unsubscribe() }
+  }, [accountPreferencesCacheIdentity, applySharedAccountPreferences])
+
+  useEffect(() => {
+    accountPreferencesComponentMountedRef.current = true
+    return () => {
+      accountPreferencesComponentMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -2144,7 +2287,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
-      persistedInputModeRef.current = next.inputMode
+      persistedInputModeRef.current = initialCachedAccountPreferences?.inputMode ?? next.inputMode
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       if (!conversationId) {
@@ -2153,12 +2296,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSpeechLanguages(next.speechLanguages)
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
-      setTextSizeLevel(next.textSizeLevel)
-      setAdBannerPosition(next.adBannerPosition)
+      setTextSizeLevel(initialCachedAccountPreferences?.textSizeLevel ?? next.textSizeLevel)
+      setAdBannerPosition(initialCachedAccountPreferences?.adBannerPosition ?? next.adBannerPosition)
       composerFocusRequestedRef.current = false
       setIsComposerOpen((current) => resolveHydratedComposerOpenState({
         currentIsComposerOpen: current,
-        persistedInputMode: next.inputMode,
+        persistedInputMode: initialCachedAccountPreferences?.inputMode ?? next.inputMode,
       }))
       const persistedComposerDraft = readPersistedComposerDraft(composerDraftStorageKey)
       composerDraftRef.current = persistedComposerDraft
@@ -2170,7 +2313,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [composerDraftStorageKey, conversationId, fallbackLanguages])
+  }, [composerDraftStorageKey, conversationId, fallbackLanguages, initialCachedAccountPreferences])
 
   useEffect(() => {
     if (!conversationId) return
@@ -2503,11 +2646,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     accountPreferencesSyncTimerRef.current = null
   }, [])
 
+  const clearAccountPreferencesSyncRetryTimer = useCallback((options?: { resetAttempt?: boolean }) => {
+    if (accountPreferencesSyncRetryTimerRef.current !== null) {
+      window.clearTimeout(accountPreferencesSyncRetryTimerRef.current)
+      accountPreferencesSyncRetryTimerRef.current = null
+    }
+    if (options?.resetAttempt) {
+      accountPreferencesSyncRetryAttemptRef.current = 0
+    }
+  }, [])
+
   useEffect(() => {
     // Hydrate from the server only on lifecycle inputs. Re-fetching on live local
     // preference changes would clobber in-progress edits with the last server snapshot.
     let cancelled = false
     clearAccountPreferencesSyncTimer()
+    clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
@@ -2521,6 +2675,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+    const hydrationStartedSavedAt = readCachedAccountPreferencesSnapshot(
+      accountPreferencesCacheIdentity,
+      isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+    )?.savedAt ?? null
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
@@ -2547,27 +2705,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           body,
           isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
         )
-        setTextSizeLevel(hydratedPreferences.textSizeLevel)
-        setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
-        setSttSegmentationMode(hydratedPreferences.sttSegmentationMode)
-        setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
-        setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
-        setTranslationModel(hydratedPreferences.translationModel)
-        setBubbleDisplayMode(hydratedPreferences.bubbleDisplayMode)
-        setAdBannerPosition(hydratedPreferences.adBannerPosition)
+        const snapshot = reconcileAccountPreferencesHydration({
+          identity: accountPreferencesCacheIdentity,
+          preferences: hydratedPreferences,
+          startedSavedAt: hydrationStartedSavedAt,
+          isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+        })
+        accountPreferencesPendingSyncRef.current = snapshot.pendingSync
+        accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
+          ? null
+          : serializeAccountPreferencesSyncState(snapshot.preferences)
+        applySharedAccountPreferences(snapshot.preferences)
         if (persistedInputModeRef.current === null) {
           composerFocusRequestedRef.current = false
-          setIsComposerOpen(hydratedPreferences.inputMode === 'text')
+          setIsComposerOpen(snapshot.preferences.inputMode === 'text')
         }
-        accountPreferencesLastSyncedStateKeyRef.current =
-          serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesSuccessfulHydrationGeneration(hydrationGeneration)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
       .catch(() => {
         if (cancelled) return
         accountPreferencesLastSyncedStateKeyRef.current =
-          serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
+          accountPreferencesPendingSyncRef.current
+            ? null
+            : serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
 
@@ -2576,71 +2737,132 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [
     accountPreferencesApiPath,
+    accountPreferencesCacheIdentity,
+    applySharedAccountPreferences,
     clearAccountPreferencesSyncTimer,
+    clearAccountPreferencesSyncRetryTimer,
     enableAccountPreferencesSync,
     nativeAppUpdate,
     resolveConversationSessionKey,
   ])
 
+  const scheduleAccountPreferencesSyncRetry = useCallback(() => {
+    if (!shouldRetryAccountPreferencesSync({
+      allowSync: enableAccountPreferencesSync,
+      pendingSync: accountPreferencesPendingSyncRef.current,
+      mounted: accountPreferencesComponentMountedRef.current,
+    })) {
+      return
+    }
+    if (accountPreferencesSyncRetryTimerRef.current !== null) return
+
+    accountPreferencesSyncRetryAttemptRef.current += 1
+    const delayMs = resolveAccountPreferencesSyncRetryDelayMs(
+      accountPreferencesSyncRetryAttemptRef.current,
+    )
+    accountPreferencesSyncRetryTimerRef.current = window.setTimeout(() => {
+      accountPreferencesSyncRetryTimerRef.current = null
+      if (!shouldRetryAccountPreferencesSync({
+        allowSync: enableAccountPreferencesSync,
+        pendingSync: accountPreferencesPendingSyncRef.current,
+        mounted: accountPreferencesComponentMountedRef.current,
+      })) {
+        return
+      }
+      accountPreferencesSyncRunnerRef.current()
+    }, delayMs)
+  }, [enableAccountPreferencesSync])
+
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
-    const currentPreferences = latestAccountPreferencesRef.current
-    const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
-    const sessionKey = resolveConversationSessionKey()
-    const trackingUserId = getOrCreateTrackingUserId()
+    if (accountPreferencesSyncInFlightRef.current) {
+      accountPreferencesSyncQueuedRef.current = true
+      return
+    }
 
-    void fetch(accountPreferencesApiPath, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...buildTrackingRequestHeaders({
-          sessionKey,
-          trackingUserId,
-          nativeAppUpdate,
-        }),
+    clearAccountPreferencesSyncRetryTimer()
+
+    const syncPromise = flushCachedAccountPreferences({
+      identity: accountPreferencesCacheIdentity,
+      isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+      send: async (currentPreferences) => {
+        const response = await fetch(accountPreferencesApiPath, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accountPreferencesCacheIdentity.userId ? { [EXPECTED_ACCOUNT_HEADER]: accountPreferencesCacheIdentity.userId } : {}),
+            ...buildTrackingRequestHeaders({
+              sessionKey: resolveConversationSessionKey(),
+              trackingUserId: getOrCreateTrackingUserId(),
+              nativeAppUpdate,
+            }),
+          },
+          body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
+        })
+        if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
       },
-      body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`account_preferences_patch_failed:${response.status}`)
-        }
-        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+      .then(() => {
+        clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
+        accountPreferencesSyncQueuedRef.current = false
       })
       .catch(() => {
-        // Keep the current in-memory state and retry on the next change.
+        // Keep the local-first state durable and retry even if the user does
+        // not make another settings edit before connectivity recovers.
+        scheduleAccountPreferencesSyncRetry()
       })
-  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+      .finally(() => {
+        accountPreferencesSyncInFlightRef.current = null
+        if (
+          !accountPreferencesComponentMountedRef.current
+          || !accountPreferencesSyncQueuedRef.current
+        ) {
+          return
+        }
+        accountPreferencesSyncQueuedRef.current = false
+        accountPreferencesSyncRunnerRef.current()
+      })
+    accountPreferencesSyncInFlightRef.current = syncPromise
+  }, [accountPreferencesApiPath, accountPreferencesCacheIdentity, clearAccountPreferencesSyncRetryTimer, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey, scheduleAccountPreferencesSyncRetry])
+  accountPreferencesSyncRunnerRef.current = syncAccountPreferences
+
+  useEffect(() => {
+    if (!enableAccountPreferencesSync) return
+
+    const retryPendingSync = () => {
+      if (!shouldRetryAccountPreferencesSync({
+        allowSync: enableAccountPreferencesSync,
+        pendingSync: accountPreferencesPendingSyncRef.current,
+        mounted: accountPreferencesComponentMountedRef.current,
+      })) {
+        return
+      }
+      clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
+      accountPreferencesSyncRunnerRef.current()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') retryPendingSync()
+    }
+
+    window.addEventListener('online', retryPendingSync)
+    window.addEventListener('focus', retryPendingSync)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('online', retryPendingSync)
+      window.removeEventListener('focus', retryPendingSync)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [clearAccountPreferencesSyncRetryTimer, enableAccountPreferencesSync])
+
+  useEffect(() => () => {
+    clearAccountPreferencesSyncTimer()
+    clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
+  }, [clearAccountPreferencesSyncRetryTimer, clearAccountPreferencesSyncTimer])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
-    if (!enableAccountPreferencesSync) return
     latestAccountPreferencesRef.current = nextPreferences
-    const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
-    const sessionKey = resolveConversationSessionKey()
-    const trackingUserId = getOrCreateTrackingUserId()
-
-    void fetch(accountPreferencesApiPath, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...buildTrackingRequestHeaders({
-          sessionKey,
-          trackingUserId,
-          nativeAppUpdate,
-        }),
-      },
-      body: JSON.stringify(buildAccountPreferencesPatchBody(nextPreferences)),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`account_preferences_patch_failed:${response.status}`)
-        }
-        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
-      })
-      .catch(() => {
-        // Keep the current in-memory state and retry on the next change.
-      })
-  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+    syncAccountPreferences()
+  }, [syncAccountPreferences])
 
   const clearFeedbackSubmitState = useCallback(() => {
     setFeedbackSubmitError(null)
@@ -3096,35 +3318,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleTextSizeLevelSelect = useCallback((nextTextSizeLevel: number) => {
     setTextSizeMenuOpen(false)
     if (latestAccountPreferencesRef.current.textSizeLevel === nextTextSizeLevel) return
-    setTextSizeLevel(nextTextSizeLevel)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
+    const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       textSizeLevel: nextTextSizeLevel,
     })
-  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+    setTextSizeLevel(nextTextSizeLevel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
     setTranslationModelUserSelectedSinceHydrationStart(true)
-    setTranslationModel(nextTranslationModel)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
+    const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       translationModel: nextTranslationModel,
     })
-  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+    setTranslationModel(nextTranslationModel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
     setBubbleDisplayModeMenuOpen(false)
     if (latestAccountPreferencesRef.current.bubbleDisplayMode === nextBubbleDisplayMode) return
-    setBubbleDisplayMode(nextBubbleDisplayMode)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
+    const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       bubbleDisplayMode: nextBubbleDisplayMode,
     })
-  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+    setBubbleDisplayMode(nextBubbleDisplayMode)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
     setSessionAdBannerPositionOverride(nextAdBannerPosition)
@@ -3132,13 +3357,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setAdBannerPosition(nextAdBannerPosition)
       return
     }
-    setAdBannerPosition(nextAdBannerPosition)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
+    const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       adBannerPosition: nextAdBannerPosition,
     })
-  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+    setAdBannerPosition(nextAdBannerPosition)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   useEffect(() => {
     if (isVisible) return
@@ -3227,14 +3453,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       allowSync: enableAccountPreferencesSync,
       hydratedGeneration: accountPreferencesHydratedGeneration,
       requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
-      currentPreferences: latestAccountPreferences,
+      currentPreferences: latestAccountPreferencesRef.current,
       lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
     })) {
       return
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferences()
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, syncAccountPreferences])
 
   useEffect(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -3598,6 +3824,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     if (isComposerOpen) {
+      commitLocalAccountPreferences({
+        ...latestAccountPreferencesRef.current,
+        inputMode: 'voice',
+      })
       setIsComposerOpen(false)
       composerTextareaRef.current?.blur()
       return true
@@ -3614,6 +3844,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     closeDeleteAccountDialog,
     closeLanguageSelector,
     closeRenameConversationDialog,
+    commitLocalAccountPreferences,
     deleteAccountDialogOpen,
     deleteConversationDialogOpen,
     isAuthActionPending,
@@ -4124,13 +4355,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
     if (isSttSessionRunning) return
     if (latestAccountPreferencesRef.current.sttSegmentationMode === nextMode) return
-    setSttSegmentationMode(nextMode)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
+    const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       sttSegmentationMode: nextMode,
     })
-  }, [clearAccountPreferencesSyncTimer, isSttSessionRunning, syncAccountPreferencesOverride])
+    setSttSegmentationMode(nextMode)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, isSttSessionRunning, syncAccountPreferencesOverride])
+  const handleSonioxManualFinalizeSilenceChange = useCallback((next: number) => {
+    commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      sonioxManualFinalizeSilenceMs: next,
+    })
+    setSonioxManualFinalizeSilenceMs(next)
+  }, [commitLocalAccountPreferences])
+  const handleSonioxEndpointTuningStepChange = useCallback((next: number) => {
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      sonioxEndpointTuningStep: next,
+    })
+    setSonioxEndpointTuningStep(next)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -4141,12 +4389,53 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onSttSessionRunningChangeRef.current?.(isSttSessionRunning)
   }, [isSttSessionRunning])
 
+  const conversationStatsReportTimerRef = useRef<number | null>(null)
+  const latestConversationStatsRef = useRef({
+    usageSec,
+    messageCount: persistedUtteranceCount,
+  })
+  const lastReportedConversationStatsRef = useRef<{
+    usageSec: number
+    messageCount: number
+  } | null>(null)
+  const onConversationStatsChangeRef = useRef(onConversationStatsChange)
+  onConversationStatsChangeRef.current = onConversationStatsChange
+  latestConversationStatsRef.current = {
+    usageSec,
+    messageCount: persistedUtteranceCount,
+  }
+
   useEffect(() => {
-    onConversationStatsChange?.({
-      usageSec,
-      messageCount: persistedUtteranceCount,
-    })
-  }, [onConversationStatsChange, persistedUtteranceCount, usageSec])
+    const nextStats = latestConversationStatsRef.current
+    const previousStats = lastReportedConversationStatsRef.current
+    const shouldReportImmediately = previousStats === null
+      || previousStats.messageCount !== nextStats.messageCount
+      || !isSttSessionRunning
+
+    if (shouldReportImmediately) {
+      if (conversationStatsReportTimerRef.current !== null) {
+        window.clearTimeout(conversationStatsReportTimerRef.current)
+        conversationStatsReportTimerRef.current = null
+      }
+      lastReportedConversationStatsRef.current = nextStats
+      onConversationStatsChangeRef.current?.(nextStats)
+      return
+    }
+
+    if (conversationStatsReportTimerRef.current !== null) return
+    conversationStatsReportTimerRef.current = window.setTimeout(() => {
+      conversationStatsReportTimerRef.current = null
+      const latestStats = latestConversationStatsRef.current
+      lastReportedConversationStatsRef.current = latestStats
+      onConversationStatsChangeRef.current?.(latestStats)
+    }, CONVERSATION_STATS_REPORT_INTERVAL_MS)
+  }, [isSttSessionRunning, persistedUtteranceCount, usageSec])
+
+  useEffect(() => () => {
+    if (conversationStatsReportTimerRef.current === null) return
+    window.clearTimeout(conversationStatsReportTimerRef.current)
+    conversationStatsReportTimerRef.current = null
+  }, [])
 
   const committedUtteranceIdsRef = useRef<Set<string>>(new Set())
   committedUtteranceIdsRef.current = new Set(utterances.map((utterance) => utterance.id))
@@ -4421,6 +4710,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
+      if (onConversationRemoveRequested) {
+        const accepted = await onConversationRemoveRequested()
+        if (accepted === false) {
+          throw new Error('conversation_remove_not_accepted')
+        }
+        manualTtsRequestSeqRef.current += 1
+        setPendingManualTtsTarget(null)
+        forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+        // A queued removal can still be rejected. Keep unsent messages in the
+        // journal until the list receives the actual deletion acknowledgement.
+        clearConversationHistory({ preservePendingDelivery: true })
+        setDeleteConversationDialogOpen(false)
+        requestCloseMenuPanel()
+        toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
+        return
+      }
+
       const trackingUserId = getOrCreateTrackingUserId()
       // A multi-member room's row-removal action is "leave" (removes just
       // this caller's membership, see leaveConversationChannel), not
@@ -4467,6 +4773,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     leaveConversationCopy.successToastLabel,
     nativeAppUpdate,
     onConversationDeleted,
+    onConversationRemoveRequested,
     prepareForDeletion,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
@@ -4486,6 +4793,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setIsRenamingConversation(true)
 
     try {
+      if (onConversationTitleChange) {
+        await onConversationTitleChange(normalizedTitle)
+        setDisplayConversationTitle(normalizedTitle)
+        setRenameConversationValue(normalizedTitle)
+        setRenameConversationDialogOpen(false)
+        toast.success(roomManagementCopy.renameSuccessToastLabel)
+        return
+      }
+
       const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
         method: 'PATCH',
         headers: {
@@ -4516,6 +4832,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationId,
     isRenamingConversation,
     nativeAppUpdate,
+    onConversationTitleChange,
     renameConversationValue,
     resolveConversationSessionKey,
     roomManagementCopy.renameEmptyMessage,
@@ -4852,21 +5169,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleToggleComposer = useCallback(() => {
-    setIsComposerOpen((previous) => {
-      const next = !previous
-      composerFocusRequestedRef.current = next
-      persistedInputModeRef.current = next ? 'text' : 'voice'
-      try {
-        localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
-      } catch {
-        // Ignore local persistence failures and keep in-memory state.
-      }
-      if (previous) {
-        composerTextareaRef.current?.blur()
-      }
-      return next
+    const next = !isComposerOpen
+    commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      inputMode: next ? 'text' : 'voice',
     })
-  }, [])
+    composerFocusRequestedRef.current = next
+    persistedInputModeRef.current = next ? 'text' : 'voice'
+    try {
+      localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
+    } catch {
+      // Ignore local persistence failures and keep in-memory state.
+    }
+    if (isComposerOpen) {
+      composerTextareaRef.current?.blur()
+    }
+    setIsComposerOpen(next)
+  }, [commitLocalAccountPreferences, isComposerOpen])
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
@@ -5720,14 +6039,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleNativePipStart = useCallback(() => {
     const state = nativePipStateRef.current
-    if (!state?.conversationId) return
+    if (!isNativeIosPipAvailable || !state?.conversationId) return
 
     nativePipLastSyncedPlaybackStateRef.current = null
     postNativePipCommand({
       type: 'native_pip_start',
       payload: state,
     })
-  }, [])
+  }, [isNativeIosPipAvailable])
 
   const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
     if (!isNativeIosPipAvailable) return
@@ -6317,6 +6636,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   conversationId={conversationId}
                   selectedLanguagesAttribution={selectedLanguagesAttribution}
                   viewerSelectedLanguages={ownSelectedLanguages}
+                  initialMemberProfiles={initialLanguageSelectorMembers}
+                  viewerUserId={viewerUserId}
+                  trackingUserId={accountPreferencesTrackingUserId}
                 />
               ) : null}
             </div>
@@ -6593,7 +6915,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       MAX_SONIOX_SILENCE_MS,
                                       100,
                                     )
-                                    setSonioxManualFinalizeSilenceMs(next)
+                                    handleSonioxManualFinalizeSilenceChange(next)
                                   }}
                                   onPointerMove={(event) => {
                                     if (isSilenceFinalizeSliderDisabled) return
@@ -6604,7 +6926,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       MAX_SONIOX_SILENCE_MS,
                                       100,
                                     )
-                                    setSonioxManualFinalizeSilenceMs(next)
+                                    handleSonioxManualFinalizeSilenceChange(next)
                                   }}
                                   onPointerUp={(event) => {
                                     if (isSilenceFinalizeSliderDisabled) return
@@ -6619,7 +6941,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       MIN_SONIOX_SILENCE_MS,
                                       Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
                                     )
-                                    setSonioxManualFinalizeSilenceMs(next)
+                                    handleSonioxManualFinalizeSilenceChange(next)
                                   }}
                                   className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
                                   aria-label={`${silenceFinalizeLabel} milliseconds`}
@@ -6674,12 +6996,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onChange={(event) => {
                                       if (isSilenceFinalizeSliderDisabled) return
                                       const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
-                                      setSonioxEndpointTuningStep(next)
-                                      clearAccountPreferencesSyncTimer()
-                                      syncAccountPreferencesOverride({
-                                        ...latestAccountPreferencesRef.current,
-                                        sonioxEndpointTuningStep: next,
-                                      })
+                                      handleSonioxEndpointTuningStepChange(next)
                                     }}
                                     className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
                                     aria-label={endpointTuningLabel}

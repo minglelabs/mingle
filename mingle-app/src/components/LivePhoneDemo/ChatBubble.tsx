@@ -83,6 +83,7 @@ export interface Utterance {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
+  translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
 }
 
@@ -747,14 +748,19 @@ function ChatBubble({
           </span>
         )}
         {activeIsPending ? (
-          <span
-            data-interim-translation-cursor
-            className="inline-flex h-4 items-center gap-0.5 align-middle"
-          >
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
-          </span>
+          <>
+            <span data-current-bubble-text-value className="align-middle">{utterance.originalText}</span>
+            <span
+              data-interim-translation-cursor
+              className="inline-flex h-4 items-center gap-0.5 align-middle"
+              aria-hidden="true"
+            >
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+            </span>
+            <span data-translation-pending-label className="ml-1 text-[10px] font-normal text-gray-400">{bubbleDisplayCopy.translationPendingLabel}</span>
+          </>
         ) : (
           <span data-current-bubble-text-value className="align-middle">
             {activeText}
@@ -1129,6 +1135,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
+    if (pu.translationStatus !== nu.translationStatus) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

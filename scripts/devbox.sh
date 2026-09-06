@@ -2985,19 +2985,17 @@ run_ios_mobile_install() {
     log "iOS device not detected; skipping iOS build/install"
     return 0
   fi
-  coredevice_id="$(detect_ios_coredevice_id "$requested_udid" || true)"
+  # Resolve only the chosen build target, including auto-selected destinations.
+  # An independent first-connected-device lookup could install on another phone.
+  coredevice_id="$(detect_ios_coredevice_id "$destination_udid" || true)"
   if [[ -z "$coredevice_id" ]]; then
-    if [[ -n "$requested_udid" ]]; then
-      die "requested iOS device is not connected to CoreDevice: $requested_udid"
-    fi
-    # Fallback for environments where only xcodebuild destination id is visible.
+    # devicectl also accepts the same hardware UDID when its list is stale.
+    # Reachability is checked below; never fall back to a different phone.
     coredevice_id="$destination_udid"
   fi
 
-  if [[ -n "$requested_udid" ]]; then
-    xcrun devicectl device info details --device "$coredevice_id" >/dev/null 2>&1 || \
-      die "requested iOS device is not reachable through CoreDevice: $requested_udid"
-  fi
+  xcrun devicectl device info details --device "$coredevice_id" >/dev/null 2>&1 || \
+    die "selected iOS device is not reachable through CoreDevice: $destination_udid"
 
   require_cmd xcodebuild
   require_cmd xcrun
@@ -3029,7 +3027,7 @@ run_ios_mobile_install() {
   mkdir -p "$(dirname "$derived_data_path")"
   [[ -d "$workspace_path" ]] || die "RN iOS workspace not found: $workspace_path"
 
-  local xcode_destination="$destination_udid"
+  local xcode_destination="id=$destination_udid"
   if [[ -n "$requested_udid" ]]; then
     # CoreDevice can install a signed generic iOS build even when Xcode's
     # destination list has not surfaced a paired wireless device yet.
