@@ -118,6 +118,25 @@ describe("request user identity", () => {
     expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
   });
 
+  it.each([null, { user: { id: "other_account" } }])("rejects queued writes belonging to a different session: %j", async session => {
+    const request = new NextRequest("https://mingle.example/api/ios/v2.0.3/conversations/room", {
+      headers: { "x-mingle-expected-account-id": "original_account", "x-mingle-user-id": "anon_device" },
+    });
+    expect((await resolveOrCreateUserIdForRequest({ request, session })).userId).toBe("");
+    expect(await resolveUserIdForTrackedWrite({ request, session, tracking: {} as never, clientContext: {} as never })).toBe("");
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+    expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
+    expect(mockRecordTrackedUserActivity).not.toHaveBeenCalled();
+  });
+
+  it("accepts an expected-account precondition only with its authenticated session", async () => {
+    mockUserFindUnique.mockResolvedValue({ id: "original_account" });
+    const request = new NextRequest("https://mingle.example/api/ios/v2.0.3/conversations/room", {
+      headers: { "x-mingle-expected-account-id": "original_account" },
+    });
+    expect((await resolveOrCreateUserIdForRequest({ request, session: { user: { id: "original_account" } } })).userId).toBe("original_account");
+  });
+
   it("rejects current conversation ownership while the session is missing", async () => {
     const request = new NextRequest("https://mingle.example/api/ios/v2.0.0/conversations", {
       headers: { "x-mingle-user-id": "anon_device" },

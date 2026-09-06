@@ -3,6 +3,8 @@
 import type { Utterance } from './ChatBubble'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { readConversationMutationRecords } from '../conversation-mutation-queue'
+import { compatiblePendingWorkNamespaces } from '@/lib/pending-work-api-namespace'
+import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 
 const STORAGE_KEY = 'mingle:message-finalization:v1'
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -156,6 +158,35 @@ export function readDurableFinalizations(ownerIdentity: string, apiNamespace: st
   return [...records.values()].filter(r => r.ownerIdentity === ownerIdentity && r.apiNamespace === apiNamespace)
 }
 
+async function migratePendingFinalizations(ownerIdentity: string, apiNamespace: string, canContinue: () => boolean): Promise<void> {
+  if (!ownerIdentity.startsWith('user:')) return
+  load()
+  const compatible = compatiblePendingWorkNamespaces(apiNamespace)
+  const previous = [...records.values()].filter(r => r.ownerIdentity === ownerIdentity
+    && r.apiNamespace !== apiNamespace && compatible.includes(r.apiNamespace))
+  for (const namespace of new Set(previous.map(r => r.apiNamespace))) {
+    cancelActiveDurableFinalizations(ownerIdentity, namespace)
+  }
+  await Promise.all(previous.map(r => active.get(r.id)?.promise.catch(() => null)))
+  if (!canContinue()) return
+  for (const record of previous) {
+    if (records.get(record.id) !== record) continue
+    const id = [ownerIdentity, apiNamespace, record.eventBody.sessionKey, record.utterance.id].join('\u001f')
+    const existing = records.get(id)
+    // A current-version edit wins. Only carry acknowledged progress across an
+    // identical payload; an older translation must never attach to edited text.
+    if (existing && existing.utterance.originalText === record.utterance.originalText
+      && JSON.stringify(existing.translationBody) === JSON.stringify(record.translationBody)) {
+      existing.sourceDelivered ||= record.sourceDelivered
+      existing.result ??= record.result
+    } else if (!existing) {
+      records.set(id, { ...record, id, apiNamespace, nextAttemptAt: 0 })
+    }
+    records.delete(record.id)
+  }
+  if (previous.length) persist()
+}
+
 export function restoreDurableFinalizationCache(ownerIdentity: string, apiNamespace: string): void {
   for (const record of readDurableFinalizations(ownerIdentity, apiNamespace)) {
     if (current(record)) persistUtterance(record, record.attemptCount > 0)
@@ -214,7 +245,8 @@ export function enqueueDurableFinalization(input: Omit<DurableFinalization,
 }
 
 export function discardDurableFinalizations(ownerIdentity: string, apiNamespace: string, conversationId: string): void {
-  for (const r of readDurableFinalizations(ownerIdentity, apiNamespace)) {
+  const namespaces = ownerIdentity.startsWith('user:') ? compatiblePendingWorkNamespaces(apiNamespace) : [apiNamespace]
+  for (const r of namespaces.flatMap(namespace => readDurableFinalizations(ownerIdentity, namespace))) {
     if (r.conversationId !== conversationId) continue
     records.delete(r.id)
     active.get(r.id)?.controller.abort()
@@ -273,7 +305,10 @@ async function post(record: DurableFinalization, path: string, body: Record<stri
   try {
     if (signal.aborted || !canSend()) throw new Error('finalization_aborted')
     return await Promise.race([fetchImpl(apiPath(record, path), {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mingle-user-id': record.trackingUserId },
+      method: 'POST', headers: {
+        'Content-Type': 'application/json', 'x-mingle-user-id': record.trackingUserId,
+        ...(record.ownerIdentity.startsWith('user:') ? { [EXPECTED_ACCOUNT_HEADER]: record.ownerIdentity.slice(5) } : {}),
+      },
       body: JSON.stringify(body), signal: controller.signal,
     }).then(async response => {
       if (!response.ok) throw new Error(`${path}_${response.status}`)
@@ -356,13 +391,17 @@ export function flushDurableFinalizations(ownerIdentity: string, apiNamespace: s
   if (existing && currentRun(key, existing.run)) return existing.promise
   const run: FinalizationRun = { owner, generation: owner.generation }
   const flush = { run, promise: Promise.resolve() }
-  const due = readDurableFinalizations(ownerIdentity, apiNamespace)
-    .filter(r => (force || r.nextAttemptAt <= Date.now()) && !pendingRemoval(r)).slice(0, 20)
-  let index = 0
   flushes.set(key, flush)
-  flush.promise = Promise.all([0, 1].map(async () => {
-    while (index < due.length && currentRun(key, run)) await deliverForRun(due[index++], run)
-  })).then(() => {}).finally(() => {
+  flush.promise = (async () => {
+    await migratePendingFinalizations(ownerIdentity, apiNamespace, () => currentRun(key, run))
+    if (!currentRun(key, run)) return
+    const due = readDurableFinalizations(ownerIdentity, apiNamespace)
+      .filter(r => (force || r.nextAttemptAt <= Date.now()) && !pendingRemoval(r)).slice(0, 20)
+    let index = 0
+    await Promise.all([0, 1].map(async () => {
+      while (index < due.length && currentRun(key, run)) await deliverForRun(due[index++], run)
+    }))
+  })().finally(() => {
     // A canceled run may finish after a new mount has already started recovery.
     if (flushes.get(key) === flush) flushes.delete(key)
   })

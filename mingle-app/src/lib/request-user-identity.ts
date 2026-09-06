@@ -9,6 +9,7 @@ import {
 } from "@/lib/app-analytics";
 import { parseApiNamespaceVersion } from "@/lib/api-namespace-version";
 import { prisma } from "@/lib/prisma";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 
 export type SessionUserIdentity = {
   id: string;
@@ -169,6 +170,7 @@ export async function resolveUserIdForTrackedWrite(args: {
   tracking: TrackingContext;
   clientContext: ClientContext;
 }): Promise<string> {
+  if (!matchesExpectedAccount(args.request, args.session)) return "";
   const sessionIdentity = normalizeSessionUserIdentity(args.session);
   if (hasAuthenticatedSessionIdentity(sessionIdentity)) {
     const userId = await findUserIdForIdentity(sessionIdentity);
@@ -207,6 +209,10 @@ export async function resolveOrCreateUserIdForRequest(args: {
     externalUserId: resolveTrackingExternalUserId(args.request),
     sessionKey: resolveTrackingSessionKey(args.request),
   };
+
+  if (!matchesExpectedAccount(args.request, args.session)) {
+    return { userId: "", identity, tracking: null };
+  }
 
   if (hasAuthenticatedSessionIdentity(sessionIdentity)) {
     const userId = await findUserIdForIdentity(sessionIdentity);

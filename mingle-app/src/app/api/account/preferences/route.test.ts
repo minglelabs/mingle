@@ -62,6 +62,19 @@ vi.mock("@/lib/request-user-identity", () => ({
 import { GET, PATCH } from "@/app/api/account/preferences/route";
 
 describe("/api/account/preferences route", () => {
+  it.each(["web", "native"])("rejects previous-account preferences in the %s handler", async variant => {
+    mockGetServerSession.mockResolvedValue({ user: { id: "new_account" } });
+    const handler = variant === "web" ? PATCH : (await import("@/server/api/controllers/shared/account-preferences-controller")).PATCH;
+    const response = await handler(new NextRequest("https://mingle.example/api/account/preferences", {
+      method: "PATCH", headers: { "Content-Type": "application/json", "x-mingle-expected-account-id": "old_account" },
+      body: JSON.stringify({ textSizeLevel: 5 }),
+    }));
+    expect(response.status).toBe(401);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+    expect(mockUserUpdateMany).not.toHaveBeenCalled();
+    expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppEventLogFindFirst.mockResolvedValue(null);

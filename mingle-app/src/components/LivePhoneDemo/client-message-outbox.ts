@@ -1,5 +1,7 @@
 'use client'
 
+import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
+
 const CLIENT_MESSAGE_OUTBOX_STORAGE_KEY = 'mingle:client-message-outbox:v1'
 const CLIENT_MESSAGE_OUTBOX_MAX_RECORDS = 500
 const CLIENT_MESSAGE_OUTBOX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -283,6 +285,7 @@ async function performFlush(input: {
         headers: {
           'Content-Type': 'application/json',
           'x-mingle-user-id': record.trackingUserId,
+          ...(record.ownerIdentity.startsWith('user:') ? { [EXPECTED_ACCOUNT_HEADER]: record.ownerIdentity.slice(5) } : {}),
         },
         body: record.body,
         keepalive: true,

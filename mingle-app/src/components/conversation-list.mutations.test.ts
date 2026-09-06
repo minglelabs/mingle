@@ -26,6 +26,43 @@ function callbackSource(name: string): string {
 }
 
 describe("conversation-list mutation wiring", () => {
+  it.each(["profile-default-languages", "title"])("ignores a delayed %s response after account replacement", async kind => {
+    const identity = { authenticatedUserId: "old-user", apiNamespace: "ios/v2.0.0" };
+    const scope = { identity, controller: new AbortController() };
+    const scopeRef = { current: scope as typeof scope | null };
+    const inFlightRef = { current: null as Promise<unknown> | null };
+    let finishBody!: (value: unknown) => void;
+    const response = { json: () => new Promise(resolve => { finishBody = resolve; }) };
+    const setConversations = vi.fn();
+    const setDefaultSelectedLanguages = vi.fn();
+    const readSnapshot = vi.fn();
+    const flushQueue = vi.fn(async (input) => {
+      await input.onSuccess({ kind, patch: { defaultConversationLanguages: ["ko"] } }, response, true);
+    });
+    const callback = runInNewContext(callbackSource("flushPendingConversationMutations"), {
+      window: {}, conversationMutationScopeRef: scopeRef, conversationMutationIdentity: identity,
+      conversationMutationFlushInFlightRef: inFlightRef, flushConversationMutationQueue: flushQueue,
+      advanceConversationListMutationRevision: vi.fn(), setConversations, setDefaultSelectedLanguages,
+      defaultSelectedLanguagesRef: { current: ["en"] }, sanitizeSttLanguageSelection,
+      readConversationResponse: (r: typeof response) => r.json(),
+      readPendingConversationMutationSnapshot: readSnapshot,
+    }) as () => Promise<unknown>;
+    const flushing = callback();
+    expect(flushQueue.mock.calls[0][0].signal).toBe(scope.controller.signal);
+    scope.controller.abort();
+    scopeRef.current = null;
+    const newAccountFlush = Promise.resolve();
+    inFlightRef.current = newAccountFlush;
+    finishBody({ defaultConversationLanguages: ["ko"], id: "old-room" });
+    await flushing;
+    expect(setConversations).not.toHaveBeenCalled();
+    expect(setDefaultSelectedLanguages).not.toHaveBeenCalled();
+    expect(readSnapshot).not.toHaveBeenCalled();
+    expect(inFlightRef.current).toBe(newAccountFlush);
+    await callback();
+    expect(flushQueue).toHaveBeenCalledTimes(1);
+  });
+
   it("queues selection and profile defaults while preserving other members' languages", () => {
     const enqueue = vi.fn();
     const fetch = vi.fn();

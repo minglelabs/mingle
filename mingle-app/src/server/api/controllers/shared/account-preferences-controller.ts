@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import {
@@ -383,6 +384,9 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  if (!matchesExpectedAccount(request, session)) {
+    return NextResponse.json({ error: "account_changed" }, { status: 401 });
+  }
   const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {

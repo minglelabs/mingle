@@ -12,6 +12,7 @@ import {
   resolveDefaultSelectableTranslationModel,
 } from "@/lib/translation-models";
 import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
@@ -410,6 +411,9 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  if (!matchesExpectedAccount(request, session)) {
+    return NextResponse.json({ error: "account_changed" }, { status: 401 });
+  }
   const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {

@@ -1,6 +1,8 @@
 "use client";
 
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import { compatiblePendingWorkNamespaces } from "@/lib/pending-work-api-namespace";
+import { EXPECTED_ACCOUNT_HEADER } from "@/lib/request-account-guard";
 
 const CONVERSATION_MUTATION_QUEUE_KEY_PREFIX = "mingle:conversation-mutation-queue:v1";
 const CONVERSATION_MUTATION_MAX_RECORDS = 200;
@@ -40,6 +42,7 @@ export type ConversationMutationPatch = Partial<Pick<
 export type ConversationMutationRecord = {
   id: string;
   ownerIdentity: string;
+  apiNamespace: string;
   conversationId: string;
   kind: ConversationMutationKind;
   endpoint: string;
@@ -67,7 +70,7 @@ export type ConversationMutationFlushResult = {
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 const conversationMutationMemory = new Map<string, ConversationMutationRecord>();
-const activeFlushes = new Map<string, Promise<ConversationMutationFlushResult>>();
+const activeFlushes = new Map<string, { promise: Promise<ConversationMutationFlushResult>; signal?: AbortSignal }>();
 const loadedMutationStorageKeys = new Set<string>();
 let lastMutationTimestamp = 0;
 
@@ -181,6 +184,7 @@ function normalizeRecord(value: unknown, now = Date.now()): ConversationMutation
   return {
     id,
     ownerIdentity,
+    apiNamespace: typeof candidate.apiNamespace === "string" ? candidate.apiNamespace : "",
     conversationId,
     kind,
     endpoint,
@@ -221,17 +225,18 @@ export function buildConversationMutationOwnerIdentity(
 
 function buildMutationId(input: {
   ownerIdentity: string;
+  apiNamespace: string;
   conversationId: string;
   kind: ConversationMutationKind;
 }): string {
-  return [input.ownerIdentity.trim(), input.conversationId.trim(), input.kind].join("\u001f");
+  return [input.ownerIdentity.trim(), input.apiNamespace, input.conversationId.trim(), input.kind].join("\u001f");
 }
 
-function persistMutations(identity: ConversationMutationQueueIdentity): void {
+function persistMutations(identity: ConversationMutationQueueIdentity): boolean {
   const storageKey = buildStorageKey(identity);
   const ownerIdentity = buildConversationMutationOwnerIdentity(identity);
   const records = [...conversationMutationMemory.values()]
-    .filter((record) => record.ownerIdentity === ownerIdentity)
+    .filter((record) => record.ownerIdentity === ownerIdentity && record.apiNamespace === identity.apiNamespace)
     .sort((left, right) => left.createdAt - right.createdAt)
     .slice(-CONVERSATION_MUTATION_MAX_RECORDS);
 
@@ -240,22 +245,24 @@ function persistMutations(identity: ConversationMutationQueueIdentity): void {
   // the last 200 records.
   const retainedIds = new Set(records.map((record) => record.id));
   for (const [recordId, record] of conversationMutationMemory.entries()) {
-    if (record.ownerIdentity === ownerIdentity && !retainedIds.has(recordId)) {
+    if (record.ownerIdentity === ownerIdentity && record.apiNamespace === identity.apiNamespace && !retainedIds.has(recordId)) {
       conversationMutationMemory.delete(recordId);
     }
   }
 
   const storage = readBrowserStorage();
-  if (!storage) return;
+  if (!storage) return false;
 
   try {
     if (records.length === 0) {
       storage.removeItem(storageKey);
-      return;
+      return true;
     }
     storage.setItem(storageKey, JSON.stringify(records));
+    return true;
   } catch {
     // The in-memory queue remains available for the current WebView process.
+    return false;
   }
 }
 
@@ -268,21 +275,43 @@ function ensureStoredMutationsLoaded(identity: ConversationMutationQueueIdentity
   if (!storage) return;
 
   try {
-    const rawValue = storage.getItem(storageKey);
-    if (!rawValue) return;
-    const parsed = JSON.parse(rawValue);
-    if (!Array.isArray(parsed)) {
-      storage.removeItem(storageKey);
-      return;
+    const ownerIdentity = buildConversationMutationOwnerIdentity(identity);
+    const namespaces = identity.authenticatedUserId
+      ? compatiblePendingWorkNamespaces(identity.apiNamespace) : [identity.apiNamespace];
+    const oldKeys: string[] = [];
+    for (const namespace of namespaces) {
+      const sourceKey = buildStorageKey({ ...identity, apiNamespace: namespace });
+      const rawValue = storage.getItem(sourceKey);
+      if (!rawValue) continue;
+      let parsed: unknown;
+      try { parsed = JSON.parse(rawValue); } catch { continue; }
+      if (!Array.isArray(parsed)) continue;
+      for (const value of parsed) {
+        const record = normalizeRecord(value, now);
+        if (!record || record.ownerIdentity !== ownerIdentity) continue;
+        // Only replace the API prefix, never a room ID, payload or tracking ID.
+        const prefix = `/api/${namespace ? `${namespace}/` : ""}`;
+        if (!record.endpoint.startsWith(prefix) && /^\/api\/(ios|android)\//.test(record.endpoint)) continue;
+        const endpoint = record.endpoint.startsWith(prefix)
+          ? `/api/${identity.apiNamespace ? `${identity.apiNamespace}/` : ""}${record.endpoint.slice(prefix.length)}`
+          : record.endpoint;
+        const id = buildMutationId({ ...record, apiNamespace: identity.apiNamespace });
+        const existing = conversationMutationMemory.get(id);
+        if (!existing || record.updatedAt > existing.updatedAt) {
+          conversationMutationMemory.set(id, { ...record, id, endpoint, apiNamespace: identity.apiNamespace });
+        }
+        lastMutationTimestamp = Math.max(lastMutationTimestamp, record.updatedAt);
+      }
+      if (sourceKey !== storageKey) oldKeys.push(sourceKey);
     }
-
-    for (const value of parsed) {
-      const record = normalizeRecord(value, now);
-      if (!record) continue;
-      conversationMutationMemory.set(record.id, record);
-      lastMutationTimestamp = Math.max(lastMutationTimestamp, record.updatedAt);
+    // Persist the destination before removing any previous-version journal.
+    if (persistMutations(identity)) {
+      oldKeys.forEach(key => storage.removeItem(key));
+      for (const [id, record] of conversationMutationMemory) {
+        if (record.ownerIdentity === ownerIdentity && record.apiNamespace !== identity.apiNamespace
+          && namespaces.includes(record.apiNamespace)) conversationMutationMemory.delete(id);
+      }
     }
-    persistMutations(identity);
   } catch {
     // Ignore malformed or unavailable storage and start with an empty queue.
   }
@@ -305,7 +334,7 @@ export function readConversationMutationRecords(
   if (removedExpiredRecord) persistMutations(identity);
 
   return [...conversationMutationMemory.values()]
-    .filter((record) => record.ownerIdentity === ownerIdentity)
+    .filter((record) => record.ownerIdentity === ownerIdentity && record.apiNamespace === identity.apiNamespace)
     .sort((left, right) => left.createdAt - right.createdAt || left.updatedAt - right.updatedAt);
 }
 
@@ -324,7 +353,7 @@ export function enqueueConversationMutation(
 ): ConversationMutationRecord {
   const ownerIdentity = buildConversationMutationOwnerIdentity(identity);
   const conversationId = input.conversationId.trim();
-  const id = buildMutationId({ ownerIdentity, conversationId, kind: input.kind });
+  const id = buildMutationId({ ownerIdentity, apiNamespace: identity.apiNamespace, conversationId, kind: input.kind });
   const now = input.now ?? Date.now();
   ensureStoredMutationsLoaded(identity, now);
   const existing = conversationMutationMemory.get(id);
@@ -333,6 +362,7 @@ export function enqueueConversationMutation(
   const record: ConversationMutationRecord = {
     id,
     ownerIdentity,
+    apiNamespace: identity.apiNamespace,
     conversationId,
     kind: input.kind,
     endpoint: input.endpoint,
@@ -366,7 +396,7 @@ export function acknowledgeConversationMutation(
   conversationMutationMemory.delete(record.id);
   if (record.kind === "remove") {
     for (const [id, pending] of conversationMutationMemory) {
-      if (pending.ownerIdentity === record.ownerIdentity && pending.conversationId === record.conversationId) {
+      if (pending.ownerIdentity === record.ownerIdentity && pending.apiNamespace === record.apiNamespace && pending.conversationId === record.conversationId) {
         conversationMutationMemory.delete(id);
       }
     }
@@ -389,9 +419,10 @@ export function adoptConversationMutationRecords(input: {
   let adopted = 0;
 
   for (const [recordId, record] of conversationMutationMemory.entries()) {
-    if (record.ownerIdentity !== fromOwnerIdentity) continue;
+    if (record.ownerIdentity !== fromOwnerIdentity || record.apiNamespace !== input.from.apiNamespace) continue;
     const nextId = buildMutationId({
       ownerIdentity: toOwnerIdentity,
+      apiNamespace: input.to.apiNamespace,
       conversationId: record.conversationId,
       kind: record.kind,
     });
@@ -402,6 +433,7 @@ export function adoptConversationMutationRecords(input: {
       ...latest,
       id: nextId,
       ownerIdentity: toOwnerIdentity,
+      apiNamespace: input.to.apiNamespace,
       updatedAt: Math.max(now, latest.updatedAt, lastMutationTimestamp + 1),
     };
     conversationMutationMemory.set(nextId, adoptedRecord);
@@ -453,6 +485,7 @@ async function performFlush(input: {
   fetchImpl: FetchLike;
   force: boolean;
   now: () => number;
+  signal?: AbortSignal;
   onSuccess?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
   onPermanentFailure?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
 }): Promise<ConversationMutationFlushResult> {
@@ -460,7 +493,7 @@ async function performFlush(input: {
   let delivered = 0;
   let attempts = 0;
 
-  while (attempts < CONVERSATION_MUTATION_MAX_FLUSH_BATCH) {
+  while (!input.signal?.aborted && attempts < CONVERSATION_MUTATION_MAX_FLUSH_BATCH) {
     const now = input.now();
     const pending = readConversationMutationRecords(input.identity, now);
     const removingRooms = new Set(pending.filter((record) => record.kind === "remove").map((record) => record.conversationId));
@@ -479,12 +512,16 @@ async function performFlush(input: {
     for (const record of records) {
       attempts += 1;
       try {
-        const response = await input.fetchImpl(record.endpoint, {
+        const response = await fetchUntilAborted(input.fetchImpl, record.endpoint, {
           method: record.method,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(input.identity.authenticatedUserId ? { [EXPECTED_ACCOUNT_HEADER]: input.identity.authenticatedUserId } : {}),
+          },
           body: record.method === "DELETE" ? undefined : record.body,
-          keepalive: true,
+          signal: input.signal,
         });
+        if (input.signal?.aborted) break;
         const treatAsSuccess = response.ok || (record.kind === "remove" && response.status === 404);
         if (treatAsSuccess) {
           const acknowledged = acknowledgeConversationMutation(input.identity, record);
@@ -520,6 +557,8 @@ async function performFlush(input: {
       } catch {
         // Retain the record and retry after an exponential backoff.
       }
+
+      if (input.signal?.aborted) break;
 
       const current = readConversationMutationRecords(input.identity, input.now())
         .find((candidate) => candidate.id === record.id);
@@ -557,11 +596,12 @@ export function flushConversationMutationQueue(input: {
   fetchImpl?: FetchLike;
   force?: boolean;
   now?: () => number;
+  signal?: AbortSignal;
   onSuccess?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
   onPermanentFailure?: (record: ConversationMutationRecord, response: Response, acknowledged: boolean) => void | Promise<void>;
 }): Promise<ConversationMutationFlushResult> {
   const ownerIdentity = buildConversationMutationOwnerIdentity(input.identity);
-  if (!ownerIdentity || typeof window === "undefined") {
+  if (!ownerIdentity || typeof window === "undefined" || input.signal?.aborted) {
     return Promise.resolve({ delivered: 0, retained: 0 });
   }
 
@@ -569,18 +609,35 @@ export function flushConversationMutationQueue(input: {
   // cannot accidentally share a promise during a namespace transition.
   const flushKey = buildStorageKey(input.identity);
   const activeFlush = activeFlushes.get(flushKey);
-  if (activeFlush) return activeFlush;
+  if (activeFlush && !activeFlush.signal?.aborted) return activeFlush.promise;
 
   const flushPromise = performFlush({
     identity: input.identity,
     fetchImpl: input.fetchImpl ?? window.fetch.bind(window),
     force: input.force === true,
     now: input.now ?? Date.now,
+    signal: input.signal,
     onSuccess: input.onSuccess,
     onPermanentFailure: input.onPermanentFailure,
   }).finally(() => {
-    activeFlushes.delete(flushKey);
+    if (activeFlushes.get(flushKey)?.promise === flushPromise) activeFlushes.delete(flushKey);
   });
-  activeFlushes.set(flushKey, flushPromise);
+  activeFlushes.set(flushKey, { promise: flushPromise, signal: input.signal });
   return flushPromise;
+}
+
+// Abort must settle the worker even if a fetch implementation never settles.
+async function fetchUntilAborted(fetchImpl: FetchLike, endpoint: string, init: RequestInit): Promise<Response> {
+  const signal = init.signal;
+  if (!signal) return fetchImpl(endpoint, init);
+  let rejectAbort: (reason: Error) => void = () => {};
+  const aborted = new Promise<never>((_, reject) => { rejectAbort = reject; });
+  const onAbort = () => rejectAbort(new Error("conversation_mutation_aborted"));
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal.aborted) throw new Error("conversation_mutation_aborted");
+    return await Promise.race([fetchImpl(endpoint, init), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 }

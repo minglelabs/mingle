@@ -3,6 +3,7 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
+import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
@@ -2789,6 +2790,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            ...(accountPreferencesCacheIdentity.userId ? { [EXPECTED_ACCOUNT_HEADER]: accountPreferencesCacheIdentity.userId } : {}),
             ...buildTrackingRequestHeaders({
               sessionKey: resolveConversationSessionKey(),
               trackingUserId: getOrCreateTrackingUserId(),

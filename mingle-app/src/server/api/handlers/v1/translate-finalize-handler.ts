@@ -7,6 +7,7 @@ import {
 } from '@/lib/app-analytics'
 import { getAuthOptions } from '@/lib/auth-options'
 import { requestAllowsLegacyAnonymousUser } from '@/lib/request-user-identity'
+import { EXPECTED_ACCOUNT_HEADER, matchesExpectedAccount } from '@/lib/request-account-guard'
 import { prisma } from '@/lib/prisma'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
@@ -1620,6 +1621,10 @@ async function synthesizeTtsInline(args: {
 }
 
 export async function handleTranslateFinalizeV1(request: NextRequest) {
+  if (request.headers.has(EXPECTED_ACCOUNT_HEADER)
+    && !matchesExpectedAccount(request, await getServerSession(getAuthOptions()))) {
+    return NextResponse.json({ error: 'account_changed' }, { status: 401 })
+  }
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body.text === 'string' ? body.text.trim() : ''
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []

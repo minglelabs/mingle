@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DurableFinalization } from './durable-message-finalization'
 
-const { pendingRemoval } = vi.hoisted(() => ({ pendingRemoval: vi.fn(() => []) }))
+const { pendingRemoval } = vi.hoisted(() => ({ pendingRemoval: vi.fn<(identity: unknown) => unknown[]>(() => []) }))
 vi.mock('../conversation-mutation-queue', () => ({ readConversationMutationRecords: pendingRemoval }))
 type Module = typeof import('./durable-message-finalization')
 const owner = 'user:one'
@@ -153,6 +153,98 @@ describe('durable message finalization', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
+  it.each(['ios/v2.0.0', 'ios/v2.0.1', 'ios/v2.0.2'])('recovers %s jobs after a cold upgrade to iOS 2.0.3', async previousNamespace => {
+    jobs.enqueueDurableFinalization({ ...input(), apiNamespace: previousNamespace })
+    await reloadJobs()
+    retainOwner(owner, 'ios/v2.0.3')
+    await jobs.flushDurableFinalizations(owner, 'ios/v2.0.3', true)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    expect(fetcher.mock.calls.every(([url]) => String(url).startsWith('/api/ios/v2.0.3/'))).toBe(true)
+    expect(fetcher.mock.calls.every(([, init]) => new Headers(init?.headers).get('x-mingle-expected-account-id') === 'one')).toBe(true)
+    expect(bodyOf(fetcher.mock.calls[0][1]).clientMessageId).toBe('message-one')
+    expect(localStorage.getItem(journalKey)).toBeNull()
+  })
+
+  it('preserves completed translation and source progress across an Android update', async () => {
+    fetcher.mockImplementation(async (url, init) => String(url).endsWith('translate/finalize')
+      ? Response.json(translated) : new Response(null, { status: bodyOf(init).translationUpdate ? 503 : 204 }))
+    retainOwner(owner, 'android/v2.0.0')
+    await jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization({ ...input(), apiNamespace: 'android/v2.0.0' }))
+    await reloadJobs()
+    retainOwner(owner, 'android/v2.0.1')
+    fetcher.mockReset().mockResolvedValue(new Response(null, { status: 204 }))
+    await jobs.flushDurableFinalizations(owner, 'android/v2.0.1', true)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0][0]).toBe('/api/android/v2.0.1/log/client-event')
+    expect(bodyOf(fetcher.mock.calls[0][1])).toMatchObject({ translationUpdate: true, translations: translated.translations })
+    expect(localStorage.getItem(journalKey)).toBeNull()
+  })
+
+  it('never adopts another account, platform, legacy, unknown, or tracking-only job during upgrade', async () => {
+    for (const [ownerIdentity, apiNamespace] of [
+      ['user:two', 'ios/v2.0.0'], [owner, 'android/v2.0.0'], [owner, 'ios/v1.1.4'],
+      [owner, 'ios/v2.1.0'], ['tracking:tracking-one', 'ios/v2.0.0'],
+    ]) jobs.enqueueDurableFinalization({ ...input(), ownerIdentity, apiNamespace })
+    await reloadJobs()
+    retainOwner(owner, 'ios/v2.0.3')
+    await jobs.flushDurableFinalizations(owner, 'ios/v2.0.3', true)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem(journalKey)!)).toHaveLength(5)
+  })
+
+  it('retains migrated work after 401 and resumes when the original account returns', async () => {
+    jobs.enqueueDurableFinalization({ ...input(), apiNamespace: 'ios/v2.0.0', translationBody: null })
+    retainOwner(owner, 'ios/v2.0.3')
+    fetcher.mockResolvedValue(new Response(null, { status: 401 }))
+    await jobs.flushDurableFinalizations(owner, 'ios/v2.0.3', true)
+    expect(jobs.readDurableFinalizations(owner, 'ios/v2.0.3')).toHaveLength(1)
+    await reloadJobs()
+    retainOwner(owner, 'ios/v2.0.3')
+    fetcher.mockReset().mockResolvedValue(new Response(null, { status: 204 }))
+    await jobs.flushDurableFinalizations(owner, 'ios/v2.0.3', true)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem(journalKey)).toBeNull()
+  })
+
+  it('cancels an upgrade before migration if the account unmounts', async () => {
+    jobs.enqueueDurableFinalization({ ...input(), apiNamespace: 'ios/v2.0.0' })
+    const release = retainOwner(owner, 'ios/v2.0.3')
+    const flushing = jobs.flushDurableFinalizations(owner, 'ios/v2.0.3', true)
+    release()
+    await flushing
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(jobs.readDurableFinalizations(owner, 'ios/v2.0.0')).toHaveLength(1)
+  })
+
+  it('discards deleted-room jobs across compatible versions before recovery starts', async () => {
+    jobs.enqueueDurableFinalization({ ...input(), apiNamespace: 'ios/v2.0.0' })
+    jobs.discardDurableFinalizations(owner, 'ios/v2.0.3', 'room-one')
+    expect(localStorage.getItem(journalKey)).toBeNull()
+  })
+
+  it('migrates a real removal queue with its message and keeps the message paused until removal acknowledgement', async () => {
+    const mutations = await vi.importActual<typeof import('../conversation-mutation-queue')>('../conversation-mutation-queue')
+    const previous = { authenticatedUserId: 'one', apiNamespace: 'ios/v2.0.0' }
+    const upgraded = { ...previous, apiNamespace: 'ios/v2.0.3' }
+    mutations.enqueueConversationMutation(previous, {
+      conversationId: 'room-one', kind: 'remove', endpoint: '/api/ios/v2.0.0/conversations/room-one',
+      method: 'DELETE', body: {}, patch: { removed: true },
+    })
+    pendingRemoval.mockImplementation(identity => mutations.readConversationMutationRecords(identity as typeof upgraded))
+    jobs.enqueueDurableFinalization({ ...input(), apiNamespace: previous.apiNamespace })
+    retainOwner(owner, upgraded.apiNamespace)
+    await jobs.flushDurableFinalizations(owner, upgraded.apiNamespace, true)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(jobs.readDurableFinalizations(owner, upgraded.apiNamespace)).toHaveLength(1)
+    await mutations.flushConversationMutationQueue({ identity: upgraded, fetchImpl: fetcher,
+      onSuccess: () => jobs.discardDurableFinalizations(owner, upgraded.apiNamespace, 'room-one'),
+    })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0][1]?.method).toBe('DELETE')
+    expect(fetcher.mock.calls[0][0]).toBe('/api/ios/v2.0.3/conversations/room-one')
+    expect(localStorage.getItem(journalKey)).toBeNull()
+  })
+
   it('keeps delivery alive when a room closes but the same-account list remains mounted', async () => {
     const releaseList = releaseOwner
     const releaseRoom = retainOwner()
@@ -183,6 +275,7 @@ describe('durable message finalization', () => {
     }
     fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
     const flushing = jobs.flushDurableFinalizations(owner, namespace, true)
+    await vi.advanceTimersByTimeAsync(0)
     expect(fetcher).toHaveBeenCalledTimes(translate ? 4 : 2)
     release()
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
@@ -245,6 +338,7 @@ describe('durable message finalization', () => {
     for (const id of ['message-one', 'message-two', 'message-three']) jobs.enqueueDurableFinalization(input(id))
     fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
     const flushing = jobs.flushDurableFinalizations(owner, namespace, true)
+    await vi.advanceTimersByTimeAsync(0)
     jobs.cancelActiveDurableFinalizations(owner, namespace)
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
       ? Response.json(translated) : new Response(null, { status: 204 }))
@@ -330,6 +424,7 @@ describe('durable message finalization', () => {
     }
     fetcher.mockImplementation(async () => new Promise<Response>(() => {}))
     const oldFlush = jobs.flushDurableFinalizations(fromOwner, namespace, true)
+    await vi.advanceTimersByTimeAsync(0)
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
       ? Response.json(translated) : new Response(null, { status: 204 }))
     await jobs.adoptDurableFinalizations(fromOwner, owner, namespace)

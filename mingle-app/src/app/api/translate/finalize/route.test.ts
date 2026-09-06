@@ -183,6 +183,18 @@ function setAuthenticatedTranslationModel(model: string | null) {
 }
 
 describe('/api/translate/finalize route', () => {
+  it('rejects an old-account translation recovery before looking up preferences or calling AI', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'new_account' } })
+    const { POST } = await import('./route')
+    const response = await POST(new Request('https://mingle.example/api/translate/finalize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mingle-expected-account-id': 'old_account' },
+      body: JSON.stringify({ text: 'Hello', targetLanguages: ['ko'], isFinal: true }),
+    }) as never)
+    expect(response.status).toBe(401)
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     ensureTrackingContextMock.mockReturnValue({

@@ -2080,6 +2080,23 @@ export default function ConversationList({
   }), [authenticatedUserId, initialTrackingExternalUserId]);
   const pendingConversationMutationsRef = useRef<ConversationMutationRecord[]>([]);
   const conversationMutationFlushInFlightRef = useRef<Promise<unknown> | null>(null);
+  const conversationMutationScopeRef = useRef<{
+    identity: ConversationMutationQueueIdentity;
+    controller: AbortController;
+  } | null>(null);
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+    const scope = { identity: conversationMutationIdentity, controller: new AbortController() };
+    conversationMutationScopeRef.current = scope;
+    return () => {
+      scope.controller.abort();
+      if (conversationMutationScopeRef.current === scope) {
+        conversationMutationScopeRef.current = null;
+        conversationMutationFlushInFlightRef.current = null;
+        pendingConversationMutationsRef.current = [];
+      }
+    };
+  }, [authenticatedUserId, conversationMutationIdentity, sessionStatus]);
   const conversationListMutationRevisionRef = useRef(0);
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
@@ -2344,19 +2361,24 @@ export default function ConversationList({
 
   const flushPendingConversationMutations = useCallback(() => {
     if (typeof window === "undefined") return Promise.resolve();
+    const scope = conversationMutationScopeRef.current;
+    const isCurrent = () => !!scope && conversationMutationScopeRef.current === scope
+      && scope.identity === conversationMutationIdentity && !scope.controller.signal.aborted;
+    if (!scope || !isCurrent()) return Promise.resolve();
     if (conversationMutationFlushInFlightRef.current) {
       return conversationMutationFlushInFlightRef.current;
     }
 
     const flushPromise = flushConversationMutationQueue({
       identity: conversationMutationIdentity,
+      signal: scope.controller.signal,
       fetchImpl: (input, init) => {
         const headers = new Headers(buildConversationRequestHeaders(initialTrackingIdentityRef.current));
         new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
         return window.fetch(input, { ...init, headers });
       },
       onSuccess: async (record, response, acknowledged) => {
-        if (!acknowledged) return;
+        if (!acknowledged || !isCurrent()) return;
         advanceConversationListMutationRevision();
         if (record.kind === "remove") {
           discardDurableFinalizations(record.ownerIdentity, conversationMutationIdentity.apiNamespace, record.conversationId);
@@ -2367,6 +2389,7 @@ export default function ConversationList({
         if (record.kind === "profile-default-languages") {
           try {
             const profile = await response.json() as { defaultConversationLanguages?: unknown };
+            if (!isCurrent()) return;
             const savedLanguages = sanitizeSttLanguageSelection(
               profile.defaultConversationLanguages,
               record.patch.defaultConversationLanguages ?? [],
@@ -2381,6 +2404,7 @@ export default function ConversationList({
         }
         try {
           const nextConversation = await readConversationResponse(response);
+          if (!isCurrent()) return;
           const nextRecords = readPendingConversationMutationSnapshot();
           setConversations((current) => applyPendingConversationState(
             upsertConversation(current, nextConversation),
@@ -2393,7 +2417,7 @@ export default function ConversationList({
         }
       },
       onPermanentFailure: async (record, _response, acknowledged) => {
-        if (!acknowledged) return;
+        if (!acknowledged || !isCurrent()) return;
         advanceConversationListMutationRevision();
         if (record.kind === "profile-default-languages") {
           const rollbackLanguages = record.rollback?.defaultConversationLanguages;
@@ -2433,7 +2457,10 @@ export default function ConversationList({
         });
       },
     }).finally(() => {
-      conversationMutationFlushInFlightRef.current = null;
+      if (conversationMutationFlushInFlightRef.current === flushPromise) {
+        conversationMutationFlushInFlightRef.current = null;
+      }
+      if (!isCurrent()) return;
       const nextRecords = readPendingConversationMutationSnapshot();
       setConversations((current) => applyPendingConversationState(current, nextRecords));
     });
