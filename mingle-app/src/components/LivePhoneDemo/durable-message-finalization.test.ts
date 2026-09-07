@@ -57,6 +57,33 @@ describe('durable message finalization', () => {
     vi.unstubAllGlobals()
   })
 
+  it('batches source checkpoints while preserving synchronous original intent', async () => {
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? new Promise<Response>(() => {}) : new Response(null, { status: 204 }))
+    const first = jobs.enqueueDurableFinalization(input('first'))
+    const second = jobs.enqueueDurableFinalization(input('second'))
+    const writes = vi.spyOn(localStorage, 'setItem')
+    const deliveries = [jobs.deliverDurableFinalization(first), jobs.deliverDurableFinalization(second)]
+    await vi.advanceTimersByTimeAsync(0)
+    expect(first.sourceDelivered).toBe(true)
+    expect(second.sourceDelivered).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(writes).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(localStorage.getItem(journalKey)!).every((r: DurableFinalization) => r.sourceDelivered)).toBe(true)
+    releaseOwner()
+    await Promise.all(deliveries)
+  })
+
+  it('does not rewrite an unchanged retry cache', async () => {
+    fetcher.mockRejectedValue(new TypeError('offline'))
+    const record = jobs.enqueueDurableFinalization(input())
+    await jobs.deliverDurableFinalization(record)
+    const writes = vi.spyOn(localStorage, 'setItem')
+    await jobs.deliverDurableFinalization(record)
+    expect(writes.mock.calls.filter(([key]) => key === cacheKey)).toHaveLength(0)
+  })
+
   it('writes the full original and translation intent synchronously before any request', () => {
     jobs.enqueueDurableFinalization(input())
     expect(fetcher).not.toHaveBeenCalled()
@@ -69,7 +96,7 @@ describe('durable message finalization', () => {
       ? new Promise<Response>(() => {}) : new Response(null, { status: 204 }))
     const record = jobs.enqueueDurableFinalization(input())
     const delivery = jobs.deliverDurableFinalization(record)
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(50)
     expect(JSON.parse(localStorage.getItem(journalKey)!)[0].sourceDelivered).toBe(true)
     jobs.cancelActiveDurableFinalizations(owner, namespace)
     await delivery

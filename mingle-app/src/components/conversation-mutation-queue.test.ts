@@ -71,6 +71,67 @@ describe("conversation mutation queue", () => {
     body: { title: "Pending title" }, patch: { title: "Pending title" }, now,
   });
 
+  it("delivers another room while retaining a failing room", async () => {
+    const now = Date.now();
+    queueTitle(mutations, identity, now);
+    mutations.enqueueConversationMutation(identity, {
+      conversationId: "conversation-2", kind: "title", endpoint: "/api/conversations/conversation-2",
+      body: { title: "Other room" }, patch: { title: "Other room" }, now,
+    });
+    const fetchImpl = vi.fn<typeof fetch>(async url => new Response(null, {
+      status: String(url).endsWith("conversation-2") ? 204 : 503,
+    }));
+    const result = await mutations.flushConversationMutationQueue({ identity, fetchImpl, force: true });
+    expect(result).toEqual({ delivered: 1, retained: 1 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(mutations.readConversationMutationRecords(identity)[0].conversationId).toBe("conversation-1");
+  });
+
+  it("stops offline failures after one request instead of visiting every room", async () => {
+    queueTitle(mutations);
+    mutations.enqueueConversationMutation(identity, {
+      conversationId: "conversation-2", kind: "title", endpoint: "/api/conversations/conversation-2",
+      body: { title: "Other room" }, patch: { title: "Other room" },
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline"));
+    expect(await mutations.flushConversationMutationQueue({ identity, fetchImpl, force: true }))
+      .toEqual({ delivered: 0, retained: 2 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("a new user edit resets prolonged-failure cooldown", async () => {
+    const now = Date.now();
+    queueTitle(mutations, identity, now);
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(null, { status: 503 }));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await mutations.flushConversationMutationQueue({ identity, fetchImpl, now: () => now, force: true });
+    }
+    queueTitle(mutations, identity, now + 1);
+    fetchImpl.mockImplementation(async () => new Response(null, { status: 204 }));
+    expect(await mutations.flushConversationMutationQueue({ identity, fetchImpl, now: () => now + 1 }))
+      .toEqual({ delivered: 1, retained: 0 });
+  });
+
+  it("persists prolonged-failure cooldown across reload and forced flushes, then recovers", async () => {
+    let now = Date.now();
+    queueTitle(mutations, identity, now);
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(null, { status: 503 }));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await mutations.flushConversationMutationQueue({ identity, fetchImpl, now: () => now, force: true });
+    }
+    const pending = mutations.readConversationMutationRecords(identity, now)[0];
+    expect(pending.attemptCount).toBe(10);
+    expect(pending.nextAttemptAt - now).toBe(15 * 60_000);
+    vi.resetModules();
+    mutations = await import("./conversation-mutation-queue");
+    await mutations.flushConversationMutationQueue({ identity, fetchImpl, now: () => now, force: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(10);
+    now = pending.nextAttemptAt;
+    fetchImpl.mockImplementation(async () => new Response(null, { status: 204 }));
+    expect(await mutations.flushConversationMutationQueue({ identity, fetchImpl, now: () => now }))
+      .toEqual({ delivered: 1, retained: 0 });
+  });
+
   it("recovers a previous-version queue on cold upgrade and never resurrects acknowledged jobs", async () => {
     queueTitle(mutations);
     // Journals written before this fix had neither an apiNamespace field nor

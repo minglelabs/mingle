@@ -10,6 +10,8 @@ const CONVERSATION_MUTATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_MUTATION_MAX_FLUSH_BATCH = 50;
 const CONVERSATION_MUTATION_RETRY_BASE_MS = 2_000;
 const CONVERSATION_MUTATION_RETRY_MAX_MS = 60_000;
+const CONVERSATION_MUTATION_RETRY_COOLDOWN_THRESHOLD = 10;
+const CONVERSATION_MUTATION_RETRY_COOLDOWN_MS = 15 * 60_000;
 
 export type ConversationMutationKind =
   | "status"
@@ -474,6 +476,11 @@ export function applyPendingConversationMutations(
 }
 
 function resolveRetryDelayMs(attemptCount: number): number {
+  // Keep unsaved intent recoverable during a prolonged outage without polling
+  // a broken endpoint every minute for the entire retention period.
+  if (attemptCount >= CONVERSATION_MUTATION_RETRY_COOLDOWN_THRESHOLD) {
+    return CONVERSATION_MUTATION_RETRY_COOLDOWN_MS;
+  }
   return Math.min(
     CONVERSATION_MUTATION_RETRY_MAX_MS,
     CONVERSATION_MUTATION_RETRY_BASE_MS * (2 ** Math.max(0, attemptCount - 1)),
@@ -492,6 +499,7 @@ async function performFlush(input: {
   const ownerIdentity = buildConversationMutationOwnerIdentity(input.identity);
   let delivered = 0;
   let attempts = 0;
+  const failedRooms = new Set<string>();
 
   while (!input.signal?.aborted && attempts < CONVERSATION_MUTATION_MAX_FLUSH_BATCH) {
     const now = input.now();
@@ -502,8 +510,11 @@ async function performFlush(input: {
     const actionable = pending.filter((record) => record.kind === "remove" || !removingRooms.has(record.conversationId));
     const blockedRooms = new Set<string>();
     const first = actionable.find((record) => {
-      if (blockedRooms.has(record.conversationId)) return false;
+      if (failedRooms.has(record.conversationId) || blockedRooms.has(record.conversationId)) return false;
       blockedRooms.add(record.conversationId);
+      if (record.attemptCount >= CONVERSATION_MUTATION_RETRY_COOLDOWN_THRESHOLD) {
+        return record.nextAttemptAt <= now;
+      }
       return input.force || record.nextAttemptAt <= now;
     });
     if (!first) break;
@@ -511,6 +522,7 @@ async function performFlush(input: {
 
     for (const record of records) {
       attempts += 1;
+      let connectionUnavailable = false;
       try {
         const response = await fetchUntilAborted(input.fetchImpl, record.endpoint, {
           method: record.method,
@@ -521,6 +533,7 @@ async function performFlush(input: {
           body: record.method === "DELETE" ? undefined : record.body,
           signal: input.signal,
         });
+        connectionUnavailable = response.status === 401 || response.status === 429;
         if (input.signal?.aborted) break;
         const treatAsSuccess = response.ok || (record.kind === "remove" && response.status === 404);
         if (treatAsSuccess) {
@@ -556,6 +569,7 @@ async function performFlush(input: {
         }
       } catch {
         // Retain the record and retry after an exponential backoff.
+        connectionUnavailable = true;
       }
 
       if (input.signal?.aborted) break;
@@ -572,12 +586,14 @@ async function performFlush(input: {
         nextAttemptAt: retryAt,
       });
       persistMutations(input.identity);
-      // Preserve mutation order. A later setting must not pass an earlier
-      // failed setting while the network is unavailable.
-      return {
-        delivered,
-        retained: readConversationMutationRecords(input.identity, input.now()).length,
-      };
+      // Preserve order within the failed room, including forced flushes, while
+      // allowing unrelated rooms to make progress in this bounded batch.
+      failedRooms.add(record.conversationId);
+      // Offline/auth/rate-limit failures affect the entire connection. Do not
+      // fan those failures out into a request for every unrelated room.
+      if (connectionUnavailable) {
+        return { delivered, retained: readConversationMutationRecords(input.identity, input.now()).length };
+      }
     }
 
     if (attempts >= CONVERSATION_MUTATION_MAX_FLUSH_BATCH) break;

@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-07 - Reduce pending-write retry and synchronous storage overhead
+
+- Surfaces: Offline conversation settings and durable message recovery, particularly WebView main-thread work on iOS.
+- Queue issue: A transient room failure ended the current flush, deferring unrelated rooms. Existing later flushes already skipped backoff-blocked rooms; this was not an indefinite global queue lock. Repeated failures could still retry every minute throughout the 30-day retention window.
+- Queue resolution: Preserve ordering within each failed room while continuing other rooms in the bounded 50-request batch. Stop the batch on network, authentication, or rate-limit failure. After ten failures, retain the pending edit with a 15-minute retry interval that focus/forced flushes cannot bypass. A newly coalesced user edit resets the interval. Keep automatic recovery and the existing retention policy rather than silently dropping edits at an attempt limit. A dependent edit within the same room still waits for its predecessor.
+- Storage resolution: Coalesce replay-safe source-delivery checkpoints over 50 ms; immediate persistence cancels any pending checkpoint timer. Flush pending checkpoints when the last owner consumer releases. Original message intent, translation results, deletion, and ownership transitions remain synchronous. Skip warm-cache writes when the serialized content is unchanged, including repeated retry notifications. A WebView termination before a checkpoint may replay an acknowledged source using its existing idempotent client message ID.
+- Verification: All 154 non-live test files / 1,445 tests passed, including six new regressions covering independent rooms, offline request fan-out, cooldown reload/recovery, new edits, checkpoint batching, and unchanged retry caches. TypeScript and targeted ESLint passed. The broad test invocation also attempted five live API tests, which failed because no server was listening on localhost:3000; eight live files were skipped. No physical-device performance or voice test was performed.
+- Limits: This reduces selected redundant synchronous writes; it does not replace localStorage, add a storage quota policy, or establish measured iOS frame-time improvement. Pending source intent is not evicted to satisfy a new count limit.
+- Deployment: Web code only; no new server environment variables, Prisma migration, native rebuild, or version/API namespace change.
+
 ## 2026-09-05 - Preserve installed-client behavior while integrating service updates
 
 - **Scope:** Merge service commit `4e8df995` from `codex/messenger-tabs-device-test` into `codex/messenger-client-sot-2.0.1`, whose prior tip was `2fc127eb`. The service branch is not a merge destination.

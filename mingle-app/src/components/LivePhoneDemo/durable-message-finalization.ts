@@ -47,6 +47,15 @@ const flushes = new Map<string, { run: FinalizationRun; promise: Promise<void> }
 const owners = new Map<string, FinalizationOwner>()
 const listeners = new Set<(update: Update) => void>()
 let loaded = false
+let persistTimer: ReturnType<typeof setTimeout> | undefined
+
+// Source acknowledgements can be replayed safely using the client message ID.
+// Batch those checkpoints, but persist new intent and paid translation results
+// immediately so a terminated WebView can recover them.
+function schedulePersist(): void {
+  if (persistTimer !== undefined) return
+  persistTimer = setTimeout(() => persist(), 50)
+}
 
 function ownerKey(ownerIdentity: string, apiNamespace: string): string {
   return `${ownerIdentity}\u001f${apiNamespace}`
@@ -61,6 +70,10 @@ function storage(): Storage | null {
 }
 
 function persist(): void {
+  if (persistTimer !== undefined) {
+    clearTimeout(persistTimer)
+    persistTimer = undefined
+  }
   const target = storage()
   if (!target) return
   try {
@@ -137,7 +150,8 @@ function persistUtterance(record: DurableFinalization, retrying = false): void {
     const index = items.findIndex(u => u.id === next.id)
     if (index < 0) items.push(next)
     else items[index] = { ...items[index], ...next }
-    target.setItem(key, JSON.stringify(record.conversationId ? items.slice(-100) : items))
+    const serialized = JSON.stringify(record.conversationId ? items.slice(-100) : items)
+    if (serialized !== target.getItem(key)) target.setItem(key, serialized)
   } catch { /* The durable job still contains the complete original. */ }
 }
 
@@ -218,6 +232,7 @@ export function retainDurableFinalizationOwner(ownerIdentity: string, apiNamespa
     released = true
     owner.consumers -= 1
     if (owner.consumers === 0 && owners.get(key) === owner) {
+      if (persistTimer !== undefined) persist()
       owners.delete(key)
       cancelActiveDurableFinalizations(ownerIdentity, apiNamespace)
     }
@@ -346,7 +361,7 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
         await post(record, 'log/client-event', {
           ...record.eventBody, translationPending: !!record.translationBody,
         }, fetcher, controller.signal, canSend)
-        if (canSend()) { record.sourceDelivered = true; persist() }
+        if (canSend()) { record.sourceDelivered = true; schedulePersist() }
       })(),
       (async () => {
         if (!record.translationBody || record.result) return
