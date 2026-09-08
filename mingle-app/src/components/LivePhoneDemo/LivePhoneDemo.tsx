@@ -994,12 +994,34 @@ function formatScrollDateLabel(createdAtMs: number, locale: string): string {
   }
 }
 
+// KakaoTalk-style inline date divider: unlike formatScrollDateLabel (which
+// says "today"/"yesterday" relative to now, appropriate for a transient
+// overlay), this labels a fixed historical day, so it always spells out the
+// absolute date — otherwise a divider written days ago would keep reading
+// "today" forever.
+function formatChatDateDividerLabel(dayStartMs: number, locale: string): string {
+  const dayStartDate = new Date(dayStartMs)
+  if (Number.isNaN(dayStartDate.getTime())) return ''
+
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    }).format(dayStartDate)
+  } catch {
+    return `${dayStartDate.getFullYear()}/${dayStartDate.getMonth() + 1}/${dayStartDate.getDate()}`
+  }
+}
+
 function readScrollDateLabelAnchors(container: HTMLDivElement): ScrollDateLabelAnchor[] {
   const anchors: ScrollDateLabelAnchor[] = []
 
-  for (const child of Array.from(container.children)) {
-    if (!(child instanceof HTMLElement)) continue
-
+  // Query by attribute rather than walking container.children: message rows are
+  // wrapped in a spacing/key div (added for leave/invite notices), so the element
+  // carrying data-utterance-created-at is no longer a direct child of container.
+  for (const child of Array.from(container.querySelectorAll<HTMLElement>('[data-utterance-created-at]'))) {
     const createdAtMs = Number(child.dataset.utteranceCreatedAt || '')
     if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) continue
 
@@ -1579,10 +1601,40 @@ function LivePhoneDemoInviteNoticeRow({
 
 const MemoizedLivePhoneDemoInviteNoticeRow = memo(LivePhoneDemoInviteNoticeRow)
 
+// Renders the KakaoTalk-style date header ("March 15, 2024, Friday") that
+// splits the timeline wherever the local calendar day changes — a permanent
+// marker baked into the message list, as opposed to the floating date label
+// that follows the scroll position (see formatScrollDateLabel above).
+function LivePhoneDemoDateDividerRow({
+  dayStartMs,
+  uiLocale,
+}: {
+  dayStartMs: number
+  uiLocale: string
+}) {
+  const label = formatChatDateDividerLabel(dayStartMs, uiLocale)
+  if (!label) return null
+
+  return (
+    <div
+      data-date-divider-day={dayStartMs}
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex justify-center py-2"
+    >
+      <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] font-medium text-gray-500">
+        {label}
+      </span>
+    </div>
+  )
+}
+
+const MemoizedLivePhoneDemoDateDividerRow = memo(LivePhoneDemoDateDividerRow)
+
 type LivePhoneDemoTimelineItem =
   | { kind: 'message'; timestampMs: number; utterance: Utterance }
   | { kind: 'leave-notice'; timestampMs: number; notice: ConversationLeaveNotice }
   | { kind: 'invite-notice'; timestampMs: number; notice: ConversationInviteNotice }
+  | { kind: 'date-divider'; timestampMs: number; dayStartMs: number }
 
 function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
   if (typeof window === 'undefined') return false
@@ -5889,7 +5941,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       items.push({ kind: 'invite-notice', timestampMs: notice.invitedAtMs, notice })
     }
     items.sort((a, b) => a.timestampMs - b.timestampMs)
-    return items
+
+    // Splice in a date-divider wherever the local calendar day advances.
+    // Items with no real timestamp (timestampMs <= 0) neither trigger nor
+    // count toward a transition, so they can't produce a bogus 1970 divider.
+    const itemsWithDateDividers: LivePhoneDemoTimelineItem[] = []
+    let lastDayStartMs: number | null = null
+    for (const item of items) {
+      if (item.timestampMs > 0) {
+        const dayStartMs = startOfLocalDay(new Date(item.timestampMs)).getTime()
+        if (dayStartMs !== lastDayStartMs) {
+          itemsWithDateDividers.push({ kind: 'date-divider', timestampMs: dayStartMs, dayStartMs })
+          lastDayStartMs = dayStartMs
+        }
+      }
+      itemsWithDateDividers.push(item)
+    }
+    return itemsWithDateDividers
   }, [displayUtterances, leaveNotices, inviteNotices])
 
   useEffect(() => {
@@ -7581,7 +7649,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       ? `leave:${item.notice.userId}:${item.notice.leftAtMs}`
                       : item.kind === 'invite-notice'
                         ? `invite:${item.notice.inviteeUserId}:${item.notice.invitedAtMs}`
-                        : `${item.utterance.id}:${displayLanguageSelectionKey}`
+                        : item.kind === 'date-divider'
+                          ? `date:${item.dayStartMs}`
+                          : `${item.utterance.id}:${displayLanguageSelectionKey}`
                     }
                     className={spacingClass}
                   >
@@ -7593,6 +7663,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     ) : item.kind === 'invite-notice' ? (
                       <MemoizedLivePhoneDemoInviteNoticeRow
                         notice={item.notice}
+                        uiLocale={uiLocale}
+                      />
+                    ) : item.kind === 'date-divider' ? (
+                      <MemoizedLivePhoneDemoDateDividerRow
+                        dayStartMs={item.dayStartMs}
                         uiLocale={uiLocale}
                       />
                     ) : (
