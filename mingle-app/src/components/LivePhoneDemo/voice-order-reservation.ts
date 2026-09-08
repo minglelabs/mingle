@@ -6,6 +6,11 @@ type Scope = { ownerIdentity: string; apiNamespace: string; sessionKey: string; 
 const reservations = new Map<string, { expiresAt: number; promise: Promise<string | null> }>()
 const keyOf = (s: Scope) => JSON.stringify([s.ownerIdentity, s.apiNamespace, s.sessionKey, s.clientMessageId])
 
+export function rememberLiveVoiceOrder(scope: Scope, receipt: string): void {
+  if (reservations.size >= 200) reservations.delete(reservations.keys().next().value!)
+  reservations.set(keyOf(scope), { expiresAt: Date.now() + 30 * 60_000, promise: Promise.resolve(receipt) })
+}
+
 export function reserveVoiceOrder(scope: Scope, endpoint: string, trackingUserId: string): void {
   if (!scope.ownerIdentity.startsWith('user:')) return
   const key = keyOf(scope)

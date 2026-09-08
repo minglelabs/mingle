@@ -314,6 +314,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           select: {
             id: true,
             createdAt: true,
+            user: { select: { name: true, image: true } },
           },
         })
         messageId = message.id
@@ -370,16 +371,6 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         }
 
-        // The durable client first delivers the source, then patches the same
-        // message with translations. Do not delay source acknowledgement on AI.
-        if (body.translationPending !== true && body.translationUpdate !== true) {
-          try {
-            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
-          } catch (error) {
-            console.error('Conversation auto title generation failed:', error)
-          }
-        }
-
         // An invitee gets no DB record and can't see the room at all until
         // this, the owner's first real message — see
         // pendingInviteeUserIds' doc comment. Must run before the
@@ -414,13 +405,30 @@ export async function handleLogClientEventV1(request: NextRequest) {
           // The publish helper absorbs transport failures, but awaiting it here
           // keeps the request alive long enough for the messaging service to
           // receive the event instead of dropping it after the response ends.
-          await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          // Retained membership rows include departed users. Match history's
+          // point-in-time attribution; a solo turn retried after an invitation
+          // must not suddenly become an account-attributed shared-room bubble.
+          const sharedAtMessage = memberUserIds.length >= 2 && await prisma.appConversationChannelMember.count({
+            where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
+              OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
+          }).then(count => count >= 2).catch(() => false)
+          if (sharedAtMessage) {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
+              id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
+              translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
+              targetLanguages: Object.keys(translations), createdAtMs: message.createdAt.getTime(),
+              serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
+              speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+            })
+          } else {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          }
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
         // Translation availability must be published before optional AI title
         // generation, which can stall independently of message delivery.
-        if (body.translationUpdate === true) {
+        if (body.translationPending !== true) {
           try {
             await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
           } catch (error) {

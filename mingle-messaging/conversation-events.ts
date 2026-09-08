@@ -1,14 +1,27 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { WebSocket } from 'ws';
 import { verifyRealtimeToken } from './realtime-token';
+import { LiveUtterances } from './live-utterances';
 
 /**
  * In-memory fan-out for conversation and conversation-list notifications.
  * The app owns persistence and authorization; this service only owns live
- * WebSocket connections and publishes a small invalidation event.
+ * WebSocket connections, ephemeral speech previews and committed message fan-out.
+ * Legacy subscribers continue to receive small invalidation events only.
  */
 export class ConversationEventBus {
     private readonly subscribers = new Map<string, Set<WebSocket>>();
+    private readonly liveSubscribers = new WeakSet<WebSocket>();
+    readonly liveUtterances = new LiveUtterances();
+
+    enableLive(socket: WebSocket): void { this.liveSubscribers.add(socket); }
+
+    publishLive(sessionKey: string, event: unknown): void {
+        const payload = JSON.stringify(event);
+        for (const socket of this.subscribers.get(sessionKey) ?? []) {
+            if (this.liveSubscribers.has(socket) && socket.readyState === socket.OPEN && socket.bufferedAmount < 256_000) socket.send(payload);
+        }
+    }
 
     subscribe(sessionKey: string, socket: WebSocket): void {
         let sockets = this.subscribers.get(sessionKey);
@@ -31,14 +44,18 @@ export class ConversationEventBus {
         return this.subscribers.get(sessionKey)?.size ?? 0;
     }
 
-    publish(sessionKey: string): void {
+    publish(sessionKey: string, utterance?: Record<string, unknown>): void {
+        if (utterance && typeof utterance.id === 'string' && typeof utterance.speakerUserId === 'string') {
+            this.liveUtterances.commit(sessionKey, utterance.speakerUserId, utterance.id);
+        }
         const sockets = this.subscribers.get(sessionKey);
         if (!sockets || sockets.size === 0) return;
 
         const payload = JSON.stringify({ type: 'message', sessionKey });
+        const messagePayload = utterance ? JSON.stringify({ type: 'utterance_committed', sessionKey, utterance }) : null;
         for (const socket of sockets) {
             if (socket.readyState !== socket.OPEN) continue;
-            socket.send(payload);
+            socket.send(messagePayload && this.liveSubscribers.has(socket) ? messagePayload : payload);
         }
     }
 }
@@ -64,7 +81,7 @@ export function handleConversationEventsConnection(
     bus: ConversationEventBus,
 ): void {
     const token = new URL(requestUrl || '', 'http://internal').searchParams.get('token') || '';
-    const payload = token ? verifyRealtimeToken(token, secret) : null;
+    let payload = token ? verifyRealtimeToken(token, secret) : null;
 
     if (!payload) {
         socket.close(4401, 'invalid_token');
@@ -72,8 +89,37 @@ export function handleConversationEventsConnection(
     }
 
     bus.subscribe(payload.sessionKey, socket);
-    socket.on('close', () => bus.unsubscribe(payload.sessionKey, socket));
-    socket.on('error', () => bus.unsubscribe(payload.sessionKey, socket));
+    const sessionKey = payload.sessionKey;
+    const userId = payload.userId;
+    const live = payload.liveReader === true && new URL(requestUrl || '', 'http://internal').searchParams.get('live') === '1';
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+    const expire = () => {
+        if (expiryTimer) clearTimeout(expiryTimer);
+        expiryTimer = setTimeout(() => { bus.unsubscribe(sessionKey, socket); socket.close(4401, 'expired_token'); }, Math.max(1, payload!.exp - Date.now()));
+        expiryTimer.unref();
+    };
+    if (live) { bus.enableLive(socket); expire(); }
+    const cleanup = () => { if (expiryTimer) clearTimeout(expiryTimer); bus.unsubscribe(sessionKey, socket); };
+    socket.on('close', cleanup);
+    socket.on('error', cleanup);
+    let lastFrameAt = 0;
+    socket.on('message', (raw, binary) => {
+        if (!live || binary || Buffer.byteLength(raw.toString()) > 256_000) return;
+        let input: Record<string, unknown>;
+        try { input = JSON.parse(raw.toString()); } catch { return; }
+        if (!input || typeof input !== 'object') return;
+        if (input.type === 'renew' && typeof input.token === 'string') {
+            const next = verifyRealtimeToken(input.token, secret);
+            if (next?.liveReader === true && next.sessionKey === sessionKey && next.userId === userId) { payload = next; expire(); }
+            return;
+        }
+        if (payload!.exp <= Date.now() || input.type !== 'utterance_preview' || Date.now() - lastFrameAt < 80) return;
+        lastFrameAt = Date.now();
+        const writer = typeof input.writerToken === 'string' ? verifyRealtimeToken(input.writerToken, secret) : null;
+        if (!writer || writer.sessionKey !== sessionKey || writer.userId !== userId) return;
+        const frame = bus.liveUtterances.accept(input, writer, secret);
+        if (frame) bus.publishLive(sessionKey, frame);
+    });
 }
 
 function readRequestBody(request: IncomingMessage): Promise<string> {
@@ -87,8 +133,8 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
 
 /**
  * Handles the service-to-service publish request from mingle-app after a
- * message commits. The messaging service never receives or stores message
- * contents; it only fans out invalidation events to subscribed topics.
+ * message commits. Contents are delivered to upgraded room subscribers only;
+ * list and legacy subscribers receive invalidations. Persistence stays in app.
  */
 export async function handleConversationEventsPublish(
     request: IncomingMessage,
@@ -131,8 +177,12 @@ export async function handleConversationEventsPublish(
         return;
     }
 
+    const utterance = record.utterance && typeof record.utterance === 'object' && !Array.isArray(record.utterance)
+        ? record.utterance as Record<string, unknown> : undefined;
     for (const key of keys) {
-        bus.publish(key);
+        // Full content is room-scoped. List subscriptions still get only their
+        // usual invalidation, not another room's contents or live partials.
+        bus.publish(key, key === sessionKey ? utterance : undefined);
     }
     response.writeHead(204);
     response.end();

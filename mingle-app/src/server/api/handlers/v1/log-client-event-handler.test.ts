@@ -15,6 +15,7 @@ const {
   mockListChannelMemberUserIdsBySessionKey,
   mockGetServerSession,
   mockResolveUserIdForTrackedWrite,
+  mockMemberCount,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
@@ -29,6 +30,7 @@ const {
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockResolveUserIdForTrackedWrite: vi.fn(),
+  mockMemberCount: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -45,6 +47,7 @@ vi.mock("@/lib/request-user-identity", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    appConversationChannelMember: { count: mockMemberCount },
     appMessage: {
       upsert: mockAppMessageUpsert,
     },
@@ -106,6 +109,7 @@ describe("handleLogClientEventV1", () => {
     mockMaterializePendingConversationInvitees.mockResolvedValue(undefined);
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(false);
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
+    mockMemberCount.mockResolvedValue(2);
   });
 
   it("reserves voice order without creating a message, then stores the verified order separately", async () => {
@@ -135,6 +139,20 @@ describe("handleLogClientEventV1", () => {
         translations: { ko: '안녕' }, translationUpdate: true }),
     }));
     expect(mockNotifyConversationMessage.mock.invocationCallOrder[0]).toBeLessThan(mockMaybeGenerateConversationTitleForSession.mock.invocationCallOrder[0]);
+  });
+
+  it("keeps historical solo attribution when a room now has multiple retained members", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    mockMemberCount.mockResolvedValue(1);
+    await handleLogClientEventV1(new NextRequest('https://example.com/api/ios/v2.0.2/log/client-event', {
+      method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1',
+        eventType: 'stt_turn_finalized', sourceText: 'hello', sourceLanguage: 'en', translationUpdate: true }),
+    }));
+    expect(mockMemberCount).toHaveBeenCalledWith({ where: {
+      channel: { sessionKey: 'sess_123' }, joinedAt: { lte: new Date('2026-04-12T09:00:00.000Z') },
+      OR: [{ leftAt: null }, { leftAt: { gt: new Date('2026-04-12T09:00:00.000Z') } }],
+    } });
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith('sess_123', ['user_123', 'user_456']);
   });
 
   it("acknowledges the original without waiting for title AI while translation is pending", async () => {
@@ -338,7 +356,9 @@ describe("handleLogClientEventV1", () => {
     const response = await handleLogClientEventV1(request);
     expect(response.status).toBe(200);
     expect(mockListChannelMemberUserIdsBySessionKey).toHaveBeenCalledWith("sess_123");
-    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"]);
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
+      id: "client_message_multi", originalText: "안녕하세요", speakerUserId: "user_123", serverMessageId: "message_123",
+    }));
     expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
       messageId: "message_123",
       sessionKey: "sess_123",
@@ -368,7 +388,9 @@ describe("handleLogClientEventV1", () => {
 
     expect(response.status).toBe(200);
     expect(mockListChannelMemberUserIdsBySessionKey).not.toHaveBeenCalled();
-    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"]);
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
+      speakerUserId: "user_123", serverMessageId: "message_123",
+    }));
     expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
       messageId: "message_123",
       sessionKey: "sess_123",

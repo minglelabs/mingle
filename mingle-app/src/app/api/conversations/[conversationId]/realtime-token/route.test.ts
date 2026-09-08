@@ -6,11 +6,17 @@ const {
   mockGetConversationSessionKeyForMember,
   mockMintConversationRealtimeToken,
   mockResolveOrCreateUserIdForRequest,
+  mockBlocked,
+  mockSender,
+  mockWriter,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockGetConversationSessionKeyForMember: vi.fn(),
   mockMintConversationRealtimeToken: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
+  mockBlocked: vi.fn(),
+  mockSender: vi.fn(),
+  mockWriter: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -23,11 +29,15 @@ vi.mock("@/lib/auth-options", () => ({
 
 vi.mock("@/lib/app-conversations", () => ({
   getConversationSessionKeyForMember: mockGetConversationSessionKeyForMember,
+  isMessageSenderBlockedInConversation: mockBlocked,
 }));
 
 vi.mock("@/server/conversation-realtime", () => ({
   mintConversationRealtimeToken: mockMintConversationRealtimeToken,
+  mintConversationLiveWriterToken: mockWriter,
 }));
+
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mockSender } } }));
 
 vi.mock("@/lib/request-user-identity", () => ({
   resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
@@ -104,5 +114,38 @@ describe("/api/conversations/[conversationId]/realtime-token route", () => {
 
     expect(response.status).toBe(401);
     expect(mockGetConversationSessionKeyForMember).not.toHaveBeenCalled();
+  });
+
+  it("issues short-lived live capabilities with the authenticated sender profile", async () => {
+    mockGetConversationSessionKeyForMember.mockResolvedValue("session-a");
+    mockMintConversationRealtimeToken.mockReturnValue("read");
+    mockBlocked.mockResolvedValue(false);
+    mockSender.mockResolvedValue({ name: "Trusted name" });
+    mockWriter.mockReturnValue("write");
+    const response = await GET(new NextRequest("https://example.com/api/conversations/conv-a/realtime-token?live=1&name=spoof"),
+      { params: Promise.resolve({ conversationId: "conv-a" }) });
+    expect(await response.json()).toEqual({ token: "read", writerToken: "write", sessionKey: "session-a", userId: "user-1" });
+    expect(mockMintConversationRealtimeToken).toHaveBeenCalledWith({ sessionKey: "session-a", userId: "user-1", live: true });
+    expect(mockWriter).toHaveBeenCalledWith("session-a", "user-1", "Trusted name");
+  });
+
+  it("does not grant live writing to a blocked sender", async () => {
+    mockGetConversationSessionKeyForMember.mockResolvedValue("session-a");
+    mockMintConversationRealtimeToken.mockReturnValue("read");
+    mockBlocked.mockResolvedValue(true);
+    const response = await GET(new NextRequest("https://example.com/api/conversations/conv-a/realtime-token?live=1"),
+      { params: Promise.resolve({ conversationId: "conv-a" }) });
+    expect((await response.json()).writerToken).toBeNull();
+    expect(mockWriter).not.toHaveBeenCalled();
+    expect(mockSender).not.toHaveBeenCalled();
+  });
+
+  it("rejects a live request from a non-member before checking writer permissions", async () => {
+    mockGetConversationSessionKeyForMember.mockResolvedValue(null);
+    const response = await GET(new NextRequest("https://example.com/api/conversations/conv-a/realtime-token?live=1"),
+      { params: Promise.resolve({ conversationId: "conv-a" }) });
+    expect(response.status).toBe(404);
+    expect(mockBlocked).not.toHaveBeenCalled();
+    expect(mockWriter).not.toHaveBeenCalled();
   });
 });
