@@ -2,6 +2,7 @@
 
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder } from './voice-order-reservation'
+import { nativeStopIntent } from './native-stop-intent'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
@@ -641,20 +642,32 @@ export function shouldApplyNativeBridgeConnectionStatus(input: {
   nextConnectionStatus: ConnectionStatus | null
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
 }): boolean {
   if (!input.nextConnectionStatus) return false
-  if (input.isStopping || input.nativeStopRequested) {
+  if (input.isStopping || input.nativeStopRequested || input.stopIntent) {
     return input.nextConnectionStatus === 'idle'
   }
   return true
+}
+
+export function shouldCompleteNativeStopFromStatus(input: {
+  status: string; stopping?: boolean; stopRequested: boolean
+}): boolean {
+  // Older iOS shells synthesize stopped as soon as stop() is accepted.
+  // Only the actual close lifecycle (or server ACK/close handler) completes it.
+  return input.stopRequested && !input.stopping && input.status.trim().toLowerCase() === 'closed'
 }
 
 export function shouldPromoteConnectionStatusFromNativeActivity(input: {
   previousConnectionStatus: ConnectionStatus
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
+  message?: Record<string, unknown>
 }): boolean {
-  if (input.isStopping || input.nativeStopRequested) return false
+  if (input.isStopping || input.nativeStopRequested || input.stopIntent) return false
+  if (input.message && input.message.status !== 'ready' && !parseSttTranscriptMessage(input.message)) return false
   return input.previousConnectionStatus !== 'ready'
 }
 
@@ -662,8 +675,9 @@ export function shouldHandleNativeBridgeServerMessage(input: {
   message: Record<string, unknown>
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
 }): boolean {
-  if (!(input.isStopping || input.nativeStopRequested)) return true
+  if (!(input.isStopping || input.nativeStopRequested || input.stopIntent)) return true
   return input.message.status !== 'ready'
 }
 
@@ -2987,6 +3001,10 @@ export default function useRealtimeSTT({
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
+  const nativeStopIntentKeyRef = useRef('')
+  nativeStopIntentKeyRef.current = JSON.stringify([
+    clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId || storageNamespace || 'default',
+  ])
   const nativeSttConversationIdRef = useRef<string | null>(null)
   const nativeSttSessionIdRef = useRef<string | null>(null)
   const nativeSttRequestedSessionIdRef = useRef<string | null>(null)
@@ -3077,6 +3095,7 @@ export default function useRealtimeSTT({
     pendingNativeStopAckTimeoutRef.current = null
   }, [])
   const resolvePendingNativeStopAck = useCallback(() => {
+    nativeStopIntent.complete(nativeStopIntentKeyRef.current)
     clearPendingNativeStopAckTimeout()
     const resolve = pendingNativeStopAckResolverRef.current
     pendingNativeStopAckResolverRef.current = null
@@ -4813,10 +4832,12 @@ export default function useRealtimeSTT({
 
     if (useNativeStt) {
       nativeStopRequestedRef.current = true
+      nativeStopIntent.stop(nativeStopIntentKeyRef.current, NATIVE_STOP_ACK_TIMEOUT_MS)
       clearPendingNativeStopAckTimeout()
       const nativeStopAckPromise = new Promise<void>((resolve) => {
         pendingNativeStopAckResolverRef.current = resolve
         pendingNativeStopAckTimeoutRef.current = setTimeout(() => {
+          nativeStopIntent.complete(nativeStopIntentKeyRef.current)
           pendingNativeStopAckTimeoutRef.current = null
           pendingNativeStopAckResolverRef.current = null
           nativeStopRequestedRef.current = false
@@ -5266,6 +5287,8 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
+      if (useNativeSttRef.current && (isStoppingRef.current || nativeStopRequestedRef.current
+        || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current))) return
       connectionStatusRef.current = 'ready'
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
@@ -5285,8 +5308,11 @@ export default function useRealtimeSTT({
     }
 
     if (message.type === 'stop_recording_ack') {
-      if (nativeStopRequestedRef.current) {
+      if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
         finalizePendingTurnsLocallyForStop('native_stop_ack')
+        nativeStopRequestedRef.current = false
+        releaseCurrentNativeSttOwner()
+        resolvePendingNativeStopAck()
       }
       return
     }
@@ -5303,7 +5329,8 @@ export default function useRealtimeSTT({
         textPreview: buildDebugTextPreview(text),
       })
 
-      if (isStoppingRef.current && !isFinal) {
+      if ((isStoppingRef.current || (useNativeSttRef.current
+        && nativeStopIntent.isStopped(nativeStopIntentKeyRef.current))) && !isFinal) {
         return
       }
 
@@ -5547,12 +5574,18 @@ export default function useRealtimeSTT({
     outboxTrackingUserId,
     removePendingTurn,
     startAudioProcessing,
+    releaseCurrentNativeSttOwner,
+    resolvePendingNativeStopAck,
     syncVisiblePendingTurn,
     effectiveViewerUserId,
     effectiveViewerImage,
   ])
 
   const startRecording = useCallback(async () => {
+    // A remounted visible hook shares the previous hook's stop window.
+    while (nativeStopIntent.isPending(nativeStopIntentKeyRef.current)) {
+      await sleep(25)
+    }
     if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
       logSttDebug('recording.start.waiting_for_stop')
       const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250
@@ -5588,6 +5621,7 @@ export default function useRealtimeSTT({
       const cachedSessionId = readCachedNativeSttSessionId(cachedWindow)
       const currentConversationId = (conversationId || '').trim()
       const canReuseCachedSession = isLiveNativeBridgeStatus(cachedNativeStatus)
+        && !nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)
         && Boolean(cachedSessionId)
         && Boolean(currentConversationId)
         && cachedConversationId === currentConversationId
@@ -5676,6 +5710,8 @@ export default function useRealtimeSTT({
       bumpPendingTurnRenderVersion()
 
       if (useNativeStt) {
+        nativeStopIntent.start(nativeStopIntentKeyRef.current)
+        nativeStopRequestedRef.current = false
         claimCurrentNativeSttOwner()
         const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
         const nativeSessionId = nativeSttSessionIdRef.current || createNativeSttSessionId()
@@ -5920,6 +5956,12 @@ export default function useRealtimeSTT({
         return
       }
 
+      if (detail.type === 'status' && isLiveNativeBridgeStatus(detail.status)
+        && nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
+        logSttDebug('native.status.skip_stop_intent', { status: detail.status })
+        return
+      }
+
       const provisionalSessionId = nativeSttSessionAuthoritativeRef.current
         ? null
         : nativeSttRequestedSessionIdRef.current || nativeSttSessionIdRef.current
@@ -6067,6 +6109,7 @@ export default function useRealtimeSTT({
           nextConnectionStatus,
           isStopping: isStoppingRef.current,
           nativeStopRequested: nativeStopRequestedRef.current,
+          stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
         })) {
           logSttDebug('native.status.skip_stop_pending', { status: detail.status })
           return
@@ -6077,7 +6120,9 @@ export default function useRealtimeSTT({
         if (nextConnectionStatus === 'ready') {
           hasActiveSessionRef.current = true
         }
-        if (nextConnectionStatus === 'idle' && nativeStopRequestedRef.current && !nativeStopInProgress) {
+        if (shouldCompleteNativeStopFromStatus({
+          status: detail.status, stopping: nativeStopInProgress, stopRequested: nativeStopRequestedRef.current,
+        })) {
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()
           handlers.resolvePendingNativeStopAck()
@@ -6086,7 +6131,7 @@ export default function useRealtimeSTT({
           hasActiveSessionRef.current = false
           handlers.releaseCurrentNativeSttOwner()
         }
-        if (isTerminalNativeBridgeStatus(detail.status)) {
+        if (isTerminalNativeBridgeStatus(detail.status) && !nativeStopRequestedRef.current) {
           nativeSttConversationIdRef.current = null
           nativeSttSessionIdRef.current = null
           nativeSttRequestedSessionIdRef.current = null
@@ -6104,6 +6149,12 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
+        let message: Record<string, unknown>
+        try {
+          const parsed: unknown = JSON.parse(detail.raw)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+          message = parsed as Record<string, unknown>
+        } catch { return }
         if (!handlers.claimCurrentNativeSttOwnerForMessage(detail)) {
           return
         }
@@ -6118,6 +6169,8 @@ export default function useRealtimeSTT({
           previousConnectionStatus: connectionStatusRef.current,
           isStopping: isStoppingRef.current,
           nativeStopRequested: nativeStopRequestedRef.current,
+          stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
+          message,
         })) {
           logSttDebug('native.message.promote_ready', {
             previousConnectionStatus: connectionStatusRef.current,
@@ -6128,11 +6181,11 @@ export default function useRealtimeSTT({
           setConnectionStatus('ready')
         }
         try {
-          const message = JSON.parse(detail.raw) as Record<string, unknown>
           if (!shouldHandleNativeBridgeServerMessage({
             message,
             isStopping: isStoppingRef.current,
             nativeStopRequested: nativeStopRequestedRef.current,
+            stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
           })) {
             logSttDebug('native.message.skip_stop_pending_ready')
             return
@@ -6166,7 +6219,7 @@ export default function useRealtimeSTT({
           return
         }
         logSttDebug('native.error', { message: detail.message })
-        if (nativeStopRequestedRef.current) {
+        if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
           handlers.finalizePendingTurnsLocallyForStop('native_stop_error')
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()
@@ -6199,7 +6252,7 @@ export default function useRealtimeSTT({
           return
         }
         logSttDebug('native.close', { reason: detail.reason })
-        if (nativeStopRequestedRef.current) {
+        if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
           handlers.finalizePendingTurnsLocallyForStop('native_stop_close')
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()

@@ -31,6 +31,7 @@ import { addNativePipListener, type NativePipEvent } from './src/nativePip';
 import {
   isNativeSttServerReadyMessage,
   resolveNativeSttStatusAfterStart,
+  resolveNativeSttStatusAfterStopAccepted,
 } from './src/nativeSttStatus';
 
 import {
@@ -3422,6 +3423,12 @@ function AppInner(): React.JSX.Element {
       : activeConversationId || (activeSessionId ? requestedConversationId : undefined);
     const nativeStopSessionId = force ? undefined : activeSessionId || undefined;
     try {
+      nativeStatusRef.current = 'stopping';
+      emitToWeb({
+        type: 'status', status: 'stopping', stopping: true,
+        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
+        ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
+      });
       await stopNativeStt({
         ...(nativeStopConversationId ? { conversationId: nativeStopConversationId } : {}),
         ...(nativeStopSessionId ? { sessionId: nativeStopSessionId } : {}),
@@ -3429,21 +3436,10 @@ function AppInner(): React.JSX.Element {
         pendingText: typeof payload?.pendingText === 'string' ? payload.pendingText : '',
         pendingLanguage: typeof payload?.pendingLanguage === 'string' ? payload.pendingLanguage : 'unknown',
       });
-      nativeStatusRef.current = 'stopped';
-      emitToWeb({
-        type: 'status',
-        status: 'stopped',
-        ...(stoppedConversationId ? { conversationId: stoppedConversationId } : {}),
-        ...(stoppedSessionId ? { sessionId: stoppedSessionId } : {}),
-        running: false,
-        serverReady: false,
-        stopping: false,
-      });
-      nativeSttConversationIdRef.current = null;
-      rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, stoppedSessionId);
-      nativeSttSessionIdRef.current = null;
-      nativeSttRequestedConversationIdRef.current = null;
-      nativeSttRequestedSessionIdRef.current = null;
+      // iOS resolves when graceful stop is accepted, not when the socket has
+      // drained. The terminal status/close listener owns identity retirement.
+      // Android may already have emitted that terminal event before resolving.
+      nativeStatusRef.current = resolveNativeSttStatusAfterStopAccepted(nativeStatusRef.current);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       emitToWeb({
@@ -3972,6 +3968,7 @@ function AppInner(): React.JSX.Element {
         }
         return;
       }
+      if (nativeStatusRef.current === 'stopping' && isLiveNativeSttStatus(event.status)) return;
       if (event.conversationId) {
         nativeSttConversationIdRef.current = event.conversationId;
       }
@@ -4022,7 +4019,7 @@ function AppInner(): React.JSX.Element {
       if (event.sessionId) {
         nativeSttSessionIdRef.current = event.sessionId;
       }
-      if (isNativeSttServerReadyMessage(event.raw)) {
+      if (nativeStatusRef.current !== 'stopping' && isNativeSttServerReadyMessage(event.raw)) {
         nativeStatusRef.current = 'ready';
       }
       if (nativeStatusRef.current) {
