@@ -83,7 +83,10 @@ export interface Utterance {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
+  translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
+  serverCreatedAtMs?: number
+  serverMessageId?: string
 }
 
 interface ChatBubbleProps {
@@ -336,6 +339,11 @@ export function resolveInitialDisplayLanguage(
   }
 
   return availableLanguages[0] || originalLanguage
+}
+
+export function resolveSelectedBubbleLanguage(messageId: string, automaticLanguage: string,
+  selection: { messageId: string; language: string } | null): string {
+  return selection?.messageId === messageId ? selection.language : automaticLanguage
 }
 
 function ChatLanguageBadge({
@@ -591,6 +599,7 @@ function ChatBubble({
   // — the server only sets it once the room has 2+ real members, so this
   // doubles as "is this a shared-room bubble" without a separate prop.
   const isSharedRoomMember = Boolean(utterance.speakerUserId)
+  const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
@@ -638,17 +647,20 @@ function ChatBubble({
     targetLangs,
     languageOrder,
   )
-  const [displayLanguage, setDisplayLanguage] = useState(() => (
-    resolveInitialDisplayLanguage(
-      preferredDisplayLanguages?.length
-        ? preferredDisplayLanguages
-        : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
-      defaultDisplayLanguage,
-      originalDisplayLanguage,
-      targetLangs,
-      languageOrder,
-    )
-  ))
+  const automaticDisplayLanguage = resolveInitialDisplayLanguage(
+    preferredDisplayLanguages?.length
+      ? preferredDisplayLanguages
+      : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
+    defaultDisplayLanguage,
+    originalDisplayLanguage,
+    targetLangs,
+    languageOrder,
+  )
+  // Only an explicit language selection is sticky. The automatic choice must
+  // follow newly available translations after a source-only first snapshot.
+  const [selectedLanguage, setDisplayLanguage] = useState<{ messageId: string; language: string } | null>(null)
+  const selectDisplayLanguage = (language: string) => setDisplayLanguage({ messageId: utterance.id, language })
+  const displayLanguage = resolveSelectedBubbleLanguage(utterance.id, automaticDisplayLanguage, selectedLanguage)
   const activeLanguage = languageOptions.find((language) => (
     normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
   )) || originalDisplayLanguage
@@ -673,6 +685,8 @@ function ChatBubble({
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
   const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleCornerClassName = isOwnMessage ? 'rounded-tl-2xl' : 'rounded-tl-none'
+  const expandedBubblePaddingClassName = isCounterpartMessage ? 'px-2 pt-0.5 pb-1' : 'px-2 py-1'
+  const collapsedBubblePaddingClassName = isCounterpartMessage ? 'px-2.5 pt-0.5 pb-1' : 'px-2.5 py-1'
   const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
     flag,
     utterance.originalText,
@@ -736,7 +750,7 @@ function ChatBubble({
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                   translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                   onSelect={() => {
-                    setDisplayLanguage(lang)
+                    selectDisplayLanguage(lang)
                   }}
                 />
               )
@@ -744,14 +758,18 @@ function ChatBubble({
           </span>
         )}
         {activeIsPending ? (
-          <span
-            data-interim-translation-cursor
-            className="inline-flex h-4 items-center gap-0.5 align-middle"
-          >
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
-          </span>
+          <>
+            <span data-current-bubble-text-value className="align-middle">{utterance.originalText}</span>
+            <span
+              data-interim-translation-cursor
+              className="inline-flex h-4 items-center gap-0.5 align-middle"
+              aria-hidden="true"
+            >
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+            </span>
+          </>
         ) : (
           <span data-current-bubble-text-value className="align-middle">
             {activeText}
@@ -794,7 +812,7 @@ function ChatBubble({
   const bubbleControls = (
     <div
       data-chat-bubble-controls
-      className="flex shrink-0 flex-col items-end gap-0 self-end"
+      className={`flex shrink-0 flex-col gap-0 ${isOwnMessage ? 'items-end self-end' : 'items-start self-start'}`}
     >
       <button
         type="button"
@@ -838,7 +856,7 @@ function ChatBubble({
       {speakerName && (
         <span
           data-chat-speaker-name
-          className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-base font-medium leading-5 text-gray-500"
+          className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
         </span>
@@ -862,7 +880,7 @@ function ChatBubble({
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                 translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                 onSelect={() => {
-                  setDisplayLanguage(lang)
+                  selectDisplayLanguage(lang)
                 }}
               />
             )
@@ -920,15 +938,6 @@ function ChatBubble({
           avatarImage
         )}
       </div>
-      {hasTimestamp && (
-        <ChatBubbleTimestamp
-          createdAtMs={utterance.createdAtMs}
-          uiLocale={uiLocale}
-          align="center"
-          minWidth="2.5rem"
-          className="text-[10px] text-black/[0.3]"
-        />
-      )}
     </div>
   )
 
@@ -956,7 +965,7 @@ function ChatBubble({
               data-expanded-bubble-container
               data-display-language={originalDisplayLanguage}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              className={`inline-block w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2 py-1 shadow-sm`}
+              className={`inline-block w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${expandedBubblePaddingClassName} shadow-sm`}
             >
               {expandedBubbleEntries.map((entry, index) => (
                 <ExpandedChatBubbleRow
@@ -979,7 +988,7 @@ function ChatBubble({
                   speakingPlaybackKey={speakingPlaybackKey}
                   onPlayOriginal={onPlayOriginal}
                   onPlayTranslation={onPlayTranslation}
-                  onSelectLanguage={setDisplayLanguage}
+                  onSelectLanguage={selectDisplayLanguage}
                 />
               ))}
             </div>
@@ -1007,7 +1016,7 @@ function ChatBubble({
               data-display-language={activeLanguage}
               data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} px-2.5 py-1 shadow-sm`}
+              className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${collapsedBubblePaddingClassName} shadow-sm`}
             >
               <div
                 data-original-bubble-row
@@ -1023,25 +1032,32 @@ function ChatBubble({
     </AnimatePresence>
   )
 
-  const ownTimestamp = isOwnMessage && hasTimestamp ? (
+  // Own and other/animal bubbles share the same "time stacked above the
+  // expand/collapse button" meta column — previously only own bubbles got
+  // this, while other bubbles got a timestamp under the avatar instead.
+  // Own messages sit at the right edge of the screen, so their meta column
+  // right-aligns; other/animal messages sit next to a left-anchored bubble,
+  // so their meta column hugs the bubble on the left instead.
+  const bubbleTimestamp = hasTimestamp ? (
     <ChatBubbleTimestamp
       createdAtMs={utterance.createdAtMs}
       uiLocale={uiLocale}
-      align="right"
+      align={isOwnMessage ? 'right' : 'left'}
       minWidth="2.5rem"
       className="text-[10px] font-medium leading-5 text-black/[0.34]"
     />
   ) : null
 
-  const ownMeta = isOwnMessage ? (
+  const bubbleMeta = (
     <div
-      data-chat-bubble-own-meta
-      className="flex shrink-0 flex-col items-end justify-end gap-0 self-end"
+      data-chat-bubble-own-meta={isOwnMessage || undefined}
+      data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
+      className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {ownTimestamp}
+      {bubbleTimestamp}
       {bubbleControls}
     </div>
-  ) : null
+  )
 
   const messageColumn = (
     <motion.div
@@ -1060,13 +1076,13 @@ function ChatBubble({
       >
         {isOwnMessage ? (
           <>
-            {ownMeta}
+            {bubbleMeta}
             {bubbleContentSwitch}
           </>
         ) : (
           <>
             {bubbleContentSwitch}
-            {bubbleControls}
+            {bubbleMeta}
           </>
         )}
       </div>
@@ -1126,6 +1142,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
+    if (pu.translationStatus !== nu.translationStatus) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

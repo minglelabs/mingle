@@ -1,4 +1,11 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 100
+export function shouldAnchorConversationEntry(input: {
+  isVisible: boolean; isStorageHydrated: boolean; hasAnchored: boolean
+  messageCount: number; isServerPending: boolean
+}): boolean {
+  return input.isVisible && input.isStorageHydrated && !input.hasAnchored
+    && (input.messageCount > 0 || !input.isServerPending)
+}
 // Latest-message affordance must mirror the auto-follow threshold so the user always
 // has a clear signal in the same band. Decoupling these creates a "no follow + no
 // button" dead zone (see PR review on the scroll perf branch).

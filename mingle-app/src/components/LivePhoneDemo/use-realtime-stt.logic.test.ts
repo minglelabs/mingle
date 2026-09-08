@@ -37,6 +37,7 @@ import {
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldBlockNativeSttSessionEvent,
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
@@ -403,6 +404,35 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 2,
       },
     ])
+  })
+
+  it('keeps a completed local translation when the source-only delivery snapshot arrives late', () => {
+    const local = { id: 'durable-one', originalText: '안녕하세요', originalLang: 'ko',
+      translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local, translations: {}, translationFinalized: {}, createdAtMs: 200,
+    })
+    expect(next.utterances[0]).toMatchObject({ translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 })
+  })
+
+  it('preserves the room store reference when server hydration is unchanged', () => {
+    const utterance = {
+      id: 'u-server',
+      originalText: 'same source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'same translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 2,
+    }
+    const store = createUtteranceStoreState([utterance])
+
+    expect(mergeServerHydrationUtteranceIntoStoreState(store, {
+      ...utterance,
+      targetLanguages: [...utterance.targetLanguages],
+      translations: { ...utterance.translations },
+      translationFinalized: { ...utterance.translationFinalized },
+    })).toBe(store)
   })
 
   it('preserves local speech order when server persistence time would move a finalized turn', () => {
@@ -856,6 +886,25 @@ describe('use-realtime-stt pure logic', () => {
       nativeStatus: 'legacy_unknown_state',
       previousConnectionStatus: 'connecting',
     })).toBeNull()
+  })
+
+  it('blocks native events from a different session generation', () => {
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-a',
+      activeSessionId: 'session-a',
+    })).toBe(false)
+
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-old',
+      activeSessionId: 'session-a',
+    })).toBe(true)
+
+    // Older native shells do not include a session ID, so conversation
+    // filtering remains the compatibility guard at the event consumer.
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: undefined,
+      activeSessionId: 'session-a',
+    })).toBe(false)
   })
 
   it('does not re-enter running UI state while a native stop is pending', () => {

@@ -24,6 +24,7 @@ import {
   type UserProfile,
 } from "@/server/user-profile";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 
 export const runtime = "nodejs";
 
@@ -227,6 +228,9 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   const session = await getServerSession(getAuthOptions());
+  if (!matchesExpectedAccount(request, session)) {
+    return NextResponse.json({ error: "account_changed" }, { status: 401 });
+  }
   const userId = getSessionUserId(session);
   if (!userId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

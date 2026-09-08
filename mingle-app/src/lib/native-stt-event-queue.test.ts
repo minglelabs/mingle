@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  filterNativeSttMessagesForSession,
   isNativeSttMessageForConversation,
   readNativeSttMessageQueue,
   removeNativeSttQueuedMessage,
@@ -43,5 +44,22 @@ describe("native STT event queue helpers", () => {
     ]);
     expect(isNativeSttMessageForConversation({ conversationId: "room-a" }, "room-a")).toBe(true);
     expect(isNativeSttMessageForConversation({ conversationId: "room-a" }, "room-b")).toBe(false);
+  });
+
+  it("keeps only messages from the active native session and legacy untagged messages", () => {
+    const messages = readNativeSttMessageQueue([
+      { type: "message", queueId: "active", raw: "active", sessionId: "session-a" },
+      { type: "message", queueId: "stale", raw: "stale", sessionId: "session-old" },
+      { type: "message", queueId: "legacy", raw: "legacy" },
+    ]);
+
+    expect(filterNativeSttMessagesForSession(messages, "session-a")).toEqual({
+      matching: [messages[0], messages[2]],
+      stale: [messages[1]],
+    });
+    expect(filterNativeSttMessagesForSession(messages, null)).toEqual({
+      matching: [messages[2]],
+      stale: [messages[0], messages[1]],
+    });
   });
 });

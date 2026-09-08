@@ -8,6 +8,7 @@ const {
   mockAppFeedbackFindMany,
   mockEnsureTrackingContext,
   mockParseClientContext,
+  mockRequestAllowsLegacyAnonymousUser,
   mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockAppFeedbackFindMany: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockParseClientContext: vi.fn(),
+  mockRequestAllowsLegacyAnonymousUser: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
 }));
 
@@ -43,6 +45,10 @@ vi.mock("@/lib/app-analytics", () => ({
   ensureTrackingContext: mockEnsureTrackingContext,
   parseClientContext: mockParseClientContext,
   upsertTrackedUser: mockUpsertTrackedUser,
+}));
+
+vi.mock("@/lib/request-user-identity", () => ({
+  requestAllowsLegacyAnonymousUser: mockRequestAllowsLegacyAnonymousUser,
 }));
 
 import { GET, POST } from "@/app/api/feedback/route";
@@ -78,6 +84,7 @@ describe("/api/feedback route", () => {
       usageSec: null,
     }));
     mockUpsertTrackedUser.mockResolvedValue("anon_user_row");
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(true);
   });
 
   it("returns empty threads when the tracking user has no saved feedback", async () => {
@@ -169,7 +176,7 @@ describe("/api/feedback route", () => {
     });
   });
 
-  it("returns feedback for both the authenticated account and the current anon device user", async () => {
+  it("returns only canonical account feedback after authentication", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "auth_user_123",
@@ -195,14 +202,6 @@ describe("/api/feedback route", () => {
         message: "I signed in and have another question.",
         contactEmail: "member@example.com",
         createdAt: new Date("2026-04-03T09:00:00.000Z"),
-        replies: [],
-      },
-      {
-        id: "feedback_anon",
-        category: "feedback",
-        message: "I sent this before signing in.",
-        contactEmail: null,
-        createdAt: new Date("2026-04-02T09:00:00.000Z"),
         replies: [],
       },
     ]);
@@ -231,20 +230,6 @@ describe("/api/feedback route", () => {
             },
           ],
         },
-        {
-          id: "feedback_anon",
-          category: "feedback",
-          contactEmail: null,
-          createdAt: "2026-04-02T09:00:00.000Z",
-          messages: [
-            {
-              id: "feedback_anon:root",
-              authorType: "user",
-              message: "I sent this before signing in.",
-              createdAt: "2026-04-02T09:00:00.000Z",
-            },
-          ],
-        },
       ],
     });
 
@@ -252,11 +237,27 @@ describe("/api/feedback route", () => {
     expect(findManyArgs).toMatchObject({
       where: {
         userId: {
-          in: ["auth_user_123", "anon_user_row"],
+          in: ["auth_user_123"],
         },
       },
       orderBy: { createdAt: "desc" },
     });
+  });
+
+  it("rejects current anonymous feedback without creating a User row", async () => {
+    mockRequestAllowsLegacyAnonymousUser.mockReturnValue(false);
+
+    const response = await POST(new NextRequest("https://example.com/api/feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        category: "feedback",
+        message: "This is long enough.",
+      }),
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mockUpsertTrackedUser).not.toHaveBeenCalled();
+    expect(mockAppFeedbackCreate).not.toHaveBeenCalled();
   });
 
   it("does not merge another authenticated account via the shared session key", async () => {

@@ -4,8 +4,10 @@ import {
   mintConversationListRealtimeToken,
   mintConversationRealtimeToken,
   notifyConversationMessage,
+  reserveConversationVoiceOrder,
 } from "@/server/conversation-realtime";
 import { verifyRealtimeToken } from "@/lib/realtime-token";
+import { mintVoiceOrderReceipt } from '@/lib/voice-order-receipt';
 
 describe("conversation-realtime", () => {
   const originalFetch = global.fetch;
@@ -36,6 +38,22 @@ describe("conversation-realtime", () => {
   });
 
   describe("notifyConversationMessage", () => {
+    it('reserves through the same messaging service and rejects invalid responses without inventing a second clock', async () => {
+      vi.stubEnv('MINGLE_REALTIME_SECRET', 'shared-secret');
+      vi.stubEnv('MINGLE_MESSAGING_URL', 'http://127.0.0.1:3002');
+      const scope = { sessionKey: 'room', userId: 'alice', clientMessageId: 'voice' };
+      const receipt = mintVoiceOrderReceipt(scope);
+      const fetcher = vi.fn().mockResolvedValue(Response.json({ orderReceipt: receipt }));
+      global.fetch = fetcher;
+      expect(await reserveConversationVoiceOrder(scope)).toBe(receipt);
+      expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ ...scope, reserveOrder: true });
+      fetcher.mockResolvedValue(Response.json({ orderReceipt: 'forged' }));
+      expect(await reserveConversationVoiceOrder(scope)).toBeNull();
+      fetcher.mockResolvedValue(new Response(null, { status: 204 }));
+      expect(await reserveConversationVoiceOrder(scope)).toBeNull();
+      fetcher.mockRejectedValue(new Error('offline'));
+      expect(await reserveConversationVoiceOrder(scope)).toBeNull();
+    });
     it("does nothing when unconfigured", () => {
       vi.stubEnv("MINGLE_REALTIME_SECRET", "");
       vi.stubEnv("NEXT_PUBLIC_WS_URL", "wss://host/stt");

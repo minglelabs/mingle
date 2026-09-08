@@ -178,6 +178,7 @@
 }
 
 .mobile-canvas-shell {
+  width: var(--mingle-mobile-canvas-scaled-width, 400px);
   height: 100svh;
   min-height: 100svh;
   overflow: hidden;
@@ -185,10 +186,11 @@
 
 .mobile-canvas-frame {
   width: 400px;
-  height: 100svh;
-  min-height: 100svh;
+  height: var(--mingle-mobile-canvas-frame-height, 100svh);
+  min-height: var(--mingle-mobile-canvas-frame-height, 100svh);
+  transform: var(--mingle-mobile-canvas-transform, none);
   transform-origin: top left;
-  will-change: transform;
+  will-change: var(--mingle-mobile-canvas-will-change, auto);
   overflow: hidden;
 }
 

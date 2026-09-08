@@ -1,4 +1,28 @@
-import { mintRealtimeToken, readRealtimeSecret } from "@/lib/realtime-token";
+import { mintRealtimeToken, readRealtimeSecret, signRealtimeToken } from "@/lib/realtime-token";
+import { verifyVoiceOrderReceipt } from "@/lib/voice-order-receipt";
+
+export async function reserveConversationVoiceOrder(scope: { userId: string; sessionKey: string; clientMessageId: string }): Promise<string | null> {
+  const secret = readRealtimeSecret();
+  const url = resolveConversationEventsPublishUrl();
+  if (!secret || !url) return null;
+  try {
+    const response = await fetch(url, {
+      method: 'POST', signal: AbortSignal.timeout(1500),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ ...scope, reserveOrder: true }),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return verifyVoiceOrderReceipt(body.orderReceipt, scope) !== null ? body.orderReceipt : null;
+  } catch { return null; }
+}
+
+// Separate short-lived capability; legacy room/list subscription tokens never
+// authorize writing. Renewing this requires the app's membership/block checks.
+export function mintConversationLiveWriterToken(sessionKey: string, userId: string, name: string | null): string | null {
+  const secret = readRealtimeSecret();
+  return secret ? signRealtimeToken({ sessionKey, userId, exp: Date.now() + 30_000, liveWriter: { name } }, secret) : null;
+}
 
 /**
  * Resolves the messaging service's plain-HTTP publish endpoint. Railway and
@@ -49,10 +73,13 @@ function resolveConversationEventsPublishUrl(): string | null {
 export function mintConversationRealtimeToken(args: {
   sessionKey: string;
   userId: string;
+  live?: boolean;
 }): string | null {
   const secret = readRealtimeSecret();
   if (!secret) return null;
-  return mintRealtimeToken({ sessionKey: args.sessionKey, userId: args.userId, secret });
+  return args.live
+    ? signRealtimeToken({ sessionKey: args.sessionKey, userId: args.userId, exp: Date.now() + 30_000, liveReader: true }, secret)
+    : mintRealtimeToken({ sessionKey: args.sessionKey, userId: args.userId, secret });
 }
 
 /**
@@ -92,7 +119,7 @@ export function mintConversationListRealtimeToken(userId: string): string | null
  * The returned promise is awaited by message handlers so a serverless request
  * does not terminate before the publish request has been handed to messaging.
  */
-export async function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = []): Promise<void> {
+export async function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = [], utterance?: Record<string, unknown>): Promise<void> {
   const secret = readRealtimeSecret();
   const publishUrl = resolveConversationEventsPublishUrl();
   const normalizedSessionKey = sessionKey.trim();
@@ -108,7 +135,7 @@ export async function notifyConversationMessage(sessionKey: string, memberUserId
         "content-type": "application/json",
         authorization: `Bearer ${secret}`,
       },
-      body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys }),
+      body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys, ...(utterance ? { utterance } : {}) }),
     });
     if (!response.ok) {
       console.warn("[conversation-realtime] publish_failed", { status: response.status });

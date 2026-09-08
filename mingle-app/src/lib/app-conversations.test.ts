@@ -198,6 +198,33 @@ describe("app-conversations", () => {
     }));
   });
 
+  it("preserves aggregate reads, membership and canonical message order during hydration", async () => {
+    const time = new Date("2026-04-12T10:00:00Z");
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-dm", sequenceNumber: 1, title: "Room", status: "active", sessionKey: "session-dm",
+      selectedLanguages: ["en"], speechLanguages: ["en"], translationLanguagesLinked: true,
+      pendingInviteeUserIds: [], createdAt: time, updatedAt: time, pausedAt: null,
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", selectedLanguages: [], user: { name: "Alice" } },
+      { channelId: "conv-dm", userId: "user-2", selectedLanguages: [], user: { name: "Bob" } },
+    ]);
+    mockAppMessageFindMany.mockResolvedValue([{
+      id: "db-message", clientMessageId: "local-message", sourceLanguage: "en", userId: "user-2",
+      createdAt: time, metadata: { orderStartedAtMs: time.getTime() - 60000 }, contents: [{ contentType: "SOURCE", language: "en", text: "Hello" }],
+    }]);
+    const state = await getConversationHydrationStateForUser({ conversationId: "conv-dm", userId: "user-1" });
+    expect(mockAppEventLogFindFirst).toHaveBeenCalled();
+    expect(mockAppMessageCount).toHaveBeenCalled();
+    expect(state?.utterances[0]).toMatchObject({ serverCreatedAtMs: time.getTime() - 60000, createdAtMs: time.getTime(), serverMessageId: "db-message", speakerUserId: "user-2" });
+    expect(state?.oldestMessageCursor).toEqual({ createdAtMs: time.getTime(), messageId: "db-message" });
+    expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ members: { some: { userId: "user-1", leftAt: null } } }) }));
+    mockFindConversationFirst.mockResolvedValue(null);
+    mockAppMessageFindMany.mockClear();
+    expect(await getConversationHydrationStateForUser({ conversationId: "conv-dm", userId: "stranger" })).toBeNull();
+    expect(mockAppMessageFindMany).not.toHaveBeenCalled();
+  });
+
   it("resolves a 2-person room's title to the other member's name, per viewer", async () => {
     mockFindConversationFirst.mockResolvedValue({
       id: "conv-dm",
