@@ -23,6 +23,12 @@ export function observeConnectViewport(element: HTMLElement): () => void {
 
   const viewport = window.visualViewport;
   const previousHeight = element.style.height;
+  const previousKeyboardState = element.getAttribute("data-keyboard-open");
+  // Android adjustResize shrinks both innerHeight and visualViewport. Remember
+  // the unobscured height instead of relying on their difference alone.
+  let unobscuredHeight = Math.max(window.innerHeight, viewport?.height ?? 0);
+  let viewportWidth = window.innerWidth;
+  let keyboardOpen = false;
   let animationFrame = 0;
   const sync = () => {
     animationFrame = 0;
@@ -35,6 +41,18 @@ export function observeConnectViewport(element: HTMLElement): () => void {
       viewportOffsetTop: viewport?.offsetTop ?? 0,
     });
     element.style.height = `${height}px`;
+    const visibleHeight = viewport?.height ?? window.innerHeight;
+    if (window.innerWidth !== viewportWidth) {
+      viewportWidth = window.innerWidth;
+      unobscuredHeight = Math.max(window.innerHeight, visibleHeight);
+      keyboardOpen = false;
+    }
+    unobscuredHeight = Math.max(unobscuredHeight, window.innerHeight, visibleHeight);
+    const searchFocused = element.querySelector('input[type="search"]') === document.activeElement;
+    // Ignore small browser-toolbar changes. Keep tabs hidden during keyboard
+    // dismissal even if blur arrives before the viewport expands again.
+    keyboardOpen = (searchFocused || keyboardOpen) && unobscuredHeight - visibleHeight > 100;
+    element.setAttribute("data-keyboard-open", String(keyboardOpen));
   };
   const scheduleSync = () => {
     if (!animationFrame) animationFrame = window.requestAnimationFrame(sync);
@@ -44,6 +62,8 @@ export function observeConnectViewport(element: HTMLElement): () => void {
   viewport?.addEventListener("resize", scheduleSync);
   viewport?.addEventListener("scroll", scheduleSync);
   window.addEventListener("resize", scheduleSync);
+  element.addEventListener("focusin", scheduleSync);
+  element.addEventListener("focusout", scheduleSync);
   sync();
 
   return () => {
@@ -51,7 +71,11 @@ export function observeConnectViewport(element: HTMLElement): () => void {
     viewport?.removeEventListener("resize", scheduleSync);
     viewport?.removeEventListener("scroll", scheduleSync);
     window.removeEventListener("resize", scheduleSync);
+    element.removeEventListener("focusin", scheduleSync);
+    element.removeEventListener("focusout", scheduleSync);
     if (animationFrame) window.cancelAnimationFrame(animationFrame);
     element.style.height = previousHeight;
+    if (previousKeyboardState === null) element.removeAttribute("data-keyboard-open");
+    else element.setAttribute("data-keyboard-open", previousKeyboardState);
   };
 }

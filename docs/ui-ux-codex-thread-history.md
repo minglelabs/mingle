@@ -2183,3 +2183,11 @@
   - At 390x844, the results reached scroll offset 635.5px while the header stayed at 0 and tabs stayed at 844px. At 360x740, focusing a bottom result kept the outer shell at scroll offset 0 and the header at 0, fixing the reproduced 19px displacement.
   - A simulated 300px keyboard reduction moved the tabs to 440px on the 740px screen; closing restored their position. Search submission blurred the input, changing the query reset the result offset to 0, and a follow action completed with one click while the input had focus.
 - Limits: Browser keyboard geometry was simulated; physical iOS/Android keyboards and touch dragging were not exercised. The iOS WebView policy change requires a rebuilt native app. No release or production deployment was performed; app/API namespaces remain at 2.0.3.
+
+## 2026-09-08 — Hide search tabs while the keyboard is open on both platforms
+
+- User clarification: The keyboard should cover the bottom tabs on both iOS and Android. The search header must remain fixed. This supersedes the earlier behavior that raised the bottom tabs above the keyboard.
+- Change: Hide the search tab bar while a focused search field reduces the available viewport by more than 100px. The result list fills the space above the keyboard. Restore tabs after viewport recovery, including when Android Back closes the keyboard without blurring the input. Keep tabs hidden if blur precedes the keyboard-closing resize.
+- Platform handling: Remember the unobscured viewport height so Android `adjustResize` is detected even when `innerHeight` and `visualViewport.height` both shrink. iOS overlay keyboards use the same observer. Small toolbar changes and hardware-keyboard focus do not hide tabs. Width changes reset the height reference.
+- Validation: 35 targeted tests passed, including separate iOS-overlay and Android-resize lifecycles, plus ESLint and the full web TypeScript check. In the devbox browser fixture at 390x844, a simulated 300px keyboard hid the tabs and let results extend to 544px; closing restored tabs at 844px. The header remained at y=0 in both states, and tabs restored while the input remained focused.
+- Limits: Physical-device keyboards were not tested. No additional native code or app/API version change is introduced by this follow-up.

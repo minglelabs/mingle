@@ -203,6 +203,10 @@
   overflow: clip;
 }
 
+.connect-page[data-keyboard-open="true"] > .connect-bottom-tabs {
+  display: none;
+}
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;

@@ -19,11 +19,12 @@ describe("search viewport", () => {
     })).toBe(expected);
   });
 
-  it("updates on keyboard opening/closing and removes observers on unmount", () => {
+  it.each(["ios", "android"])("hides tabs until the %s keyboard finishes closing and cleans up", (platform) => {
     const viewport = Object.assign(new EventTarget(), { height: 800, offsetTop: 0 });
     const runtime = Object.assign(new EventTarget(), {
       visualViewport: viewport,
       innerHeight: 800,
+      innerWidth: 400,
       requestAnimationFrame: vi.fn(),
       cancelAnimationFrame: vi.fn(),
     });
@@ -38,30 +39,59 @@ describe("search viewport", () => {
       observe() {}
       disconnect = disconnect;
     });
-    const element = {
+    const searchInput = {};
+    const document = { activeElement: searchInput };
+    vi.stubGlobal("document", document);
+    const attributes = new Map<string, string>();
+    const frame = {
+      clientHeight: 800,
+      offsetWidth: 400,
+      getBoundingClientRect: () => ({ top: 0, width: 400 }),
+    };
+    const element = Object.assign(new EventTarget(), {
+      querySelector: () => searchInput,
+      getAttribute: (name: string) => attributes.get(name) ?? null,
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+      removeAttribute: (name: string) => attributes.delete(name),
       style: { height: "" },
-      parentElement: {
-        clientHeight: 800,
-        offsetWidth: 400,
-        getBoundingClientRect: () => ({ top: 0, width: 400 }),
-      },
-    } as unknown as HTMLElement;
+      parentElement: frame,
+    }) as unknown as HTMLElement;
 
     const dispose = observeConnectViewport(element);
     expect(element.style.height).toBe("800px");
+    expect(element.getAttribute("data-keyboard-open")).toBe("false");
     viewport.height = 480;
+    if (platform === "android") {
+      runtime.innerHeight = 480;
+      frame.clientHeight = 480;
+    }
     viewport.dispatchEvent(new Event("resize"));
     viewport.dispatchEvent(new Event("scroll"));
     expect(runtime.requestAnimationFrame).toHaveBeenCalledTimes(1);
     scheduled?.();
     expect(element.style.height).toBe("480px");
+    expect(element.getAttribute("data-keyboard-open")).toBe("true");
+    document.activeElement = {};
+    element.dispatchEvent(new Event("focusout"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("true");
     viewport.height = 800;
+    runtime.innerHeight = 800;
+    frame.clientHeight = 800;
     viewport.dispatchEvent(new Event("resize"));
     scheduled?.();
     expect(element.style.height).toBe("800px");
+    expect(element.getAttribute("data-keyboard-open")).toBe("false");
+    // A focused input with a hardware keyboard / toolbar resize keeps tabs.
+    document.activeElement = searchInput;
+    viewport.height = 750;
+    runtime.dispatchEvent(new Event("resize"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("false");
     runtime.dispatchEvent(new Event("resize"));
     dispose();
     expect(element.style.height).toBe("");
+    expect(element.getAttribute("data-keyboard-open")).toBeNull();
     expect(disconnect).toHaveBeenCalledOnce();
     expect(runtime.cancelAnimationFrame).toHaveBeenCalledWith(1);
     runtime.requestAnimationFrame.mockClear();

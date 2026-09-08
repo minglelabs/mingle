@@ -654,7 +654,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         ) : null}
       </div>
 
-        <div className="shrink-0" onClickCapture={dismissSearchKeyboard}>
+        <div className="connect-bottom-tabs shrink-0" onClickCapture={dismissSearchKeyboard}>
           <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
         </div>
       </main>
