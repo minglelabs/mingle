@@ -12,6 +12,7 @@ import {
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
+import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -1086,17 +1087,19 @@ function ChatBubble({
           </>
         )}
       </div>
+      <MessageReactionBadges />
     </motion.div>
   )
 
   const bubbleContent = isOwnMessage
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
+  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>{bubbleContent}</MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
     return (
       <div className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}>
-        {bubbleContent}
+        {reactiveContent}
       </div>
     )
   }
@@ -1108,7 +1111,7 @@ function ChatBubble({
       transition={{ duration: 0.3 }}
       className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}
     >
-      {bubbleContent}
+      {reactiveContent}
     </motion.div>
   )
 }

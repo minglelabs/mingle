@@ -1,5 +1,7 @@
 'use client'
 
+import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 import { nativeStopIntent } from './native-stop-intent'
@@ -3843,6 +3845,7 @@ export default function useRealtimeSTT({
               }
             }
           } catch { return }
+          window.dispatchEvent(new CustomEvent(MESSAGE_REACTIONS_REFRESH_EVENT, { detail: conversationId }))
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {

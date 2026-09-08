@@ -10,6 +10,7 @@ import {
   type TouchEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { MessageReactionPicker } from './MessageReactions'
 import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
@@ -52,6 +53,7 @@ export default function CopyableBubbleSurface({
   className,
   style,
   onContextMenu,
+  onKeyDown,
   onDoubleClick,
   onTouchCancel,
   onTouchEnd,
@@ -82,7 +84,7 @@ export default function CopyableBubbleSurface({
   const calcTooltipPos = useCallback((): TooltipPos | null => {
     const rect = surfaceRef.current?.getBoundingClientRect()
     if (!rect) return null
-    const left = rect.left + rect.width / 2
+    const left = Math.max(120, Math.min(window.innerWidth - 120, rect.left + rect.width / 2))
     // 위쪽 공간이 충분하면 버블 위에, 부족하면 버블 아래에 표시
     if (rect.top - TOOLTIP_GAP_PX >= TOOLTIP_ESTIMATED_MAX_HEIGHT_PX) {
       return {
@@ -124,11 +126,14 @@ export default function CopyableBubbleSurface({
       }
     }
 
+    const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeMenu() }
+    document.addEventListener('keydown', handleEscape)
     document.addEventListener('pointerdown', handlePointerDown, true)
     window.addEventListener('scroll', closeMenu, true)
     window.addEventListener('resize', closeMenu)
 
     return () => {
+      document.removeEventListener('keydown', handleEscape)
       document.removeEventListener('pointerdown', handlePointerDown, true)
       window.removeEventListener('scroll', closeMenu, true)
       window.removeEventListener('resize', closeMenu)
@@ -168,7 +173,8 @@ export default function CopyableBubbleSurface({
       onTouchCancel={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="w-44 rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+      <div className="w-[230px] max-w-[calc(100vw-16px)] rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+        <MessageReactionPicker onSelect={closeMenu} />
         <button
           type="button"
           data-copyable-bubble-menu-button
@@ -230,6 +236,15 @@ export default function CopyableBubbleSurface({
       {...props}
       data-copyable-bubble
       data-copyable-bubble-double-tap-action={showPlayPronunciationButton ? 'play-pronunciation' : 'copy'}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented || event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          event.preventDefault()
+          openMenu()
+        } else if (event.key === 'Escape') closeMenu()
+      }}
       onContextMenu={(event) => {
         onContextMenu?.(event)
         if (event.defaultPrevented) return

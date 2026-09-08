@@ -75,6 +75,7 @@ model User {
   createdAt                    DateTime  @default(now()) @map("created_at")
   updatedAt                    DateTime  @updatedAt @map("updated_at")
 
+  reactions               AppMessageReaction[]
   messages                AppMessage[]
   eventLogs               AppEventLog[]
   feedbackEntries         AppFeedback[]
@@ -217,6 +218,7 @@ model AppMessage {
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
   user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reactions AppMessageReaction[]
   contents  AppMessageContent[]
   eventLogs AppEventLog[]
 
@@ -567,4 +569,19 @@ model AdminDashboardDailyMetric {
   @@id([day, platform])
   @@index([platform, day], map: "admin_dashboard_daily_metrics_platform_day_idx")
   @@map("admin_dashboard_daily_metrics")
+}
+
+model AppMessageReaction {
+  messageId String @map("message_id")
+  userId String @map("user_id")
+  kind String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  message AppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId])
+  @@map("app_message_reactions")
 }
