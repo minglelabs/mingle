@@ -13,15 +13,16 @@ describe('ChatBubble', () => {
     expect(resolveSelectedBubbleLanguage('message', translated, manual)).toBe('ko')
     expect(resolveSelectedBubbleLanguage('other-message', translated, manual)).toBe('en')
   })
-  it('shows the original with a pending label instead of a blank translated bubble after restart', () => {
+  it.each(['pending', 'retrying'] as const)('shows the original without a waiting label when translation is %s', translationStatus => {
     const html = renderToStaticMarkup(createElement(ChatBubble, {
       utterance: { id: 'durable-pending', originalText: '보관된 원문', originalLang: 'ko',
-        targetLanguages: ['ko', 'en'], translations: {}, translationStatus: 'retrying' },
+        targetLanguages: ['ko', 'en'], translations: {}, translationStatus },
       uiLocale: 'ko', preferredDisplayLanguage: 'en', defaultDisplayLanguage: 'en', bubbleDisplayMode: 'collapsed',
     }))
     expect(html).toContain('data-current-bubble-text-value')
     expect(html).toContain('보관된 원문')
-    expect(html).toContain('번역 대기 중 · 원문 표시')
+    expect(html).not.toContain('번역 대기')
+    expect(html).not.toContain('data-translation-pending-label')
   })
   afterEach(() => {
     vi.restoreAllMocks()

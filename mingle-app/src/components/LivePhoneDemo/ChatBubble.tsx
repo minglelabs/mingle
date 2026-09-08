@@ -769,7 +769,6 @@ function ChatBubble({
               <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
               <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
             </span>
-            <span data-translation-pending-label className="ml-1 text-[10px] font-normal text-gray-400">{bubbleDisplayCopy.translationPendingLabel}</span>
           </>
         ) : (
           <span data-current-bubble-text-value className="align-middle">

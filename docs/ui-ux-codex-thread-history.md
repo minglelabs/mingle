@@ -1,5 +1,11 @@
 # UI/UX Codex Thread History
 
+## 2026-09-08 - Remove the translation waiting label
+
+- User request: Remove the visible translation-pending/original-fallback explanatory text from message bubbles.
+- Resolution: Remove the label and its unused localized copy. Preserve original-text fallback, the existing interim indicator, translation retries, and automatic preferred-language selection when translations arrive.
+- Verification: Rendering regressions cover both pending and retrying states, asserting that the original remains visible without the waiting label. No native rebuild, schema migration, or runtime configuration change is required.
+
 ## 2026-09-08 - Preserve voice start order, follow arriving translations, and anchor only on entry
 
 - Voice order: On a new local pending voice turn with recognized text, request an authenticated, account/session/message-scoped server start receipt through the existing client-event handler. The server checks current room membership/block eligibility, timestamps receipt at request entry, and signs it with a domain-separated HMAC using the existing messaging secret. Finalization verifies signature, scope, non-future timestamp, and 30-day expiry, then stores the verified start time in message metadata. Shared-room canonical display ordering uses that time plus the DB message ID. Database creation time, unread calculations, membership attribution, and pagination cursors remain based on persistence time; no empty draft messages are inserted.

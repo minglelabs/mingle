@@ -11,7 +11,6 @@ export type LivePhoneDemoBubbleDisplayCopy = {
   collapsedModeLabel: string
   expandBubbleLabel: string
   collapseBubbleLabel: string
-  translationPendingLabel: string
 }
 
 const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
@@ -21,7 +20,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: '하나의 말풍선으로 표시',
     expandBubbleLabel: '펼치기',
     collapseBubbleLabel: '접기',
-    translationPendingLabel: '번역 대기 중 · 원문 표시',
   },
   en: {
     displayModeLabel: 'Bubble display',
@@ -29,7 +27,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Combined bubble',
     expandBubbleLabel: 'Expand',
     collapseBubbleLabel: 'Collapse',
-    translationPendingLabel: 'Translation pending · showing original',
   },
   ja: {
     displayModeLabel: '吹き出し表示',
@@ -37,7 +34,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: '1つの吹き出しにまとめる',
     expandBubbleLabel: '開く',
     collapseBubbleLabel: '閉じる',
-    translationPendingLabel: '翻訳待ち · 原文を表示',
   },
   'zh-CN': {
     displayModeLabel: '气泡显示方式',
@@ -45,7 +41,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: '合并为一个气泡',
     expandBubbleLabel: '展开',
     collapseBubbleLabel: '收起',
-    translationPendingLabel: '等待翻译 · 显示原文',
   },
   'zh-TW': {
     displayModeLabel: '對話泡泡顯示方式',
@@ -53,7 +48,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: '合併為一個泡泡',
     expandBubbleLabel: '展開',
     collapseBubbleLabel: '收起',
-    translationPendingLabel: '等待翻譯 · 顯示原文',
   },
   fr: {
     displayModeLabel: 'Affichage des bulles',
@@ -61,7 +55,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Bulle combinée',
     expandBubbleLabel: 'Développer',
     collapseBubbleLabel: 'Réduire',
-    translationPendingLabel: 'Traduction en attente · texte original',
   },
   de: {
     displayModeLabel: 'Blasenanzeige',
@@ -69,7 +62,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Zusammengefasste Blase',
     expandBubbleLabel: 'Aufklappen',
     collapseBubbleLabel: 'Zuklappen',
-    translationPendingLabel: 'Übersetzung ausstehend · Originaltext',
   },
   es: {
     displayModeLabel: 'Vista de burbujas',
@@ -77,7 +69,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Una burbuja combinada',
     expandBubbleLabel: 'Expandir',
     collapseBubbleLabel: 'Contraer',
-    translationPendingLabel: 'Traducción pendiente · texto original',
   },
   pt: {
     displayModeLabel: 'Exibição dos balões',
@@ -85,7 +76,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Balão combinado',
     expandBubbleLabel: 'Expandir',
     collapseBubbleLabel: 'Recolher',
-    translationPendingLabel: 'Tradução pendente · texto original',
   },
   it: {
     displayModeLabel: 'Visualizzazione dei fumetti',
@@ -93,7 +83,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Fumetto combinato',
     expandBubbleLabel: 'Espandi',
     collapseBubbleLabel: 'Comprimi',
-    translationPendingLabel: 'Traduzione in attesa · testo originale',
   },
   ru: {
     displayModeLabel: 'Вид сообщений',
@@ -101,7 +90,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Одно объединённое сообщение',
     expandBubbleLabel: 'Развернуть',
     collapseBubbleLabel: 'Свернуть',
-    translationPendingLabel: 'Ожидание перевода · исходный текст',
   },
   ar: {
     displayModeLabel: 'عرض الفقاعات',
@@ -109,7 +97,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'فقاعة موحدة',
     expandBubbleLabel: 'توسيع',
     collapseBubbleLabel: 'طي',
-    translationPendingLabel: 'الترجمة قيد الانتظار · عرض النص الأصلي',
   },
   hi: {
     displayModeLabel: 'बबल प्रदर्शन',
@@ -117,7 +104,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'एक संयुक्त बबल',
     expandBubbleLabel: 'खोलें',
     collapseBubbleLabel: 'बंद करें',
-    translationPendingLabel: 'अनुवाद लंबित · मूल पाठ',
   },
   th: {
     displayModeLabel: 'การแสดงบับเบิล',
@@ -125,7 +111,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'รวมเป็นบับเบิลเดียว',
     expandBubbleLabel: 'ขยาย',
     collapseBubbleLabel: 'ย่อ',
-    translationPendingLabel: 'รอการแปล · แสดงต้นฉบับ',
   },
   vi: {
     displayModeLabel: 'Hiển thị bong bóng',
@@ -133,7 +118,6 @@ const BUBBLE_DISPLAY_COPY_BY_LOCALE = {
     collapsedModeLabel: 'Một bong bóng gộp',
     expandBubbleLabel: 'Mở rộng',
     collapseBubbleLabel: 'Thu gọn',
-    translationPendingLabel: 'Đang chờ dịch · hiển thị bản gốc',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoBubbleDisplayCopy>
 
