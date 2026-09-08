@@ -1,5 +1,6 @@
 "use client";
 
+import ProfileBio from "./profile-bio";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import {
   postNativeAndroidBackCapability,
@@ -21,6 +22,8 @@ type ProfileImagePreviewProps = {
   name?: string | null;
   handle?: string | null;
   bio?: string | null;
+  bioUserId?: string;
+  locale?: string;
   closeLabel: string;
   onClose: () => void;
 };
@@ -39,6 +42,8 @@ export default function ProfileImagePreview({
   name,
   handle,
   bio,
+  bioUserId,
+  locale = "en",
   closeLabel,
   onClose,
 }: ProfileImagePreviewProps) {
@@ -106,9 +111,9 @@ export default function ProfileImagePreview({
         <X size={24} strokeWidth={2.1} aria-hidden="true" />
       </button>
 
-      <div className="flex max-w-full flex-col items-center">
+      <div className="flex max-h-[85dvh] max-w-full flex-col items-center overflow-y-auto overscroll-contain">
         <div
-          className="overflow-hidden rounded-full border border-white/20 bg-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+          className="shrink-0 overflow-hidden rounded-full border border-white/20 bg-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
           style={{ height: previewSize, width: previewSize }}
         >
           {image ? (
@@ -132,7 +137,7 @@ export default function ProfileImagePreview({
           <div className="mt-5 w-full max-w-[min(20rem,85vw)] rounded-[24px] border border-white/15 bg-white/12 px-5 py-4 text-white shadow-[0_12px_36px_rgba(0,0,0,0.18)] backdrop-blur-md">
             {name?.trim() ? <p className="truncate text-center text-[19px] font-semibold tracking-[-0.01em]">{name.trim()}</p> : null}
             {handle?.trim() ? <p className="mt-0.5 truncate text-center text-[13px] text-white/65">@{handle.trim().replace(/^@+/, "")}</p> : null}
-            {bio?.trim() ? <p className="mt-3 whitespace-pre-wrap break-words text-center text-[14px] leading-relaxed text-white/85">{bio.trim()}</p> : null}
+            {bioUserId ? <ProfileBio userId={bioUserId} initialBio={bio} locale={locale} dark /> : bio?.trim() ? <p className="mt-3 whitespace-pre-wrap break-words text-center text-[14px] leading-relaxed text-white/85">{bio.trim()}</p> : null}
             {language || flag || languageName ? (
               <div className={`${name?.trim() || handle?.trim() || bio?.trim() ? "mt-4 border-t border-white/15 pt-3" : ""} flex items-center justify-center gap-2`}>
                 {language ? (

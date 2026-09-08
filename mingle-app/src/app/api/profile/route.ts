@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +25,8 @@ import {
 } from "@/server/user-profile";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { matchesExpectedAccount } from "@/lib/request-account-guard";
+
+import { getPublishedBioText, updateProfileWithBio, runBioVersion } from "@/server/profile-bio";
 
 export const runtime = "nodejs";
 
@@ -462,11 +464,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data,
-      select: userProfileSelect,
-    });
+    const { profile: updated, versionId } = await updateProfileWithBio(userId, data.bio, tx => tx.user.update({
+      where: { id: userId }, data, select: userProfileSelect,
+    }));
+    if (versionId) after(() => runBioVersion(versionId));
     const privateFields = await prisma.user.findUnique({
       where: { id: userId },
       select: { birthDate: true },
@@ -485,6 +486,8 @@ export async function PATCH(request: NextRequest) {
 
     return profileResponse({
       ...serializeUserProfile(updated),
+      bio: await getPublishedBioText(userId, updated.bio),
+      bioDraft: updated.bio,
       birthDate: serializePrivateBirthDate(privateFields?.birthDate),
     });
   } catch (error) {
