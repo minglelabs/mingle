@@ -15,8 +15,9 @@ import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
-import ChatBubble, { resolveOriginalDisplayLanguage } from './ChatBubble'
+import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
+import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
 import {
   buildTargetLanguagesForUtterance,
   findLanguageRecordValue,
@@ -1346,7 +1347,7 @@ interface LivePhoneDemoProps {
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
-  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void
   onConversationStatsChange?: (payload: {
     usageSec: number
@@ -4536,7 +4537,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const committedUtteranceIdsRef = useRef<Set<string>>(new Set())
   committedUtteranceIdsRef.current = new Set(utterances.map((utterance) => utterance.id))
-  const lastReportedUtteranceIdRef = useRef('')
+  const lastReportedUtteranceRef = useRef<LatestUtteranceReport | null>(null)
   const liveUtterancePreviewTimerRef = useRef<number | null>(null)
   const lastReportedLiveUtterancePreviewRef = useRef<{
     utteranceId: string
@@ -4562,7 +4563,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       : null
     if (!latestPayload || !latestUtterance) return
 
-    const isNewFinalUtterance = lastReportedUtteranceIdRef.current !== latestUtterance.id
+    const update = resolveLatestUtteranceReport(
+      lastReportedUtteranceRef.current,
+      latestUtterance.id,
+      latestPayload,
+    )
+    if (!update) return
+    const isNewFinalUtterance = update.isNewUtterance
     if (isNewFinalUtterance) {
       if (liveUtterancePreviewTimerRef.current !== null) {
         window.clearTimeout(liveUtterancePreviewTimerRef.current)
@@ -4572,9 +4579,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       onLatestUtterancePreviewChangeRef.current?.(null)
     }
 
-    if (!isNewFinalUtterance) return
-    lastReportedUtteranceIdRef.current = latestUtterance.id
-    onLatestUtteranceChange?.(latestPayload)
+    lastReportedUtteranceRef.current = update.report
+    onLatestUtteranceChange?.(update.report.payload, isNewFinalUtterance)
   }, [
     onLatestUtteranceChange,
     utterances,
