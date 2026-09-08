@@ -30,6 +30,29 @@ export async function getMessageReactions(request: NextRequest, conversationId: 
   if (!ids.length || ids.length > 100 || ids.some(id => !id || id.length > 256)) {
     return NextResponse.json({ error: 'invalid_message_ids' }, { status: 400 })
   }
+  const kind = request.nextUrl.searchParams.get('kind')
+  const after = request.nextUrl.searchParams.get('after')
+  if (kind !== null) {
+    if (ids.length !== 1 || !isMessageReactionKind(kind) || (after !== null && (!after || after.length > 256))) {
+      return NextResponse.json({ error: 'invalid_participant_query' }, { status: 400 })
+    }
+    const message = await prisma.appMessage.findFirst({
+      where: { sessionKey: scope.sessionKey, AND: [messageIdentity(ids), { OR: [{ isDeleted: null }, { isDeleted: false }] }] },
+      select: { id: true },
+    })
+    if (!message) return NextResponse.json({ error: 'message_not_found' }, { status: 404 })
+    const rows = await prisma.appMessageReaction.findMany({
+      where: { messageId: message.id, kind, ...(after ? { userId: { gt: after } } : {}) },
+      orderBy: { userId: 'asc' }, take: 51,
+      select: { userId: true, user: { select: { name: true, handle: true } } },
+    })
+    const page = rows.slice(0, 50)
+    return NextResponse.json({
+      participants: page.map(row => ({ id: row.userId, name: row.user.name, handle: row.user.handle, mine: row.userId === scope.userId })),
+      nextCursor: rows.length > 50 ? page.at(-1)?.userId ?? null : null,
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
+  }
+  if (after !== null) return NextResponse.json({ error: 'invalid_participant_query' }, { status: 400 })
   const messages = await prisma.appMessage.findMany({
     where: { sessionKey: scope.sessionKey, AND: [messageIdentity(ids), { OR: [{ isDeleted: null }, { isDeleted: false }] }] },
     select: { id: true, clientMessageId: true, reactions: { select: { kind: true, userId: true } } },
@@ -67,6 +90,6 @@ export async function putMessageReaction(request: NextRequest, conversationId: s
     })
   }
   const rows = await prisma.appMessageReaction.findMany({ where: { messageId: message.id }, select: { kind: true, userId: true } })
-  await notifyConversationMessage(scope.sessionKey)
+  await notifyConversationMessage(scope.sessionKey, [], undefined, { timeoutMs: 3000 })
   return NextResponse.json({ reactions: summarizeMessageReactions(rows, scope.userId) })
 }

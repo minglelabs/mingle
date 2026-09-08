@@ -38,6 +38,17 @@ describe("conversation-realtime", () => {
   });
 
   describe("notifyConversationMessage", () => {
+    it('bounds reaction notifications when messaging stops responding', async () => {
+      vi.stubEnv('MINGLE_REALTIME_SECRET', 'shared-secret');
+      vi.stubEnv('MINGLE_MESSAGING_URL', 'http://127.0.0.1:3002');
+      let signal: AbortSignal | undefined;
+      global.fetch = vi.fn((_url, init) => new Promise<Response>((_resolve, reject) => {
+        signal = init?.signal ?? undefined;
+        signal?.addEventListener('abort', () => reject(new Error('publish_timeout')));
+      }));
+      await expect(notifyConversationMessage('room', [], undefined, { timeoutMs: 5 })).resolves.toBeUndefined();
+      expect(signal?.aborted).toBe(true);
+    });
     it('reserves through the same messaging service and rejects invalid responses without inventing a second clock', async () => {
       vi.stubEnv('MINGLE_REALTIME_SECRET', 'shared-secret');
       vi.stubEnv('MINGLE_MESSAGING_URL', 'http://127.0.0.1:3002');

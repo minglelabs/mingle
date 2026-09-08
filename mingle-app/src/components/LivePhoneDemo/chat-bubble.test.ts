@@ -208,7 +208,7 @@ describe('ChatBubble', () => {
 
     const ownHtml = renderBubble('user-me', 'user-me')
     const ownMessageColumnTag = openingTag(ownHtml, 'data-chat-message-column')
-    expect(ownMessageColumnTag).toContain('max-w-full items-end gap-px')
+    expect(ownMessageColumnTag).toContain('max-w-full flex-col items-end gap-px')
     expect(ownMessageColumnTag).not.toContain('flex-row-reverse')
   })
 

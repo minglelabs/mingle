@@ -1,10 +1,14 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import MessageReactionParticipants from './MessageReactionParticipants'
+import { fetchReactionJson } from '@/lib/message-reaction-request'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { MESSAGE_REACTIONS, MESSAGE_REACTIONS_REFRESH_EVENT, messageReactionCopy, type MessageReactionKind, type MessageReactionSummary } from '@/lib/message-reactions'
 
 type RoomContext = {
+  endpoint: string
+  active: boolean
   register: (id: string) => () => void
   reactions: Record<string, MessageReactionSummary[]>
   pending: ReadonlySet<string>
@@ -44,9 +48,8 @@ function ReactionRoom({ conversationId, enabled, active, children }: { conversat
       for (let offset = 0; offset < messageIds.length; offset += 100) {
         const query = new URLSearchParams()
         messageIds.slice(offset, offset + 100).forEach(id => query.append('id', id))
-        const response = await fetch(`${endpoint}?${query}`, { cache: 'no-store' })
-        if (!response.ok) return
-        Object.assign(result, (await response.json()).reactions)
+        const payload = await fetchReactionJson<{ reactions: Record<string, MessageReactionSummary[]> }>(`${endpoint}?${query}`, { cache: 'no-store' })
+        Object.assign(result, payload.reactions)
       }
       if (generation.current === version) setReactions(result)
     } catch { /* Preserve the last known counts while offline. */ }
@@ -91,12 +94,10 @@ function ReactionRoom({ conversationId, enabled, active, children }: { conversat
     setErrors(value => { const next = new Set(value); next.delete(id); return next })
     const selected = current.current[id]?.some(row => row.kind === kind && row.mine)
     try {
-      const response = await fetch(endpoint, {
+      const payload = await fetchReactionJson<{ reactions: MessageReactionSummary[] }>(endpoint, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageId: id, kind: selected ? null : kind }),
       })
-      if (!response.ok) throw new Error('reaction_failed')
-      const payload = await response.json()
       setReactions(value => ({ ...value, [id]: payload.reactions }))
     } catch {
       setErrors(value => new Set(value).add(id))
@@ -106,7 +107,7 @@ function ReactionRoom({ conversationId, enabled, active, children }: { conversat
       schedule()
     }
   }, [endpoint, schedule])
-  const value = useMemo(() => ({ register, reactions, pending, errors, select }), [register, reactions, pending, errors, select])
+  const value = useMemo(() => ({ register, reactions, pending, errors, select, endpoint, active }), [register, reactions, pending, errors, select, endpoint, active])
   return <Room.Provider value={enabled ? value : null}>{children}</Room.Provider>
 }
 
@@ -133,17 +134,62 @@ export function MessageReactionPicker({ onSelect }: { onSelect: () => void }) {
 export function MessageReactionBadges() {
   const room = useContext(Room)
   const message = useContext(Message)
-  if (!room || !message) return null
+  if (!room || !message || !room.active) return null
+  return <ReactionBadgesContent room={room} message={message} />
+}
+function ReactionBadgesContent({ room, message }: { room: RoomContext; message: { id: string; locale: string } }) {
+  const [participants, setParticipants] = useState<MessageReactionKind | null>(null)
+  const closeParticipants = useCallback(() => setParticipants(null), [])
   const copy = messageReactionCopy(message.locale)
   const rows = room.reactions[message.id] ?? []
   return <>
     {rows.length > 0 && <div role="group" aria-label={copy.label} className="flex max-w-full flex-wrap gap-1 pt-1">
-      {rows.map(row => <button key={row.kind} type="button" aria-pressed={row.mine}
-        aria-label={`${copy[row.kind]} ${row.count}`} disabled={room.pending.has(message.id)}
-        onClick={() => void room.select(message.id, row.kind)}
-        className="min-h-8 min-w-11 rounded-full border border-slate-200 bg-white px-2 text-sm aria-pressed:border-sky-400 aria-pressed:bg-sky-50 disabled:opacity-50"
-      >{MESSAGE_REACTIONS.find(reaction => reaction.kind === row.kind)?.emoji} {row.count}</button>)}
+      {rows.map(row => <ReactionBadge key={row.kind} row={row} locale={message.locale}
+        pending={room.pending.has(message.id)} onSelect={() => void room.select(message.id, row.kind)}
+        onShowParticipants={() => setParticipants(row.kind)} />)}
     </div>}
+    {participants && room.active && <MessageReactionParticipants endpoint={room.endpoint} messageId={message.id}
+      initialKind={participants} locale={message.locale} onClose={closeParticipants} />}
     {room.errors.has(message.id) && <p role="alert" className="max-w-64 pt-1 text-xs text-red-600">{copy.error}</p>}
   </>
+}
+
+function ReactionBadge({ row, locale, pending, onSelect, onShowParticipants }: {
+  row: MessageReactionSummary; locale: string; pending: boolean; onSelect: () => void; onShowParticipants: () => void
+}) {
+  const copy = messageReactionCopy(locale)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const origin = useRef<{ x: number; y: number } | null>(null)
+  const suppressClick = useRef(false)
+  const clearPress = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null; origin.current = null
+  }, [])
+  useEffect(() => clearPress, [clearPress])
+  return <button type="button" aria-pressed={row.mine} aria-label={`${copy[row.kind]} ${row.count}, ${copy.hint}`} title={copy.hint} aria-disabled={pending}
+    onPointerDown={event => {
+      if (event.button !== 0 || !event.isPrimary) return
+      clearPress(); suppressClick.current = false
+      origin.current = { x: event.clientX, y: event.clientY }
+      timer.current = setTimeout(() => { clearPress(); suppressClick.current = true; onShowParticipants() }, 450)
+    }}
+    onPointerMove={event => {
+      if (origin.current && Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) > 10) {
+        suppressClick.current = true; clearPress()
+      }
+    }}
+    onPointerUp={clearPress} onPointerCancel={() => { suppressClick.current = true; clearPress() }} onPointerLeave={clearPress}
+    onContextMenu={event => { event.preventDefault(); clearPress(); suppressClick.current = true; onShowParticipants() }}
+    onKeyDown={event => {
+      if (event.key === 'ContextMenu' || (event.shiftKey && (event.key === 'F10' || event.key === 'Enter'))) {
+        event.preventDefault(); onShowParticipants()
+      } else if (event.key === 'Enter' || event.key === ' ') suppressClick.current = false
+    }}
+    onClick={event => {
+      if (suppressClick.current) { event.preventDefault(); suppressClick.current = false; return }
+      if (!pending) onSelect()
+    }}
+    className="min-h-8 min-w-11 select-none rounded-full border border-slate-200 bg-white px-2 text-sm aria-pressed:border-sky-400 aria-pressed:bg-sky-50 aria-disabled:opacity-50"
+    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+  >{MESSAGE_REACTIONS.find(reaction => reaction.kind === row.kind)?.emoji} {row.count}</button>
 }

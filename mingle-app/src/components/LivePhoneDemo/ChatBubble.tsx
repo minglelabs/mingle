@@ -1067,7 +1067,7 @@ function ChatBubble({
       layout
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
       className={isOwnMessage
-        ? 'flex min-w-0 max-w-full items-end gap-px'
+        ? 'flex min-w-0 max-w-full flex-col items-end gap-px'
         : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
