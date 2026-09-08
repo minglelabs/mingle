@@ -341,6 +341,11 @@ export function resolveInitialDisplayLanguage(
   return availableLanguages[0] || originalLanguage
 }
 
+export function resolveSelectedBubbleLanguage(messageId: string, automaticLanguage: string,
+  selection: { messageId: string; language: string } | null): string {
+  return selection?.messageId === messageId ? selection.language : automaticLanguage
+}
+
 function ChatLanguageBadge({
   lang,
   isOriginal = false,
@@ -642,17 +647,20 @@ function ChatBubble({
     targetLangs,
     languageOrder,
   )
-  const [displayLanguage, setDisplayLanguage] = useState(() => (
-    resolveInitialDisplayLanguage(
-      preferredDisplayLanguages?.length
-        ? preferredDisplayLanguages
-        : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
-      defaultDisplayLanguage,
-      originalDisplayLanguage,
-      targetLangs,
-      languageOrder,
-    )
-  ))
+  const automaticDisplayLanguage = resolveInitialDisplayLanguage(
+    preferredDisplayLanguages?.length
+      ? preferredDisplayLanguages
+      : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
+    defaultDisplayLanguage,
+    originalDisplayLanguage,
+    targetLangs,
+    languageOrder,
+  )
+  // Only an explicit language selection is sticky. The automatic choice must
+  // follow newly available translations after a source-only first snapshot.
+  const [selectedLanguage, setDisplayLanguage] = useState<{ messageId: string; language: string } | null>(null)
+  const selectDisplayLanguage = (language: string) => setDisplayLanguage({ messageId: utterance.id, language })
+  const displayLanguage = resolveSelectedBubbleLanguage(utterance.id, automaticDisplayLanguage, selectedLanguage)
   const activeLanguage = languageOptions.find((language) => (
     normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
   )) || originalDisplayLanguage
@@ -742,7 +750,7 @@ function ChatBubble({
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                   translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                   onSelect={() => {
-                    setDisplayLanguage(lang)
+                    selectDisplayLanguage(lang)
                   }}
                 />
               )
@@ -873,7 +881,7 @@ function ChatBubble({
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                 translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                 onSelect={() => {
-                  setDisplayLanguage(lang)
+                  selectDisplayLanguage(lang)
                 }}
               />
             )
@@ -990,7 +998,7 @@ function ChatBubble({
                   speakingPlaybackKey={speakingPlaybackKey}
                   onPlayOriginal={onPlayOriginal}
                   onPlayTranslation={onPlayTranslation}
-                  onSelectLanguage={setDisplayLanguage}
+                  onSelectLanguage={selectDisplayLanguage}
                 />
               ))}
             </div>

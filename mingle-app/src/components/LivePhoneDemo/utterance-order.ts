@@ -6,7 +6,8 @@ type OrderableUtterance = {
 }
 
 // Local capture time keeps pending messages immediate. Once persisted, every
-// member uses the DB timestamp/ID pair, also used by server history pagination.
+// member uses the reserved server start time (or persistence time) and DB ID.
+// History cursors retain persistence time independently of this display order.
 export function utteranceOrderTime(utterance: OrderableUtterance): number {
   if (typeof utterance.serverCreatedAtMs === 'number' && Number.isFinite(utterance.serverCreatedAtMs)) {
     return utterance.serverCreatedAtMs

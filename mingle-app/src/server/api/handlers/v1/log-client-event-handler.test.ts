@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const {
@@ -88,6 +88,7 @@ vi.mock("@/lib/app-conversations", () => ({
 import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-event-handler";
 
 describe("handleLogClientEventV1", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnsureTrackingContext.mockReturnValue({
@@ -105,6 +106,35 @@ describe("handleLogClientEventV1", () => {
     mockMaterializePendingConversationInvitees.mockResolvedValue(undefined);
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(false);
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123"]);
+  });
+
+  it("reserves voice order without creating a message, then stores the verified order separately", async () => {
+    vi.stubEnv('MINGLE_REALTIME_SECRET', 'test-only');
+    const request = (body: object) => new NextRequest('https://example.com/api/ios/v2.0.2/log/client-event', {
+      method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1', ...body }),
+    });
+    const started = await handleLogClientEventV1(request({ eventType: 'stt_turn_started', reserveOrder: true }));
+    const { orderReceipt } = await started.json();
+    expect(typeof orderReceipt).toBe('string');
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
+    await handleLogClientEventV1(request({ eventType: 'stt_turn_finalized', sourceText: 'hello',
+      sourceLanguage: 'en', orderReceipt, translationPending: true }));
+    const write = mockAppMessageUpsert.mock.calls[0][0];
+    expect(write.create.metadata.orderStartedAtMs).toEqual(expect.any(Number));
+    expect(write.create.createdAt).toBeUndefined();
+    expect(write.update.createdAt).toBeUndefined();
+    mockIsMessageSenderBlockedInConversation.mockResolvedValue(true);
+    expect((await handleLogClientEventV1(request({ eventType: 'stt_turn_started', reserveOrder: true }))).status).toBe(403);
+  });
+
+  it("publishes translations before waiting for optional title generation", async () => {
+    await handleLogClientEventV1(new NextRequest('https://example.com/api/ios/v2.0.2/log/client-event', {
+      method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1',
+        eventType: 'stt_turn_finalized', sourceText: 'hello', sourceLanguage: 'en',
+        translations: { ko: '안녕' }, translationUpdate: true }),
+    }));
+    expect(mockNotifyConversationMessage.mock.invocationCallOrder[0]).toBeLessThan(mockMaybeGenerateConversationTitleForSession.mock.invocationCallOrder[0]);
   });
 
   it("acknowledges the original without waiting for title AI while translation is pending", async () => {

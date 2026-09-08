@@ -1,9 +1,18 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import ChatBubble from './ChatBubble'
+import ChatBubble, { resolveInitialDisplayLanguage, resolveSelectedBubbleLanguage } from './ChatBubble'
 
 describe('ChatBubble', () => {
+  it('follows arriving translations unless the viewer explicitly selected a language', () => {
+    const sourceOnly = resolveInitialDisplayLanguage(['en'], 'en', 'ko', [], ['ko', 'en'])
+    const translated = resolveInitialDisplayLanguage(['en'], 'en', 'ko', ['en'], ['ko', 'en'])
+    expect(resolveSelectedBubbleLanguage('message', sourceOnly, null)).toBe('ko')
+    expect(resolveSelectedBubbleLanguage('message', translated, null)).toBe('en')
+    const manual = { messageId: 'message', language: 'ko' }
+    expect(resolveSelectedBubbleLanguage('message', translated, manual)).toBe('ko')
+    expect(resolveSelectedBubbleLanguage('other-message', translated, manual)).toBe('en')
+  })
   it('shows the original with a pending label instead of a blank translated bubble after restart', () => {
     const html = renderToStaticMarkup(createElement(ChatBubble, {
       utterance: { id: 'durable-pending', originalText: '보관된 원문', originalLang: 'ko',

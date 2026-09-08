@@ -56,3 +56,15 @@ it('keeps pending capture time and safely handles a malformed cached timestamp',
   expect(utteranceOrderTime({ ...message('cached', 123), serverCreatedAtMs: NaN })).toBe(123)
   expect(utteranceOrderTime({ id: 'legacy', createdAtMs: NaN })).toBe(0)
 })
+
+it('keeps a long voice turn before a reply that was persisted first', () => {
+  const started = 1700000000000
+  const voice = { ...message('voice', started), serverCreatedAtMs: started, serverMessageId: 'db-voice' }
+  const reply = { ...message('reply', started + 10000), serverCreatedAtMs: started + 10000, serverMessageId: 'db-reply' }
+  // The reply arrives first; the voice final snapshot arrives much later.
+  for (const cached of [[voice], [reply]]) {
+    let store = createUtteranceStoreState(cached)
+    store = [reply, { ...voice, createdAtMs: started + 60000 }].reduce(mergeServerHydrationUtteranceIntoStoreState, store)
+    expect(store.utterances.map(u => u.id)).toEqual(['voice', 'reply'])
+  }
+})

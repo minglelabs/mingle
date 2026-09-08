@@ -22,6 +22,7 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { mintVoiceOrderReceipt, verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import {
   isMessageSenderBlockedInConversation,
@@ -156,6 +157,7 @@ async function shouldSkipFinalizedTurnPersistence(args: {
 }
 
 export async function handleLogClientEventV1(request: NextRequest) {
+  const receivedAtMs = Date.now()
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>
@@ -218,6 +220,15 @@ export async function handleLogClientEventV1(request: NextRequest) {
     }
     let messageId: string | null = null
 
+    if (eventType === 'stt_turn_started' && body.reserveOrder === true && clientMessageId) {
+      if (await isMessageSenderBlockedInConversation({ sessionKey: tracking.sessionKey, userId })) {
+        return NextResponse.json({ error: 'conversation_unavailable' }, { status: 403 })
+      }
+      return NextResponse.json({ ok: true, orderReceipt: mintVoiceOrderReceipt({
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      }, receivedAtMs) })
+    }
+
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
       const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
         shouldSkipFinalizedTurnPersistence({
@@ -244,6 +255,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      const orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, {
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      })
+      if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
       if (
@@ -357,7 +372,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
 
         // The durable client first delivers the source, then patches the same
         // message with translations. Do not delay source acknowledgement on AI.
-        if (body.translationPending !== true) {
+        if (body.translationPending !== true && body.translationUpdate !== true) {
           try {
             await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
           } catch (error) {
@@ -402,6 +417,15 @@ export async function handleLogClientEventV1(request: NextRequest) {
           await notifyConversationMessage(tracking.sessionKey, memberUserIds)
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
+        }
+        // Translation availability must be published before optional AI title
+        // generation, which can stall independently of message delivery.
+        if (body.translationUpdate === true) {
+          try {
+            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+          } catch (error) {
+            console.error('Conversation auto title generation failed:', error)
+          }
         }
         if (messageId && body.translationUpdate !== true) {
           try {

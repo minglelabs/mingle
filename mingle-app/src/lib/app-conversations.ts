@@ -2523,7 +2523,9 @@ export async function getConversationHydrationStateForUser(args: {
       translationFinalized,
       createdAtMs: message.createdAt.getTime(),
       ...(isMultiMember || isMultiMemberAtMessage ? {
-        serverCreatedAtMs: message.createdAt.getTime(),
+        serverCreatedAtMs: typeof metadata?.orderStartedAtMs === 'number'
+          && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
+          ? metadata.orderStartedAtMs : message.createdAt.getTime(),
         serverMessageId: message.id,
       } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),

@@ -75,6 +75,24 @@ describe('durable message finalization', () => {
     await Promise.all(deliveries)
   })
 
+  it('journals the reserved voice order before source delivery and reuses it for translations', async () => {
+    const { reserveVoiceOrder } = await import('./voice-order-reservation')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ orderReceipt: 'signed-start' })))
+    reserveVoiceOrder({ ownerIdentity: owner, apiNamespace: namespace,
+      sessionKey: 'session-one', clientMessageId: 'ordered-voice' }, '/reserve', 'tracking-one')
+    fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith('translate/finalize')) return Response.json(translated)
+      expect(bodyOf(init).orderReceipt).toBe('signed-start')
+      expect(JSON.parse(localStorage.getItem(journalKey)!)[0].eventBody.orderReceipt).toBe('signed-start')
+      return new Response(null, { status: 204 })
+    })
+    const record = jobs.enqueueDurableFinalization(input('ordered-voice'))
+    await jobs.deliverDurableFinalization(record)
+    const events = fetcher.mock.calls.filter(([url]) => String(url).endsWith('log/client-event'))
+    expect(events).toHaveLength(2)
+    expect(bodyOf(events[1][1]).translationUpdate).toBe(true)
+  })
+
   it('does not rewrite an unchanged retry cache', async () => {
     fetcher.mockRejectedValue(new TypeError('offline'))
     const record = jobs.enqueueDurableFinalization(input())

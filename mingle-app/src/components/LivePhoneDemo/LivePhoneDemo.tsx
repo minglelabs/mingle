@@ -1,6 +1,7 @@
 'use client'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
+import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -5265,6 +5266,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
   const hasInitialBottomAnchorRef = useRef(false)
+  const bottomAnchorConversationRef = useRef(conversationId)
   const allowAutoTopPaginationRef = useRef(false)
   const isPaginatingRef = useRef(false)
   const prevScrollHeightRef = useRef<number | null>(null)
@@ -5279,10 +5281,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     frameId: null,
     fromUserScroll: false,
   })
-  const openSmoothScrollTimerRef = useRef<number | null>(null)
-  const openSmoothScrollDeadlineRef = useRef(0)
-  const openSmoothScrollLastHeightRef = useRef(0)
-  const openSmoothScrollStableTicksRef = useRef(0)
   const scrollUiVisibleRef = useRef(false)
   const scrollDateLabelRef = useRef('')
   const previousDisplayUtteranceIdsRef = useRef<string[] | null>(null)
@@ -5382,13 +5380,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (scrollUiHideTimerRef.current) {
       window.clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
-    }
-  }, [])
-
-  const clearOpenSmoothScrollTimer = useCallback(() => {
-    if (openSmoothScrollTimerRef.current) {
-      window.clearTimeout(openSmoothScrollTimerRef.current)
-      openSmoothScrollTimerRef.current = null
     }
   }, [])
 
@@ -5742,126 +5733,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [captureCurrentViewportAnchorSnapshot, refreshScrollDateLabelAnchors, updateScrollDerivedState])
 
-  // Wait for stored conversation hydration, then pin to the latest messages once.
-  // This prevents initial top-pagination from running before we settle at bottom.
+  // Anchor once per entry, after the cached transcript has mounted. Later
+  // messages use the existing near-bottom policy, never an entry-time timer.
   useLayoutEffect(() => {
-    if (!chatRef.current || hasInitialBottomAnchorRef.current || !isStorageHydrated) return
-    const node = chatRef.current
-    if (utterances.length > 0) {
-      node.scrollTop = node.scrollHeight
-      lastDistanceToBottomRef.current = 0
-      shouldAutoScroll.current = true
-      suppressAutoScrollRef.current = false
-      autoScrollSchedulerRef.current.markPerformed()
+    if (bottomAnchorConversationRef.current !== conversationId) {
+      bottomAnchorConversationRef.current = conversationId
+      hasInitialBottomAnchorRef.current = false
+      allowAutoTopPaginationRef.current = false
     }
-    hasInitialBottomAnchorRef.current = true
-
-    const rafId = window.requestAnimationFrame(() => {
-      allowAutoTopPaginationRef.current = true
-      updateScrollDerivedState()
-    })
-
-    return () => window.cancelAnimationFrame(rafId)
-  }, [isStorageHydrated, updateScrollDerivedState, utterances.length])
-
-  useLayoutEffect(() => {
-    if (!isVisible || !chatRef.current) return
-
+    if (!isVisible) {
+      hasInitialBottomAnchorRef.current = false
+      allowAutoTopPaginationRef.current = false
+      return
+    }
     const node = chatRef.current
+    if (!node || !shouldAnchorConversationEntry({
+      isVisible, isStorageHydrated, hasAnchored: hasInitialBottomAnchorRef.current,
+      messageCount: utterances.length, isServerPending: isInitialServerHydrationPending,
+    })) return
     node.scrollTop = node.scrollHeight
     lastDistanceToBottomRef.current = 0
     shouldAutoScroll.current = true
     suppressAutoScrollRef.current = false
     autoScrollSchedulerRef.current.markPerformed()
-
-    const rafId = window.requestAnimationFrame(() => {
-      if (!chatRef.current) return
-      chatRef.current.scrollTop = chatRef.current.scrollHeight
-      updateScrollDerivedState()
-    })
-
-    return () => window.cancelAnimationFrame(rafId)
-  }, [isVisible, updateScrollDerivedState])
-
-  useEffect(() => {
-    clearOpenSmoothScrollTimer()
-    if (!isVisible) {
-      openSmoothScrollDeadlineRef.current = 0
-      openSmoothScrollLastHeightRef.current = 0
-      openSmoothScrollStableTicksRef.current = 0
-      return
-    }
-
-    openSmoothScrollDeadlineRef.current = Date.now() + 2500
-    openSmoothScrollLastHeightRef.current = 0
-    openSmoothScrollStableTicksRef.current = 0
-
-    return () => {
-      clearOpenSmoothScrollTimer()
-    }
-  }, [clearOpenSmoothScrollTimer, isVisible])
-
-  useEffect(() => {
-    if (
-      !isVisible
-      || !isStorageHydrated
-      || !chatRef.current
-      || Date.now() > openSmoothScrollDeadlineRef.current
-    ) {
-      return
-    }
-
-    openSmoothScrollDeadlineRef.current = Date.now() + 900
-    clearOpenSmoothScrollTimer()
-    const followToBottom = () => {
-      openSmoothScrollTimerRef.current = null
-      if (!chatRef.current || !isVisible) return
-
-      const nextScrollHeight = chatRef.current.scrollHeight
-      const distanceToBottom = Math.max(
-        0,
-        chatRef.current.scrollHeight - chatRef.current.scrollTop - chatRef.current.clientHeight,
-      )
-      const heightChanged = Math.abs(nextScrollHeight - openSmoothScrollLastHeightRef.current) > 1
-      openSmoothScrollLastHeightRef.current = nextScrollHeight
-
-      if (heightChanged) {
-        openSmoothScrollStableTicksRef.current = 0
-      } else {
-        openSmoothScrollStableTicksRef.current += 1
-      }
-
-      if (distanceToBottom > 1) {
-        suppressAutoScrollRef.current = false
-        shouldAutoScroll.current = true
-        chatRef.current.scrollTop = nextScrollHeight
-        autoScrollSchedulerRef.current.markPerformed()
-        updateScrollDerivedState()
-        openSmoothScrollStableTicksRef.current = 0
-      }
-
-      if (
-        Date.now() <= openSmoothScrollDeadlineRef.current
-        && (heightChanged || distanceToBottom > 1 || openSmoothScrollStableTicksRef.current < 3)
-      ) {
-        openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 120)
-      }
-    }
-
-    openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 180)
-
-    return () => {
-      clearOpenSmoothScrollTimer()
-    }
-  }, [
-    clearOpenSmoothScrollTimer,
-    demoTypingText,
-    isStorageHydrated,
-    isVisible,
-    liveUtterances.length,
-    utterances.length,
-    updateScrollDerivedState,
-  ])
+    hasInitialBottomAnchorRef.current = true
+    allowAutoTopPaginationRef.current = true
+    updateScrollDerivedState()
+  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
@@ -5916,10 +5814,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     return () => {
       clearPendingAutoScrollTimer()
-      clearOpenSmoothScrollTimer()
     }
   }, [
-    clearOpenSmoothScrollTimer,
     clearPendingAutoScrollTimer,
     demoTypingText,
     executeAutoScrollIfEligible,
@@ -6533,16 +6429,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances.length,
   ])
 
-  // Membership/invites are deliberately server-authoritative, never
-  // optimistic (docs/local-first-conversation-plan.md, client-SoT branch):
-  // leaveNotices/inviteNotices only exist once the one-shot mount hydration
-  // resolves, so painting the transcript before then can show a message with
-  // no accompanying "X invited Y" notice for an invite that already
-  // succeeded server-side, which then pops in a moment later. Hold real
-  // rooms (not the marketing demo) in the same loading state the outer
-  // Suspense fallback already shows until that first hydration settles, so
-  // what's shown is the complete state from the first frame.
-  if (headerMode === 'conversation' && isInitialServerHydrationPending) {
+  // Cached transcripts can render without waiting for server-owned notices.
+  // Their viewport is anchored by the layout effect before the first paint.
+  if (headerMode === 'conversation' && !isStorageHydrated) {
     return (
       <PhoneFrame>
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">

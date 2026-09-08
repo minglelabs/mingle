@@ -1,6 +1,7 @@
 'use client'
 
 import { compareUtteranceOrder } from './utterance-order'
+import { reserveVoiceOrder } from './voice-order-reservation'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
@@ -2817,11 +2818,9 @@ export default function useRealtimeSTT({
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
   // Membership/invites are deliberately server-authoritative, never optimistic
   // (see docs/local-first-conversation-plan.md on the client-SoT branch) — a
-  // fresh mount always starts with empty leave/invite notices and only fills
-  // them in once the one-shot mount hydration below resolves. True while
-  // that first hydration is outstanding, so a caller can hold the room in a
-  // loading state instead of briefly painting a transcript that's missing
-  // notices for an invite/leave that already happened server-side.
+  // fresh mount starts with empty notices and fills them after hydration.
+  // This flag distinguishes a cold empty room from a completed empty snapshot;
+  // it must not block presentation of the local transcript.
   const [isInitialServerHydrationPending, setIsInitialServerHydrationPending] = useState(true)
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
@@ -5500,6 +5499,10 @@ export default function useRealtimeSTT({
         )
         if (!existingPendingTurn) {
           utteranceIdRef.current = turnIdentity.utteranceSerial
+          if (conversationId && text) reserveVoiceOrder({
+            ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
+            sessionKey: ensureSessionKey(), clientMessageId: turnIdentity.utteranceId,
+          }, buildClientApiPath('/log/client-event'), outboxTrackingUserId)
         }
         pendingTurnsBySpeakerRef.current[speaker] = {
           ...turnIdentity,
@@ -5537,6 +5540,11 @@ export default function useRealtimeSTT({
     getCurrentTargetLanguages,
     logClientEvent,
     ensureSpeakerAvatarAssignment,
+    conversationId,
+    clientMessageOutboxOwnerIdentity,
+    finalizationApiNamespace,
+    ensureSessionKey,
+    outboxTrackingUserId,
     removePendingTurn,
     startAudioProcessing,
     syncVisiblePendingTurn,

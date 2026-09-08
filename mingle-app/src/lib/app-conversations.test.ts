@@ -211,12 +211,12 @@ describe("app-conversations", () => {
     ]);
     mockAppMessageFindMany.mockResolvedValue([{
       id: "db-message", clientMessageId: "local-message", sourceLanguage: "en", userId: "user-2",
-      createdAt: time, metadata: null, contents: [{ contentType: "SOURCE", language: "en", text: "Hello" }],
+      createdAt: time, metadata: { orderStartedAtMs: time.getTime() - 60000 }, contents: [{ contentType: "SOURCE", language: "en", text: "Hello" }],
     }]);
     const state = await getConversationHydrationStateForUser({ conversationId: "conv-dm", userId: "user-1" });
     expect(mockAppEventLogFindFirst).toHaveBeenCalled();
     expect(mockAppMessageCount).toHaveBeenCalled();
-    expect(state?.utterances[0]).toMatchObject({ serverCreatedAtMs: time.getTime(), serverMessageId: "db-message", speakerUserId: "user-2" });
+    expect(state?.utterances[0]).toMatchObject({ serverCreatedAtMs: time.getTime() - 60000, createdAtMs: time.getTime(), serverMessageId: "db-message", speakerUserId: "user-2" });
     expect(state?.oldestMessageCursor).toEqual({ createdAtMs: time.getTime(), messageId: "db-message" });
     expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ members: { some: { userId: "user-1", leftAt: null } } }) }));
     mockFindConversationFirst.mockResolvedValue(null);

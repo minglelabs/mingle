@@ -5,6 +5,7 @@ import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages
 import { readConversationMutationRecords } from '../conversation-mutation-queue'
 import { compatiblePendingWorkNamespaces } from '@/lib/pending-work-api-namespace'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
+import { consumeVoiceOrder } from './voice-order-reservation'
 
 const STORAGE_KEY = 'mingle:message-finalization:v1'
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -358,6 +359,16 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
     await Promise.all([
       (async () => {
         if (record.sourceDelivered) return
+        if (!record.eventBody.orderReceipt) {
+          const reservation = consumeVoiceOrder({ ownerIdentity: record.ownerIdentity,
+            apiNamespace: record.apiNamespace, sessionKey: String(record.eventBody.sessionKey || ''),
+            clientMessageId: record.utterance.id })
+          if (reservation) {
+            const receipt = await reservation
+            if (!canSend()) return
+            if (receipt) { record.eventBody.orderReceipt = receipt; persist() }
+          }
+        }
         await post(record, 'log/client-event', {
           ...record.eventBody, translationPending: !!record.translationBody,
         }, fetcher, controller.signal, canSend)
