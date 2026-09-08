@@ -2294,3 +2294,35 @@
   existing PR migrations remain the only database changes; no new migration or
   native/version change is introduced here. Updated the Railway deployment guide
   with the bucket, migration, existing-object cleanup, and device test sequence.
+
+## 2026-09-09 — Install PR 219 on connected iOS 18 and Android phones
+
+- Request: Rebuild/install the current branch on the connected iOS 18 and Android
+  phones and restart all devbox services using prod Vault and Cloudflare tunneling.
+- Runtime: Restarted this worktree's devbox supervisor with `--profile device`,
+  `--tunnel-provider cloudflare`, and `--vault-path secret/mingle/prod`. Do not use
+  `--device-app-env prod` for this setup: that option skips local servers/tunnels
+  and points the native apps at the production service. The three local services
+  run on ports 15558 (web), 17558 (STT), and 19558 (messaging).
+- Connectivity: The web tunnel returns HTTP 200 after its locale redirect; the STT
+  tunnel completes a WebSocket handshake; messaging health reports realtime
+  configured. Both apps point to `mingle-app-devbox.photo-for-passport.com` and
+  `mingle-stt-devbox.photo-for-passport.com`. Servers and the named tunnel remain up.
+- Devices: Installed and launched Release builds on the connected iPhone 11 Pro
+  running iOS 18.6 and Galaxy S9 (SM-G960N). iOS is 2.0.3 (105) with `ios/v2.0.3`
+  and the photo-library usage description; Android is 2.0.3 (97) with
+  `android/v2.0.3`. Native app processes were verified running on both phones.
+- Android install issue: The existing installation had a different signing
+  certificate, so in-place installation failed with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+  Uninstalled it and installed the successfully built APK, then launched it.
+  Android requires signing in again. iOS installation preserved its app data.
+  Local CocoaPods checksum/formatting churn was removed from the tracked diff.
+- Pending prerequisites: Read-only inspection found none of the four new feature
+  tables in the prod Vault database and no Prisma migration-history table. Asked
+  the user before applying the two migrations to that production database; no DDL
+  has been executed. The dedicated private bucket setting is missing from prod
+  Vault, and the existing R2 object credential cannot list/manage buckets (403).
+  The Mac is locked, preventing Cloudflare dashboard access, so requested unlock
+  to provision private storage. No production Cloudflare/Vault changes were made.
+  Installation and service connectivity are complete, but reaction/biography and
+  photo feature acceptance must wait for these database/storage prerequisites.
