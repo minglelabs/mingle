@@ -4,6 +4,8 @@ import nextConfig from '../../../next.config.mjs'
 describe('installed 2.x client compatibility', () => {
   it.each([
     ['android', '2.0.1'],
+    ['android', '2.0.2'],
+    ['android', '2.0.3'],
     ['ios', '2.0.1'],
     ['ios', '2.0.2'],
     ['ios', '2.0.3'],

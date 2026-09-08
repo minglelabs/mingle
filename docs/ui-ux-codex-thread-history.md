@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-09-08 - Prepare the unified 2.0.3 store release
+
+- Integrated service-branch PR #215 before release. Retained timestamp-descendant scroll anchors and calendar-day dividers while preserving the Local-first branch's canonical speech-start ordering and message-ID tie breaker. Both branches' issue histories remain intact.
+- Set iOS marketing version/API namespace to 2.0.3 (build 105) and Android version/API namespace to 2.0.3 (version code 97). Extended Android 2.0.2/2.0.3 aliases and compatible pending-work namespaces to preserve installed 2.x server behavior and recover an upgrading user's queued work.
+- Production packages use the verified Railway production web/STT endpoints, production client configuration, release signing and disabled QA bridges. Production Vault currently lacks the public runtime URLs, so archive arguments explicitly provide the verified production endpoints without changing Vault secrets or using development tunnels.
+- Do not raise minimum/recommended/latest-version server policy before store availability. This release preparation does not add a Prisma migration or change those policies. Store submissions and server deployment must be verified independently from successful local builds.
+
 ## 2026-09-08 - Stream counterpart speech before finalization
 
 - Surface: Shared conversation bubbles, the same mounted room's hidden list consumer, and conversation WebSocket delivery.
