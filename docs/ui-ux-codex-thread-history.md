@@ -2191,3 +2191,10 @@
 - Platform handling: Remember the unobscured viewport height so Android `adjustResize` is detected even when `innerHeight` and `visualViewport.height` both shrink. iOS overlay keyboards use the same observer. Small toolbar changes and hardware-keyboard focus do not hide tabs. Width changes reset the height reference.
 - Validation: 35 targeted tests passed, including separate iOS-overlay and Android-resize lifecycles, plus ESLint and the full web TypeScript check. In the devbox browser fixture at 390x844, a simulated 300px keyboard hid the tabs and let results extend to 544px; closing restored tabs at 844px. The header remained at y=0 in both states, and tabs restored while the input remained focused.
 - Limits: Physical-device keyboards were not tested. No additional native code or app/API version change is introduced by this follow-up.
+
+### Device installation follow-up
+
+- Installed and launched this branch on the wired iPhone 11 Pro and Galaxy S9 on 2026-09-08. Both devices received clean installs; Android required uninstalling the previous package because its signing certificate differed.
+- The devbox web, STT, and messaging servers run from the search-scroll-keyboard worktree using 73 runtime values read from `secret/mingle/prod`. Cloudflare named-tunnel bridges route to local ports 5538, 7538, and 9538. Servers and the connector remain running for user testing.
+- Verified the installed iOS app is 2.0.3 (105) with `ios/v2.0.3`, and Android is 2.0.3 (97) with `android/v2.0.3`. Both built apps point to `mingle-app-devbox.photo-for-passport.com` and `mingle-stt-devbox.photo-for-passport.com`.
+- Confirmed both native app processes are running, the web tunnel returns HTTP 200, the STT tunnel accepts a WebSocket handshake, and messaging health reports realtime configuration active. Physical keyboard behavior has not yet been exercised after login; the clean installs require signing in again.
