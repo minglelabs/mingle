@@ -71,6 +71,35 @@ describe("search viewport", () => {
     scheduled?.();
     expect(element.style.height).toBe("480px");
     expect(element.getAttribute("data-keyboard-open")).toBe("true");
+    // Rotate while the keyboard remains open. Android has already resized
+    // both viewport heights; iOS keeps its layout viewport unobscured.
+    runtime.innerWidth = 800;
+    runtime.innerHeight = platform === "android" ? 180 : 380;
+    viewport.height = 180;
+    frame.clientHeight = runtime.innerHeight;
+    runtime.dispatchEvent(new Event("resize"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("true");
+    // Back closes the keyboard without blurring the search input.
+    runtime.innerHeight = 380;
+    viewport.height = 380;
+    frame.clientHeight = 380;
+    runtime.dispatchEvent(new Event("resize"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("false");
+    // Reopen in landscape, then rotate back to the known portrait size.
+    viewport.height = 180;
+    if (platform === "android") runtime.innerHeight = 180;
+    runtime.dispatchEvent(new Event("resize"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("true");
+    runtime.innerWidth = 400;
+    runtime.innerHeight = platform === "android" ? 480 : 800;
+    viewport.height = 480;
+    frame.clientHeight = runtime.innerHeight;
+    runtime.dispatchEvent(new Event("resize"));
+    scheduled?.();
+    expect(element.getAttribute("data-keyboard-open")).toBe("true");
     document.activeElement = {};
     element.dispatchEvent(new Event("focusout"));
     scheduled?.();

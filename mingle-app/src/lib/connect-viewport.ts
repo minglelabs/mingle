@@ -28,6 +28,7 @@ export function observeConnectViewport(element: HTMLElement): () => void {
   // the unobscured height instead of relying on their difference alone.
   let unobscuredHeight = Math.max(window.innerHeight, viewport?.height ?? 0);
   let viewportWidth = window.innerWidth;
+  const unobscuredHeights = new Map<number, number>([[viewportWidth, unobscuredHeight]]);
   let keyboardOpen = false;
   let animationFrame = 0;
   const sync = () => {
@@ -43,15 +44,25 @@ export function observeConnectViewport(element: HTMLElement): () => void {
     element.style.height = `${height}px`;
     const visibleHeight = viewport?.height ?? window.innerHeight;
     if (window.innerWidth !== viewportWidth) {
+      // adjustResize can already include the keyboard in the first resize after
+      // rotation. Reuse a known height for this width; for a new orientation,
+      // the previous width estimates its unobscured height (within system bars).
+      // Never carry the old portrait height into landscape, or closing the
+      // keyboard there would leave the tabs hidden.
+      const rotatedHeight = unobscuredHeights.get(window.innerWidth) ?? viewportWidth;
       viewportWidth = window.innerWidth;
-      unobscuredHeight = Math.max(window.innerHeight, visibleHeight);
-      keyboardOpen = false;
+      unobscuredHeight = Math.max(
+        window.innerHeight, visibleHeight, keyboardOpen ? rotatedHeight : 0,
+      );
     }
     unobscuredHeight = Math.max(unobscuredHeight, window.innerHeight, visibleHeight);
     const searchFocused = element.querySelector('input[type="search"]') === document.activeElement;
     // Ignore small browser-toolbar changes. Keep tabs hidden during keyboard
     // dismissal even if blur arrives before the viewport expands again.
     keyboardOpen = (searchFocused || keyboardOpen) && unobscuredHeight - visibleHeight > 100;
+    if (!keyboardOpen) {
+      unobscuredHeights.set(viewportWidth, unobscuredHeight);
+    }
     element.setAttribute("data-keyboard-open", String(keyboardOpen));
   };
   const scheduleSync = () => {
