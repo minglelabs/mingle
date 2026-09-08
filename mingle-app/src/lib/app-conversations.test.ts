@@ -1134,14 +1134,14 @@ describe("app-conversations", () => {
         createdAt: new Date("2026-04-12T09:30:00.000Z"),
         sourceLanguage: "en",
         metadata: null,
-        contents: [{ language: "en", text: "older message" }],
+        contents: [{ contentType: "SOURCE", language: "en", text: "older message" }],
       },
       {
         sessionKey: "session-b",
         createdAt: new Date("2026-04-12T11:30:00.000Z"),
         sourceLanguage: "en",
         metadata: null,
-        contents: [{ language: "en", text: "newest message" }],
+        contents: [{ contentType: "SOURCE", language: "en", text: "newest message" }],
       },
     ]);
     mockAppMessageGroupBy.mockResolvedValue([
@@ -1181,6 +1181,46 @@ describe("app-conversations", () => {
         _all: true,
       },
     });
+  });
+
+  it("shows the viewer's own display-language translation in the list preview, not the speaker's original language", async () => {
+    mockFindConversationMany.mockResolvedValue([{
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["it", "ko"],
+      speechLanguages: ["it"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    }]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["it", "ko"], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: "it", selectedLanguages: ["it", "ko"], user: { name: "Bob", handle: "bob" } },
+    ]);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        sessionKey: "session-dm",
+        createdAt: new Date("2026-04-12T09:30:00.000Z"),
+        sourceLanguage: "it",
+        metadata: null,
+        contents: [
+          { contentType: "SOURCE", language: "it", text: "Ciao" },
+          { contentType: "TRANSLATION_FINAL", language: "ko", text: "안녕" },
+        ],
+      },
+    ]);
+
+    const conversations = await listConversationChannelsForUser("user-1");
+
+    expect(conversations[0]).toEqual(expect.objectContaining({
+      latestMessagePreview: "안녕",
+    }));
   });
 
   it("includes the unread message count returned for each viewer membership", async () => {
