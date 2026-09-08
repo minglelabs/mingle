@@ -28,7 +28,7 @@ describe('ChatBubble', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders one unified message bubble with language badges and a timestamp under the avatar', () => {
+  it('renders one unified message bubble with language badges and a timestamp above the expand/collapse button', () => {
     vi.spyOn(Date, 'now').mockReturnValue(
       new Date('2026-03-11T13:06:10+09:00').getTime(),
     )
@@ -82,6 +82,16 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
+    expect(html.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
+      html.indexOf('data-original-bubble-timestamp'),
+    )
+    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
+      html.indexOf('data-chat-bubble-controls'),
+    )
+    expect(html).toContain('data-chat-bubble-other-meta="true"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0 self-end items-start"')
+    expect(html).toContain('items-start self-start text-left')
+    expect(html).not.toContain('items-end self-end text-right')
     expect(html).toContain('max-width:100%')
     expect(html).toContain('px-2.5 py-1')
     expect(html).not.toContain('px-3.5 py-2')
@@ -188,7 +198,7 @@ describe('ChatBubble', () => {
     expect(otherContentSwitchTag).toContain('min-w-0 w-max max-w-full shrink')
     expect(otherContentSwitchTag).toContain('flex-basis:max-content')
     expect(otherContentSwitchTag).not.toContain('flex-1')
-    expect(otherControlsTag).toContain('self-end')
+    expect(otherControlsTag).toContain('self-start')
     expect(otherControlsTag).not.toContain('mb-1.5')
     const otherBubbleLineTag = openingTag(otherHtml, 'data-chat-bubble-line')
     expect(otherBubbleLineTag).toContain('items-end gap-1')

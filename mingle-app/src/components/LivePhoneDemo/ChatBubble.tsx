@@ -812,7 +812,7 @@ function ChatBubble({
   const bubbleControls = (
     <div
       data-chat-bubble-controls
-      className="flex shrink-0 flex-col items-end gap-0 self-end"
+      className={`flex shrink-0 flex-col gap-0 ${isOwnMessage ? 'items-end self-end' : 'items-start self-start'}`}
     >
       <button
         type="button"
@@ -938,15 +938,6 @@ function ChatBubble({
           avatarImage
         )}
       </div>
-      {hasTimestamp && (
-        <ChatBubbleTimestamp
-          createdAtMs={utterance.createdAtMs}
-          uiLocale={uiLocale}
-          align="center"
-          minWidth="2.5rem"
-          className="text-[10px] text-black/[0.3]"
-        />
-      )}
     </div>
   )
 
@@ -1041,25 +1032,32 @@ function ChatBubble({
     </AnimatePresence>
   )
 
-  const ownTimestamp = isOwnMessage && hasTimestamp ? (
+  // Own and other/animal bubbles share the same "time stacked above the
+  // expand/collapse button" meta column — previously only own bubbles got
+  // this, while other bubbles got a timestamp under the avatar instead.
+  // Own messages sit at the right edge of the screen, so their meta column
+  // right-aligns; other/animal messages sit next to a left-anchored bubble,
+  // so their meta column hugs the bubble on the left instead.
+  const bubbleTimestamp = hasTimestamp ? (
     <ChatBubbleTimestamp
       createdAtMs={utterance.createdAtMs}
       uiLocale={uiLocale}
-      align="right"
+      align={isOwnMessage ? 'right' : 'left'}
       minWidth="2.5rem"
       className="text-[10px] font-medium leading-5 text-black/[0.34]"
     />
   ) : null
 
-  const ownMeta = isOwnMessage ? (
+  const bubbleMeta = (
     <div
-      data-chat-bubble-own-meta
-      className="flex shrink-0 flex-col items-end justify-end gap-0 self-end"
+      data-chat-bubble-own-meta={isOwnMessage || undefined}
+      data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
+      className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {ownTimestamp}
+      {bubbleTimestamp}
       {bubbleControls}
     </div>
-  ) : null
+  )
 
   const messageColumn = (
     <motion.div
@@ -1078,13 +1076,13 @@ function ChatBubble({
       >
         {isOwnMessage ? (
           <>
-            {ownMeta}
+            {bubbleMeta}
             {bubbleContentSwitch}
           </>
         ) : (
           <>
             {bubbleContentSwitch}
-            {bubbleControls}
+            {bubbleMeta}
           </>
         )}
       </div>
