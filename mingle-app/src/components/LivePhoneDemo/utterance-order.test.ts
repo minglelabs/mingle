@@ -23,13 +23,14 @@ it('converges different sender caches on identical server order and preserves ca
   }
 })
 
-it('breaks equal server timestamps by server ID regardless of receipt or capture order', () => {
+it('breaks equal server timestamps by the stable client ID before and after DB assignment', () => {
   const a = { ...message('client-z', 10), serverCreatedAtMs: 100, serverMessageId: 'db-a' }
   const b = { ...message('client-a', 1), serverCreatedAtMs: 100, serverMessageId: 'db-b' }
   for (const snapshot of [[a, b], [b, a]]) {
     const store = snapshot.reduce(mergeServerHydrationUtteranceIntoStoreState, createUtteranceStoreState([]))
-    expect(store.utterances.map(u => u.id)).toEqual(['client-z', 'client-a'])
-    expect(mergeDisplayUtterances({ utterances: store.utterances, liveUtterances: [] }).map(u => u.id)).toEqual(['client-z', 'client-a'])
+    expect(store.utterances.map(u => u.id)).toEqual(['client-a', 'client-z'])
+    expect(mergeDisplayUtterances({ utterances: store.utterances, liveUtterances: [] }).map(u => u.id)).toEqual(['client-a', 'client-z'])
+    expect(snapshot.map(u => ({ ...u, serverMessageId: undefined })).sort(compareUtteranceOrder).map(u => u.id)).toEqual(['client-a', 'client-z'])
   }
 })
 
@@ -67,4 +68,12 @@ it('keeps a long voice turn before a reply that was persisted first', () => {
     store = [reply, { ...voice, createdAtMs: started + 60000 }].reduce(mergeServerHydrationUtteranceIntoStoreState, store)
     expect(store.utterances.map(u => u.id)).toEqual(['voice', 'reply'])
   }
+})
+
+it('does not erase an acknowledged order when a partial hydration payload omits ordering fields', () => {
+  const cached = { ...message('a', 5000), serverCreatedAtMs: 1000, serverMessageId: 'db-a' }
+  const state = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([cached]), {
+    ...message('a', 9000), translations: { ko: '번역' },
+  })
+  expect(state.utterances[0]).toMatchObject({ createdAtMs: 5000, serverCreatedAtMs: 1000, serverMessageId: 'db-a', translations: { ko: '번역' } })
 })

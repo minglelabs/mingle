@@ -8,6 +8,46 @@ import { LiveUtterances } from '../live-utterances';
 
 const secret = 'isolated-live-test';
 const writer = { sessionKey: 'room', userId: 'alice', exp: Date.now() + 60_000, liveWriter: { name: 'Alice' } };
+
+test('HTTP and WS share one order in either arrival order, including retries and restart receipts', () => {
+    const scope = { sessionKey: 'room', userId: 'alice', clientMessageId: 'voice' };
+    const originalNow = Date.now;
+    let clock = originalNow();
+    Date.now = () => clock;
+    try {
+    for (const httpFirst of [true, false]) {
+        const turns = new LiveUtterances();
+        const http = httpFirst ? turns.reserveOrder(scope, secret) : null;
+        clock += 100;
+        const first = turns.accept({ id: 'voice', originalText: 'partial', sequence: 1 }, writer, secret)!;
+        clock += 100;
+        const reserved = http ?? turns.reserveOrder(scope, secret);
+        assert.equal(first.utterance.createdAtMs, reserved.startedAtMs);
+        clock += 100;
+        const final = turns.accept({ id: 'voice', originalText: 'final', sequence: 2, final: true }, writer, secret)!;
+        assert.equal(final.utterance.createdAtMs, reserved.startedAtMs);
+        clock += 100;
+        turns.commit('room', 'alice', 'voice');
+        assert.equal(turns.reserveOrder(scope, secret).startedAtMs, reserved.startedAtMs);
+        clock += 100;
+        const restarted = new LiveUtterances();
+        const replay = restarted.accept({ id: 'voice', originalText: 'final', sequence: 3, final: true,
+            orderReceipt: reserved.orderReceipt }, writer, secret)!;
+        assert.equal(replay.utterance.createdAtMs, reserved.startedAtMs);
+    }
+    } finally { Date.now = originalNow; }
+});
+
+test('a forged or cross-account receipt cannot choose another turn order', () => {
+    const old = Date.now() - 10000;
+    const scope = { sessionKey: 'room', userId: 'alice', clientMessageId: 'voice', startedAtMs: old };
+    const body = Buffer.from(JSON.stringify(scope)).toString('base64url');
+    const receipt = `${body}.${createHmac('sha256', secret).update(`mingle-voice-order-v1:${body}`).digest('base64url')}`;
+    const restored = new LiveUtterances().reserveOrder(scope, secret, receipt);
+    assert.equal(restored.startedAtMs, old);
+    assert.notEqual(new LiveUtterances().reserveOrder({ ...scope, userId: 'bob' }, secret, receipt).startedAtMs, old);
+    assert.notEqual(new LiveUtterances().reserveOrder(scope, secret, receipt + 'x').startedAtMs, old);
+});
 function token(value: object) {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url');
     return `${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;

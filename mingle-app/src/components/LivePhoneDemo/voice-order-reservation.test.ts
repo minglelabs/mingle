@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { reserveVoiceOrder, consumeVoiceOrder } from './voice-order-reservation'
+import { reserveVoiceOrder, consumeVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 const scope = { ownerIdentity: 'user:alice', apiNamespace: 'ios/v2.0.2', sessionKey: 'room', clientMessageId: 'voice' }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
@@ -25,4 +25,18 @@ it('bounds unavailable reservations even if a transport ignores abort', async ()
   await vi.advanceTimersByTimeAsync(200)
   expect(await pending).toBeNull()
   await vi.advanceTimersByTimeAsync(3300)
+})
+
+it('does not replace a socket receipt when an outstanding HTTP response completes later', async () => {
+  let finish!: (value: Response) => void
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+  const racing = { ...scope, clientMessageId: 'racing' }
+  reserveVoiceOrder(racing, '/start', 'tracking')
+  await Promise.resolve()
+  const pending = consumeVoiceOrder(racing)
+  rememberLiveVoiceOrder(racing, 'socket-order')
+  finish(Response.json({ orderReceipt: 'late-http-order' }))
+  expect(await pending).toBe('socket-order')
+  expect(await consumeVoiceOrder(racing)).toBe('socket-order')
+  expect(getVoiceOrderReceipt(racing)).toBe('socket-order')
 })

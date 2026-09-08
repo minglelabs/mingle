@@ -1,4 +1,21 @@
 import { mintRealtimeToken, readRealtimeSecret, signRealtimeToken } from "@/lib/realtime-token";
+import { verifyVoiceOrderReceipt } from "@/lib/voice-order-receipt";
+
+export async function reserveConversationVoiceOrder(scope: { userId: string; sessionKey: string; clientMessageId: string }): Promise<string | null> {
+  const secret = readRealtimeSecret();
+  const url = resolveConversationEventsPublishUrl();
+  if (!secret || !url) return null;
+  try {
+    const response = await fetch(url, {
+      method: 'POST', signal: AbortSignal.timeout(1500),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ ...scope, reserveOrder: true }),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return verifyVoiceOrderReceipt(body.orderReceipt, scope) !== null ? body.orderReceipt : null;
+  } catch { return null; }
+}
 
 // Separate short-lived capability; legacy room/list subscription tokens never
 // authorize writing. Renewing this requires the app's membership/block checks.

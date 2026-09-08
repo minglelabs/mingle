@@ -21,8 +21,8 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
-import { notifyConversationMessage } from '@/server/conversation-realtime'
-import { mintVoiceOrderReceipt, verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
+import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
+import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import {
   isMessageSenderBlockedInConversation,
@@ -157,7 +157,6 @@ async function shouldSkipFinalizedTurnPersistence(args: {
 }
 
 export async function handleLogClientEventV1(request: NextRequest) {
-  const receivedAtMs = Date.now()
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>
@@ -224,9 +223,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (await isMessageSenderBlockedInConversation({ sessionKey: tracking.sessionKey, userId })) {
         return NextResponse.json({ error: 'conversation_unavailable' }, { status: 403 })
       }
-      return NextResponse.json({ ok: true, orderReceipt: mintVoiceOrderReceipt({
+      return NextResponse.json({ ok: true, orderReceipt: await reserveConversationVoiceOrder({
         userId, sessionKey: tracking.sessionKey, clientMessageId,
-      }, receivedAtMs) })
+      }) })
     }
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
@@ -255,9 +254,13 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
-      const orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, {
-        userId, sessionKey: tracking.sessionKey, clientMessageId,
-      })
+      const orderScope = { userId, sessionKey: tracking.sessionKey, clientMessageId }
+      let orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, orderScope)
+      if (orderStartedAtMs === null && !shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+        // Finalization can beat the first socket echo. Resolve the SAME live
+        // reservation instead of falling back to the later DB creation time.
+        orderStartedAtMs = verifyVoiceOrderReceipt(await reserveConversationVoiceOrder(orderScope), orderScope)
+      }
       if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
@@ -272,51 +275,71 @@ export async function handleLogClientEventV1(request: NextRequest) {
       }
 
       if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
-        const message = await prisma.appMessage.upsert({
-          where: {
-            sessionKey_clientMessageId: {
+        const message = await prisma.$transaction(async tx => {
+          // Serialize source/translation/retry writes even before the row exists.
+          // Never erase or replace a persisted display-order key on an update.
+          const lockKey = JSON.stringify([tracking.sessionKey, clientMessageId])
+          await tx.$queryRaw`SELECT true AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+          const existing = await tx.appMessage.findUnique({
+            where: { sessionKey_clientMessageId: { sessionKey: tracking.sessionKey, clientMessageId } },
+            select: { metadata: true, createdAt: true },
+          })
+          if (existing) {
+            const metadata = sanitizeJsonObject(existing.metadata)
+            const savedOrder = metadata?.orderStartedAtMs
+            messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
+              ? savedOrder : existing.createdAt.getTime()
+          }
+          return tx.appMessage.upsert({
+            where: {
+              sessionKey_clientMessageId: {
+                sessionKey: tracking.sessionKey,
+                clientMessageId,
+              },
+            },
+            create: {
+              user: {
+                connect: { id: userId },
+              },
               sessionKey: tracking.sessionKey,
               clientMessageId,
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-          },
-          create: {
-            user: {
-              connect: { id: userId },
+            update: {
+              user: {
+                connect: { id: userId },
+              },
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-            sessionKey: tracking.sessionKey,
-            clientMessageId,
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          update: {
-            user: {
-              connect: { id: userId },
+            select: {
+              id: true,
+              createdAt: true,
+              metadata: true,
+              user: { select: { name: true, image: true } },
             },
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          select: {
-            id: true,
-            createdAt: true,
-            user: { select: { name: true, image: true } },
-          },
+          })
         })
+        const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
+        orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
+          ? persistedOrder : message.createdAt.getTime()
         messageId = message.id
 
         await prisma.appMessageContent.upsert({

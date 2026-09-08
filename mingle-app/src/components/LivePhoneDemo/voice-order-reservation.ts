@@ -3,12 +3,18 @@
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 
 type Scope = { ownerIdentity: string; apiNamespace: string; sessionKey: string; clientMessageId: string }
-const reservations = new Map<string, { expiresAt: number; promise: Promise<string | null> }>()
+const reservations = new Map<string, { expiresAt: number; promise: Promise<string | null>; receipt?: string }>()
 const keyOf = (s: Scope) => JSON.stringify([s.ownerIdentity, s.apiNamespace, s.sessionKey, s.clientMessageId])
 
 export function rememberLiveVoiceOrder(scope: Scope, receipt: string): void {
+  if (getVoiceOrderReceipt(scope)) return
   if (reservations.size >= 200) reservations.delete(reservations.keys().next().value!)
-  reservations.set(keyOf(scope), { expiresAt: Date.now() + 30 * 60_000, promise: Promise.resolve(receipt) })
+  reservations.set(keyOf(scope), { expiresAt: Date.now() + 30 * 60_000, promise: Promise.resolve(receipt), receipt })
+}
+
+export function getVoiceOrderReceipt(scope: Scope): string | undefined {
+  const entry = reservations.get(keyOf(scope))
+  return entry && entry.expiresAt > Date.now() ? entry.receipt : undefined
 }
 
 export function reserveVoiceOrder(scope: Scope, endpoint: string, trackingUserId: string): void {
@@ -31,9 +37,10 @@ export function reserveVoiceOrder(scope: Scope, endpoint: string, trackingUserId
   })).then(async response => {
     if (!response.ok) return null
     const body = await response.json()
-    return typeof body.orderReceipt === 'string' ? body.orderReceipt : null
+    if (typeof body.orderReceipt === 'string') rememberLiveVoiceOrder(scope, body.orderReceipt)
+    return getVoiceOrderReceipt(scope) ?? null
   }).catch(() => null)
-  const promise = Promise.race([request, timeout]).finally(() => clearTimeout(timer))
+  const promise = Promise.race([request, timeout]).then(receipt => getVoiceOrderReceipt(scope) ?? receipt).finally(() => clearTimeout(timer))
   reservations.set(key, { expiresAt: Date.now() + 30 * 60_000, promise })
 }
 

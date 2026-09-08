@@ -9,6 +9,9 @@ export type PreviewEvent = {
 // A server message with the same ID replaces the preview without another row.
 export class RemotePreviews {
   private records = new Map<string, PreviewEvent>()
+  // Order outlives the disposable preview, including local finalization before
+  // the DB acknowledgement. This cache is scoped to the account and room hook.
+  private orders = new Map<string, { time: number; until: number }>()
   accept(event: PreviewEvent): boolean {
     if (!event.utterance?.id || !event.utterance.speakerUserId || !Number.isFinite(event.revision)
       || !Number.isFinite(event.expiresAt) || typeof event.utterance.originalText !== 'string') return false
@@ -17,15 +20,28 @@ export class RemotePreviews {
     if (previous && (previous.revision >= event.revision || (previous.final && !event.final))) return false
     if (this.records.size >= 100 && !this.records.has(key)) this.records.delete(this.records.keys().next().value!)
     this.records.set(key, event)
+    const knownOrder = this.orders.get(key)
+    if (knownOrder) {
+      knownOrder.until = Date.now() + 30 * 60_000
+    } else if (typeof event.utterance.createdAtMs === 'number' && Number.isFinite(event.utterance.createdAtMs) && event.utterance.createdAtMs > 0) {
+      if (this.orders.size >= 1000) this.orders.delete(this.orders.keys().next().value!)
+      this.orders.set(key, { time: event.utterance.createdAtMs, until: Date.now() + 30 * 60_000 })
+    }
     return !previous || previous.final !== event.final || JSON.stringify(previous.utterance) !== JSON.stringify(event.utterance)
   }
-  clear(): void { this.records.clear() }
+  clear(): void { this.records.clear(); this.orders.clear() }
   orderFor(userId: string | null | undefined, id: string): number | undefined {
-    return this.records.get(JSON.stringify([userId, id]))?.utterance.createdAtMs
+    return this.orders.get(JSON.stringify([userId, id]))?.time
+  }
+  applyOrder(utterance: Utterance): Utterance {
+    const time = this.orderFor(utterance.speakerUserId, utterance.id)
+    return !utterance.serverMessageId && time !== undefined && utterance.serverCreatedAtMs !== time
+      ? { ...utterance, serverCreatedAtMs: time } : utterance
   }
   expire(now = Date.now()): boolean {
     let changed = false
     for (const [key, event] of this.records) if (event.expiresAt <= now) { this.records.delete(key); changed = true }
+    for (const [key, order] of this.orders) if (order.until <= now) this.orders.delete(key)
     return changed
   }
   visible(committed: readonly Utterance[], viewerUserId?: string | null, now = Date.now()): Utterance[] {
@@ -35,7 +51,7 @@ export class RemotePreviews {
       if (committed.some(u => u.id === event.utterance.id)) { this.records.delete(key); continue }
       if (event.utterance.speakerUserId === viewerUserId) continue
       const knownSpeaker = committed.find(u => u.speakerUserId === event.utterance.speakerUserId)
-      result.push({ ...event.utterance, serverCreatedAtMs: event.utterance.createdAtMs, speakerImage: knownSpeaker?.speakerImage ?? null })
+      result.push({ ...this.applyOrder(event.utterance), speakerImage: knownSpeaker?.speakerImage ?? null })
     }
     return result
   }

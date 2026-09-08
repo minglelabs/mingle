@@ -1,5 +1,20 @@
 import type { RealtimeTokenPayload } from './realtime-token';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
+
+type OrderScope = { sessionKey: string; userId: string; clientMessageId: string };
+function readReceiptTime(value: unknown, scope: OrderScope, secret: string): number | null {
+    if (typeof value !== 'string' || value.length > 4096) return null;
+    try {
+        const [body, signature, extra] = value.split('.');
+        if (!body || !signature || extra !== undefined) return null;
+        const expected = createHmac('sha256', secret).update(`mingle-voice-order-v1:${body}`).digest('base64url');
+        if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+        const data = JSON.parse(Buffer.from(body, 'base64url').toString());
+        const time = data.startedAtMs;
+        return data.sessionKey === scope.sessionKey && data.userId === scope.userId && data.clientMessageId === scope.clientMessageId
+            && Number.isSafeInteger(time) && time > 0 && time <= Date.now() && Date.now() - time <= 30 * 86400_000 ? time : null;
+    } catch { return null; }
+}
 
 export type LiveFrame = {
     type: 'utterance_preview'; sessionKey: string; revision: number; expiresAt: number;
@@ -14,10 +29,23 @@ export type LiveFrame = {
 export class LiveUtterances {
     private turns = new Map<string, { sequence: number; final: boolean; createdAtMs: number; until: number; committed?: boolean }>();
 
+    // HTTP reservation and the first WebSocket frame share this authority.
+    // A signed receipt also restores order after reconnect/service restart.
+    reserveOrder(scope: OrderScope, secret: string, receipt?: unknown): { orderReceipt: string; startedAtMs: number } {
+        this.prune();
+        const key = JSON.stringify([scope.sessionKey, scope.userId, scope.clientMessageId]);
+        const previous = this.turns.get(key);
+        const startedAtMs = previous?.createdAtMs ?? readReceiptTime(receipt, scope, secret) ?? Date.now();
+        if (!previous) this.turns.set(key, { sequence: -1, final: false, createdAtMs: startedAtMs, until: Date.now() + 30 * 60_000 });
+        const body = Buffer.from(JSON.stringify({ ...scope, startedAtMs })).toString('base64url');
+        return { startedAtMs, orderReceipt: `${body}.${createHmac('sha256', secret).update(`mingle-voice-order-v1:${body}`).digest('base64url')}` };
+    }
+
     commit(sessionKey: string, userId: string, id: string): void {
         this.prune();
-        this.turns.set(JSON.stringify([sessionKey, userId, id]), {
-            sequence: Infinity, final: true, committed: true, createdAtMs: Date.now(), until: Date.now() + 30 * 60_000,
+        const key = JSON.stringify([sessionKey, userId, id]);
+        this.turns.set(key, {
+            sequence: Infinity, final: true, committed: true, createdAtMs: this.turns.get(key)?.createdAtMs ?? Date.now(), until: Date.now() + 30 * 60_000,
         });
     }
 
@@ -39,7 +67,8 @@ export class LiveUtterances {
         const key = JSON.stringify([writer.sessionKey, writer.userId, id]);
         const previous = this.turns.get(key);
         if (previous && (previous.committed || Number(sequence) <= previous.sequence || (previous.final && input.final !== true))) return null;
-        const createdAtMs = previous?.createdAtMs ?? Date.now();
+        const order = secret ? this.reserveOrder({ sessionKey: writer.sessionKey, userId: writer.userId, clientMessageId: id }, secret, input.orderReceipt) : null;
+        const createdAtMs = order?.startedAtMs ?? previous?.createdAtMs ?? Date.now();
         const final = input.final === true;
         const expiresAt = Date.now() + (final ? 120_000 : 15_000);
         const translations: Record<string, string> = {};
@@ -49,8 +78,7 @@ export class LiveUtterances {
             }
         }
         this.turns.set(key, { sequence: Number(sequence), final, createdAtMs, until: Date.now() + 30 * 60_000 });
-        const body = Buffer.from(JSON.stringify({ userId: writer.userId, sessionKey: writer.sessionKey, clientMessageId: id, startedAtMs: createdAtMs })).toString('base64url');
-        const orderReceipt = secret ? `${body}.${createHmac('sha256', secret).update(`mingle-voice-order-v1:${body}`).digest('base64url')}` : undefined;
+        const orderReceipt = order?.orderReceipt;
         return { type: 'utterance_preview', sessionKey: writer.sessionKey, revision: Number(sequence), expiresAt, final, orderReceipt,
             utterance: { id, originalText: text, originalLang: typeof input.originalLang === 'string' ? input.originalLang.slice(0, 20) : 'unknown',
                 translations, speakerUserId: writer.userId, speakerName: writer.liveWriter.name, createdAtMs } };

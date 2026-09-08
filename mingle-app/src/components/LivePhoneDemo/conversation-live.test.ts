@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
-import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState } from './use-realtime-stt'
+import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances } from './use-realtime-stt'
 import { LiveUtterances } from '../../../../mingle-messaging/live-utterances'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 
@@ -9,6 +9,63 @@ const preview = (revision: number, final = false): PreviewEvent => ({ type: 'utt
   final, expiresAt: Date.now() + 15000, utterance: { ...utterance, createdAtMs: 1000 } })
 
 describe('remote live message lifecycle', () => {
+  it.each([0, 50])('keeps both phones in the same order through opposite finalization, translation, and cached hydration (gap %s)', gap => {
+    const alice = { ...utterance, id: 'client-z', createdAtMs: 9000 }
+    const bob = { ...utterance, id: 'client-a', speakerUserId: 'bob', createdAtMs: 1 }
+    const timeFor = (userId?: string | null) => 1000 + (userId === 'bob' ? gap : 0)
+    const expected = gap === 0 ? ['client-a', 'client-z'] : ['client-z', 'client-a']
+    // Equal server timestamps exercise the tie-breaker too. Local clocks and
+    // database IDs deliberately disagree with the shared message identity.
+    for (const viewer of ['alice', 'bob']) {
+      const previews = new RemotePreviews()
+      for (const u of [alice, bob]) previews.accept({ ...preview(1), utterance: { ...u, createdAtMs: timeFor(u.speakerUserId) } })
+      let state = createUtteranceStoreState([])
+      let localLive = [viewer === 'alice' ? alice : bob]
+      const display = () => mergeDisplayUtterances({ utterances: state.utterances,
+        liveUtterances: [...localLive.map(u => previews.applyOrder(u)), ...previews.visible(state.utterances, viewer)] }).map(u => u.id)
+      expect(display()).toEqual(expected)
+      // Local final replaces the preview before the DB response.
+      state = appendFinalizedUtteranceToStoreState(state, previews.applyOrder(localLive[0]))
+      localLive = []
+      expect(display()).toEqual(expected)
+      // Disposing the preview must not dispose its order reservation.
+      expect(previews.orderFor(viewer, state.utterances[0].id)).toBe(timeFor(viewer))
+      const snapshots = [alice, bob].map((u, i) => ({ ...u, serverCreatedAtMs: timeFor(u.speakerUserId), serverMessageId: `db-${i}`, originalText: 'finished' }))
+      for (const snapshot of viewer === 'alice' ? snapshots : [...snapshots].reverse()) {
+        state = mergeServerHydrationUtteranceIntoStoreState(state, snapshot)
+        expect(display()).toEqual(expected)
+      }
+      for (const snapshot of snapshots) {
+        state = mergeServerHydrationUtteranceIntoStoreState(state, { ...snapshot, translations: { ko: '완료' } })
+        expect(display()).toEqual(expected)
+      }
+      state = createUtteranceStoreState(normalizeConversationHydrationUtterances(JSON.parse(JSON.stringify(state.utterances))))
+      expect(display()).toEqual(expected)
+    }
+  })
+
+  it('retains reserved order in a pre-DB cache after disposing the preview', () => {
+    const remote = new RemotePreviews()
+    remote.accept(preview(1))
+    const finalized = remote.applyOrder(utterance)
+    expect(finalized.serverCreatedAtMs).toBe(1000)
+    remote.visible([finalized], 'alice')
+    expect(remote.applyOrder({ ...utterance, createdAtMs: 5000 }).serverCreatedAtMs).toBe(1000)
+    expect(normalizeConversationHydrationUtterances([finalized])[0].serverCreatedAtMs).toBe(1000)
+    remote.clear()
+    expect(remote.orderFor('alice', 'voice')).toBeUndefined()
+  })
+
+  it('applies the first echo to a turn already finalized locally without losing text or translation', () => {
+    const remote = new RemotePreviews()
+    const finalized = { ...utterance, originalText: 'finished', translations: { ko: '완료' } }
+    remote.accept(preview(1))
+    expect(remote.applyOrder(finalized)).toMatchObject({
+      serverCreatedAtMs: 1000, originalText: 'finished', translations: { ko: '완료' },
+    })
+    const persisted = { ...finalized, serverCreatedAtMs: 999, serverMessageId: 'db-1' }
+    expect(remote.applyOrder(persisted)).toBe(persisted)
+  })
   it('shows speech before any DB message, rejects regression, then replaces it with one translated committed bubble', () => {
     const remote = new RemotePreviews()
     remote.accept(preview(1))

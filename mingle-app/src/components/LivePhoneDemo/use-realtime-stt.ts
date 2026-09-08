@@ -1,7 +1,7 @@
 'use client'
 
 import { compareUtteranceOrder } from './utterance-order'
-import { reserveVoiceOrder, rememberLiveVoiceOrder } from './voice-order-reservation'
+import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 import { nativeStopIntent } from './native-stop-intent'
 import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
 
@@ -1003,7 +1003,7 @@ function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationH
   }
 }
 
-function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utterance[] {
+export function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utterance[] {
   if (!Array.isArray(rawUtterances)) return []
 
   return rawUtterances
@@ -1033,8 +1033,9 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
           : {},
         createdAtMs: typeof record.createdAtMs === 'number' ? record.createdAtMs : undefined,
         ...(typeof record.serverCreatedAtMs === 'number' && Number.isFinite(record.serverCreatedAtMs)
-          && record.serverCreatedAtMs > 0 && typeof record.serverMessageId === 'string' ? {
-            serverCreatedAtMs: record.serverCreatedAtMs, serverMessageId: record.serverMessageId,
+          && record.serverCreatedAtMs > 0 ? {
+            serverCreatedAtMs: record.serverCreatedAtMs,
+            ...(typeof record.serverMessageId === 'string' ? { serverMessageId: record.serverMessageId } : {}),
           } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
@@ -2385,6 +2386,10 @@ export function mergeServerHydrationUtteranceIntoStoreState(
     : {
         ...normalizedServerUtterance,
         createdAtMs: existingCreatedAtMs,
+        ...(normalizedServerUtterance.serverCreatedAtMs === undefined && existingUtterance?.serverCreatedAtMs !== undefined
+          ? { serverCreatedAtMs: existingUtterance.serverCreatedAtMs } : {}),
+        ...(normalizedServerUtterance.serverMessageId === undefined && existingUtterance?.serverMessageId !== undefined
+          ? { serverMessageId: existingUtterance.serverMessageId } : {}),
         // Source delivery is now independent of translation. A raw server
         // snapshot must not erase the final translation already rendered here.
         ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
@@ -3814,7 +3819,19 @@ export default function useRealtimeSTT({
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
                   sessionKey: socketSessionKey, clientMessageId: frame.utterance.id }, frame.orderReceipt)
               }
-              if (remotePreviews.accept(frame as PreviewEvent)) setRemotePreviewVersion(v => v + 1)
+              if (remotePreviews.accept(frame as PreviewEvent)) {
+                setRemotePreviewVersion(v => v + 1)
+                // A very short turn can finalize before its first echo arrives.
+                // Carry the same order into that local row, not just live JSX.
+                setUtteranceStore(current => {
+                  const existing = current.utterances.find(u => u.id === frame.utterance.id)
+                  if (!existing) return current
+                  const ordered = remotePreviews.applyOrder(existing)
+                  return ordered === existing ? current : {
+                    ...current, utterances: appendOrReplaceUtterance(current.utterances, ordered),
+                  }
+                })
+              }
               return
             }
             if (frame.type === 'utterance_committed') {
@@ -3845,7 +3862,9 @@ export default function useRealtimeSTT({
       if (cancelled) return
       livePreviewSender.flush(frame => {
         if (!writerToken || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount > 256_000) return false
-        socket.send(JSON.stringify({ ...frame, writerToken }))
+        const orderReceipt = getVoiceOrderReceipt({ ownerIdentity: clientMessageOutboxOwnerIdentity,
+          apiNamespace: finalizationApiNamespace, sessionKey: socketSessionKey, clientMessageId: String(frame.id) })
+        socket.send(JSON.stringify({ ...frame, writerToken, orderReceipt }))
         return true
       })
       // Also expires abandoned drafts if a sender disconnects mid-sentence.
@@ -4557,6 +4576,7 @@ export default function useRealtimeSTT({
       previousStateSourceText: options?.previousStateSourceText,
     })
     if (!localPayload) return null
+    localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
       previousExpiresAt: stopFinalizeDedupRef.current.expiresAt,
@@ -4603,7 +4623,7 @@ export default function useRealtimeSTT({
       speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
       speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
-  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, effectiveViewerUserId, effectiveViewerImage])
+  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, effectiveViewerUserId, effectiveViewerImage, remotePreviews])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null

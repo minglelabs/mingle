@@ -164,6 +164,19 @@ export async function handleConversationEventsPublish(
 
     const record = body as Record<string, unknown>;
     const sessionKey = typeof record?.sessionKey === 'string' ? record.sessionKey.trim() : '';
+    if (record?.reserveOrder === true) {
+        const userId = record.userId;
+        const clientMessageId = record.clientMessageId;
+        if (!sessionKey || sessionKey.startsWith('list:') || typeof userId !== 'string' || !userId
+            || typeof clientMessageId !== 'string' || !clientMessageId || clientMessageId.length > 128) {
+            response.writeHead(400, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'invalid_payload' }));
+            return;
+        }
+        response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        response.end(JSON.stringify(bus.liveUtterances.reserveOrder({ sessionKey, userId, clientMessageId }, normalizedSecret, record.orderReceipt)));
+        return;
+    }
     const extraKeys = Array.isArray(record?.keys)
         ? record.keys
             .filter((key): key is string => typeof key === 'string' && key.trim() !== '')

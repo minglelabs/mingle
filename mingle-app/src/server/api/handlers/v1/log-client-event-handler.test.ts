@@ -3,6 +3,9 @@ import { NextRequest } from "next/server";
 
 const {
   mockAppMessageUpsert,
+  mockAppMessageFindUnique,
+  mockOrderLock,
+  mockReserveConversationVoiceOrder,
   mockAppMessageContentUpsert,
   mockAppEventLogFindFirst,
   mockCreateTrackedEventLog,
@@ -18,6 +21,9 @@ const {
   mockMemberCount,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
+  mockAppMessageFindUnique: vi.fn(),
+  mockOrderLock: vi.fn(),
+  mockReserveConversationVoiceOrder: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockCreateTrackedEventLog: vi.fn(),
@@ -47,6 +53,10 @@ vi.mock("@/lib/request-user-identity", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: (run: (tx: unknown) => unknown) => run({
+      $queryRaw: mockOrderLock,
+      appMessage: { upsert: mockAppMessageUpsert, findUnique: mockAppMessageFindUnique },
+    }),
     appConversationChannelMember: { count: mockMemberCount },
     appMessage: {
       upsert: mockAppMessageUpsert,
@@ -76,6 +86,7 @@ vi.mock("@/server/conversation-auto-title", () => ({
 
 vi.mock("@/server/conversation-realtime", () => ({
   notifyConversationMessage: mockNotifyConversationMessage,
+  reserveConversationVoiceOrder: mockReserveConversationVoiceOrder,
 }));
 
 vi.mock("@/server/push-notifications", () => ({
@@ -89,11 +100,15 @@ vi.mock("@/lib/app-conversations", () => ({
 }));
 
 import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-event-handler";
+import { mintVoiceOrderReceipt } from '@/lib/voice-order-receipt';
 
 describe("handleLogClientEventV1", () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppMessageFindUnique.mockResolvedValue(null);
+    mockOrderLock.mockResolvedValue([{ locked: true }]);
+    mockReserveConversationVoiceOrder.mockImplementation(async scope => mintVoiceOrderReceipt(scope));
     mockEnsureTrackingContext.mockReturnValue({
       externalUserId: "anon_device",
       sessionKey: "sess_123",
@@ -130,6 +145,38 @@ describe("handleLogClientEventV1", () => {
     expect(write.update.createdAt).toBeUndefined();
     mockIsMessageSenderBlockedInConversation.mockResolvedValue(true);
     expect((await handleLogClientEventV1(request({ eventType: 'stt_turn_started', reserveOrder: true }))).status).toBe(403);
+  });
+
+  it.each([undefined, 1700000000000])('keeps persisted order for missing or different receipts on translation retries: %s', async savedOrder => {
+    vi.stubEnv('MINGLE_REALTIME_SECRET', 'test-only');
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(['user_123', 'user_456']);
+    const createdAt = new Date('2026-04-12T09:00:00.000Z');
+    mockAppMessageFindUnique.mockResolvedValue({ createdAt, metadata: savedOrder ? { orderStartedAtMs: savedOrder } : {} });
+    mockAppMessageUpsert.mockImplementation(async args => ({ id: 'message_123', createdAt, metadata: args.update.metadata }));
+    const receipt = mintVoiceOrderReceipt({ userId: 'user_123', sessionKey: 'sess_123', clientMessageId: 'voice_1' });
+    for (const orderReceipt of [undefined, receipt]) {
+      const response = await handleLogClientEventV1(new NextRequest('https://example.com/api/ios/v2.0.3/log/client-event', {
+        method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1', eventType: 'stt_turn_finalized',
+          sourceText: 'hello', sourceLanguage: 'en', translations: { ko: '안녕' }, translationUpdate: true, orderReceipt }),
+      }));
+      expect(response.status).toBe(200);
+      expect(mockAppMessageUpsert.mock.lastCall?.[0].update.metadata.orderStartedAtMs).toBe(savedOrder ?? createdAt.getTime());
+      expect(mockNotifyConversationMessage.mock.lastCall?.[2].serverCreatedAtMs).toBe(savedOrder ?? createdAt.getTime());
+    }
+    expect(mockOrderLock).toHaveBeenCalledTimes(2);
+    expect(mockOrderLock.mock.invocationCallOrder[0]).toBeLessThan(mockAppMessageFindUnique.mock.invocationCallOrder[0]);
+    expect(mockAppMessageFindUnique.mock.invocationCallOrder[0]).toBeLessThan(mockAppMessageUpsert.mock.invocationCallOrder[0]);
+  });
+
+  it('resolves a live reservation when finalization beats the first socket echo', async () => {
+    vi.stubEnv('MINGLE_REALTIME_SECRET', 'test-only');
+    const order = Date.now() - 12000;
+    mockReserveConversationVoiceOrder.mockResolvedValue(mintVoiceOrderReceipt({ userId: 'user_123', sessionKey: 'sess_123', clientMessageId: 'voice_1' }, order));
+    await handleLogClientEventV1(new NextRequest('https://example.com/api/ios/v2.0.3/log/client-event', {
+      method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1', eventType: 'stt_turn_finalized',
+        sourceText: 'hello', sourceLanguage: 'en', translationPending: true }),
+    }));
+    expect(mockAppMessageUpsert.mock.lastCall?.[0].create.metadata.orderStartedAtMs).toBe(order);
   });
 
   it("publishes translations before waiting for optional title generation", async () => {
