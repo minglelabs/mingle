@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-08 - Diagnose recurring iOS Stop/Start control flicker
+
+- Observation: Pressing Stop briefly shows Start, then Stop again, then Start, particularly on iOS. This investigation reads current source/history only; it does not establish physical microphone restart or measure the reported 100-ms transitions on a device.
+- Existing protection remains: The May 25 stop-pending status/activity guards from `1908e2de` are still present. Recent voice-order/translation/entry changes did not remove them.
+- Lifecycle mismatch: iOS NativeSTTModule.stop calls beginGracefulStop and immediately resolves the native promise while its socket remains alive for trailing transcripts/stop_recording_ack. React Native handleNativeStop treats that promise resolution as completion and emits stopped with stopping:false. The WebView's idle-status handler clears nativeStopRequested and resolves the pending stop; the awaiting stop routine then clears isStopping. These protections are therefore gone before native cleanup necessarily finishes.
+- Re-entry path: iOS emits raw messages with conversation ID but no session-generation ID/event sequence. Once the early stopped event clears the active identity, these untagged trailing messages are not rejected by the retired-session filter. The WebView promotes idle to ready for any accepted native message BEFORE inspecting whether it is merely stop_recording_ack. Swift itself emits that ack message before calling finishGracefulStop/close, so even an acknowledgement can create the observed ready/idle flash. No new Start command or microphone restart is required for this UI transition.
+- Historical interaction: The explicit RN stopped notification was added in `1efd5d1e` (conversation-scoped native sessions), and later restart/handoff work (`91a6e9f3`, `b367ae93`) added/refined idle-driven stop completion. Android has session IDs, status sequences, and explicit stopping metadata that reduce exposure; the shared acknowledgement/promotion logic still deserves regression coverage there.
+- Proposed correction: Distinguish stop request acceptance from actual capture/transport termination; preserve stop intent until a genuine terminal lifecycle event. Parse control messages before promoting activity and never let stop acknowledgements promote ready. Identify retired generations end-to-end and allow final transcript persistence without reopening the UI. Add an ordered integration regression covering tap, early native promise completion, trailing final text/ack, close, and an intentional subsequent Start, rather than testing only guards with isStopping=true.
+- Scope: Diagnosis recorded only; no product/native code, installation, configuration, or production data changes were made.
+
 ## 2026-09-08 - Remove the translation waiting label
 
 - User request: Remove the visible translation-pending/original-fallback explanatory text from message bubbles.
