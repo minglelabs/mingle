@@ -2163,3 +2163,54 @@
 - Scope boundary: This fixes repeated reordering after a shared order has been received. Optimistic device-local messages can still reconcile once when they first receive server order, including after an offline interval. Guaranteeing zero movement before any server acknowledgement while also guaranteeing identical order on both devices would require delaying initial shared-message placement; this change does not introduce that delay.
 - Deployment: Deploy the updated web app and messaging service together. No native rebuild, app/API version change, environment variable, Prisma migration, or historical-data rewrite is required. PR #211 was already merged; this follow-up is committed to `codex/messenger-client-sot-2.0.1` and is not automatically included in that prior merge. No service-branch merge or production deployment was performed for this follow-up.
 - Subsequent user-directed integration: Applied only this fix from `6a48c1be` directly to `codex/messenger-tabs-device-test`, after fast-forwarding its clean local worktree to the already-merged PR #211. The cherry-pick was conflict-free and its resulting code tree matched the tested source tree. Pushing the service branch requests its normal automatic deployment; deployment completion is a separate runtime status.
+
+## 2026-09-08 — Search tab scroll boundaries and keyboard handling
+
+- Report: [Search tab scroll area and keyboard issue](https://app.notion.com/p/roycenam/3d122e3ed20a80ceb402fa52755319d9). Long search results moved the search header and bottom tabs along with the results.
+- Branch: `codex/search-scroll-keyboard`, based on `origin/codex/messenger-tabs-device-test` at `9c94e666`.
+- Root causes:
+  - The 400px mobile canvas scales down on narrow screens, leaving a layout box taller than its visible shell. `overflow: hidden` still permits programmatic/focus scrolling. A result button receiving focus scrolled the outer shell by 19px at 360px width, moving the header above the viewport and the tabs away from the bottom.
+  - The search page did not track the visual viewport when the keyboard covered part of the screen.
+  - The native iOS layout route list omitted `/connect`, leaving whole-WebView scrolling, bouncing, and the keyboard accessory enabled on search.
+- Resolution:
+  - Use `overflow: clip` for the search page and its canvas ancestors, scoped to search, while retaining the result list as the scroll container with contained overscroll.
+  - Observe visual viewport resize/scroll and parent resize, convert visible pixels to canvas coordinates, and cap page height to the parent. Android WebView resizing does not cause a second keyboard-height subtraction. Clean up listeners, the observer, and scheduled frames on unmount.
+  - Submit the search form to dismiss the keyboard without navigating or clearing the query. Dismiss on result-list dragging, result selection, and bottom-tab selection. Keep clear-and-refocus behavior and reset the result scroll offset when editing the query.
+  - Apply the existing iOS fixed-screen scroll and keyboard-accessory policy to localized search routes.
+- Validation:
+  - 34 Vitest checks passed for viewport geometry/lifecycle, native layout routes, mobile canvas scaling, search cache, and tab navigation. ESLint and the full web TypeScript check passed.
+  - Browser verification used the actual search component, viewport observer, bottom tabs, and generated application CSS with 20 synthetic users and mocked authentication/network responses, served through this worktree's local devbox.
+  - At 390x844, the results reached scroll offset 635.5px while the header stayed at 0 and tabs stayed at 844px. At 360x740, focusing a bottom result kept the outer shell at scroll offset 0 and the header at 0, fixing the reproduced 19px displacement.
+  - A simulated 300px keyboard reduction moved the tabs to 440px on the 740px screen; closing restored their position. Search submission blurred the input, changing the query reset the result offset to 0, and a follow action completed with one click while the input had focus.
+- Limits: Browser keyboard geometry was simulated; physical iOS/Android keyboards and touch dragging were not exercised. The iOS WebView policy change requires a rebuilt native app. No release or production deployment was performed; app/API namespaces remain at 2.0.3.
+
+## 2026-09-08 — Hide search tabs while the keyboard is open on both platforms
+
+- User clarification: The keyboard should cover the bottom tabs on both iOS and Android. The search header must remain fixed. This supersedes the earlier behavior that raised the bottom tabs above the keyboard.
+- Change: Hide the search tab bar while a focused search field reduces the available viewport by more than 100px. The result list fills the space above the keyboard. Restore tabs after viewport recovery, including when Android Back closes the keyboard without blurring the input. Keep tabs hidden if blur precedes the keyboard-closing resize.
+- Platform handling: Remember the unobscured viewport height so Android `adjustResize` is detected even when `innerHeight` and `visualViewport.height` both shrink. iOS overlay keyboards use the same observer. Small toolbar changes and hardware-keyboard focus do not hide tabs. Width changes reset the height reference.
+- Validation: 35 targeted tests passed, including separate iOS-overlay and Android-resize lifecycles, plus ESLint and the full web TypeScript check. In the devbox browser fixture at 390x844, a simulated 300px keyboard hid the tabs and let results extend to 544px; closing restored tabs at 844px. The header remained at y=0 in both states, and tabs restored while the input remained focused.
+- Limits: Physical-device keyboards were not tested. No additional native code or app/API version change is introduced by this follow-up.
+
+### Device installation follow-up
+
+- Installed and launched this branch on the wired iPhone 11 Pro and Galaxy S9 on 2026-09-08. Both devices received clean installs; Android required uninstalling the previous package because its signing certificate differed.
+- The devbox web, STT, and messaging servers run from the search-scroll-keyboard worktree using 73 runtime values read from `secret/mingle/prod`. Cloudflare named-tunnel bridges route to local ports 5538, 7538, and 9538. Servers and the connector remain running for user testing.
+- Verified the installed iOS app is 2.0.3 (105) with `ios/v2.0.3`, and Android is 2.0.3 (97) with `android/v2.0.3`. Both built apps point to `mingle-app-devbox.photo-for-passport.com` and `mingle-stt-devbox.photo-for-passport.com`.
+- Confirmed both native app processes are running, the web tunnel returns HTTP 200, the STT tunnel accepts a WebSocket handshake, and messaging health reports realtime configuration active. Physical keyboard behavior has not yet been exercised after login; the clean installs require signing in again.
+
+## 2026-09-08 — Preserve native Google login attempts through auth-screen recreation
+
+- Report: Google login did not complete in the freshly installed Android app.
+- Evidence: The devbox server recorded a successful Google OAuth callback and native-auth completion for the original Android request, while subsequent pending-result polls used different request IDs. This supports a lost/replaced client attempt; the exact device-side trigger was not captured. The custom callback scheme resolves to the installed Mingle activity, and the server completed Google authentication, so an OAuth client/signature rejection was not the observed failure.
+- Code defects addressed: The auth-session reset effect stopped polling and cleared the loading state even when an external native login was still active. A login-screen remount lost its request/provider refs, and another Continue action could replace the request before the native browser completed it.
+- Resolution: Preserve active attempts across unauthenticated session refreshes, reject duplicate starts synchronously, and retain only request ID/provider/start time in sessionStorage so a recreated screen resumes polling without reopening OAuth. Retire the saved attempt on completion/error; expire abandoned saved requests after the native browser's three-minute timeout. No bridge token or account credentials are persisted by this recovery mechanism.
+- Validation: 15 targeted auth tests passed. In a browser fixture using the actual MingleHome component under React StrictMode and mocked OAuth, one start retained the same request across remount and loading-to-unauthenticated transitions; the completion event invoked signIn exactly once. Targeted ESLint and source TypeScript checks passed. The full generated Next route check is blocked by the pre-existing exported `upsertNativeAppleUser` helper in the Apple exchange route, outside this change.
+- Device handoff: The existing prod-Vault devbox server serves the fix. Android was restarted without deleting app data; a real Google account retry is still needed to confirm the end-to-end outcome. No native rebuild or production deployment was performed for this auth follow-up.
+
+## 2026-09-08 — Keep search tabs hidden through keyboard rotation
+
+- PR review issue: Android `adjustResize` reports keyboard-reduced heights after rotation. Resetting the unobscured reference to that height incorrectly restored the bottom tabs above the open keyboard.
+- Resolution: Preserve keyboard detection through width changes and remember unobscured heights by viewport width. For a previously unseen orientation while the keyboard is open, use the previous width as an estimated unobscured height, allowing the existing 100px system-bar tolerance. Do not retain the old portrait height in landscape, which would prevent tab restoration on keyboard dismissal.
+- Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
+- Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
