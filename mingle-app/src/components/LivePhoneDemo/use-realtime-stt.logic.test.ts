@@ -406,6 +406,35 @@ describe('use-realtime-stt pure logic', () => {
     ])
   })
 
+  it('keeps a completed local translation when the source-only delivery snapshot arrives late', () => {
+    const local = { id: 'durable-one', originalText: '안녕하세요', originalLang: 'ko',
+      translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local, translations: {}, translationFinalized: {}, createdAtMs: 200,
+    })
+    expect(next.utterances[0]).toMatchObject({ translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 })
+  })
+
+  it('preserves the room store reference when server hydration is unchanged', () => {
+    const utterance = {
+      id: 'u-server',
+      originalText: 'same source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'same translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 2,
+    }
+    const store = createUtteranceStoreState([utterance])
+
+    expect(mergeServerHydrationUtteranceIntoStoreState(store, {
+      ...utterance,
+      targetLanguages: [...utterance.targetLanguages],
+      translations: { ...utterance.translations },
+      translationFinalized: { ...utterance.translationFinalized },
+    })).toBe(store)
+  })
+
   it('preserves local speech order when server persistence time would move a finalized turn', () => {
     const localCreatedAtMs = 1700000000004
     const liveCreatedAtMs = 1700000000005

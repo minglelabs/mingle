@@ -55,14 +55,16 @@ function buildConversation(): ConversationChannelSummary {
 
 describe("conversation list cache", () => {
   let cache: ConversationListCacheModule;
+  let localStorage: Storage;
   let sessionStorage: Storage;
 
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-15T12:30:00.000Z"));
+    localStorage = createStorage();
     sessionStorage = createStorage();
     vi.stubGlobal("window", {
-      localStorage: createStorage(),
+      localStorage,
       sessionStorage,
     });
     vi.resetModules();
@@ -135,7 +137,7 @@ describe("conversation list cache", () => {
     });
   });
 
-  it("restores the snapshot from session storage after the module memory is recreated", async () => {
+  it("restores the snapshot from durable local storage after the module memory is recreated", async () => {
     const identity = {
       apiNamespace: "android/v2.0.0",
       authenticatedUserId: "user-2",
@@ -156,6 +158,25 @@ describe("conversation list cache", () => {
         "conv-1": { usageSec: 120, messageCount: 431 },
       },
     });
+  });
+
+  it("migrates a valid legacy session snapshot into durable local storage", async () => {
+    const identity = {
+      apiNamespace: "ios/v2.0.0",
+      authenticatedUserId: "user-session-migration",
+    };
+    cache.writeConversationListCache(identity, [buildConversation()], {});
+    const storageKey = localStorage.key(0);
+    expect(storageKey).not.toBeNull();
+    const serialized = localStorage.getItem(storageKey!);
+    localStorage.removeItem(storageKey!);
+    sessionStorage.setItem(storageKey!, serialized!);
+
+    vi.resetModules();
+    const reloadedCache = await import("@/components/conversation-list-cache");
+
+    expect(reloadedCache.readConversationListCache(identity)?.conversations).toEqual([buildConversation()]);
+    expect(localStorage.getItem(storageKey!)).toBe(serialized);
   });
 
   it("separates snapshots by authenticated user and API namespace", () => {
@@ -181,13 +202,13 @@ describe("conversation list cache", () => {
       authenticatedUserId: "user-stale",
     };
     cache.writeConversationListCache(identity, [buildConversation()], {});
-    expect(sessionStorage.length).toBe(1);
+    expect(localStorage.length).toBe(1);
 
     vi.setSystemTime(new Date("2026-08-23T12:30:00.000Z"));
     vi.resetModules();
     const reloadedCache = await import("@/components/conversation-list-cache");
 
     expect(reloadedCache.readConversationListCache(identity)).toBeNull();
-    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
   });
 });

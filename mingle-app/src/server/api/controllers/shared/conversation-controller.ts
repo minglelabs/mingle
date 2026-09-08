@@ -8,6 +8,7 @@ import {
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
+  isMessageSenderBlockedInConversation,
   inviteMembersToConversationChannel,
   leaveConversationChannel,
   listChannelMemberUserIdsBySessionKey,
@@ -24,7 +25,8 @@ import {
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
-import { mintConversationRealtimeToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -348,10 +350,19 @@ export async function getConversationRealtimeTokenResponse(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const token = mintConversationRealtimeToken({ sessionKey, userId: resolvedUser.userId });
+  const live = request.nextUrl.searchParams.get('live') === '1';
+  const token = mintConversationRealtimeToken({ sessionKey, userId: resolvedUser.userId, ...(live ? { live } : {}) });
+  // Only upgraded callers request the live capability. Read-only subscription
+  // and older apps keep their original request/response cost and behavior.
+  let writerToken: string | null = null;
+  if (request.nextUrl.searchParams.get('live') === '1'
+    && !(await isMessageSenderBlockedInConversation({ sessionKey, userId: resolvedUser.userId }))) {
+    const sender = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
+    writerToken = mintConversationLiveWriterToken(sessionKey, resolvedUser.userId, sender?.name ?? null);
+  }
   // Realtime push is unconfigured in this environment — not an error the
   // caller needs to see, since the client falls back to polling.
-  return NextResponse.json({ token });
+  return NextResponse.json(live ? { token, writerToken, sessionKey, userId: resolvedUser.userId } : { token });
 }
 
 export async function getConversationMembersResponse(

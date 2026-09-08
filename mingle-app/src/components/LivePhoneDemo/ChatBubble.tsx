@@ -83,7 +83,10 @@ export interface Utterance {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
+  translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
+  serverCreatedAtMs?: number
+  serverMessageId?: string
 }
 
 interface ChatBubbleProps {
@@ -336,6 +339,11 @@ export function resolveInitialDisplayLanguage(
   }
 
   return availableLanguages[0] || originalLanguage
+}
+
+export function resolveSelectedBubbleLanguage(messageId: string, automaticLanguage: string,
+  selection: { messageId: string; language: string } | null): string {
+  return selection?.messageId === messageId ? selection.language : automaticLanguage
 }
 
 function ChatLanguageBadge({
@@ -639,17 +647,20 @@ function ChatBubble({
     targetLangs,
     languageOrder,
   )
-  const [displayLanguage, setDisplayLanguage] = useState(() => (
-    resolveInitialDisplayLanguage(
-      preferredDisplayLanguages?.length
-        ? preferredDisplayLanguages
-        : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
-      defaultDisplayLanguage,
-      originalDisplayLanguage,
-      targetLangs,
-      languageOrder,
-    )
-  ))
+  const automaticDisplayLanguage = resolveInitialDisplayLanguage(
+    preferredDisplayLanguages?.length
+      ? preferredDisplayLanguages
+      : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
+    defaultDisplayLanguage,
+    originalDisplayLanguage,
+    targetLangs,
+    languageOrder,
+  )
+  // Only an explicit language selection is sticky. The automatic choice must
+  // follow newly available translations after a source-only first snapshot.
+  const [selectedLanguage, setDisplayLanguage] = useState<{ messageId: string; language: string } | null>(null)
+  const selectDisplayLanguage = (language: string) => setDisplayLanguage({ messageId: utterance.id, language })
+  const displayLanguage = resolveSelectedBubbleLanguage(utterance.id, automaticDisplayLanguage, selectedLanguage)
   const activeLanguage = languageOptions.find((language) => (
     normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
   )) || originalDisplayLanguage
@@ -739,7 +750,7 @@ function ChatBubble({
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                   translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                   onSelect={() => {
-                    setDisplayLanguage(lang)
+                    selectDisplayLanguage(lang)
                   }}
                 />
               )
@@ -747,14 +758,18 @@ function ChatBubble({
           </span>
         )}
         {activeIsPending ? (
-          <span
-            data-interim-translation-cursor
-            className="inline-flex h-4 items-center gap-0.5 align-middle"
-          >
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
-          </span>
+          <>
+            <span data-current-bubble-text-value className="align-middle">{utterance.originalText}</span>
+            <span
+              data-interim-translation-cursor
+              className="inline-flex h-4 items-center gap-0.5 align-middle"
+              aria-hidden="true"
+            >
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+            </span>
+          </>
         ) : (
           <span data-current-bubble-text-value className="align-middle">
             {activeText}
@@ -865,7 +880,7 @@ function ChatBubble({
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                 translationLanguageLabel={copyActionCopy.translationLanguageLabel}
                 onSelect={() => {
-                  setDisplayLanguage(lang)
+                  selectDisplayLanguage(lang)
                 }}
               />
             )
@@ -982,7 +997,7 @@ function ChatBubble({
                   speakingPlaybackKey={speakingPlaybackKey}
                   onPlayOriginal={onPlayOriginal}
                   onPlayTranslation={onPlayTranslation}
-                  onSelectLanguage={setDisplayLanguage}
+                  onSelectLanguage={selectDisplayLanguage}
                 />
               ))}
             </div>
@@ -1129,6 +1144,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
+    if (pu.translationStatus !== nu.translationStatus) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

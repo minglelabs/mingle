@@ -8,9 +8,8 @@ import {
   ensureTrackingContext,
   parseClientContext,
   sanitizeNonNegativeInt,
-  upsertTrackedUser,
 } from '@/lib/app-analytics'
-import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
+import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -23,6 +22,7 @@ import {
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { mintVoiceOrderReceipt, verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import {
   isMessageSenderBlockedInConversation,
@@ -157,6 +157,7 @@ async function shouldSkipFinalizedTurnPersistence(args: {
 }
 
 export async function handleLogClientEventV1(request: NextRequest) {
+  const receivedAtMs = Date.now()
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>
@@ -199,10 +200,34 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
     const session = await getServerSession(getAuthOptions())
-    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
+    const userId = await resolveUserIdForTrackedWrite({
+      request,
+      session,
+      tracking,
+      clientContext,
+    })
+    if (!userId) {
+      const unauthorizedResponse = NextResponse.json(
+        { error: 'authenticated_user_required' },
+        { status: 401 },
+      )
+      ensureTrackingContext(request, unauthorizedResponse, {
+        externalUserIdHint: tracking.externalUserId,
+        sessionKeyHint: tracking.sessionKey,
+      })
+      return unauthorizedResponse
+    }
     let messageId: string | null = null
+
+    if (eventType === 'stt_turn_started' && body.reserveOrder === true && clientMessageId) {
+      if (await isMessageSenderBlockedInConversation({ sessionKey: tracking.sessionKey, userId })) {
+        return NextResponse.json({ error: 'conversation_unavailable' }, { status: 403 })
+      }
+      return NextResponse.json({ ok: true, orderReceipt: mintVoiceOrderReceipt({
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      }, receivedAtMs) })
+    }
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
       const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
@@ -230,6 +255,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      const orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, {
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      })
+      if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
       if (
@@ -285,6 +314,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           select: {
             id: true,
             createdAt: true,
+            user: { select: { name: true, image: true } },
           },
         })
         messageId = message.id
@@ -341,14 +371,6 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         }
 
-        try {
-          await maybeGenerateConversationTitleForSession({
-            sessionKey: tracking.sessionKey,
-          })
-        } catch (error) {
-          console.error('Conversation auto title generation failed:', error)
-        }
-
         // An invitee gets no DB record and can't see the room at all until
         // this, the owner's first real message — see
         // pendingInviteeUserIds' doc comment. Must run before the
@@ -358,7 +380,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // materializePendingConversationInvitees's joinedAt doc comment.
         let committedMemberUserIds: string[] | null = null
         try {
-          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          if (body.translationUpdate !== true) {
+            committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          }
           if (Array.isArray(committedMemberUserIds)) {
             console.info('[conversation-message] membership-ready', {
               messageId,
@@ -381,11 +405,37 @@ export async function handleLogClientEventV1(request: NextRequest) {
           // The publish helper absorbs transport failures, but awaiting it here
           // keeps the request alive long enough for the messaging service to
           // receive the event instead of dropping it after the response ends.
-          await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          // Retained membership rows include departed users. Match history's
+          // point-in-time attribution; a solo turn retried after an invitation
+          // must not suddenly become an account-attributed shared-room bubble.
+          const sharedAtMessage = memberUserIds.length >= 2 && await prisma.appConversationChannelMember.count({
+            where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
+              OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
+          }).then(count => count >= 2).catch(() => false)
+          if (sharedAtMessage) {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
+              id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
+              translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
+              targetLanguages: Object.keys(translations), createdAtMs: message.createdAt.getTime(),
+              serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
+              speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+            })
+          } else {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          }
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
-        if (messageId) {
+        // Translation availability must be published before optional AI title
+        // generation, which can stall independently of message delivery.
+        if (body.translationPending !== true) {
+          try {
+            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+          } catch (error) {
+            console.error('Conversation auto title generation failed:', error)
+          }
+        }
+        if (messageId && body.translationUpdate !== true) {
           try {
             await sendPushNotificationForConversationMessage({
               messageId,
@@ -424,6 +474,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
       sessionKey: tracking.sessionKey,
       messageId,
       eventType,
+      ...(body.translationUpdate === true ? { skipAnalyticsCapture: true } : {}),
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
 

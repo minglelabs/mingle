@@ -1,3 +1,13 @@
+import { compareApiNamespaceVersions, parseApiNamespaceVersion } from './api-namespace-version'
+
+// Older native shells load the same WebView, but do not implement PiP commands.
+// iOS 2.0.2 introduced the module; the already-installed 2.0.3 beta also has it.
+export function supportsNativePipNamespace(apiNamespace: string): boolean {
+  const parsed = parseApiNamespaceVersion(apiNamespace)
+  return parsed?.platform === 'ios'
+    && compareApiNamespaceVersions(parsed.version, [2, 0, 2]) >= 0
+}
+
 export type NativePipTranslation = {
   language: string
   text: string

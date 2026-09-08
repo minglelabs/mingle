@@ -12,6 +12,7 @@ const {
   mockResolveOrCreateUserIdForRequest,
   mockResolveTrackingExternalUserId,
   mockResolveTrackingSessionKey,
+  mockRequestAllowsLegacyAnonymousUser,
   mockSanitizeRequestIdentityValue,
   mockSanitizeSttLanguageSelection,
   mockUserFindMany,
@@ -26,6 +27,7 @@ const {
   mockResolveOrCreateUserIdForRequest: vi.fn(),
   mockResolveTrackingExternalUserId: vi.fn(),
   mockResolveTrackingSessionKey: vi.fn(),
+  mockRequestAllowsLegacyAnonymousUser: vi.fn(),
   mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
   mockUserFindMany: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock("@/lib/stt-languages", () => ({
 
 vi.mock("@/lib/request-user-identity", () => ({
   normalizeSessionUserIdentity: mockNormalizeSessionUserIdentity,
+  requestAllowsLegacyAnonymousUser: mockRequestAllowsLegacyAnonymousUser,
   resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
   resolveTrackingExternalUserId: mockResolveTrackingExternalUserId,
   resolveTrackingSessionKey: mockResolveTrackingSessionKey,
@@ -85,6 +88,9 @@ describe("/api/conversations route", () => {
     });
     mockResolveTrackingExternalUserId.mockReturnValue("anon_local_storage_user");
     mockResolveTrackingSessionKey.mockReturnValue("sess_local_storage_user");
+    mockRequestAllowsLegacyAnonymousUser.mockImplementation(
+      (request: Request) => request.url.includes("/v1."),
+    );
     mockResolveOrCreateUserIdForRequest.mockResolvedValue({
       userId: "tracked_user_123",
       identity: {
@@ -126,7 +132,7 @@ describe("/api/conversations route", () => {
     ]);
 
     const response = await GET(new NextRequest(
-      "https://example.com/api/conversations?view=native-list",
+      "https://example.com/api/ios/v1.1.4/conversations?view=native-list",
       {
         headers: {
           "x-mingle-user-id": "anon_local_storage_user",

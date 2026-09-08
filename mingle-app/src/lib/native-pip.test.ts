@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   parseNativePipEvent,
   postNativePipCommand,
+  supportsNativePipNamespace,
   type NativePipCommand,
 } from './native-pip'
 
@@ -25,6 +26,24 @@ afterEach(() => {
 })
 
 describe('native Picture in Picture bridge', () => {
+  it.each([
+    ['ios/v1.1.4', false],
+    ['ios/v2.0.0', false],
+    ['ios/v2.0.1', false],
+    ['ios/v2.0.2', true],
+    ['ios/v2.0.3', true],
+    ['ios/v2.1.0', true],
+    ['android/v2.0.0', false],
+    ['android/v2.0.1', false],
+    ['android/v2.0.2', false],
+    ['', false],
+    ['ios/vunknown', false],
+    ['/ios/v2.0.2/', true],
+    ['ios%2Fv2.0.2', true],
+  ])('only exposes PiP for a native namespace that implements it: %s', (namespace, expected) => {
+    expect(supportsNativePipNamespace(namespace)).toBe(expected)
+  })
+
   it('serializes a command through the React Native WebView bridge', () => {
     const postMessage = vi.fn()
     setTestWindow({ ReactNativeWebView: { postMessage } })

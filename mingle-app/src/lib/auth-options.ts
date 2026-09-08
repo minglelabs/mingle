@@ -89,7 +89,6 @@ async function upsertUserForCredentialsSignIn(args: {
         },
         update: {
           email: normalizedEmail ?? undefined,
-          externalUserId: normalizedExternalUserId ?? idHint,
           lastSeenAt: now,
         },
         select,
@@ -456,7 +455,6 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
           },
           update: {
             email: email ?? undefined,
-            externalUserId: userId,
             lastSeenAt: now,
             isActive: true,
             deactivatedAt: null,

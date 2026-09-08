@@ -1,9 +1,17 @@
 import {
   isNativeSttServerReadyMessage,
   resolveNativeSttStatusAfterStart,
+  resolveNativeSttStatusAfterStopAccepted,
 } from '../src/nativeSttStatus';
 
 describe('native STT status helpers', () => {
+  it('distinguishes iOS stop acceptance from actual termination and preserves Android completion', () => {
+    expect(resolveNativeSttStatusAfterStopAccepted('ready')).toBe('stopping');
+    expect(resolveNativeSttStatusAfterStopAccepted('stopping')).toBe('stopping');
+    expect(resolveNativeSttStatusAfterStopAccepted('closed')).toBe('closed');
+    expect(resolveNativeSttStatusAfterStopAccepted('stopped')).toBe('stopped');
+    expect(resolveNativeSttStatusAfterStopAccepted('idle')).toBe('idle');
+  });
   it('does not overwrite a server-confirmed ready status when start resolves later', () => {
     expect(resolveNativeSttStatusAfterStart('ready')).toBe('ready');
     expect(resolveNativeSttStatusAfterStart('running')).toBe('running');

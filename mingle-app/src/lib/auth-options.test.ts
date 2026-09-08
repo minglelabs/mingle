@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCreateWithDefaultHandle,
+  mockCredentialsProvider,
   mockEnsureSignupWelcomeOnboarding,
   mockUserUpsert,
+  mockVerifyNativeAuthBridgeToken,
 } = vi.hoisted(() => ({
   mockCreateWithDefaultHandle: vi.fn(),
+  mockCredentialsProvider: vi.fn(),
   mockEnsureSignupWelcomeOnboarding: vi.fn(),
   mockUserUpsert: vi.fn(),
+  mockVerifyNativeAuthBridgeToken: vi.fn(),
 }));
 
 vi.mock("@next-auth/prisma-adapter", () => ({
@@ -19,7 +23,7 @@ vi.mock("next-auth/providers/apple", () => ({
 }));
 
 vi.mock("next-auth/providers/credentials", () => ({
-  default: vi.fn(() => ({ id: "credentials", type: "credentials" })),
+  default: mockCredentialsProvider,
 }));
 
 vi.mock("next-auth/providers/google", () => ({
@@ -43,7 +47,7 @@ vi.mock("@/lib/signup-welcome-onboarding", () => ({
 }));
 
 vi.mock("@/lib/native-auth-bridge", () => ({
-  verifyNativeAuthBridgeToken: vi.fn(),
+  verifyNativeAuthBridgeToken: mockVerifyNativeAuthBridgeToken,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -64,6 +68,10 @@ describe("getAuthOptions", () => {
     mockCreateWithDefaultHandle.mockImplementation(
       async (_input: unknown, create: (handle: string) => Promise<unknown>) => create("new-handle"),
     );
+    mockCredentialsProvider.mockImplementation((config) => ({
+      ...config,
+      type: "credentials",
+    }));
     mockUserUpsert.mockResolvedValue({});
   });
 
@@ -93,5 +101,55 @@ describe("getAuthOptions", () => {
       userId: "oauth_new_user",
       locale: "en",
     });
+  });
+
+  it("does not overwrite a provider identity during the native session bridge", async () => {
+    mockVerifyNativeAuthBridgeToken.mockReturnValue({
+      sub: "native_apple_user",
+      email: "relay@example.com",
+      name: "Apple User",
+      provider: "apple",
+    });
+    mockUserUpsert.mockResolvedValue({
+      id: "native_apple_user",
+      name: "Apple User",
+      email: "relay@example.com",
+      externalUserId: "apple:stable_provider_subject",
+    });
+    const options = getAuthOptions();
+    const nativeBridgeProvider = options.providers.find((provider) => provider.id === "native-bridge");
+    const authorize = (nativeBridgeProvider as {
+      authorize?: (credentials: { token: string }) => Promise<unknown>;
+    } | undefined)?.authorize;
+
+    await authorize?.({ token: "valid-bridge-token" });
+
+    expect(mockUserUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "native_apple_user" },
+      update: expect.not.objectContaining({
+        externalUserId: expect.anything(),
+      }),
+    }));
+  });
+
+  it("does not replace an OAuth provider identity during the sign-in event", async () => {
+    const options = getAuthOptions("apple");
+
+    await options.events?.signIn?.({
+      user: {
+        id: "native_apple_user",
+        name: "Apple User",
+        email: "relay@example.com",
+      },
+      account: null,
+      isNewUser: false,
+    } as never);
+
+    expect(mockUserUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "native_apple_user" },
+      update: expect.not.objectContaining({
+        externalUserId: expect.anything(),
+      }),
+    }));
   });
 });

@@ -1,5 +1,10 @@
 'use client'
 
+import { compareUtteranceOrder } from './utterance-order'
+import { reserveVoiceOrder, rememberLiveVoiceOrder } from './voice-order-reservation'
+import { nativeStopIntent } from './native-stop-intent'
+import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
+
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
@@ -31,6 +36,10 @@ import {
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import {
+  REALTIME_FALLBACK_POLL_INTERVAL_MS,
+  shouldRunRealtimeFallbackRefresh,
+} from '@/lib/realtime-fallback-poll'
+import {
   isNativeSttMessageForConversation,
   filterNativeSttMessagesForSession,
   readNativeSttMessageQueue,
@@ -38,6 +47,24 @@ import {
   splitNativeSttMessagesForConversation,
   type NativeSttQueuedMessage,
 } from '@/lib/native-stt-event-queue'
+import {
+  adoptClientMessageOutboxRecords,
+  buildClientMessageOutboxId,
+  buildClientMessageOutboxOwnerIdentity,
+  enqueueClientMessageOutboxRecord,
+  flushClientMessageOutbox,
+} from './client-message-outbox'
+import {
+  adoptDurableFinalizations,
+  retainDurableFinalizationOwner,
+  deliverDurableFinalization,
+  discardDurableFinalizations,
+  enqueueDurableFinalization,
+  flushDurableFinalizations,
+  readDurableFinalizations,
+  restoreDurableFinalizationCache,
+  subscribeDurableFinalizations,
+} from './durable-message-finalization'
 
 export {
   buildStorageKey,
@@ -616,20 +643,32 @@ export function shouldApplyNativeBridgeConnectionStatus(input: {
   nextConnectionStatus: ConnectionStatus | null
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
 }): boolean {
   if (!input.nextConnectionStatus) return false
-  if (input.isStopping || input.nativeStopRequested) {
+  if (input.isStopping || input.nativeStopRequested || input.stopIntent) {
     return input.nextConnectionStatus === 'idle'
   }
   return true
+}
+
+export function shouldCompleteNativeStopFromStatus(input: {
+  status: string; stopping?: boolean; stopRequested: boolean
+}): boolean {
+  // Older iOS shells synthesize stopped as soon as stop() is accepted.
+  // Only the actual close lifecycle (or server ACK/close handler) completes it.
+  return input.stopRequested && !input.stopping && input.status.trim().toLowerCase() === 'closed'
 }
 
 export function shouldPromoteConnectionStatusFromNativeActivity(input: {
   previousConnectionStatus: ConnectionStatus
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
+  message?: Record<string, unknown>
 }): boolean {
-  if (input.isStopping || input.nativeStopRequested) return false
+  if (input.isStopping || input.nativeStopRequested || input.stopIntent) return false
+  if (input.message && input.message.status !== 'ready' && !parseSttTranscriptMessage(input.message)) return false
   return input.previousConnectionStatus !== 'ready'
 }
 
@@ -637,8 +676,9 @@ export function shouldHandleNativeBridgeServerMessage(input: {
   message: Record<string, unknown>
   isStopping?: boolean
   nativeStopRequested?: boolean
+  stopIntent?: boolean
 }): boolean {
-  if (!(input.isStopping || input.nativeStopRequested)) return true
+  if (!(input.isStopping || input.nativeStopRequested || input.stopIntent)) return true
   return input.message.status !== 'ready'
 }
 
@@ -877,6 +917,22 @@ function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): Conver
   return result
 }
 
+function areConversationLeaveNoticesEqual(
+  left: ConversationLeaveNotice[],
+  right: ConversationLeaveNotice[],
+): boolean {
+  return left === right || (
+    left.length === right.length
+    && left.every((notice, index) => {
+      const candidate = right[index]
+      return notice.userId === candidate.userId
+        && notice.name === candidate.name
+        && notice.handle === candidate.handle
+        && notice.leftAtMs === candidate.leftAtMs
+    })
+  )
+}
+
 // One AppConversationChannelInvite row (see its doc comment on the server),
 // for rendering an in-room "{inviter} invited {invitee}" notice — same
 // KakaoTalk-style timeline chrome as ConversationLeaveNotice above, written
@@ -914,6 +970,25 @@ function normalizeConversationHydrationInviteNotices(rawNotices: unknown): Conve
     })
   }
   return result
+}
+
+function areConversationInviteNoticesEqual(
+  left: ConversationInviteNotice[],
+  right: ConversationInviteNotice[],
+): boolean {
+  return left === right || (
+    left.length === right.length
+    && left.every((notice, index) => {
+      const candidate = right[index]
+      return notice.inviteeUserId === candidate.inviteeUserId
+        && notice.inviteeName === candidate.inviteeName
+        && notice.inviteeHandle === candidate.inviteeHandle
+        && notice.invitedByUserId === candidate.invitedByUserId
+        && notice.invitedByName === candidate.invitedByName
+        && notice.invitedByHandle === candidate.invitedByHandle
+        && notice.invitedAtMs === candidate.invitedAtMs
+    })
+  )
 }
 
 function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationHydrationCursor | null {
@@ -957,6 +1032,10 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
             )
           : {},
         createdAtMs: typeof record.createdAtMs === 'number' ? record.createdAtMs : undefined,
+        ...(typeof record.serverCreatedAtMs === 'number' && Number.isFinite(record.serverCreatedAtMs)
+          && record.serverCreatedAtMs > 0 && typeof record.serverMessageId === 'string' ? {
+            serverCreatedAtMs: record.serverCreatedAtMs, serverMessageId: record.serverMessageId,
+          } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
           ? { speakerAvatarSeed: record.speakerAvatarSeed.trim() }
@@ -1374,6 +1453,7 @@ interface SubmitExternalUtteranceInput {
 }
 
 interface LocalFinalizeResult {
+  utterance: Utterance
   utteranceId: string
   text: string
   lang: string
@@ -1489,10 +1569,8 @@ export function buildLiveUtterance(input: {
   partialLang?: string | null
   partialTranslations: Record<string, string>
   languages: string[]
-  // A live/pending turn is always produced by this device's own mic input —
-  // there is no cross-device streaming of another member's in-progress
-  // speech — so it's always "mine" by definition, same as a locally
-  // finalized utterance.
+  // This builder handles this device's own microphone. Remote previews carry
+  // their authenticated sender and are combined separately for rendering.
   viewerUserId?: string | null
   viewerImage?: string | null
 }): Utterance | null {
@@ -1579,6 +1657,9 @@ export function mergeDisplayUtterances(input: {
   ]
 
   combined.sort((left, right) => {
+    if (left.utterance.serverCreatedAtMs !== undefined || right.utterance.serverCreatedAtMs !== undefined) {
+      return compareUtteranceOrder(left.utterance, right.utterance)
+    }
     const leftCreatedAt = inferUtteranceCreatedAtMs(left.utterance)
     const rightCreatedAt = inferUtteranceCreatedAtMs(right.utterance)
     if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
@@ -2034,6 +2115,53 @@ function applyPendingTranslationUpdateToUtteranceState(input: {
   }
 }
 
+function areOptionalStringArraysEqual(
+  left: string[] | undefined,
+  right: string[] | undefined,
+): boolean {
+  if (left === right) return true
+  if (!left || !right || left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+function areOptionalRecordsEqual<T extends string | boolean>(
+  left: Record<string, T> | undefined,
+  right: Record<string, T> | undefined,
+): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => (
+    Object.prototype.hasOwnProperty.call(right, key)
+    && left[key] === right[key]
+  ))
+}
+
+function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
+  return (
+    left.id === right.id
+    && left.speaker === right.speaker
+    && left.speakerAvatarSeed === right.speakerAvatarSeed
+    && left.speakerAvatarIndex === right.speakerAvatarIndex
+    && left.speakerName === right.speakerName
+    && left.speakerUserId === right.speakerUserId
+    && left.speakerImage === right.speakerImage
+    && left.originalText === right.originalText
+    && left.originalLang === right.originalLang
+    && left.sourceLanguagesMixed === right.sourceLanguagesMixed
+    && left.sourceTextHasForeignScript === right.sourceTextHasForeignScript
+    && left.translationStatus === right.translationStatus
+    && areOptionalStringArraysEqual(left.targetLanguages, right.targetLanguages)
+    && areOptionalRecordsEqual(left.translations, right.translations)
+    && areOptionalRecordsEqual(left.translationFinalized, right.translationFinalized)
+    && left.createdAtMs === right.createdAtMs
+    && left.serverCreatedAtMs === right.serverCreatedAtMs
+    && left.serverMessageId === right.serverMessageId
+  )
+}
+
 function appendOrReplaceUtterance(
   utterances: Utterance[],
   nextUtterance: Utterance,
@@ -2041,7 +2169,15 @@ function appendOrReplaceUtterance(
   const existingIndex = utterances.findIndex((utterance) => utterance.id === nextUtterance.id)
   const normalizedNextUtterance = normalizeStoredUtterance(nextUtterance)
   const existingUtterance = existingIndex >= 0 ? utterances[existingIndex] : null
-  if (existingUtterance === normalizedNextUtterance) return utterances
+  if (
+    existingUtterance
+    && (
+      existingUtterance === normalizedNextUtterance
+      || areUtterancesEqual(existingUtterance, normalizedNextUtterance)
+    )
+  ) {
+    return utterances
+  }
 
   const withoutExisting = existingIndex >= 0
     ? [
@@ -2053,6 +2189,9 @@ function appendOrReplaceUtterance(
   if (nextCreatedAt === null) return [...withoutExisting, normalizedNextUtterance]
 
   const insertIndex = withoutExisting.findIndex((utterance) => {
+    if (utterance.serverCreatedAtMs !== undefined || normalizedNextUtterance.serverCreatedAtMs !== undefined) {
+      return compareUtteranceOrder(utterance, normalizedNextUtterance) > 0
+    }
     const createdAt = inferUtteranceCreatedAtMs(utterance)
     return createdAt !== null && createdAt > nextCreatedAt
   })
@@ -2238,13 +2377,23 @@ export function mergeServerHydrationUtteranceIntoStoreState(
   // positioned its live draft. AppMessage.createdAt is a later persistence
   // timestamp, so replacing the former with the latter can move a finalized
   // bubble across a newer live turn during push/poll hydration. Server content
-  // remains authoritative; only the established display-order timestamp stays
-  // immutable for an utterance that is already present on this client.
+  // remains authoritative. Shared messages also carry a canonical server order
+  // independent of this display/capture time, so both members converge without
+  // changing solo-session live-draft ordering or the pagination cursor.
   const serverUtterance = existingCreatedAtMs === null
     ? normalizedServerUtterance
     : {
         ...normalizedServerUtterance,
         createdAtMs: existingCreatedAtMs,
+        // Source delivery is now independent of translation. A raw server
+        // snapshot must not erase the final translation already rendered here.
+        ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
+          originalLang: normalizedServerUtterance.originalLang === 'unknown'
+            ? existingUtterance.originalLang : normalizedServerUtterance.originalLang,
+          translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
+          translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
+          translationStatus: existingUtterance.translationStatus,
+        } : {}),
       }
   const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)
   const basePriorities = removeTranslationPrioritiesForUtterance(
@@ -2262,6 +2411,12 @@ export function mergeServerHydrationUtteranceIntoStoreState(
   const nextUtterances = appendOrReplaceUtterance(store.utterances, nextUtterance)
 
   if (!pendingUpdate) {
+    if (
+      nextUtterances === store.utterances
+      && basePriorities === store.translationPriorities
+    ) {
+      return store
+    }
     return {
       ...store,
       utterances: nextUtterances,
@@ -2676,14 +2831,25 @@ export default function useRealtimeSTT({
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
   // Membership/invites are deliberately server-authoritative, never optimistic
   // (see docs/local-first-conversation-plan.md on the client-SoT branch) — a
-  // fresh mount always starts with empty leave/invite notices and only fills
-  // them in once the one-shot mount hydration below resolves. True while
-  // that first hydration is outstanding, so a caller can hold the room in a
-  // loading state instead of briefly painting a transcript that's missing
-  // notices for an invite/leave that already happened server-side.
+  // fresh mount starts with empty notices and fills them after hydration.
+  // This flag distinguishes a cold empty room from a completed empty snapshot;
+  // it must not block presentation of the local transcript.
   const [isInitialServerHydrationPending, setIsInitialServerHydrationPending] = useState(true)
   const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
   const effectiveViewerImage = isSharedRoom ? viewerImage : null
+  const outboxTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
+  const trackingClientMessageOutboxOwnerIdentity = useMemo(() => buildClientMessageOutboxOwnerIdentity({
+    trackingUserId: outboxTrackingUserId,
+  }), [outboxTrackingUserId])
+  const clientMessageOutboxOwnerIdentity = useMemo(() => buildClientMessageOutboxOwnerIdentity({
+    userId: viewerUserId,
+    trackingUserId: outboxTrackingUserId,
+  }), [outboxTrackingUserId, viewerUserId])
+  const finalizationApiNamespace = resolveRuntimeApiNamespace()
+  const realtimeScope = JSON.stringify([clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId])
+  const livePreviewSender = useMemo(() => { void realtimeScope; return new LivePreviewSender() }, [realtimeScope])
+  const remotePreviews = useMemo(() => { void realtimeScope; return new RemotePreviews() }, [realtimeScope])
+  const [remotePreviewVersion, setRemotePreviewVersion] = useState(0)
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -2720,6 +2886,7 @@ export default function useRealtimeSTT({
     }
 
     try {
+      restoreDurableFinalizationCache(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)
       const stored = localStorage.getItem(buildStorageKey(LS_KEY_UTTERANCES, storageNamespace))
       if (stored) {
         const recent = parseRecentStoredUtterances(stored, LOAD_BATCH_SIZE)
@@ -2781,7 +2948,7 @@ export default function useRealtimeSTT({
         clearTimeout(fullStorageParseTimer)
       }
     }
-  }, [buildLocalUtteranceCache, persistLocalUtterancesSnapshot, storageNamespace])
+  }, [buildLocalUtteranceCache, clientMessageOutboxOwnerIdentity, finalizationApiNamespace, persistLocalUtterancesSnapshot, storageNamespace])
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
@@ -2837,6 +3004,10 @@ export default function useRealtimeSTT({
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
+  const nativeStopIntentKeyRef = useRef('')
+  nativeStopIntentKeyRef.current = JSON.stringify([
+    clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId || storageNamespace || 'default',
+  ])
   const nativeSttConversationIdRef = useRef<string | null>(null)
   const nativeSttSessionIdRef = useRef<string | null>(null)
   const nativeSttRequestedSessionIdRef = useRef<string | null>(null)
@@ -2927,6 +3098,7 @@ export default function useRealtimeSTT({
     pendingNativeStopAckTimeoutRef.current = null
   }, [])
   const resolvePendingNativeStopAck = useCallback(() => {
+    nativeStopIntent.complete(nativeStopIntentKeyRef.current)
     clearPendingNativeStopAckTimeout()
     const resolve = pendingNativeStopAckResolverRef.current
     pendingNativeStopAckResolverRef.current = null
@@ -2944,6 +3116,8 @@ export default function useRealtimeSTT({
   const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
   const nativeShellSupportsOpenAppSettingsRef = useRef(false)
   const serverHydrationKeyRef = useRef('')
+  const serverHydrationInFlightRef = useRef<Promise<void> | null>(null)
+  const queuedServerHydrationTriggerRef = useRef<ConversationHydrationRefreshTrigger | null>(null)
   const nativeSttOwnerKeyRef = useRef('')
   const nativeSttOwnerLeaseIdRef = useRef('')
   if (!nativeSttOwnerKeyRef.current) {
@@ -3257,7 +3431,7 @@ export default function useRealtimeSTT({
     const conflicts = findConversationHydrationOrderConflicts({
       localUtterances: utterancesRef.current,
       liveUtterances,
-      serverUtterances: utterancesFromServer,
+      serverUtterances: utterancesFromServer.filter(utterance => utterance.serverCreatedAtMs === undefined),
     })
 
     for (const conflict of conflicts) {
@@ -3335,8 +3509,14 @@ export default function useRealtimeSTT({
       if (payload.conversation) {
         setIsSharedRoom(payload.conversation.isMultiMember === true)
       }
-      setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
-      setInviteNotices(normalizeConversationHydrationInviteNotices(payload.inviteNotices))
+      const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
+      setLeaveNotices((current) => (
+        areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+      ))
+      const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
+      setInviteNotices((current) => (
+        areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
+      ))
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3430,7 +3610,7 @@ export default function useRealtimeSTT({
   // Shared by the one-shot mount hydration below and by conversation-events
   // push/poll (a second real member's messages otherwise never appear in an
   // already-open room, since nothing else here re-fetches after mount).
-  const refreshFromServerHydration = useCallback((
+  const performServerHydrationRefresh = useCallback((
     trigger: ConversationHydrationRefreshTrigger,
   ): Promise<void> => {
     if (!conversationId) return Promise.resolve()
@@ -3449,8 +3629,14 @@ export default function useRealtimeSTT({
         if (payload.conversation) {
           setIsSharedRoom(payload.conversation.isMultiMember === true)
         }
-        setLeaveNotices(normalizeConversationHydrationLeaveNotices(payload.leaveNotices))
-        setInviteNotices(normalizeConversationHydrationInviteNotices(payload.inviteNotices))
+        const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
+        setLeaveNotices((current) => (
+          areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+        ))
+        const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
+        setInviteNotices((current) => (
+          areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
+        ))
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3483,6 +3669,7 @@ export default function useRealtimeSTT({
 
         setUtteranceStore((current) => {
           const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
+          if (nextStore === current) return current
           const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
           storedUtterancesRef.current = nextStoredUtterances
           storageLoadedCountRef.current = nextStore.utterances.length
@@ -3504,6 +3691,30 @@ export default function useRealtimeSTT({
     queueHasOlderUtterancesRefresh,
     reportConversationHydrationOrderConflicts,
   ])
+
+  const refreshFromServerHydration = useCallback((
+    trigger: ConversationHydrationRefreshTrigger,
+  ): Promise<void> => {
+    const inFlight = serverHydrationInFlightRef.current
+    if (inFlight) {
+      queuedServerHydrationTriggerRef.current = trigger
+      return inFlight
+    }
+
+    const hydrationPromise = (async () => {
+      let nextTrigger: ConversationHydrationRefreshTrigger | null = trigger
+      while (nextTrigger) {
+        queuedServerHydrationTriggerRef.current = null
+        await performServerHydrationRefresh(nextTrigger)
+        nextTrigger = queuedServerHydrationTriggerRef.current
+      }
+    })().finally(() => {
+      serverHydrationInFlightRef.current = null
+    })
+
+    serverHydrationInFlightRef.current = hydrationPromise
+    return hydrationPromise
+  }, [performServerHydrationRefresh])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3527,10 +3738,9 @@ export default function useRealtimeSTT({
   // Live sync: a solo room never needed this (nothing else can add a
   // message), but a room shared by more than one real account does — without
   // it, another member's messages only show up on next mount/reload. Opens a
-  // push channel on mingle-messaging (membership-checked token minted by the
-  // server) and re-runs the same fetch+merge above on push; a long-interval
-  // poll is the fallback for whenever the socket is down or push is
-  // unconfigured in this environment.
+  // push channel on mingle-messaging with membership-checked capabilities.
+  // Preview and committed payloads render immediately; invalidation, reconnect
+  // and bounded recovery polling still reconcile authoritative history.
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!conversationId) return
@@ -3538,6 +3748,22 @@ export default function useRealtimeSTT({
     let cancelled = false
     let socket: WebSocket | null = null
     let reconnectTimer: number | null = null
+    let lastRealtimeActivityAt = Date.now()
+    let lastRecoveryAt = Date.now()
+    let writerToken: string | null = null
+    let socketSessionKey = ''
+    let renewing = false
+
+    const getTokens = async () => {
+      const response = await fetch(
+        buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/realtime-token${viewerUserId ? '?live=1' : ''}` as `/${string}`),
+        { cache: 'no-store', headers: buildConversationHydrationHeaders() },
+      )
+      if (!response.ok || cancelled) return null
+      const result = await response.json() as { token?: string; writerToken?: string | null; sessionKey?: string; userId?: string }
+      if (cancelled || (viewerUserId && result.userId && result.userId !== viewerUserId)) return null
+      return result
+    }
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== null) {
@@ -3545,52 +3771,130 @@ export default function useRealtimeSTT({
         reconnectTimer = null
       }
     }
+    const scheduleReconnect = () => {
+      if (cancelled) return
+      clearReconnectTimer()
+      reconnectTimer = window.setTimeout(() => {
+        void openSocket()
+      }, 5_000)
+    }
 
     const openSocket = async () => {
       if (cancelled) return
       try {
-        const response = await fetch(
-          buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/realtime-token` as `/${string}`),
-          { cache: 'no-store', headers: buildConversationHydrationHeaders() },
-        )
-        if (!response.ok || cancelled) return
-        const payload = await response.json() as { token?: string | null }
+        const payload = await getTokens()
+        if (cancelled) return
+        if (!payload) { scheduleReconnect(); return }
         const token = payload.token
         const wsBase = getConversationEventsWsUrl()
-        if (!token || !wsBase || cancelled) return
+        if (!token || !wsBase || cancelled) {
+          // A missing token/URL means realtime is intentionally unavailable in
+          // this deployment. The 20-second poll below is the fallback; retrying
+          // token setup every five seconds would add more load than the poll.
+          return
+        }
 
-        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
-        socket.onmessage = () => {
+        writerToken = payload.writerToken ?? null
+        socketSessionKey = payload.sessionKey ?? ''
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}${viewerUserId ? '&live=1' : ''}`)
+        socket.onopen = () => {
+          lastRealtimeActivityAt = Date.now()
+          // Recover messages committed while disconnected; live frames never
+          // replace history recovery or durable delivery.
+          void refreshFromServerHydration('push')
+        }
+        socket.onmessage = (event) => {
+          if (cancelled) return
+          lastRealtimeActivityAt = Date.now()
+          try {
+            const frame = JSON.parse(event.data)
+            if (socketSessionKey && frame.sessionKey !== socketSessionKey) return
+            if (frame.type === 'utterance_preview') {
+              if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
+                rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
+                  sessionKey: socketSessionKey, clientMessageId: frame.utterance.id }, frame.orderReceipt)
+              }
+              if (remotePreviews.accept(frame as PreviewEvent)) setRemotePreviewVersion(v => v + 1)
+              return
+            }
+            if (frame.type === 'utterance_committed') {
+              const incoming = normalizeConversationHydrationUtterances([frame.utterance])[0]
+              if (incoming) {
+                livePreviewSender.committed(incoming.id)
+                setUtteranceStore(current => mergeServerHydrationUtteranceIntoStoreState(current, incoming))
+                return
+              }
+            }
+          } catch { return }
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
           if (cancelled) return
-          clearReconnectTimer()
-          reconnectTimer = window.setTimeout(openSocket, 5_000)
+          socket = null
+          scheduleReconnect()
         }
       } catch {
         // Realtime push failed to set up — the poll fallback below still runs.
+        scheduleReconnect()
       }
     }
 
     void openSocket()
 
-    const pollIntervalMs = 20_000
+    const liveTimer = window.setInterval(() => {
+      if (cancelled) return
+      livePreviewSender.flush(frame => {
+        if (!writerToken || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount > 256_000) return false
+        socket.send(JSON.stringify({ ...frame, writerToken }))
+        return true
+      })
+      // Also expires abandoned drafts if a sender disconnects mid-sentence.
+      if (remotePreviews.expire()) setRemotePreviewVersion(v => v + 1)
+    }, 250)
+    const renewTimer = window.setInterval(() => {
+      if (renewing || socket?.readyState !== WebSocket.OPEN) return
+      renewing = true
+      void getTokens().then(payload => {
+        if (cancelled || socket?.readyState !== WebSocket.OPEN) return
+        if (!payload?.token || (socketSessionKey && payload.sessionKey !== socketSessionKey)) {
+          writerToken = null
+          remotePreviews.clear()
+          setRemotePreviewVersion(v => v + 1)
+          socket.close()
+          return
+        }
+        writerToken = payload.writerToken ?? null
+        socket.send(JSON.stringify({ type: 'renew', token: payload.token }))
+      }).catch(() => { writerToken = null }).finally(() => { renewing = false })
+    }, 20_000)
+
     const pollTimer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return
+      // Preview heartbeats prove the socket works, not that every DB commit's
+      // publish succeeded. Keep bounded reconciliation during continuous speech.
+      const now = Date.now()
+      const recoveryDue = document.visibilityState === 'visible' && now - lastRecoveryAt >= 60_000
+      if (!recoveryDue && !shouldRunRealtimeFallbackRefresh({
+        isDocumentVisible: document.visibilityState === 'visible',
+        socketReadyState: socket?.readyState,
+        lastRealtimeActivityAt,
+        now,
+      })) return
+      lastRecoveryAt = now
       void refreshFromServerHydration('poll')
-    }, pollIntervalMs)
+    }, REALTIME_FALLBACK_POLL_INTERVAL_MS)
 
     return () => {
       cancelled = true
       clearReconnectTimer()
       window.clearInterval(pollTimer)
+      window.clearInterval(liveTimer)
+      window.clearInterval(renewTimer)
       if (socket) {
         socket.onclose = null
         socket.close()
       }
     }
-  }, [buildConversationHydrationHeaders, conversationId, refreshFromServerHydration])
+  }, [buildConversationHydrationHeaders, conversationId, refreshFromServerHydration, livePreviewSender, remotePreviews, viewerUserId, clientMessageOutboxOwnerIdentity, finalizationApiNamespace])
 
   useEffect(() => {
     utterancesRef.current = utterances
@@ -3933,9 +4237,10 @@ export default function useRealtimeSTT({
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
+      const resolvedSessionKey = ensureSessionKey()
       const body: Record<string, unknown> = {
         eventType: payload.eventType,
-        sessionKey: ensureSessionKey(),
+        sessionKey: resolvedSessionKey,
         clientContext: buildClientContextPayload(usageSec),
       }
 
@@ -3965,6 +4270,29 @@ export default function useRealtimeSTT({
       }
       if (payload.metadata) body.metadata = payload.metadata
 
+      const endpoint = buildClientApiPath('/log/client-event')
+      if (
+        payload.eventType === 'stt_turn_finalized'
+        && payload.clientMessageId
+        && payload.sourceText?.trim()
+      ) {
+        enqueueClientMessageOutboxRecord({
+          id: buildClientMessageOutboxId({
+            ownerIdentity: clientMessageOutboxOwnerIdentity,
+            sessionKey: resolvedSessionKey,
+            clientMessageId: payload.clientMessageId,
+          }),
+          ownerIdentity: clientMessageOutboxOwnerIdentity,
+          endpoint,
+          body: JSON.stringify(body),
+          trackingUserId: outboxTrackingUserId,
+        })
+        await flushClientMessageOutbox({
+          ownerIdentity: clientMessageOutboxOwnerIdentity,
+        })
+        return
+      }
+
       const requestInit: RequestInit = {
         method: 'POST',
         headers: {
@@ -3979,7 +4307,7 @@ export default function useRealtimeSTT({
       let lastError: unknown = null
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          const res = await fetch(buildClientApiPath('/log/client-event'), requestInit)
+          const res = await fetch(endpoint, requestInit)
           if (res.ok) return
           lastError = new Error(`log/client-event responded with ${res.status}`)
         } catch (error) {
@@ -3995,8 +4323,64 @@ export default function useRealtimeSTT({
     } catch {
       // Logging must not affect UX.
     }
-  }, [ensureSessionKey, usageSec])
+  }, [clientMessageOutboxOwnerIdentity, ensureSessionKey, outboxTrackingUserId, usageSec])
   logClientEventRef.current = logClientEvent
+
+  useEffect(() => {
+    if (!viewerUserId || typeof window === 'undefined') return
+
+    let cancelled = false
+    void adoptDurableFinalizations(
+      trackingClientMessageOutboxOwnerIdentity, clientMessageOutboxOwnerIdentity, finalizationApiNamespace,
+    ).then(() => {
+      if (!cancelled) return flushDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, true)
+    })
+    void adoptClientMessageOutboxRecords({
+      fromOwnerIdentity: trackingClientMessageOutboxOwnerIdentity,
+      toOwnerIdentity: clientMessageOutboxOwnerIdentity,
+    }).then(() => {
+      if (cancelled) return
+      return flushClientMessageOutbox({
+        ownerIdentity: clientMessageOutboxOwnerIdentity,
+        force: true,
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, trackingClientMessageOutboxOwnerIdentity, viewerUserId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const flushOutbox = (force = false) => {
+      void flushDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, force)
+      void flushClientMessageOutbox({
+        ownerIdentity: clientMessageOutboxOwnerIdentity,
+        force,
+      })
+    }
+    const releaseOwner = retainDurableFinalizationOwner(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)
+    const handleOnline = () => flushOutbox(true)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') flushOutbox(true)
+    }
+
+    flushOutbox(true)
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    const retryTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') flushOutbox()
+    }, 15_000)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.clearInterval(retryTimer)
+      releaseOwner()
+    }
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace])
 
   const synthesizeTtsViaApi = useCallback(async (text: string, language: string): Promise<Blob | null> => {
     const normalizedText = text.trim()
@@ -4092,34 +4476,35 @@ export default function useRealtimeSTT({
     }
   }, [requestTtsForRenderedTranslation, utterances])
 
-  const applyTranslationToUtterance = useCallback((
-    utteranceId: string,
-    translations: Record<string, string>,
-    priority: TranslationPriority,
-    markFinalized: boolean,
-    fallbackMatch?: TranslationApplyFallbackMatch,
-    options?: {
-      detectedSourceLanguage?: string
-      sourceLanguagesMixed?: boolean
-      sourceTextHasForeignScript?: boolean
-      selectedLanguages?: string[]
-      sourceText?: string
-    },
-  ) => {
-    setUtteranceStore((prev) => applyTranslationToUtteranceStoreState({
-      store: prev,
-      utteranceId,
-      translations,
-      priority,
-      markFinalized,
-      fallbackMatch,
-      detectedSourceLanguage: options?.detectedSourceLanguage,
-      sourceLanguagesMixed: options?.sourceLanguagesMixed,
-      sourceTextHasForeignScript: options?.sourceTextHasForeignScript,
-      selectedLanguages: options?.selectedLanguages,
-      sourceText: options?.sourceText,
-    }))
-  }, [])
+  useEffect(() => {
+    const apply = (record: ReturnType<typeof readDurableFinalizations>[number]) => {
+      if (record.ownerIdentity !== clientMessageOutboxOwnerIdentity || record.apiNamespace !== finalizationApiNamespace
+        || record.storageNamespace !== (storageNamespace || '')) return
+      // Preserve foreground playback timing: translation rendering must not
+      // wait for the following server write. Recovered/background jobs have no
+      // foreground controller and must never autoplay old messages.
+      const foreground = finalizedTurnTranslationControllersRef.current[record.utterance.id]
+      if (record.result && foreground && !foreground.signal.aborted && enableTtsRef.current) {
+        pendingFinalizedTtsUtteranceIdsRef.current.add(record.utterance.id)
+      }
+      const seq = ++translateSeqRef.current
+      setUtteranceStore(prev => {
+        let next = { ...prev, utterances: appendOrReplaceUtterance(prev.utterances, record.utterance) }
+        if (record.result) next = applyTranslationToUtteranceStoreState({
+          store: next, utteranceId: record.utterance.id,
+          translations: record.result.translations, priority: { kind: 'final', seq }, markFinalized: true,
+          detectedSourceLanguage: record.result.sourceLanguage,
+          sourceLanguagesMixed: record.result.sourceLanguagesMixed,
+          sourceTextHasForeignScript: record.result.sourceTextHasForeignScript,
+          selectedLanguages: record.utterance.targetLanguages,
+          sourceText: record.utterance.originalText,
+        })
+        return next
+      })
+    }
+    for (const record of readDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)) apply(record)
+    return subscribeDurableFinalizations(({ record }) => apply(record))
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, storageNamespace])
 
   const finalizePendingLocally = useCallback((
     rawText: string,
@@ -4209,6 +4594,7 @@ export default function useRealtimeSTT({
       nowMs: now,
     })
     return {
+      utterance: localPayload.utterance,
       utteranceId: localPayload.utteranceId,
       text: localPayload.text,
       lang: localPayload.language,
@@ -4266,143 +4652,76 @@ export default function useRealtimeSTT({
       speakerAvatarIndex?: number
     },
   ) => {
-    const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
-    const resolvedSpeaker = options?.speaker ?? localFinalizeResult.speaker
-    const resolvedSpeakerAvatarSeed = options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed
-    const resolvedSpeakerAvatarIndex = options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex
-    const seq = ++translateSeqRef.current
-    const requestStartedAt = Date.now()
+    const { utteranceId, text, lang, currentTurnPreviousState, utterance } = localFinalizeResult
+    livePreviewSender.update(utterance, true)
     const targetLanguages = [...getCurrentTargetLanguages()]
-    const conversationClearSequence = conversationClearSequenceRef.current
-    const isStaleConversationFinalize = () => conversationClearSequenceRef.current !== conversationClearSequence
-
-    // 단일 언어 모드: 선택 언어가 1개인 경우
     const isSingleLanguageMode = targetLanguages.length === 1
-    const detectedLangNorm = normalizeTranslationLanguageKey(lang)
-    const selectedLangNorm = normalizeTranslationLanguageKey(targetLanguages[0] || '')
-
-    if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
-      // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
-      if (isStaleConversationFinalize()) return
-      void logClientEvent({
-        eventType: 'stt_turn_finalized',
-        clientMessageId: utteranceId,
-        sourceLanguage: lang,
-        sourceText: text,
-        translations: {},
-        sttDurationMs: options?.sttDurationMs,
-        totalDurationMs: options?.sttDurationMs ?? 0,
+    const skipTranslation = targetLanguages.length === 0 || (
+      isSingleLanguageMode
+      && normalizeTranslationLanguageKey(lang) === normalizeTranslationLanguageKey(targetLanguages[0])
+    )
+    const sessionKey = ensureSessionKey()
+    const clientContext = buildClientContextPayload(usageSec)
+    const recentTurns = buildRecentTurnContextPayload(utteranceId)
+    const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
+      text, sourceLanguage: lang, targetLanguages, isFinal: true,
+      sessionKey, clientContext, clientMessageId: utteranceId,
+      sttDurationMs: options?.sttDurationMs,
+      currentTurnPreviousState,
+      clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
+      ...(translationModel ? { translationModel } : {}),
+      ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
+    }
+    // Synchronous write-ahead journal: never clear the composer with the only
+    // copy of this message stranded behind a translation request.
+    const record = enqueueDurableFinalization({
+      ownerIdentity: clientMessageOutboxOwnerIdentity,
+      apiNamespace: finalizationApiNamespace,
+      trackingUserId: outboxTrackingUserId,
+      conversationId: conversationId || '',
+      storageNamespace: storageNamespace || '',
+      utterance: {
+        ...utterance,
+        speaker: options?.speaker ?? utterance.speaker,
+        speakerAvatarSeed: options?.speakerAvatarSeed ?? utterance.speakerAvatarSeed,
+        speakerAvatarIndex: options?.speakerAvatarIndex ?? utterance.speakerAvatarIndex,
+      },
+      translationBody,
+      eventBody: {
+        eventType: 'stt_turn_finalized', sessionKey, clientContext,
+        clientMessageId: utteranceId, sourceLanguage: lang, sourceText: text,
+        sttDurationMs: options?.sttDurationMs, totalDurationMs: options?.sttDurationMs ?? 0,
         metadata: {
-          reason: options?.reason || 'unknown',
-          singleLanguageMode: true,
-          skipTranslation: true,
-          speaker: resolvedSpeaker || null,
-          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
-          speakerAvatarIndex:
-            typeof resolvedSpeakerAvatarIndex === 'number'
-              ? resolvedSpeakerAvatarIndex
-              : null,
+          reason: options?.reason || 'unknown', singleLanguageMode: isSingleLanguageMode,
+          skipTranslation, hasInlineTts: false,
+          speaker: options?.speaker ?? localFinalizeResult.speaker ?? null,
+          speakerAvatarSeed: options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed ?? null,
+          speakerAvatarIndex: options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex ?? null,
         },
-        keepalive: true,
-      })
-      return
-    }
-
-    // 단일 언어 모드이지만 다른 언어 감지: 선택 언어로 번역 + TTS
-    // 다중 언어 모드: 기존 동작 유지
-    const ttsTargetLang = isSingleLanguageMode
-      ? (targetLanguages[0] || '')
-      : (targetLanguages.filter(l => l !== lang)[0] || '')
-    const effectiveTargetLanguages = isSingleLanguageMode
-      ? targetLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
-      : targetLanguages
-
-    // Reserve a TTS queue slot before the API call so playback order matches utterance order
-    if (enableTtsRef.current && ttsTargetLang) {
-      onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
-    }
-
+      },
+    })
+    const ttsTargetLang = skipTranslation ? '' : targetLanguages.filter(l => l !== lang)[0] || ''
+    if (enableTtsRef.current && ttsTargetLang) onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
     clearFinalizedTurnTranslationController(utteranceId)
     const controller = new AbortController()
+    const clearSequence = conversationClearSequenceRef.current
     finalizedTurnTranslationControllersRef.current[utteranceId] = controller
-
-    void translateViaApi(text, lang, effectiveTargetLanguages, {
-      signal: controller.signal,
-      ttsLanguage: ttsTargetLang,
-      enableTts: enableTtsRef.current,
-      isFinal: true,
-      clientMessageId: utteranceId,
-      currentTurnPreviousState,
-      excludeUtteranceId: utteranceId,
-      sttDurationMs: options?.sttDurationMs,
-    }).then(result => {
-      if (isStaleConversationFinalize()) {
-        if (enableTtsRef.current && ttsTargetLang) {
-          onTtsCanceledRef.current?.(utteranceId)
-        }
+    // A view's controller only gates playback. Durable delivery can resume on
+    // another screen or after restart without replaying historical speech.
+    void deliverDurableFinalization(record).then(result => {
+      if (controller.signal.aborted || clearSequence !== conversationClearSequenceRef.current) {
+        if (ttsTargetLang) onTtsCanceledRef.current?.(utteranceId)
         return
       }
-
-      const hasTranslations = Object.keys(result.translations).length > 0
-      if (hasTranslations) {
-        applyTranslationToUtterance(
-          utteranceId,
-          result.translations,
-          { kind: 'final', seq },
-          true,
-          {
-            sourceText: text,
-            sourceLanguage: lang,
-          },
-          {
-            detectedSourceLanguage: result.sourceLanguage,
-            sourceLanguagesMixed: result.sourceLanguagesMixed,
-            sourceTextHasForeignScript: result.sourceTextHasForeignScript,
-            selectedLanguages: targetLanguages,
-            sourceText: text,
-          },
-        )
-        if (enableTtsRef.current && ttsTargetLang) {
-          pendingFinalizedTtsUtteranceIdsRef.current.add(utteranceId)
-        }
-      } else if (enableTtsRef.current && ttsTargetLang) {
-        onTtsCanceledRef.current?.(utteranceId)
-      }
-
-      const translationLatencyMs = Math.max(0, Date.now() - requestStartedAt)
-      const totalDurationMs = (options?.sttDurationMs ?? 0) + translationLatencyMs
-      void logClientEvent({
-        eventType: 'stt_turn_finalized',
-        clientMessageId: utteranceId,
-        sourceLanguage: result.sourceLanguage || lang,
-        sourceText: text,
-        translations: result.translations,
-        sttDurationMs: options?.sttDurationMs,
-        totalDurationMs,
-        provider: result.provider,
-        infrastructureProvider: result.infrastructureProvider,
-        model: result.model,
-        translationPromptTokens: result.translationPromptTokens,
-        translationCompletionTokens: result.translationCompletionTokens,
-        translationTotalTokens: result.translationTotalTokens,
-        metadata: {
-          reason: options?.reason || 'unknown',
-          hasInlineTts: Boolean(result.ttsAudioBase64),
-          singleLanguageMode: isSingleLanguageMode,
-          speaker: resolvedSpeaker || null,
-          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
-          speakerAvatarIndex:
-            typeof resolvedSpeakerAvatarIndex === 'number'
-              ? resolvedSpeakerAvatarIndex
-              : null,
-        },
-        keepalive: true,
-      })
+      if ((!result || !Object.keys(result.translations).length) && ttsTargetLang) onTtsCanceledRef.current?.(utteranceId)
     }).finally(() => {
-      if (finalizedTurnTranslationControllersRef.current[utteranceId] !== controller) return
-      delete finalizedTurnTranslationControllersRef.current[utteranceId]
+      if (finalizedTurnTranslationControllersRef.current[utteranceId] === controller) {
+        delete finalizedTurnTranslationControllersRef.current[utteranceId]
+      }
     })
-  }, [applyTranslationToUtterance, clearFinalizedTurnTranslationController, getCurrentTargetLanguages, logClientEvent, translateViaApi])
+  }, [buildRecentTurnContextPayload, clearFinalizedTurnTranslationController, clientMessageOutboxOwnerIdentity,
+    conversationId, ensureSessionKey, finalizationApiNamespace, getCurrentTargetLanguages, outboxTrackingUserId,
+    storageNamespace, translationModel, usageSec, livePreviewSender])
 
   const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
     const text = normalizeSttTurnText(input.text)
@@ -4431,8 +4750,13 @@ export default function useRealtimeSTT({
     return localFinalizeResult.utteranceId
   }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
 
-  const clearConversationHistory = useCallback(() => {
+  const clearConversationHistory = useCallback((options?: { preservePendingDelivery?: boolean }) => {
+    livePreviewSender.clear()
+    remotePreviews.clear()
     const wasActiveSession = hasActiveSessionRef.current
+    if (!options?.preservePendingDelivery) {
+      discardDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId || '')
+    }
 
     conversationClearSequenceRef.current += 1
     clearConnectionErrorResetTimer()
@@ -4477,6 +4801,9 @@ export default function useRealtimeSTT({
       })
     }
   }, [
+    clientMessageOutboxOwnerIdentity,
+    finalizationApiNamespace,
+    conversationId,
     clearAllFinalizedTurnTranslationControllers,
     clearConnectionErrorResetTimer,
     clearUtterancePersistTimer,
@@ -4485,6 +4812,8 @@ export default function useRealtimeSTT({
     persistLocalUtterancesSnapshot,
     resetToIdle,
     sendNativeSttCommand,
+    livePreviewSender,
+    remotePreviews,
   ])
 
   const replaceConversationHistoryForQa = useCallback((items: Utterance[], options?: { loadAll?: boolean }) => {
@@ -4579,10 +4908,12 @@ export default function useRealtimeSTT({
 
     if (useNativeStt) {
       nativeStopRequestedRef.current = true
+      nativeStopIntent.stop(nativeStopIntentKeyRef.current, NATIVE_STOP_ACK_TIMEOUT_MS)
       clearPendingNativeStopAckTimeout()
       const nativeStopAckPromise = new Promise<void>((resolve) => {
         pendingNativeStopAckResolverRef.current = resolve
         pendingNativeStopAckTimeoutRef.current = setTimeout(() => {
+          nativeStopIntent.complete(nativeStopIntentKeyRef.current)
           pendingNativeStopAckTimeoutRef.current = null
           pendingNativeStopAckResolverRef.current = null
           nativeStopRequestedRef.current = false
@@ -5032,6 +5363,8 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
+      if (useNativeSttRef.current && (isStoppingRef.current || nativeStopRequestedRef.current
+        || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current))) return
       connectionStatusRef.current = 'ready'
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
@@ -5051,8 +5384,11 @@ export default function useRealtimeSTT({
     }
 
     if (message.type === 'stop_recording_ack') {
-      if (nativeStopRequestedRef.current) {
+      if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
         finalizePendingTurnsLocallyForStop('native_stop_ack')
+        nativeStopRequestedRef.current = false
+        releaseCurrentNativeSttOwner()
+        resolvePendingNativeStopAck()
       }
       return
     }
@@ -5069,7 +5405,8 @@ export default function useRealtimeSTT({
         textPreview: buildDebugTextPreview(text),
       })
 
-      if (isStoppingRef.current && !isFinal) {
+      if ((isStoppingRef.current || (useNativeSttRef.current
+        && nativeStopIntent.isStopped(nativeStopIntentKeyRef.current))) && !isFinal) {
         return
       }
 
@@ -5161,8 +5498,11 @@ export default function useRealtimeSTT({
             ? recentFinalizedMatch.utteranceId
             : null
         )
-        let reusedSpeakerAvatarSeed: string | undefined
-        let reusedSpeakerAvatarIndex: number | undefined
+        const reusedUtterance = recentLocalReuseUtteranceId
+          ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)
+          : undefined
+        let reusedSpeakerAvatarSeed = reusedUtterance?.speakerAvatarSeed
+        let reusedSpeakerAvatarIndex = reusedUtterance?.speakerAvatarIndex
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
@@ -5214,6 +5554,13 @@ export default function useRealtimeSTT({
 
         finalizeTurnWithTranslation(
           {
+            utterance: {
+              ...finalizedPayload.utterance,
+              id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+              createdAtMs: (recentLocalReuseUtteranceId
+                ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)?.createdAtMs
+                : undefined) ?? finalizedPayload.utterance.createdAtMs,
+            },
             utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
@@ -5255,6 +5602,10 @@ export default function useRealtimeSTT({
         )
         if (!existingPendingTurn) {
           utteranceIdRef.current = turnIdentity.utteranceSerial
+          if (conversationId && text) reserveVoiceOrder({
+            ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
+            sessionKey: ensureSessionKey(), clientMessageId: turnIdentity.utteranceId,
+          }, buildClientApiPath('/log/client-event'), outboxTrackingUserId)
         }
         pendingTurnsBySpeakerRef.current[speaker] = {
           ...turnIdentity,
@@ -5292,14 +5643,25 @@ export default function useRealtimeSTT({
     getCurrentTargetLanguages,
     logClientEvent,
     ensureSpeakerAvatarAssignment,
+    conversationId,
+    clientMessageOutboxOwnerIdentity,
+    finalizationApiNamespace,
+    ensureSessionKey,
+    outboxTrackingUserId,
     removePendingTurn,
     startAudioProcessing,
+    releaseCurrentNativeSttOwner,
+    resolvePendingNativeStopAck,
     syncVisiblePendingTurn,
     effectiveViewerUserId,
     effectiveViewerImage,
   ])
 
   const startRecording = useCallback(async () => {
+    // A remounted visible hook shares the previous hook's stop window.
+    while (nativeStopIntent.isPending(nativeStopIntentKeyRef.current)) {
+      await sleep(25)
+    }
     if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
       logSttDebug('recording.start.waiting_for_stop')
       const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250
@@ -5335,6 +5697,7 @@ export default function useRealtimeSTT({
       const cachedSessionId = readCachedNativeSttSessionId(cachedWindow)
       const currentConversationId = (conversationId || '').trim()
       const canReuseCachedSession = isLiveNativeBridgeStatus(cachedNativeStatus)
+        && !nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)
         && Boolean(cachedSessionId)
         && Boolean(currentConversationId)
         && cachedConversationId === currentConversationId
@@ -5423,6 +5786,8 @@ export default function useRealtimeSTT({
       bumpPendingTurnRenderVersion()
 
       if (useNativeStt) {
+        nativeStopIntent.start(nativeStopIntentKeyRef.current)
+        nativeStopRequestedRef.current = false
         claimCurrentNativeSttOwner()
         const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
         const nativeSessionId = nativeSttSessionIdRef.current || createNativeSttSessionId()
@@ -5667,6 +6032,12 @@ export default function useRealtimeSTT({
         return
       }
 
+      if (detail.type === 'status' && isLiveNativeBridgeStatus(detail.status)
+        && nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
+        logSttDebug('native.status.skip_stop_intent', { status: detail.status })
+        return
+      }
+
       const provisionalSessionId = nativeSttSessionAuthoritativeRef.current
         ? null
         : nativeSttRequestedSessionIdRef.current || nativeSttSessionIdRef.current
@@ -5814,6 +6185,7 @@ export default function useRealtimeSTT({
           nextConnectionStatus,
           isStopping: isStoppingRef.current,
           nativeStopRequested: nativeStopRequestedRef.current,
+          stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
         })) {
           logSttDebug('native.status.skip_stop_pending', { status: detail.status })
           return
@@ -5824,7 +6196,9 @@ export default function useRealtimeSTT({
         if (nextConnectionStatus === 'ready') {
           hasActiveSessionRef.current = true
         }
-        if (nextConnectionStatus === 'idle' && nativeStopRequestedRef.current && !nativeStopInProgress) {
+        if (shouldCompleteNativeStopFromStatus({
+          status: detail.status, stopping: nativeStopInProgress, stopRequested: nativeStopRequestedRef.current,
+        })) {
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()
           handlers.resolvePendingNativeStopAck()
@@ -5833,7 +6207,7 @@ export default function useRealtimeSTT({
           hasActiveSessionRef.current = false
           handlers.releaseCurrentNativeSttOwner()
         }
-        if (isTerminalNativeBridgeStatus(detail.status)) {
+        if (isTerminalNativeBridgeStatus(detail.status) && !nativeStopRequestedRef.current) {
           nativeSttConversationIdRef.current = null
           nativeSttSessionIdRef.current = null
           nativeSttRequestedSessionIdRef.current = null
@@ -5851,6 +6225,12 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
+        let message: Record<string, unknown>
+        try {
+          const parsed: unknown = JSON.parse(detail.raw)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+          message = parsed as Record<string, unknown>
+        } catch { return }
         if (!handlers.claimCurrentNativeSttOwnerForMessage(detail)) {
           return
         }
@@ -5865,6 +6245,8 @@ export default function useRealtimeSTT({
           previousConnectionStatus: connectionStatusRef.current,
           isStopping: isStoppingRef.current,
           nativeStopRequested: nativeStopRequestedRef.current,
+          stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
+          message,
         })) {
           logSttDebug('native.message.promote_ready', {
             previousConnectionStatus: connectionStatusRef.current,
@@ -5875,11 +6257,11 @@ export default function useRealtimeSTT({
           setConnectionStatus('ready')
         }
         try {
-          const message = JSON.parse(detail.raw) as Record<string, unknown>
           if (!shouldHandleNativeBridgeServerMessage({
             message,
             isStopping: isStoppingRef.current,
             nativeStopRequested: nativeStopRequestedRef.current,
+            stopIntent: nativeStopIntent.isStopped(nativeStopIntentKeyRef.current),
           })) {
             logSttDebug('native.message.skip_stop_pending_ready')
             return
@@ -5913,7 +6295,7 @@ export default function useRealtimeSTT({
           return
         }
         logSttDebug('native.error', { message: detail.message })
-        if (nativeStopRequestedRef.current) {
+        if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
           handlers.finalizePendingTurnsLocallyForStop('native_stop_error')
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()
@@ -5946,7 +6328,7 @@ export default function useRealtimeSTT({
           return
         }
         logSttDebug('native.close', { reason: detail.reason })
-        if (nativeStopRequestedRef.current) {
+        if (nativeStopRequestedRef.current || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current)) {
           handlers.finalizePendingTurnsLocallyForStop('native_stop_close')
           nativeStopRequestedRef.current = false
           handlers.releaseCurrentNativeSttOwner()
@@ -6397,12 +6779,21 @@ export default function useRealtimeSTT({
     return buildPendingSpeakerTurnSnapshots(pendingTurnsBySpeakerRef.current)
   }, [pendingTurnsSignature])
   const activePendingTurn = getActivePendingTurn()
-  const liveUtterances = useMemo(() => buildLiveUtterances({
+  const localLiveUtterances = useMemo(() => buildLiveUtterances({
     pendingTurns: pendingTurnSnapshots,
     languages: liveUtteranceLanguages,
     viewerUserId: effectiveViewerUserId,
     viewerImage: effectiveViewerImage,
   }), [pendingTurnSnapshots, liveUtteranceLanguages, effectiveViewerUserId, effectiveViewerImage])
+  useEffect(() => { livePreviewSender.setPartials(localLiveUtterances) }, [livePreviewSender, localLiveUtterances])
+  const liveUtterances = useMemo(() => {
+    void remotePreviewVersion
+    const own = localLiveUtterances.map(u => {
+      const time = remotePreviews.orderFor(viewerUserId, u.id)
+      return time ? { ...u, serverCreatedAtMs: time } : u
+    })
+    return [...own, ...remotePreviews.visible(utterances, viewerUserId)].sort(compareUtteranceOrder)
+  }, [localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,
