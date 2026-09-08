@@ -1,5 +1,7 @@
 'use client'
 
+import { compareUtteranceOrder } from './utterance-order'
+
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
@@ -1014,6 +1016,10 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
             )
           : {},
         createdAtMs: typeof record.createdAtMs === 'number' ? record.createdAtMs : undefined,
+        ...(typeof record.serverCreatedAtMs === 'number' && Number.isFinite(record.serverCreatedAtMs)
+          && record.serverCreatedAtMs > 0 && typeof record.serverMessageId === 'string' ? {
+            serverCreatedAtMs: record.serverCreatedAtMs, serverMessageId: record.serverMessageId,
+          } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
           ? { speakerAvatarSeed: record.speakerAvatarSeed.trim() }
@@ -1637,6 +1643,9 @@ export function mergeDisplayUtterances(input: {
   ]
 
   combined.sort((left, right) => {
+    if (left.utterance.serverCreatedAtMs !== undefined || right.utterance.serverCreatedAtMs !== undefined) {
+      return compareUtteranceOrder(left.utterance, right.utterance)
+    }
     const leftCreatedAt = inferUtteranceCreatedAtMs(left.utterance)
     const rightCreatedAt = inferUtteranceCreatedAtMs(right.utterance)
     if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
@@ -2134,6 +2143,8 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
     && areOptionalRecordsEqual(left.translations, right.translations)
     && areOptionalRecordsEqual(left.translationFinalized, right.translationFinalized)
     && left.createdAtMs === right.createdAtMs
+    && left.serverCreatedAtMs === right.serverCreatedAtMs
+    && left.serverMessageId === right.serverMessageId
   )
 }
 
@@ -2164,6 +2175,9 @@ function appendOrReplaceUtterance(
   if (nextCreatedAt === null) return [...withoutExisting, normalizedNextUtterance]
 
   const insertIndex = withoutExisting.findIndex((utterance) => {
+    if (utterance.serverCreatedAtMs !== undefined || normalizedNextUtterance.serverCreatedAtMs !== undefined) {
+      return compareUtteranceOrder(utterance, normalizedNextUtterance) > 0
+    }
     const createdAt = inferUtteranceCreatedAtMs(utterance)
     return createdAt !== null && createdAt > nextCreatedAt
   })
@@ -2349,8 +2363,9 @@ export function mergeServerHydrationUtteranceIntoStoreState(
   // positioned its live draft. AppMessage.createdAt is a later persistence
   // timestamp, so replacing the former with the latter can move a finalized
   // bubble across a newer live turn during push/poll hydration. Server content
-  // remains authoritative; only the established display-order timestamp stays
-  // immutable for an utterance that is already present on this client.
+  // remains authoritative. Shared messages also carry a canonical server order
+  // independent of this display/capture time, so both members converge without
+  // changing solo-session live-draft ordering or the pagination cursor.
   const serverUtterance = existingCreatedAtMs === null
     ? normalizedServerUtterance
     : {
@@ -3395,7 +3410,7 @@ export default function useRealtimeSTT({
     const conflicts = findConversationHydrationOrderConflicts({
       localUtterances: utterancesRef.current,
       liveUtterances,
-      serverUtterances: utterancesFromServer,
+      serverUtterances: utterancesFromServer.filter(utterance => utterance.serverCreatedAtMs === undefined),
     })
 
     for (const conflict of conflicts) {

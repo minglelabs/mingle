@@ -75,6 +75,8 @@ export type ConversationChannelSummary = {
 };
 
 export type ConversationHydrationUtterance = {
+  serverCreatedAtMs?: number;
+  serverMessageId?: string;
   id: string;
   originalText: string;
   originalLang: string;
@@ -2401,7 +2403,9 @@ export async function getConversationHydrationStateForUser(args: {
       : {}),
   };
 
-  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords] = await prisma.$transaction([
+  // Independent read queries do not need a sequential transaction. Especially
+  // with a remote DB, each serialized round trip delays counterpart messages.
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById] = await Promise.all([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -2445,6 +2449,8 @@ export async function getConversationHydrationStateForUser(args: {
       where: { channelId: conversationRecord.id },
       select: { inviteeUserId: true, invitedByUserId: true, createdAt: true },
     }),
+    listChannelMembersByChannelId([conversationRecord.id]),
+    listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
   ]);
 
   const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
@@ -2452,10 +2458,6 @@ export async function getConversationHydrationStateForUser(args: {
   const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
 
-  const [membersByChannelId, pendingInviteeProfileById] = await Promise.all([
-    listChannelMembersByChannelId([conversationRecord.id]),
-    listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
-  ]);
   const members = membersByChannelId.get(conversationRecord.id);
   const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
@@ -2520,6 +2522,10 @@ export async function getConversationHydrationStateForUser(args: {
       translations,
       translationFinalized,
       createdAtMs: message.createdAt.getTime(),
+      ...(isMultiMember || isMultiMemberAtMessage ? {
+        serverCreatedAtMs: message.createdAt.getTime(),
+        serverMessageId: message.id,
+      } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),

@@ -1,5 +1,7 @@
 'use client'
 
+import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
+
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
@@ -6196,9 +6198,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const timelineItems = useMemo<LivePhoneDemoTimelineItem[]>(() => {
     const items: LivePhoneDemoTimelineItem[] = displayUtterances.map((utterance) => ({
       kind: 'message',
-      timestampMs: typeof utterance.createdAtMs === 'number' && Number.isFinite(utterance.createdAtMs)
-        ? utterance.createdAtMs
-        : 0,
+      timestampMs: utteranceOrderTime(utterance),
       utterance,
     }))
     for (const notice of leaveNotices) {
@@ -6207,7 +6207,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     for (const notice of inviteNotices) {
       items.push({ kind: 'invite-notice', timestampMs: notice.invitedAtMs, notice })
     }
-    items.sort((a, b) => a.timestampMs - b.timestampMs)
+    items.sort((a, b) => a.kind === 'message' && b.kind === 'message'
+      ? compareUtteranceOrder(a.utterance, b.utterance) : a.timestampMs - b.timestampMs)
     return items
   }, [displayUtterances, leaveNotices, inviteNotices])
 

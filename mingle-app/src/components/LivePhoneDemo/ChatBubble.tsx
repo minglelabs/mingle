@@ -85,6 +85,8 @@ export interface Utterance {
   translationFinalized?: Record<string, boolean>
   translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
+  serverCreatedAtMs?: number
+  serverMessageId?: string
 }
 
 interface ChatBubbleProps {
