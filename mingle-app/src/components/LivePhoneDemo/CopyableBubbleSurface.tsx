@@ -29,6 +29,7 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   copyAllBubblesLabel?: string
   playPronunciationLabel?: string
   onPlayPronunciation?: () => void
+  onActivate?: () => void
 }
 
 export function didLongPressQualify(
@@ -49,6 +50,7 @@ export default function CopyableBubbleSurface({
   copyAllBubblesLabel,
   playPronunciationLabel,
   onPlayPronunciation,
+  onActivate,
   children,
   className,
   style,
@@ -237,9 +239,16 @@ export default function CopyableBubbleSurface({
       data-copyable-bubble
       data-copyable-bubble-double-tap-action={showPlayPronunciationButton ? 'play-pronunciation' : 'copy'}
       tabIndex={0}
+      onClick={(event) => {
+        props.onClick?.(event)
+        if (!event.defaultPrevented && !isCopyMenuOpen) onActivate?.()
+      }}
       onKeyDown={(event) => {
         onKeyDown?.(event)
         if (event.defaultPrevented || event.target !== event.currentTarget) return
+        if (event.key === 'Enter' && onActivate) {
+          event.preventDefault(); onActivate(); return
+        }
         if (event.key === 'Enter' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
           event.preventDefault()
           openMenu()
@@ -253,6 +262,7 @@ export default function CopyableBubbleSurface({
       }}
       onDoubleClick={(event) => {
         onDoubleClick?.(event)
+        if (onActivate) return
         if (event.defaultPrevented) return
         // 터치 더블탭으로 이미 처리된 경우 dblclick 중복 발동 방지
         if (touchDoubleTapFiredRef.current) {
@@ -274,7 +284,7 @@ export default function CopyableBubbleSurface({
         // 터치 기반 더블탭 감지 (모바일 웹뷰에서 dblclick 미발생 대응)
         const now = Date.now()
         const last = lastTapRef.current
-        if (last !== null) {
+        if (last !== null && !onActivate) {
           const timeDiff = now - last.time
           const distX = Math.abs(touchPoint.clientX - last.x)
           const distY = Math.abs(touchPoint.clientY - last.y)

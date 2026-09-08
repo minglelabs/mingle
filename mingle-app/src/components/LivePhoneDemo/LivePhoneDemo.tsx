@@ -1,5 +1,7 @@
 'use client'
 
+import ConversationImageComposer from './ConversationImageComposer'
+
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 
@@ -4401,6 +4403,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startRecording,
     stopRecording,
     submitExternalUtterance,
+    refreshConversationMessages,
     clearConversationHistory,
     prepareForDeletion,
     isActive,
@@ -8425,6 +8428,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </div>
 
+                      {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
+                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer} /> : (
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
                         data-qa="live-demo-keyboard-close"
@@ -8439,6 +8444,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <Keyboard size={18} strokeWidth={2.2} />
                       </motion.button>
+                      )}
                     </div>
 
                     <button
@@ -8587,7 +8593,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   </motion.div>
 
-                  <div className="self-end justify-self-end">
+                  <div className="flex items-end gap-1 self-end justify-self-end">
+                    {conversationId && viewerUserId && <ConversationImageComposer conversationId={conversationId} locale={uiLocale} onSent={() => void refreshConversationMessages('push')} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"
