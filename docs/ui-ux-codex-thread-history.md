@@ -2163,3 +2163,23 @@
 - Scope boundary: This fixes repeated reordering after a shared order has been received. Optimistic device-local messages can still reconcile once when they first receive server order, including after an offline interval. Guaranteeing zero movement before any server acknowledgement while also guaranteeing identical order on both devices would require delaying initial shared-message placement; this change does not introduce that delay.
 - Deployment: Deploy the updated web app and messaging service together. No native rebuild, app/API version change, environment variable, Prisma migration, or historical-data rewrite is required. PR #211 was already merged; this follow-up is committed to `codex/messenger-client-sot-2.0.1` and is not automatically included in that prior merge. No service-branch merge or production deployment was performed for this follow-up.
 - Subsequent user-directed integration: Applied only this fix from `6a48c1be` directly to `codex/messenger-tabs-device-test`, after fast-forwarding its clean local worktree to the already-merged PR #211. The cherry-pick was conflict-free and its resulting code tree matched the tested source tree. Pushing the service branch requests its normal automatic deployment; deployment completion is a separate runtime status.
+
+## 2026-09-08 — Search tab scroll boundaries and keyboard handling
+
+- Report: [Search tab scroll area and keyboard issue](https://app.notion.com/p/roycenam/3d122e3ed20a80ceb402fa52755319d9). Long search results moved the search header and bottom tabs along with the results.
+- Branch: `codex/search-scroll-keyboard`, based on `origin/codex/messenger-tabs-device-test` at `9c94e666`.
+- Root causes:
+  - The 400px mobile canvas scales down on narrow screens, leaving a layout box taller than its visible shell. `overflow: hidden` still permits programmatic/focus scrolling. A result button receiving focus scrolled the outer shell by 19px at 360px width, moving the header above the viewport and the tabs away from the bottom.
+  - The search page did not track the visual viewport when the keyboard covered part of the screen.
+  - The native iOS layout route list omitted `/connect`, leaving whole-WebView scrolling, bouncing, and the keyboard accessory enabled on search.
+- Resolution:
+  - Use `overflow: clip` for the search page and its canvas ancestors, scoped to search, while retaining the result list as the scroll container with contained overscroll.
+  - Observe visual viewport resize/scroll and parent resize, convert visible pixels to canvas coordinates, and cap page height to the parent. Android WebView resizing does not cause a second keyboard-height subtraction. Clean up listeners, the observer, and scheduled frames on unmount.
+  - Submit the search form to dismiss the keyboard without navigating or clearing the query. Dismiss on result-list dragging, result selection, and bottom-tab selection. Keep clear-and-refocus behavior and reset the result scroll offset when editing the query.
+  - Apply the existing iOS fixed-screen scroll and keyboard-accessory policy to localized search routes.
+- Validation:
+  - 34 Vitest checks passed for viewport geometry/lifecycle, native layout routes, mobile canvas scaling, search cache, and tab navigation. ESLint and the full web TypeScript check passed.
+  - Browser verification used the actual search component, viewport observer, bottom tabs, and generated application CSS with 20 synthetic users and mocked authentication/network responses, served through this worktree's local devbox.
+  - At 390x844, the results reached scroll offset 635.5px while the header stayed at 0 and tabs stayed at 844px. At 360x740, focusing a bottom result kept the outer shell at scroll offset 0 and the header at 0, fixing the reproduced 19px displacement.
+  - A simulated 300px keyboard reduction moved the tabs to 440px on the 740px screen; closing restored their position. Search submission blurred the input, changing the query reset the result offset to 0, and a follow action completed with one click while the input had focus.
+- Limits: Browser keyboard geometry was simulated; physical iOS/Android keyboards and touch dragging were not exercised. The iOS WebView policy change requires a rebuilt native app. No release or production deployment was performed; app/API namespaces remain at 2.0.3.

@@ -14,6 +14,7 @@ import {
 } from "@/components/connect-search-cache";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { observeConnectViewport } from "@/lib/connect-viewport";
 import { formatHandle, isAnonymousTrackingHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
@@ -136,6 +137,8 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pageRef = useRef<HTMLElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const requestSequenceRef = useRef(0);
   const searchRequestSequenceRef = useRef(0);
   const lastSearchContextRef = useRef<{
@@ -181,7 +184,17 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
 
+  const dismissSearchKeyboard = useCallback(() => {
+    inputRef.current?.blur();
+  }, []);
+
+  useEffect(() => {
+    if (!pageRef.current) return;
+    return observeConnectViewport(pageRef.current);
+  }, []);
+
   const handleSearchQueryChange = useCallback((nextQuery: string) => {
+    if (resultsRef.current) resultsRef.current.scrollTop = 0;
     setQuery(nextQuery);
     const normalizedNextQuery = nextQuery.trim();
     if (normalizedNextQuery) {
@@ -510,14 +523,21 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
 
   return (
     <>
-      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+      <main ref={pageRef} className="connect-page relative flex h-full min-h-0 w-full flex-col overflow-clip bg-white text-slate-900">
       <header
         className="shrink-0 px-4 pb-3"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 44px) + 12px)",
         }}
       >
-        <label className="relative block">
+        <form
+          role="search"
+          className="relative block"
+          onSubmit={(event) => {
+            event.preventDefault();
+            dismissSearchKeyboard();
+          }}
+        >
           <Search
             size={19}
             strokeWidth={2.1}
@@ -527,6 +547,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <input
             ref={inputRef}
             type="search"
+            enterKeyHint="search"
             value={query}
             onChange={(event) => handleSearchQueryChange(event.target.value)}
             placeholder={copy.placeholder}
@@ -549,10 +570,15 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
               <X size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
           ) : null}
-        </label>
+        </form>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={resultsRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+        onTouchMove={dismissSearchKeyboard}
+        onClickCapture={dismissSearchKeyboard}
+      >
         {followError ? (
           <p className="px-6 pt-4 text-center text-[13px] text-red-500" role="alert">
             {copy.followError}
@@ -628,7 +654,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         ) : null}
       </div>
 
-        <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
+        <div className="shrink-0" onClickCapture={dismissSearchKeyboard}>
+          <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
+        </div>
       </main>
       <PublicUserProfileScreen
         dictionary={dictionary}
