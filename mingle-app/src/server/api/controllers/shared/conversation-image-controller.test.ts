@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import sharp from 'sharp'
-const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn() }))
+const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), push: vi.fn(), after: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn() }))
+vi.mock('next/server', async importOriginal => ({ ...await importOriginal<typeof import('next/server')>(), after: m.after }))
+vi.mock('@/server/push-notifications', () => ({ sendPushNotificationForConversationMessage: m.push }))
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/lib/prisma', () => ({ prisma: { appMessage: { findUnique: m.findUnique, findFirst: m.findFirst, create: m.create } } }))
@@ -40,6 +42,10 @@ describe('conversation images', () => {
     expect(m.create.mock.calls[0][0].data).toMatchObject({ userId: 'alice', sessionKey: 'session', clientMessageId: 'image-client-message', contents: { create: { text: '📷 Photo' } } })
     expect(m.materialize).toHaveBeenCalledWith('session', expect.any(Date))
     expect(m.notify).toHaveBeenCalledWith('session', ['alice', 'bob'], undefined, { timeoutMs: 3000 })
+    expect(m.after).toHaveBeenCalledTimes(1)
+    expect(m.push).not.toHaveBeenCalled()
+    await m.after.mock.calls[0][0]()
+    expect(m.push).toHaveBeenCalledWith({ messageId: 'db-image', sessionKey: 'session', senderUserId: 'alice', sourceText: '📷 Photo', memberUserIds: ['alice', 'bob'] })
   })
   it('rejects spoofed raster content and excessive payloads', async () => {
     expect((await postConversationImage(upload(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>')), 'room')).status).toBe(400)
@@ -51,6 +57,7 @@ describe('conversation images', () => {
     m.findUnique.mockResolvedValue({ id: 'db-image', userId: 'alice', createdAt: new Date(), metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: createHash('sha256').update(bytes).digest('hex'), width: 32, height: 64 } } })
     expect((await postConversationImage(upload(bytes), 'room')).status).toBe(201)
     expect(m.put).not.toHaveBeenCalled(); expect(m.create).not.toHaveBeenCalled()
+    expect(m.after).not.toHaveBeenCalled()
   })
   it('removes only its losing upload when a concurrent identical retry already committed', async () => {
     const bytes = await png()
@@ -62,6 +69,24 @@ describe('conversation images', () => {
     expect(await response.json()).toMatchObject({ messageId: 'winning-image' })
     expect(m.remove).toHaveBeenCalledWith(m.put.mock.calls[0][0])
     expect(m.remove).not.toHaveBeenCalledWith('conversation-images/winner.jpg')
+    expect(m.after).not.toHaveBeenCalled()
+  })
+  it('keeps a committed photo successful when background push delivery fails', async () => {
+    m.push.mockRejectedValue(new Error('push_unavailable'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+      await expect(m.after.mock.calls[0][0]()).resolves.toBeUndefined()
+      expect(m.push).toHaveBeenCalledTimes(1)
+      expect(m.remove).not.toHaveBeenCalled()
+    } finally { error.mockRestore() }
+  })
+  it('resolves recipients after pending invitees have been materialized', async () => {
+    m.members.mockResolvedValue(['alice'])
+    m.materialize.mockImplementation(async () => { m.members.mockResolvedValue(['alice', 'new-member']) })
+    expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+    await m.after.mock.calls[0][0]()
+    expect(m.push).toHaveBeenCalledWith(expect.objectContaining({ memberUserIds: ['alice', 'new-member'] }))
   })
   it('cannot reuse another sender message identifier', async () => {
     m.findUnique.mockResolvedValue({ id: 'db-image', userId: 'bob' })
@@ -77,6 +102,7 @@ describe('conversation images', () => {
     m.put.mockRejectedValue(new Error('unavailable'))
     expect((await postConversationImage(upload(await png()), 'room')).status).toBe(503)
     expect(m.create).not.toHaveBeenCalled()
+    expect(m.after).not.toHaveBeenCalled()
   })
   it('only serves images belonging to visible messages in the authorized room', async () => {
     m.findFirst.mockResolvedValue({ metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: 'hash', width: 32, height: 64 } } })

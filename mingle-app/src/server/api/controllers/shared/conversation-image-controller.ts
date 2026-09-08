@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import sharp from 'sharp'
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
@@ -8,6 +8,7 @@ import { getConversationSessionKeyForMember, isMessageSenderBlockedInConversatio
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { putConversationImage, getConversationImage, deleteConversationImage } from '@/server/conversation-image-storage'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 
 async function authorize(conversationId: string) {
   const session = await getServerSession(getAuthOptions())
@@ -37,6 +38,7 @@ export async function postConversationImage(request: NextRequest, conversationId
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const identity = { sessionKey_clientMessageId: { sessionKey: scope.sessionKey, clientMessageId } }
   let message = await prisma.appMessage.findUnique({ where: identity })
+  let created = false
   if (message && (message.userId !== scope.userId || message.isDeleted || storedImage(message.metadata)?.sha256 !== sha256)) return NextResponse.json({ error: 'message_conflict' }, { status: 409 })
   if (!message) {
     let image
@@ -59,6 +61,7 @@ export async function postConversationImage(request: NextRequest, conversationId
         metadata: { image: { objectKey, sha256, width: image.info.width, height: image.info.height } },
         contents: { create: { contentType: 'SOURCE', language: 'en', text: '📷 Photo' } },
       } })
+      created = true
     } catch (error) {
       await deleteConversationImage(objectKey).catch(() => {})
       // A retry arriving concurrently may have committed the identical image.
@@ -68,6 +71,23 @@ export async function postConversationImage(request: NextRequest, conversationId
         return NextResponse.json({ error: 'image_save_failed' }, { status: 500 })
       }
     }
+  }
+  // Only the insert winner schedules a push. Retried/concurrent uploads reuse
+  // that message without notifying recipients again. Notification failures must
+  // not turn a committed photo into a failed send in the composer.
+  if (created) {
+    const messageId = message.id
+    after(async () => {
+      try {
+        const memberUserIds = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)
+        await sendPushNotificationForConversationMessage({
+          messageId, sessionKey: scope.sessionKey, senderUserId: scope.userId,
+          sourceText: '📷 Photo', memberUserIds,
+        })
+      } catch (error) {
+        console.error('[conversation-image] push failed', error instanceof Error ? error.name : 'unknown')
+      }
+    })
   }
   await materializePendingConversationInvitees(scope.sessionKey, message.createdAt)
   const members = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)

@@ -1,9 +1,20 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { readProfileImageStorageConfig } from './profile-image-storage'
+
+export function readConversationImageStorageConfig(env: Readonly<Record<string, string | undefined>> = process.env) {
+  const read = (name: string) => (env[`CLOUDFLARE_R2_${name}`]?.trim() || env[`R2_${name}`]?.trim() || '')
+  const accountId = read('ACCOUNT_ID')
+  const accessKeyId = read('ACCESS_KEY_ID')
+  const secretAccessKey = read('SECRET_ACCESS_KEY')
+  const bucketName = read('CONVERSATION_BUCKET_NAME')
+  // Never fall back to the public profile bucket, including on reads or deletes.
+  const publicBuckets = [env.CLOUDFLARE_R2_BUCKET_NAME, env.R2_BUCKET_NAME].map(value => value?.trim()).filter(Boolean)
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || publicBuckets.includes(bucketName)) return null
+  return { accountId, accessKeyId, secretAccessKey, bucketName }
+}
 
 // Message clients receive only a membership-checked app URL, never an R2 URL/key.
 function storage() {
-  const config = readProfileImageStorageConfig()
+  const config = readConversationImageStorageConfig()
   if (!config) throw new Error('image_storage_not_configured')
   const client = new S3Client({ region: 'auto', endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
   return { client, bucket: config.bucketName }

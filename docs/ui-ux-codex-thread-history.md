@@ -2261,3 +2261,36 @@
 - Automated validation: 197 targeted regression tests and 10 real-PostgreSQL lifecycle tests passed. The lifecycle suite uses an explicitly supplied isolated test DB and disposable users; it covers the four-language/source-skip rule, unchanged saves, concurrent shared requests, additional-language regeneration, partial failures/manual retries, stale edits, abandoned jobs, a never-resolving provider, late manual results, deletion, and legacy publication. Full TypeScript validation passed. Real devbox HTTP tests exercised iOS v2.0.3 save and Android v2.0.3 snapshot routes. The save returned in 342ms while the previous public text remained; real provider translation subsequently succeeded for all applicable defaults. A German request from the actual component showed original + Translating, then a real German translation, then toggled back to the English original.
 - Provider-format correction (2026-09-09): Real Japanese/Korean responses sometimes echoed the input JSON wrapper despite a plain-text instruction. Require structured JSON output with one text field, validate its type/length, and expose only the field value. Six provider-response tests cover extraction and malformed/empty/oversized responses. A subsequent real save produced clean Japanese, Korean, Chinese, and previously requested German translations with no wrapper text.
 - Final UI validation (2026-09-09): Actual ProfileBio components were exercised in Android Chrome on the connected Galaxy S9 (360px viewport) and Safari on an iPhone 17 / iOS 26.5 simulator (402px viewport). Both passed original/translation activation, a 44px button height, scrolling a generated long translation, and no horizontal overflow; text heights were 1183px and 968px respectively. These were scrollable component fixtures, not a rebuilt Mingle native app or a physical iPhone test. A browser fixture also changed the real conversation display-language preference and observed the saved Japanese biography translation. An authenticated owner deletion returned HTTP 200 and immediately removed the displayed biography; changing saved-original props invalidates stale polls. Temporary fixtures, generated QA users, and test-driver processes were cleaned up. Full TypeScript and targeted ESLint checks passed.
+
+## 2026-09-09 — Resolve PR 219 photo storage and push review findings
+
+- Review findings: Conversation images used the public profile R2 bucket, allowing
+  anonymous reads when the object URL was known. Image sends also omitted the
+  APNs/FCM conversation-message notification, so backgrounded recipients received
+  no photo-arrival notification.
+- Storage correction: Require the dedicated `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME`
+  (or `R2_CONVERSATION_BUCKET_NAME`) and reuse the existing R2 account credentials.
+  Refuse missing credentials/bucket and either configured public profile bucket.
+  Every put/get/delete targets only the dedicated bucket; missing objects never
+  trigger a public fallback. Profile-image storage remains unchanged. Provisioning
+  must disable r2.dev, custom domains, and any public Worker access to this bucket.
+- Notification correction: The successful database insert schedules the existing
+  conversation push helper through Next after(). Resolve recipients after pending
+  invitation materialization and use the stored message ID, authenticated sender,
+  and a Photo preview. Matching retries and concurrent insert losers do not queue
+  another push. Provider errors are caught after the response and do not turn a
+  saved image into a failed send. Delivery retains the existing best-effort policy.
+- Validation: 62 targeted tests passed, covering private-bucket-only reads/writes/
+  deletes, unsafe or missing configuration, missing private objects, image access
+  rules, JPEG processing, successful push scheduling, retries/concurrent losers,
+  newly materialized recipients, push failure, and existing text/realtime behavior.
+  A real request to the existing isolated devbox returned HTTP 503 without the new
+  bucket setting, confirming public storage is not used as a fallback. Full TypeScript
+  and targeted ESLint checks passed.
+- Deployment: Add the dedicated private bucket setting and grant the existing R2
+  credential access before enabling photo sends. This follow-up does not provision
+  or change production Cloudflare/Vault resources. Private-bucket live access and
+  native APNs/FCM delivery still require deployment/device verification. The two
+  existing PR migrations remain the only database changes; no new migration or
+  native/version change is introduced here. Updated the Railway deployment guide
+  with the bucket, migration, existing-object cleanup, and device test sequence.
