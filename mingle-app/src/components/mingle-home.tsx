@@ -81,7 +81,7 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
-  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void;
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void;
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
     usageSec: number;

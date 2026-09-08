@@ -190,7 +190,7 @@ function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
   return rawLanguage
 }
 
-function buildTargetLanguagesForUtterance(
+export function buildTargetLanguagesForUtterance(
   utterance: Utterance,
   originalDisplayLanguage = utterance.originalLang,
 ): string[] {
@@ -277,7 +277,7 @@ function buildCombinedUtteranceCopyText(
   return lines.join('\n')
 }
 
-function findLanguageRecordValue<T>(
+export function findLanguageRecordValue<T>(
   record: Record<string, T> | undefined,
   language: string,
 ): T | undefined {

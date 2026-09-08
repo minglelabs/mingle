@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-09-08 - PR 217 delayed translation preview refresh
+
+- Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.
+- Resolution: Compare the latest reported message content as well as its ID. Publish same-message preview changes while preserving the original reported timestamp. Only a new message clears the interim preview or triggers read-state updates, so a late translation cannot erase the next live utterance's preview.
+- Verification: Regression coverage follows one finalized message through original text, delayed translation, final correction, duplicate updates, and display-language changes; it also checks a new message with identical text and stable timestamps for legacy messages without creation times. All 616 related conversation and bubble tests, full TypeScript checking, and ESLint for the changed components passed.
+- Deployment: No new Prisma migration, environment variable, native rebuild, mobile version change, or API namespace change is required. PR 216 and PR 217 use existing message content and language fields.
+
 ## 2026-09-08 - Prepare the unified 2.0.3 store release
 
 - Integrated service-branch PR #215 before release. Retained timestamp-descendant scroll anchors and calendar-day dividers while preserving the Local-first branch's canonical speech-start ordering and message-ID tie breaker. Both branches' issue histories remain intact.
