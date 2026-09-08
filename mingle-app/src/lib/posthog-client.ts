@@ -11,7 +11,11 @@ import {
 export type MingleClientEvent =
   | "mingle_app_opened"
   | "mingle_screen_viewed"
-  | "mingle_signup_completed";
+  | "mingle_signup_completed"
+  | "mingle_connect_search_requested"
+  | "mingle_connect_search_completed"
+  | "mingle_connect_follow_clicked"
+  | "mingle_connect_follow_completed";
 
 type SafeEventProperty = string | number | boolean | null | undefined;
 

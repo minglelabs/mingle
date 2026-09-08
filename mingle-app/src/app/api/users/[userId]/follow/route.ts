@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
+import { digestAnalyticsValue } from "@/lib/search-analytics";
+import { captureMingleEvent } from "@/lib/posthog-server";
 import { sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const runtime = "nodejs";
@@ -27,6 +30,39 @@ function isUniqueConstraintViolation(error: unknown): boolean {
     && error !== null
     && "code" in error
     && (error as { code?: unknown }).code === "P2002";
+}
+
+async function captureFollowApiAction(args: {
+  request: NextRequest;
+  followerId: string;
+  followingId: string;
+  action: "follow" | "unfollow";
+  outcome: "created" | "already_following" | "removed" | "not_following";
+}): Promise<void> {
+  try {
+    const [requestContext, targetIdDigest] = await Promise.all([
+      buildPostHogRequestContext(args.request, args.followerId),
+      digestAnalyticsValue(args.followingId),
+    ]);
+    captureMingleEvent({
+      distinctId: requestContext.distinctId,
+      event: "mingle_follow_api_action",
+      properties: {
+        action: args.action,
+        outcome: args.outcome,
+        account_id_digest: requestContext.accountIdDigest,
+        target_id_digest: targetIdDigest,
+        tracking_source: requestContext.trackingSource,
+        client_platform: requestContext.clientPlatform,
+        api_namespace: requestContext.apiNamespace,
+        app_version: requestContext.appVersion,
+      },
+    });
+  } catch (error) {
+    console.warn("[posthog] follow analytics failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function resolveFollowTarget(
@@ -74,7 +110,7 @@ async function resolveFollowTarget(
   return { followerId, followingId };
 }
 
-export async function POST(_request: NextRequest, { params }: FollowRouteProps) {
+export async function POST(request: NextRequest, { params }: FollowRouteProps) {
   const result = await resolveFollowTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
 
@@ -107,18 +143,34 @@ export async function POST(_request: NextRequest, { params }: FollowRouteProps) 
     }
   }
 
+  await captureFollowApiAction({
+    request,
+    followerId: result.followerId,
+    followingId: result.followingId,
+    action: "follow",
+    outcome: created ? "created" : "already_following",
+  });
+
   return jsonResult(true);
 }
 
-export async function DELETE(_request: NextRequest, { params }: FollowRouteProps) {
+export async function DELETE(request: NextRequest, { params }: FollowRouteProps) {
   const result = await resolveFollowTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
 
-  await prisma.userFollow.deleteMany({
+  const deleted = await prisma.userFollow.deleteMany({
     where: {
       followerId: result.followerId,
       followingId: result.followingId,
     },
+  });
+
+  await captureFollowApiAction({
+    request,
+    followerId: result.followerId,
+    followingId: result.followingId,
+    action: "unfollow",
+    outcome: deleted.count > 0 ? "removed" : "not_following",
   });
 
   return jsonResult(false);

@@ -2,12 +2,14 @@ import { prisma } from "@/lib/prisma";
 import {
   ADMIN_DASHBOARD_TIME_ZONE,
   type AdminDashboardDateRange,
+  type AdminDashboardPlatform,
   type DailyRow,
   type DashboardMetric,
   fillDailySeries,
   formatDayKey,
   parseDayKey,
   resolveUncacheableDayKeys,
+  shiftDayKey,
   startOfDayUtc,
 } from "@/lib/admin-dashboard-metrics";
 
@@ -16,7 +18,7 @@ import {
  * truncating it directly buckets by UTC day -- the same basis the column
  * is already stored in, no timezone conversion needed.
  */
-const DAY_BUCKET_EXPR = (column: string) => `date_trunc('day', "${column}")`;
+const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_at")`;
 const USAGE_METRIC_VERSION = 1;
 
 type RawDayCount = { day: Date; value: bigint | number };
@@ -86,6 +88,25 @@ function createCalculationRange(dayKeys: readonly string[]): AdminDashboardDateR
   return { dayKeys: [...dayKeys], rangeStart, rangeEnd };
 }
 
+function buildPlatformFilter(platform: AdminDashboardPlatform, userAlias = "u"): string {
+  return platform === "all" ? "" : `\n       and ${userAlias}."latest_client_platform" = $3`;
+}
+
+function buildQueryParams(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): [Date, Date] | [Date, Date, AdminDashboardPlatform] {
+  return platform === "all"
+    ? [range.rangeStart, range.rangeEnd]
+    : [range.rangeStart, range.rangeEnd, platform];
+}
+
+function buildMessageUserJoin(platform: AdminDashboardPlatform, messageAlias = "m"): string {
+  return platform === "all"
+    ? ""
+    : `\n     join "app"."app_users" as u on u."id" = ${messageAlias}."user_id"`;
+}
+
 /**
  * upsertTrackedUser (src/lib/app-analytics.ts) creates an app_users row keyed only by
  * externalUserId for anyone who fires a tracked client event, before they ever sign up
@@ -95,19 +116,21 @@ function createCalculationRange(dayKeys: readonly string[]): AdminDashboardDateR
  * go through the same NextAuth PrismaAdapter user-creation path); anonymous tracking
  * rows have neither.
  */
-async function querySignups(range: AdminDashboardDateRange): Promise<DailyRow[]> {
+async function querySignups(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
-    `select ${DAY_BUCKET_EXPR("created_at")} as day, count(*) as value
+    `select ${DAY_BUCKET_EXPR("u")} as day, count(*) as value
      from "app"."app_users" as u
      where u."created_at" >= $1 and u."created_at" < $2
        and (
          u."password_hash" is not null
          or exists (select 1 from "app"."auth_accounts" as a where a."user_id" = u."id")
-       )
+       )${buildPlatformFilter(platform)}
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
 }
@@ -121,31 +144,35 @@ async function querySignups(range: AdminDashboardDateRange): Promise<DailyRow[]>
  * read as ~0. app_messages is unaffected by that client bug and is the same table
  * queryMessageCount already trusts, so it's the reliable ground truth for "was active".
  */
-async function queryDau(range: AdminDashboardDateRange): Promise<DailyRow[]> {
+async function queryDau(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
-    `select ${DAY_BUCKET_EXPR("created_at")} as day, count(distinct "user_id") as value
-     from "app"."app_messages"
-     where "is_deleted" is distinct from true
-       and "user_id" is not null
-       and "created_at" >= $1 and "created_at" < $2
+    `select ${DAY_BUCKET_EXPR("m")} as day, count(distinct m."user_id") as value
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."user_id" is not null
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
 }
 
-async function queryMessageCount(range: AdminDashboardDateRange): Promise<DailyRow[]> {
+async function queryMessageCount(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
-    `select ${DAY_BUCKET_EXPR("created_at")} as day, count(*) as value
-     from "app"."app_messages"
-     where "is_deleted" is distinct from true
-       and "created_at" >= $1 and "created_at" < $2
+    `select ${DAY_BUCKET_EXPR("m")} as day, count(*) as value
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
 }
@@ -156,28 +183,38 @@ async function queryMessageCount(range: AdminDashboardDateRange): Promise<DailyR
  * window so the first day is not undercounted. A counter reset contributes zero.
  * This deliberately does not use app_messages duration fields: those are
  * per-turn client diagnostics and can be corrupted by a suspended/stale timer.
+ * Look up only the last pre-range snapshot per active user using the existing
+ * user/created_at/id index. DISTINCT ON over all earlier events can scan the
+ * entire log table even when only today and yesterday need recalculation.
  */
-async function queryUsageSeconds(range: AdminDashboardDateRange): Promise<DailyRow[]> {
+async function queryUsageSeconds(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
     `with usage_in_range as materialized (
-       select "user_id", "id", "created_at", "usage_sec"
-       from "app"."app_event_logs"
-       where "user_id" is not null
-         and "usage_sec" is not null
-         and "created_at" >= $1 and "created_at" < $2
+       select el."user_id", el."id", el."created_at", el."usage_sec"
+       from "app"."app_event_logs" as el${platform === "all" ? "" : "\n       join \"app\".\"app_users\" as u on u.\"id\" = el.\"user_id\""}
+       where el."user_id" is not null
+         and el."usage_sec" is not null
+         and el."created_at" >= $1 and el."created_at" < $2${buildPlatformFilter(platform)}
      ),
      usage_users as materialized (
        select distinct "user_id"
        from usage_in_range
      ),
      usage_before_start as materialized (
-       select distinct on (el."user_id")
-         el."user_id", el."id", el."created_at", el."usage_sec"
-       from "app"."app_event_logs" as el
-       join usage_users as uu on uu."user_id" = el."user_id"
-       where el."usage_sec" is not null
-         and el."created_at" < $1
-       order by el."user_id", el."created_at" desc, el."id" desc
+       select baseline."user_id", baseline."id", baseline."created_at", baseline."usage_sec"
+       from usage_users as uu
+       cross join lateral (
+         select el."user_id", el."id", el."created_at", el."usage_sec"
+         from "app"."app_event_logs" as el
+         where el."user_id" = uu."user_id"
+           and el."usage_sec" is not null
+           and el."created_at" < $1
+         order by el."created_at" desc, el."id" desc
+         limit 1
+       ) as baseline
      ),
      usage_events as materialized (
        select "user_id", "id", "created_at", "usage_sec"
@@ -196,7 +233,7 @@ async function queryUsageSeconds(range: AdminDashboardDateRange): Promise<DailyR
          ) as previous_usage_sec
        from usage_events
      )
-     select ${DAY_BUCKET_EXPR("created_at")} as day,
+     select ${DAY_BUCKET_EXPR("usage_snapshots")} as day,
        coalesce(sum(
          case
            when previous_usage_sec is null then 0::bigint
@@ -208,27 +245,28 @@ async function queryUsageSeconds(range: AdminDashboardDateRange): Promise<DailyR
      where "created_at" >= $1 and "created_at" < $2
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
 }
 
 /** STT-only latency: every finalized message has this regardless of whether translation ran. */
-async function querySttLatency(range: AdminDashboardDateRange): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
+async function querySttLatency(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
   const rows = await prisma.$queryRawUnsafe<RawDayLatency[]>(
     `select
-       ${DAY_BUCKET_EXPR("created_at")} as day,
-       avg("stt_duration_ms") as avg_ms,
-       percentile_cont(0.95) within group (order by "stt_duration_ms") as p95_ms
-     from "app"."app_messages"
-     where "is_deleted" is distinct from true
-       and "stt_duration_ms" is not null
-       and "created_at" >= $1 and "created_at" < $2
+       ${DAY_BUCKET_EXPR("m")} as day,
+       avg(m."stt_duration_ms") as avg_ms,
+       percentile_cont(0.95) within group (order by m."stt_duration_ms") as p95_ms
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."stt_duration_ms" is not null
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return splitLatencyRows(rows);
 }
@@ -238,35 +276,40 @@ async function querySttLatency(range: AdminDashboardDateRange): Promise<{ avg: D
  * client skipped translation entirely (detected language == selected language);
  * including those rows would drag the average toward 0 and hide real latency.
  */
-async function queryTranslationLatency(range: AdminDashboardDateRange): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
+async function queryTranslationLatency(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
   const rows = await prisma.$queryRawUnsafe<RawDayLatency[]>(
     `select
-       ${DAY_BUCKET_EXPR("created_at")} as day,
-       avg("total_duration_ms" - "stt_duration_ms") as avg_ms,
-       percentile_cont(0.95) within group (order by ("total_duration_ms" - "stt_duration_ms")) as p95_ms
-     from "app"."app_messages"
-     where "is_deleted" is distinct from true
-       and "total_duration_ms" is not null
-       and "stt_duration_ms" is not null
-       and "total_duration_ms" >= "stt_duration_ms"
-       and "translation_provider" is not null
-       and "created_at" >= $1 and "created_at" < $2
+       ${DAY_BUCKET_EXPR("m")} as day,
+       avg(m."total_duration_ms" - m."stt_duration_ms") as avg_ms,
+       percentile_cont(0.95) within group (order by (m."total_duration_ms" - m."stt_duration_ms")) as p95_ms
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."total_duration_ms" is not null
+       and m."stt_duration_ms" is not null
+       and m."total_duration_ms" >= m."stt_duration_ms"
+       and m."translation_provider" is not null
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
      group by day
      order by day`,
-    range.rangeStart,
-    range.rangeEnd,
+    ...buildQueryParams(range, platform),
   );
   return splitLatencyRows(rows);
 }
 
-async function queryDailyMetricSnapshots(range: AdminDashboardDateRange): Promise<Map<string, DailyMetricSnapshot>> {
+async function queryDailyMetricSnapshots(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, DailyMetricSnapshot>> {
   const [signups, dau, messages, usageSeconds, sttLatency, translationLatency] = await Promise.all([
-    querySignups(range),
-    queryDau(range),
-    queryMessageCount(range),
-    queryUsageSeconds(range),
-    querySttLatency(range),
-    queryTranslationLatency(range),
+    querySignups(range, platform),
+    queryDau(range, platform),
+    queryMessageCount(range, platform),
+    queryUsageSeconds(range, platform),
+    querySttLatency(range, platform),
+    queryTranslationLatency(range, platform),
   ]);
 
   const snapshots = new Map<string, DailyMetricSnapshot>();
@@ -297,10 +340,48 @@ async function queryDailyMetricSnapshots(range: AdminDashboardDateRange): Promis
   return snapshots;
 }
 
-async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<Map<string, CachedDailyMetric>> {
+function groupContiguousDayKeys(dayKeys: readonly string[]): string[][] {
+  const sortedDayKeys = [...new Set(dayKeys)].sort();
+  const groups: string[][] = [];
+
+  for (const dayKey of sortedDayKeys) {
+    const currentGroup = groups[groups.length - 1];
+    const previousDayKey = currentGroup?.[currentGroup.length - 1];
+    if (!currentGroup || !previousDayKey || shiftDayKey(previousDayKey, 1) !== dayKey) {
+      groups.push([dayKey]);
+    } else {
+      currentGroup.push(dayKey);
+    }
+  }
+
+  return groups;
+}
+
+async function queryDailyMetricSnapshotsForDays(
+  dayKeys: readonly string[],
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, DailyMetricSnapshot>> {
+  const groups = groupContiguousDayKeys(dayKeys);
+  const calculatedGroups = await Promise.all(
+    groups.map((group) => queryDailyMetricSnapshots(createCalculationRange(group), platform)),
+  );
+  const calculated = new Map<string, DailyMetricSnapshot>();
+  for (const groupSnapshots of calculatedGroups) {
+    for (const [dayKey, snapshot] of groupSnapshots) {
+      calculated.set(dayKey, snapshot);
+    }
+  }
+  return calculated;
+}
+
+async function loadCachedDailyMetrics(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, CachedDailyMetric>> {
   const rows = await prisma.adminDashboardDailyMetric.findMany({
     where: {
       day: { in: range.dayKeys.map(parseDayKey) },
+      platform,
     },
     select: {
       day: true,
@@ -323,9 +404,15 @@ async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<M
   );
 }
 
-function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: Date) {
+function snapshotToCacheRow(
+  dayKey: string,
+  snapshot: DailyMetricSnapshot,
+  platform: AdminDashboardPlatform,
+  now: Date,
+) {
   return {
     day: parseDayKey(dayKey),
+    platform,
     ...snapshot,
     usageMetricVersion: USAGE_METRIC_VERSION,
     createdAt: now,
@@ -336,6 +423,7 @@ function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: 
 async function persistDailyMetricSnapshots(
   snapshots: ReadonlyMap<string, DailyMetricSnapshot>,
   historicalDayKeys: readonly string[],
+  platform: AdminDashboardPlatform,
 ): Promise<void> {
   const now = new Date();
   await Promise.all(historicalDayKeys.map(async (dayKey) => {
@@ -343,8 +431,13 @@ async function persistDailyMetricSnapshots(
     if (!snapshot) return;
 
     await prisma.adminDashboardDailyMetric.upsert({
-      where: { day: parseDayKey(dayKey) },
-      create: snapshotToCacheRow(dayKey, snapshot, now),
+      where: {
+        day_platform: {
+          day: parseDayKey(dayKey),
+          platform,
+        },
+      },
+      create: snapshotToCacheRow(dayKey, snapshot, platform, now),
       update: {
         ...snapshot,
         usageMetricVersion: USAGE_METRIC_VERSION,
@@ -369,12 +462,19 @@ function snapshotFromCachedRow(row: CachedDailyMetric): DailyMetricSnapshot {
 
 export type LoadAdminDashboardOptions = {
   forceRefresh?: boolean;
+  platform?: AdminDashboardPlatform;
 };
 
-export async function clearAdminDashboardCache(cacheableDayKeys: readonly string[]): Promise<void> {
+export async function clearAdminDashboardCache(
+  cacheableDayKeys: readonly string[],
+  platform: AdminDashboardPlatform = "all",
+): Promise<void> {
   if (cacheableDayKeys.length === 0) return;
   await prisma.adminDashboardDailyMetric.deleteMany({
-    where: { day: { in: cacheableDayKeys.map(parseDayKey) } },
+    where: {
+      day: { in: cacheableDayKeys.map(parseDayKey) },
+      platform,
+    },
   });
 }
 
@@ -382,22 +482,25 @@ async function resolveDailyMetricSnapshots(
   range: AdminDashboardDateRange,
   options?: LoadAdminDashboardOptions,
 ): Promise<Map<string, DailyMetricSnapshot>> {
+  const platform = options?.platform ?? "all";
+
   // 오늘 + 어제는 데이터가 완전히 집계되지 않을 수 있으므로 항상 실시간 집계한다.
   const uncacheableKeys = resolveUncacheableDayKeys(new Date(), ADMIN_DASHBOARD_TIME_ZONE);
   const isForceRefresh = Boolean(options?.forceRefresh);
 
   if (isForceRefresh) {
-    const calculated = await queryDailyMetricSnapshots(range);
+    const calculated = await queryDailyMetricSnapshots(range, platform);
     const historicalDayKeys = range.dayKeys.filter((dayKey) => !uncacheableKeys.has(dayKey));
 
     await prisma.adminDashboardDailyMetric.deleteMany({
       where: {
         day: { in: historicalDayKeys.map(parseDayKey) },
+        platform,
       },
     });
 
     if (historicalDayKeys.length > 0) {
-      await persistDailyMetricSnapshots(calculated, historicalDayKeys);
+      await persistDailyMetricSnapshots(calculated, historicalDayKeys, platform);
     }
 
     return new Map(
@@ -414,7 +517,7 @@ async function resolveDailyMetricSnapshots(
     ? await loadCachedDailyMetrics({
         ...range,
         dayKeys: cacheableDayKeysInRange,
-      })
+      }, platform)
     : new Map<string, CachedDailyMetric>();
 
   const missingCacheableDays = cacheableDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
@@ -422,11 +525,11 @@ async function resolveDailyMetricSnapshots(
   const daysToCalculate = [...missingCacheableDays, ...uncacheableDaysInRange];
 
   if (daysToCalculate.length > 0) {
-    const calculated = await queryDailyMetricSnapshots(createCalculationRange(daysToCalculate));
+    const calculated = await queryDailyMetricSnapshotsForDays(daysToCalculate, platform);
     const daysToPersist = daysToCalculate.filter((dayKey) => !uncacheableKeys.has(dayKey));
 
     if (daysToPersist.length > 0) {
-      await persistDailyMetricSnapshots(calculated, daysToPersist);
+      await persistDailyMetricSnapshots(calculated, daysToPersist, platform);
     }
 
     for (const dayKey of missingCacheableDays) {

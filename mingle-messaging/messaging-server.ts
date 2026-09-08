@@ -46,7 +46,7 @@ const server = createServer((request, response) => {
     response.end(JSON.stringify({ error: 'not_found' }));
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: 256_000 });
 wss.on('connection', (socket, request) => {
     const path = request.url?.split('?')[0] || '';
     if (path !== CONVERSATION_EVENTS_WS_PATH) {

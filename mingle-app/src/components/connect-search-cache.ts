@@ -1,5 +1,7 @@
 "use client";
 
+import { isAnonymousTrackingHandle } from "@/lib/handles";
+
 const CONNECT_SEARCH_CACHE_KEY_PREFIX = "mingle:connect-search-cache:v1";
 const CONNECT_SEARCH_CACHE_MAX_STALE_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -77,10 +79,14 @@ function normalizeCacheSnapshot(
     return null;
   }
 
+  const searchableResults = candidate.results.filter(
+    (result) => !isAnonymousTrackingHandle(result.handle),
+  );
+
   return {
     savedAt: candidate.savedAt,
     query: candidate.query.trim(),
-    results: candidate.results,
+    results: searchableResults,
     resultsReady: candidate.resultsReady,
   };
 }
@@ -141,7 +147,9 @@ export function writeConnectSearchCache(
   const cached: ConnectSearchCacheSnapshot = {
     savedAt: Date.now(),
     query,
-    results: snapshot.resultsReady ? snapshot.results : [],
+    results: snapshot.resultsReady
+      ? snapshot.results.filter((result) => !isAnonymousTrackingHandle(result.handle))
+      : [],
     resultsReady: snapshot.resultsReady,
   };
   connectSearchMemoryCache.set(storageKey, cached);

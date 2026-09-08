@@ -1,9 +1,29 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import ChatBubble from './ChatBubble'
+import ChatBubble, { resolveInitialDisplayLanguage, resolveSelectedBubbleLanguage } from './ChatBubble'
 
 describe('ChatBubble', () => {
+  it('follows arriving translations unless the viewer explicitly selected a language', () => {
+    const sourceOnly = resolveInitialDisplayLanguage(['en'], 'en', 'ko', [], ['ko', 'en'])
+    const translated = resolveInitialDisplayLanguage(['en'], 'en', 'ko', ['en'], ['ko', 'en'])
+    expect(resolveSelectedBubbleLanguage('message', sourceOnly, null)).toBe('ko')
+    expect(resolveSelectedBubbleLanguage('message', translated, null)).toBe('en')
+    const manual = { messageId: 'message', language: 'ko' }
+    expect(resolveSelectedBubbleLanguage('message', translated, manual)).toBe('ko')
+    expect(resolveSelectedBubbleLanguage('other-message', translated, manual)).toBe('en')
+  })
+  it.each(['pending', 'retrying'] as const)('shows the original without a waiting label when translation is %s', translationStatus => {
+    const html = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'durable-pending', originalText: '보관된 원문', originalLang: 'ko',
+        targetLanguages: ['ko', 'en'], translations: {}, translationStatus },
+      uiLocale: 'ko', preferredDisplayLanguage: 'en', defaultDisplayLanguage: 'en', bubbleDisplayMode: 'collapsed',
+    }))
+    expect(html).toContain('data-current-bubble-text-value')
+    expect(html).toContain('보관된 원문')
+    expect(html).not.toContain('번역 대기')
+    expect(html).not.toContain('data-translation-pending-label')
+  })
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -614,7 +634,8 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(5)
     expect((html.match(/border-b-2 border-amber-400/g) || []).length).toBeGreaterThanOrEqual(1)
     expect(html).toContain('h-5 min-h-5')
-    expect(html).toContain('text-base font-medium leading-5')
+    expect(html).toContain('text-sm font-medium leading-5')
+    expect(html).toContain('px-2.5 pt-0.5 pb-1')
     expect(html).toContain('w-max min-w-0 max-w-full')
     expect(html).not.toContain('data-chat-bubble-language-badges')
     expect(html).toContain('rounded-2xl rounded-tl-none')
@@ -643,7 +664,8 @@ describe('ChatBubble', () => {
     )
 
     expect(expandedHtml).toContain('h-5 min-h-5')
-    expect(expandedHtml).toContain('text-base font-medium leading-5')
+    expect(expandedHtml).toContain('text-sm font-medium leading-5')
+    expect(expandedHtml).toContain('px-2 pt-0.5 pb-1')
     expect(expandedHtml).not.toContain('data-chat-bubble-header-language-badges')
   })
 

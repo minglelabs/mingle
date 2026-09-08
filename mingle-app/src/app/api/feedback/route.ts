@@ -7,6 +7,7 @@ import {
   upsertTrackedUser,
 } from "@/lib/app-analytics";
 import { prisma } from "@/lib/prisma";
+import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
 
 export const runtime = "nodejs";
 
@@ -245,10 +246,20 @@ export async function GET(request: Request) {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
+  const hasAuthenticatedIdentity = Boolean(sessionIdentity.id || sessionIdentity.email);
+  if (!hasAuthenticatedIdentity && !allowLegacyAnonymousUser) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
-    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+    ...sessionIdentity,
+    externalUserId: !hasAuthenticatedIdentity && allowLegacyAnonymousUser
+      ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+      : "",
+    sessionKey: !hasAuthenticatedIdentity && allowLegacyAnonymousUser
+      ? resolveTrackingSessionKey(request) || tracking.sessionKey
+      : "",
   };
   const userIds = await resolveFeedbackUserIds(identity);
 
@@ -335,10 +346,16 @@ export async function POST(request: Request) {
   });
 
   const authenticatedUserId = await resolveAuthenticatedUserId(session);
-  const userId = authenticatedUserId ?? await upsertTrackedUser({
-    tracking,
-    clientContext,
-  });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const hasAuthenticatedIdentity = Boolean(sessionIdentity.id || sessionIdentity.email);
+  if (hasAuthenticatedIdentity && !authenticatedUserId) {
+    return NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
+  }
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
+  if (!authenticatedUserId && !allowLegacyAnonymousUser) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const userId = authenticatedUserId ?? await upsertTrackedUser({ tracking, clientContext });
 
   const feedback = await prisma.appFeedback.create({
     data: {

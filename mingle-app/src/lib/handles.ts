@@ -1,5 +1,11 @@
 export const HANDLE_MAX_LENGTH = 30;
 export const HANDLE_PATTERN = /^[A-Za-z0-9_.]+$/;
+export const ANONYMOUS_HANDLE_PREFIX = "anon_";
+
+export function isAnonymousTrackingHandle(value: unknown): boolean {
+  return typeof value === "string"
+    && value.trim().toLowerCase().startsWith(ANONYMOUS_HANDLE_PREFIX);
+}
 
 export type DefaultHandleInput = {
   id?: string | null;

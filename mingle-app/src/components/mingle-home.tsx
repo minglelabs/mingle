@@ -44,6 +44,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -53,12 +54,15 @@ type MingleHomeProps = {
   headerMode?: "default" | "conversation";
   onBack?: () => void;
   onConversationDeleted?: () => void;
+  onConversationTitleChange?: (title: string) => void | Promise<void>;
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>;
   conversationTitle?: string;
   conversationId?: string;
   preferredDisplayLanguage?: string | null;
   preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialOtherMembers?: ConversationChannelOtherMember[];
   initialSelectedLanguages?: string[];
   initialOwnSelectedLanguages?: string[];
   selectedLanguagesAttribution?: Record<string, string[]>;
@@ -88,14 +92,17 @@ type MingleHomeProps = {
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>;
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
-  onInvite?: () => void;
   isBlockedCounterpart?: boolean;
   isMultiMember?: boolean;
 };
 
 export type MingleHomeRef = {
   startRecording: () => Promise<void>;
-  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  stopRecording: (options?: {
+    deferRunningStateChange?: boolean;
+    discardPendingFinalization?: boolean;
+    forceNativeStop?: boolean;
+  }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
   requestCloseTopmostOverlay: () => boolean;
@@ -1915,6 +1922,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
+          dictionary={props.dictionary}
           usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}
@@ -1955,12 +1963,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          onConversationTitleChange={props.onConversationTitleChange}
+          onConversationRemoveRequested={props.onConversationRemoveRequested}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           preferredDisplayLanguage={props.preferredDisplayLanguage}
           preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialOtherMembers={props.initialOtherMembers}
           initialSelectedLanguages={props.initialSelectedLanguages}
           initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
           selectedLanguagesAttribution={props.selectedLanguagesAttribution}
@@ -1979,7 +1990,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
-          onInvite={props.onInvite}
           isBlockedCounterpart={props.isBlockedCounterpart}
           isMultiMember={props.isMultiMember}
         />

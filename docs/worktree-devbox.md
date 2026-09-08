@@ -283,6 +283,7 @@ scripts/devbox bootstrap
   - RN iOS/Android는 devbox URL(`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`) 기준으로
     빌드/설치를 수행
   - `--ios-udid`, `--android-serial`로 대상 기기 지정 가능
+  - iOS의 명시적 UDID는 빌드·삭제·설치·실행에 동일하게 사용합니다. 설치 단계에서 다른 연결 기기를 별도로 자동 탐지하지 않습니다.
   - `--ios-configuration Debug|Release` (기본 Release)
   - `--android-variant debug|release` (기본 release)
   - `--qa-bridge`를 주면 Appium QA용 bridge/query param 경로가 켜진 앱을 설치

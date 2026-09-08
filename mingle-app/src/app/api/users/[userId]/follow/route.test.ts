@@ -52,6 +52,7 @@ describe("/api/users/[userId]/follow route", () => {
     mockUserFindUnique.mockResolvedValue({ id: "user_456" });
     mockUserBlockFindFirst.mockResolvedValue(null);
     mockUserFollowCreate.mockResolvedValue({ id: "follow_123" });
+    mockUserFollowDeleteMany.mockResolvedValue({ count: 0 });
     mockUserNotificationCreate.mockResolvedValue({ id: "notification_123" });
   });
 

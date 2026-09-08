@@ -7,6 +7,18 @@ export const ADMIN_DASHBOARD_PRESET_OPTIONS = [7, 30, 90] as const;
 /** @deprecated Use ADMIN_DASHBOARD_PRESET_OPTIONS */
 export const ADMIN_DASHBOARD_RANGE_OPTIONS = ADMIN_DASHBOARD_PRESET_OPTIONS;
 
+export const ADMIN_DASHBOARD_PLATFORM_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "android", label: "Android" },
+  { value: "ios", label: "iOS" },
+] as const;
+
+export type AdminDashboardPlatform = typeof ADMIN_DASHBOARD_PLATFORM_OPTIONS[number]["value"];
+
+export function normalizeDashboardPlatform(value: unknown): AdminDashboardPlatform {
+  return value === "android" || value === "ios" ? value : "all";
+}
+
 /** Logical chart plot area, in svg units. Shared by the server-side geometry builder
  * (buildChartGeometry) and the client hover component so their coordinate spaces
  * always agree -- letting them drift apart would silently break hover positioning. */
