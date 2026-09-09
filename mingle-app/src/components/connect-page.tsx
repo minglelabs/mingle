@@ -861,7 +861,8 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                   type="button"
                   onClick={() => void loadMoreSearchResults()}
                   disabled={isLoadingMore}
-                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-60"
+                  aria-busy={isLoadingMore}
+                  className="inline-flex min-h-9 min-w-[10rem] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-[13px] font-semibold text-slate-800 transition-colors active:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
                 >
                   {isLoadingMore ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                   <span>{isLoadingMore ? copy.loadingMore : copy.loadMore}</span>
