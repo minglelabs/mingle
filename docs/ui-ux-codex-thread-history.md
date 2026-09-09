@@ -2231,3 +2231,11 @@
 - Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
 - Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
 - Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
+
+## 2026-09-09 — Hide the reserved admin handle from Explore search
+
+- Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
+- Issue: The reserved `admin` account was still eligible for user search and could appear as a normal followable result. This was especially visible in broad searches that were being used to validate pagination and cache restoration.
+- Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
+- Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.

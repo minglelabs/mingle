@@ -15,7 +15,7 @@ import {
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { observeConnectViewport } from "@/lib/connect-viewport";
-import { formatHandle, isAnonymousTrackingHandle } from "@/lib/handles";
+import { formatHandle, isSearchExcludedHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
@@ -78,7 +78,7 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
 
   return {
     query: rawSnapshot.query,
-    results: rawSnapshot.results.filter((result) => !isAnonymousTrackingHandle(result.handle)),
+    results: rawSnapshot.results.filter((result) => !isSearchExcludedHandle(result.handle)),
     nextCursor: typeof rawSnapshot.nextCursor === "string" ? rawSnapshot.nextCursor : null,
   };
 }
@@ -539,7 +539,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             nextCursor?: unknown;
           };
           const users = Array.isArray(payload.users)
-            ? payload.users.filter((user) => !isAnonymousTrackingHandle(user.handle))
+            ? payload.users.filter((user) => !isSearchExcludedHandle(user.handle))
             : [];
           const responseNextCursor = normalizeSearchCursor(payload.nextCursor);
           captureMingleClientEvent("mingle_connect_search_completed", {
@@ -642,7 +642,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         nextCursor?: unknown;
       };
       const users = Array.isArray(payload.users)
-        ? payload.users.filter((user) => !isAnonymousTrackingHandle(user.handle))
+        ? payload.users.filter((user) => !isSearchExcludedHandle(user.handle))
         : [];
       const responseNextCursor = normalizeSearchCursor(payload.nextCursor);
       captureMingleClientEvent("mingle_connect_search_completed", {

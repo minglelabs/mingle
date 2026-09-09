@@ -146,7 +146,7 @@ describe("connect search cache", () => {
     });
   });
 
-  it("removes anonymous tracking users from cached search results", () => {
+  it("removes anonymous and reserved users from cached search results", () => {
     const identity = {
       apiNamespace: "ios/v2.0.0",
       authenticatedUserId: "user-1",
@@ -158,6 +158,7 @@ describe("connect search cache", () => {
       results: [
         buildSearchResult(),
         { ...buildSearchResult(), id: "anon-user", handle: "anon_mtb662yd_3j2l0q283" },
+        { ...buildSearchResult(), id: "admin-user", handle: "ADMIN" },
       ],
       resultsReady: true,
       nextCursor: null,

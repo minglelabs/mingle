@@ -93,6 +93,11 @@ describe("/api/users/search route", () => {
               handle: { startsWith: "anon_", mode: "insensitive" },
             },
           },
+          {
+            NOT: {
+              handle: { equals: "admin", mode: "insensitive" },
+            },
+          },
           { blockingRelations: { none: { blockedId: "user_123" } } },
           { blockedByRelations: { none: { blockerId: "user_123" } } },
           {
