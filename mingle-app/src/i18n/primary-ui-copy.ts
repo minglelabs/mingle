@@ -5,8 +5,14 @@ import {
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 
+type PrimaryConnectCopy = Partial<AppDictionary["connect"]> & {
+  loadMoreLabel: string;
+  loadingMoreLabel: string;
+  loadMoreError: string;
+};
+
 type PrimaryUiCopy = {
-  connect: Partial<AppDictionary["connect"]>;
+  connect: PrimaryConnectCopy;
   profile: Partial<AppDictionary["profile"]>;
 };
 

@@ -2232,6 +2232,14 @@
 - Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
 - Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
 
+## 2026-09-09 — Localize Explore pagination controls
+
+- Surface: Explore user search pagination, including the `Load more`, loading, and retry-error states.
+- Verification: The app exposes 15 primary UI languages. Pagination copy is defined beside the existing Explore/search copy in `primary-ui-copy.ts`, merged through `getSupplementalDictionary()` and `getDictionary()`, and consumed by `connect-page.tsx` instead of owning a separate translation path.
+- Resolution: Require all three pagination strings in every primary UI dictionary and add an exact 15-locale contract test. Supported locales outside the 15 primary UI languages continue to use the established English supplemental fallback.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
+
 ## 2026-09-09 — Hide the reserved admin handle from Explore search
 
 - Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
