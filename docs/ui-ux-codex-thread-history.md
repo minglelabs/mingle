@@ -2223,3 +2223,11 @@
 - Resolution: Preserve keyboard detection through width changes and remember unobscured heights by viewport width. For a previously unseen orientation while the keyboard is open, use the previous width as an estimated unobscured height, allowing the existing 100px system-bar tolerance. Do not retain the old portrait height in landscape, which would prevent tab restoration on keyboard dismissal.
 - Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
 - Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
+
+## 2026-09-09 — Avoid the generic Mingle user label in Explore search
+
+- Surface: Explore search result names and handles, including cached results restored after tab navigation.
+- Issue: A valid user with a handle but no profile name was rendered as the localized fallback `Mingle 사용자`, even though the row already contained the account's real handle. This made an incomplete profile look like a synthetic system account and caused the generic label to reappear after returning to the search tab.
+- Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.

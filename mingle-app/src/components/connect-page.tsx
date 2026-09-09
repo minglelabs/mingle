@@ -795,7 +795,16 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <>
             <ul className="border-t border-gray-100">
               {visibleResults.map((user) => {
-                const name = user.name?.trim() || copy.userFallback;
+                const profileName = user.name?.trim() || "";
+                const rawHandle = user.handle?.trim() || "";
+                const formattedHandle = formatHandle(rawHandle);
+                const name = profileName || rawHandle || copy.userFallback;
+                const normalizedNameForHandleComparison = profileName.replace(/^@/, "").toLocaleLowerCase();
+                const shouldShowHandle = Boolean(
+                  formattedHandle
+                  && profileName
+                  && normalizedNameForHandleComparison !== rawHandle.toLocaleLowerCase(),
+                );
                 const isFollowPending = followInFlightIds.has(user.id);
                 return (
                   <li key={user.id} className="border-b border-gray-100 px-4 py-3">
@@ -804,7 +813,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                         type="button"
                         onClick={() => openConnectProfile(user.id)}
                         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                        aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
+                        aria-label={shouldShowHandle ? `${name}, ${formattedHandle}` : name}
                       >
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
                           {user.image ? (
@@ -827,7 +836,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                          {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
+                          {shouldShowHandle ? <p className="truncate text-[13px] text-gray-500">{formattedHandle}</p> : null}
                         </div>
                       </button>
                       <button
