@@ -2240,6 +2240,14 @@
 - Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
 - Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
 
+## 2026-09-09 — Preserve restored Explore search pages
+
+- Surface: Explore search when returning from a user profile or remounting the search tab after loading multiple result pages.
+- Issue: The history snapshot restoration effect populated the query, results, and next cursor, but the initial search effect then ran with its first-render empty query and cleared those values. The restored list could disappear or trigger an unnecessary first-page request, losing the loaded-page state.
+- Resolution: Track the pending restored query separately. Skip the initial empty-query search effect, preserve the matching restored query state once it arrives, and consume the restore marker when the user changes the query so normal search behavior remains unchanged. Normalize restored history queries before comparing them.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: Added restore-state regression tests for the initial effect, repeated mount-effect replay, restored query, and changed-query paths. The full web unit suite passed with 164 files and 1,521 tests; targeted lint and TypeScript checks also passed.
+
 ## 2026-09-09 — Hide the reserved admin handle from Explore search
 
 - Surface: Explore user search API responses, fresh result rendering, and cached result restoration.

@@ -34,6 +34,7 @@ import {
   DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
   replaceWithConversationListThenPush,
 } from "@/lib/direct-conversation-navigation";
+import { resolveConnectSearchRestore } from "@/components/connect-search-restore";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -76,8 +77,9 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
       && typeof rawSnapshot.nextCursor !== "string")
   ) return null;
 
+  const query = rawSnapshot.query.trim();
   return {
-    query: rawSnapshot.query,
+    query,
     results: rawSnapshot.results.filter((result) => !isSearchExcludedHandle(result.handle)),
     nextCursor: typeof rawSnapshot.nextCursor === "string" ? rawSnapshot.nextCursor : null,
   };
@@ -180,6 +182,8 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   } | null>(null);
   const isMountedRef = useRef(false);
   const initialHistorySnapshotRef = useRef<ConnectSearchHistorySnapshot | null>(null);
+  const pendingHistoryRestoreQueryRef = useRef<string | null>(null);
+  const skipInitialSearchEffectRef = useRef(false);
   const hydratedCacheIdentityRef = useRef("");
   const pendingDirectConversationNavigationRef = useRef(false);
   const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
@@ -413,10 +417,15 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     const snapshot = readConnectSearchHistorySnapshot();
     initialHistorySnapshotRef.current = snapshot;
     if (snapshot) {
+      pendingHistoryRestoreQueryRef.current = snapshot.query;
+      skipInitialSearchEffectRef.current = true;
       setQuery(snapshot.query);
       setResults(snapshot.results);
       setResultsQuery(snapshot.query);
       setNextCursor(snapshot.nextCursor);
+    } else {
+      pendingHistoryRestoreQueryRef.current = null;
+      skipInitialSearchEffectRef.current = false;
     }
 
     return () => {
@@ -494,6 +503,18 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   ]);
 
   useEffect(() => {
+    const restoreDecision = resolveConnectSearchRestore({
+      normalizedQuery,
+      pendingQuery: pendingHistoryRestoreQueryRef.current,
+      skipInitialEffect: skipInitialSearchEffectRef.current,
+    });
+    pendingHistoryRestoreQueryRef.current = restoreDecision.nextPendingQuery;
+    skipInitialSearchEffectRef.current = restoreDecision.nextSkipInitialEffect;
+    if (!restoreDecision.shouldRunSearch) {
+      activeSearchQueryRef.current = restoreDecision.activeQuery ?? normalizedQuery;
+      return;
+    }
+
     const requestSequence = ++requestSequenceRef.current;
     activeSearchQueryRef.current = normalizedQuery;
     loadingMoreRef.current = false;
