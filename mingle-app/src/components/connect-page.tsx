@@ -796,6 +796,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             <ul className="border-t border-gray-100">
               {visibleResults.map((user) => {
                 const name = user.name?.trim() || copy.userFallback;
+                const isFollowPending = followInFlightIds.has(user.id);
                 return (
                   <li key={user.id} className="border-b border-gray-100 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -832,15 +833,16 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                       <button
                         type="button"
                         onClick={() => void handleToggleFollow(user)}
-                        disabled={followInFlightIds.has(user.id)}
-                        className={`ml-auto shrink-0 rounded-lg border px-3 py-2 text-[13px] font-semibold transition active:opacity-70 disabled:opacity-50 ${
+                        disabled={isFollowPending}
+                        aria-busy={isFollowPending}
+                        className={`ml-auto flex h-10 min-w-[4.5rem] shrink-0 items-center justify-center rounded-lg border px-3 text-center text-[13px] font-semibold transition-colors active:opacity-70 disabled:cursor-wait disabled:opacity-50 ${
                           user.isFollowing
                             ? "border-amber-200 bg-amber-50 text-amber-700"
                             : "border-gray-200 bg-white text-slate-800"
                         }`}
                         aria-pressed={user.isFollowing}
                       >
-                        {followInFlightIds.has(user.id) ? "…" : user.isFollowing ? copy.following : copy.follow}
+                        {isFollowPending ? "…" : user.isFollowing ? copy.following : copy.follow}
                       </button>
                     </div>
                   </li>
