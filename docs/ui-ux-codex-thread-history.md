@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-09 - Paginate crowded user search results
+
+- Surface: Explore/search tab user results on web, iOS WebView, and Android WebView.
+- Issue: User search returned only one server page of 20 users. When a query matched more users, the list silently ended after the first viewport-sized page, so users could not discover the remaining matches or tell whether more results existed.
+- Resolution: Add deterministic cursor pagination ordered by `updatedAt` and `id`, keeping the existing account, block, deactivated-user, and anonymous-user filters. The API returns at most 20 users plus an opaque `nextCursor`; malformed cursors are rejected before the database query. The client resets pagination for every new query, appends de-duplicated pages, and keeps the cursor in the scoped search cache and history snapshot.
+- Interaction: Keep the first result page visible while loading additional pages. Show a localized “Load more” action below the results and automatically request the next page when the sentinel approaches the scroll viewport. The button remains available as an explicit fallback, shows a loading state during the request, and exposes a retryable error without discarding already-loaded users. The control is hidden when the server reports the final page.
+- Compatibility: This is a Web/API change only. No Prisma migration, native code, mobile version, or API namespace change is required; existing versioned search routes re-export the shared handler.
+- Verification: Search-route tests cover the 20-user page boundary, cursor emission, and malformed-cursor rejection. Search-cache tests cover cursor persistence, pending-query clearing, namespace/account isolation, anonymous filtering, and stale snapshots. Targeted Vitest, TypeScript no-emit, targeted ESLint, and whitespace checks pass. Physical iOS/Android scrolling and real authenticated Devbox data remain manual follow-up checks.
+
 ## 2026-09-08 - PR 217 delayed translation preview refresh
 
 - Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.

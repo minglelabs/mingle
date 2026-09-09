@@ -105,6 +105,9 @@ export type BaseAppDictionarySource = {
     followingAction?: string;
     followError?: string;
     clearSearchLabel?: string;
+    loadMoreLabel?: string;
+    loadingMoreLabel?: string;
+    loadMoreError?: string;
   };
   moments: {
     minutesAgoSuffix: string;

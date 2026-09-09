@@ -25,6 +25,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "팔로잉",
       followError: "팔로우 상태를 변경하지 못했습니다.",
       clearSearchLabel: "검색어 지우기",
+      loadMoreLabel: "더 보기",
+      loadingMoreLabel: "불러오는 중...",
+      loadMoreError: "추가 결과를 불러오지 못했습니다. 다시 시도해 주세요.",
     },
     profile: {
       comingSoonLabel: "기능 준비중입니다.",
@@ -120,6 +123,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Following",
       followError: "Could not update follow status.",
       clearSearchLabel: "Clear search",
+      loadMoreLabel: "Load more",
+      loadingMoreLabel: "Loading more...",
+      loadMoreError: "Could not load more results. Please try again.",
     },
     profile: {
       comingSoonLabel: "Feature coming soon.",
@@ -215,6 +221,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "フォロー中",
       followError: "フォロー状態を更新できませんでした。",
       clearSearchLabel: "検索語を消去",
+      loadMoreLabel: "もっと見る",
+      loadingMoreLabel: "追加読み込み中...",
+      loadMoreError: "追加の結果を読み込めませんでした。もう一度お試しください。",
     },
     profile: {
       comingSoonLabel: "準備中の機能です。",
@@ -310,6 +319,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "已关注",
       followError: "更新关注状态失败。",
       clearSearchLabel: "清除搜索内容",
+      loadMoreLabel: "加载更多",
+      loadingMoreLabel: "正在加载更多...",
+      loadMoreError: "无法加载更多结果，请重试。",
     },
     profile: {
       comingSoonLabel: "功能即将推出。",
@@ -394,6 +406,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "已追蹤",
       followError: "無法更新追蹤狀態。",
       clearSearchLabel: "清除搜尋",
+      loadMoreLabel: "載入更多",
+      loadingMoreLabel: "正在載入更多...",
+      loadMoreError: "無法載入更多結果，請再試一次。",
     },
     profile: {
       comingSoonLabel: "功能準備中。",
@@ -489,6 +504,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Abonné",
       followError: "Impossible de modifier le suivi.",
       clearSearchLabel: "Effacer la recherche",
+      loadMoreLabel: "Voir plus",
+      loadingMoreLabel: "Chargement...",
+      loadMoreError: "Impossible de charger plus de résultats. Réessayez.",
     },
     profile: {
       comingSoonLabel: "Fonctionnalité bientôt disponible.",
@@ -584,6 +602,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Gefolgt",
       followError: "Der Folgen-Status konnte nicht geändert werden.",
       clearSearchLabel: "Suche löschen",
+      loadMoreLabel: "Mehr laden",
+      loadingMoreLabel: "Weitere Ergebnisse werden geladen...",
+      loadMoreError: "Weitere Ergebnisse konnten nicht geladen werden. Bitte erneut versuchen.",
     },
     profile: {
       comingSoonLabel: "Funktion kommt bald.",
@@ -679,6 +700,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Siguiendo",
       followError: "No se pudo actualizar el seguimiento.",
       clearSearchLabel: "Borrar búsqueda",
+      loadMoreLabel: "Cargar más",
+      loadingMoreLabel: "Cargando más...",
+      loadMoreError: "No se pudieron cargar más resultados. Inténtalo de nuevo.",
     },
     profile: {
       comingSoonLabel: "Función próximamente disponible.",
@@ -774,6 +798,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Seguindo",
       followError: "Não foi possível atualizar o seguimento.",
       clearSearchLabel: "Limpar pesquisa",
+      loadMoreLabel: "Carregar mais",
+      loadingMoreLabel: "Carregando mais...",
+      loadMoreError: "Não foi possível carregar mais resultados. Tente novamente.",
     },
     profile: {
       comingSoonLabel: "Recurso em breve.",
@@ -869,6 +896,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Segui già",
       followError: "Impossibile aggiornare lo stato del follow.",
       clearSearchLabel: "Cancella ricerca",
+      loadMoreLabel: "Carica altro",
+      loadingMoreLabel: "Caricamento...",
+      loadMoreError: "Impossibile caricare altri risultati. Riprova.",
     },
     profile: {
       comingSoonLabel: "Funzione in arrivo.",
@@ -964,6 +994,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Вы подписаны",
       followError: "Не удалось изменить статус подписки.",
       clearSearchLabel: "Очистить поиск",
+      loadMoreLabel: "Загрузить ещё",
+      loadingMoreLabel: "Загрузка...",
+      loadMoreError: "Не удалось загрузить другие результаты. Попробуйте ещё раз.",
     },
     profile: {
       comingSoonLabel: "Функция скоро появится.",
@@ -1059,6 +1092,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "تتابعه",
       followError: "تعذر تحديث حالة المتابعة.",
       clearSearchLabel: "مسح البحث",
+      loadMoreLabel: "تحميل المزيد",
+      loadingMoreLabel: "جارٍ تحميل المزيد...",
+      loadMoreError: "تعذر تحميل المزيد من النتائج. يرجى المحاولة مرة أخرى.",
     },
     profile: {
       comingSoonLabel: "الميزة قيد الإعداد.",
@@ -1154,6 +1190,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "फ़ॉलो कर रहे हैं",
       followError: "फ़ॉलो स्थिति अपडेट नहीं हो सकी।",
       clearSearchLabel: "खोज साफ़ करें",
+      loadMoreLabel: "और लोड करें",
+      loadingMoreLabel: "और लोड हो रहा है...",
+      loadMoreError: "और परिणाम लोड नहीं हो सके। फिर कोशिश करें।",
     },
     profile: {
       comingSoonLabel: "फ़ीचर जल्द आ रहा है।",
@@ -1249,6 +1288,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "กำลังติดตาม",
       followError: "อัปเดตสถานะการติดตามไม่สำเร็จ",
       clearSearchLabel: "ล้างการค้นหา",
+      loadMoreLabel: "โหลดเพิ่มเติม",
+      loadingMoreLabel: "กำลังโหลดเพิ่มเติม...",
+      loadMoreError: "โหลดผลลัพธ์เพิ่มเติมไม่สำเร็จ โปรดลองอีกครั้ง",
     },
     profile: {
       comingSoonLabel: "ฟีเจอร์กำลังเตรียมพร้อม",
@@ -1344,6 +1386,9 @@ const primaryUiCopyByLocale: Record<PrimaryUiLocale, PrimaryUiCopy> = {
       followingAction: "Đang theo dõi",
       followError: "Không thể cập nhật trạng thái theo dõi.",
       clearSearchLabel: "Xóa tìm kiếm",
+      loadMoreLabel: "Tải thêm",
+      loadingMoreLabel: "Đang tải thêm...",
+      loadMoreError: "Không thể tải thêm kết quả. Vui lòng thử lại.",
     },
     profile: {
       comingSoonLabel: "Tính năng sắp ra mắt.",
