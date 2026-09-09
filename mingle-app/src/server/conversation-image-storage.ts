@@ -2,9 +2,17 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
 
 export function readConversationImageStorageConfig(env: Readonly<Record<string, string | undefined>> = process.env) {
   const read = (name: string) => (env[`CLOUDFLARE_R2_${name}`]?.trim() || env[`R2_${name}`]?.trim() || '')
+  const readConversationCredential = (name: 'ACCESS_KEY_ID' | 'SECRET_ACCESS_KEY') => (
+    env[`CLOUDFLARE_R2_CONVERSATION_${name}`]?.trim()
+    || env[`R2_CONVERSATION_${name}`]?.trim()
+    || read(name)
+  )
   const accountId = read('ACCOUNT_ID')
-  const accessKeyId = read('ACCESS_KEY_ID')
-  const secretAccessKey = read('SECRET_ACCESS_KEY')
+  // Conversation images may use a token scoped only to the private bucket.
+  // Keep the profile credentials as a backwards-compatible fallback for
+  // deployments that grant one token access to both buckets.
+  const accessKeyId = readConversationCredential('ACCESS_KEY_ID')
+  const secretAccessKey = readConversationCredential('SECRET_ACCESS_KEY')
   const bucketName = read('CONVERSATION_BUCKET_NAME')
   // Never fall back to the public profile bucket, including on reads or deletes.
   const publicBuckets = [env.CLOUDFLARE_R2_BUCKET_NAME, env.R2_BUCKET_NAME].map(value => value?.trim()).filter(Boolean)

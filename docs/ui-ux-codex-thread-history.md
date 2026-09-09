@@ -2274,6 +2274,12 @@
   Every put/get/delete targets only the dedicated bucket; missing objects never
   trigger a public fallback. Profile-image storage remains unchanged. Provisioning
   must disable r2.dev, custom domains, and any public Worker access to this bucket.
+- Credential correction (2026-09-09): Prefer the separately scoped
+  `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` and
+  `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` when present. Fall back to the
+  profile credential variables only for deployments whose single token can access
+  both buckets. This prevents a profile-only token from causing photo uploads to
+  fail with R2 `AccessDenied`.
 - Notification correction: The successful database insert schedules the existing
   conversation push helper through Next after(). Resolve recipients after pending
   invitation materialization and use the stored message ID, authenticated sender,

@@ -133,10 +133,12 @@ Before merging the feature branch into the automatically deployed branch:
 2. Set `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME` on the web server and the selected
    devbox Vault record when testing locally. `R2_CONVERSATION_BUCKET_NAME` is an
    accepted alias. The bucket must differ from both public profile bucket settings.
-   Existing `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, and
-   `CLOUDFLARE_R2_SECRET_ACCESS_KEY` (or their `R2_*` aliases) are reused. Ensure the
-   credential grants object read/write/delete access to the new bucket. A credential
-   scoped only to the profile bucket must be updated before photo testing.
+   Prefer a private-bucket token in `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` and
+   `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` (or their `R2_CONVERSATION_*`
+   aliases). If those are omitted, the existing profile credential variables are
+   reused for backwards compatibility. Ensure the selected credential grants object
+   read/write/delete access to the new bucket; a credential scoped only to the profile
+   bucket cannot upload conversation photos.
 3. Confirm the existing `GEMINI_API_KEY` is configured for biography translations.
    Apply the pending Prisma migrations to the target database before web deployment:
    `20260908135150_add_message_reactions` and

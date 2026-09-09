@@ -13,7 +13,7 @@ const env = {
 }
 beforeEach(() => {
   vi.resetAllMocks()
-  for (const name of ['ACCOUNT_ID', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY', 'BUCKET_NAME', 'PUBLIC_URL', 'CONVERSATION_BUCKET_NAME']) {
+  for (const name of ['ACCOUNT_ID', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY', 'BUCKET_NAME', 'PUBLIC_URL', 'CONVERSATION_BUCKET_NAME', 'CONVERSATION_ACCESS_KEY_ID', 'CONVERSATION_SECRET_ACCESS_KEY']) {
     vi.stubEnv(`R2_${name}`, '')
     vi.stubEnv(`CLOUDFLARE_R2_${name}`, '')
   }
@@ -33,6 +33,17 @@ describe('private conversation image storage', () => {
   })
   it('supports existing short credential aliases and an explicit private bucket alias', () => {
     expect(readConversationImageStorageConfig({ R2_ACCOUNT_ID: 'account', R2_ACCESS_KEY_ID: 'key', R2_SECRET_ACCESS_KEY: 'secret', R2_CONVERSATION_BUCKET_NAME: 'private' })).toMatchObject({ bucketName: 'private' })
+  })
+  it('prefers credentials scoped to the private conversation bucket', () => {
+    expect(readConversationImageStorageConfig({
+      ...env,
+      CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID: 'conversation-key',
+      CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY: 'conversation-secret',
+    })).toMatchObject({
+      accessKeyId: 'conversation-key',
+      secretAccessKey: 'conversation-secret',
+      bucketName: 'private-conversations',
+    })
   })
   it.each(['CLOUDFLARE_R2_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY'])('rejects incomplete credentials: %s', key => {
     expect(readConversationImageStorageConfig({ ...env, [key]: '' })).toBeNull()
