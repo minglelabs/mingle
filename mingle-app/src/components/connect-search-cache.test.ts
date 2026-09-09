@@ -65,6 +65,7 @@ describe("connect search cache", () => {
       query: "mingle",
       results: [result],
       resultsReady: true,
+      nextCursor: "cursor-2",
     });
 
     expect(cache.readConnectSearchMemoryCache(identity)).toEqual({
@@ -72,6 +73,7 @@ describe("connect search cache", () => {
       query: "mingle",
       results: [result],
       resultsReady: true,
+      nextCursor: "cursor-2",
     });
   });
 
@@ -85,12 +87,14 @@ describe("connect search cache", () => {
       query: "new query",
       results: [buildSearchResult(true)],
       resultsReady: false,
+      nextCursor: "cursor-2",
     });
 
     expect(cache.readConnectSearchMemoryCache(identity)).toMatchObject({
       query: "new query",
       results: [],
       resultsReady: false,
+      nextCursor: null,
     });
   });
 
@@ -103,6 +107,7 @@ describe("connect search cache", () => {
       query: "friend",
       results: [result],
       resultsReady: true,
+      nextCursor: null,
     });
 
     expect(cache.readConnectSearchMemoryCache({
@@ -125,6 +130,7 @@ describe("connect search cache", () => {
       query: "friend",
       results: [result],
       resultsReady: true,
+      nextCursor: "cursor-2",
     });
 
     vi.resetModules();
@@ -136,23 +142,26 @@ describe("connect search cache", () => {
       query: "friend",
       results: [result],
       resultsReady: true,
+      nextCursor: "cursor-2",
     });
   });
 
-  it("removes anonymous tracking users from cached search results", () => {
+  it("removes anonymous and reserved users from cached search results", () => {
     const identity = {
       apiNamespace: "ios/v2.0.0",
       authenticatedUserId: "user-1",
     };
-    const storageKey = "mingle:connect-search-cache:v1:ios%2Fv2.0.0:user-1";
+    const storageKey = "mingle:connect-search-cache:v2:ios%2Fv2.0.0:user-1";
     sessionStorage.setItem(storageKey, JSON.stringify({
       savedAt: Date.now(),
       query: "a",
       results: [
         buildSearchResult(),
         { ...buildSearchResult(), id: "anon-user", handle: "anon_mtb662yd_3j2l0q283" },
+        { ...buildSearchResult(), id: "admin-user", handle: "ADMIN" },
       ],
       resultsReady: true,
+      nextCursor: null,
     }));
 
     const cached = cache.readConnectSearchCache(identity);
@@ -169,6 +178,7 @@ describe("connect search cache", () => {
       query: "friend",
       results: [buildSearchResult()],
       resultsReady: true,
+      nextCursor: null,
     });
 
     cache.clearConnectSearchCache(identity);
@@ -186,6 +196,7 @@ describe("connect search cache", () => {
       query: "friend",
       results: [buildSearchResult()],
       resultsReady: true,
+      nextCursor: null,
     });
 
     vi.setSystemTime(new Date("2026-08-16T12:30:01.000Z"));

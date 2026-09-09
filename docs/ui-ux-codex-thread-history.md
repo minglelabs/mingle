@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-09 - Paginate crowded user search results
+
+- Surface: Explore/search tab user results on web, iOS WebView, and Android WebView.
+- Issue: User search returned only one server page of 20 users. When a query matched more users, the list silently ended after the first viewport-sized page, so users could not discover the remaining matches or tell whether more results existed.
+- Resolution: Add deterministic cursor pagination ordered by `updatedAt` and `id`, keeping the existing account, block, deactivated-user, and anonymous-user filters. The API returns at most 20 users plus an opaque `nextCursor`; malformed cursors are rejected before the database query. The client resets pagination for every new query, appends de-duplicated pages, and keeps the cursor in the scoped search cache and history snapshot.
+- Interaction: Keep the first result page visible while loading additional pages. Show a localized “Load more” action below the results and automatically request the next page when the sentinel approaches the scroll viewport. The button remains available as an explicit fallback, shows a loading state during the request, and exposes a retryable error without discarding already-loaded users. The control is hidden when the server reports the final page.
+- Compatibility: This is a Web/API change only. No Prisma migration, native code, mobile version, or API namespace change is required; existing versioned search routes re-export the shared handler.
+- Verification: Search-route tests cover the 20-user page boundary, cursor emission, and malformed-cursor rejection. Search-cache tests cover cursor persistence, pending-query clearing, namespace/account isolation, anonymous filtering, and stale snapshots. Targeted Vitest, TypeScript no-emit, targeted ESLint, and whitespace checks pass. Physical iOS/Android scrolling and real authenticated Devbox data remain manual follow-up checks.
+
 ## 2026-09-08 - PR 217 delayed translation preview refresh
 
 - Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.
@@ -2214,3 +2223,35 @@
 - Resolution: Preserve keyboard detection through width changes and remember unobscured heights by viewport width. For a previously unseen orientation while the keyboard is open, use the previous width as an estimated unobscured height, allowing the existing 100px system-bar tolerance. Do not retain the old portrait height in landscape, which would prevent tab restoration on keyboard dismissal.
 - Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
 - Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
+
+## 2026-09-09 — Avoid the generic Mingle user label in Explore search
+
+- Surface: Explore search result names and handles, including cached results restored after tab navigation.
+- Issue: A valid user with a handle but no profile name was rendered as the localized fallback `Mingle 사용자`, even though the row already contained the account's real handle. This made an incomplete profile look like a synthetic system account and caused the generic label to reappear after returning to the search tab.
+- Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
+
+## 2026-09-09 — Localize Explore pagination controls
+
+- Surface: Explore user search pagination, including the `Load more`, loading, and retry-error states.
+- Verification: The app exposes 15 primary UI languages. Pagination copy is defined beside the existing Explore/search copy in `primary-ui-copy.ts`, merged through `getSupplementalDictionary()` and `getDictionary()`, and consumed by `connect-page.tsx` instead of owning a separate translation path.
+- Resolution: Require all three pagination strings in every primary UI dictionary and add an exact 15-locale contract test. Supported locales outside the 15 primary UI languages continue to use the established English supplemental fallback.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
+
+## 2026-09-09 — Preserve restored Explore search pages
+
+- Surface: Explore search when returning from a user profile or remounting the search tab after loading multiple result pages.
+- Issue: The history snapshot restoration effect populated the query, results, and next cursor, but the initial search effect then ran with its first-render empty query and cleared those values. The restored list could disappear or trigger an unnecessary first-page request, losing the loaded-page state.
+- Resolution: Track the pending restored query separately. Skip the initial empty-query search effect, preserve the matching restored query state once it arrives, and consume the restore marker when the user changes the query so normal search behavior remains unchanged. Normalize restored history queries before comparing them.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: Added restore-state regression tests for the initial effect, repeated mount-effect replay, restored query, and changed-query paths. The full web unit suite passed with 164 files and 1,521 tests; targeted lint and TypeScript checks also passed.
+
+## 2026-09-09 — Hide the reserved admin handle from Explore search
+
+- Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
+- Issue: The reserved `admin` account was still eligible for user search and could appear as a normal followable result. This was especially visible in broad searches that were being used to validate pagination and cache restoration.
+- Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
+- Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.
