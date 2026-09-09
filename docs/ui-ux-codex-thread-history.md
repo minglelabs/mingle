@@ -2280,6 +2280,11 @@
   profile credential variables only for deployments whose single token can access
   both buckets. This prevents a profile-only token from causing photo uploads to
   fail with R2 `AccessDenied`.
+- Image viewing (2026-09-09): Tapping a sent photo opens a dark, full-size viewer.
+  The viewer uses pointer gestures with `touch-action: none` so iOS and Android
+  WebViews can pinch to zoom up to 4x and pan the enlarged image without scrolling
+  the conversation. A double tap toggles 2x zoom, and the close control remains a
+  44px touch target above the image.
 - Notification correction: The successful database insert schedules the existing
   conversation push helper through Next after(). Resolve recipients after pending
   invitation materialization and use the stored message ID, authenticated sender,

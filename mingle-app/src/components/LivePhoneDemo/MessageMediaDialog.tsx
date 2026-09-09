@@ -24,7 +24,7 @@ export default function MessageMediaDialog({ title, onClose, children, dark = fa
   return createPortal(<div className={`fixed inset-0 z-[10010] flex items-center justify-center p-4 ${dark ? 'bg-black/95' : 'bg-black/40'}`}
     onPointerDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
-      className={`flex max-h-[85dvh] w-full ${dark ? 'max-w-4xl text-white' : 'max-w-sm rounded-3xl bg-white p-4 text-slate-900'} flex-col overflow-y-auto overscroll-contain outline-none`}>
+      className={`flex max-h-[85dvh] w-full ${dark ? 'max-w-4xl overflow-hidden text-white' : 'max-w-sm rounded-3xl bg-white p-4 text-slate-900 overflow-y-auto'} flex-col overscroll-contain outline-none`}>
       {children}
     </div>
   </div>, document.body)
