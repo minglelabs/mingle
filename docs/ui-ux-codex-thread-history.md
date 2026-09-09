@@ -2330,5 +2330,6 @@
 ## 2026-09-09 — Align conversation photo controls and anchor attachment menu
 
 - Report: Voice mode showed a plus button at a different height from the keyboard control; keyboard attachments opened an unnecessarily large modal.
-- Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode retains the plus trigger and shows a compact popover immediately above it, with photo and close-keyboard actions and 48px touch targets. The photo preview remains a confirmation dialog.
-- Validation: TypeScript check and targeted ESLint passed. Physical-device visual verification is pending.
+- Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode keeps the photo trigger beside the independent keyboard-close control and shows a compact photo-only tooltip immediately above the trigger. The preview remains a confirmation dialog.
+- Follow-up: The first tooltip implementation was clipped by the input shell's `overflow-hidden`; changing that shell to `overflow-visible` kept the tooltip anchored to the button while preserving the input layout.
+- Validation: TypeScript check and targeted ESLint passed. Android physical-device verification confirmed the voice-mode alignment, keyboard-mode side-by-side controls, and visible anchored tooltip. iOS was relaunched against the same tunnel; physical screenshot verification remains pending.
