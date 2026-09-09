@@ -2326,3 +2326,9 @@
   to provision private storage. No production Cloudflare/Vault changes were made.
   Installation and service connectivity are complete, but reaction/biography and
   photo feature acceptance must wait for these database/storage prerequisites.
+
+## 2026-09-09 — Align conversation photo controls and anchor attachment menu
+
+- Report: Voice mode showed a plus button at a different height from the keyboard control; keyboard attachments opened an unnecessarily large modal.
+- Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode retains the plus trigger and shows a compact popover immediately above it, with photo and close-keyboard actions and 48px touch targets. The photo preview remains a confirmation dialog.
+- Validation: TypeScript check and targeted ESLint passed. Physical-device visual verification is pending.

@@ -8593,8 +8593,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   </motion.div>
 
-                  <div className="flex items-end gap-1 self-end justify-self-end">
-                    {conversationId && viewerUserId && <ConversationImageComposer conversationId={conversationId} locale={uiLocale} onSent={() => void refreshConversationMessages('push')} />}
+                  <div className="flex items-center gap-1 self-end justify-self-end">
+                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale} onSent={() => void refreshConversationMessages('push')} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"

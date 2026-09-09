@@ -1,14 +1,16 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImagePlus, Keyboard, Loader2, Plus, X } from 'lucide-react'
+import { Image as Photo, Keyboard, Loader2, Plus, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { CONVERSATION_IMAGE_MAX_BYTES, conversationImageCopy } from '@/lib/conversation-image'
+import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard }: {
-  conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, voiceButtonSize = 33 }: {
+  conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; voiceButtonSize?: number
 }) {
   const copy = conversationImageCopy(locale)
+  const [anchor, setAnchor] = useState({ right: 8, bottom: 48 })
   const input = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState<{ file: File; url: string; id: string } | null>(null)
@@ -34,27 +36,34 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     finally { clearTimeout(deadline); request.current = null; if (mounted.current) setPending(false) }
   }
   return <>
-    <button type="button" data-qa="live-demo-attachment-open" aria-label={copy.attach}
-      onClick={() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); setOpen(true) }}
-      className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center self-end rounded-full text-gray-500 hover:bg-gray-50 active:scale-95"><Plus size={20} /></button>
+    <button type="button" data-qa="live-demo-attachment-open" aria-label={onCloseKeyboard ? copy.attach : copy.choose}
+      onPointerDown={event => event.preventDefault()}
+      onClick={event => { if (!onCloseKeyboard) { input.current?.click(); return }; const rect = event.currentTarget.getBoundingClientRect(); setAnchor({ right: Math.max(8, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 8 }); setOpen(value => !value) }}
+      style={onCloseKeyboard ? undefined : { width: voiceButtonSize, height: voiceButtonSize }}
+      className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}</button>
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
       onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''
         if (!file) return
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); return }
-        setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); return }
+        setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
       }} />
-    {open && <MessageMediaDialog title={chosen ? copy.preview : copy.attach} onClose={close}>
+    {open && !chosen && createPortal(<>
+      <div className="fixed inset-0 z-[99]" onPointerDown={() => setOpen(false)} />
+      <div role="group" aria-label={copy.attach} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} className="fixed z-[100] min-w-44 rounded-2xl border border-gray-200 bg-white p-1.5 text-gray-700 shadow-lg" style={anchor}>
+        <button type="button" onClick={() => input.current?.click()} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Photo size={20} strokeWidth={2.15} />{copy.choose}</button>
+        {onCloseKeyboard && <button type="button" onClick={() => { close(); onCloseKeyboard() }} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Keyboard size={20} />{copy.closeKeyboard}</button>}
+        {error && <p role="alert" className="max-w-60 px-3 text-sm text-red-600">{error}</p>}
+      </div>
+    </>, document.body)}
+    {open && chosen && <MessageMediaDialog title={chosen ? copy.preview : copy.attach} onClose={close}>
       <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{chosen ? copy.preview : copy.attach}</h2><button type="button" disabled={pending} aria-label={copy.close} onClick={close} className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40"><X size={20} /></button></div>
-      {chosen ? <>
+      <>
         {/* Local file URLs are intentionally displayed without the Next image proxy. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={chosen.url} alt={copy.preview} className="max-h-[50dvh] w-full rounded-xl object-contain" />
         <button type="button" disabled={pending} onClick={() => void send()} className="mt-4 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 font-medium text-white disabled:opacity-60">{pending && <Loader2 size={18} className="animate-spin" />}{pending ? copy.sending : copy.send}</button>
-      </> : <>
-        <button type="button" onClick={() => input.current?.click()} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><ImagePlus size={21} />{copy.choose}</button>
-        {onCloseKeyboard && <button type="button" onClick={() => { close(); onCloseKeyboard() }} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Keyboard size={21} />{copy.closeKeyboard}</button>}
-      </>}
+      </>
       {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
     </MessageMediaDialog>}
   </>
