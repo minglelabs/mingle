@@ -221,102 +221,112 @@ export async function handleLogClientEventV1(request: NextRequest) {
       }
 
       if (!shouldIgnoreDueToConversationClear) {
-        const message = await prisma.appMessage.upsert({
-          where: {
-            sessionKey_clientMessageId: {
+        // SOURCE and every TRANSLATION_FINAL row must land in one commit —
+        // a concurrent reader (e.g. the conversation list's own poll) can
+        // otherwise observe the message mid-write with only the source text
+        // visible and no translation yet, which is what makes the list
+        // flash original-language text before "later" flipping to the
+        // translated preview.
+        const message = await prisma.$transaction(async (tx) => {
+          const message = await tx.appMessage.upsert({
+            where: {
+              sessionKey_clientMessageId: {
+                sessionKey: tracking.sessionKey,
+                clientMessageId,
+              },
+            },
+            create: {
+              user: {
+                connect: { id: userId },
+              },
               sessionKey: tracking.sessionKey,
               clientMessageId,
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-          },
-          create: {
-            user: {
-              connect: { id: userId },
+            update: {
+              user: {
+                connect: { id: userId },
+              },
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-            sessionKey: tracking.sessionKey,
-            clientMessageId,
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          update: {
-            user: {
-              connect: { id: userId },
+            select: {
+              id: true,
             },
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          select: {
-            id: true,
-          },
-        })
-        messageId = message.id
+          })
 
-        await prisma.appMessageContent.upsert({
-          where: {
-            messageId_contentType_language: {
-              messageId: message.id,
-              contentType: 'SOURCE',
-              language: sourceLanguage,
-            },
-          },
-          create: {
-            messageId: message.id,
-            contentType: 'SOURCE',
-            language: sourceLanguage,
-            isDeleted: false,
-            text: sourceText,
-            provider: infrastructureProvider ?? provider ?? undefined,
-            model: model ?? undefined,
-          },
-          update: {
-            isDeleted: false,
-            text: sourceText,
-            provider: infrastructureProvider ?? provider ?? undefined,
-            model: model ?? undefined,
-          },
-        })
-
-        for (const [language, translatedText] of Object.entries(translations)) {
-          await prisma.appMessageContent.upsert({
+          await tx.appMessageContent.upsert({
             where: {
               messageId_contentType_language: {
                 messageId: message.id,
-                contentType: 'TRANSLATION_FINAL',
-                language,
+                contentType: 'SOURCE',
+                language: sourceLanguage,
               },
             },
             create: {
               messageId: message.id,
-              contentType: 'TRANSLATION_FINAL',
-              language,
+              contentType: 'SOURCE',
+              language: sourceLanguage,
               isDeleted: false,
-              text: translatedText,
+              text: sourceText,
               provider: infrastructureProvider ?? provider ?? undefined,
               model: model ?? undefined,
             },
             update: {
               isDeleted: false,
-              text: translatedText,
+              text: sourceText,
               provider: infrastructureProvider ?? provider ?? undefined,
               model: model ?? undefined,
             },
           })
-        }
+
+          for (const [language, translatedText] of Object.entries(translations)) {
+            await tx.appMessageContent.upsert({
+              where: {
+                messageId_contentType_language: {
+                  messageId: message.id,
+                  contentType: 'TRANSLATION_FINAL',
+                  language,
+                },
+              },
+              create: {
+                messageId: message.id,
+                contentType: 'TRANSLATION_FINAL',
+                language,
+                isDeleted: false,
+                text: translatedText,
+                provider: infrastructureProvider ?? provider ?? undefined,
+                model: model ?? undefined,
+              },
+              update: {
+                isDeleted: false,
+                text: translatedText,
+                provider: infrastructureProvider ?? provider ?? undefined,
+                model: model ?? undefined,
+              },
+            })
+          }
+
+          return message
+        })
+        messageId = message.id
 
         try {
           await maybeGenerateConversationTitleForSession({
