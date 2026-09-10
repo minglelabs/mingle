@@ -230,8 +230,8 @@ describe("handleLogClientEventV1", () => {
   });
 
   it.each([
-    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3",
-    "android/v2.0.0", "android/v2.0.1",
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3", "ios/v2.0.4",
+    "android/v2.0.0", "android/v2.0.1", "android/v2.0.4",
   ])("accepts the pre-local-first finalized payload without new flags: %s", async namespace => {
     const response = await handleLogClientEventV1(new NextRequest(`https://example.com/api/${namespace}/log/client-event`, {
       method: "POST",

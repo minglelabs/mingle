@@ -1,7 +1,7 @@
 import { compareApiNamespaceVersions, parseApiNamespaceVersion } from './api-namespace-version'
 
 // Older native shells load the same WebView, but do not implement PiP commands.
-// iOS 2.0.2 introduced the module; the already-installed 2.0.3 beta also has it.
+// iOS 2.0.2 introduced the module; later 2.0.3 and 2.0.4 releases retain it.
 export function supportsNativePipNamespace(apiNamespace: string): boolean {
   const parsed = parseApiNamespaceVersion(apiNamespace)
   return parsed?.platform === 'ios'

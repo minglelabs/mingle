@@ -29,7 +29,7 @@ const nextConfig = {
         destination: "/api/android/v2.0.0/:path*",
       },
       // Android patch releases retain the same shared server contract.
-      ...['2.0.2', '2.0.3'].flatMap(version => [
+      ...['2.0.2', '2.0.3', '2.0.4'].flatMap(version => [
         { source: `/api/android/v${version}`, destination: '/api/android/v2.0.0' },
         { source: `/api/android/v${version}/:path*`, destination: '/api/android/v2.0.0/:path*' },
       ]),
@@ -60,6 +60,16 @@ const nextConfig = {
       },
       {
         source: "/api/ios/v2.0.3/:path*",
+        destination: "/api/ios/v2.0.0/:path*",
+      },
+      // iOS 2.0.4 keeps the v2.0.0 server contract while using its own
+      // versioned namespace, so existing production API behavior is preserved.
+      {
+        source: "/api/ios/v2.0.4",
+        destination: "/api/ios/v2.0.0",
+      },
+      {
+        source: "/api/ios/v2.0.4/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
     ];

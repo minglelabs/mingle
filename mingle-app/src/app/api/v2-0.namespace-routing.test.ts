@@ -6,9 +6,11 @@ describe('installed 2.x client compatibility', () => {
     ['android', '2.0.1'],
     ['android', '2.0.2'],
     ['android', '2.0.3'],
+    ['android', '2.0.4'],
     ['ios', '2.0.1'],
     ['ios', '2.0.2'],
     ['ios', '2.0.3'],
+    ['ios', '2.0.4'],
   ])('retains both root and nested rewrites for %s/v%s', async (platform, version) => {
     const rewrites = await nextConfig.rewrites!()
     expect(rewrites).toEqual(expect.arrayContaining([
