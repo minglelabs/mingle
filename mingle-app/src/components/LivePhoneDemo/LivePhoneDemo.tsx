@@ -15,8 +15,15 @@ import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
-import ChatBubble, { resolveOriginalDisplayLanguage } from './ChatBubble'
+import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
+import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
+import {
+  buildTargetLanguagesForUtterance,
+  findLanguageRecordValue,
+  resolveInitialDisplayLanguage,
+  resolveOriginalDisplayLanguage,
+} from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
@@ -1340,7 +1347,7 @@ interface LivePhoneDemoProps {
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
-  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void
   onConversationStatsChange?: (payload: {
     usageSec: number
@@ -1368,8 +1375,44 @@ interface LivePhoneDemoProps {
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
 const LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS = 250
 
-function buildLatestUtterancePayload(utterance: Utterance): LatestUtterancePayload | null {
-  const preview = utterance.originalText.trim()
+// Mirrors ChatBubble's own display-language resolution (same helpers, same
+// inputs) so the conversation list's live preview shows the same language
+// the room itself is showing — the viewer's own message stays in the
+// original text (no translation exists for the sender's own language), and
+// the counterpart's message shows the viewer's preferred display language
+// once its translation has landed.
+export function buildLatestUtterancePayload(
+  utterance: Utterance,
+  preferredDisplayLanguage: string | null | undefined,
+  preferredDisplayLanguages: readonly string[] | undefined,
+  defaultDisplayLanguage: string | null | undefined,
+  languageOrder: readonly string[],
+): LatestUtterancePayload | null {
+  const originalDisplayLanguage = resolveOriginalDisplayLanguage(
+    utterance.originalLang,
+    [
+      ...(utterance.targetLanguages || []),
+      ...Object.keys(utterance.translations || {}),
+      ...Object.keys(utterance.translationFinalized || {}),
+    ],
+    languageOrder,
+  )
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
+  const displayLanguage = resolveInitialDisplayLanguage(
+    preferredDisplayLanguages?.length
+      ? preferredDisplayLanguages
+      : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
+    defaultDisplayLanguage,
+    originalDisplayLanguage,
+    targetLanguages,
+    languageOrder,
+  )
+  const isOriginalLanguageSelected = displayLanguage.trim().toLowerCase()
+    === originalDisplayLanguage.trim().toLowerCase()
+  const preview = (isOriginalLanguageSelected
+    ? utterance.originalText
+    : findLanguageRecordValue(utterance.translations, displayLanguage) || utterance.originalText
+  ).trim()
   if (!preview) return null
 
   const createdAtMs = typeof utterance.createdAtMs === 'number'
@@ -4494,7 +4537,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const committedUtteranceIdsRef = useRef<Set<string>>(new Set())
   committedUtteranceIdsRef.current = new Set(utterances.map((utterance) => utterance.id))
-  const lastReportedUtteranceIdRef = useRef('')
+  const lastReportedUtteranceRef = useRef<LatestUtteranceReport | null>(null)
   const liveUtterancePreviewTimerRef = useRef<number | null>(null)
   const lastReportedLiveUtterancePreviewRef = useRef<{
     utteranceId: string
@@ -4510,11 +4553,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!onLatestUtteranceChange && !onLatestUtterancePreviewChangeRef.current) return
     const latestUtterance = utterances[utterances.length - 1]
     const latestPayload = latestUtterance
-      ? buildLatestUtterancePayload(latestUtterance)
+      ? buildLatestUtterancePayload(
+        latestUtterance,
+        preferredDisplayLanguage,
+        preferredDisplayLanguages,
+        resolvedDefaultDisplayLanguage,
+        normalizedDisplayLanguageOptions,
+      )
       : null
     if (!latestPayload || !latestUtterance) return
 
-    const isNewFinalUtterance = lastReportedUtteranceIdRef.current !== latestUtterance.id
+    const update = resolveLatestUtteranceReport(
+      lastReportedUtteranceRef.current,
+      latestUtterance.id,
+      latestPayload,
+    )
+    if (!update) return
+    const isNewFinalUtterance = update.isNewUtterance
     if (isNewFinalUtterance) {
       if (liveUtterancePreviewTimerRef.current !== null) {
         window.clearTimeout(liveUtterancePreviewTimerRef.current)
@@ -4524,10 +4579,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       onLatestUtterancePreviewChangeRef.current?.(null)
     }
 
-    if (!isNewFinalUtterance) return
-    lastReportedUtteranceIdRef.current = latestUtterance.id
-    onLatestUtteranceChange?.(latestPayload)
-  }, [onLatestUtteranceChange, utterances])
+    lastReportedUtteranceRef.current = update.report
+    onLatestUtteranceChange?.(update.report.payload, isNewFinalUtterance)
+  }, [
+    onLatestUtteranceChange,
+    utterances,
+    preferredDisplayLanguage,
+    preferredDisplayLanguages,
+    resolvedDefaultDisplayLanguage,
+    normalizedDisplayLanguageOptions,
+  ])
 
   useEffect(() => {
     const onPreviewChange = onLatestUtterancePreviewChangeRef.current
@@ -4545,7 +4606,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         && Boolean(utterance.originalText.trim())
       ))
     const latestPayload = latestLiveUtterance
-      ? buildLatestUtterancePayload(latestLiveUtterance)
+      ? buildLatestUtterancePayload(
+        latestLiveUtterance,
+        preferredDisplayLanguage,
+        preferredDisplayLanguages,
+        resolvedDefaultDisplayLanguage,
+        normalizedDisplayLanguageOptions,
+      )
       : null
 
     if (!latestLiveUtterance || !latestPayload) {
@@ -4587,7 +4654,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         liveUtterancePreviewTimerRef.current = null
       }
     }
-  }, [liveUtterances, utterances])
+  }, [
+    liveUtterances,
+    utterances,
+    preferredDisplayLanguage,
+    preferredDisplayLanguages,
+    resolvedDefaultDisplayLanguage,
+    normalizedDisplayLanguageOptions,
+  ])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = effectiveTranslationLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'

@@ -14,7 +14,8 @@ import {
 } from "@/components/connect-search-cache";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
-import { formatHandle, isAnonymousTrackingHandle } from "@/lib/handles";
+import { observeConnectViewport } from "@/lib/connect-viewport";
+import { formatHandle, isSearchExcludedHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
@@ -33,6 +34,7 @@ import {
   DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
   replaceWithConversationListThenPush,
 } from "@/lib/direct-conversation-navigation";
+import { resolveConnectSearchRestore } from "@/components/connect-search-restore";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -52,6 +54,7 @@ const CONNECT_PROFILE_SURFACE_ID = "profile";
 type ConnectSearchHistorySnapshot = {
   query: string;
   results: UserSearchResult[];
+  nextCursor: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,11 +69,19 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
     return null;
   }
 
-  if (!rawSnapshot.query.trim() || !rawSnapshot.results.every(isConnectSearchResult)) return null;
+  if (
+    !rawSnapshot.query.trim()
+    || !rawSnapshot.results.every(isConnectSearchResult)
+    || (typeof rawSnapshot.nextCursor !== "undefined"
+      && rawSnapshot.nextCursor !== null
+      && typeof rawSnapshot.nextCursor !== "string")
+  ) return null;
 
+  const query = rawSnapshot.query.trim();
   return {
-    query: rawSnapshot.query,
-    results: rawSnapshot.results.filter((result) => !isAnonymousTrackingHandle(result.handle)),
+    query,
+    results: rawSnapshot.results.filter((result) => !isSearchExcludedHandle(result.handle)),
+    nextCursor: typeof rawSnapshot.nextCursor === "string" ? rawSnapshot.nextCursor : null,
   };
 }
 
@@ -114,7 +125,28 @@ function resolveSearchCopy(dictionary: AppDictionary) {
       ?? (isKorean ? "팔로우 상태를 변경하지 못했습니다." : "Could not update follow status."),
     clearSearch: dictionary.connect.clearSearchLabel
       ?? (isKorean ? "검색어 지우기" : "Clear search"),
+    loadMore: dictionary.connect.loadMoreLabel
+      ?? (isKorean ? "더 보기" : "Load more"),
+    loadingMore: dictionary.connect.loadingMoreLabel
+      ?? (isKorean ? "불러오는 중..." : "Loading more..."),
+    loadMoreError: dictionary.connect.loadMoreError
+      ?? (isKorean ? "추가 결과를 불러오지 못했습니다. 다시 시도해 주세요." : "Could not load more results. Please try again."),
   };
+}
+
+function normalizeSearchCursor(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function appendUniqueSearchResults(
+  currentResults: UserSearchResult[],
+  nextResults: UserSearchResult[],
+): UserSearchResult[] {
+  const existingIds = new Set(currentResults.map((result) => result.id));
+  return [
+    ...currentResults,
+    ...nextResults.filter((result) => !existingIds.has(result.id)),
+  ];
 }
 
 function buildConnectTrackingHeaders(): Record<string, string> {
@@ -136,8 +168,13 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pageRef = useRef<HTMLElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const requestSequenceRef = useRef(0);
   const searchRequestSequenceRef = useRef(0);
+  const activeSearchQueryRef = useRef("");
+  const loadingMoreRef = useRef(false);
   const lastSearchContextRef = useRef<{
     query: string;
     sequence: number;
@@ -145,6 +182,8 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   } | null>(null);
   const isMountedRef = useRef(false);
   const initialHistorySnapshotRef = useRef<ConnectSearchHistorySnapshot | null>(null);
+  const pendingHistoryRestoreQueryRef = useRef<string | null>(null);
+  const skipInitialSearchEffectRef = useRef(false);
   const hydratedCacheIdentityRef = useRef("");
   const pendingDirectConversationNavigationRef = useRef(false);
   const directConversationNavigationReleaseTimerRef = useRef<number | null>(null);
@@ -161,6 +200,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const [resultsQuery, setResultsQuery] = useState("");
   const [searchError, setSearchError] = useState(false);
   const [searchErrorQuery, setSearchErrorQuery] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [followInFlightIds, setFollowInFlightIds] = useState<Set<string>>(new Set());
   const [followError, setFollowError] = useState(false);
   const [connectSurfaceHistory, setConnectSurfaceHistory] = useState(() => (
@@ -169,6 +211,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const copy = resolveSearchCopy(dictionary);
   const normalizedQuery = query.trim();
   const visibleResults = resultsQuery === normalizedQuery ? results : [];
+  const hasMoreResults = resultsQuery === normalizedQuery && Boolean(nextCursor);
   const isSearching = Boolean(normalizedQuery)
     && searchingQuery === normalizedQuery
     && visibleResults.length === 0;
@@ -181,20 +224,36 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
 
+  const dismissSearchKeyboard = useCallback(() => {
+    inputRef.current?.blur();
+  }, []);
+
+  useEffect(() => {
+    if (!pageRef.current) return;
+    return observeConnectViewport(pageRef.current);
+  }, []);
+
   const handleSearchQueryChange = useCallback((nextQuery: string) => {
+    if (resultsRef.current) resultsRef.current.scrollTop = 0;
     setQuery(nextQuery);
     const normalizedNextQuery = nextQuery.trim();
+    activeSearchQueryRef.current = normalizedNextQuery;
+    loadingMoreRef.current = false;
+    setIsLoadingMore(false);
+    setLoadMoreError(false);
+    setNextCursor(null);
     if (normalizedNextQuery) {
       writeConnectSearchCache(searchCacheIdentity, {
         query: normalizedNextQuery,
         results: [],
         resultsReady: false,
+        nextCursor: null,
       });
     } else {
       clearConnectSearchCache(searchCacheIdentity);
     }
     replaceConnectSearchHistorySnapshot(normalizedNextQuery
-      ? { query: normalizedNextQuery, results: [] }
+      ? { query: normalizedNextQuery, results: [], nextCursor: null }
       : null);
   }, [searchCacheIdentity]);
 
@@ -358,9 +417,15 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     const snapshot = readConnectSearchHistorySnapshot();
     initialHistorySnapshotRef.current = snapshot;
     if (snapshot) {
+      pendingHistoryRestoreQueryRef.current = snapshot.query;
+      skipInitialSearchEffectRef.current = true;
       setQuery(snapshot.query);
       setResults(snapshot.results);
       setResultsQuery(snapshot.query);
+      setNextCursor(snapshot.nextCursor);
+    } else {
+      pendingHistoryRestoreQueryRef.current = null;
+      skipInitialSearchEffectRef.current = false;
     }
 
     return () => {
@@ -382,6 +447,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
 
     const isFirstAuthenticatedIdentity = !hydratedCacheIdentityRef.current;
     hydratedCacheIdentityRef.current = cacheIdentityKey;
+    activeSearchQueryRef.current = initialHistorySnapshotRef.current?.query ?? "";
 
     // The history snapshot is the freshest source when returning from a profile.
     if (isFirstAuthenticatedIdentity && initialHistorySnapshotRef.current) return;
@@ -392,20 +458,22 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       setQuery("");
       setResults([]);
       setResultsQuery("");
+      setNextCursor(null);
       return;
     }
 
     setQuery(snapshot.query);
     setResults(snapshot.resultsReady ? snapshot.results : []);
     setResultsQuery(snapshot.resultsReady ? snapshot.query : "");
+    setNextCursor(snapshot.resultsReady ? snapshot.nextCursor : null);
     setSearchError(false);
     setSearchErrorQuery("");
   }, [authenticatedUserId, searchCacheIdentity, sessionStatus]);
 
   useEffect(() => {
     if (!isMountedRef.current || !resultsQuery) return;
-    replaceConnectSearchHistorySnapshot({ query: resultsQuery, results });
-  }, [results, resultsQuery]);
+    replaceConnectSearchHistorySnapshot({ query: resultsQuery, results, nextCursor });
+  }, [nextCursor, results, resultsQuery]);
 
   useEffect(() => {
     if (
@@ -422,20 +490,44 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       query: normalizedQuery,
       results,
       resultsReady: true,
+      nextCursor,
     });
   }, [
     authenticatedUserId,
     normalizedQuery,
     results,
     resultsQuery,
+    nextCursor,
     searchCacheIdentity,
     sessionStatus,
   ]);
 
   useEffect(() => {
-    const requestSequence = ++requestSequenceRef.current;
+    const restoreDecision = resolveConnectSearchRestore({
+      normalizedQuery,
+      pendingQuery: pendingHistoryRestoreQueryRef.current,
+      skipInitialEffect: skipInitialSearchEffectRef.current,
+    });
+    pendingHistoryRestoreQueryRef.current = restoreDecision.nextPendingQuery;
+    skipInitialSearchEffectRef.current = restoreDecision.nextSkipInitialEffect;
+    if (!restoreDecision.shouldRunSearch) {
+      activeSearchQueryRef.current = restoreDecision.activeQuery ?? normalizedQuery;
+      return;
+    }
 
-    if (!normalizedQuery) return;
+    const requestSequence = ++requestSequenceRef.current;
+    activeSearchQueryRef.current = normalizedQuery;
+    loadingMoreRef.current = false;
+    setIsLoadingMore(false);
+    setLoadMoreError(false);
+    setNextCursor(null);
+
+    if (!normalizedQuery) {
+      setSearchingQuery("");
+      setResults([]);
+      setResultsQuery("");
+      return;
+    }
 
     const timeoutId = window.setTimeout(() => {
       const searchSequence = ++searchRequestSequenceRef.current;
@@ -453,8 +545,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
 
         let httpStatus: number | null = null;
         try {
+          const requestParams = new URLSearchParams({ q: normalizedQuery });
           const response = await fetch(
-            buildClientApiPath(`/users/search?q=${encodeURIComponent(normalizedQuery)}`),
+            buildClientApiPath(`/users/search?${requestParams.toString()}`),
             {
               cache: "no-store",
               headers: buildConnectTrackingHeaders(),
@@ -462,22 +555,33 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           );
           httpStatus = response.status;
           if (!response.ok) throw new Error("user_search_failed");
-          const payload = await response.json() as { users?: UserSearchResult[] };
+          const payload = await response.json() as {
+            users?: UserSearchResult[];
+            nextCursor?: unknown;
+          };
           const users = Array.isArray(payload.users)
-            ? payload.users.filter((user) => !isAnonymousTrackingHandle(user.handle))
+            ? payload.users.filter((user) => !isSearchExcludedHandle(user.handle))
             : [];
+          const responseNextCursor = normalizeSearchCursor(payload.nextCursor);
           captureMingleClientEvent("mingle_connect_search_completed", {
             search_sequence: searchSequence,
             success: true,
             http_status: httpStatus,
             result_count: users.length,
+            has_more: Boolean(responseNextCursor),
+            load_more: false,
             duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
             ...searchProperties,
           });
 
-          if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
+          if (
+            requestSequenceRef.current !== requestSequence
+            || activeSearchQueryRef.current !== normalizedQuery
+            || !isMountedRef.current
+          ) return;
           setResults(users);
           setResultsQuery(normalizedQuery);
+          setNextCursor(responseNextCursor);
           lastSearchContextRef.current = {
             query: normalizedQuery,
             sequence: searchSequence,
@@ -489,12 +593,19 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             success: false,
             http_status: httpStatus,
             result_count: 0,
+            has_more: false,
+            load_more: false,
             duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
             ...searchProperties,
           });
-          if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
+          if (
+            requestSequenceRef.current !== requestSequence
+            || activeSearchQueryRef.current !== normalizedQuery
+            || !isMountedRef.current
+          ) return;
           setResults([]);
           setResultsQuery("");
+          setNextCursor(null);
           setSearchError(true);
           setSearchErrorQuery(normalizedQuery);
         } finally {
@@ -508,16 +619,141 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     return () => window.clearTimeout(timeoutId);
   }, [normalizedQuery]);
 
+  const loadMoreSearchResults = useCallback(async () => {
+    const pageQuery = normalizedQuery;
+    const cursor = nextCursor;
+    if (
+      !pageQuery
+      || resultsQuery !== pageQuery
+      || !cursor
+      || loadingMoreRef.current
+    ) return;
+
+    const requestSequence = requestSequenceRef.current;
+    const searchContext = lastSearchContextRef.current?.query === pageQuery
+      ? lastSearchContextRef.current
+      : null;
+    const searchStartedAt = performance.now();
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    setLoadMoreError(false);
+
+    const searchProperties = searchContext?.properties
+      ?? await buildSearchAnalyticsProperties(pageQuery);
+    captureMingleClientEvent("mingle_connect_search_requested", {
+      search_sequence: searchContext?.sequence ?? 0,
+      load_more: true,
+      ...searchProperties,
+    });
+
+    let httpStatus: number | null = null;
+    try {
+      const requestParams = new URLSearchParams({ q: pageQuery, cursor });
+      const response = await fetch(
+        buildClientApiPath(`/users/search?${requestParams.toString()}`),
+        {
+          cache: "no-store",
+          headers: buildConnectTrackingHeaders(),
+        },
+      );
+      httpStatus = response.status;
+      if (!response.ok) throw new Error("user_search_failed");
+      const payload = await response.json() as {
+        users?: UserSearchResult[];
+        nextCursor?: unknown;
+      };
+      const users = Array.isArray(payload.users)
+        ? payload.users.filter((user) => !isSearchExcludedHandle(user.handle))
+        : [];
+      const responseNextCursor = normalizeSearchCursor(payload.nextCursor);
+      captureMingleClientEvent("mingle_connect_search_completed", {
+        search_sequence: searchContext?.sequence ?? 0,
+        success: true,
+        http_status: httpStatus,
+        result_count: users.length,
+        has_more: Boolean(responseNextCursor),
+        load_more: true,
+        duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
+        ...searchProperties,
+      });
+
+      if (
+        requestSequenceRef.current !== requestSequence
+        || activeSearchQueryRef.current !== pageQuery
+        || !isMountedRef.current
+      ) return;
+      setResults((currentResults) => appendUniqueSearchResults(currentResults, users));
+      setNextCursor(responseNextCursor);
+    } catch {
+      captureMingleClientEvent("mingle_connect_search_completed", {
+        search_sequence: searchContext?.sequence ?? 0,
+        success: false,
+        http_status: httpStatus,
+        result_count: 0,
+        has_more: Boolean(cursor),
+        load_more: true,
+        duration_ms: Math.max(0, Math.round(performance.now() - searchStartedAt)),
+        ...searchProperties,
+      });
+      if (
+        requestSequenceRef.current === requestSequence
+        && activeSearchQueryRef.current === pageQuery
+        && isMountedRef.current
+      ) {
+        setLoadMoreError(true);
+      }
+    } finally {
+      loadingMoreRef.current = false;
+      if (
+        requestSequenceRef.current === requestSequence
+        && activeSearchQueryRef.current === pageQuery
+        && isMountedRef.current
+      ) {
+        setIsLoadingMore(false);
+      }
+    }
+  }, [nextCursor, normalizedQuery, resultsQuery]);
+
+  useEffect(() => {
+    const scrollContainer = resultsRef.current;
+    const sentinel = loadMoreSentinelRef.current;
+    if (
+      !scrollContainer
+      || !sentinel
+      || !hasMoreResults
+      || typeof IntersectionObserver === "undefined"
+    ) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadMoreSearchResults();
+      }
+    }, {
+      root: scrollContainer,
+      rootMargin: "240px 0px",
+      threshold: 0,
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreResults, loadMoreSearchResults]);
+
   return (
     <>
-      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+      <main ref={pageRef} className="connect-page relative flex h-full min-h-0 w-full flex-col overflow-clip bg-white text-slate-900">
       <header
         className="shrink-0 px-4 pb-3"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 44px) + 12px)",
         }}
       >
-        <label className="relative block">
+        <form
+          role="search"
+          className="relative block"
+          onSubmit={(event) => {
+            event.preventDefault();
+            dismissSearchKeyboard();
+          }}
+        >
           <Search
             size={19}
             strokeWidth={2.1}
@@ -527,6 +763,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <input
             ref={inputRef}
             type="search"
+            enterKeyHint="search"
             value={query}
             onChange={(event) => handleSearchQueryChange(event.target.value)}
             placeholder={copy.placeholder}
@@ -549,10 +786,15 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
               <X size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
           ) : null}
-        </label>
+        </form>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={resultsRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+        onTouchMove={dismissSearchKeyboard}
+        onClickCapture={dismissSearchKeyboard}
+      >
         {followError ? (
           <p className="px-6 pt-4 text-center text-[13px] text-red-500" role="alert">
             {copy.followError}
@@ -571,64 +813,99 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             {copy.noResults}
           </p>
         ) : visibleResults.length > 0 ? (
-          <ul className="border-t border-gray-100">
-            {visibleResults.map((user) => {
-              const name = user.name?.trim() || copy.userFallback;
-              return (
-                <li key={user.id} className="border-b border-gray-100 px-4 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => openConnectProfile(user.id)}
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                      aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-                        {user.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={user.image}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            style={{
-                              transform: buildProfileImageTransform(44, {
-                                scale: user.imageCropScale,
-                                x: user.imageCropX,
-                                y: user.imageCropY,
-                              }),
-                            }}
-                          />
-                        ) : (
-                          <UserRound size={24} className="text-gray-400" aria-hidden="true" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                        {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleToggleFollow(user)}
-                      disabled={followInFlightIds.has(user.id)}
-                      className={`ml-auto shrink-0 rounded-lg border px-3 py-2 text-[13px] font-semibold transition active:opacity-70 disabled:opacity-50 ${
-                        user.isFollowing
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-gray-200 bg-white text-slate-800"
-                      }`}
-                      aria-pressed={user.isFollowing}
-                    >
-                      {followInFlightIds.has(user.id) ? "…" : user.isFollowing ? copy.following : copy.follow}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="border-t border-gray-100">
+              {visibleResults.map((user) => {
+                const profileName = user.name?.trim() || "";
+                const rawHandle = user.handle?.trim() || "";
+                const formattedHandle = formatHandle(rawHandle);
+                const name = profileName || rawHandle || copy.userFallback;
+                const normalizedNameForHandleComparison = profileName.replace(/^@/, "").toLocaleLowerCase();
+                const shouldShowHandle = Boolean(
+                  formattedHandle
+                  && profileName
+                  && normalizedNameForHandleComparison !== rawHandle.toLocaleLowerCase(),
+                );
+                const isFollowPending = followInFlightIds.has(user.id);
+                return (
+                  <li key={user.id} className="border-b border-gray-100 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => openConnectProfile(user.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                        aria-label={shouldShowHandle ? `${name}, ${formattedHandle}` : name}
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+                          {user.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={user.image}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              style={{
+                                transform: buildProfileImageTransform(44, {
+                                  scale: user.imageCropScale,
+                                  x: user.imageCropX,
+                                  y: user.imageCropY,
+                                }),
+                              }}
+                            />
+                          ) : (
+                            <UserRound size={24} className="text-gray-400" aria-hidden="true" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
+                          {shouldShowHandle ? <p className="truncate text-[13px] text-gray-500">{formattedHandle}</p> : null}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleFollow(user)}
+                        disabled={isFollowPending}
+                        aria-busy={isFollowPending}
+                        className={`ml-auto flex h-10 min-w-[4.5rem] shrink-0 items-center justify-center rounded-lg border px-3 text-center text-[13px] font-semibold transition-colors active:opacity-70 disabled:cursor-wait disabled:opacity-50 ${
+                          user.isFollowing
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-gray-200 bg-white text-slate-800"
+                        }`}
+                        aria-pressed={user.isFollowing}
+                      >
+                        {isFollowPending ? "…" : user.isFollowing ? copy.following : copy.follow}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {hasMoreResults ? (
+              <div className="flex flex-col items-center gap-2 px-4 py-4">
+                <div ref={loadMoreSentinelRef} className="h-px w-full" aria-hidden="true" />
+                {loadMoreError ? (
+                  <p className="text-center text-[13px] text-red-500" role="alert">
+                    {copy.loadMoreError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void loadMoreSearchResults()}
+                  disabled={isLoadingMore}
+                  aria-busy={isLoadingMore}
+                  className="inline-flex min-h-9 min-w-[10rem] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-[13px] font-semibold text-slate-800 transition-colors active:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isLoadingMore ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
+                  <span>{isLoadingMore ? copy.loadingMore : copy.loadMore}</span>
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
 
-        <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
+        <div className="connect-bottom-tabs shrink-0" onClickCapture={dismissSearchKeyboard}>
+          <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
+        </div>
       </main>
       <PublicUserProfileScreen
         dictionary={dictionary}

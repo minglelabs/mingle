@@ -3345,16 +3345,17 @@ export default function ConversationList({
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
     payload: LatestUtterancePayload,
+    isNewUtterance: boolean,
   ) => {
     const normalizedPreview = payload.preview.trim();
     if (!normalizedPreview) return;
     const normalizedCreatedAt = payload.createdAt.trim();
     if (!normalizedCreatedAt) return;
 
-    clearConversationInterimPreview(conversationId);
+    if (isNewUtterance) clearConversationInterimPreview(conversationId);
 
     const isActiveConversation = activeConversationRef.current?.id === conversationId;
-    if (isActiveConversation) {
+    if (isActiveConversation && isNewUtterance) {
       markConversationAsRead(conversationId);
     }
 
@@ -3373,7 +3374,7 @@ export default function ConversationList({
           typeof payload.speakerAvatarIndex === "number" && Number.isInteger(payload.speakerAvatarIndex)
             ? payload.speakerAvatarIndex
             : conversation.latestSpeakerAvatarIndex ?? null,
-        ...(isActiveConversation ? { unreadMessageCount: 0 } : {}),
+        ...(isActiveConversation && isNewUtterance ? { unreadMessageCount: 0 } : {}),
       };
     }).sort(compareConversationRecency));
   }, [clearConversationInterimPreview, markConversationAsRead]);
@@ -5729,8 +5730,8 @@ export default function ConversationList({
                         onSttSessionRunningChange={(isRunning) => {
                           handleConversationRunningChange(conversation.id, isRunning);
                         }}
-                        onLatestUtteranceChange={(payload) => {
-                          handleConversationLatestUtteranceChange(conversation.id, payload);
+                        onLatestUtteranceChange={(payload, isNewUtterance) => {
+                          handleConversationLatestUtteranceChange(conversation.id, payload, isNewUtterance);
                         }}
                         onLatestUtterancePreviewChange={(payload) => {
                           handleConversationLatestUtterancePreviewChange(conversation.id, payload);

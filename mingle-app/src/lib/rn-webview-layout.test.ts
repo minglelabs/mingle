@@ -14,6 +14,15 @@ import {
 } from '../../rn/src/webViewLayout'
 
 describe('RN WebView layout helpers', () => {
+  it('keeps localized search tabs inside their own scroll area without a keyboard accessory', () => {
+    for (const pathname of ['/ko/connect', '/en/connect', '/ja/connect/']) {
+      expect(shouldDisableIosWebViewScrolling({ isIosPlatform: true, pathname })).toBe(true);
+      expect(shouldHideIosKeyboardAccessoryView({ isIosPlatform: true, pathname })).toBe(true);
+      expect(shouldDisableIosWebViewScrolling({ isIosPlatform: false, pathname })).toBe(false);
+    }
+    expect(isLiveDemoPathname('/unsupported/connect')).toBe(false);
+    expect(isLiveDemoPathname('/ko/connect/unknown')).toBe(false);
+  });
   it('parses pathname from a full URL', () => {
     expect(parseWebPathname('https://mingle-app-devbox.photo-for-passport.com/ko?nativeUi=1')).toBe('/ko')
   })

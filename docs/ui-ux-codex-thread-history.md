@@ -1,5 +1,21 @@
 # UI/UX Codex Thread History
 
+## 2026-09-09 - Paginate crowded user search results
+
+- Surface: Explore/search tab user results on web, iOS WebView, and Android WebView.
+- Issue: User search returned only one server page of 20 users. When a query matched more users, the list silently ended after the first viewport-sized page, so users could not discover the remaining matches or tell whether more results existed.
+- Resolution: Add deterministic cursor pagination ordered by `updatedAt` and `id`, keeping the existing account, block, deactivated-user, and anonymous-user filters. The API returns at most 20 users plus an opaque `nextCursor`; malformed cursors are rejected before the database query. The client resets pagination for every new query, appends de-duplicated pages, and keeps the cursor in the scoped search cache and history snapshot.
+- Interaction: Keep the first result page visible while loading additional pages. Show a localized “Load more” action below the results and automatically request the next page when the sentinel approaches the scroll viewport. The button remains available as an explicit fallback, shows a loading state during the request, and exposes a retryable error without discarding already-loaded users. The control is hidden when the server reports the final page.
+- Compatibility: This is a Web/API change only. No Prisma migration, native code, mobile version, or API namespace change is required; existing versioned search routes re-export the shared handler.
+- Verification: Search-route tests cover the 20-user page boundary, cursor emission, and malformed-cursor rejection. Search-cache tests cover cursor persistence, pending-query clearing, namespace/account isolation, anonymous filtering, and stale snapshots. Targeted Vitest, TypeScript no-emit, targeted ESLint, and whitespace checks pass. Physical iOS/Android scrolling and real authenticated Devbox data remain manual follow-up checks.
+
+## 2026-09-08 - PR 217 delayed translation preview refresh
+
+- Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.
+- Resolution: Compare the latest reported message content as well as its ID. Publish same-message preview changes while preserving the original reported timestamp. Only a new message clears the interim preview or triggers read-state updates, so a late translation cannot erase the next live utterance's preview.
+- Verification: Regression coverage follows one finalized message through original text, delayed translation, final correction, duplicate updates, and display-language changes; it also checks a new message with identical text and stable timestamps for legacy messages without creation times. All 616 related conversation and bubble tests, full TypeScript checking, and ESLint for the changed components passed.
+- Deployment: No new Prisma migration, environment variable, native rebuild, mobile version change, or API namespace change is required. PR 216 and PR 217 use existing message content and language fields.
+
 ## 2026-09-08 - Prepare the unified 2.0.3 store release
 
 - Integrated service-branch PR #215 before release. Retained timestamp-descendant scroll anchors and calendar-day dividers while preserving the Local-first branch's canonical speech-start ordering and message-ID tie breaker. Both branches' issue histories remain intact.
@@ -2169,3 +2185,86 @@
 - 회귀 검증 범위: 실제 송신기 → 메시징 중계 → 다른 사용자 미리보기 → 원문 저장 → 최종 번역의 경로에서 렌더링된 행 수/국기/대기 표시를 검사했다. 로컬 발화 확정도 미완료 언어를 유지한다.
 - 한계: 물리 기기 마이크 테스트는 수행하지 않았다. 번역 텍스트가 여러 줄로 늘어날 때의 정상적인 높이 증가는 남는다.
 - 반영 범위: 새 작업 브랜치에 커밋/푸시한다. 번역 수정은 웹 앱과 메시징 서비스를 함께 배포해야 한다. 이 작업에서 네이티브 앱 변경, 운영 배포, 앱/API 버전 변경, 스키마 변경과 마이그레이션은 없다.
+
+## 2026-09-08 — Search tab scroll boundaries and keyboard handling
+
+- Report: [Search tab scroll area and keyboard issue](https://app.notion.com/p/roycenam/3d122e3ed20a80ceb402fa52755319d9). Long search results moved the search header and bottom tabs along with the results.
+- Branch: `codex/search-scroll-keyboard`, based on `origin/codex/messenger-tabs-device-test` at `9c94e666`.
+- Root causes:
+  - The 400px mobile canvas scales down on narrow screens, leaving a layout box taller than its visible shell. `overflow: hidden` still permits programmatic/focus scrolling. A result button receiving focus scrolled the outer shell by 19px at 360px width, moving the header above the viewport and the tabs away from the bottom.
+  - The search page did not track the visual viewport when the keyboard covered part of the screen.
+  - The native iOS layout route list omitted `/connect`, leaving whole-WebView scrolling, bouncing, and the keyboard accessory enabled on search.
+- Resolution:
+  - Use `overflow: clip` for the search page and its canvas ancestors, scoped to search, while retaining the result list as the scroll container with contained overscroll.
+  - Observe visual viewport resize/scroll and parent resize, convert visible pixels to canvas coordinates, and cap page height to the parent. Android WebView resizing does not cause a second keyboard-height subtraction. Clean up listeners, the observer, and scheduled frames on unmount.
+  - Submit the search form to dismiss the keyboard without navigating or clearing the query. Dismiss on result-list dragging, result selection, and bottom-tab selection. Keep clear-and-refocus behavior and reset the result scroll offset when editing the query.
+  - Apply the existing iOS fixed-screen scroll and keyboard-accessory policy to localized search routes.
+- Validation:
+  - 34 Vitest checks passed for viewport geometry/lifecycle, native layout routes, mobile canvas scaling, search cache, and tab navigation. ESLint and the full web TypeScript check passed.
+  - Browser verification used the actual search component, viewport observer, bottom tabs, and generated application CSS with 20 synthetic users and mocked authentication/network responses, served through this worktree's local devbox.
+  - At 390x844, the results reached scroll offset 635.5px while the header stayed at 0 and tabs stayed at 844px. At 360x740, focusing a bottom result kept the outer shell at scroll offset 0 and the header at 0, fixing the reproduced 19px displacement.
+  - A simulated 300px keyboard reduction moved the tabs to 440px on the 740px screen; closing restored their position. Search submission blurred the input, changing the query reset the result offset to 0, and a follow action completed with one click while the input had focus.
+- Limits: Browser keyboard geometry was simulated; physical iOS/Android keyboards and touch dragging were not exercised. The iOS WebView policy change requires a rebuilt native app. No release or production deployment was performed; app/API namespaces remain at 2.0.3.
+
+## 2026-09-08 — Hide search tabs while the keyboard is open on both platforms
+
+- User clarification: The keyboard should cover the bottom tabs on both iOS and Android. The search header must remain fixed. This supersedes the earlier behavior that raised the bottom tabs above the keyboard.
+- Change: Hide the search tab bar while a focused search field reduces the available viewport by more than 100px. The result list fills the space above the keyboard. Restore tabs after viewport recovery, including when Android Back closes the keyboard without blurring the input. Keep tabs hidden if blur precedes the keyboard-closing resize.
+- Platform handling: Remember the unobscured viewport height so Android `adjustResize` is detected even when `innerHeight` and `visualViewport.height` both shrink. iOS overlay keyboards use the same observer. Small toolbar changes and hardware-keyboard focus do not hide tabs. Width changes reset the height reference.
+- Validation: 35 targeted tests passed, including separate iOS-overlay and Android-resize lifecycles, plus ESLint and the full web TypeScript check. In the devbox browser fixture at 390x844, a simulated 300px keyboard hid the tabs and let results extend to 544px; closing restored tabs at 844px. The header remained at y=0 in both states, and tabs restored while the input remained focused.
+- Limits: Physical-device keyboards were not tested. No additional native code or app/API version change is introduced by this follow-up.
+
+### Device installation follow-up
+
+- Installed and launched this branch on the wired iPhone 11 Pro and Galaxy S9 on 2026-09-08. Both devices received clean installs; Android required uninstalling the previous package because its signing certificate differed.
+- The devbox web, STT, and messaging servers run from the search-scroll-keyboard worktree using 73 runtime values read from `secret/mingle/prod`. Cloudflare named-tunnel bridges route to local ports 5538, 7538, and 9538. Servers and the connector remain running for user testing.
+- Verified the installed iOS app is 2.0.3 (105) with `ios/v2.0.3`, and Android is 2.0.3 (97) with `android/v2.0.3`. Both built apps point to `mingle-app-devbox.photo-for-passport.com` and `mingle-stt-devbox.photo-for-passport.com`.
+- Confirmed both native app processes are running, the web tunnel returns HTTP 200, the STT tunnel accepts a WebSocket handshake, and messaging health reports realtime configuration active. Physical keyboard behavior has not yet been exercised after login; the clean installs require signing in again.
+
+## 2026-09-08 — Preserve native Google login attempts through auth-screen recreation
+
+- Report: Google login did not complete in the freshly installed Android app.
+- Evidence: The devbox server recorded a successful Google OAuth callback and native-auth completion for the original Android request, while subsequent pending-result polls used different request IDs. This supports a lost/replaced client attempt; the exact device-side trigger was not captured. The custom callback scheme resolves to the installed Mingle activity, and the server completed Google authentication, so an OAuth client/signature rejection was not the observed failure.
+- Code defects addressed: The auth-session reset effect stopped polling and cleared the loading state even when an external native login was still active. A login-screen remount lost its request/provider refs, and another Continue action could replace the request before the native browser completed it.
+- Resolution: Preserve active attempts across unauthenticated session refreshes, reject duplicate starts synchronously, and retain only request ID/provider/start time in sessionStorage so a recreated screen resumes polling without reopening OAuth. Retire the saved attempt on completion/error; expire abandoned saved requests after the native browser's three-minute timeout. No bridge token or account credentials are persisted by this recovery mechanism.
+- Validation: 15 targeted auth tests passed. In a browser fixture using the actual MingleHome component under React StrictMode and mocked OAuth, one start retained the same request across remount and loading-to-unauthenticated transitions; the completion event invoked signIn exactly once. Targeted ESLint and source TypeScript checks passed. The full generated Next route check is blocked by the pre-existing exported `upsertNativeAppleUser` helper in the Apple exchange route, outside this change.
+- Device handoff: The existing prod-Vault devbox server serves the fix. Android was restarted without deleting app data; a real Google account retry is still needed to confirm the end-to-end outcome. No native rebuild or production deployment was performed for this auth follow-up.
+
+## 2026-09-08 — Keep search tabs hidden through keyboard rotation
+
+- PR review issue: Android `adjustResize` reports keyboard-reduced heights after rotation. Resetting the unobscured reference to that height incorrectly restored the bottom tabs above the open keyboard.
+- Resolution: Preserve keyboard detection through width changes and remember unobscured heights by viewport width. For a previously unseen orientation while the keyboard is open, use the previous width as an estimated unobscured height, allowing the existing 100px system-bar tolerance. Do not retain the old portrait height in landscape, which would prevent tab restoration on keyboard dismissal.
+- Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
+- Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
+
+## 2026-09-09 — Avoid the generic Mingle user label in Explore search
+
+- Surface: Explore search result names and handles, including cached results restored after tab navigation.
+- Issue: A valid user with a handle but no profile name was rendered as the localized fallback `Mingle 사용자`, even though the row already contained the account's real handle. This made an incomplete profile look like a synthetic system account and caused the generic label to reappear after returning to the search tab.
+- Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
+
+## 2026-09-09 — Localize Explore pagination controls
+
+- Surface: Explore user search pagination, including the `Load more`, loading, and retry-error states.
+- Verification: The app exposes 15 primary UI languages. Pagination copy is defined beside the existing Explore/search copy in `primary-ui-copy.ts`, merged through `getSupplementalDictionary()` and `getDictionary()`, and consumed by `connect-page.tsx` instead of owning a separate translation path.
+- Resolution: Require all three pagination strings in every primary UI dictionary and add an exact 15-locale contract test. Supported locales outside the 15 primary UI languages continue to use the established English supplemental fallback.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
+
+## 2026-09-09 — Preserve restored Explore search pages
+
+- Surface: Explore search when returning from a user profile or remounting the search tab after loading multiple result pages.
+- Issue: The history snapshot restoration effect populated the query, results, and next cursor, but the initial search effect then ran with its first-render empty query and cleared those values. The restored list could disappear or trigger an unnecessary first-page request, losing the loaded-page state.
+- Resolution: Track the pending restored query separately. Skip the initial empty-query search effect, preserve the matching restored query state once it arrives, and consume the restore marker when the user changes the query so normal search behavior remains unchanged. Normalize restored history queries before comparing them.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: Added restore-state regression tests for the initial effect, repeated mount-effect replay, restored query, and changed-query paths. The full web unit suite passed with 164 files and 1,521 tests; targeted lint and TypeScript checks also passed.
+
+## 2026-09-09 — Hide the reserved admin handle from Explore search
+
+- Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
+- Issue: The reserved `admin` account was still eligible for user search and could appear as a normal followable result. This was especially visible in broad searches that were being used to validate pagination and cache restoration.
+- Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
+- Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.

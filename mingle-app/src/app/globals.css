@@ -194,6 +194,19 @@
   overflow: hidden;
 }
 
+/* The scaled canvas is taller in layout pixels than its visible shell.
+   Unlike hidden, clip prevents focus/scrollIntoView from scrolling that shell
+   and moving the search header and tabs with it. Only the results may scroll. */
+.mobile-canvas-stage:has(.connect-page),
+.mobile-canvas-shell:has(.connect-page),
+.mobile-canvas-frame:has(> .connect-page) {
+  overflow: clip;
+}
+
+.connect-page[data-keyboard-open="true"] > .connect-bottom-tabs {
+  display: none;
+}
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;

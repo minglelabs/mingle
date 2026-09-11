@@ -12,6 +12,12 @@ import {
   type FormEvent,
 } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
+import {
+  clearNativeAuthAttempt,
+  readNativeAuthAttempt,
+  saveNativeAuthAttempt,
+  NATIVE_AUTH_ATTEMPT_TTL_MS,
+} from "@/lib/native-auth-attempt";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo, {
@@ -81,7 +87,7 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
-  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void;
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void;
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
     usageSec: number;
@@ -541,6 +547,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
 
@@ -620,6 +627,27 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   );
 
   useEffect(() => {
+    if (!isNativeAuthBridgeEnabled() || status === "authenticated") return;
+    if (pendingNativeProviderRef.current) return;
+    const attempt = readNativeAuthAttempt();
+    if (!attempt) return;
+    pendingNativeRequestIdRef.current = attempt.requestId;
+    pendingNativeProviderRef.current = attempt.provider;
+    setIsSigningIn(true);
+    setSigningInProvider(attempt.provider);
+    startNativeAuthPoller(attempt.requestId, attempt.provider);
+    nativeAuthTimeoutRef.current = setTimeout(() => {
+      if (pendingNativeRequestIdRef.current !== attempt.requestId) return;
+      clearNativeAuthPoller();
+      clearNativeAuthAttempt();
+      pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
+      setIsSigningIn(false);
+      setSigningInProvider(null);
+    }, Math.max(0, attempt.startedAt + NATIVE_AUTH_ATTEMPT_TTL_MS - Date.now()));
+  }, [clearNativeAuthPoller, startNativeAuthPoller, status]);
+
+  useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = props.locale;
     }
@@ -632,6 +660,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       // Clearing them too early can cause the ASWebAuthSession callback to be ignored,
       // which prevents signIn from running and leaves the UI stuck on the login screen.
       const hasActiveFlow = pendingNativeProviderRef.current !== null;
+      // An unauthenticated session refresh is expected while the external
+      // browser is signing in. Keep the request, spinner and poller alive.
+      if (hasActiveFlow && status !== "authenticated") return;
 
       clearNativeAuthTimeout();
       clearNativeAuthPoller();
@@ -658,8 +689,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       resetSignupSetup();
       setForgotPasswordEmail("");
 
-      if (!hasActiveFlow) {
-        // Reset refs only when no flow is active. Active flows reset them after completion.
+      if (!hasActiveFlow || status === "authenticated") {
+        // Retire the request when the session is established or no flow is active.
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
       }
@@ -711,6 +743,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       if (detail.type === "error") {
         clearNativeAuthPoller();
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
         setIsSigningIn(false);
@@ -724,6 +757,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }
 
       clearNativeAuthPoller();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
       const bridgeToken = (detail.bridgeToken || "").trim();
@@ -781,6 +815,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
   const handleSocialSignIn = useCallback(
     (provider: "apple" | "google") => {
+      // Guard synchronously: a second tap must not replace the request that
+      // the native browser is already completing.
+      if (pendingNativeProviderRef.current) return;
       setIsSigningIn(true);
       setSigningInProvider(provider);
       const nativeBridgeEnabled =
@@ -812,6 +849,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               startUrl: startUrl.toString(),
             },
           };
+          saveNativeAuthAttempt({ requestId, provider, startedAt: Date.now() });
           pendingNativeRequestIdRef.current = requestId;
           pendingNativeProviderRef.current = provider;
           clearNativeAuthTimeout();
@@ -819,6 +857,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           nativeAuthTimeoutRef.current = setTimeout(() => {
             if (pendingNativeProviderRef.current !== provider) return;
             clearNativeAuthPoller();
+            clearNativeAuthAttempt();
             pendingNativeRequestIdRef.current = null;
             pendingNativeProviderRef.current = null;
             setIsSigningIn(false);
@@ -830,6 +869,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         } catch {
           clearNativeAuthPoller();
           clearNativeAuthTimeout();
+          clearNativeAuthAttempt();
           pendingNativeRequestIdRef.current = null;
           pendingNativeProviderRef.current = null;
           setIsSigningIn(false);
@@ -1222,6 +1262,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       clearLegalSheetCloseTimer();
       clearEmailSheetCloseTimer();
       pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
     };
   }, [
     clearEmailSheetCloseTimer,
