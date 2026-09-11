@@ -2157,16 +2157,15 @@
 - Deployment: Deploy the updated web app and messaging service together. No native rebuild, app/API version change, environment variable, Prisma migration, or historical-data rewrite is required. PR #211 was already merged; this follow-up is committed to `codex/messenger-client-sot-2.0.1` and is not automatically included in that prior merge. No service-branch merge or production deployment was performed for this follow-up.
 - Subsequent user-directed integration: Applied only this fix from `6a48c1be` directly to `codex/messenger-tabs-device-test`, after fast-forwarding its clean local worktree to the already-merged PR #211. The cherry-pick was conflict-free and its resulting code tree matched the tested source tree. Pushing the service branch requests its normal automatic deployment; deployment completion is a separate runtime status.
 
-## 2026-09-11 — 번역 대기 영역 재발 및 Start 직후 의도하지 않은 Stop
+## 2026-09-11 — 번역 대기 영역 재발
 
-- 요청: 발화 버블 첫 표시부터 번역 대상별 국기와 대기 표시가 자리를 차지하고, 발화 종료/최종 번역 전환 중에도 사라지지 않아야 한다. 앱스토어 앱에서 사용자 조작 없이 Start가 Stop으로 돌아가는 간헐적 현상도 조사한다.
+- 요청: 발화 버블 첫 표시부터 번역 대상별 국기와 대기 표시가 자리를 차지하고, 발화 종료/최종 번역 전환 중에도 사라지지 않아야 한다.
 - 작업 위치: `codex/messenger-tabs-device-test`의 `92413c9a`에서 새 브랜치 `codex/translation-placeholder-session-stop`과 별도 워크트리 `/Users/nam/mingle-translation-session-fix`를 생성했다.
 - 번역 초기 표시 원인: `60f13766`에서 추가된 공유 대화 실시간 전송은 원문/번역 텍스트만 보내고 `targetLanguages`를 보내지 않았다. 받는 기기는 첫 번역이 도착하기 전까지 표시할 번역 언어를 알 수 없었다. 로컬 발화 생성기와 펼친 버블 자체에는 이미 대상 언어/대기 표시 지원이 있었다.
 - 번역 확정 전환 원인: `66a5010d`에서 도입된 `pruneUnresolvedTranslationTargets`가 일부 중간 번역을 확정 발화에 옮길 때도 아직 텍스트가 없는 대상을 삭제했다. 공유 미리보기를 원문만 저장된 서버 메시지로 교체할 때는 미리보기의 번역 대상/중간 번역도 함께 사라질 수 있었다.
 - 수정: 실시간 송신/메시징 중계에 검증된 번역 대상 목록을 추가했다. 대상 정규화는 빈 번역 텍스트만 정리하고 대상 언어 행은 유지한다. 공유 미리보기에서 저장 메시지로 전환할 때 번역 대상과 중간 번역을 이어받고, 최종 번역이 도착하면 해당 텍스트로 교체한다. 후속 원문 전용 서버 응답도 기존 대상 목록을 지우지 않는다. 과거 메시지에 현재 방의 언어 설정을 소급 적용하지 않는다.
-- Stop 조사: iOS WebSocket의 이전 세션 취소 콜백은 `isRunning`만 검사했다. 새 Start로 이 값이 다시 true가 된 뒤 이전 연결의 실패 응답이 도착하면 새 세션을 `receive_failed`로 정리할 수 있었다. send/receive 콜백에서 현재 소켓과의 동일성도 검사하도록 수정했다.
-- Stop 보완: WebView의 `offline` 이벤트가 네이티브 녹음에도 수동 Stop을 보내던 경로를 제거했다. 네이티브 세션 종료는 자체 소켓 이벤트로 처리하고 브라우저 녹음의 기존 offline 처리는 유지한다. ready 이전 연결 실패도 `stt_session_stopped`에 이전 연결 상태와 오류 사유를 기록하도록 보완했다.
-- 검증: 전체 웹 단위 테스트 161개 파일/1,493개 테스트 통과 후 로컬 발화 확정 회귀 테스트 1개를 추가하여 해당 90개 테스트 재검증을 통과했다. 메시징 24개, 스크립트 7개 테스트 통과. 웹/메시징 TypeScript 및 수정한 웹 파일 ESLint 통과. iOS Swift 구문 검사 통과.
-- 회귀 검증 범위: 실제 송신기 → 메시징 중계 → 다른 사용자 미리보기 → 원문 저장 → 최종 번역의 경로에서 렌더링된 행 수/국기/대기 표시를 검사했다. 로컬 발화 확정도 미완료 언어를 유지한다. 실제 offline 콜백을 실행해 네이티브/브라우저 동작을 검사했다. 실제 Swift send/receive 함수 본문을 제어 가능한 소켓과 함께 컴파일·실행하여 이전 연결의 오류/본문을 무시하고 현재 연결의 본문/오류는 처리함을 확인했다.
-- 한계: 물리 기기 마이크 테스트, 전체 iOS 앱 빌드/재설치, 앱스토어 현상 당시의 로그 확인은 수행하지 않았다. 따라서 발견한 Stop 경로는 수정했지만 사용자 관측 건의 단일 원인을 확정한 것은 아니다. 번역 텍스트가 여러 줄로 늘어날 때의 정상적인 높이 증가는 남는다.
-- 반영 범위: 새 작업 브랜치에 커밋/푸시한다. 번역 수정은 웹 앱과 메시징 서비스를 함께 배포해야 하고, iOS 소켓 수정은 새 앱 빌드/배포가 필요하다. 이 작업에서 운영 배포나 앱/API 버전 변경은 하지 않았다. 스키마 변경과 마이그레이션은 없다.
+- 자동 Stop 조사 및 수정은 사용자 지시로 되돌렸다. 현재 브랜치에는 이 문제를 위한 네이티브 앱 변경이 포함되지 않는다.
+- 검증: 전체 웹 단위 테스트 161개 파일/1,493개 테스트 통과 후 로컬 발화 확정 회귀 테스트 1개를 추가하여 해당 90개 테스트 재검증을 통과했다. 메시징 24개 테스트와 웹/메시징 TypeScript 검사를 통과했다.
+- 회귀 검증 범위: 실제 송신기 → 메시징 중계 → 다른 사용자 미리보기 → 원문 저장 → 최종 번역의 경로에서 렌더링된 행 수/국기/대기 표시를 검사했다. 로컬 발화 확정도 미완료 언어를 유지한다.
+- 한계: 물리 기기 마이크 테스트는 수행하지 않았다. 번역 텍스트가 여러 줄로 늘어날 때의 정상적인 높이 증가는 남는다.
+- 반영 범위: 새 작업 브랜치에 커밋/푸시한다. 번역 수정은 웹 앱과 메시징 서비스를 함께 배포해야 한다. 이 작업에서 네이티브 앱 변경, 운영 배포, 앱/API 버전 변경, 스키마 변경과 마이그레이션은 없다.

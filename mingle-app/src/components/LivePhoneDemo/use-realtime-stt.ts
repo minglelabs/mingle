@@ -5265,8 +5265,7 @@ export default function useRealtimeSTT({
   const handleSttTransportError = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.error', details)
     console.error('[MingleSTT] transport.error', details || {})
-    const previousConnectionStatus = connectionStatusRef.current
-    const wasActiveSession = hasActiveSessionRef.current || previousConnectionStatus === 'connecting'
+    const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
 
     const localFinalizeResults: LocalFinalizeResult[] = []
@@ -5296,7 +5295,6 @@ export default function useRealtimeSTT({
         eventType: 'stt_session_stopped',
         metadata: {
           reason: 'transport_error',
-          previousConnectionStatus,
           details: details || null,
         },
         keepalive: true,
@@ -5332,8 +5330,7 @@ export default function useRealtimeSTT({
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.close', details)
     console.warn('[MingleSTT] transport.close', details || {})
-    const previousConnectionStatus = connectionStatusRef.current
-    const wasActiveSession = hasActiveSessionRef.current || previousConnectionStatus === 'connecting'
+    const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
 
     if (!isStoppingRef.current) {
@@ -5365,7 +5362,6 @@ export default function useRealtimeSTT({
         eventType: 'stt_session_stopped',
         metadata: {
           reason: isStoppingRef.current ? 'stt_stop_close' : 'transport_close',
-          previousConnectionStatus,
           details: details || null,
         },
         keepalive: true,
@@ -6750,8 +6746,7 @@ export default function useRealtimeSTT({
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
 
     const handleOffline = () => {
-      // WebView reachability does not describe the native WebSocket transport.
-      if (useNativeSttRef.current || !shouldStop()) return
+      if (!shouldStop()) return
       void stopRecordingGracefully()
     }
 
