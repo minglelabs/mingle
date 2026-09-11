@@ -38,6 +38,23 @@ export class RemotePreviews {
     return !utterance.serverMessageId && time !== undefined && utterance.serverCreatedAtMs !== time
       ? { ...utterance, serverCreatedAtMs: time } : utterance
   }
+  mergeCommitted(utterance: Utterance): Utterance {
+    const preview = this.records.get(JSON.stringify([utterance.speakerUserId, utterance.id]))
+    if (!preview || preview.expiresAt <= Date.now()) return utterance
+    // Source persistence may beat the final translation. Keep the preview's
+    // targets and interim text until the committed translation replaces them.
+    const partial = preview.utterance
+    return {
+      ...utterance,
+      targetLanguages: [...new Set([...(partial.targetLanguages || []), ...(utterance.targetLanguages || [])])],
+      translations: { ...partial.translations, ...utterance.translations },
+      translationFinalized: {
+        ...Object.fromEntries(Object.keys(partial.translations).map(lang => [lang, false])),
+        ...Object.fromEntries(Object.keys(utterance.translations).map(lang => [lang, true])),
+        ...utterance.translationFinalized,
+      },
+    }
+  }
   expire(now = Date.now()): boolean {
     let changed = false
     for (const [key, event] of this.records) if (event.expiresAt <= now) { this.records.delete(key); changed = true }
@@ -86,6 +103,7 @@ export class LivePreviewSender {
       sequence = Math.max(sequence + 1, Date.now())
       if (send({ type: 'utterance_preview', id: item.utterance.id, originalText: item.utterance.originalText,
         originalLang: item.utterance.originalLang, translations: item.utterance.translations,
+        targetLanguages: item.utterance.targetLanguages,
         sequence, final: item.final })) item.lastSent = now
       // At most four frames/second per room hook, even with many speakers.
       break

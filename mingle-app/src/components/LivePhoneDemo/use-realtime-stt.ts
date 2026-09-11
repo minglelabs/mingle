@@ -1187,7 +1187,7 @@ export function filterTranslationsToTargetLanguages(
   return translations
 }
 
-export function pruneUnresolvedTranslationTargets(input: {
+export function normalizeTranslationTargets(input: {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
@@ -1202,15 +1202,12 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const targetLanguages: string[] = []
   const seen = new Set<string>()
-  const translationKeysByNormalizedLanguage = new Map(
-    Object.keys(translations).map((language) => [normalizeTranslationLanguageKey(language), language]),
-  )
   const pushLanguage = (languageRaw: string) => {
     const language = (languageRaw || '').trim()
     if (!language) return
     const normalizedLanguage = normalizeTranslationLanguageKey(language)
-    const matchingTranslationKey = translationKeysByNormalizedLanguage.get(normalizedLanguage) || language
-    if (seen.has(normalizedLanguage) || !translations[matchingTranslationKey]) return
+    // Missing text is a waiting row, not a removed target.
+    if (seen.has(normalizedLanguage)) return
     seen.add(normalizedLanguage)
     targetLanguages.push(language)
   }
@@ -1973,7 +1970,7 @@ function mergePendingTranslationUpdateIntoUtterance(
   utterance: Utterance,
   pendingUpdate: PendingUtteranceTranslationUpdate,
 ): Utterance {
-  const settledState = pruneUnresolvedTranslationTargets({
+  const settledState = normalizeTranslationTargets({
     targetLanguages: utterance.targetLanguages,
     translations: pendingUpdate.translations,
     translationFinalized: pendingUpdate.translationFinalized,
@@ -2099,7 +2096,7 @@ function applyPendingTranslationUpdateToUtteranceState(input: {
     nextPriorities = merged.priorities
   }
 
-  const settledState = pruneUnresolvedTranslationTargets({
+  const settledState = normalizeTranslationTargets({
     targetLanguages: reconciled.utterance.targetLanguages,
     translations: nextTranslations,
     translationFinalized: nextTranslationFinalized,
@@ -2395,6 +2392,7 @@ export function mergeServerHydrationUtteranceIntoStoreState(
         ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
           originalLang: normalizedServerUtterance.originalLang === 'unknown'
             ? existingUtterance.originalLang : normalizedServerUtterance.originalLang,
+          targetLanguages: existingUtterance.targetLanguages ?? normalizedServerUtterance.targetLanguages,
           translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
           translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
           translationStatus: existingUtterance.translationStatus,
@@ -2532,7 +2530,7 @@ export function applyTranslationToUtteranceStoreState(input: {
   })
 
   const settledState = input.markFinalized
-    ? pruneUnresolvedTranslationTargets({
+    ? normalizeTranslationTargets({
       targetLanguages: baseTarget.targetLanguages,
       translations: merged.translations,
       translationFinalized: merged.translationFinalized,
@@ -3420,10 +3418,10 @@ export default function useRealtimeSTT({
   ): UtteranceStoreState => {
     let nextStore = store
     for (const utterance of utterancesFromServer) {
-      nextStore = mergeServerHydrationUtteranceIntoStoreState(nextStore, utterance)
+      nextStore = mergeServerHydrationUtteranceIntoStoreState(nextStore, remotePreviews.mergeCommitted(utterance))
     }
     return nextStore
-  }, [])
+  }, [remotePreviews])
 
   const reportConversationHydrationOrderConflicts = useCallback((
     trigger: ConversationHydrationRefreshTrigger,
@@ -3838,7 +3836,7 @@ export default function useRealtimeSTT({
               const incoming = normalizeConversationHydrationUtterances([frame.utterance])[0]
               if (incoming) {
                 livePreviewSender.committed(incoming.id)
-                setUtteranceStore(current => mergeServerHydrationUtteranceIntoStoreState(current, incoming))
+                setUtteranceStore(current => mergeServerHydrationUtteranceIntoStoreState(current, remotePreviews.mergeCommitted(incoming)))
                 return
               }
             }
@@ -5267,7 +5265,8 @@ export default function useRealtimeSTT({
   const handleSttTransportError = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.error', details)
     console.error('[MingleSTT] transport.error', details || {})
-    const wasActiveSession = hasActiveSessionRef.current
+    const previousConnectionStatus = connectionStatusRef.current
+    const wasActiveSession = hasActiveSessionRef.current || previousConnectionStatus === 'connecting'
     hasActiveSessionRef.current = false
 
     const localFinalizeResults: LocalFinalizeResult[] = []
@@ -5297,6 +5296,7 @@ export default function useRealtimeSTT({
         eventType: 'stt_session_stopped',
         metadata: {
           reason: 'transport_error',
+          previousConnectionStatus,
           details: details || null,
         },
         keepalive: true,
@@ -5332,7 +5332,8 @@ export default function useRealtimeSTT({
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.close', details)
     console.warn('[MingleSTT] transport.close', details || {})
-    const wasActiveSession = hasActiveSessionRef.current
+    const previousConnectionStatus = connectionStatusRef.current
+    const wasActiveSession = hasActiveSessionRef.current || previousConnectionStatus === 'connecting'
     hasActiveSessionRef.current = false
 
     if (!isStoppingRef.current) {
@@ -5364,6 +5365,7 @@ export default function useRealtimeSTT({
         eventType: 'stt_session_stopped',
         metadata: {
           reason: isStoppingRef.current ? 'stt_stop_close' : 'transport_close',
+          previousConnectionStatus,
           details: details || null,
         },
         keepalive: true,
@@ -6748,7 +6750,8 @@ export default function useRealtimeSTT({
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
 
     const handleOffline = () => {
-      if (!shouldStop()) return
+      // WebView reachability does not describe the native WebSocket transport.
+      if (useNativeSttRef.current || !shouldStop()) return
       void stopRecordingGracefully()
     }
 

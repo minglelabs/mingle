@@ -747,7 +747,7 @@ class NativeSTTModule: RCTEventEmitter {
             }
 
             task.send(.string(text)) { [weak self] error in
-                guard let self else { return }
+                guard let self, self.socketTask === task else { return }
                 if let error, self.isRunning {
                     self.emitError("ws_send_failed: \(error.localizedDescription)")
                 }
@@ -766,7 +766,8 @@ class NativeSTTModule: RCTEventEmitter {
 
         task.receive { [weak self] result in
             guard let self else { return }
-            guard self.isRunning else { return }
+            // Cancellation of a retired socket can complete after a new Start.
+            guard self.isRunning, self.socketTask === task else { return }
 
             switch result {
             case .failure(let error):
