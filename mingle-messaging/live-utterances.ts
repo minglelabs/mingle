@@ -19,7 +19,7 @@ function readReceiptTime(value: unknown, scope: OrderScope, secret: string): num
 export type LiveFrame = {
     type: 'utterance_preview'; sessionKey: string; revision: number; expiresAt: number;
     final: boolean; orderReceipt?: string; utterance: {
-        id: string; originalText: string; originalLang: string; translations: Record<string, string>;
+        id: string; originalText: string; originalLang: string; translations: Record<string, string>; targetLanguages?: string[];
         speakerUserId: string; speakerName: string | null; createdAtMs: number;
     };
 };
@@ -77,10 +77,14 @@ export class LiveUtterances {
                 if (/^[a-zA-Z][a-zA-Z0-9-]{0,19}$/.test(language) && typeof value === 'string' && value.length <= 20_000) translations[language] = value;
             }
         }
+        const targetLanguages = Array.isArray(input.targetLanguages)
+            ? [...new Set(input.targetLanguages.filter((language): language is string =>
+                typeof language === 'string' && /^[a-zA-Z][a-zA-Z0-9-]{0,19}$/.test(language)).slice(0, 10))]
+            : undefined;
         this.turns.set(key, { sequence: Number(sequence), final, createdAtMs, until: Date.now() + 30 * 60_000 });
         const orderReceipt = order?.orderReceipt;
         return { type: 'utterance_preview', sessionKey: writer.sessionKey, revision: Number(sequence), expiresAt, final, orderReceipt,
             utterance: { id, originalText: text, originalLang: typeof input.originalLang === 'string' ? input.originalLang.slice(0, 20) : 'unknown',
-                translations, speakerUserId: writer.userId, speakerName: writer.liveWriter.name, createdAtMs } };
+                translations, ...(targetLanguages ? { targetLanguages } : {}), speakerUserId: writer.userId, speakerName: writer.liveWriter.name, createdAtMs } };
     }
 }

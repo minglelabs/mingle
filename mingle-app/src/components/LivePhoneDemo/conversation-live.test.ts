@@ -1,3 +1,6 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import ChatBubble from './ChatBubble'
 import { describe, expect, it, vi } from 'vitest'
 import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
 import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances } from './use-realtime-stt'
@@ -9,6 +12,52 @@ const preview = (revision: number, final = false): PreviewEvent => ({ type: 'utt
   final, expiresAt: Date.now() + 15000, utterance: { ...utterance, createdAtMs: 1000 } })
 
 describe('remote live message lifecycle', () => {
+  it('keeps flags and waiting rows from the first shared draft through source commit and final translation', () => {
+    const sender = new LivePreviewSender()
+    const server = new LiveUtterances()
+    const remote = new RemotePreviews()
+    const writer = { userId: 'alice', sessionKey: 'room', exp: Date.now() + 60_000, liveWriter: { name: 'Alice' } }
+    const draft = { ...utterance, targetLanguages: ['ko', 'ja'] }
+    const render = (message: typeof draft) => renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: message, uiLocale: 'en', bubbleDisplayMode: 'expanded',
+    }))
+    const assertRows = (message: typeof draft, waiting: number) => {
+      const html = render(message)
+      expect(html.match(/data-expanded-chat-bubble-row=/g)).toHaveLength(3)
+      expect(html.match(/data-interim-translation-cursor=/g) || []).toHaveLength(waiting)
+      expect(html).toContain('🇰🇷')
+      expect(html).toContain('🇯🇵')
+    }
+    const transmit = (message: typeof draft, final = false) => {
+      sender.update(message, final)
+      sender.flush(frame => {
+        const accepted = server.accept({ ...frame, writerToken: 'unused' }, writer)!
+        expect(accepted.utterance.targetLanguages).toEqual(['ko', 'ja'])
+        return remote.accept(accepted)
+      }, Date.now() + 2000)
+      return remote.visible([], 'bob')[0] as typeof draft
+    }
+    assertRows(transmit(draft), 2)
+    assertRows(transmit({ ...draft, translations: { ko: '중간 번역' } }), 1)
+    assertRows(transmit({ ...draft, originalText: 'hello world', translations: { ko: '중간 번역' } }, true), 1)
+    let state = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([]), remote.mergeCommitted({
+      ...utterance, originalText: 'hello world', targetLanguages: [], serverMessageId: 'db-1',
+    }))
+    expect(remote.visible(state.utterances, 'bob')).toEqual([])
+    assertRows(state.utterances[0] as typeof draft, 1)
+    expect(state.utterances[0].translations.ko).toBe('중간 번역')
+    // The preview has been discarded, so subsequent raw hydration must also preserve the rows.
+    state = mergeServerHydrationUtteranceIntoStoreState(state, {
+      ...utterance, originalText: 'hello world', targetLanguages: [], serverMessageId: 'db-1',
+    })
+    assertRows(state.utterances[0] as typeof draft, 1)
+    state = mergeServerHydrationUtteranceIntoStoreState(state, {
+      ...utterance, originalText: 'hello world', translations: { ko: '최종 번역', ja: '最終翻訳' }, serverMessageId: 'db-1',
+    })
+    assertRows(state.utterances[0] as typeof draft, 0)
+    expect(state.utterances[0].translations.ko).toBe('최종 번역')
+  })
+
   it.each([0, 50])('keeps both phones in the same order through opposite finalization, translation, and cached hydration (gap %s)', gap => {
     const alice = { ...utterance, id: 'client-z', createdAtMs: 9000 }
     const bob = { ...utterance, id: 'client-a', speakerUserId: 'bob', createdAtMs: 1 }
