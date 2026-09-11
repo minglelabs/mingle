@@ -215,6 +215,60 @@ describe("handleLogClientEventV1", () => {
     expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
   });
 
+  it("persists waiting translation targets with the source and retains them for its final update", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    const sourceResponse = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.3/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "waiting_targets",
+        sourceLanguage: "en",
+        sourceText: "hello",
+        targetLanguages: ["ko", "ja", "ko", "<script>"],
+        translationPending: true,
+      }),
+    }));
+
+    expect(sourceResponse.status).toBe(200);
+    expect(mockAppMessageUpsert.mock.calls[0][0].create.metadata).toMatchObject({
+      translationLanguages: [],
+      translationTargetLanguages: ["ko", "ja"],
+    });
+    expect(mockNotifyConversationMessage).toHaveBeenLastCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
+      targetLanguages: ["ko", "ja"],
+      translations: {},
+      translationFinalized: {},
+    }));
+
+    mockAppMessageFindUnique.mockResolvedValue({
+      createdAt: new Date("2026-04-12T09:00:00.000Z"),
+      metadata: { translationTargetLanguages: ["ko", "ja"] },
+    });
+    mockAppMessageUpsert.mockClear();
+    mockNotifyConversationMessage.mockClear();
+
+    const translatedResponse = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.3/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "waiting_targets",
+        sourceLanguage: "en",
+        sourceText: "hello",
+        translations: { ko: "안녕하세요" },
+        translationUpdate: true,
+      }),
+    }));
+
+    expect(translatedResponse.status).toBe(200);
+    expect(mockAppMessageUpsert.mock.calls[0][0].update.metadata.translationTargetLanguages).toEqual(["ko", "ja"]);
+    expect(mockNotifyConversationMessage).toHaveBeenLastCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
+      targetLanguages: ["ko", "ja"],
+      translations: { ko: "안녕하세요" },
+    }));
+  });
+
   it("patches translations and refreshes the room without sending a second push", async () => {
     const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
       method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true }),

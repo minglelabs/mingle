@@ -17,6 +17,7 @@ import {
 import {
   normalizeLang,
   sanitizeJsonObject,
+  sanitizeTargetLanguages,
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
@@ -181,6 +182,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const translationCompletionTokens = sanitizeNonNegativeInt(body.translationCompletionTokens)
   const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
   const translations = sanitizeTranslations(body.translations)
+  const requestedTargetLanguages = sanitizeTargetLanguages(body.targetLanguages)
   const clientMetadata = sanitizeJsonObject(body.metadata)
   const clientContext = parseClientContext(body.clientContext)
   const usageSecFromBody = sanitizeNonNegativeInt(body.usageSec)
@@ -250,6 +252,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
         infrastructureProvider: infrastructureProvider ?? null,
         model: model ?? null,
         translationLanguages: Object.keys(translations),
+        translationTargetLanguages: sanitizeTargetLanguages([
+          ...requestedTargetLanguages,
+          ...Object.keys(translations),
+        ]),
       }
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
@@ -286,6 +292,13 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
           if (existing) {
             const metadata = sanitizeJsonObject(existing.metadata)
+            const previousTargetLanguages = sanitizeTargetLanguages(metadata?.translationTargetLanguages)
+            if (requestedTargetLanguages.length === 0 && previousTargetLanguages.length > 0) {
+              messageMetadata.translationTargetLanguages = sanitizeTargetLanguages([
+                ...previousTargetLanguages,
+                ...Object.keys(translations),
+              ])
+            }
             const savedOrder = metadata?.orderStartedAtMs
             messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
               ? savedOrder : existing.createdAt.getTime()
@@ -340,6 +353,14 @@ export async function handleLogClientEventV1(request: NextRequest) {
         const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
         orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
           ? persistedOrder : message.createdAt.getTime()
+        const persistedMetadata = sanitizeJsonObject(message.metadata)
+        const persistedTargetLanguages = sanitizeTargetLanguages(
+          persistedMetadata?.translationTargetLanguages ?? messageMetadata.translationTargetLanguages,
+        )
+        const committedTargetLanguages = sanitizeTargetLanguages([
+          ...persistedTargetLanguages,
+          ...Object.keys(translations),
+        ])
         messageId = message.id
 
         await prisma.appMessageContent.upsert({
@@ -439,7 +460,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
               translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
-              targetLanguages: Object.keys(translations), createdAtMs: message.createdAt.getTime(),
+              targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
               speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
             })

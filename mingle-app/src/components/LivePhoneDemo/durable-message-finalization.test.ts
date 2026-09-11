@@ -12,7 +12,10 @@ const translated = { sourceLanguage: 'ko', translations: { en: 'Hello' }, model:
 const input = (id = 'message-one') => ({
   ownerIdentity: owner, apiNamespace: namespace, trackingUserId: 'tracking-one',
   conversationId: 'room-one', storageNamespace: 'room-one',
-  eventBody: { eventType: 'stt_turn_finalized', sessionKey: 'session-one', clientMessageId: id, sourceText: '안녕하세요', sourceLanguage: 'ko' },
+  eventBody: {
+    eventType: 'stt_turn_finalized', sessionKey: 'session-one', clientMessageId: id,
+    sourceText: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['en'],
+  },
   translationBody: { text: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['ko', 'en'] },
   utterance: { id, originalText: '안녕하세요', originalLang: 'ko', translations: {}, targetLanguages: ['ko', 'en'] },
 })
@@ -90,6 +93,7 @@ describe('durable message finalization', () => {
     await jobs.deliverDurableFinalization(record)
     const events = fetcher.mock.calls.filter(([url]) => String(url).endsWith('log/client-event'))
     expect(events).toHaveLength(2)
+    expect(events.map(([, init]) => bodyOf(init).targetLanguages)).toEqual([['en'], ['en']])
     expect(bodyOf(events[1][1]).translationUpdate).toBe(true)
   })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeLang,
   sanitizeJsonObject,
+  sanitizeTargetLanguages,
   sanitizeText,
   sanitizeTranslations,
 } from './sanitize'
@@ -33,6 +34,12 @@ describe('client-event sanitize utils', () => {
     expect(sanitized.en).toBe('Hello')
     expect(sanitized.xx).toBe('custom')
     expect(sanitized.ja.length).toBe(20000)
+  })
+
+  it('keeps a bounded, deduplicated list of valid translation targets', () => {
+    expect(sanitizeTargetLanguages([
+      'ko', 'ja', 'ko', null, '<script>', 'zh-TW', 'en', 'fr', 'de', 'es', 'it', 'pt', 'vi',
+    ])).toEqual(['ko', 'ja', 'zh-TW', 'en', 'fr', 'de', 'es', 'it', 'pt', 'vi'])
   })
 
   it('returns serializable json object and rejects invalid inputs', () => {

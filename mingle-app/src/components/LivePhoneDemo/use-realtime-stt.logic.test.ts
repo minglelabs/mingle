@@ -415,6 +415,30 @@ describe('use-realtime-stt pure logic', () => {
     expect(next.utterances[0]).toMatchObject({ translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 })
   })
 
+  it('adopts durable waiting targets when a source snapshot reaches an empty local row', () => {
+    const local = {
+      id: 'durable-waiting',
+      originalText: 'hello',
+      originalLang: 'en',
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local,
+      targetLanguages: ['ko', 'ja'],
+      createdAtMs: 200,
+    })
+
+    expect(next.utterances[0]).toMatchObject({
+      targetLanguages: ['ko', 'ja'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    })
+  })
+
   it('preserves the room store reference when server hydration is unchanged', () => {
     const utterance = {
       id: 'u-server',

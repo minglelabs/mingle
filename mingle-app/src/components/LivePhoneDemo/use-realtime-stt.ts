@@ -2392,7 +2392,16 @@ export function mergeServerHydrationUtteranceIntoStoreState(
         ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
           originalLang: normalizedServerUtterance.originalLang === 'unknown'
             ? existingUtterance.originalLang : normalizedServerUtterance.originalLang,
-          targetLanguages: existingUtterance.targetLanguages ?? normalizedServerUtterance.targetLanguages,
+          targetLanguages: normalizeTranslationTargets({
+            targetLanguages: [
+              ...(existingUtterance.targetLanguages || []),
+              ...(normalizedServerUtterance.targetLanguages || []),
+            ],
+            translations: {
+              ...existingUtterance.translations,
+              ...normalizedServerUtterance.translations,
+            },
+          }).targetLanguages,
           translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
           translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
           translationStatus: existingUtterance.translationStatus,
@@ -4708,6 +4717,7 @@ export default function useRealtimeSTT({
       eventBody: {
         eventType: 'stt_turn_finalized', sessionKey, clientContext,
         clientMessageId: utteranceId, sourceLanguage: lang, sourceText: text,
+        targetLanguages: [...(utterance.targetLanguages || [])],
         sttDurationMs: options?.sttDurationMs, totalDurationMs: options?.sttDurationMs ?? 0,
         metadata: {
           reason: options?.reason || 'unknown', singleLanguageMode: isSingleLanguageMode,
