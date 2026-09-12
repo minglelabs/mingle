@@ -4262,6 +4262,317 @@
           font-size: 0.6rem;
         }
       }
+
+      .slide-shell--ecosystem-analogy {
+        gap: clamp(16px, 2.8vh, 28px);
+      }
+
+      .slide-copy--ecosystem-analogy {
+        gap: clamp(10px, 1.5vh, 16px);
+      }
+
+      .slide-copy--ecosystem-analogy .slide-title {
+        max-width: 1040px;
+        width: 100%;
+        min-width: 0;
+        font-size: clamp(2rem, 3.55vw, 3.8rem);
+        line-height: 1.08;
+        white-space: normal;
+      }
+
+      .slide-copy--ecosystem-analogy .slide-body {
+        width: 100%;
+        min-width: 0;
+        max-width: 760px;
+      }
+
+      .slide-ecosystem-matrix {
+        display: grid;
+        grid-template-columns: clamp(74px, 8.4vw, 116px) minmax(0, 1fr) clamp(28px, 3vw, 46px) minmax(0, 1fr);
+        grid-template-rows: auto repeat(2, minmax(118px, 1fr));
+        align-items: stretch;
+        gap: clamp(8px, 1vw, 14px) clamp(10px, 1.2vw, 18px);
+        width: min(1120px, 100%);
+        margin-inline: auto;
+      }
+
+      .slide-ecosystem-heading {
+        grid-row: 1;
+        margin: 0;
+        color: rgba(164, 71, 3, 0.84);
+        font-size: clamp(0.68rem, 0.9vw, 0.86rem);
+        font-weight: 850;
+        line-height: 1.08;
+        letter-spacing: 0.1em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .slide-ecosystem-heading--technology {
+        grid-column: 2;
+      }
+
+      .slide-ecosystem-heading--ecosystem {
+        grid-column: 4;
+        color: var(--accent-strong);
+      }
+
+      .slide-ecosystem-heading span {
+        display: block;
+        margin-top: 3px;
+        color: rgba(45, 42, 30, 0.5);
+        font-size: 0.86em;
+        letter-spacing: 0.08em;
+      }
+
+      .slide-ecosystem-row-label {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(0.78rem, 1.05vw, 1rem);
+        font-weight: 850;
+        line-height: 1.1;
+        letter-spacing: 0.09em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      .slide-ecosystem-row-label span {
+        display: block;
+        margin-top: 5px;
+        color: rgba(45, 42, 30, 0.48);
+        font-size: 0.78em;
+        letter-spacing: 0.02em;
+        text-transform: none;
+      }
+
+      .slide-ecosystem-row-label--then {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .slide-ecosystem-row-label--now {
+        grid-column: 1;
+        grid-row: 3;
+      }
+
+      .slide-ecosystem-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        min-height: 0;
+        padding: clamp(16px, 1.5vw, 24px) clamp(14px, 1.6vw, 24px) clamp(16px, 1.5vw, 24px)
+          clamp(28px, 2.5vw, 40px);
+        overflow: hidden;
+        border: 1px solid rgba(45, 42, 30, 0.1);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 252, 246, 0.62) 100%);
+        box-shadow: 0 16px 32px rgba(72, 57, 18, 0.1);
+      }
+
+      .slide-ecosystem-card::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        content: "";
+        background: linear-gradient(var(--accent), #ffd978);
+      }
+
+      .slide-ecosystem-card--technology {
+        grid-column: 2;
+      }
+
+      .slide-ecosystem-card--ecosystem {
+        grid-column: 4;
+        background: linear-gradient(180deg, rgba(255, 247, 232, 0.98) 0%, rgba(255, 238, 211, 0.76) 100%);
+        box-shadow: 0 18px 36px rgba(205, 91, 8, 0.14);
+      }
+
+      .slide-ecosystem-card--ecosystem::before {
+        background: linear-gradient(var(--accent-strong), var(--accent));
+      }
+
+      .slide-ecosystem-card--then {
+        grid-row: 2;
+      }
+
+      .slide-ecosystem-card--now {
+        grid-row: 3;
+      }
+
+      .slide-ecosystem-card-title,
+      .slide-ecosystem-card-detail,
+      .slide-ecosystem-card-value {
+        margin: 0;
+      }
+
+      .slide-ecosystem-card-title {
+        color: rgba(45, 42, 30, 0.94);
+        font-size: clamp(1.18rem, 1.65vw, 1.6rem);
+        font-weight: 850;
+        line-height: 1.1;
+        letter-spacing: -0.045em;
+        text-wrap: balance;
+      }
+
+      .slide-ecosystem-card-detail {
+        margin-top: 7px;
+        color: rgba(45, 42, 30, 0.62);
+        font-size: clamp(0.86rem, 1.12vw, 1.08rem);
+        font-weight: 650;
+        line-height: 1.2;
+        text-wrap: balance;
+      }
+
+      .slide-ecosystem-card-value {
+        margin-top: 7px;
+        color: #bb6209;
+        font-size: clamp(0.76rem, 0.96vw, 0.94rem);
+        font-weight: 800;
+        line-height: 1.15;
+      }
+
+      .slide-ecosystem-card--ecosystem .slide-ecosystem-card-title,
+      .slide-ecosystem-card--ecosystem .slide-ecosystem-card-value {
+        color: rgba(164, 71, 3, 0.92);
+      }
+
+      .slide-ecosystem-arrow {
+        display: flex;
+        grid-column: 3;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-strong);
+        font-size: clamp(1.8rem, 2.7vw, 2.7rem);
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .slide-ecosystem-arrow--then {
+        grid-row: 2;
+      }
+
+      .slide-ecosystem-arrow--now {
+        grid-row: 3;
+      }
+
+      html.is-mobile-viewport .slide-shell--ecosystem-analogy {
+        gap: clamp(12px, 2.4vh, 20px);
+      }
+
+      html.is-mobile-viewport .slide-copy--ecosystem-analogy {
+        gap: clamp(8px, 1.5vh, 13px);
+      }
+
+      html.is-mobile-viewport .slide-copy--ecosystem-analogy .slide-title {
+        font-size: clamp(1.45rem, 6.7vw, 2.35rem);
+        white-space: normal;
+      }
+
+      html.is-mobile-viewport .slide-copy--ecosystem-analogy .slide-body {
+        font-size: clamp(0.74rem, 3vw, 0.94rem);
+        line-height: 1.25;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-matrix {
+        grid-template-columns: 52px minmax(0, 1fr) 22px minmax(0, 1fr);
+        grid-template-rows: auto repeat(2, minmax(100px, 1fr));
+        gap: 6px 6px;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-heading {
+        font-size: clamp(0.52rem, 2.25vw, 0.72rem);
+        letter-spacing: 0.07em;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-heading span {
+        margin-top: 2px;
+        font-size: 0.82em;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-row-label {
+        font-size: clamp(0.62rem, 2.55vw, 0.78rem);
+        letter-spacing: 0.06em;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-row-label span {
+        margin-top: 3px;
+        font-size: 0.72em;
+        line-height: 1.1;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-card {
+        padding: 12px 8px 12px 20px;
+        border-radius: 14px;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-card::before {
+        width: 4px;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-card-title {
+        font-size: clamp(0.82rem, 3.25vw, 1.04rem);
+        line-height: 1.08;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-card-detail {
+        margin-top: 5px;
+        font-size: clamp(0.64rem, 2.55vw, 0.8rem);
+        line-height: 1.12;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-card-value {
+        margin-top: 5px;
+        font-size: clamp(0.57rem, 2.15vw, 0.7rem);
+        line-height: 1.1;
+      }
+
+      html.is-mobile-viewport .slide-ecosystem-arrow {
+        font-size: 1.35rem;
+      }
+
+      @media (max-width: 360px) and (max-height: 640px) {
+        html.is-mobile-viewport .slide-copy--ecosystem-analogy {
+          --kicker-slot: 42px;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-matrix {
+          grid-template-columns: 46px minmax(0, 1fr) 18px minmax(0, 1fr);
+          gap: 5px 4px;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-card {
+          padding: 9px 6px 9px 16px;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-card-title {
+          font-size: 0.72rem;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-card-detail {
+          margin-top: 3px;
+          font-size: 0.56rem;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-card-value {
+          margin-top: 3px;
+          font-size: 0.5rem;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-row-label {
+          font-size: 0.56rem;
+        }
+
+        html.is-mobile-viewport .slide-ecosystem-heading {
+          font-size: 0.46rem;
+        }
+      }
 </style></head><body><main class="deck" aria-label="Virtually presentation deck"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
@@ -4848,18 +5159,40 @@ allowfullscreen
 </section>
 
 <section class="slide" data-page="28">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Toshiba → Apple</p>
-<h1 class="slide-title">“1,000 songs in your pocket”<br>needed <span class="slide-emphasis">more than storage.</span></h1>
-<p class="slide-body">Technology → Product → Ecosystem</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Toshiba<br>1.8″ / 5 GB<br>MK5002MAL</p>
+<article class="slide-shell slide-shell--ai-requirements slide-shell--ecosystem-analogy">
+<div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--ecosystem-analogy">
+<p class="slide-kicker">The ecosystem pattern</p>
+<h1 class="slide-title">Technology enables the market.<br><span class="slide-emphasis">The ecosystem captures the value.</span></h1>
+<p class="slide-body">Apple showed the pattern. Virtually can apply it to Live.</p>
 </div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Apple<br>iPod + iTunes<br>Music ecosystem</p>
-</div>
+<div class="slide-side-media slide-side-media--ai-requirements">
+<div class="slide-ecosystem-matrix">
+<p class="slide-ecosystem-heading slide-ecosystem-heading--technology">Technology<span>provider</span></p>
+<p class="slide-ecosystem-heading slide-ecosystem-heading--ecosystem">Ecosystem<span>owner</span></p>
+<p class="slide-ecosystem-row-label slide-ecosystem-row-label--then">Then<span>Digital music</span></p>
+<article class="slide-ecosystem-card slide-ecosystem-card--technology slide-ecosystem-card--then">
+<h2 class="slide-ecosystem-card-title">Toshiba</h2>
+<p class="slide-ecosystem-card-detail">5 GB drive</p>
+<p class="slide-ecosystem-card-value">Technology provider</p>
+</article>
+<div class="slide-ecosystem-arrow slide-ecosystem-arrow--then" aria-hidden="true">→</div>
+<article class="slide-ecosystem-card slide-ecosystem-card--ecosystem slide-ecosystem-card--then">
+<h2 class="slide-ecosystem-card-title">Apple</h2>
+<p class="slide-ecosystem-card-detail">iPod + iTunes</p>
+<p class="slide-ecosystem-card-value">Ecosystem owner</p>
+</article>
+<p class="slide-ecosystem-row-label slide-ecosystem-row-label--now">Now<span>Live avatars</span></p>
+<article class="slide-ecosystem-card slide-ecosystem-card--technology slide-ecosystem-card--now">
+<h2 class="slide-ecosystem-card-title">China AI companies</h2>
+<p class="slide-ecosystem-card-detail">Qwen · Wan · Alibaba</p>
+<p class="slide-ecosystem-card-value">Technology providers</p>
+</article>
+<div class="slide-ecosystem-arrow slide-ecosystem-arrow--now" aria-hidden="true">→</div>
+<article class="slide-ecosystem-card slide-ecosystem-card--ecosystem slide-ecosystem-card--now">
+<h2 class="slide-ecosystem-card-title">Virtually</h2>
+<p class="slide-ecosystem-card-detail">Live creator layer</p>
+<p class="slide-ecosystem-card-value">Ecosystem owner</p>
+</article>
 </div>
 </div>
 <p class="slide-source">The Computer History Museum identifies Toshiba’s 1.8-inch MK5002MAL 5 GB drive as storage used in the first iPod. <a href="https://www.computerhistory.org/storageengine/miniature-disk-drives-enable-mobile-computing/" target="_blank" rel="noopener noreferrer">CHM source</a>
@@ -4870,10 +5203,9 @@ allowfullscreen
 <section class="slide" data-page="29">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Virtually</p>
-<h1 class="slide-title">The models may come from China.<br><span class="slide-emphasis">The Live standard is unclaimed.</span></h1>
-<p class="slide-body">Alibaba · Qwen / Wan · Wan-Animate-2<br>LiveAnimate: streaming animation research<br>
-<br>Technology providers enable the next ecosystem owner.</p>
+<p class="slide-kicker">Opportunity</p>
+<h1 class="slide-title">Build the standard<br>around <span class="slide-emphasis">Live.</span></h1>
+<p class="slide-body">Virtually turns shared models into one creator experience.</p>
 </div>
 </article>
 </section>
