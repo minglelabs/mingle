@@ -3685,6 +3685,59 @@
       html.is-mobile-viewport .slide-shell--download-qr { gap: 32px; }
       html.is-mobile-viewport .slide-copy--download-qr { position: relative; left: clamp(8px, 3.8vw, 18px); }
       html.is-mobile-viewport .virtually-rigging { height: 35vh; }
+      .slide-copy--vtuber-process {
+        width: min(42vw, 520px);
+        max-width: min(42vw, 520px);
+      }
+      .slide-side-media--virtually-process {
+        top: 50%;
+        right: clamp(64px, 7vw, 112px);
+        width: clamp(430px, 38vw, 560px);
+        transform: translateY(-50%);
+      }
+      .virtually-process-title {
+        margin: 0 0 clamp(12px, 1.2vw, 18px);
+        color: #a96010;
+        font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+      }
+      .virtually-process .slide-tool-items {
+        gap: clamp(8px, 0.8vw, 12px);
+      }
+      .virtually-process .slide-tool-item--numbered {
+        min-height: 0;
+        padding: clamp(11px, 0.9vw, 14px) clamp(14px, 1.1vw, 18px) clamp(11px, 0.9vw, 14px)
+          clamp(18px, 1.8vw, 28px);
+        border-radius: 16px;
+      }
+      .virtually-process .slide-tool-item--numbered::before {
+        top: 10px;
+        bottom: 10px;
+        left: 9px;
+        width: 3px;
+      }
+      .virtually-process .slide-tool-heading {
+        gap: 10px;
+      }
+      .virtually-process .slide-tool-step-number {
+        min-width: 36px;
+        min-height: 30px;
+        padding: 0 7px;
+        border-radius: 9px;
+        color: #a96010;
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.98) 0%, rgba(255, 233, 181, 0.78) 100%);
+      }
+      .virtually-process .slide-tool-title {
+        font-size: clamp(1.04rem, 1.22vw, 1.25rem);
+        line-height: 1.2;
+      }
+      .virtually-process .slide-tool-description {
+        margin-top: 4px;
+        font-size: clamp(0.9rem, 1vw, 1rem);
+        line-height: 1.28;
+      }
       @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
         html.is-mobile-viewport .slide-shell--download-qr { gap: 28px; }
         html.is-mobile-viewport .slide-copy--download-qr { width: 43%; max-width: 43%; left: 12px; }
@@ -3692,6 +3745,91 @@
         html.is-mobile-viewport .slide-copy--download-qr .slide-title:not(.virtually-cover-subtitle) { font-size: 50px; }
         html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle { font-size: 28px; }
         html.is-mobile-viewport .slide-shell--ai-requirements { gap: 14px; }
+      }
+      html.is-mobile-viewport .slide-copy--vtuber-process {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+      html.is-mobile-viewport .slide-side-media--virtually-process {
+        top: auto;
+        right: auto;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        transform: none;
+      }
+      html.is-mobile-viewport .virtually-process-title {
+        margin-bottom: 10px;
+        font-size: clamp(1.05rem, 4.2vw, 1.35rem);
+      }
+      html.is-mobile-viewport .virtually-process .slide-tool-items {
+        gap: 7px;
+      }
+      html.is-mobile-viewport .virtually-process .slide-tool-item--numbered {
+        padding: 9px 12px 9px 22px;
+        border-radius: 13px;
+      }
+      html.is-mobile-viewport .virtually-process .slide-tool-item--numbered::before {
+        top: 9px;
+        bottom: 9px;
+        left: 9px;
+      }
+      html.is-mobile-viewport .virtually-process .slide-tool-title {
+        font-size: clamp(0.92rem, 3.35vw, 1.08rem);
+      }
+      html.is-mobile-viewport .virtually-process .slide-tool-description {
+        margin-top: 3px;
+        font-size: clamp(0.76rem, 2.7vw, 0.9rem);
+      }
+      @media (max-width: 900px) and (max-height: 650px) and (orientation: portrait) {
+        html.is-mobile-viewport .slide-shell--has-side-media {
+          gap: 16px;
+          padding-top: calc(env(safe-area-inset-top) + 18px);
+          padding-bottom: calc(env(safe-area-inset-bottom) + 46px);
+        }
+        html.is-mobile-viewport .slide-copy--vtuber-process {
+          gap: 8px;
+        }
+        html.is-mobile-viewport .slide-copy--vtuber-process .slide-title {
+          font-size: clamp(1.55rem, 7.2vw, 2.2rem);
+        }
+        html.is-mobile-viewport .slide-copy--vtuber-process .slide-body {
+          font-size: clamp(0.88rem, 3.2vw, 1rem);
+          line-height: 1.35;
+        }
+        html.is-mobile-viewport .virtually-process-title {
+          margin-bottom: 6px;
+          font-size: clamp(0.96rem, 3.8vw, 1.2rem);
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-items {
+          gap: 4px;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-item--numbered {
+          padding: 5px 8px 5px 18px;
+          border-radius: 10px;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-item--numbered::before {
+          top: 6px;
+          bottom: 6px;
+          left: 7px;
+          width: 2px;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-heading {
+          gap: 7px;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-step-number {
+          min-width: 29px;
+          min-height: 23px;
+          padding: 0 4px;
+          border-radius: 7px;
+          font-size: 0.76rem;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-title {
+          font-size: clamp(0.82rem, 3vw, 0.96rem);
+          line-height: 1.1;
+        }
+        html.is-mobile-viewport .virtually-process .slide-tool-description {
+          display: none;
+        }
       }
 </style></head><body><main class="deck" aria-label="Virtually presentation deck"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
@@ -3710,10 +3848,45 @@
 
 <section class="slide" data-page="2">
 <article class="slide-shell">
-<div class="slide-copy slide-copy--center">
+<div class="slide-copy slide-copy--with-side-media slide-copy--vtuber-process">
 <p class="slide-kicker">Problem</p>
 <h1 class="slide-title">Becoming a VTuber<br>is still <span class="slide-emphasis">too hard.</span></h1>
-<p class="slide-body">Illustration → Parts → Rigging<br>Tracking → OBS → Live</p>
+<p class="slide-body">A single character still passes through multiple production and broadcast steps before the first live stream.</p>
+</div>
+<div class="slide-side-media slide-side-media--virtually-process">
+<div class="virtually-process">
+<h2 class="virtually-process-title">VTuber creation process</h2>
+<div class="slide-tool-items">
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">01</span><h3 class="slide-tool-title">Character illustration</h3></div>
+<p class="slide-tool-description">Draw the character artwork.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">02</span><h3 class="slide-tool-title">Parts separation</h3></div>
+<p class="slide-tool-description">Split layers for deformation.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">03</span><h3 class="slide-tool-title">Live2D rigging</h3></div>
+<p class="slide-tool-description">Build deformable parameters.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">04</span><h3 class="slide-tool-title">Model setup</h3></div>
+<p class="slide-tool-description">Export and load the avatar model.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">05</span><h3 class="slide-tool-title">Face tracking</h3></div>
+<p class="slide-tool-description">Map camera input to parameters.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">06</span><h3 class="slide-tool-title">Scene and OBS setup</h3></div>
+<p class="slide-tool-description">Compose the scene and stream output.</p>
+</article>
+<article class="slide-tool-item slide-tool-item--numbered">
+<div class="slide-tool-heading"><span class="slide-tool-step-number">07</span><h3 class="slide-tool-title">Live stream</h3></div>
+<p class="slide-tool-description">Broadcast on a streaming platform.</p>
+</article>
+</div>
+</div>
 </div>
 </article>
 </section>
