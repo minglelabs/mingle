@@ -3745,7 +3745,7 @@
       .slide-side-media--virtually-process {
         top: 50%;
         right: clamp(64px, 7vw, 112px);
-        width: clamp(430px, 38vw, 560px);
+        width: clamp(380px, 31vw, 460px);
         transform: translateY(-50%);
       }
       .virtually-process-title {
@@ -3785,6 +3785,7 @@
       .virtually-process .slide-tool-title {
         font-size: clamp(1.18rem, 1.45vw, 1.48rem);
         line-height: 1.2;
+        white-space: nowrap;
       }
       @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
         html.is-mobile-viewport .slide-shell--download-qr { gap: 28px; }
@@ -3801,8 +3802,8 @@
       html.is-mobile-viewport .slide-side-media--virtually-process {
         top: auto;
         right: auto;
-        width: var(--mobile-content-width);
-        max-width: var(--mobile-content-width);
+        width: min(var(--mobile-content-width), 330px);
+        max-width: min(var(--mobile-content-width), 330px);
         transform: none;
       }
       html.is-mobile-viewport .virtually-process-title {
@@ -3823,6 +3824,7 @@
       }
       html.is-mobile-viewport .virtually-process .slide-tool-title {
         font-size: clamp(1rem, 3.8vw, 1.18rem);
+        white-space: nowrap;
       }
       @media (max-width: 900px) and (max-height: 650px) and (orientation: portrait) {
         html.is-mobile-viewport .slide-shell--has-side-media {
