@@ -1,0 +1,3845 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Virtually - AI Virtual Live for VTubers</title>
+    <meta
+      name="description"
+      content="Virtually is an AI-native virtual live engine for VTubers: one character image, one camera, one live character."
+    />
+    <meta property="og:title" content="Virtually - AI Virtual Live for VTubers" />
+    <meta
+      property="og:description"
+      content="One character image. One camera. A live character."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="./assets/virtually-vtuber-cover.png" />
+    <meta property="og:image:alt" content="AI virtual live for VTubers" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Virtually - AI Virtual Live for VTubers" />
+    <meta
+      name="twitter:description"
+      content="One character image. One camera. A live character."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #fffdf7;
+        --paper-deep: #fff8ed;
+        --ink: #2d2a1e;
+        --muted: rgba(45, 42, 30, 0.68);
+        --faint: rgba(45, 42, 30, 0.1);
+        --orange: #f97316;
+        --gold: #fbbc32;
+        --blue: #2563eb;
+        --green: #159957;
+        --red: #dc3c35;
+        --violet: #7357e8;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --deck-width: 100vw;
+        --deck-height: 100vh;
+        --slide-x: clamp(32px, 7vw, 104px);
+        --slide-y: clamp(28px, 5.5vh, 62px);
+        --control-bottom: clamp(18px, 3.1vh, 32px);
+        --shadow: 0 26px 64px rgba(72, 57, 18, 0.13);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(120% 100% at 0% 0%, rgba(251, 188, 50, 0.11), transparent 52%),
+          radial-gradient(100% 110% at 100% 100%, rgba(249, 115, 22, 0.06), transparent 52%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%);
+        color: var(--ink);
+        font-family: "SF Pro Display", "Inter", "Pretendard", "Segoe UI", sans-serif;
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        pointer-events: none;
+        content: "";
+        opacity: 0.18;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+      }
+
+      a {
+        color: inherit;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .deck {
+        position: relative;
+        width: var(--deck-width);
+        height: var(--deck-height);
+        overflow: hidden;
+        isolation: isolate;
+        touch-action: none;
+        overscroll-behavior: none;
+      }
+
+      .track {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: row;
+        will-change: transform;
+        transition: transform 340ms var(--ease);
+      }
+
+      .slide {
+        position: relative;
+        flex: 0 0 var(--deck-width);
+        width: var(--deck-width);
+        height: var(--deck-height);
+        overflow: hidden;
+        opacity: 0.72;
+      }
+
+      .slide.is-active {
+        opacity: 1;
+      }
+
+      .slide::before {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: "";
+        background:
+          radial-gradient(70% 100% at 90% 8%, rgba(251, 188, 50, 0.12), transparent 58%),
+          radial-gradient(65% 90% at 8% 100%, rgba(249, 115, 22, 0.06), transparent 58%);
+      }
+
+      .slide-shell {
+        position: relative;
+        display: grid;
+        width: 100%;
+        height: 100%;
+        padding: var(--slide-y) var(--slide-x) calc(var(--slide-y) + 42px);
+      }
+
+      .slide-shell--center {
+        place-items: center;
+        text-align: center;
+      }
+
+      .slide-shell--split {
+        grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+        align-items: center;
+        gap: clamp(32px, 6vw, 110px);
+      }
+
+      .slide-shell--split-reverse {
+        grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+      }
+
+      .slide-shell--wide {
+        align-content: center;
+        justify-items: center;
+        gap: clamp(22px, 4vh, 44px);
+      }
+
+      .slide-shell--dark {
+        color: #fffdf7;
+        background:
+          radial-gradient(80% 120% at 95% 0%, rgba(115, 87, 232, 0.28), transparent 58%),
+          radial-gradient(70% 100% at 0% 100%, rgba(249, 115, 22, 0.2), transparent 58%),
+          #19172a;
+      }
+
+      .slide-shell--dark::after {
+        position: absolute;
+        inset: 12px;
+        pointer-events: none;
+        content: "";
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 32px;
+      }
+
+      .copy {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        justify-items: start;
+        align-content: center;
+        gap: clamp(16px, 2.1vw, 28px);
+        max-width: min(760px, 100%);
+      }
+
+      .copy--center {
+        justify-items: center;
+        max-width: min(1120px, 100%);
+        text-align: center;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.6);
+        font-size: clamp(0.78rem, 1.05vw, 1.02rem);
+        font-weight: 850;
+        letter-spacing: 0.18em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .kicker::after {
+        display: block;
+        width: 54px;
+        height: 3px;
+        content: "";
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--gold), var(--orange));
+      }
+
+      .slide-shell--dark .kicker {
+        color: rgba(255, 253, 247, 0.62);
+      }
+
+      .title {
+        max-width: 100%;
+        width: 100%;
+        margin: 0;
+        font-size: clamp(2.55rem, 5vw, 5.7rem);
+        font-weight: 690;
+        letter-spacing: -0.065em;
+        line-height: 1.08;
+        text-wrap: balance;
+      }
+
+      .title--hero {
+        font-size: clamp(4.1rem, 8.7vw, 9.1rem);
+        letter-spacing: -0.085em;
+        line-height: 0.94;
+      }
+
+      .title--compact {
+        font-size: clamp(2.15rem, 4vw, 4.2rem);
+      }
+
+      .title--quote {
+        max-width: 1050px;
+        font-size: clamp(3rem, 6.2vw, 7.4rem);
+        line-height: 0.98;
+      }
+
+      .accent {
+        color: var(--orange);
+      }
+
+      .accent-blue {
+        color: #4d7fff;
+      }
+
+      .lede {
+        max-width: 680px;
+        width: 100%;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.55vw, 1.5rem);
+        font-weight: 500;
+        letter-spacing: -0.025em;
+        line-height: 1.5;
+        text-wrap: pretty;
+      }
+
+      .slide-shell--dark .lede {
+        color: rgba(255, 253, 247, 0.7);
+      }
+
+      .source {
+        max-width: min(760px, 100%);
+        margin: 0;
+        color: rgba(45, 42, 30, 0.48);
+        font-size: clamp(0.66rem, 0.78vw, 0.78rem);
+        letter-spacing: 0.01em;
+        line-height: 1.45;
+      }
+
+      .source a {
+        text-underline-offset: 3px;
+      }
+
+      .slide-shell--dark .source {
+        color: rgba(255, 253, 247, 0.45);
+      }
+
+      .top-brand {
+        position: absolute;
+        top: var(--slide-y);
+        right: var(--slide-x);
+        z-index: 4;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .top-brand::before {
+        width: 10px;
+        height: 10px;
+        content: "";
+        border-radius: 50%;
+        background: var(--orange);
+        box-shadow: 0 0 0 5px rgba(249, 115, 22, 0.13);
+      }
+
+      .slide-shell--dark .top-brand {
+        color: rgba(255, 253, 247, 0.7);
+      }
+
+      .visual {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .visual--center {
+        width: min(1120px, 100%);
+      }
+
+      .glass {
+        border: 1px solid rgba(255, 255, 255, 0.82);
+        border-radius: clamp(18px, 2vw, 30px);
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(255, 252, 246, 0.58));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+      }
+
+      .cover-shell {
+        grid-template-columns: minmax(0, 0.8fr) minmax(380px, 1.2fr);
+        align-items: center;
+        gap: clamp(28px, 6vw, 104px);
+        padding-right: clamp(32px, 5.5vw, 84px);
+      }
+
+      .cover-copy {
+        display: grid;
+        align-content: center;
+        gap: clamp(18px, 2.4vw, 32px);
+        max-width: 760px;
+      }
+
+      .cover-kicker {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: rgba(45, 42, 30, 0.6);
+        font-size: clamp(0.78rem, 0.95vw, 0.98rem);
+        font-weight: 850;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .cover-kicker span {
+        width: 60px;
+        height: 3px;
+        border-radius: 99px;
+        background: linear-gradient(90deg, var(--gold), var(--orange));
+      }
+
+      .cover-subtitle {
+        max-width: 510px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(1.15rem, 1.8vw, 1.8rem);
+        letter-spacing: -0.04em;
+        line-height: 1.35;
+      }
+
+      .cover-stamp {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        padding: 11px 16px;
+        border-radius: 999px;
+        color: #8c4b00;
+        background: linear-gradient(135deg, rgba(255, 232, 176, 0.86), rgba(255, 247, 225, 0.68));
+        box-shadow: 0 12px 26px rgba(245, 158, 11, 0.13);
+        font-size: clamp(0.78rem, 1vw, 1rem);
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+
+      .cover-media {
+        position: relative;
+        align-self: center;
+        width: 100%;
+        max-width: 760px;
+        margin-left: auto;
+        transform: rotate(2.4deg);
+      }
+
+      .cover-media::before {
+        position: absolute;
+        inset: 7% -4% -7% 4%;
+        z-index: -1;
+        content: "";
+        border-radius: 34px;
+        background: linear-gradient(140deg, rgba(251, 188, 50, 0.75), rgba(249, 115, 22, 0.58));
+        filter: blur(0.2px);
+      }
+
+      .cover-media::after {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        border-radius: 28px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+      }
+
+      .cover-media img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 745 / 391;
+        border: 12px solid rgba(255, 255, 255, 0.78);
+        border-radius: 30px;
+        object-fit: cover;
+        box-shadow: 0 30px 72px rgba(72, 57, 18, 0.2);
+      }
+
+      .cover-caption {
+        position: absolute;
+        right: 24px;
+        bottom: 20px;
+        padding: 9px 13px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(34, 30, 26, 0.48);
+        font-size: clamp(0.66rem, 0.85vw, 0.82rem);
+        font-weight: 750;
+        letter-spacing: 0.04em;
+        backdrop-filter: blur(10px);
+      }
+
+      .rigging-image {
+        display: block;
+        width: 100%;
+        height: min(67vh, 620px);
+        border-radius: 20px;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .flow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(8px, 1.1vw, 16px);
+        width: 100%;
+      }
+
+      .flow--wrap {
+        flex-wrap: wrap;
+      }
+
+      .flow--vertical {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .flow-node {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-width: 0;
+        min-height: clamp(58px, 7vh, 82px);
+        padding: 13px 18px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 13px 28px rgba(72, 57, 18, 0.08);
+        color: rgba(45, 42, 30, 0.84);
+        font-size: clamp(0.82rem, 1.15vw, 1.15rem);
+        font-weight: 760;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        text-align: center;
+      }
+
+      .flow-node--wide {
+        min-width: clamp(118px, 11vw, 178px);
+      }
+
+      .flow-node--muted {
+        color: rgba(45, 42, 30, 0.42);
+        background: rgba(234, 230, 222, 0.55);
+        box-shadow: none;
+      }
+
+      .flow-node--accent {
+        border-color: rgba(249, 115, 22, 0.34);
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 245, 216, 0.96), rgba(255, 224, 175, 0.7));
+        box-shadow: 0 16px 34px rgba(249, 115, 22, 0.14);
+      }
+
+      .flow-arrow {
+        flex: 0 0 auto;
+        color: var(--orange);
+        font-size: clamp(1.25rem, 2vw, 2.1rem);
+        font-weight: 850;
+      }
+
+      .flow--vertical .flow-arrow {
+        line-height: 0.65;
+        text-align: center;
+      }
+
+      .pipeline-card {
+        display: grid;
+        gap: 0;
+        width: min(430px, 100%);
+        margin: 0 auto;
+        padding: clamp(14px, 1.6vw, 22px);
+      }
+
+      .pipeline-step {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: clamp(42px, 5vh, 58px);
+        padding: 8px 14px;
+        border-radius: 14px;
+        color: rgba(45, 42, 30, 0.78);
+        background: rgba(255, 255, 255, 0.64);
+        font-size: clamp(0.78rem, 1.05vw, 1.05rem);
+        font-weight: 720;
+      }
+
+      .pipeline-step + .pipeline-step {
+        margin-top: 5px;
+      }
+
+      .pipeline-step::before {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        content: "→";
+        border-radius: 50%;
+        color: #fff;
+        background: var(--orange);
+        font-size: 0.68rem;
+        font-weight: 900;
+      }
+
+      .pipeline-step:first-child::before {
+        content: "1";
+      }
+
+      .pipeline-step:nth-child(2)::before {
+        content: "2";
+      }
+
+      .pipeline-step:nth-child(3)::before {
+        content: "3";
+      }
+
+      .pipeline-step:nth-child(4)::before {
+        content: "4";
+      }
+
+      .pipeline-step:nth-child(5)::before {
+        content: "5";
+      }
+
+      .pipeline-step:nth-child(6)::before {
+        content: "6";
+      }
+
+      .pipeline-step:nth-child(7)::before {
+        content: "7";
+      }
+
+      .pipeline-step:nth-child(8)::before {
+        content: "8";
+      }
+
+      .annotation {
+        width: fit-content;
+        margin: clamp(14px, 2vh, 24px) auto 0;
+        padding: 9px 13px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.6);
+        background: rgba(255, 255, 255, 0.62);
+        font-size: clamp(0.72rem, 0.92vw, 0.9rem);
+        font-weight: 720;
+        letter-spacing: 0.01em;
+        text-align: center;
+      }
+
+      .motion-strip {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: clamp(10px, 1.2vw, 18px);
+        width: min(920px, 100%);
+      }
+
+      .motion-chip {
+        display: grid;
+        place-items: center;
+        min-height: clamp(74px, 10vh, 110px);
+        padding: 12px 8px;
+        border: 1px solid rgba(249, 115, 22, 0.16);
+        border-radius: 20px;
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 249, 231, 0.94), rgba(255, 232, 185, 0.64));
+        box-shadow: 0 16px 32px rgba(245, 158, 11, 0.1);
+        font-size: clamp(0.72rem, 1vw, 1rem);
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .motion-chip--hard {
+        color: rgba(45, 42, 30, 0.42);
+        background: linear-gradient(145deg, rgba(243, 240, 234, 0.88), rgba(224, 220, 212, 0.56));
+        box-shadow: none;
+      }
+
+      .capability-layout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 2vw, 28px);
+        width: min(980px, 100%);
+      }
+
+      .capability-panel {
+        padding: clamp(20px, 2.2vw, 34px);
+      }
+
+      .capability-panel h2,
+      .fit-card h2 {
+        margin: 0 0 18px;
+        font-size: clamp(1.05rem, 1.45vw, 1.45rem);
+        letter-spacing: -0.04em;
+      }
+
+      .capability-panel--yes {
+        border-top: 7px solid var(--green);
+      }
+
+      .capability-panel--no {
+        border-top: 7px solid var(--red);
+      }
+
+      .check-list {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .check-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: clamp(0.82rem, 1.1vw, 1.08rem);
+        font-weight: 650;
+      }
+
+      .check-list li::before {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        content: "✓";
+        border-radius: 50%;
+        color: #fff;
+        background: var(--green);
+        font-size: 0.72rem;
+        font-weight: 900;
+      }
+
+      .capability-panel--no .check-list li::before {
+        content: "—";
+        background: rgba(220, 60, 53, 0.12);
+        color: var(--red);
+      }
+
+      .fit-layout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 2vw, 28px);
+        width: min(920px, 100%);
+      }
+
+      .fit-card {
+        display: grid;
+        align-content: center;
+        min-height: clamp(180px, 25vh, 280px);
+        padding: clamp(22px, 3vw, 42px);
+      }
+
+      .fit-card--native {
+        background:
+          radial-gradient(100% 100% at 100% 0%, rgba(251, 188, 50, 0.24), transparent 62%),
+          rgba(255, 255, 255, 0.84);
+      }
+
+      .fit-card--arbitrary {
+        background:
+          repeating-linear-gradient(-45deg, rgba(45, 42, 30, 0.035) 0 2px, transparent 2px 9px),
+          rgba(243, 240, 234, 0.68);
+      }
+
+      .fit-tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .fit-tag {
+        padding: 8px 11px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.68);
+        background: rgba(255, 255, 255, 0.76);
+        font-size: clamp(0.72rem, 0.92vw, 0.92rem);
+        font-weight: 720;
+      }
+
+      .fit-card--arbitrary .fit-tag {
+        color: rgba(45, 42, 30, 0.5);
+        background: rgba(225, 221, 213, 0.72);
+      }
+
+      .formula {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+        align-items: center;
+        gap: clamp(12px, 2vw, 26px);
+        width: min(980px, 100%);
+      }
+
+      .formula-block {
+        display: grid;
+        align-content: center;
+        min-height: clamp(150px, 24vh, 250px);
+        padding: clamp(20px, 2.8vw, 40px);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: var(--shadow);
+        text-align: left;
+      }
+
+      .formula-block--ai {
+        border: 1px solid rgba(249, 115, 22, 0.3);
+        background: linear-gradient(145deg, rgba(255, 247, 222, 0.98), rgba(255, 228, 180, 0.72));
+      }
+
+      .formula-label {
+        margin: 0 0 12px;
+        color: rgba(45, 42, 30, 0.5);
+        font-size: clamp(0.72rem, 0.9vw, 0.9rem);
+        font-weight: 850;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .formula-line {
+        margin: 0;
+        font-size: clamp(1.05rem, 1.65vw, 1.65rem);
+        font-weight: 770;
+        letter-spacing: -0.045em;
+        line-height: 1.22;
+      }
+
+      .formula-plus {
+        color: var(--orange);
+        font-size: clamp(2rem, 4vw, 4rem);
+        font-weight: 300;
+      }
+
+      .frame-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: clamp(10px, 1.6vw, 24px);
+        width: min(1000px, 100%);
+      }
+
+      .frame {
+        position: relative;
+        display: grid;
+        align-content: end;
+        min-height: clamp(190px, 29vh, 330px);
+        overflow: hidden;
+        padding: 16px;
+        border-radius: 24px;
+        background: linear-gradient(160deg, #2b263a, #8d5e59 60%, #f4c37f);
+        box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
+      }
+
+      .frame:nth-child(2) {
+        background: linear-gradient(160deg, #2f3a5e, #8e99b9 58%, #f2cfa1);
+      }
+
+      .frame:nth-child(3) {
+        background: linear-gradient(160deg, #314a49, #a3b57e 58%, #f9df9b);
+      }
+
+      .frame:nth-child(4) {
+        background: linear-gradient(160deg, #4d3347, #b6859a 58%, #f4d5b5);
+      }
+
+      .frame::before {
+        position: absolute;
+        top: 13%;
+        left: 50%;
+        width: 42%;
+        height: 48%;
+        content: "";
+        border: 2px solid rgba(255, 255, 255, 0.68);
+        border-radius: 48% 52% 44% 56%;
+        box-shadow: 0 0 0 12px rgba(255, 255, 255, 0.08);
+        transform: translateX(-50%) rotate(var(--tilt, 0deg));
+      }
+
+      .frame::after {
+        position: absolute;
+        top: 39%;
+        left: 50%;
+        width: 62%;
+        height: 2px;
+        content: "";
+        background: rgba(255, 255, 255, 0.56);
+        box-shadow: 0 16px 0 rgba(255, 255, 255, 0.38);
+        transform: translateX(-50%) rotate(var(--tilt, 0deg));
+      }
+
+      .frame:nth-child(2)::before {
+        --tilt: 12deg;
+        width: 38%;
+      }
+
+      .frame:nth-child(3)::before {
+        --tilt: -18deg;
+        top: 8%;
+        width: 33%;
+        height: 55%;
+      }
+
+      .frame:nth-child(4)::before {
+        --tilt: 31deg;
+        top: 19%;
+        width: 34%;
+      }
+
+      .frame-label {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        width: fit-content;
+        padding: 7px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(28, 24, 28, 0.34);
+        font-size: clamp(0.64rem, 0.78vw, 0.78rem);
+        font-weight: 850;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .compare-layout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 2vw, 28px);
+        width: min(980px, 100%);
+      }
+
+      .compare-card {
+        display: grid;
+        gap: 16px;
+        min-height: clamp(220px, 30vh, 320px);
+        padding: clamp(22px, 2.8vw, 40px);
+      }
+
+      .compare-card--old {
+        background: linear-gradient(145deg, rgba(235, 231, 224, 0.85), rgba(249, 247, 242, 0.56));
+      }
+
+      .compare-card--new {
+        border-color: rgba(249, 115, 22, 0.34);
+        background: linear-gradient(145deg, rgba(255, 247, 220, 0.96), rgba(255, 225, 176, 0.72));
+      }
+
+      .compare-card h2 {
+        margin: 0;
+        font-size: clamp(1rem, 1.25vw, 1.25rem);
+        letter-spacing: -0.03em;
+      }
+
+      .compare-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+        font-weight: 750;
+        letter-spacing: -0.055em;
+        line-height: 1.08;
+      }
+
+      .compare-card--old p {
+        color: rgba(45, 42, 30, 0.52);
+      }
+
+      .compare-arrow {
+        display: grid;
+        place-items: center;
+        color: var(--orange);
+        font-size: clamp(2rem, 4vw, 4rem);
+      }
+
+      .latency-visual {
+        display: grid;
+        gap: clamp(18px, 2.3vh, 28px);
+        width: min(1050px, 100%);
+      }
+
+      .latency-row {
+        display: grid;
+        grid-template-columns: 130px minmax(0, 1fr) max-content;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .latency-name {
+        color: rgba(45, 42, 30, 0.62);
+        font-size: clamp(0.8rem, 1vw, 1rem);
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .latency-track {
+        height: clamp(28px, 4.6vh, 48px);
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(45, 42, 30, 0.08);
+      }
+
+      .latency-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--gold), var(--orange));
+      }
+
+      .latency-fill--batch {
+        width: 86%;
+      }
+
+      .latency-fill--live {
+        width: 8%;
+        min-width: 58px;
+        background: linear-gradient(90deg, #6d83ff, var(--blue));
+      }
+
+      .latency-value {
+        color: rgba(45, 42, 30, 0.84);
+        font-size: clamp(0.9rem, 1.2vw, 1.2rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        white-space: nowrap;
+      }
+
+      .research-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 2.2vw, 30px);
+        width: min(1000px, 100%);
+      }
+
+      .research-card {
+        display: grid;
+        align-content: space-between;
+        min-height: clamp(210px, 29vh, 330px);
+        padding: clamp(22px, 2.8vw, 40px);
+      }
+
+      .research-card--wan {
+        border-color: rgba(37, 99, 235, 0.28);
+        background: linear-gradient(145deg, rgba(233, 240, 255, 0.92), rgba(255, 255, 255, 0.58));
+      }
+
+      .research-card--live {
+        border-color: rgba(115, 87, 232, 0.3);
+        background: linear-gradient(145deg, rgba(242, 237, 255, 0.94), rgba(255, 255, 255, 0.6));
+      }
+
+      .research-name {
+        margin: 0;
+        font-size: clamp(1.25rem, 2vw, 2rem);
+        font-weight: 820;
+        letter-spacing: -0.055em;
+      }
+
+      .research-tag {
+        display: inline-flex;
+        width: fit-content;
+        margin-top: 14px;
+        padding: 8px 11px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.68);
+        background: rgba(255, 255, 255, 0.7);
+        font-size: clamp(0.67rem, 0.82vw, 0.82rem);
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .research-detail {
+        margin: 22px 0 0;
+        color: var(--muted);
+        font-size: clamp(0.86rem, 1.15vw, 1.1rem);
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .live-formula {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+        align-items: center;
+        justify-content: center;
+        gap: clamp(12px, 2vw, 28px);
+        width: min(1050px, 100%);
+      }
+
+      .live-token {
+        display: grid;
+        place-items: center;
+        min-width: clamp(130px, 16vw, 210px);
+        min-height: clamp(86px, 13vh, 132px);
+        padding: 18px;
+        border-radius: 24px;
+        color: rgba(45, 42, 30, 0.78);
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: var(--shadow);
+        font-size: clamp(0.9rem, 1.45vw, 1.45rem);
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        text-align: center;
+      }
+
+      .live-token--ai {
+        border: 1px solid rgba(249, 115, 22, 0.34);
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 245, 214, 0.98), rgba(255, 222, 170, 0.74));
+      }
+
+      .live-token--stream {
+        border: 1px solid rgba(37, 99, 235, 0.22);
+        color: #284fa8;
+        background: linear-gradient(145deg, rgba(232, 240, 255, 0.98), rgba(212, 224, 255, 0.72));
+      }
+
+      .live-plus {
+        color: var(--orange);
+        font-size: clamp(2rem, 4vw, 4rem);
+        font-weight: 280;
+      }
+
+      .proof-point {
+        display: inline-grid;
+        gap: 7px;
+        width: fit-content;
+        margin: 0 auto;
+        padding: 14px 18px;
+        border: 1px solid rgba(45, 42, 30, 0.1);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        text-align: center;
+      }
+
+      .proof-point strong {
+        color: var(--orange);
+        font-size: clamp(1.25rem, 2vw, 2rem);
+        letter-spacing: -0.05em;
+      }
+
+      .proof-point span {
+        color: rgba(45, 42, 30, 0.52);
+        font-size: clamp(0.66rem, 0.82vw, 0.82rem);
+        font-weight: 750;
+      }
+
+      .before-after {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+        align-items: center;
+        gap: clamp(14px, 2vw, 28px);
+        width: min(1050px, 100%);
+      }
+
+      .before-after-panel {
+        display: grid;
+        gap: 10px;
+        min-height: clamp(220px, 30vh, 330px);
+        padding: clamp(20px, 2.5vw, 36px);
+      }
+
+      .before-after-panel--before {
+        opacity: 0.58;
+        background: rgba(238, 235, 228, 0.7);
+      }
+
+      .before-after-panel--after {
+        border-color: rgba(249, 115, 22, 0.34);
+        background: linear-gradient(145deg, rgba(255, 246, 218, 0.98), rgba(255, 227, 177, 0.72));
+      }
+
+      .before-after-panel h2 {
+        margin: 0 0 8px;
+        color: rgba(45, 42, 30, 0.56);
+        font-size: clamp(0.72rem, 0.9vw, 0.9rem);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .before-after-panel p {
+        margin: 0;
+        font-size: clamp(1rem, 1.5vw, 1.5rem);
+        font-weight: 800;
+        letter-spacing: -0.045em;
+        line-height: 1.2;
+      }
+
+      .before-after-panel .strike {
+        position: relative;
+        color: rgba(45, 42, 30, 0.42);
+      }
+
+      .before-after-panel .strike::after {
+        position: absolute;
+        top: 52%;
+        left: -3%;
+        width: 106%;
+        height: 5px;
+        content: "";
+        border-radius: 999px;
+        background: var(--red);
+        transform: rotate(-4deg);
+      }
+
+      .economy-lane {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: clamp(8px, 1.2vw, 16px);
+        width: min(1000px, 100%);
+      }
+
+      .economy-node {
+        display: grid;
+        place-items: center;
+        min-height: clamp(74px, 10vh, 112px);
+        padding: 12px;
+        border: 1px solid rgba(45, 42, 30, 0.08);
+        border-radius: 18px;
+        color: rgba(45, 42, 30, 0.72);
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 12px 24px rgba(72, 57, 18, 0.06);
+        font-size: clamp(0.78rem, 1.1vw, 1.1rem);
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        text-align: center;
+      }
+
+      .economy-node--old {
+        border-color: rgba(115, 87, 232, 0.17);
+        background: rgba(239, 235, 255, 0.72);
+      }
+
+      .economy-node--future {
+        border-color: rgba(249, 115, 22, 0.3);
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.96), rgba(255, 225, 176, 0.7));
+      }
+
+      .economy-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: min(1000px, 100%);
+        margin: clamp(12px, 2vh, 20px) auto;
+        color: var(--orange);
+        font-size: clamp(1.7rem, 3vw, 3rem);
+        letter-spacing: 0.08em;
+      }
+
+      .economy-note {
+        max-width: 720px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(0.84rem, 1.12vw, 1.08rem);
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: center;
+      }
+
+      .virtually-formula {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+        align-items: center;
+        gap: clamp(12px, 2vw, 28px);
+        width: min(1050px, 100%);
+      }
+
+      .input-card,
+      .output-card {
+        display: grid;
+        align-content: center;
+        min-height: clamp(150px, 24vh, 250px);
+        padding: clamp(22px, 3vw, 40px);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+
+      .input-card {
+        border: 1px solid rgba(45, 42, 30, 0.08);
+      }
+
+      .output-card {
+        border: 1px solid rgba(249, 115, 22, 0.36);
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.74));
+      }
+
+      .formula-symbol {
+        color: var(--orange);
+        font-size: clamp(2.2rem, 4vw, 4.2rem);
+        font-weight: 250;
+      }
+
+      .card-eyebrow {
+        margin: 0 0 10px;
+        color: rgba(45, 42, 30, 0.5);
+        font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+        font-weight: 850;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .card-heading {
+        margin: 0;
+        font-size: clamp(1.2rem, 2vw, 2rem);
+        font-weight: 820;
+        letter-spacing: -0.06em;
+        line-height: 1.08;
+      }
+
+      .step-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: clamp(10px, 1.5vw, 20px);
+        width: min(1050px, 100%);
+      }
+
+      .step-card {
+        display: grid;
+        align-content: center;
+        min-height: clamp(140px, 20vh, 220px);
+        padding: clamp(16px, 2vw, 28px);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+      }
+
+      .step-number {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+        color: #8c4b00;
+        background: linear-gradient(135deg, #ffdda3, #fff0cb);
+        font-size: 0.82rem;
+        font-weight: 900;
+      }
+
+      .step-card h2 {
+        margin: 0;
+        font-size: clamp(0.86rem, 1.25vw, 1.25rem);
+        letter-spacing: -0.045em;
+        line-height: 1.14;
+      }
+
+      .step-card p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+        line-height: 1.3;
+      }
+
+      .obs-flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: center;
+        gap: clamp(8px, 1.2vw, 16px);
+        width: min(1000px, 100%);
+      }
+
+      .obs-node {
+        display: grid;
+        place-items: center;
+        min-height: clamp(70px, 10vh, 110px);
+        padding: 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.77);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.08);
+        font-size: clamp(0.75rem, 1vw, 1rem);
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        text-align: center;
+      }
+
+      .obs-node--virtually {
+        border: 1px solid rgba(249, 115, 22, 0.36);
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+      }
+
+      .platform-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 9px;
+        margin-top: clamp(12px, 1.8vh, 20px);
+      }
+
+      .platform {
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.68);
+        background: rgba(255, 255, 255, 0.72);
+        font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+        font-weight: 760;
+      }
+
+      .mobile-stack {
+        display: grid;
+        justify-items: center;
+        gap: 7px;
+        width: min(350px, 100%);
+        margin: 0 auto;
+      }
+
+      .mobile-node {
+        display: grid;
+        place-items: center;
+        width: min(270px, 100%);
+        min-height: clamp(38px, 5vh, 54px);
+        padding: 9px 14px;
+        border-radius: 14px;
+        color: rgba(45, 42, 30, 0.78);
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 10px 20px rgba(72, 57, 18, 0.07);
+        font-size: clamp(0.78rem, 1.05vw, 1.05rem);
+        font-weight: 800;
+      }
+
+      .mobile-node--brand {
+        width: min(310px, 100%);
+        min-height: clamp(52px, 7vh, 74px);
+        border: 1px solid rgba(249, 115, 22, 0.34);
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+        font-size: clamp(1rem, 1.55vw, 1.55rem);
+      }
+
+      .mobile-arrow {
+        color: var(--orange);
+        font-size: 1.2rem;
+        line-height: 0.7;
+      }
+
+      .expansion-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: clamp(10px, 1.6vw, 20px);
+        width: min(1040px, 100%);
+      }
+
+      .expansion-card {
+        display: grid;
+        align-content: center;
+        gap: 10px;
+        min-height: clamp(144px, 21vh, 230px);
+        padding: clamp(18px, 2vw, 30px);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        text-align: center;
+      }
+
+      .expansion-card strong {
+        color: var(--orange);
+        font-size: clamp(1.25rem, 2.4vw, 2.4rem);
+        letter-spacing: -0.06em;
+      }
+
+      .expansion-card span {
+        color: rgba(45, 42, 30, 0.64);
+        font-size: clamp(0.76rem, 1.08vw, 1.08rem);
+        font-weight: 760;
+      }
+
+      .world-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+        align-items: center;
+        gap: clamp(18px, 3vw, 44px);
+        width: min(940px, 100%);
+      }
+
+      .character-card {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: clamp(230px, 36vh, 390px);
+        overflow: hidden;
+        border-radius: 28px;
+        background:
+          radial-gradient(70% 70% at 50% 36%, rgba(255, 255, 255, 0.9), transparent 60%),
+          linear-gradient(160deg, #3b324c, #b46d6b 64%, #ffd28e);
+        box-shadow: var(--shadow);
+      }
+
+      .character-card::before {
+        width: 34%;
+        height: 46%;
+        content: "";
+        border: 2px solid rgba(255, 255, 255, 0.65);
+        border-radius: 48% 52% 42% 58%;
+        box-shadow:
+          0 0 0 14px rgba(255, 255, 255, 0.09),
+          0 0 0 34px rgba(255, 255, 255, 0.05);
+      }
+
+      .character-card span {
+        position: absolute;
+        bottom: 16px;
+        left: 16px;
+        padding: 8px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.36);
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(32, 26, 34, 0.34);
+        font-size: 0.7rem;
+        font-weight: 820;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .world-prompt {
+        display: grid;
+        gap: 20px;
+        padding: clamp(22px, 2.8vw, 38px);
+      }
+
+      .prompt-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(0.9rem, 1.25vw, 1.22rem);
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .prompt-line::before {
+        width: 11px;
+        height: 11px;
+        flex: 0 0 auto;
+        margin-top: 0.32em;
+        content: "";
+        border-radius: 50%;
+        background: var(--orange);
+      }
+
+      .market-visual {
+        display: grid;
+        gap: clamp(16px, 2.6vh, 28px);
+        width: min(920px, 100%);
+      }
+
+      .market-headline {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .market-number {
+        margin: 0;
+        color: var(--orange);
+        font-size: clamp(3.5rem, 8vw, 8rem);
+        font-weight: 820;
+        letter-spacing: -0.1em;
+        line-height: 0.84;
+      }
+
+      .market-unit {
+        max-width: 270px;
+        margin: 0 0 4px;
+        color: rgba(45, 42, 30, 0.62);
+        font-size: clamp(0.84rem, 1.2vw, 1.15rem);
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .market-bars {
+        display: grid;
+        gap: 12px;
+      }
+
+      .market-bar-row {
+        display: grid;
+        grid-template-columns: 100px minmax(0, 1fr) 72px;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .market-bar-row span {
+        color: rgba(45, 42, 30, 0.6);
+        font-size: clamp(0.72rem, 0.95vw, 0.95rem);
+        font-weight: 820;
+        text-transform: uppercase;
+      }
+
+      .market-bar {
+        height: 18px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(45, 42, 30, 0.07);
+      }
+
+      .market-bar i {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--gold), var(--orange));
+      }
+
+      .i--short {
+        width: 9%;
+      }
+
+      .i--long {
+        width: 100%;
+      }
+
+      .market-bar-row strong {
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(0.75rem, 1vw, 1rem);
+        text-align: right;
+      }
+
+      .live-economy {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 2vw, 28px);
+        width: min(1000px, 100%);
+      }
+
+      .revenue-card {
+        display: grid;
+        align-content: center;
+        gap: 16px;
+        min-height: clamp(200px, 29vh, 310px);
+        padding: clamp(22px, 2.6vw, 36px);
+      }
+
+      .revenue-card--recorded {
+        opacity: 0.64;
+        background: rgba(235, 232, 225, 0.68);
+      }
+
+      .revenue-card--live {
+        border-color: rgba(249, 115, 22, 0.34);
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+      }
+
+      .revenue-card h2 {
+        margin: 0;
+        font-size: clamp(1rem, 1.3vw, 1.3rem);
+        letter-spacing: -0.035em;
+      }
+
+      .revenue-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .revenue-list span {
+        padding: 8px 10px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.65);
+        background: rgba(255, 255, 255, 0.62);
+        font-size: clamp(0.68rem, 0.9vw, 0.88rem);
+        font-weight: 750;
+      }
+
+      .revenue-card--live .revenue-list span {
+        color: #9a4a00;
+        background: rgba(255, 255, 255, 0.65);
+      }
+
+      .superchat-proof {
+        display: grid;
+        place-items: center;
+        width: min(320px, 100%);
+        min-height: clamp(120px, 18vh, 190px);
+        margin: 0 auto;
+        padding: 20px;
+        border-radius: 28px;
+        color: #fff;
+        background:
+          radial-gradient(100% 100% at 20% 0%, rgba(255, 255, 255, 0.24), transparent 60%),
+          linear-gradient(145deg, #2b2360, #7357e8);
+        box-shadow: 0 26px 52px rgba(80, 54, 190, 0.22);
+        text-align: center;
+      }
+
+      .superchat-proof strong {
+        display: block;
+        font-size: clamp(2.6rem, 5vw, 5rem);
+        letter-spacing: -0.09em;
+        line-height: 0.9;
+      }
+
+      .superchat-proof span {
+        display: block;
+        margin-top: 11px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .phase-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(12px, 1.8vw, 24px);
+        width: min(1050px, 100%);
+      }
+
+      .phase-card {
+        position: relative;
+        display: grid;
+        align-content: space-between;
+        min-height: clamp(210px, 30vh, 330px);
+        padding: clamp(20px, 2.4vw, 34px);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+      }
+
+      .phase-card--active {
+        border: 1px solid rgba(249, 115, 22, 0.34);
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+      }
+
+      .phase-index {
+        color: var(--orange);
+        font-size: clamp(0.74rem, 0.92vw, 0.92rem);
+        font-weight: 900;
+        letter-spacing: 0.14em;
+      }
+
+      .phase-card h2 {
+        margin: 16px 0 0;
+        font-size: clamp(1.05rem, 1.5vw, 1.5rem);
+        letter-spacing: -0.05em;
+      }
+
+      .phase-card p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: clamp(0.78rem, 1vw, 1rem);
+        font-weight: 650;
+        line-height: 1.35;
+      }
+
+      .phase-route {
+        margin: 22px 0 0;
+        color: rgba(45, 42, 30, 0.64);
+        font-size: clamp(0.72rem, 0.95vw, 0.95rem);
+        font-weight: 800;
+        line-height: 1.3;
+      }
+
+      .music-scramble {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: clamp(10px, 1.5vw, 20px);
+        width: min(900px, 100%);
+        transform: rotate(-1.5deg);
+      }
+
+      .music-piece {
+        display: grid;
+        place-items: center;
+        min-height: clamp(72px, 11vh, 122px);
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 20px;
+        color: rgba(45, 42, 30, 0.72);
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 16px 32px rgba(72, 57, 18, 0.08);
+        font-size: clamp(0.75rem, 1.02vw, 1.02rem);
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .music-piece:nth-child(2n) {
+        transform: translateY(9px) rotate(3deg);
+      }
+
+      .music-piece:nth-child(3n) {
+        transform: translateY(-6px) rotate(-3deg);
+      }
+
+      .music-piece--accent {
+        color: #9a4a00;
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+      }
+
+      .apple-layout {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: center;
+        gap: clamp(10px, 1.5vw, 20px);
+        width: min(900px, 100%);
+      }
+
+      .apple-piece {
+        display: grid;
+        place-items: center;
+        gap: 8px;
+        min-height: clamp(120px, 18vh, 190px);
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+
+      .apple-piece strong {
+        font-size: clamp(1rem, 1.5vw, 1.5rem);
+        letter-spacing: -0.05em;
+      }
+
+      .apple-piece span {
+        color: var(--muted);
+        font-size: clamp(0.68rem, 0.9vw, 0.88rem);
+        font-weight: 700;
+      }
+
+      .apple-plus {
+        display: grid;
+        place-items: center;
+        color: var(--orange);
+        font-size: clamp(1.5rem, 3vw, 3rem);
+      }
+
+      .standard-route {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: min(920px, 100%);
+      }
+
+      .standard-route span {
+        padding: 10px 13px;
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.68);
+        background: rgba(255, 255, 255, 0.74);
+        font-size: clamp(0.72rem, 0.95vw, 0.95rem);
+        font-weight: 800;
+      }
+
+      .standard-route b {
+        color: var(--orange);
+      }
+
+      .toshiba-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+        align-items: center;
+        gap: clamp(16px, 3vw, 48px);
+        width: min(1050px, 100%);
+      }
+
+      .technology-card {
+        display: grid;
+        gap: 10px;
+        min-height: clamp(180px, 24vh, 260px);
+        padding: clamp(22px, 2.8vw, 38px);
+      }
+
+      .technology-card--toshiba {
+        background: linear-gradient(145deg, rgba(240, 240, 235, 0.9), rgba(255, 255, 255, 0.64));
+      }
+
+      .technology-card--apple {
+        border-color: rgba(249, 115, 22, 0.34);
+        background: linear-gradient(145deg, rgba(255, 247, 219, 0.98), rgba(255, 224, 175, 0.72));
+      }
+
+      .technology-card h2 {
+        margin: 0;
+        color: rgba(45, 42, 30, 0.58);
+        font-size: clamp(0.74rem, 0.95vw, 0.95rem);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .technology-card strong {
+        margin-top: 8px;
+        font-size: clamp(1.35rem, 2.4vw, 2.4rem);
+        letter-spacing: -0.075em;
+      }
+
+      .technology-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(0.75rem, 1vw, 1rem);
+        font-weight: 700;
+      }
+
+      .toshiba-arrow {
+        display: grid;
+        place-items: center;
+        gap: 10px;
+        color: var(--orange);
+        font-size: clamp(2rem, 4vw, 4rem);
+      }
+
+      .toshiba-arrow span {
+        color: rgba(45, 42, 30, 0.5);
+        font-size: clamp(0.62rem, 0.78vw, 0.78rem);
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .provider-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+        align-items: center;
+        gap: clamp(24px, 5vw, 80px);
+        width: min(1040px, 100%);
+      }
+
+      .provider-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .provider-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 15px 18px;
+        border-radius: 16px;
+        color: rgba(45, 42, 30, 0.74);
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: 0 12px 24px rgba(72, 57, 18, 0.07);
+        font-size: clamp(0.85rem, 1.12vw, 1.12rem);
+        font-weight: 800;
+      }
+
+      .provider-chip small {
+        color: rgba(45, 42, 30, 0.42);
+        font-size: clamp(0.62rem, 0.78vw, 0.78rem);
+        font-weight: 750;
+      }
+
+      .claim-card {
+        display: grid;
+        align-content: center;
+        min-height: clamp(250px, 37vh, 420px);
+        padding: clamp(24px, 3.6vw, 52px);
+        border: 1px solid rgba(115, 87, 232, 0.3);
+        border-radius: 32px;
+        background:
+          radial-gradient(90% 120% at 90% 0%, rgba(115, 87, 232, 0.3), transparent 58%),
+          linear-gradient(145deg, rgba(46, 39, 84, 0.98), rgba(30, 27, 48, 0.95));
+        box-shadow: 0 28px 64px rgba(55, 40, 122, 0.2);
+        color: #fffdf7;
+      }
+
+      .claim-card p {
+        margin: 0;
+        color: rgba(255, 253, 247, 0.6);
+        font-size: clamp(0.72rem, 0.9vw, 0.9rem);
+        font-weight: 850;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      .claim-card strong {
+        display: block;
+        margin-top: 18px;
+        font-size: clamp(2rem, 4.3vw, 4.6rem);
+        letter-spacing: -0.08em;
+        line-height: 0.98;
+      }
+
+      .orbit {
+        position: relative;
+        width: min(720px, 100%);
+        min-height: clamp(320px, 52vh, 560px);
+      }
+
+      .orbit::before,
+      .orbit::after {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        content: "";
+        border: 1px dashed rgba(249, 115, 22, 0.3);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .orbit::before {
+        width: 57%;
+        height: 55%;
+      }
+
+      .orbit::after {
+        width: 88%;
+        height: 84%;
+        border-color: rgba(115, 87, 232, 0.24);
+      }
+
+      .orbit-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: clamp(140px, 18vw, 220px);
+        height: clamp(140px, 18vw, 220px);
+        border-radius: 50%;
+        color: #fffdf7;
+        background:
+          radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.32), transparent 24%),
+          linear-gradient(145deg, var(--orange), #c84c1f);
+        box-shadow: 0 28px 56px rgba(249, 115, 22, 0.28);
+        font-size: clamp(1.25rem, 2.3vw, 2.3rem);
+        font-weight: 850;
+        letter-spacing: -0.07em;
+        transform: translate(-50%, -50%);
+      }
+
+      .orbit-tag {
+        position: absolute;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 86px;
+        padding: 10px 13px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.72);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.1);
+        font-size: clamp(0.68rem, 0.88vw, 0.88rem);
+        font-weight: 800;
+      }
+
+      .orbit-tag:nth-child(2) {
+        top: 8%;
+        left: 30%;
+      }
+
+      .orbit-tag:nth-child(3) {
+        top: 22%;
+        right: 4%;
+      }
+
+      .orbit-tag:nth-child(4) {
+        top: 52%;
+        right: 0;
+      }
+
+      .orbit-tag:nth-child(5) {
+        bottom: 10%;
+        right: 14%;
+      }
+
+      .orbit-tag:nth-child(6) {
+        bottom: 5%;
+        left: 28%;
+      }
+
+      .orbit-tag:nth-child(7) {
+        bottom: 26%;
+        left: 3%;
+      }
+
+      .orbit-tag:nth-child(8) {
+        top: 44%;
+        left: 0;
+      }
+
+      .orbit-tag:nth-child(9) {
+        top: 8%;
+        right: 26%;
+      }
+
+      .orbit-tag:nth-child(10) {
+        bottom: 20%;
+        right: 36%;
+      }
+
+      .orbit-tag:nth-child(11) {
+        bottom: 45%;
+        left: 18%;
+      }
+
+      .final-line {
+        margin: 0;
+        color: var(--orange);
+        font-size: clamp(1.7rem, 3.5vw, 3.7rem);
+        font-weight: 820;
+        letter-spacing: -0.075em;
+      }
+
+      .page-controls {
+        position: fixed;
+        right: var(--slide-x);
+        bottom: var(--control-bottom);
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: rgba(45, 42, 30, 0.62);
+        font-size: 0.76rem;
+        font-weight: 850;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .page-counter {
+        min-width: 58px;
+        text-align: right;
+      }
+
+      .page-home-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border: 0;
+        border-radius: 999px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.54);
+        cursor: pointer;
+        font-size: inherit;
+        font-weight: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+      }
+
+      .page-home-button:hover,
+      .page-home-button:focus-visible {
+        outline: 2px solid rgba(249, 115, 22, 0.34);
+        outline-offset: 3px;
+        color: var(--orange);
+      }
+
+      .page-home-icon {
+        width: 14px;
+        height: 14px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
+
+      .progress-line {
+        position: fixed;
+        right: var(--slide-x);
+        bottom: calc(var(--control-bottom) + 34px);
+        left: var(--slide-x);
+        z-index: 30;
+        height: 2px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: rgba(45, 42, 30, 0.08);
+      }
+
+      .progress-line::after {
+        display: block;
+        width: var(--progress, 3.3%);
+        height: 100%;
+        content: "";
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--gold), var(--orange));
+        transition: width 260ms var(--ease);
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+
+      .slide.is-active .reveal {
+        animation: reveal 620ms var(--ease) forwards;
+      }
+
+      .slide.is-active .reveal:nth-child(2) {
+        animation-delay: 70ms;
+      }
+
+      .slide.is-active .reveal:nth-child(3) {
+        animation-delay: 130ms;
+      }
+
+      .slide.is-active .reveal:nth-child(4) {
+        animation-delay: 190ms;
+      }
+
+      .slide.is-active .reveal:nth-child(5) {
+        animation-delay: 250ms;
+      }
+
+      .is-dark .page-controls {
+        color: rgba(255, 253, 247, 0.76);
+      }
+
+      .is-dark .page-home-button {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .is-dark .progress-line {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      @keyframes reveal {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 900px) {
+        :root {
+          --slide-x: 24px;
+          --slide-y: 26px;
+          --control-bottom: 16px;
+        }
+
+        .slide-shell,
+        .slide-shell--split,
+        .slide-shell--split-reverse,
+        .cover-shell,
+        .provider-layout {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 18px;
+          padding-bottom: 72px;
+        }
+
+        .slide-shell {
+          align-content: center;
+        }
+
+        .slide-shell--wide {
+          gap: 18px;
+        }
+
+        .slide-shell--split .visual,
+        .slide-shell--split-reverse .visual {
+          max-height: 36vh;
+        }
+
+        .slide-shell > *,
+        .cover-shell > *,
+        .copy,
+        .visual,
+        .visual--center {
+          min-width: 0;
+          width: 100%;
+        }
+
+        .copy {
+          align-content: start;
+          gap: 13px;
+          max-width: 100%;
+        }
+
+        .copy .title,
+        .copy .lede {
+          max-width: 100%;
+          width: 100%;
+        }
+
+        .title,
+        .title--compact {
+          font-size: clamp(2.15rem, 9.4vw, 3.5rem);
+        }
+
+        .title--hero {
+          font-size: clamp(3.5rem, 16vw, 6.2rem);
+        }
+
+        .title--quote {
+          font-size: clamp(2.35rem, 10vw, 4.2rem);
+        }
+
+        .lede {
+          font-size: clamp(0.92rem, 4.2vw, 1.15rem);
+          line-height: 1.35;
+        }
+
+        .source {
+          font-size: 0.64rem;
+        }
+
+        .cover-shell {
+          align-content: center;
+          gap: 20px;
+          padding-right: var(--slide-x);
+        }
+
+        .cover-copy {
+          gap: 14px;
+        }
+
+        .cover-subtitle {
+          font-size: clamp(1rem, 4.2vw, 1.25rem);
+        }
+
+        .cover-media {
+          width: min(100%, 620px);
+          margin: 0 auto;
+          transform: rotate(1.7deg);
+        }
+
+        .cover-media img {
+          border-width: 7px;
+          border-radius: 20px;
+        }
+
+        .cover-caption {
+          right: 12px;
+          bottom: 12px;
+          padding: 7px 10px;
+          font-size: 0.58rem;
+        }
+
+        .rigging-image {
+          height: min(36vh, 310px);
+        }
+
+        .top-brand {
+          top: 24px;
+          right: 24px;
+          font-size: 0.62rem;
+        }
+
+        .kicker {
+          font-size: 0.68rem;
+          letter-spacing: 0.14em;
+        }
+
+        .kicker::after {
+          width: 34px;
+          height: 2px;
+        }
+
+        .flow {
+          gap: 5px;
+        }
+
+        .flow-node {
+          min-height: 42px;
+          padding: 8px 7px;
+          border-radius: 11px;
+          font-size: clamp(0.62rem, 2.4vw, 0.8rem);
+        }
+
+        .flow-node--wide {
+          min-width: 0;
+        }
+
+        .flow-arrow {
+          font-size: 1.1rem;
+        }
+
+        .pipeline-card {
+          width: min(100%, 420px);
+          padding: 9px;
+          border-radius: 18px;
+        }
+
+        .pipeline-step {
+          min-height: 30px;
+          padding: 5px 8px;
+          border-radius: 9px;
+          font-size: 0.66rem;
+        }
+
+        .pipeline-step + .pipeline-step {
+          margin-top: 3px;
+        }
+
+        .pipeline-step::before {
+          width: 18px;
+          height: 18px;
+          font-size: 0.58rem;
+        }
+
+        .annotation {
+          margin-top: 9px;
+          padding: 7px 10px;
+          font-size: 0.62rem;
+        }
+
+        .motion-strip,
+        .capability-layout,
+        .fit-layout,
+        .compare-layout,
+        .research-grid,
+        .live-economy {
+          gap: 8px;
+        }
+
+        .motion-chip {
+          min-height: 58px;
+          padding: 7px 4px;
+          border-radius: 12px;
+          font-size: 0.58rem;
+        }
+
+        .capability-panel,
+        .fit-card,
+        .compare-card,
+        .research-card,
+        .revenue-card {
+          padding: 14px;
+          border-radius: 16px;
+        }
+
+        .capability-panel h2,
+        .fit-card h2,
+        .compare-card h2,
+        .revenue-card h2 {
+          margin-bottom: 9px;
+          font-size: 0.74rem;
+        }
+
+        .check-list {
+          gap: 6px;
+        }
+
+        .check-list li {
+          gap: 6px;
+          font-size: 0.65rem;
+        }
+
+        .check-list li::before {
+          width: 17px;
+          height: 17px;
+          font-size: 0.55rem;
+        }
+
+        .fit-card {
+          min-height: 120px;
+        }
+
+        .fit-tag-row {
+          gap: 4px;
+        }
+
+        .fit-tag {
+          padding: 5px 6px;
+          font-size: 0.54rem;
+        }
+
+        .formula,
+        .virtually-formula,
+        .before-after,
+        .toshiba-layout,
+        .compare-layout {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 8px;
+        }
+
+        .live-formula {
+          grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+          gap: 7px;
+        }
+
+        .formula-block,
+        .input-card,
+        .output-card,
+        .before-after-panel,
+        .technology-card {
+          min-height: 105px;
+          padding: 14px;
+          border-radius: 16px;
+        }
+
+        .formula-label,
+        .card-eyebrow,
+        .before-after-panel h2,
+        .technology-card h2 {
+          margin-bottom: 6px;
+          font-size: 0.56rem;
+        }
+
+        .formula-line,
+        .card-heading,
+        .before-after-panel p,
+        .technology-card strong {
+          font-size: 0.76rem;
+        }
+
+        .formula-plus,
+        .formula-symbol {
+          font-size: 1.7rem;
+        }
+
+        .frame-row {
+          gap: 6px;
+        }
+
+        .frame {
+          min-height: 116px;
+          padding: 7px;
+          border-radius: 13px;
+        }
+
+        .frame-label {
+          padding: 4px 5px;
+          font-size: 0.43rem;
+        }
+
+        .latency-visual {
+          gap: 12px;
+        }
+
+        .latency-row {
+          grid-template-columns: 63px minmax(0, 1fr) max-content;
+          gap: 8px;
+        }
+
+        .latency-name,
+        .latency-value {
+          font-size: 0.58rem;
+        }
+
+        .latency-track {
+          height: 18px;
+        }
+
+        .latency-fill--live {
+          min-width: 25px;
+        }
+
+        .research-card {
+          min-height: 135px;
+        }
+
+        .research-name {
+          font-size: 0.85rem;
+        }
+
+        .research-tag {
+          margin-top: 7px;
+          padding: 5px 6px;
+          font-size: 0.5rem;
+        }
+
+        .research-detail {
+          margin-top: 8px;
+          font-size: 0.58rem;
+        }
+
+        .live-token {
+          min-width: 0;
+          min-height: 62px;
+          padding: 8px;
+          border-radius: 13px;
+          font-size: 0.64rem;
+        }
+
+        .live-plus {
+          font-size: 1.6rem;
+        }
+
+        .proof-point {
+          padding: 8px 10px;
+          border-radius: 11px;
+        }
+
+        .proof-point strong {
+          font-size: 1rem;
+        }
+
+        .proof-point span {
+          font-size: 0.5rem;
+        }
+
+        .economy-lane {
+          gap: 5px;
+        }
+
+        .economy-node {
+          min-height: 52px;
+          padding: 6px 3px;
+          border-radius: 10px;
+          font-size: 0.54rem;
+        }
+
+        .economy-arrow {
+          margin: 6px auto;
+          font-size: 1.5rem;
+        }
+
+        .economy-note {
+          font-size: 0.64rem;
+        }
+
+        .step-grid,
+        .expansion-grid,
+        .phase-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 6px;
+        }
+
+        .step-card,
+        .expansion-card,
+        .phase-card {
+          min-height: 108px;
+          padding: 10px;
+          border-radius: 13px;
+        }
+
+        .step-number {
+          width: 22px;
+          height: 22px;
+          margin-bottom: 8px;
+          border-radius: 7px;
+          font-size: 0.58rem;
+        }
+
+        .step-card h2,
+        .phase-card h2 {
+          font-size: 0.65rem;
+        }
+
+        .step-card p,
+        .phase-card p,
+        .phase-route {
+          margin-top: 4px;
+          font-size: 0.52rem;
+        }
+
+        .phase-index {
+          font-size: 0.56rem;
+        }
+
+        .obs-flow {
+          gap: 5px;
+        }
+
+        .obs-node {
+          min-height: 50px;
+          padding: 6px 3px;
+          border-radius: 11px;
+          font-size: 0.56rem;
+        }
+
+        .platform-row {
+          gap: 4px;
+          margin-top: 8px;
+        }
+
+        .platform {
+          padding: 5px 7px;
+          font-size: 0.52rem;
+        }
+
+        .mobile-stack {
+          gap: 4px;
+        }
+
+        .mobile-node {
+          width: min(230px, 100%);
+          min-height: 27px;
+          padding: 5px 8px;
+          border-radius: 8px;
+          font-size: 0.62rem;
+        }
+
+        .mobile-node--brand {
+          min-height: 38px;
+          font-size: 0.85rem;
+        }
+
+        .mobile-arrow {
+          font-size: 0.75rem;
+        }
+
+        .world-layout {
+          gap: 8px;
+        }
+
+        .character-card {
+          min-height: 152px;
+          border-radius: 16px;
+        }
+
+        .character-card span {
+          bottom: 7px;
+          left: 7px;
+          padding: 5px 6px;
+          font-size: 0.48rem;
+        }
+
+        .world-prompt {
+          gap: 8px;
+          padding: 12px;
+          border-radius: 16px;
+        }
+
+        .prompt-line {
+          gap: 7px;
+          font-size: 0.62rem;
+        }
+
+        .prompt-line::before {
+          width: 7px;
+          height: 7px;
+        }
+
+        .market-visual {
+          gap: 13px;
+        }
+
+        .market-headline {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px;
+        }
+
+        .market-number {
+          font-size: clamp(3.5rem, 17vw, 6rem);
+        }
+
+        .market-unit {
+          max-width: 100%;
+          margin: 0;
+          font-size: 0.64rem;
+        }
+
+        .market-bar-row {
+          grid-template-columns: 50px minmax(0, 1fr) 45px;
+          gap: 7px;
+        }
+
+        .market-bar-row span,
+        .market-bar-row strong {
+          font-size: 0.56rem;
+        }
+
+        .market-bar {
+          height: 11px;
+        }
+
+        .revenue-card {
+          min-height: 132px;
+        }
+
+        .revenue-list {
+          gap: 4px;
+        }
+
+        .revenue-list span {
+          padding: 5px 6px;
+          font-size: 0.5rem;
+        }
+
+        .superchat-proof {
+          min-height: 82px;
+          padding: 10px;
+          border-radius: 17px;
+        }
+
+        .superchat-proof strong {
+          font-size: 2.1rem;
+        }
+
+        .superchat-proof span {
+          margin-top: 5px;
+          font-size: 0.48rem;
+        }
+
+        .music-scramble {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 5px;
+        }
+
+        .music-piece {
+          min-height: 52px;
+          padding: 5px;
+          border-radius: 10px;
+          font-size: 0.55rem;
+        }
+
+        .apple-layout {
+          gap: 6px;
+        }
+
+        .apple-piece {
+          min-height: 80px;
+          gap: 3px;
+          padding: 8px;
+          border-radius: 11px;
+        }
+
+        .apple-piece strong {
+          font-size: 0.72rem;
+        }
+
+        .apple-piece span {
+          font-size: 0.48rem;
+        }
+
+        .apple-plus {
+          font-size: 1.3rem;
+        }
+
+        .standard-route {
+          gap: 4px;
+        }
+
+        .standard-route span {
+          padding: 5px 7px;
+          font-size: 0.52rem;
+        }
+
+        .toshiba-arrow {
+          gap: 4px;
+          font-size: 1.7rem;
+        }
+
+        .toshiba-arrow span {
+          font-size: 0.48rem;
+        }
+
+        .technology-card {
+          min-height: 112px;
+        }
+
+        .world-layout,
+        .toshiba-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .technology-card p {
+          font-size: 0.56rem;
+        }
+
+        .provider-layout {
+          align-content: center;
+        }
+
+        .provider-stack {
+          gap: 5px;
+        }
+
+        .provider-chip {
+          padding: 8px 10px;
+          border-radius: 9px;
+          font-size: 0.64rem;
+        }
+
+        .provider-chip small {
+          font-size: 0.48rem;
+        }
+
+        .claim-card {
+          min-height: 135px;
+          padding: 15px;
+          border-radius: 17px;
+        }
+
+        .claim-card p {
+          font-size: 0.5rem;
+        }
+
+        .claim-card strong {
+          margin-top: 8px;
+          font-size: 1.7rem;
+        }
+
+        .orbit {
+          min-height: 270px;
+        }
+
+        .orbit-tag {
+          min-width: 54px;
+          padding: 5px 6px;
+          font-size: 0.48rem;
+        }
+
+        .orbit-center {
+          width: 110px;
+          height: 110px;
+          font-size: 1.1rem;
+        }
+
+        .page-controls {
+          right: auto;
+          left: 50%;
+          bottom: 14px;
+          gap: 10px;
+          font-size: 0.58rem;
+          transform: translateX(-50%);
+        }
+
+        .progress-line {
+          right: 24px;
+          bottom: 42px;
+          left: 24px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .track {
+          transition: none;
+        }
+
+        .slide.is-active .reveal {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck" aria-label="Virtually presentation deck">
+      <div class="track" id="deck-track">
+        <section class="slide slide--cover">
+          <article class="slide-shell cover-shell">
+            <div class="cover-copy reveal">
+              <div class="cover-kicker">VIRTUALLY <span></span> 01</div>
+              <h1 class="title title--hero">
+                AI Virtual<br />
+                <span class="accent">Live</span>
+              </h1>
+              <p class="cover-subtitle">For VTubers who want to start with a picture, not a production pipeline.</p>
+              <span class="cover-stamp">One image. One camera. A live character.</span>
+            </div>
+            <figure class="cover-media reveal">
+              <img
+                src="./assets/virtually-vtuber-cover.png"
+                alt="A VTuber character beside a live camera transformation example"
+              />
+              <figcaption class="cover-caption">AI-native virtual live</figcaption>
+            </figure>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Problem / 02</p>
+              <h1 class="title">Becoming a VTuber is still too hard.</h1>
+              <p class="lede">A single drawing must pass through a chain of specialists and tools before it can appear on a live stream.</p>
+            </div>
+            <div class="visual visual--center reveal">
+              <div class="flow flow--wrap">
+                <span class="flow-node flow-node--wide">Illustration</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-node flow-node--wide">Parts</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-node flow-node--wide">Rigging</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-node flow-node--wide">Tracking</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-node flow-node--wide">OBS</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-node flow-node--accent flow-node--wide">Live</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--split slide-shell--split-reverse">
+            <div class="copy reveal">
+              <p class="kicker">Problem / 03</p>
+              <h1 class="title">It takes this much work to make one picture move.</h1>
+              <p class="lede">Live2D Cubism turns a drawing into a parameterized model, one deformable part at a time.</p>
+            </div>
+            <figure class="visual glass reveal" style="padding: 12px; transform: rotate(1.3deg);">
+              <img
+                class="rigging-image"
+                src="./assets/virtually-live2d-rigging.png"
+                alt="Live2D Cubism rigging interface with parameters and a character model"
+              />
+              <figcaption class="source" style="padding:9px 5px 2px;">Reference image: Live2D Cubism parameter rigging interface.</figcaption>
+            </figure>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--split">
+            <div class="copy reveal">
+              <p class="kicker">Current stack / 04</p>
+              <h1 class="title">Virtual Live crosses too many industries.</h1>
+              <p class="lede">The creator experience is fragmented before the first stream even starts.</p>
+            </div>
+            <div class="visual reveal">
+              <div class="pipeline-card glass">
+                <div class="pipeline-step">Illustrator</div>
+                <div class="pipeline-step">Parts Separation</div>
+                <div class="pipeline-step">Live2D Rigger</div>
+                <div class="pipeline-step">Live2D Cubism</div>
+                <div class="pipeline-step">VTube Studio</div>
+                <div class="pipeline-step">OBS</div>
+                <div class="pipeline-step">Streaming Platform</div>
+              </div>
+              <p class="annotation">Live2D · nizima · VTube Studio · rigging commissions</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Problem / 05</p>
+              <h1 class="title">And after all that, motion is still limited.</h1>
+              <p class="lede">The workflow is optimized for expressive parameters, not for arbitrary movement.</p>
+            </div>
+            <div class="visual visual--center reveal">
+              <div class="motion-strip">
+                <div class="motion-chip">Blink</div>
+                <div class="motion-chip">Smile</div>
+                <div class="motion-chip">Mouth</div>
+                <div class="motion-chip">Head</div>
+                <div class="motion-chip motion-chip--hard">Limited hand</div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Problem / 06</p>
+              <h1 class="title">If it was not rigged, it does not exist.</h1>
+              <p class="lede">Tracking can only drive the parameters the model already has.</p>
+            </div>
+            <div class="visual visual--center capability-layout reveal">
+              <article class="capability-panel capability-panel--yes glass">
+                <h2>Reliable parameters</h2>
+                <ul class="check-list">
+                  <li>Blink</li>
+                  <li>Smile</li>
+                  <li>Mouth shapes</li>
+                  <li>Head turn</li>
+                  <li>Limited hand motion</li>
+                </ul>
+              </article>
+              <article class="capability-panel capability-panel--no glass">
+                <h2>Expensive to pre-build</h2>
+                <ul class="check-list">
+                  <li>Turn around</li>
+                  <li>Back view</li>
+                  <li>Full-body jump</li>
+                  <li>Dance</li>
+                  <li>Arbitrary motion</li>
+                </ul>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Problem / 07</p>
+              <h1 class="title">The ecosystem is optimized for Live2D avatars.</h1>
+              <p class="lede">Anime 2D is a great native format. The workflow becomes awkward when the character is anything else.</p>
+            </div>
+            <div class="visual visual--center fit-layout reveal">
+              <article class="fit-card fit-card--native glass">
+                <h2>Native fit</h2>
+                <div class="fit-tag-row">
+                  <span class="fit-tag">Anime 2D</span>
+                  <span class="fit-tag">Predefined expressions</span>
+                  <span class="fit-tag">Front-facing avatar</span>
+                </div>
+              </article>
+              <article class="fit-card fit-card--arbitrary glass">
+                <h2>Workflow friction</h2>
+                <div class="fit-tag-row">
+                  <span class="fit-tag">Semi-realistic</span>
+                  <span class="fit-tag">Photoreal</span>
+                  <span class="fit-tag">Animal</span>
+                  <span class="fit-tag">Creature</span>
+                  <span class="fit-tag">3D-looking</span>
+                  <span class="fit-tag">Unusual character</span>
+                </div>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--shift">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Shift / 08</p>
+              <h1 class="title">In recorded video, the problem is already disappearing.</h1>
+            </div>
+            <div class="visual visual--center reveal">
+              <div class="formula">
+                <div class="formula-block">
+                  <p class="formula-label">Input</p>
+                  <p class="formula-line">Character image<br />+<br />Driving video</p>
+                </div>
+                <div class="formula-plus">→</div>
+                <div class="formula-block formula-block--ai">
+                  <p class="formula-label">Output</p>
+                  <p class="formula-line">Character video</p>
+                </div>
+              </div>
+              <div class="flow" style="margin-top:20px;">
+                <span class="flow-node flow-node--muted">No parts</span>
+                <span class="flow-node flow-node--accent">No rigging</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">AI Animate / 09</p>
+              <h1 class="title">AI does not move the joints.<br /><span class="accent">It rebuilds every frame.</span></h1>
+            </div>
+            <div class="visual visual--center compare-layout reveal">
+              <article class="compare-card compare-card--old glass">
+                <h2>Old motion pipeline</h2>
+                <p>Camera<br />→ Tracking<br />→ Parameters<br />→ Rigged model<br />→ Video</p>
+              </article>
+              <article class="compare-card compare-card--new glass">
+                <h2>Generative pipeline</h2>
+                <p>Image + driving video<br />→ Generative model<br />→ Video</p>
+              </article>
+            </div>
+            <p class="source reveal">Direction based on <a href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer">Wan-Animate-2</a> and its end-to-end character animation framework.</p>
+          </article>
+        </section>
+
+        <section class="slide slide--dark">
+          <article class="slide-shell slide-shell--center slide-shell--dark">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Result / 10</p>
+              <h1 class="title">Recorded characters can move freely.</h1>
+            </div>
+            <div class="visual visual--center frame-row reveal">
+              <div class="frame"><span class="frame-label">Dance</span></div>
+              <div class="frame"><span class="frame-label">Turn around</span></div>
+              <div class="frame"><span class="frame-label">Full body</span></div>
+              <div class="frame"><span class="frame-label">Side / back</span></div>
+            </div>
+            <p class="source reveal">Capability map, not production footage. See the official <a href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer">Wan-Animate-2 project</a> for reference results.</p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Core problem / 11</p>
+              <h1 class="title">Live is the last major surface still running on rigging.</h1>
+            </div>
+            <div class="visual visual--center compare-layout reveal">
+              <article class="compare-card compare-card--new glass">
+                <h2>Recorded — AI native</h2>
+                <p>Image<br />→ AI<br />→ Video</p>
+              </article>
+              <article class="compare-card compare-card--old glass">
+                <h2>Live — rigging native</h2>
+                <p>Parts<br />→ Rigging<br />→ Tracking<br />→ Live2D</p>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Cause / 12</p>
+              <h1 class="title">The reason was latency.</h1>
+              <p class="lede">Batch generation could wait. Live interaction cannot.</p>
+            </div>
+            <div class="visual visual--center latency-visual reveal">
+              <div class="latency-row">
+                <span class="latency-name">Batch</span>
+                <div class="latency-track"><i class="latency-fill latency-fill--batch"></i></div>
+                <strong class="latency-value">seconds → minutes</strong>
+              </div>
+              <div class="latency-row">
+                <span class="latency-name">Live</span>
+                <div class="latency-track"><i class="latency-fill latency-fill--live"></i></div>
+                <strong class="latency-value">one frame / 33–50 ms</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Why now / 13</p>
+              <h1 class="title">The last barrier is beginning to fall.</h1>
+              <p class="lede">Two research lines now point toward streaming character animation. Their release status matters.</p>
+            </div>
+            <div class="visual visual--center research-grid reveal">
+              <article class="research-card research-card--wan glass">
+                <div>
+                  <h2 class="research-name">Wan-Animate-2 Lite</h2>
+                  <span class="research-tag">Official repo / released</span>
+                </div>
+                <p class="research-detail">The official repository describes a real-time threshold variant. Inference scripts and Base / Distillation weights were released on Aug 07, 2026.</p>
+              </article>
+              <article class="research-card research-card--live glass">
+                <div>
+                  <h2 class="research-name">LiveAnimate</h2>
+                  <span class="research-tag">Research / code coming soon</span>
+                </div>
+                <p class="research-detail">A 14B streaming research system reports real-time inference, while its official repository still lists code as coming soon.</p>
+              </article>
+            </div>
+            <p class="source reveal"><a href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer">Wan-Animate-2 official repository</a> · <a href="https://github.com/liveanimate/LiveAnimate" target="_blank" rel="noopener noreferrer">LiveAnimate official repository</a></p>
+          </article>
+        </section>
+
+        <section class="slide slide--shift">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Why now / 14</p>
+              <h1 class="title">Generative animation is entering Live.</h1>
+            </div>
+            <div class="visual visual--center live-formula reveal">
+              <span class="live-token">Reference image<br />+<br />Streaming pose</span>
+              <span class="live-plus">→</span>
+              <span class="live-token live-token--ai">Character stream</span>
+            </div>
+            <div class="proof-point reveal">
+              <strong>19.63 FPS</strong>
+              <span>Research result on 2× H100 GPUs · not a consumer product spec</span>
+            </div>
+            <p class="source reveal"><a href="https://arxiv.org/abs/2608.11745" target="_blank" rel="noopener noreferrer">LiveAnimate paper</a> · <a href="https://github.com/liveanimate/LiveAnimate" target="_blank" rel="noopener noreferrer">official project repository</a></p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Industry shift / 15</p>
+              <h1 class="title">If generation is good enough, rigging becomes optional.</h1>
+            </div>
+            <div class="visual visual--center before-after reveal">
+              <article class="before-after-panel before-after-panel--before glass">
+                <h2>Before</h2>
+                <p>Image<br />↓<br /><span class="strike">Parts → Rigging → Live2D → Tracking</span><br />↓<br />Video</p>
+              </article>
+              <div class="compare-arrow">→</div>
+              <article class="before-after-panel before-after-panel--after glass">
+                <h2>After</h2>
+                <p>Image + camera<br />↓<br /><span class="accent">Generative AI</span><br />↓<br />Video</p>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Industry shift / 16</p>
+              <h1 class="title">From the Rigging Economy<br />to the Generative Economy.</h1>
+            </div>
+            <div class="visual visual--center reveal">
+              <div class="economy-lane">
+                <div class="economy-node economy-node--old">Live2D</div>
+                <div class="economy-node economy-node--old">VTube Studio</div>
+                <div class="economy-node economy-node--old">nizima</div>
+                <div class="economy-node economy-node--old">IRIAM</div>
+              </div>
+              <div class="economy-arrow">↓ &nbsp; Animation layer is being replaced &nbsp; ↓</div>
+              <div class="economy-lane">
+                <div class="economy-node economy-node--future">Image</div>
+                <div class="economy-node economy-node--future">Generative model</div>
+                <div class="economy-node economy-node--future">Live motion</div>
+                <div class="economy-node economy-node--future">Creator</div>
+              </div>
+              <p class="economy-note">The claim is about the production layer. Platforms, communities, marketplaces, and creator relationships remain valuable assets.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--shift">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Solution / 17</p>
+              <h1 class="title">So we generate <span class="accent">Live</span> itself.</h1>
+            </div>
+            <div class="visual visual--center virtually-formula reveal">
+              <div class="input-card">
+                <p class="card-eyebrow">Input</p>
+                <h2 class="card-heading">Character image<br />+ Camera</h2>
+              </div>
+              <div class="formula-symbol">→</div>
+              <div class="output-card">
+                <p class="card-eyebrow">Virtually</p>
+                <h2 class="card-heading">Virtual Live</h2>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">UX / 18</p>
+              <h1 class="title">One image.<br />One camera.<br /><span class="accent">Done.</span></h1>
+            </div>
+            <div class="visual visual--center step-grid reveal">
+              <article class="step-card">
+                <span class="step-number">01</span>
+                <h2>Upload character</h2>
+                <p>Start from one image.</p>
+              </article>
+              <article class="step-card">
+                <span class="step-number">02</span>
+                <h2>Turn camera on</h2>
+                <p>Use webcam or iPhone.</p>
+              </article>
+              <article class="step-card">
+                <span class="step-number">03</span>
+                <h2>Move</h2>
+                <p>Let the character follow.</p>
+              </article>
+              <article class="step-card">
+                <span class="step-number">04</span>
+                <h2>Go live</h2>
+                <p>Broadcast the result.</p>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--split">
+            <div class="copy reveal">
+              <p class="kicker">Product / 19</p>
+              <h1 class="title">Existing streamers can plug into OBS.</h1>
+              <p class="lede">The first product does not need to replace the creator’s current platform.</p>
+            </div>
+            <div class="visual reveal">
+              <div class="obs-flow">
+                <div class="obs-node">Webcam<br />/ iPhone</div>
+                <span class="flow-arrow">→</span>
+                <div class="obs-node obs-node--virtually">Virtually</div>
+                <span class="flow-arrow">→</span>
+                <div class="obs-node">Virtual camera<br />/ transparent source</div>
+                <span class="flow-arrow">→</span>
+                <div class="obs-node">OBS</div>
+              </div>
+              <div class="platform-row">
+                <span class="platform">YouTube</span>
+                <span class="platform">CHZZK</span>
+                <span class="platform">SOOP</span>
+                <span class="platform">Twitch</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--split slide-shell--split-reverse">
+            <div class="copy reveal">
+              <p class="kicker">Product / 20</p>
+              <h1 class="title">Eventually, the PC can disappear.</h1>
+              <p class="lede">A phone-first entry point, with generative motion instead of pre-built rigging.</p>
+            </div>
+            <div class="visual reveal">
+              <div class="mobile-stack">
+                <div class="mobile-node">iPhone</div>
+                <div class="mobile-arrow">↓</div>
+                <div class="mobile-node mobile-node--brand">Virtually</div>
+                <div class="mobile-arrow">↓</div>
+                <div class="mobile-node">Cloud inference</div>
+                <div class="mobile-arrow">↓</div>
+                <div class="mobile-node">Character stream</div>
+                <div class="mobile-arrow">↓</div>
+                <div class="mobile-node">Live</div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Expansion / 21</p>
+              <h1 class="title">The same engine is not only for broadcasting.</h1>
+            </div>
+            <div class="visual visual--center expansion-grid reveal">
+              <article class="expansion-card">
+                <strong>1 : N</strong>
+                <span>Live streaming</span>
+              </article>
+              <article class="expansion-card">
+                <strong>1 : 1</strong>
+                <span>Video call</span>
+              </article>
+              <article class="expansion-card">
+                <strong>Random</strong>
+                <span>Random chat</span>
+              </article>
+              <article class="expansion-card">
+                <strong>N : N</strong>
+                <span>Voice / video room</span>
+              </article>
+            </div>
+            <p class="source reveal">Gaming · Dating · Social · Telepresence</p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Expansion / 22</p>
+              <h1 class="title">Generate the world around the character, too.</h1>
+            </div>
+            <div class="visual visual--center world-layout reveal">
+              <div class="character-card"><span>Character image</span></div>
+              <div class="world-prompt glass">
+                <div class="prompt-line">Character → character</div>
+                <div class="prompt-line">Prompt / image → room / world</div>
+                <div class="prompt-line">“A late-night Tokyo radio studio that fits this character.”</div>
+              </div>
+            </div>
+            <p class="source reveal">Character + motion + world generation becomes one creator experience.</p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Market / 23</p>
+              <h1 class="title">The value of a view changes with content length.</h1>
+            </div>
+            <div class="visual visual--center market-visual reveal">
+              <div class="market-headline">
+                <p class="market-number">7–33×</p>
+                <p class="market-unit">Long-form view value<br />versus Shorts view value</p>
+              </div>
+              <div class="market-bars">
+                <div class="market-bar-row">
+                  <span>Shorts</span>
+                  <div class="market-bar"><i class="market-bar i--short"></i></div>
+                  <strong>3–14%</strong>
+                </div>
+                <div class="market-bar-row">
+                  <span>Long-form</span>
+                  <div class="market-bar"><i class="market-bar i--long"></i></div>
+                  <strong>baseline</strong>
+                </div>
+              </div>
+              <p class="source">AIR Media-Tech: 274 YouTube channels and 3,044 channel-month observations. Directional benchmark, not a creator revenue promise. <a href="https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026" target="_blank" rel="noopener noreferrer">Source</a></p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Live economy / 24</p>
+              <h1 class="title">For VTubers, Live adds the monetization layer.</h1>
+            </div>
+            <div class="visual visual--center live-economy reveal">
+              <article class="revenue-card revenue-card--recorded glass">
+                <h2>Recorded video</h2>
+                <div class="revenue-list"><span>Ads</span></div>
+              </article>
+              <article class="revenue-card revenue-card--live glass">
+                <h2>Live</h2>
+                <div class="revenue-list">
+                  <span>Ads</span>
+                  <span>Super Chat</span>
+                  <span>Membership</span>
+                  <span>Gifts</span>
+                  <span>Commerce</span>
+                </div>
+              </article>
+            </div>
+            <div class="superchat-proof reveal">
+              <strong>64 / 100</strong>
+              <span>VTubers in a May 2024 top-superchat snapshot*</span>
+            </div>
+            <p class="source reveal">*Directional figure from the source brief’s Playboard snapshot; refresh the ranking before external circulation. <a href="https://playboard.co/en/youtube-ranking/most-superchatted-v-tuber-channels-in-worldwide-yearly" target="_blank" rel="noopener noreferrer">Playboard reference</a></p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Strategy / 25</p>
+              <h1 class="title">We do not need to build a new Twitch on day one.</h1>
+            </div>
+            <div class="visual visual--center phase-grid reveal">
+              <article class="phase-card phase-card--active">
+                <span class="phase-index">PHASE 01</span>
+                <div>
+                  <h2>AI Avatar Engine</h2>
+                  <p>Meet creators where they already stream.</p>
+                  <p class="phase-route">Virtually → OBS → existing platforms</p>
+                </div>
+              </article>
+              <article class="phase-card">
+                <span class="phase-index">PHASE 02</span>
+                <div>
+                  <h2>Mobile Virtual Live</h2>
+                  <p>Remove the desktop from the loop.</p>
+                  <p class="phase-route">Virtually → direct live</p>
+                </div>
+              </article>
+              <article class="phase-card">
+                <span class="phase-index">PHASE 03</span>
+                <div>
+                  <h2>Virtually Platform</h2>
+                  <p>Own the identity, social, and world layer.</p>
+                  <p class="phase-route">Streaming + social + gifts + worlds</p>
+                </div>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Analogy / 26</p>
+              <h1 class="title">Digital music was fragmented, too.</h1>
+              <p class="lede">The technology existed. The experience was scattered across too many steps.</p>
+            </div>
+            <div class="visual visual--center music-scramble reveal">
+              <div class="music-piece">MP3</div>
+              <div class="music-piece music-piece--accent">CD ripping</div>
+              <div class="music-piece">Download</div>
+              <div class="music-piece">Player</div>
+              <div class="music-piece">Music store</div>
+              <div class="music-piece music-piece--accent">File management</div>
+              <div class="music-piece">Sync</div>
+              <div class="music-piece">Portable player</div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Apple / 27</p>
+              <h1 class="title">Apple did not invent the music file.</h1>
+              <h2 class="title title--compact">It created the standard for consuming music.</h2>
+            </div>
+            <div class="visual visual--center apple-layout reveal">
+              <div class="apple-piece"><strong>iTunes</strong><span>Manage</span></div>
+              <div class="apple-plus">+</div>
+              <div class="apple-piece"><strong>Music Store</strong><span>Discover · buy</span></div>
+              <div class="apple-plus">+</div>
+              <div class="apple-piece"><strong>iPod</strong><span>Listen anywhere</span></div>
+            </div>
+            <div class="standard-route reveal">
+              <span>Discover</span><b>→</b><span>Buy</span><b>→</b><span>Manage</span><b>→</b><span>Sync</span><b>→</b><span>Listen</span>
+            </div>
+            <p class="source reveal">Apple reported 70M+ songs purchased and more than 70% of legal downloads for singles and albums in the store’s first year. <a href="https://www.apple.com/newsroom/2004/04/28iTunes-Celebrates-Its-First-Anniversary-Over-70-Million-Songs-Purchased/" target="_blank" rel="noopener noreferrer">Apple press release</a></p>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Toshiba → Apple / 28</p>
+              <h1 class="title title--compact">The key technology behind “1,000 songs in your pocket” was not Apple’s.</h1>
+            </div>
+            <div class="visual visual--center toshiba-layout reveal">
+              <article class="technology-card technology-card--toshiba glass">
+                <h2>Toshiba</h2>
+                <strong>1.8″ / 5 GB</strong>
+                <p>MK5002MAL hard drive</p>
+              </article>
+              <div class="toshiba-arrow">→<span>Technology → Product → Ecosystem</span></div>
+              <article class="technology-card technology-card--apple glass">
+                <h2>Apple</h2>
+                <strong>iPod + iTunes</strong>
+                <p>One coherent music experience</p>
+              </article>
+            </div>
+            <p class="source reveal">The Computer History Museum identifies Toshiba’s 1.8-inch MK5002MAL 5 GB drive as storage used in the first iPod. <a href="https://www.computerhistory.org/storageengine/miniature-disk-drives-enable-mobile-computing/" target="_blank" rel="noopener noreferrer">CHM source</a></p>
+          </article>
+        </section>
+
+        <section class="slide slide--dark">
+          <article class="slide-shell slide-shell--dark slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Virtually / 29</p>
+              <h1 class="title">The model may come from China.</h1>
+              <p class="lede">The Virtual Live standard is still unclaimed.</p>
+            </div>
+            <div class="visual visual--center provider-layout reveal">
+              <div class="provider-stack">
+                <div class="provider-chip">Alibaba <small>model provider</small></div>
+                <div class="provider-chip">Qwen / Wan <small>model family</small></div>
+                <div class="provider-chip">Wan-Animate-2 <small>end-to-end animation</small></div>
+                <div class="provider-chip">LiveAnimate <small>streaming research</small></div>
+              </div>
+              <div class="claim-card">
+                <p>Open question</p>
+                <strong>Who owns<br />the ecosystem?</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--shift">
+          <article class="slide-shell slide-shell--center">
+            <div class="copy copy--center reveal">
+              <p class="kicker">Vision / 30</p>
+              <h1 class="title">We want the ecosystem,<br />not just the model.</h1>
+            </div>
+            <div class="visual visual--center orbit reveal">
+              <div class="orbit-center">Virtually</div>
+              <span class="orbit-tag">Character</span>
+              <span class="orbit-tag">Animation</span>
+              <span class="orbit-tag">Live</span>
+              <span class="orbit-tag">Calls</span>
+              <span class="orbit-tag">Social</span>
+              <span class="orbit-tag">Worlds</span>
+              <span class="orbit-tag">Marketplace</span>
+              <span class="orbit-tag">Gifts</span>
+              <span class="orbit-tag">Creators</span>
+              <span class="orbit-tag">Fans</span>
+            </div>
+            <p class="final-line reveal">Any image. Any motion. Live.</p>
+          </article>
+        </section>
+      </div>
+
+      <div class="progress-line" aria-hidden="true"></div>
+      <div class="page-controls" aria-label="Presentation navigation">
+        <button class="page-home-button" id="page-home-button" type="button" aria-label="Go to first slide">
+          <svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M10.5 3.5 6 8l4.5 4.5" />
+          </svg>
+          <span>Start</span>
+        </button>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 30</div>
+      </div>
+    </main>
+
+    <script>
+      (function () {
+        var meta = document.getElementById("viewport-meta");
+        var mobileBreakpoint = 900;
+
+        function syncViewport() {
+          var mobile = window.innerWidth <= mobileBreakpoint;
+          meta.setAttribute(
+            "content",
+            mobile
+              ? "width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+              : "width=device-width, initial-scale=1.0"
+          );
+          document.documentElement.classList.toggle("is-mobile-viewport", mobile);
+        }
+
+        syncViewport();
+        window.addEventListener("resize", syncViewport);
+        window.addEventListener("orientationchange", syncViewport);
+      })();
+
+      (function () {
+        var track = document.getElementById("deck-track");
+        var deck = document.querySelector(".deck");
+        var pageCounter = document.getElementById("page-counter");
+        var pageHomeButton = document.getElementById("page-home-button");
+        var progressLine = document.querySelector(".progress-line");
+        var baseSlides = Array.prototype.slice.call(track.querySelectorAll(".slide"));
+        var slideCount = baseSlides.length;
+        var firstClone = baseSlides[0].cloneNode(true);
+        var lastClone = baseSlides[slideCount - 1].cloneNode(true);
+        var activeIndex = 1;
+        var isAnimating = false;
+        var wheelLock = false;
+        var touchStartX = 0;
+        var touchStartY = 0;
+        var touchActive = false;
+
+        firstClone.setAttribute("data-clone", "first");
+        lastClone.setAttribute("data-clone", "last");
+        track.innerHTML = "";
+        track.appendChild(lastClone);
+        baseSlides.forEach(function (slide) {
+          track.appendChild(slide);
+        });
+        track.appendChild(firstClone);
+
+        var allSlides = Array.prototype.slice.call(track.querySelectorAll(".slide"));
+
+        function parseSlideNumber(raw) {
+          var value = Number.parseInt(raw || "", 10);
+          return Number.isFinite(value) && value >= 1 && value <= slideCount ? value : null;
+        }
+
+        function requestedSlide() {
+          var hashValue = parseSlideNumber(window.location.hash.slice(1));
+          if (hashValue !== null) {
+            return hashValue;
+          }
+          var searchValue = parseSlideNumber(new URLSearchParams(window.location.search).get("page"));
+          return searchValue || 1;
+        }
+
+        function realSlideNumber(index) {
+          if (index === 0) {
+            return slideCount;
+          }
+          if (index === slideCount + 1) {
+            return 1;
+          }
+          return index;
+        }
+
+        function deckWidth() {
+          return track.clientWidth || track.getBoundingClientRect().width;
+        }
+
+        function setPosition(transition) {
+          track.style.transition = transition ? "transform 340ms var(--ease)" : "none";
+          track.style.transform = "translate3d(" + -activeIndex * deckWidth() + "px, 0, 0)";
+        }
+
+        function syncUrl() {
+          var nextHash = "#" + realSlideNumber(activeIndex);
+          if (window.location.hash === nextHash) {
+            return;
+          }
+          window.history.replaceState(
+            window.history.state,
+            "",
+            window.location.pathname + window.location.search + nextHash
+          );
+        }
+
+        function updateUi() {
+          var current = realSlideNumber(activeIndex);
+          allSlides.forEach(function (slide, index) {
+            var isActive = index === activeIndex;
+            slide.classList.toggle("is-active", isActive);
+            slide.setAttribute("aria-hidden", String(!isActive));
+          });
+          document.body.classList.toggle(
+            "is-dark",
+            Boolean(allSlides[activeIndex].querySelector(".slide-shell--dark"))
+          );
+          pageCounter.textContent =
+            String(current).padStart(2, "0") + " / " + String(slideCount).padStart(2, "0");
+          progressLine.style.setProperty("--progress", (current / slideCount) * 100 + "%");
+          syncUrl();
+        }
+
+        function jumpTo(index) {
+          activeIndex = index;
+          isAnimating = false;
+          setPosition(false);
+          window.requestAnimationFrame(function () {
+            track.style.transition = "transform 340ms var(--ease)";
+          });
+          updateUi();
+        }
+
+        function move(step) {
+          if (isAnimating) {
+            return;
+          }
+          isAnimating = true;
+          activeIndex += step;
+          setPosition(true);
+          updateUi();
+        }
+
+        function next() {
+          move(1);
+        }
+
+        function previous() {
+          move(-1);
+        }
+
+        track.addEventListener("transitionend", function (event) {
+          if (event.target !== track || event.propertyName !== "transform") {
+            return;
+          }
+          if (activeIndex === 0) {
+            jumpTo(slideCount);
+            return;
+          }
+          if (activeIndex === slideCount + 1) {
+            jumpTo(1);
+            return;
+          }
+          isAnimating = false;
+        });
+
+        pageHomeButton.addEventListener("click", function () {
+          jumpTo(1);
+        });
+
+        window.addEventListener("resize", function () {
+          setPosition(false);
+        });
+
+        window.addEventListener("hashchange", function () {
+          var target = parseSlideNumber(window.location.hash.slice(1));
+          if (target !== null && target !== realSlideNumber(activeIndex)) {
+            jumpTo(target);
+          }
+        });
+
+        window.addEventListener("keydown", function (event) {
+          var forward = event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ";
+          var backward = event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "PageUp";
+          if (!forward && !backward) {
+            return;
+          }
+          event.preventDefault();
+          if (event.repeat) {
+            return;
+          }
+          if (forward) {
+            next();
+          } else {
+            previous();
+          }
+        });
+
+        window.addEventListener("wheel", function (event) {
+          var delta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+          if (wheelLock || Math.abs(delta) < 12) {
+            return;
+          }
+          wheelLock = true;
+          window.setTimeout(function () {
+            wheelLock = false;
+          }, 650);
+          if (event.deltaX > 0 || event.deltaY > 0) {
+            next();
+          } else {
+            previous();
+          }
+        }, { passive: true });
+
+        deck.addEventListener("click", function (event) {
+          if (event.target.closest("a, button")) {
+            return;
+          }
+          if (event.clientX < window.innerWidth * 0.23) {
+            previous();
+          } else {
+            next();
+          }
+        });
+
+        deck.addEventListener("touchstart", function (event) {
+          if (event.touches.length !== 1) {
+            return;
+          }
+          touchStartX = event.touches[0].clientX;
+          touchStartY = event.touches[0].clientY;
+          touchActive = true;
+        }, { passive: true });
+
+        deck.addEventListener("touchend", function (event) {
+          if (!touchActive || event.changedTouches.length !== 1) {
+            touchActive = false;
+            return;
+          }
+          var touch = event.changedTouches[0];
+          var deltaX = touch.clientX - touchStartX;
+          var deltaY = touch.clientY - touchStartY;
+          touchActive = false;
+          if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 46) {
+            return;
+          }
+          if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+            deltaX < 0 ? next() : previous();
+          } else {
+            deltaY < 0 ? next() : previous();
+          }
+        }, { passive: true });
+
+        activeIndex = requestedSlide();
+        setPosition(false);
+        updateUi();
+      })();
+    </script>
+  </body>
+</html>
