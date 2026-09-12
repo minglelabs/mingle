@@ -34,6 +34,12 @@ vi.mock("@/lib/signup-welcome-onboarding", () => ({
   ensureSignupWelcomeOnboarding: mockEnsureSignupWelcomeOnboarding,
 }));
 
+vi.mock("@/server/profile-bio", () => ({
+  getPublishedBioText: async (_id: string, bio: string | null) => bio,
+  updateProfileWithBio: async (_id: string, _bio: unknown, update: (tx: unknown) => Promise<unknown>) => ({ profile: await update({ user: { update: mockUserUpdate } }), versionId: null }),
+  runBioVersion: vi.fn(),
+}));
+
 import { GET, PATCH } from "@/app/api/profile/route";
 
 describe("/api/profile route", () => {
@@ -93,6 +99,7 @@ describe("/api/profile route", () => {
       image: null,
       handle: "original.name",
       bio: "Hello",
+      bioDraft: "Hello",
       nationality: "ko",
       primaryLanguages: ["ko"],
       defaultConversationLanguages: [],

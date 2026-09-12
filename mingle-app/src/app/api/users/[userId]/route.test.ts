@@ -26,6 +26,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/server/profile-bio", () => ({ getPublishedBioText: async (_id: string, bio: string | null) => bio }));
+
 import { GET } from "@/app/api/users/[userId]/route";
 
 describe("/api/users/[userId] route", () => {

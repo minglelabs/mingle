@@ -81,8 +81,8 @@ describe("request user identity", () => {
   });
 
   it.each([
-    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3",
-    "android/v2.0.0", "android/v2.0.1",
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3", "ios/v2.0.4",
+    "android/v2.0.0", "android/v2.0.1", "android/v2.0.4",
   ])("preserves authenticated conversation ownership for installed clients: %s", async namespace => {
     mockUserFindUnique.mockResolvedValue({ id: "user_session_real" });
     const request = new NextRequest(`https://mingle.example/api/${namespace}/conversations`, {

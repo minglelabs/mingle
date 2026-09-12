@@ -2255,6 +2255,136 @@
 - Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
 - Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
 
+## 2026-09-08 — Persistent message reactions in conversation rooms
+
+- Request: After merging PR #218, add thumbs-up, heart, check, sad, and laugh reactions to messages, starting from `codex/messenger-tabs-device-test`.
+- Workspace: `codex/message-reactions` at `/Users/nam/.codex/worktrees/mingle/message-reactions`, based on merge commit `8e96841c`. PR #218 merged successfully and its Railway deployment reported success.
+- Interaction: Long-press or right-click a completed message to reveal five reactions above the existing copy/listen actions. Keyboard users can focus a bubble and press Enter or the context-menu shortcut; Escape closes the menu. Reactions apply to the entire message, including its translated bubbles. Draft speech has no reaction controls.
+- Selection: Each user has one reaction per message. Choosing another replaces it; choosing the current reaction again removes it. Badges under the message show counts and highlight the viewer's selection. Tapping a badge adds, switches, or removes the viewer's reaction. Failed requests display a localized retry message without inventing a successful count; duplicate taps are guarded while a request is pending.
+- Persistence/security: Add `AppMessageReaction` with a composite message/user primary key and cascading foreign keys. API requests require a signed-in conversation member; writes also use the existing block/left-member policy. Lookups are scoped to the room's session key and exclude soft-deleted messages. Clients cannot choose another user's identity. Explicit PUT set/remove operations are idempotent. Responses expose counts and the viewer's selection, not other users' IDs.
+- Synchronization: Reuse the existing room event bus for invalidation, plus a five-second visible-room polling fallback and refresh on reconnect/visibility. Batch reads by the currently mounted message IDs (100 per request). Hidden rooms/tabs skip reads, overlapping refreshes are suppressed, and stale reads cannot overwrite a local mutation. Room state is isolated without remounting the live conversation when visibility changes.
+- Compatibility: Shared web, iOS, and Android endpoints cover current `v2.0.3` namespaces through the existing `v2.0.0` rewrite contract. App and API versions remain 2.0.3. No new environment variables or native rebuild are required.
+- Migration: `20260908135150_add_message_reactions` was generated and applied using `prisma migrate dev`. The existing migration `20260803150000_add_app_event_log_message_event_type_unique` fails on an empty database because it executes `CREATE INDEX CONCURRENTLY` in a transaction. For this isolated local test database only, the unchanged base schema was baselined in a temporary migration directory, then Prisma generated and applied the new table migration. Only the generated incremental migration is committed. Production data and migration history were not modified. Apply this new migration before deploying this feature's web code.
+- Validation: 56 targeted tests passed across reaction authorization/validation/aggregation and existing message, menu, timestamp, and auth behavior. Full TypeScript validation passed. Live devbox checks on the dedicated `mingle_message_reactions` database verified both v2.0.3 API namespaces, anonymous/nonmember denial, two-user counts, repeated-write idempotency, switching, and cancellation preserving the other user's reaction. A real messaging WebSocket received a notification after mutation.
+- Browser validation: Actual ChatBubble and reaction components under React StrictMode used real local API/DB calls with disposable test accounts. Verified selection, a second user's count update, cancellation, refresh persistence, visible error feedback after an authentication failure, keyboard menu access, and the five-option menu at 360px width. Physical iOS/Android long-press gestures were not exercised. Temporary QA assets and local test session tokens are excluded from the PR.
+
+### Reaction placement and participant-list follow-up
+
+- User decision: Keep reaction results directly below their message, right-aligned for the viewer's messages and left-aligned for received messages; reserve space only when a reaction exists. The own-message column now stacks vertically, preventing badges from taking text width beside the bubble.
+- New interaction: Short taps still select/switch/remove the viewer's reaction. Holding a result badge for 450ms opens a bottom sheet showing who reacted. Moving more than 10px or canceling the pointer cancels the hold, and the click following a completed hold is suppressed so inspecting a list never removes a reaction. Desktop right-click and keyboard context-menu/Shift+Enter shortcuts also open the sheet.
+- Participant sheet: Switch among all five reaction kinds; display each person's name and handle with a marker for the viewer. Support loading, empty and retry states, 50-person cursor pages, a scrollable list, safe-area padding, focus containment/restoration, Escape, backdrop/close button, and native Back. Closing or switching kinds cancels the previous list request; hidden conversation rooms close the sheet.
+- Access: Participant reads reuse the authenticated room-membership and visible-message checks. The list endpoint selects only name/handle/ID and the viewer marker; no email or private account fields. Cursor pagination uses user-ID ordering and continues even if the previous cursor user's reaction was removed. Existing summary responses remain unchanged.
+- Review recovery fix: All reaction reads/writes have a ten-second deadline covering response body parsing. Aborted/stalled requests release pending state so future polls and user retries can proceed. Participant requests also abort on close/switch. Reaction notification publishing has a three-second server deadline, so a stalled messaging service cannot indefinitely hold a successfully saved reaction response.
+- Validation: 75 targeted tests passed, covering participant authorization/pagination, request timeouts/cancellation, notification timeout, and existing message/menu/timestamp behavior. Browser checks using actual components and local API/DB confirmed the own-message badge starts below the message, both participant names appear, switching to an empty kind works, Escape restores focus, and short taps still remove only the viewer's reaction. Simulated touch-pointer holds opened the list without changing the count; pointer movement canceled the hold without changing the count. Physical phone long-press was not exercised.
+- Deployment: No additional migration, environment variable, or native rebuild. The previously generated `20260908135150_add_message_reactions` remains the only migration required by PR #219.
+
+## 2026-09-08 — Send conversation photos from the existing composer
+
+- Request and decision: Add photo/image messages on the same `codex/message-reactions` branch. The user selected replacing the keyboard-close icon inside the text field with a plus menu containing Choose photo and Hide keyboard. Keep the microphone, input width, and send control. Voice mode exposes the same plus beside its keyboard button.
+- Interaction: Choose one JPG, PNG, or WebP image up to 10MB, inspect its preview, then explicitly send it. Canceling the picker/menu does not send a message or clear the text draft. While sending, disable repeat submission and bound the request to 45 seconds. A failed request retains the selected image and client message ID for retry. Hide keyboard returns to the existing voice mode.
+- Display: Render a photo thumbnail on the sender's usual side, with the existing timestamp and reaction badges. Tap/Enter opens a larger viewer; close, backdrop, Escape, and native Back dismiss it. Long-press/context menu offers reactions and Copy photo link. Image activation does not invoke the text bubble's double-tap copy/listen behavior. Failed image loads offer retry. Dialogs contain keyboard focus and restore it on dismissal.
+- Persistence: Store image references and dimensions in existing AppMessage JSON metadata, with a Photo text fallback for lists and older clients. Hydration and local-cache reconciliation retain image data; images are excluded from speech translation context. Image uploads bypass translation requests. The server validates actual raster bytes, rotates EXIF orientation, scales within 2048px, removes metadata, and encodes JPEG before storing through the existing R2 configuration. Clients receive authenticated room/image paths rather than object keys. Reads require room membership and a visible message; writes also enforce the existing block/departure policy. Recheck membership after upload and clean up failed/concurrent losing uploads. Identical retries reuse the saved message. Room/list invalidation uses the existing messaging service.
+- Validation: 156 targeted tests passed, including real image decoding, EXIF removal, spoofed format rejection, access checks, post-upload membership revocation, storage failures, concurrent retries, and upgrading cached text fallbacks to image messages. Full TypeScript and targeted ESLint checks passed. Real devbox requests against an isolated local PostgreSQL database and the existing R2 service verified upload, JPEG retrieval by another member, nonmember/anonymous rejection, sanitized hydration, and idempotent retries through both iOS/Android v2.0.3 routes. Only generated test images were uploaded; test objects and their isolated database messages were removed afterward.
+- Browser validation: Actual composer, ChatBubble, image viewer, and reaction components under StrictMode at 360x740 verified file selection, preview, explicit send, thumbnail load, enlargement, Escape/focus restoration, a heart reaction surviving reload, and Hide keyboard. The test wrapper used simplified surrounding controls; the complete live screen and native photo pickers were not exercised on phones.
+- Deployment: No additional database migration or environment variable. PR #219 still requires the previously generated reaction migration. Add sharp as an explicit server dependency and the iOS photo-library usage description. The permission description requires an iOS rebuild; native apps were not rebuilt/reinstalled for this follow-up. App/API versions remain 2.0.3. HEIC/GIF/multiple-image selection are outside this implementation.
+
+## 2026-09-08 — Translate profile biographies with versioned publication
+
+- Request: Apply the agreed content-translation policy to every profile biography display, while keeping the existing authoring screen and account-ID ownership. Continue on `codex/message-reactions` / PR #219.
+- Display: The shared ProfileBio component reads the viewer's saved default display language, the same account preference updated by collapsed-message language selection. It falls back to the viewer's primary/default conversation languages and then UI locale. Display a cached translation automatically, otherwise the published original with a Languages icon and See translation in a single minimum-44px button. Identical source/target codes suppress the button. During a requested translation keep the original and show Translating; support original/translation toggling and explicit retries after failure. Reset the toggle when version or display language changes. Profile, public profile, and image-preview captions use the component. The image preview now scrolls long captions within its viewport.
+- Editor/navigation: The textarea always receives the owner's saved original through the owner-only bioDraft field, while the profile display receives the published original. Show processing/ready/partial-failure status beneath the textarea. Saving does not disable Back. A save completing after its editor was closed/reopened cannot close the new editor session. Profile requests carry the initiating account ID and ignore results after an account change; server ownership continues to come exclusively from the authenticated account.
+- Save policy: Persist the new original and its immutable version before returning the profile response. Next after() runs bounded translation work after the response, independently of the initiating screen. First-time biographies become public immediately. Generate English, Simplified Chinese, Japanese and Korean except the detected source language. On subsequent text changes, include every additional language with a previously successful saved translation. Unchanged text and name/photo-only edits do not create a version or translation batch.
+- Publication/failures: ProfileBioState tracks draft and published version IDs separately. Existing public text/translations remain on the published version until the replacement batch settles. Publish the latest matching version atomically after all attempts finish or its 55-second deadline expires. Each provider call has a 15-second deadline; four workers bound concurrency. Expired interrupted jobs settle on the next read without restarting translation. Failures store no translated text and never automatically retry. Clearing a biography clears both pointers immediately. Late results cannot publish over a newer version or restore a cleared biography.
+- Shared requests: DB rows are keyed by biography version and target language, with per-attempt IDs/deadlines. Short per-user row locks serialize claims across server processes; no transaction remains open while calling the provider. Eight concurrent requests were verified to yield one job. Reuse successful translations across viewers. On-demand jobs can wait for an initial batch and have a bounded lease; expired attempts cannot overwrite a retry. Legacy biographies are not bulk translated. Viewing one may cache source-language detection only, so same-language buttons can be suppressed; translation generation waits for an edit or explicit request.
+- Language/support: Provide button, pending, retry and editor-status copy in all 15 primary UI locales. Preserve line breaks, wrap long words, support automatic text direction, and retain native navigation. Translation polling reads status only: every two seconds while processing and every fifteen seconds otherwise, skipping hidden documents. Successful display-language mutations emit an invalidation event; focus/visibility changes also refresh.
+- Schema/deployment: Prisma generated and locally applied `20260908144017_add_profile_bio_translations`, adding state/version/translation tables. The same isolated base-schema migration workspace used for the earlier reaction migration avoids the pre-existing historical concurrent-index replay failure. This is PR #219's second migration; apply it before deploying the new web code. No new production environment variables; use the existing GEMINI_API_KEY and Gemini Flash Lite provider. No native code/version change in this biography follow-up; app/API namespaces remain 2.0.3.
+- Automated validation: 197 targeted regression tests and 10 real-PostgreSQL lifecycle tests passed. The lifecycle suite uses an explicitly supplied isolated test DB and disposable users; it covers the four-language/source-skip rule, unchanged saves, concurrent shared requests, additional-language regeneration, partial failures/manual retries, stale edits, abandoned jobs, a never-resolving provider, late manual results, deletion, and legacy publication. Full TypeScript validation passed. Real devbox HTTP tests exercised iOS v2.0.3 save and Android v2.0.3 snapshot routes. The save returned in 342ms while the previous public text remained; real provider translation subsequently succeeded for all applicable defaults. A German request from the actual component showed original + Translating, then a real German translation, then toggled back to the English original.
+- Provider-format correction (2026-09-09): Real Japanese/Korean responses sometimes echoed the input JSON wrapper despite a plain-text instruction. Require structured JSON output with one text field, validate its type/length, and expose only the field value. Six provider-response tests cover extraction and malformed/empty/oversized responses. A subsequent real save produced clean Japanese, Korean, Chinese, and previously requested German translations with no wrapper text.
+- Final UI validation (2026-09-09): Actual ProfileBio components were exercised in Android Chrome on the connected Galaxy S9 (360px viewport) and Safari on an iPhone 17 / iOS 26.5 simulator (402px viewport). Both passed original/translation activation, a 44px button height, scrolling a generated long translation, and no horizontal overflow; text heights were 1183px and 968px respectively. These were scrollable component fixtures, not a rebuilt Mingle native app or a physical iPhone test. A browser fixture also changed the real conversation display-language preference and observed the saved Japanese biography translation. An authenticated owner deletion returned HTTP 200 and immediately removed the displayed biography; changing saved-original props invalidates stale polls. Temporary fixtures, generated QA users, and test-driver processes were cleaned up. Full TypeScript and targeted ESLint checks passed.
+
+## 2026-09-09 — Resolve PR 219 photo storage and push review findings
+
+- Review findings: Conversation images used the public profile R2 bucket, allowing
+  anonymous reads when the object URL was known. Image sends also omitted the
+  APNs/FCM conversation-message notification, so backgrounded recipients received
+  no photo-arrival notification.
+- Storage correction: Require the dedicated `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME`
+  (or `R2_CONVERSATION_BUCKET_NAME`) and reuse the existing R2 account credentials.
+  Refuse missing credentials/bucket and either configured public profile bucket.
+  Every put/get/delete targets only the dedicated bucket; missing objects never
+  trigger a public fallback. Profile-image storage remains unchanged. Provisioning
+  must disable r2.dev, custom domains, and any public Worker access to this bucket.
+- Credential correction (2026-09-09): Prefer the separately scoped
+  `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` and
+  `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` when present. Fall back to the
+  profile credential variables only for deployments whose single token can access
+  both buckets. This prevents a profile-only token from causing photo uploads to
+  fail with R2 `AccessDenied`.
+- Image viewing (2026-09-09): Tapping a sent photo opens a dark, full-size viewer.
+  The viewer uses pointer gestures with `touch-action: none` so iOS and Android
+  WebViews can pinch to zoom up to 4x and pan the enlarged image without scrolling
+  the conversation. A double tap toggles 2x zoom, and the close control remains a
+  44px touch target above the image.
+- Notification correction: The successful database insert schedules the existing
+  conversation push helper through Next after(). Resolve recipients after pending
+  invitation materialization and use the stored message ID, authenticated sender,
+  and a Photo preview. Matching retries and concurrent insert losers do not queue
+  another push. Provider errors are caught after the response and do not turn a
+  saved image into a failed send. Delivery retains the existing best-effort policy.
+- Validation: 62 targeted tests passed, covering private-bucket-only reads/writes/
+  deletes, unsafe or missing configuration, missing private objects, image access
+  rules, JPEG processing, successful push scheduling, retries/concurrent losers,
+  newly materialized recipients, push failure, and existing text/realtime behavior.
+  A real request to the existing isolated devbox returned HTTP 503 without the new
+  bucket setting, confirming public storage is not used as a fallback. Full TypeScript
+  and targeted ESLint checks passed.
+- Deployment: Add the dedicated private bucket setting and grant the existing R2
+  credential access before enabling photo sends. This follow-up does not provision
+  or change production Cloudflare/Vault resources. Private-bucket live access and
+  native APNs/FCM delivery still require deployment/device verification. The two
+  existing PR migrations remain the only database changes; no new migration or
+  native/version change is introduced here. Updated the Railway deployment guide
+  with the bucket, migration, existing-object cleanup, and device test sequence.
+
+## 2026-09-09 — Install PR 219 on connected iOS 18 and Android phones
+
+- Request: Rebuild/install the current branch on the connected iOS 18 and Android
+  phones and restart all devbox services using prod Vault and Cloudflare tunneling.
+- Runtime: Restarted this worktree's devbox supervisor with `--profile device`,
+  `--tunnel-provider cloudflare`, and `--vault-path secret/mingle/prod`. Do not use
+  `--device-app-env prod` for this setup: that option skips local servers/tunnels
+  and points the native apps at the production service. The three local services
+  run on ports 15558 (web), 17558 (STT), and 19558 (messaging).
+- Connectivity: The web tunnel returns HTTP 200 after its locale redirect; the STT
+  tunnel completes a WebSocket handshake; messaging health reports realtime
+  configured. Both apps point to `mingle-app-devbox.photo-for-passport.com` and
+  `mingle-stt-devbox.photo-for-passport.com`. Servers and the named tunnel remain up.
+- Devices: Installed and launched Release builds on the connected iPhone 11 Pro
+  running iOS 18.6 and Galaxy S9 (SM-G960N). iOS is 2.0.3 (105) with `ios/v2.0.3`
+  and the photo-library usage description; Android is 2.0.3 (97) with
+  `android/v2.0.3`. Native app processes were verified running on both phones.
+- Android install issue: The existing installation had a different signing
+  certificate, so in-place installation failed with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+  Uninstalled it and installed the successfully built APK, then launched it.
+  Android requires signing in again. iOS installation preserved its app data.
+  Local CocoaPods checksum/formatting churn was removed from the tracked diff.
+- Pending prerequisites: Read-only inspection found none of the four new feature
+  tables in the prod Vault database and no Prisma migration-history table. Asked
+  the user before applying the two migrations to that production database; no DDL
+  has been executed. The dedicated private bucket setting is missing from prod
+  Vault, and the existing R2 object credential cannot list/manage buckets (403).
+  The Mac is locked, preventing Cloudflare dashboard access, so requested unlock
+  to provision private storage. No production Cloudflare/Vault changes were made.
+  Installation and service connectivity are complete, but reaction/biography and
+  photo feature acceptance must wait for these database/storage prerequisites.
+
+## 2026-09-09 — Align conversation photo controls and anchor attachment menu
+
+- Report: Voice mode showed a plus button at a different height from the keyboard control; keyboard attachments opened an unnecessarily large modal.
+- Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode keeps the photo trigger beside the independent keyboard-close control and shows a compact photo-only tooltip immediately above the trigger. The preview remains a confirmation dialog.
+- Follow-up: The first tooltip implementation was clipped by the input shell's `overflow-hidden`; changing that shell to `overflow-visible` kept the tooltip anchored to the button while preserving the input layout.
+- Validation: TypeScript check and targeted ESLint passed. Android physical-device verification confirmed the voice-mode alignment, keyboard-mode side-by-side controls, and visible anchored tooltip. iOS was relaunched against the same tunnel; physical screenshot verification remains pending.
+
 ## 2026-09-09 — Avoid the generic Mingle user label in Explore search
 
 - Surface: Explore search result names and handles, including cached results restored after tab navigation.

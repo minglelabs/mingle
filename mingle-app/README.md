@@ -376,8 +376,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Railway deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional compatibility fallback override; device builds default to the current Railway web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional compatibility fallback override; device builds default to the current Railway STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.0.2`; Android uses `android/v2.0.1`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.0.2`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.0.4`; Android uses `android/v2.0.4`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.0.4`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -421,8 +421,8 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 ```
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
-`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.3` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.3` validation before launch.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v2.0.4` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v2.0.4` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

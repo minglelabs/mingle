@@ -1,5 +1,8 @@
 'use client'
 
+import { normalizeConversationMessageImage } from '@/lib/conversation-image'
+import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 import { nativeStopIntent } from './native-stop-intent'
@@ -1012,6 +1015,7 @@ export function normalizeConversationHydrationUtterances(rawUtterances: unknown)
       const record = utterance as ConversationHydrationUtterance
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
+        ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         originalLang: typeof record.originalLang === 'string' ? record.originalLang : 'unknown',
         targetLanguages: Array.isArray(record.targetLanguages)
@@ -2146,6 +2150,10 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
     && left.speakerName === right.speakerName
     && left.speakerUserId === right.speakerUserId
     && left.speakerImage === right.speakerImage
+    && left.image?.conversationId === right.image?.conversationId
+    && left.image?.messageId === right.image?.messageId
+    && left.image?.width === right.image?.width
+    && left.image?.height === right.image?.height
     && left.originalText === right.originalText
     && left.originalLang === right.originalLang
     && left.sourceLanguagesMixed === right.sourceLanguagesMixed
@@ -3850,6 +3858,7 @@ export default function useRealtimeSTT({
               }
             }
           } catch { return }
+          window.dispatchEvent(new CustomEvent(MESSAGE_REACTIONS_REFRESH_EVENT, { detail: conversationId }))
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
@@ -4137,6 +4146,7 @@ export default function useRealtimeSTT({
     const recentTurns: RecentTurnContextPayload[] = []
 
     for (const utterance of utterancesRef.current) {
+      if (utterance.image) continue
       if (excludeUtteranceId && utterance.id === excludeUtteranceId) continue
       const occurredAtMs = inferUtteranceCreatedAtMs(utterance)
       if (occurredAtMs === null || occurredAtMs < windowStart || occurredAtMs > now) continue
@@ -6860,6 +6870,7 @@ export default function useRealtimeSTT({
     usageLimitSec: normalizedUsageLimitSec,
     appendUtterances,
     submitExternalUtterance,
+    refreshConversationMessages: refreshFromServerHydration,
     clearConversationHistory,
     prepareForDeletion,
     loadOlderUtterances,
