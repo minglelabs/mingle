@@ -27,6 +27,7 @@ import {
   resolveOriginalDisplayLanguage,
 } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
@@ -35,10 +36,7 @@ import {
   type ConversationMemberProfile,
 } from '@/components/conversation-member-profile-cache'
 import {
-  buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
-  clearLanguageSelectorHistoryState,
-  isLanguageSelectorHistoryOpen,
   resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from './language-selector.logic'
@@ -1957,7 +1955,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const bubbleDisplayCopy = useMemo(() => resolveLivePhoneDemoBubbleDisplayCopy(uiLocale), [uiLocale])
-  const [langSelectorOpen, setLangSelectorOpen] = useState(false)
+  const {
+    isOpen: langSelectorOpen,
+    open: openLanguageSelector,
+    close: closeLanguageSelector,
+  } = useLanguageSelectorNavigation({ conversationId, isVisible })
   const [menuOpen, setMenuOpen] = useState(() => readInitialMenuHistoryDepth().depth > 0)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>(() => readInitialMenuHistoryDepth().screen)
   const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
@@ -2125,9 +2127,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
   const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
-  const langSelectorHistoryTargetOpenRef = useRef<boolean | null>(null)
-  const langSelectorIosHistorySettleRef = useRef<{ open: boolean, expiresAt: number } | null>(null)
-  const langSelectorOpenRef = useRef(false)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
@@ -2311,10 +2310,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
   }, [latestAccountPreferences])
-
-  useEffect(() => {
-    langSelectorOpenRef.current = langSelectorOpen
-  }, [langSelectorOpen])
 
   const syncComposerTextareaHeight = useCallback((textarea: HTMLTextAreaElement | null) => {
     const nextHeight = resizeComposerTextarea(textarea)
@@ -3151,38 +3146,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     window.history.go(-currentDepth)
   }, [applyMenuNavigationDepth])
 
-  const applyLanguageSelectorOpen = useCallback((nextOpen: boolean) => {
-    setLangSelectorOpen(nextOpen)
-  }, [])
-
-  const closeLanguageSelector = useCallback((options?: {
-    syncHistory?: 'back' | 'replace' | 'none'
-  }) => {
-    const syncHistory = options?.syncHistory ?? 'none'
-    langSelectorIosHistorySettleRef.current = null
-
-    if (
-      syncHistory === 'back'
-      && typeof window !== 'undefined'
-      && isLanguageSelectorHistoryOpen(window.history.state)
-    ) {
-      langSelectorHistoryTargetOpenRef.current = false
-      applyLanguageSelectorOpen(false)
-      window.history.back()
-      return
-    }
-
-    langSelectorHistoryTargetOpenRef.current = null
-    applyLanguageSelectorOpen(false)
-
-    if (syncHistory === 'replace' && typeof window !== 'undefined') {
-      window.history.replaceState(
-        clearLanguageSelectorHistoryState(window.history.state),
-        '',
-      )
-    }
-  }, [applyLanguageSelectorOpen])
-
   const resetNavigationOverlays = useCallback(async () => {
     closeLanguageSelector({ syncHistory: 'replace' })
     setRenameConversationDialogOpen(false)
@@ -3311,35 +3274,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     !handleMenuSurfaceRequestClose()
   ), [handleMenuSurfaceRequestClose])
 
-  const openLanguageSelector = useCallback((options?: {
-    syncHistory?: 'push' | 'none'
-  }) => {
-    const syncHistory = options?.syncHistory ?? 'none'
-    closeMenuPanel()
-    langSelectorHistoryTargetOpenRef.current = null
-    langSelectorIosHistorySettleRef.current = null
-    applyLanguageSelectorOpen(true)
-
-    if (
-      syncHistory === 'push'
-      && typeof window !== 'undefined'
-      && !isLanguageSelectorHistoryOpen(window.history.state)
-    ) {
-      window.history.pushState(
-        buildLanguageSelectorHistoryState(window.history.state),
-        '',
-      )
-    }
-  }, [applyLanguageSelectorOpen, closeMenuPanel])
-
   const handleLanguageSelectorButtonPress = useCallback(() => {
-    if (langSelectorOpenRef.current) {
-      closeLanguageSelector({ syncHistory: 'back' })
-      return
-    }
-
-    openLanguageSelector({ syncHistory: 'push' })
-  }, [closeLanguageSelector, openLanguageSelector])
+    closeMenuPanel()
+    openLanguageSelector()
+  }, [closeMenuPanel, openLanguageSelector])
 
   const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
     if (!isNativeApp()) return
@@ -3666,77 +3604,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('popstate', handlePopState)
     }
   }, [applyMenuNavigationDepth])
-
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const requestedOpen = langSelectorHistoryTargetOpenRef.current
-      langSelectorHistoryTargetOpenRef.current = null
-      const nextStateOpen = isLanguageSelectorHistoryOpen(event.state ?? window.history.state)
-      const isNativeIosHistoryGesture = requestedOpen === null && isNativeIosAppRuntime()
-      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now()
-
-      if (
-        langSelectorIosHistorySettleRef.current
-        && nowMs > langSelectorIosHistorySettleRef.current.expiresAt
-      ) {
-        langSelectorIosHistorySettleRef.current = null
-      }
-      const activeSettleState = langSelectorIosHistorySettleRef.current
-
-      if (requestedOpen !== null) {
-        langSelectorIosHistorySettleRef.current = null
-        applyLanguageSelectorOpen(nextStateOpen)
-        return
-      }
-
-      if (langSelectorOpenRef.current === nextStateOpen) return
-
-      const shouldIgnoreSettlingReplay = (
-        isNativeIosHistoryGesture
-        && activeSettleState !== null
-        && nowMs <= activeSettleState.expiresAt
-        && activeSettleState.open !== nextStateOpen
-        && (!activeSettleState.open || !nextStateOpen)
-      )
-
-      if (shouldIgnoreSettlingReplay) {
-        const correctionDelta = Number(activeSettleState!.open) - Number(nextStateOpen)
-        if (correctionDelta !== 0) {
-          langSelectorHistoryTargetOpenRef.current = activeSettleState!.open
-          window.history.go(correctionDelta)
-        }
-        return
-      }
-
-      applyLanguageSelectorOpen(nextStateOpen)
-
-      if (isNativeIosHistoryGesture) {
-        langSelectorIosHistorySettleRef.current = {
-          open: nextStateOpen,
-          expiresAt: nowMs + MENU_IOS_HISTORY_SETTLE_WINDOW_MS,
-        }
-        return
-      }
-
-      langSelectorIosHistorySettleRef.current = null
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [applyLanguageSelectorOpen])
-
-  useEffect(() => {
-    return () => {
-      if (typeof window === 'undefined') return
-      if (!isLanguageSelectorHistoryOpen(window.history.state)) return
-      window.history.replaceState(
-        clearLanguageSelectorHistoryState(window.history.state),
-        '',
-      )
-    }
-  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
