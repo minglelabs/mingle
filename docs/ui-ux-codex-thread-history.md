@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-12 - Keep diagonal edge swipe-back gestures from becoming scrolls
+
+- Surface: All full-screen panels and nested pages using the shared `SlideSurface`, including notifications, profiles, follow lists, location, sharing, room settings, and language selection.
+- User report: On iOS, an edge-swipe-back that includes a small upward or downward component can begin moving the panel to the right, then hand control to the panel's vertical scroller. The panel returns toward its original position while the content scrolls, making the gesture feel like a failed close. The issue is intermittent and is not caused by a small hit area.
+- Cause: The surface starts an x-axis Framer Motion drag at the left edge while keeping `touch-action: pan-y`. Its direction lock can classify an early diagonal sample as vertical, after which the browser's scroll handling wins and the panel drag is interrupted.
+- Resolution: When a touch starts inside the existing 32px left-edge zone, claim the gesture immediately by temporarily changing only that surface's touch action to `none`, prevent scrolling after a small movement threshold, and keep the drag on the x axis without Framer's first-sample direction lock. Restore the caller's original touch action on pointer/touch end or cancellation. Touches outside the edge zone continue using the existing vertical scrolling behavior; button dimensions and content layout are unchanged.
+- Compatibility: The native iOS WebView suppression already owned by `SlideSurface` remains unchanged. No route, history, API, database, Prisma migration, mobile/API namespace, or translation behavior changes are required.
+- Verification: A WebKit fixture with a long scrollable surface confirmed `pan-y → none → pan-y` for an edge gesture. Targeted edge/history tests passed (16 tests), TypeScript no-emit and targeted ESLint passed, and `git diff --check` passed. A physical iOS device run is still required to confirm the exact reported diagonal gesture on WKWebView after the new WebView bundle is deployed.
+
 ## 2026-09-12 - Preserve language-selector open intent on iOS
 
 - User report: The room header's language selector intermittently fails to appear until it is tapped several times on iOS. The user confirmed the tap target is large enough and that this behavior was not present previously. Keep the existing button dimensions, flag layout, and language-selection UI.
