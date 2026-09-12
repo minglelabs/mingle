@@ -3684,6 +3684,64 @@
       }
       html.is-mobile-viewport .slide-source { left: var(--mobile-slide-x); right: var(--mobile-slide-x); bottom: 48px; font-size: 10px; }
       html.is-mobile-viewport .virtually-rigging { height: 38vh; }
+      .slide-shell--market-comparison {
+        gap: clamp(18px, 3.2vh, 30px);
+      }
+      .slide-copy--market-comparison {
+        gap: clamp(14px, 2.2vh, 22px);
+      }
+      .slide-copy--market-comparison .slide-title {
+        font-size: clamp(2.2rem, 4vw, 4.25rem);
+        line-height: 1.08;
+        white-space: normal;
+      }
+      .slide-copy--market-comparison .slide-kicker {
+        white-space: nowrap;
+      }
+      .slide-copy--market-comparison .slide-body {
+        max-width: 760px;
+      }
+      .slide-market-comparison-grid {
+        width: min(1080px, 100%);
+        gap: clamp(12px, 1.6vw, 20px);
+      }
+      .slide-market-comparison-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: clamp(190px, 16vw, 240px);
+        padding: clamp(18px, 1.8vw, 28px) clamp(18px, 1.8vw, 28px) clamp(18px, 1.8vw, 28px) clamp(38px, 2.5vw, 48px);
+      }
+      .slide-market-comparison-card .slide-ai-requirement-title {
+        font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+      }
+      .slide-market-comparison-value {
+        margin: clamp(10px, 1.1vw, 16px) 0 clamp(6px, 0.7vw, 10px);
+        font-size: clamp(2.8rem, 4.8vw, 4.8rem);
+        font-weight: 850;
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+        white-space: nowrap;
+      }
+      .slide-market-comparison-card--shorts .slide-market-comparison-value {
+        color: var(--body);
+      }
+      .slide-market-comparison-card--longform .slide-market-comparison-value {
+        color: #b36a0a;
+      }
+      .slide-market-comparison-card--live {
+        background: linear-gradient(180deg, rgba(255, 247, 232, 0.98) 0%, rgba(255, 238, 211, 0.76) 100%);
+        box-shadow: 0 22px 42px rgba(205, 91, 8, 0.16);
+      }
+      .slide-market-comparison-card--live::before {
+        background: linear-gradient(var(--accent-strong), var(--accent));
+      }
+      .slide-market-comparison-card--live .slide-market-comparison-value {
+        color: var(--accent-strong);
+      }
+      .slide-market-comparison-card--live .slide-ai-requirement-description {
+        color: rgba(164, 71, 3, 0.82);
+      }
       /* Keep the reference layouts usable on short displays. */
       @media (min-width: 901px) and (max-height: 800px) {
         .slide-copy--goal-split { margin-top: 80px; gap: 24px; }
@@ -3705,6 +3763,79 @@
         html.is-mobile-viewport .slide-side-media--download-qr { align-self: center; margin: 0; }
         html.is-mobile-viewport .virtually-rigging { height: 38vh; }
         html.is-mobile-viewport .slide-source { font-size: 9px; bottom: 44px; }
+      }
+
+      html.is-mobile-viewport .slide-shell--market-comparison {
+        gap: clamp(14px, 2.8vh, 22px);
+      }
+      html.is-mobile-viewport .slide-copy--market-comparison {
+        gap: clamp(10px, 2vh, 16px);
+      }
+      html.is-mobile-viewport .slide-copy--market-comparison .slide-title {
+        font-size: clamp(1.5rem, 7.2vw, 2.5rem);
+        line-height: 1.08;
+      }
+      html.is-mobile-viewport .slide-copy--market-comparison .slide-body {
+        font-size: clamp(0.78rem, 3.2vw, 0.98rem);
+        line-height: 1.3;
+      }
+      html.is-mobile-viewport .slide-market-comparison-grid {
+        gap: 8px;
+      }
+      html.is-mobile-viewport .slide-market-comparison-card {
+        min-height: clamp(100px, 13vh, 126px);
+        padding: 12px 10px 12px 26px;
+        border-radius: 14px;
+      }
+      html.is-mobile-viewport .slide-market-comparison-card .slide-ai-requirement-title {
+        font-size: clamp(1rem, 3.7vw, 1.18rem);
+      }
+      html.is-mobile-viewport .slide-market-comparison-value {
+        margin: 4px 0 2px;
+        font-size: clamp(2rem, 8.6vw, 2.8rem);
+      }
+      html.is-mobile-viewport .slide-market-comparison-card .slide-ai-requirement-description {
+        margin-top: 0;
+        font-size: clamp(0.72rem, 2.8vw, 0.92rem);
+        line-height: 1.22;
+      }
+      @media (max-width: 360px) and (max-height: 640px) {
+        html.is-mobile-viewport .slide-shell--market-comparison {
+          gap: 10px;
+        }
+        html.is-mobile-viewport .slide-copy--market-comparison {
+          gap: 8px;
+        }
+        html.is-mobile-viewport .slide-copy--market-comparison .slide-kicker {
+          font-size: 0.8rem;
+        }
+        html.is-mobile-viewport .slide-copy--market-comparison .slide-title {
+          font-size: clamp(1.45rem, 7vw, 1.9rem);
+        }
+        html.is-mobile-viewport .slide-copy--market-comparison .slide-body {
+          font-size: 0.7rem;
+          line-height: 1.2;
+        }
+        html.is-mobile-viewport .slide-market-comparison-card {
+          min-height: 76px;
+          padding: 8px 8px 8px 22px;
+        }
+        html.is-mobile-viewport .slide-market-comparison-card .slide-ai-requirement-title {
+          font-size: 0.86rem;
+        }
+        html.is-mobile-viewport .slide-market-comparison-value {
+          margin: 2px 0 1px;
+          font-size: clamp(1.55rem, 7.5vw, 2.1rem);
+        }
+        html.is-mobile-viewport .slide-market-comparison-card .slide-ai-requirement-description {
+          font-size: 0.62rem;
+          line-height: 1.12;
+        }
+        html.is-mobile-viewport .slide-source {
+          bottom: 30px;
+          font-size: 8px;
+          line-height: 1.18;
+        }
       }
 
       /* Refine existing type, image frames and cards; no additional slide elements. */
@@ -4406,13 +4537,32 @@ allowfullscreen
 </section>
 
 <section class="slide" data-page="23">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Market</p>
-<h1 class="slide-title">Long-form ≈ <span class="slide-emphasis">7–33×</span><br>Shorts revenue per view.</h1>
-<p class="slide-body">Most niches in AIR’s 274-channel dataset:<br>Shorts RPM = 3–14% of long-form RPM.<br>Directional benchmark, not a revenue promise.</p>
+<article class="slide-shell slide-shell--ai-requirements slide-shell--market-comparison">
+<div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--market-comparison">
+<p class="slide-kicker">Creator revenue</p>
+<h1 class="slide-title">Shorts bring reach.<br><span class="slide-emphasis">Live builds revenue.</span></h1>
+<p class="slide-body">Revenue per 1,000 views · long-form = 100%<br>Live adds fan funding beyond ads.</p>
 </div>
-<p class="slide-source">AIR Media-Tech: 274 YouTube channels and 3,044 channel-month observations. Directional benchmark, not a creator revenue promise. <a href="https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026" target="_blank" rel="noopener noreferrer">Source</a>
+<div class="slide-side-media slide-side-media--ai-requirements">
+<div class="slide-ai-requirements-grid slide-market-comparison-grid">
+<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--shorts">
+<h2 class="slide-ai-requirement-title">Shorts</h2>
+<p class="slide-market-comparison-value">3–14%</p>
+<p class="slide-ai-requirement-description">Ad RPM vs. long-form</p>
+</article>
+<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--longform">
+<h2 class="slide-ai-requirement-title">Long-form</h2>
+<p class="slide-market-comparison-value">100%</p>
+<p class="slide-ai-requirement-description">Ad RPM baseline</p>
+</article>
+<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--live">
+<h2 class="slide-ai-requirement-title">Live</h2>
+<p class="slide-market-comparison-value">124%</p>
+<p class="slide-ai-requirement-description">Ad RPM at 8+ streams / month<br>+ fan funding</p>
+</article>
+</div>
+</div>
+<p class="slide-source">Directional RPM index; long-form = 100%. Shorts = 3–14% of long-form RPM. Live = 124% ad RPM at 8+ streams / month; fan funding excluded. <a href="https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026" target="_blank" rel="noopener noreferrer">AIR Shorts study</a> · <a href="https://air.io/en/monetization/how-much-does-youtube-pay-for-1-million-views?pubDate=20251211" target="_blank" rel="noopener noreferrer">AIR Live study</a> · <a href="https://support.google.com/youtube/answer/11912533?co=YOUTUBE._YTVideoType%3Dlivestream&amp;hl=en" target="_blank" rel="noopener noreferrer">YouTube monetization</a>
 </p>
 </article>
 </section>
