@@ -3624,6 +3624,22 @@
       .slide-source a { color: inherit; }
       .slide-copy--goal-split .slide-title { font-size: clamp(2.4rem, 4.6vw, 5rem); }
       .slide-goal-text { font-size: clamp(1.7rem, 2.8vw, 3rem); }
+      .slide-goal--labeled {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(10px, 1.2vw, 16px);
+      }
+      .slide-goal-label {
+        margin: 0;
+        color: var(--goal-text-accent);
+        font-size: clamp(0.82rem, 1.15vw, 1.08rem);
+        font-weight: 850;
+        line-height: 1.1;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
       .slide-copy--ai-requirements .slide-title { white-space: normal; }
       .virtually-rigging-pair {
         width: min(1080px, 100%);
@@ -3661,6 +3677,11 @@
       }
       html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle { font-size: clamp(1.82rem, 8vw, 3.08rem); }
       html.is-mobile-viewport .slide-copy--goal-split .slide-title { font-size: clamp(1.82rem, 8vw, 3.08rem); }
+      html.is-mobile-viewport .slide-goal--labeled { gap: 8px; }
+      html.is-mobile-viewport .slide-goal-label {
+        font-size: clamp(0.62rem, 2.7vw, 0.82rem);
+        letter-spacing: 0.05em;
+      }
       html.is-mobile-viewport .slide-source { left: var(--mobile-slide-x); right: var(--mobile-slide-x); bottom: 48px; font-size: 10px; }
       html.is-mobile-viewport .virtually-rigging { height: 38vh; }
       /* Keep the reference layouts usable on short displays. */
@@ -4039,12 +4060,14 @@ allowfullscreen
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">No parameter.<br><span class="slide-emphasis">No corresponding motion.</span></h1>
+<h1 class="slide-title">A rig defines<br><span class="slide-emphasis">what can move.</span></h1>
 <div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Blink · Smile<br>Mouth · Head<br>Limited hands</p>
+<div class="slide-goal slide-goal--left slide-goal--labeled">
+<p class="slide-goal-label">Covered by the rig</p>
+<p class="slide-goal-text">Blink · Smile<br>Mouth · Head<br>Limited hand motion</p>
 </div>
-<div class="slide-goal slide-goal--right">
+<div class="slide-goal slide-goal--right slide-goal--labeled">
+<p class="slide-goal-label">Outside the rig</p>
 <p class="slide-goal-text">Turn around<br>Jump · Dance<br>Side / back view</p>
 </div>
 </div>
