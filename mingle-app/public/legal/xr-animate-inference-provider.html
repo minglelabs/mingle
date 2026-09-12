@@ -3742,6 +3742,26 @@
         width: min(42vw, 520px);
         max-width: min(42vw, 520px);
       }
+      .slide-copy--virtually-limited-movement {
+        width: min(50vw, 700px);
+        max-width: min(50vw, 700px);
+      }
+      .slide-copy--virtually-limited-movement .slide-title {
+        font-size: clamp(3rem, 4.45vw, 5.2rem);
+        line-height: 1.1;
+      }
+      .slide-side-media--virtually-limited-movement {
+        top: 50%;
+        right: clamp(72px, 8vw, 116px);
+        width: clamp(360px, 32vw, 480px);
+        transform: translateY(-50%);
+      }
+      .virtually-limited-movement-video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 22px;
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.12);
+      }
       .slide-side-media--virtually-process {
         top: 50%;
         right: clamp(64px, 7vw, 112px);
@@ -3798,6 +3818,28 @@
       html.is-mobile-viewport .slide-copy--vtuber-process {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
+      }
+      html.is-mobile-viewport .slide-copy--virtually-limited-movement {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        justify-items: center;
+        text-align: center;
+      }
+      html.is-mobile-viewport .slide-copy--virtually-limited-movement .slide-title {
+        font-size: clamp(1.75rem, 8vw, 3.1rem);
+        line-height: 1.12;
+      }
+      html.is-mobile-viewport .slide-side-media--virtually-limited-movement {
+        width: min(var(--mobile-content-width), 348px);
+        max-width: min(var(--mobile-content-width), 348px);
+        transform: none;
+      }
+      html.is-mobile-viewport .virtually-limited-movement-video {
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 16px;
       }
       html.is-mobile-viewport .slide-side-media--virtually-process {
         top: auto;
@@ -3973,12 +4015,23 @@
 </section>
 
 <section class="slide" data-page="5">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
+<article class="slide-shell slide-shell--has-side-media">
+<div class="slide-copy slide-copy--with-side-media slide-copy--virtually-limited-movement">
 <p class="slide-kicker">Problem</p>
 <h1 class="slide-title">So much setup.<br>Still <span class="slide-emphasis">limited movement.</span></h1>
 <p class="slide-body">Blink, smile, mouth shapes and head turns work well.<br>Freedom beyond the rig is harder.</p>
 </div>
+<div class="slide-side-media slide-side-media--virtually-limited-movement">
+<iframe
+class="slide-short-video virtually-limited-movement-video"
+src="https://www.youtube.com/embed/dFm5rNZpm8o?playsinline=1&rel=0&enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=dFm5rNZpm8o&controls=0&modestbranding=1"
+title="Live2D Hiyori sample animation"
+allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+referrerpolicy="strict-origin-when-cross-origin"
+allowfullscreen
+></iframe>
+</div>
+<p class="slide-source">Reference: <a href="https://www.live2d.com/en/learn/sample/momose-hiyori-video/" target="_blank" rel="noopener noreferrer">Live2D Hiyori sample video</a></p>
 </article>
 </section>
 
