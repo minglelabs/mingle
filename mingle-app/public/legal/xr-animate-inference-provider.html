@@ -3651,11 +3651,52 @@
         html.is-mobile-viewport .virtually-rigging { height: 38vh; }
         html.is-mobile-viewport .slide-source { font-size: 9px; bottom: 44px; }
       }
+
+      /* Refine existing type, image frames and cards; no additional slide elements. */
+      .slide-emphasis { color: #c96a0a; }
+      .slide-kicker { color: #a96010; }
+      .slide-goal--right .slide-goal-text { color: #b95b0b; }
+      .slide-goal--right { --goal-tint: rgba(251, 188, 50, 0.24); }
+      .slide-ai-requirement::before { background: linear-gradient(var(--accent), var(--accent-strong)); }
+      .slide-ai-requirement-title { color: #a6530b; }
+      .slide-download-qr { aspect-ratio: auto; border-radius: 12px; }
+      .slide-download-qr-link { padding: 12px; background: rgba(255, 255, 255, 0.8); border-color: rgba(251, 188, 50, 0.3); }
+      .slide-copy--download-qr .virtually-cover-subtitle { font-size: clamp(2rem, 3.65vw, 4rem); font-weight: 560; }
+      @media (min-width: 901px) {
+        .slide-shell { align-items: center; padding-bottom: 112px; }
+        .slide-copy { margin-top: 0; }
+        .slide-copy--goal-split { margin-top: 0; gap: clamp(22px, 3vh, 32px); }
+        .slide-shell--ai-requirements { justify-content: center; gap: clamp(26px, 4vh, 40px); }
+        .slide-copy--ai-requirements { margin-top: 0; }
+        .slide-ai-requirements-grid { width: min(1080px, 100%); gap: 20px; }
+        .slide-ai-requirement { min-height: 160px; padding: 28px 24px 28px 38px; }
+        .slide-ai-requirement-title { font-size: clamp(1.25rem, 1.8vw, 1.65rem); }
+        .slide-ai-requirement-description { margin-top: 14px; font-size: clamp(1.05rem, 1.45vw, 1.3rem); line-height: 1.45; font-weight: 500; }
+        .slide-shell--download-qr { padding-inline: clamp(48px, 5vw, 88px); gap: 36px; }
+        .slide-copy--download-qr { width: 43%; max-width: 43%; gap: 24px; }
+        .slide-copy--download-qr .slide-title:not(.virtually-cover-subtitle) { font-size: clamp(4rem, 7.2vw, 7.8rem); }
+        .slide-side-media--download-qr { flex: 0 0 51%; width: 51%; margin: 0; }
+        .virtually-rigging { height: min(48vh, 460px); }
+      }
+      html.is-mobile-viewport .slide-shell--ai-requirements { justify-content: center; gap: 24px; }
+      html.is-mobile-viewport .slide-side-media--download-qr { align-self: center; width: 100%; max-width: 560px; margin: 0; }
+      html.is-mobile-viewport .slide-copy--download-qr .slide-title:not(.virtually-cover-subtitle) { font-size: clamp(2.9rem, 13vw, 4.6rem); }
+      html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle { font-size: clamp(1.6rem, 7vw, 2.6rem); font-weight: 560; }
+      html.is-mobile-viewport .slide-shell--download-qr { gap: 32px; }
+      html.is-mobile-viewport .virtually-rigging { height: 35vh; }
+      @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+        html.is-mobile-viewport .slide-shell--download-qr { gap: 28px; }
+        html.is-mobile-viewport .slide-copy--download-qr { width: 43%; max-width: 43%; }
+        html.is-mobile-viewport .slide-side-media--download-qr { width: 48%; max-width: 48%; }
+        html.is-mobile-viewport .slide-copy--download-qr .slide-title:not(.virtually-cover-subtitle) { font-size: 50px; }
+        html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle { font-size: 28px; }
+        html.is-mobile-viewport .slide-shell--ai-requirements { gap: 14px; }
+      }
 </style></head><body><main class="deck" aria-label="Virtually presentation deck"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
 <div class="slide-copy slide-copy--download-qr">
-<h1 class="slide-title">Virtually</h1>
+<h1 class="slide-title"><span class="slide-emphasis">Virtually</span></h1>
 <h2 class="slide-title virtually-cover-subtitle">AI Virtual Live<br>for VTubers</h2>
 </div>
 <div class="slide-side-media slide-side-media--download-qr">
@@ -3670,7 +3711,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">Becoming a VTuber<br>is still too hard.</h1>
+<h1 class="slide-title">Becoming a VTuber<br>is still <span class="slide-emphasis">too hard.</span></h1>
 <p class="slide-body">Illustration → Parts → Rigging<br>Tracking → OBS → Live</p>
 </div>
 </article>
@@ -3680,7 +3721,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">All this work<br>to make one picture move.</h1>
+<h1 class="slide-title">All this work<br>to make <span class="slide-emphasis">one picture move.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements virtually-rigging">
 <img class="slide-full-image" src="./assets/virtually-live2d-rigging.png" alt="Live2D Cubism rigging interface with character parameters">
@@ -3692,7 +3733,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Current stack</p>
-<h1 class="slide-title">One stream.<br>Too many handoffs.</h1>
+<h1 class="slide-title">One stream.<br><span class="slide-emphasis">Too many handoffs.</span></h1>
 <p class="slide-body">Live2D · nizima · VTube Studio · Rigging commissions</p>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
@@ -3718,7 +3759,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">So much setup.<br>Still limited movement.</h1>
+<h1 class="slide-title">So much setup.<br>Still <span class="slide-emphasis">limited movement.</span></h1>
 <p class="slide-body">Blink, smile, mouth shapes and head turns work well.<br>Freedom beyond the rig is harder.</p>
 </div>
 </article>
@@ -3728,7 +3769,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">No parameter.<br>No corresponding motion.</h1>
+<h1 class="slide-title">No parameter.<br><span class="slide-emphasis">No corresponding motion.</span></h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Blink · Smile<br>Mouth · Head<br>Limited hands</p>
@@ -3745,7 +3786,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">Built for Live2D avatars.<br>Not every kind of character.</h1>
+<h1 class="slide-title">Built for Live2D avatars.<br>Not <span class="slide-emphasis">every kind of character.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -3770,7 +3811,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Shift</p>
-<h1 class="slide-title">Recorded video<br>is already changing.</h1>
+<h1 class="slide-title">Recorded video<br>is <span class="slide-emphasis">already changing.</span></h1>
 <p class="slide-body">No parts. No rigging.</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -3788,7 +3829,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">AI Animate</p>
-<h1 class="slide-title">From moving parameters<br>to generating frames.</h1>
+<h1 class="slide-title">From moving parameters<br>to <span class="slide-emphasis">generating frames.</span></h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Camera → tracking<br>→ parameters<br>→ rigged model</p>
@@ -3806,7 +3847,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Result</p>
-<h1 class="slide-title">More freedom<br>in recorded motion.</h1>
+<h1 class="slide-title"><span class="slide-emphasis">More freedom</span><br>in recorded motion.</h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -3832,7 +3873,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Core problem</p>
-<h1 class="slide-title">Batch is AI native.<br>Live still relies on rigging.</h1>
+<h1 class="slide-title">Batch is <span class="slide-emphasis">AI native.</span><br>Live still relies on rigging.</h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Recorded<br>Image → AI<br>→ Video</p>
@@ -3849,7 +3890,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Cause</p>
-<h1 class="slide-title">The barrier was latency.</h1>
+<h1 class="slide-title">The barrier was <span class="slide-emphasis">latency.</span></h1>
 <p class="slide-body">Frame cadence is not end-to-end latency.</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -3867,7 +3908,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Why now</p>
-<h1 class="slide-title">Research is crossing<br>the real-time barrier.</h1>
+<h1 class="slide-title">Research is crossing<br>the <span class="slide-emphasis">real-time barrier.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -3895,7 +3936,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Why now</p>
-<h1 class="slide-title">Generative animation<br>is entering Live.</h1>
+<h1 class="slide-title">Generative animation<br>is <span class="slide-emphasis">entering Live.</span></h1>
 <p class="slide-body">14B research model on 2× H100 GPUs.<br>Not a consumer product specification.</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -3916,7 +3957,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Industry shift</p>
-<h1 class="slide-title">When generation is good enough,<br>rigging becomes optional.</h1>
+<h1 class="slide-title">When generation is good enough,<br><span class="slide-emphasis">rigging becomes optional.</span></h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Image<br>
@@ -3935,7 +3976,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Industry shift</p>
-<h1 class="slide-title">Rigging Economy<br>→ Generative Economy.</h1>
+<h1 class="slide-title">Rigging Economy<br>→ <span class="slide-emphasis">Generative Economy.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -3960,7 +4001,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Solution</p>
-<h1 class="slide-title">Virtually<br>Generate Live itself.</h1>
+<h1 class="slide-title"><span class="slide-emphasis">Virtually</span><br>Generate Live itself.</h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Character image<br>+ camera</p>
@@ -3977,7 +4018,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">UX</p>
-<h1 class="slide-title">One image. One camera.<br>Go live.</h1>
+<h1 class="slide-title">One image. One camera.<br><span class="slide-emphasis">Go live.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -4002,7 +4043,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Product</p>
-<h1 class="slide-title">Plug into OBS.<br>Keep your audience.</h1>
+<h1 class="slide-title">Plug into OBS.<br><span class="slide-emphasis">Keep your audience.</span></h1>
 <p class="slide-body">Webcam / iPhone → Virtually<br>→ Virtual camera / OBS source → OBS<br>
 <br>YouTube · CHZZK · SOOP · Twitch</p>
 </div>
@@ -4013,7 +4054,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Product vision</p>
-<h1 class="slide-title">Eventually,<br>the PC can disappear.</h1>
+<h1 class="slide-title">Eventually,<br><span class="slide-emphasis">the PC can disappear.</span></h1>
 <p class="slide-body">iPhone → Virtually → Cloud inference<br>→ Character stream → Broadcast<br>
 <br>A phone-first experience, powered by generative motion.</p>
 </div>
@@ -4024,7 +4065,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Expansion</p>
-<h1 class="slide-title">The same identity.<br>Beyond broadcasting.</h1>
+<h1 class="slide-title">The same identity.<br><span class="slide-emphasis">Beyond broadcasting.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -4050,7 +4091,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Expansion vision</p>
-<h1 class="slide-title">Generate the world<br>around the character.</h1>
+<h1 class="slide-title"><span class="slide-emphasis">Generate the world</span><br>around the character.</h1>
 <p class="slide-body">“A late-night Tokyo radio studio for this character.”</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -4069,7 +4110,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Market</p>
-<h1 class="slide-title">Long-form ≈ 7–33×<br>Shorts revenue per view.</h1>
+<h1 class="slide-title">Long-form ≈ <span class="slide-emphasis">7–33×</span><br>Shorts revenue per view.</h1>
 <p class="slide-body">Most niches in AIR’s 274-channel dataset:<br>Shorts RPM = 3–14% of long-form RPM.<br>Directional benchmark, not a revenue promise.</p>
 </div>
 <p class="slide-source">AIR Media-Tech: 274 YouTube channels and 3,044 channel-month observations. Directional benchmark, not a creator revenue promise. <a href="https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026" target="_blank" rel="noopener noreferrer">Source</a>
@@ -4081,7 +4122,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Live economy</p>
-<h1 class="slide-title">Live monetizes relationships.</h1>
+<h1 class="slide-title">Live monetizes <span class="slide-emphasis">relationships.</span></h1>
 <p class="slide-body">Also sponsorship and commerce.<br>64 / 100 top-Superchat channels were VTubers in the brief’s May 2024 snapshot; verification pending.</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -4101,7 +4142,7 @@
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Strategy</p>
-<h1 class="slide-title">Start with the engine.<br>Grow into the platform.</h1>
+<h1 class="slide-title">Start with the engine.<br><span class="slide-emphasis">Grow into the platform.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--ai-requirements">
 <div class="slide-ai-requirements-grid">
@@ -4126,7 +4167,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Analogy</p>
-<h1 class="slide-title">Digital music<br>was fragmented, too.</h1>
+<h1 class="slide-title">Digital music<br>was <span class="slide-emphasis">fragmented, too.</span></h1>
 <p class="slide-body">MP3 · CD ripping · Downloads · Players<br>Music stores · File management · Sync<br>
 <br>The technology existed. The experience was scattered.</p>
 </div>
@@ -4137,7 +4178,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Apple</p>
-<h1 class="slide-title">Apple connected<br>the whole music experience.</h1>
+<h1 class="slide-title">Apple connected<br><span class="slide-emphasis">the whole music experience.</span></h1>
 <p class="slide-body">Steve Jobs: iTunes + Music Store + iPod<br>Discover → Buy → Manage → Sync → Listen<br>
 <br>70M+ songs purchased in year one; over 70% of legal downloads.</p>
 </div>
@@ -4150,7 +4191,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Toshiba → Apple</p>
-<h1 class="slide-title">“1,000 songs in your pocket”<br>needed more than storage.</h1>
+<h1 class="slide-title">“1,000 songs in your pocket”<br>needed <span class="slide-emphasis">more than storage.</span></h1>
 <p class="slide-body">Technology → Product → Ecosystem</p>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
@@ -4170,7 +4211,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Virtually</p>
-<h1 class="slide-title">The models may come from China.<br>The Live standard is unclaimed.</h1>
+<h1 class="slide-title">The models may come from China.<br><span class="slide-emphasis">The Live standard is unclaimed.</span></h1>
 <p class="slide-body">Alibaba · Qwen / Wan · Wan-Animate-2<br>LiveAnimate: streaming animation research<br>
 <br>Technology providers enable the next ecosystem owner.</p>
 </div>
@@ -4181,7 +4222,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Vision</p>
-<h1 class="slide-title">Virtually<br>Any image. Any motion. Live.</h1>
+<h1 class="slide-title"><span class="slide-emphasis">Virtually</span><br>Any image. Any motion. Live.</h1>
 <p class="slide-body">Character · Animation · Live · Calls · Social<br>Worlds · Marketplace · Gifts · Creators · Fans<br>
 <br>Own the ecosystem, not just the model.<br>Virtual identity infrastructure for creators.</p>
 </div>
