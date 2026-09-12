@@ -890,6 +890,17 @@ function readStringValue(value: unknown): string | null {
   return normalized || null;
 }
 
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const values: string[] = [];
+  for (const rawValue of value) {
+    const normalized = readStringValue(rawValue);
+    if (!normalized || values.includes(normalized)) continue;
+    values.push(normalized);
+  }
+  return values;
+}
+
 function readIntegerValue(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
     return null;
@@ -2547,8 +2558,11 @@ export async function getConversationHydrationStateForUser(args: {
       translationFinalized[language] = true;
     }
 
-    const targetLanguages = Object.keys(translations);
     const metadata = readJsonObject(message.metadata);
+    const targetLanguages = [...new Set([
+      ...readStringArray(metadata?.translationTargetLanguages),
+      ...Object.keys(translations),
+    ])];
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);

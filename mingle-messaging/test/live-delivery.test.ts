@@ -153,3 +153,14 @@ test('writer capability, expiry, sequence and finalization protect ephemeral tur
     assert.equal(turns.accept({ ...input, sequence: 1, final: true }, writer), null);
     assert.ok(initial.orderReceipt);
 });
+
+
+test('live targets are bounded and validated before broadcasting waiting rows', () => {
+    const live = new LiveUtterances();
+    const frame = live.accept({ id: 'targets', originalText: 'hello', sequence: 1,
+        targetLanguages: ['ko', 'ja', 'ko', null, 1, '<script>', 'zh-TW'] }, writer)!;
+    assert.deepEqual(frame.utterance.targetLanguages, ['ko', 'ja', 'zh-TW']);
+    assert.deepEqual(frame.utterance.translations, {});
+    const legacy = live.accept({ id: 'legacy', originalText: 'hello', sequence: 1 }, writer)!;
+    assert.equal(legacy.utterance.targetLanguages, undefined);
+});

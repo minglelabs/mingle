@@ -1,10 +1,18 @@
 export const HANDLE_MAX_LENGTH = 30;
 export const HANDLE_PATTERN = /^[A-Za-z0-9_.]+$/;
 export const ANONYMOUS_HANDLE_PREFIX = "anon_";
+export const RESERVED_SEARCH_HANDLE = "admin";
 
 export function isAnonymousTrackingHandle(value: unknown): boolean {
   return typeof value === "string"
     && value.trim().toLowerCase().startsWith(ANONYMOUS_HANDLE_PREFIX);
+}
+
+export function isSearchExcludedHandle(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === RESERVED_SEARCH_HANDLE || normalized.startsWith(ANONYMOUS_HANDLE_PREFIX);
 }
 
 export type DefaultHandleInput = {

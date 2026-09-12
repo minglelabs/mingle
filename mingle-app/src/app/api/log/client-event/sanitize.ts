@@ -1,5 +1,8 @@
 import type { Prisma } from '@prisma/client/index'
 
+const MAX_TARGET_LANGUAGES = 10
+const TARGET_LANGUAGE_PATTERN = /^[a-zA-Z][a-zA-Z0-9-]{0,19}$/
+
 export function sanitizeText(value: unknown, maxLength = 512): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -25,6 +28,20 @@ export function sanitizeTranslations(raw: unknown): Record<string, string> {
     const text = rawText.replace(/<\/?(?:end|fin)>/gi, '').trim().slice(0, 20000)
     if (!text) continue
     output[language] = text
+  }
+  return output
+}
+
+export function sanitizeTargetLanguages(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+
+  const output: string[] = []
+  for (const rawLanguage of raw) {
+    if (typeof rawLanguage !== 'string') continue
+    const language = rawLanguage.trim()
+    if (!TARGET_LANGUAGE_PATTERN.test(language) || output.includes(language)) continue
+    output.push(language)
+    if (output.length >= MAX_TARGET_LANGUAGES) break
   }
   return output
 }

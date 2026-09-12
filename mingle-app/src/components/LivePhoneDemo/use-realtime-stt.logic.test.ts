@@ -29,7 +29,7 @@ import {
   parseRecentStoredUtterances,
   persistMessageCountSnapshot,
   persistUtterancesSnapshot,
-  pruneUnresolvedTranslationTargets,
+  normalizeTranslationTargets,
   rememberRecentFinalizedUtterance,
   replaceFinalizedUtteranceSourceInStoreState,
   resolveLogClientEventMaxAttempts,
@@ -413,6 +413,30 @@ describe('use-realtime-stt pure logic', () => {
       ...local, translations: {}, translationFinalized: {}, createdAtMs: 200,
     })
     expect(next.utterances[0]).toMatchObject({ translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 })
+  })
+
+  it('adopts durable waiting targets when a source snapshot reaches an empty local row', () => {
+    const local = {
+      id: 'durable-waiting',
+      originalText: 'hello',
+      originalLang: 'en',
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local,
+      targetLanguages: ['ko', 'ja'],
+      createdAtMs: 200,
+    })
+
+    expect(next.utterances[0]).toMatchObject({
+      targetLanguages: ['ko', 'ja'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    })
   })
 
   it('preserves the room store reference when server hydration is unchanged', () => {
@@ -2398,8 +2422,27 @@ describe('use-realtime-stt pure logic', () => {
     )).toBe(false)
   })
 
-  it('prunes unresolved target languages after the final translation attempt settles', () => {
-    expect(pruneUnresolvedTranslationTargets({
+  it('keeps all local translation targets when a partially translated draft is finalized', () => {
+    const payload = buildFinalizedUtterancePayload({
+      utteranceId: 'local-waiting', utteranceSerial: 1, rawText: 'hello world', rawLanguage: 'en',
+      languages: ['en', 'ko', 'ja'], partialTranslations: { ko: '중간 번역' },
+    })!
+    const store = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([]), payload.utterance, {
+      translations: { ko: '중간 번역' }, priorities: new Map([['ko', { kind: 'partial', seq: 1 }]]),
+    })
+    expect(store.utterances[0].targetLanguages).toEqual(['ko', 'ja'])
+    expect(store.utterances[0].translations).toEqual({ ko: '중간 번역' })
+    expect(store.utterances[0].translationFinalized).toEqual({ ko: false })
+    const final = applyTranslationToUtteranceStoreState({
+      store, utteranceId: 'local-waiting', translations: { ko: '최종 번역', ja: '最終翻訳' },
+      priority: { kind: 'final', seq: 2 }, markFinalized: true,
+    })
+    expect(final.utterances[0].targetLanguages).toEqual(['ko', 'ja'])
+    expect(final.utterances[0].translations).toEqual({ ko: '최종 번역', ja: '最終翻訳' })
+  })
+
+  it('preserves unresolved target rows after the final translation attempt settles', () => {
+    expect(normalizeTranslationTargets({
       targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '안녕하세요',
@@ -2410,18 +2453,19 @@ describe('use-realtime-stt pure logic', () => {
         ja: false,
       },
     })).toEqual({
-      targetLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '안녕하세요',
       },
       translationFinalized: {
         ko: true,
+        ja: false,
       },
     })
   })
 
   it('preserves interim finalization flags for available partial translations', () => {
-    expect(pruneUnresolvedTranslationTargets({
+    expect(normalizeTranslationTargets({
       targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '부분 번역',

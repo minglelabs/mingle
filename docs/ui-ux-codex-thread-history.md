@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-09 - Paginate crowded user search results
+
+- Surface: Explore/search tab user results on web, iOS WebView, and Android WebView.
+- Issue: User search returned only one server page of 20 users. When a query matched more users, the list silently ended after the first viewport-sized page, so users could not discover the remaining matches or tell whether more results existed.
+- Resolution: Add deterministic cursor pagination ordered by `updatedAt` and `id`, keeping the existing account, block, deactivated-user, and anonymous-user filters. The API returns at most 20 users plus an opaque `nextCursor`; malformed cursors are rejected before the database query. The client resets pagination for every new query, appends de-duplicated pages, and keeps the cursor in the scoped search cache and history snapshot.
+- Interaction: Keep the first result page visible while loading additional pages. Show a localized “Load more” action below the results and automatically request the next page when the sentinel approaches the scroll viewport. The button remains available as an explicit fallback, shows a loading state during the request, and exposes a retryable error without discarding already-loaded users. The control is hidden when the server reports the final page.
+- Compatibility: This is a Web/API change only. No Prisma migration, native code, mobile version, or API namespace change is required; existing versioned search routes re-export the shared handler.
+- Verification: Search-route tests cover the 20-user page boundary, cursor emission, and malformed-cursor rejection. Search-cache tests cover cursor persistence, pending-query clearing, namespace/account isolation, anonymous filtering, and stale snapshots. Targeted Vitest, TypeScript no-emit, targeted ESLint, and whitespace checks pass. Physical iOS/Android scrolling and real authenticated Devbox data remain manual follow-up checks.
+
 ## 2026-09-08 - PR 217 delayed translation preview refresh
 
 - Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.
@@ -2164,6 +2173,19 @@
 - Deployment: Deploy the updated web app and messaging service together. No native rebuild, app/API version change, environment variable, Prisma migration, or historical-data rewrite is required. PR #211 was already merged; this follow-up is committed to `codex/messenger-client-sot-2.0.1` and is not automatically included in that prior merge. No service-branch merge or production deployment was performed for this follow-up.
 - Subsequent user-directed integration: Applied only this fix from `6a48c1be` directly to `codex/messenger-tabs-device-test`, after fast-forwarding its clean local worktree to the already-merged PR #211. The cherry-pick was conflict-free and its resulting code tree matched the tested source tree. Pushing the service branch requests its normal automatic deployment; deployment completion is a separate runtime status.
 
+## 2026-09-11 — 번역 대기 영역 재발
+
+- 요청: 발화 버블 첫 표시부터 번역 대상별 국기와 대기 표시가 자리를 차지하고, 발화 종료/최종 번역 전환 중에도 사라지지 않아야 한다.
+- 작업 위치: `codex/messenger-tabs-device-test`의 `92413c9a`에서 새 브랜치 `codex/translation-placeholder-session-stop`과 별도 워크트리 `/Users/nam/mingle-translation-session-fix`를 생성했다.
+- 번역 초기 표시 원인: `60f13766`에서 추가된 공유 대화 실시간 전송은 원문/번역 텍스트만 보내고 `targetLanguages`를 보내지 않았다. 받는 기기는 첫 번역이 도착하기 전까지 표시할 번역 언어를 알 수 없었다. 로컬 발화 생성기와 펼친 버블 자체에는 이미 대상 언어/대기 표시 지원이 있었다.
+- 번역 확정 전환 원인: `66a5010d`에서 도입된 `pruneUnresolvedTranslationTargets`가 일부 중간 번역을 확정 발화에 옮길 때도 아직 텍스트가 없는 대상을 삭제했다. 공유 미리보기를 원문만 저장된 서버 메시지로 교체할 때는 미리보기의 번역 대상/중간 번역도 함께 사라질 수 있었다.
+- 수정: 실시간 송신/메시징 중계에 검증된 번역 대상 목록을 추가했다. 대상 정규화는 빈 번역 텍스트만 정리하고 대상 언어 행은 유지한다. 공유 미리보기에서 저장 메시지로 전환할 때 번역 대상과 중간 번역을 이어받고, 최종 번역이 도착하면 해당 텍스트로 교체한다. 원문을 먼저 저장하는 API에도 그 발화의 대상 목록을 함께 보내고 메시지 메타데이터에 보존해, 실시간 미리보기를 놓쳤거나 만료된 수신자와 재접속/새로고침 hydration에도 대기 행을 복원한다. 후속 원문 전용 서버 응답도 기존 대상 목록을 지우지 않는다. 과거 메시지에 현재 방의 언어 설정을 소급 적용하지 않는다.
+- 자동 Stop 조사 및 수정은 사용자 지시로 되돌렸다. 현재 브랜치에는 이 문제를 위한 네이티브 앱 변경이 포함되지 않는다.
+- 검증: 전체 웹 단위 테스트 160개 파일/1,494개와 스크립트 테스트 6개를 통과했다. 번역 대상의 웹 송신·내구성 전송·서버 저장·재접속 hydration을 포함한 집중 266개, 메시징 24개, 웹/메시징 TypeScript 및 변경 파일 ESLint 검사도 통과했다.
+- 회귀 검증 범위: 실제 송신기 → 메시징 중계 → 다른 사용자 미리보기 → 원문 저장 → 최종 번역의 경로에서 렌더링된 행 수/국기/대기 표시를 검사했다. 로컬 발화 확정도 미완료 언어를 유지한다.
+- 한계: 물리 기기 마이크 테스트는 수행하지 않았다. 번역 텍스트가 여러 줄로 늘어날 때의 정상적인 높이 증가는 남는다.
+- 반영 범위: 새 작업 브랜치에 커밋/푸시한다. 번역 수정은 웹 앱과 메시징 서비스를 함께 배포해야 한다. 이 작업에서 네이티브 앱 변경, 운영 배포, 앱/API 버전 변경, 스키마 변경과 마이그레이션은 없다.
+
 ## 2026-09-08 — Search tab scroll boundaries and keyboard handling
 
 - Report: [Search tab scroll area and keyboard issue](https://app.notion.com/p/roycenam/3d122e3ed20a80ceb402fa52755319d9). Long search results moved the search header and bottom tabs along with the results.
@@ -2344,3 +2366,35 @@
 - Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode keeps the photo trigger beside the independent keyboard-close control and shows a compact photo-only tooltip immediately above the trigger. The preview remains a confirmation dialog.
 - Follow-up: The first tooltip implementation was clipped by the input shell's `overflow-hidden`; changing that shell to `overflow-visible` kept the tooltip anchored to the button while preserving the input layout.
 - Validation: TypeScript check and targeted ESLint passed. Android physical-device verification confirmed the voice-mode alignment, keyboard-mode side-by-side controls, and visible anchored tooltip. iOS was relaunched against the same tunnel; physical screenshot verification remains pending.
+
+## 2026-09-09 — Avoid the generic Mingle user label in Explore search
+
+- Surface: Explore search result names and handles, including cached results restored after tab navigation.
+- Issue: A valid user with a handle but no profile name was rendered as the localized fallback `Mingle 사용자`, even though the row already contained the account's real handle. This made an incomplete profile look like a synthetic system account and caused the generic label to reappear after returning to the search tab.
+- Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
+
+## 2026-09-09 — Localize Explore pagination controls
+
+- Surface: Explore user search pagination, including the `Load more`, loading, and retry-error states.
+- Verification: The app exposes 15 primary UI languages. Pagination copy is defined beside the existing Explore/search copy in `primary-ui-copy.ts`, merged through `getSupplementalDictionary()` and `getDictionary()`, and consumed by `connect-page.tsx` instead of owning a separate translation path.
+- Resolution: Require all three pagination strings in every primary UI dictionary and add an exact 15-locale contract test. Supported locales outside the 15 primary UI languages continue to use the established English supplemental fallback.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
+
+## 2026-09-09 — Preserve restored Explore search pages
+
+- Surface: Explore search when returning from a user profile or remounting the search tab after loading multiple result pages.
+- Issue: The history snapshot restoration effect populated the query, results, and next cursor, but the initial search effect then ran with its first-render empty query and cleared those values. The restored list could disappear or trigger an unnecessary first-page request, losing the loaded-page state.
+- Resolution: Track the pending restored query separately. Skip the initial empty-query search effect, preserve the matching restored query state once it arrives, and consume the restore marker when the user changes the query so normal search behavior remains unchanged. Normalize restored history queries before comparing them.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: Added restore-state regression tests for the initial effect, repeated mount-effect replay, restored query, and changed-query paths. The full web unit suite passed with 164 files and 1,521 tests; targeted lint and TypeScript checks also passed.
+
+## 2026-09-09 — Hide the reserved admin handle from Explore search
+
+- Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
+- Issue: The reserved `admin` account was still eligible for user search and could appear as a normal followable result. This was especially visible in broad searches that were being used to validate pagination and cache restoration.
+- Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
+- Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.
