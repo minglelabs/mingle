@@ -3675,6 +3675,138 @@
         width: auto;
         max-width: 100%;
       }
+      .virtually-limited-comparison {
+        width: min(1080px, 100%);
+      }
+      .virtually-limited-comparison-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: min(760px, 100%);
+      }
+      .slide-copy--virtually-3d {
+        width: min(46vw, 640px);
+        max-width: min(46vw, 640px);
+      }
+      .slide-copy--virtually-3d .slide-title {
+        font-size: clamp(3rem, 4.45vw, 5.2rem);
+        line-height: 1.1;
+      }
+      .slide-side-media--virtually-3d {
+        top: 50%;
+        right: clamp(56px, 7vw, 104px);
+        width: clamp(470px, 39vw, 580px);
+        transform: translateY(-50%);
+      }
+      .virtually-3d-pipeline-panel {
+        display: grid;
+        gap: clamp(12px, 1.2vw, 18px);
+        width: 100%;
+      }
+      .virtually-3d-reference {
+        padding: clamp(8px, 0.8vw, 12px);
+        border: 1px solid rgba(45, 42, 30, 0.08);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.13);
+      }
+      .virtually-3d-reference-video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 0;
+        border-radius: 17px;
+        background: #1a1815;
+      }
+      .virtually-3d-pipeline-title {
+        margin: 0;
+        color: #a96010;
+        font-size: clamp(1.12rem, 1.45vw, 1.42rem);
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+        text-align: left;
+      }
+      .virtually-3d-pipeline {
+        display: flex;
+        align-items: stretch;
+        gap: clamp(5px, 0.55vw, 8px);
+        width: 100%;
+      }
+      .virtually-3d-pipeline-step {
+        position: relative;
+        display: grid;
+        align-content: center;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: clamp(76px, 7.2vw, 96px);
+        padding: clamp(10px, 0.85vw, 14px) clamp(8px, 0.7vw, 12px) clamp(10px, 0.85vw, 14px)
+          clamp(26px, 2vw, 32px);
+        border: 1px solid rgba(45, 42, 30, 0.08);
+        border-radius: 17px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 252, 246, 0.64) 100%);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.08);
+      }
+      .virtually-3d-pipeline-step::before {
+        position: absolute;
+        top: 12px;
+        bottom: 12px;
+        left: 9px;
+        width: 3px;
+        content: "";
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+      .virtually-3d-pipeline-number {
+        color: #a96010;
+        font-size: clamp(0.68rem, 0.78vw, 0.82rem);
+        font-weight: 850;
+        letter-spacing: 0.05em;
+      }
+      .virtually-3d-pipeline-label {
+        margin: 4px 0 0;
+        color: rgba(24, 22, 18, 0.94);
+        font-size: clamp(0.76rem, 0.95vw, 0.98rem);
+        font-weight: 750;
+        line-height: 1.18;
+        letter-spacing: -0.035em;
+      }
+      .virtually-3d-pipeline-arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: clamp(12px, 1.2vw, 18px);
+        color: var(--accent-strong);
+        font-size: clamp(1.05rem, 1.4vw, 1.45rem);
+        font-weight: 850;
+      }
+      .slide-shell--virtually-tradeoff {
+        gap: clamp(18px, 3vh, 30px);
+      }
+      .slide-shell--virtually-tradeoff .slide-body {
+        max-width: 800px;
+      }
+      .virtually-tradeoff-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: min(1180px, 100%);
+        gap: clamp(12px, 1.3vw, 20px);
+      }
+      .virtually-tradeoff-card {
+        min-height: clamp(150px, 13vw, 190px);
+      }
+      .virtually-tradeoff-card--3d {
+        background: linear-gradient(180deg, rgba(255, 247, 232, 0.96) 0%, rgba(255, 238, 211, 0.74) 100%);
+        box-shadow: 0 20px 40px rgba(205, 91, 8, 0.12);
+      }
+      .virtually-tradeoff-card--3d::before {
+        background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+      }
+      .virtually-tradeoff-card--virtually {
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.98) 0%, rgba(255, 229, 172, 0.76) 100%);
+        box-shadow: 0 22px 44px rgba(245, 158, 11, 0.16);
+      }
+      .virtually-tradeoff-card--virtually::before {
+        width: 5px;
+        background: linear-gradient(180deg, #f59e0b 0%, #f97316 100%);
+      }
       html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle { font-size: clamp(1.82rem, 8vw, 3.08rem); }
       html.is-mobile-viewport .slide-copy--goal-split .slide-title { font-size: clamp(1.82rem, 8vw, 3.08rem); }
       html.is-mobile-viewport .slide-goal--labeled { gap: 8px; }
@@ -3684,6 +3816,108 @@
       }
       html.is-mobile-viewport .slide-source { left: var(--mobile-slide-x); right: var(--mobile-slide-x); bottom: 48px; font-size: 10px; }
       html.is-mobile-viewport .virtually-rigging { height: 38vh; }
+      html.is-mobile-viewport .virtually-limited-comparison {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+      html.is-mobile-viewport .slide-copy--ai-requirements {
+        min-width: 0;
+      }
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title,
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-body {
+        min-width: 0;
+      }
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      html.is-mobile-viewport .virtually-limited-comparison-grid {
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+      }
+      html.is-mobile-viewport .slide-shell--virtually-3d {
+        justify-content: flex-start;
+        gap: clamp(10px, 2.2vh, 18px);
+        padding-top: calc(env(safe-area-inset-top) + clamp(22px, 3.5vh, 32px));
+      }
+      html.is-mobile-viewport .slide-copy--virtually-3d {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        justify-items: center;
+        text-align: center;
+      }
+      html.is-mobile-viewport .slide-copy--virtually-3d .slide-title {
+        font-size: clamp(1.75rem, 8vw, 3.1rem);
+        line-height: 1.12;
+      }
+      html.is-mobile-viewport .slide-side-media--virtually-3d {
+        top: auto;
+        right: auto;
+        width: min(var(--mobile-content-width), 348px);
+        max-width: min(var(--mobile-content-width), 348px);
+        transform: none;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-panel {
+        gap: 8px;
+      }
+      html.is-mobile-viewport .virtually-3d-reference {
+        padding: 7px;
+        border-radius: 17px;
+      }
+      html.is-mobile-viewport .virtually-3d-reference-video {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        border-radius: 12px;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-title {
+        font-size: clamp(0.86rem, 3.5vw, 1.08rem);
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-step {
+        flex: 0 0 auto;
+        min-height: 0;
+        padding: 8px 10px 8px 24px;
+        border-radius: 12px;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-step::before {
+        top: 8px;
+        bottom: 8px;
+        left: 8px;
+        width: 3px;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-number {
+        font-size: 0.62rem;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-label {
+        margin-top: 2px;
+        font-size: clamp(0.76rem, 3vw, 0.94rem);
+        line-height: 1.14;
+      }
+      html.is-mobile-viewport .virtually-3d-pipeline-arrow {
+        display: none;
+      }
+      html.is-mobile-viewport .slide-shell--virtually-tradeoff {
+        gap: clamp(10px, 2vh, 16px);
+      }
+      html.is-mobile-viewport .slide-shell--virtually-tradeoff .slide-body {
+        font-size: clamp(0.88rem, 3.15vw, 1.03rem);
+        line-height: 1.35;
+      }
+      html.is-mobile-viewport .virtually-tradeoff-grid {
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+        gap: 7px;
+      }
+      html.is-mobile-viewport .virtually-tradeoff-card {
+        min-height: 0;
+        padding-top: 10px;
+        padding-bottom: 10px;
+      }
       .slide-shell--market-comparison {
         gap: clamp(18px, 3.2vh, 30px);
       }
@@ -3838,7 +4072,7 @@
         }
       }
 
-      /* Refine existing type, image frames and cards; no additional slide elements. */
+      /* Keep the added context within the existing type, image-frame and card language. */
       .slide-emphasis { color: #c96a0a; }
       .slide-kicker { color: #a96010; }
       .slide-goal--right .slide-goal-text { color: #b95b0b; }
@@ -4626,6 +4860,36 @@
       }
 
       @media (max-width: 360px) and (max-height: 640px) {
+        html.is-mobile-viewport .slide-shell--virtually-3d {
+          gap: 7px;
+        }
+        html.is-mobile-viewport .slide-copy--virtually-3d .slide-title {
+          font-size: clamp(1.5rem, 7.2vw, 2.1rem);
+        }
+        html.is-mobile-viewport .slide-copy--virtually-3d .slide-body {
+          font-size: 0.82rem;
+          line-height: 1.28;
+        }
+        html.is-mobile-viewport .virtually-3d-reference-video {
+          aspect-ratio: 16 / 7;
+        }
+        html.is-mobile-viewport .virtually-3d-pipeline {
+          gap: 5px;
+        }
+        html.is-mobile-viewport .virtually-3d-pipeline-step {
+          padding: 6px 7px 6px 21px;
+          border-radius: 10px;
+        }
+        html.is-mobile-viewport .virtually-3d-pipeline-step::before {
+          top: 6px;
+          bottom: 6px;
+          left: 7px;
+          width: 2px;
+        }
+        html.is-mobile-viewport .virtually-3d-pipeline-label {
+          font-size: 0.68rem;
+          line-height: 1.08;
+        }
         html.is-mobile-viewport .slide-copy--download-qr .virtually-cover-subtitle {
           font-size: clamp(1.25rem, 6.1vw, 2rem);
         }
@@ -4673,7 +4937,7 @@
 <article class="slide-shell">
 <div class="slide-copy slide-copy--with-side-media slide-copy--vtuber-process">
 <p class="slide-kicker">Problem</p>
-<h1 class="slide-title">All this work<br>to make <span class="slide-emphasis">one picture move.</span></h1>
+<h1 class="slide-title">For a Live2D character,<br>all this work just makes <span class="slide-emphasis">one picture move.</span></h1>
 </div>
 <div class="slide-side-media slide-side-media--virtually-process">
 <div class="virtually-process">
@@ -4707,47 +4971,122 @@
 </section>
 
 <section class="slide" data-page="4">
-<article class="slide-shell slide-shell--has-side-media">
-<div class="slide-copy slide-copy--with-side-media slide-copy--virtually-limited-movement">
-<p class="slide-kicker">Problem</p>
-<h1 class="slide-title">So much setup.<br>Still <span class="slide-emphasis">limited movement.</span></h1>
-<p class="slide-body">Blink, smile, mouth shapes and head turns work well.<br>Freedom beyond the rig is harder.</p>
+<article class="slide-shell slide-shell--ai-requirements">
+<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+<p class="slide-kicker">Live2D</p>
+<h1 class="slide-title">Live2D is accessible.<br><span class="slide-emphasis">Freedom gets complex.</span></h1>
+<p class="slide-body">Optimized for 2D expressions.<br>Full-body motion takes more manual setup.</p>
 </div>
-<div class="slide-side-media slide-side-media--virtually-limited-movement">
+<div class="slide-side-media slide-side-media--ai-requirements virtually-limited-comparison">
+<div class="slide-ai-requirements-grid virtually-limited-comparison-grid">
+<article class="slide-ai-requirement">
+<h2 class="slide-ai-requirement-title">Easy to start</h2>
+<p class="slide-ai-requirement-description">2D model + camera</p>
+</article>
+<article class="slide-ai-requirement">
+<h2 class="slide-ai-requirement-title">More freedom, more work</h2>
+<p class="slide-ai-requirement-description">Parts · rigging · tracking</p>
+</article>
+</div>
+</div>
+</article>
+</section>
+
+<section class="slide" data-page="5">
+<article class="slide-shell slide-shell--has-side-media">
+<div class="slide-copy slide-copy--with-side-media slide-copy--virtually-3d">
+<p class="slide-kicker">Professional 3D</p>
+<h1 class="slide-title">3D unlocks<br><span class="slide-emphasis">full-body freedom.</span></h1>
+<p class="slide-body">Dance, turns and back views are already possible.<br>The trade-off is a complex, expensive pipeline.</p>
+</div>
+<div class="slide-side-media slide-side-media--virtually-3d">
+<div class="virtually-3d-pipeline-panel">
+<div class="virtually-3d-reference">
 <iframe
-class="slide-short-video virtually-limited-movement-video"
+class="slide-short-video virtually-3d-reference-video"
 src="https://www.youtube.com/embed/EEYbf4PiuKY?playsinline=1&rel=0&enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=EEYbf4PiuKY&controls=0&modestbranding=1"
-title="Hakos Baelz 3D dance performance"
+title="Public 3D VTuber dance example"
 allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
 referrerpolicy="strict-origin-when-cross-origin"
 allowfullscreen
 ></iframe>
 </div>
-<p class="slide-source">Reference: <a href="https://www.youtube.com/watch?v=EEYbf4PiuKY" target="_blank" rel="noopener noreferrer">Hakos Baelz 3D Performance Video — SNAKE EYES</a></p>
+<h2 class="virtually-3d-pipeline-title">Professional 3D live pipeline</h2>
+<div class="virtually-3d-pipeline">
+<article class="virtually-3d-pipeline-step">
+<span class="virtually-3d-pipeline-number">01</span>
+<p class="virtually-3d-pipeline-label">High-quality<br>3D character</p>
 </article>
-</section>
-
-<section class="slide" data-page="5">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Solution</p>
-<h1 class="slide-title">One image.<br><span class="slide-emphasis">Live in ten seconds.</span></h1>
-<p class="slide-body">A live VTuber with freer motion, from the first frame.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left slide-goal--labeled">
-<p class="slide-goal-label">Before Virtually</p>
-<p class="slide-goal-text">Parts · rigging · tracking<br>Days to weeks<br>Fixed movement</p>
-</div>
-<div class="slide-goal slide-goal--right slide-goal--labeled">
-<p class="slide-goal-label">After Virtually</p>
-<p class="slide-goal-text"><span class="slide-goal-emphasis">One image + camera</span><br>10 seconds<br>Free movement</p>
-</div>
+<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
+<article class="virtually-3d-pipeline-step">
+<span class="virtually-3d-pipeline-number">02</span>
+<p class="virtually-3d-pipeline-label">3D rigging / skeleton<br>+ professional motion capture</p>
+</article>
+<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
+<article class="virtually-3d-pipeline-step">
+<span class="virtually-3d-pipeline-number">03</span>
+<p class="virtually-3d-pipeline-label">Real-time<br>3D engine</p>
+</article>
+<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
+<article class="virtually-3d-pipeline-step">
+<span class="virtually-3d-pipeline-number">04</span>
+<p class="virtually-3d-pipeline-label">Virtual live</p>
+</article>
 </div>
 </div>
+</div>
+<p class="slide-source">A public 3D dance reference: <a href="https://www.youtube.com/watch?v=EEYbf4PiuKY" target="_blank" rel="noopener noreferrer">Hakos Baelz 3D performance video</a> · A public report on Stellive’s Akane Lize solo concert describes a VICON motion-capture setup. <a href="https://press.todayan.com/newsRead.php?no=1038883" target="_blank" rel="noopener noreferrer">VISOL / Todayan report</a></p>
 </article>
 </section>
 
 <section class="slide" data-page="6">
+<article class="slide-shell slide-shell--ai-requirements slide-shell--virtually-tradeoff">
+<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+<p class="slide-kicker">The trade-off</p>
+<h1 class="slide-title">AI Animate removes<br><span class="slide-emphasis">the production trade-off.</span></h1>
+<p class="slide-body">Full-body freedom without the 3D production pipeline.<br>Virtually targets both accessibility and expressiveness.</p>
+</div>
+<div class="slide-side-media slide-side-media--ai-requirements">
+<div class="slide-ai-requirements-grid virtually-tradeoff-grid">
+<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--live2d">
+<h2 class="slide-ai-requirement-title">Live2D + VTube Studio</h2>
+<p class="slide-ai-requirement-description">Accessible · 2D optimized<br>Setup grows with freedom</p>
+</article>
+<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--3d">
+<h2 class="slide-ai-requirement-title">Professional 3D + Mocap</h2>
+<p class="slide-ai-requirement-description">Full-body freedom · Reusable<br>High upfront · Low marginal</p>
+</article>
+<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--virtually">
+<h2 class="slide-ai-requirement-title">Virtually</h2>
+<p class="slide-ai-requirement-description">One image + camera<br>Near-zero upfront · Higher marginal<br>Target: full-body freedom</p>
+</article>
+</div>
+</div>
+<p class="slide-source">Virtually is still in development: full-body motion is a target, with GPU inference cost on each live session.</p>
+</article>
+</section>
+
+<section class="slide" data-page="7">
+<article class="slide-shell">
+<div class="slide-copy slide-copy--goal-split">
+<p class="slide-kicker">Solution</p>
+<h1 class="slide-title">One image.<br><span class="slide-emphasis">Live in ten seconds.</span></h1>
+<p class="slide-body">We target professional 3D freedom, without the 3D production pipeline.</p>
+<div class="slide-goal-columns">
+<div class="slide-goal slide-goal--left slide-goal--labeled">
+<p class="slide-goal-label">Before Virtually</p>
+<p class="slide-goal-text">Character production<br>Days to weeks<br>Complex setup</p>
+</div>
+<div class="slide-goal slide-goal--right slide-goal--labeled">
+<p class="slide-goal-label">After Virtually</p>
+<p class="slide-goal-text"><span class="slide-goal-emphasis">One image + camera</span><br>10 seconds<br>Target: full-body freedom</p>
+</div>
+</div>
+</div>
+</article>
+</section>
+
+<section class="slide" data-page="8">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Technology</p>
@@ -4757,7 +5096,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="7">
+<section class="slide" data-page="9">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Proof</p>
@@ -4777,7 +5116,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="8">
+<section class="slide" data-page="10">
 <article class="slide-shell slide-shell--has-side-media">
 <div class="slide-copy slide-copy--with-side-media slide-copy--virtually-recorded-motion">
 <p class="slide-kicker">Result</p>
@@ -4797,7 +5136,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="9">
+<section class="slide" data-page="11">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">AI Animate</p>
@@ -4817,11 +5156,11 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="10">
+<section class="slide" data-page="12">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Core problem</p>
-<h1 class="slide-title">Batch is <span class="slide-emphasis">AI native.</span><br>Live still relies on rigging.</h1>
+<h1 class="slide-title">Batch is <span class="slide-emphasis">AI native.</span><br>Live still starts with a rig.</h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left">
 <p class="slide-goal-text">Recorded<br>Image → AI<br>→ Video</p>
@@ -4834,7 +5173,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="11">
+<section class="slide" data-page="13">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Cause</p>
@@ -4852,7 +5191,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="12">
+<section class="slide" data-page="14">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Why now</p>
@@ -4880,7 +5219,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="13">
+<section class="slide" data-page="15">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Why now</p>
@@ -4901,11 +5240,11 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="14">
+<section class="slide" data-page="16">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Industry shift</p>
-<h1 class="slide-title">When generation is good enough,<br><span class="slide-emphasis">rigging becomes optional.</span></h1>
+<h1 class="slide-title">For image-first creation,<br><span class="slide-emphasis">rigging can become optional.</span></h1>
 <div class="slide-goal-columns">
 <div class="slide-goal slide-goal--left slide-goal--labeled">
 <p class="slide-goal-label">Before generative AI</p>
@@ -4922,7 +5261,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="15">
+<section class="slide" data-page="17">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Our ambition</p>
@@ -4948,7 +5287,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="16">
+<section class="slide" data-page="18">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">UX</p>
@@ -4973,7 +5312,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="17">
+<section class="slide" data-page="19">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Product</p>
@@ -4984,7 +5323,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="18">
+<section class="slide" data-page="20">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Product vision</p>
@@ -4995,7 +5334,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="19">
+<section class="slide" data-page="21">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Expansion</p>
@@ -5021,7 +5360,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="20">
+<section class="slide" data-page="22">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Expansion vision</p>
@@ -5040,7 +5379,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="21">
+<section class="slide" data-page="23">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--market-comparison">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--market-comparison">
 <p class="slide-kicker">Creator revenue</p>
@@ -5071,7 +5410,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="22">
+<section class="slide" data-page="24">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Live economy</p>
@@ -5091,7 +5430,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="23">
+<section class="slide" data-page="25">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Strategy</p>
@@ -5116,7 +5455,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="24">
+<section class="slide" data-page="26">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--apple-analogy">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--apple-analogy">
 <p class="slide-kicker">Analogy</p>
@@ -5148,7 +5487,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="25">
+<section class="slide" data-page="27">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--ecosystem-analogy">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--ecosystem-analogy">
 <p class="slide-kicker">The ecosystem pattern</p>
@@ -5190,7 +5529,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="26">
+<section class="slide" data-page="28">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Vision</p>
@@ -5208,7 +5547,7 @@ allowfullscreen
           </svg>
           <span>Start</span>
         </button>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 26</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 28</div>
       </div>
     </main>
 
@@ -5225,7 +5564,8 @@ allowfullscreen
         playboard: "https://playboard.co/en/youtube-ranking/most-superchatted-v-tuber-channels-in-worldwide-yearly",
         apple: "https://www.apple.com/newsroom/2004/04/28iTunes-Celebrates-Its-First-Anniversary-Over-70-Million-Songs-Purchased/",
         chm: "https://www.computerhistory.org/storageengine/miniature-disk-drives-enable-mobile-computing/",
-        iriam: "https://support.us.iriam.com/hc/en-us/articles/22481664441881-Streaming-on-IRIAM"
+        iriam: "https://support.us.iriam.com/hc/en-us/articles/22481664441881-Streaming-on-IRIAM",
+        vicon: "https://press.todayan.com/newsRead.php?no=1038883"
       };
 
       const I18N_LINK_LABELS = {
@@ -5241,7 +5581,8 @@ allowfullscreen
           playboard: "Playboard reference",
           apple: "Apple press release",
           chm: "CHM source",
-          iriam: "IRIAM official FAQ"
+          iriam: "IRIAM official FAQ",
+          vicon: "VISOL / Todayan report"
         },
         ko: {
           hakos: "Hakos Baelz 3D 퍼포먼스 영상",
@@ -5255,7 +5596,8 @@ allowfullscreen
           playboard: "Playboard 참고",
           apple: "Apple 보도자료",
           chm: "CHM 자료",
-          iriam: "IRIAM 공식 FAQ"
+          iriam: "IRIAM 공식 FAQ",
+          vicon: "VISOL / Todayan 보도자료"
         },
         ja: {
           hakos: "Hakos Baelz 3Dパフォーマンス動画",
@@ -5269,7 +5611,8 @@ allowfullscreen
           playboard: "Playboard参考",
           apple: "Appleプレスリリース",
           chm: "CHM資料",
-          iriam: "IRIAM公式FAQ"
+          iriam: "IRIAM公式FAQ",
+          vicon: "VISOL / Todayan報道"
         },
         "cn-ZH": {
           hakos: "Hakos Baelz 3D舞蹈视频",
@@ -5283,7 +5626,8 @@ allowfullscreen
           playboard: "Playboard参考",
           apple: "Apple新闻稿",
           chm: "CHM资料",
-          iriam: "IRIAM官方FAQ"
+          iriam: "IRIAM官方FAQ",
+          vicon: "VISOL / Todayan报道"
         },
         "cn-TW": {
           hakos: "Hakos Baelz 3D舞蹈影片",
@@ -5297,7 +5641,8 @@ allowfullscreen
           playboard: "Playboard參考",
           apple: "Apple新聞稿",
           chm: "CHM資料",
-          iriam: "IRIAM官方FAQ"
+          iriam: "IRIAM官方FAQ",
+          vicon: "VISOL / Todayan報導"
         }
       };
 
@@ -5364,22 +5709,39 @@ allowfullscreen
           },
           3: {
             kicker: "문제",
-            title: "이 모든 작업을 거쳐<br><span class=\"slide-emphasis\">그림 한 장만 겨우 움직입니다.</span>",
+            title: "Live2D 캐릭터를 위해<br>이 모든 작업을 해도 <span class=\"slide-emphasis\">그림 한 장만 겨우 움직입니다.</span>",
             processTitle: "버튜버 제작 과정",
             toolTitles: ["캐릭터 일러스트", "파트 분리", "Cubism 리깅", "모델 설정", "얼굴 트래킹", "장면·OBS 설정", "라이브 방송"]
           },
           5: {
-            kicker: "문제",
-            title: "설정은 이렇게 많은데<br>움직임은 <span class=\"slide-emphasis\">아직 제한적입니다.</span>",
-            body: "눈 깜박임·미소·입 모양·고개 돌리기는 잘 됩니다.<br>리깅 밖의 자유로운 움직임은 어렵습니다.",
-            source: "참고: {hakos}"
+            kicker: "Live2D",
+            title: "Live2D는 접근하기 쉽습니다.<br><span class=\"slide-emphasis\">자유로운 움직임은 복잡해집니다.</span>",
+            body: "2D 표현에 최적화되어 있습니다.<br>전신 움직임에는 더 많은 수작업이 필요합니다.",
+            reqTitles: ["시작하기 쉬움", "자유로울수록 더 많은 작업"],
+            reqDescriptions: ["2D 모델 + 카메라", "파트 · 리깅 · 트래킹"]
+          },
+          31: {
+            kicker: "고급 3D",
+            title: "3D는<br><span class=\"slide-emphasis\">전신의 자유를 엽니다.</span>",
+            body: "춤·회전·뒷모습은 이미 가능합니다.<br>대신 복잡하고 비싼 파이프라인이 필요합니다.",
+            pipelineTitle: "프로페셔널 3D 라이브 파이프라인",
+            pipelineSteps: ["고품질<br>3D 캐릭터", "3D 리깅 / 스켈레톤<br>+ 전문 모션캡처", "실시간<br>3D 엔진", "버추얼 라이브"],
+            source: "공개된 3D 춤 참고 영상: {hakos} · 스텔라이브 아카네 리제 솔로 콘서트에 VICON 모션캡처가 사용됐다는 공개 보도가 있습니다. {vicon}"
+          },
+          32: {
+            kicker: "트레이드오프",
+            title: "AI Animate는<br><span class=\"slide-emphasis\">제작 트레이드오프를 없앱니다.</span>",
+            body: "3D 제작 파이프라인 없이 전신의 자유를 목표로 합니다.<br>접근성과 표현력을 함께 겨냥합니다.",
+            reqTitles: ["Live2D + VTube Studio", "프로페셔널 3D + 모션캡처", "Virtually"],
+            reqDescriptions: ["접근하기 쉬움 · 2D 최적화<br>자유로울수록 설정 증가", "전신의 자유 · 재사용 가능<br>높은 초기비용 · 낮은 추가비용", "사진 한 장 + 카메라<br>거의 없는 초기비용 · 높은 라이브당 비용<br>목표: 전신의 자유"],
+            source: "Virtually는 아직 개발 중입니다. 전신 움직임은 목표 기능이며 라이브마다 GPU 추론비용이 발생합니다."
           },
           7: {
             kicker: "해결책",
             title: "사진 한 장.<br><span class=\"slide-emphasis\">10초면 라이브 버튜버.</span>",
-            body: "더 자유로운 움직임까지, 첫 프레임부터 시작합니다.",
+            body: "프로페셔널 3D의 자유를, 3D 제작 파이프라인 없이 목표로 합니다.",
             goalLabels: ["Virtually 이전", "Virtually 이후"],
-            goalTexts: ["파트 분리 · 리깅 · 트래킹<br>며칠에서 몇 주<br>정해진 움직임", "사진 한 장 + 카메라<br>10초<br>자유로운 움직임"]
+            goalTexts: ["캐릭터 제작<br>며칠에서 몇 주<br>복잡한 설정", "사진 한 장 + 카메라<br>10초<br>목표: 전신의 자유"]
           },
           8: {
             kicker: "기술",
@@ -5403,7 +5765,7 @@ allowfullscreen
           },
           12: {
             kicker: "핵심 문제",
-            title: "배치 영상은 <span class=\"slide-emphasis\">AI 네이티브.</span><br>라이브는 아직 리깅에 의존합니다.",
+            title: "배치 영상은 <span class=\"slide-emphasis\">AI 네이티브.</span><br>라이브는 아직 리깅에서 시작합니다.",
             goalTexts: ["녹화<br>이미지 → AI<br>→ 영상", "라이브<br>파트 → 리깅<br>→ 트래킹"]
           },
           13: {
@@ -5428,7 +5790,7 @@ allowfullscreen
           },
           16: {
             kicker: "산업 변화",
-            title: "생성이 충분히 좋아지면<br><span class=\"slide-emphasis\">리깅은 선택이 됩니다.</span>",
+            title: "이미지 기반 제작에서는<br><span class=\"slide-emphasis\">리깅이 선택이 될 수 있습니다.</span>",
             goalLabels: ["생성형 AI 이전", "생성형 AI 적용"],
             goalTexts: ["이미지<br><s>파트 · 리깅<br>Cubism · 트래킹</s>", "이미지 + 카메라<br>생성형 AI<br>영상"]
           },
@@ -5526,22 +5888,39 @@ allowfullscreen
           },
           3: {
             kicker: "課題",
-            title: "これだけの作業をして<br><span class=\"slide-emphasis\">やっと1枚の絵が動きます。</span>",
+            title: "Live2Dキャラクターのために<br>これだけ作業しても<span class=\"slide-emphasis\">1枚の絵がやっと動きます。</span>",
             processTitle: "VTuber制作プロセス",
             toolTitles: ["キャラクターイラスト", "パーツ分け", "Cubismリギング", "モデル設定", "顔トラッキング", "シーン・OBS設定", "ライブ配信"]
           },
           5: {
-            kicker: "課題",
-            title: "設定は多いのに<br>動きは <span class=\"slide-emphasis\">まだ限られます。</span>",
-            body: "まばたき・笑顔・口の形・首振りは得意です。<br>リグの外にある自由な動きは難しくなります。",
-            source: "参考: {hakos}"
+            kicker: "Live2D",
+            title: "Live2Dは始めやすいです。<br><span class=\"slide-emphasis\">自由な動きほど複雑になります。</span>",
+            body: "2D表現に最適化されています。<br>全身の動きには、より多くの手作業が必要です。",
+            reqTitles: ["始めやすい", "自由にするほど作業が増える"],
+            reqDescriptions: ["2Dモデル + カメラ", "パーツ · リギング · トラッキング"]
+          },
+          31: {
+            kicker: "プロフェッショナル3D",
+            title: "3Dなら<br><span class=\"slide-emphasis\">全身の自由が生まれます。</span>",
+            body: "ダンス・回転・背面はすでに実現できます。<br>その代わり、複雑で高価なパイプラインが必要です。",
+            pipelineTitle: "プロフェッショナル3Dライブパイプライン",
+            pipelineSteps: ["高品質な<br>3Dキャラクター", "3Dリギング / スケルトン<br>+ プロ向けモーションキャプチャ", "リアルタイム<br>3Dエンジン", "バーチャルライブ"],
+            source: "公開された3Dダンス参考: {hakos} · Stelliveのアカネ・リゼ ソロコンサートでVICONモーションキャプチャが使われたとする公開報道があります。{vicon}"
+          },
+          32: {
+            kicker: "トレードオフ",
+            title: "AI Animateは<br><span class=\"slide-emphasis\">制作のトレードオフをなくします。</span>",
+            body: "3D制作パイプラインなしで、全身の自由を目指します。<br>アクセスしやすさと表現力を同時に狙います。",
+            reqTitles: ["Live2D + VTube Studio", "プロフェッショナル3D + モーションキャプチャ", "Virtually"],
+            reqDescriptions: ["始めやすい · 2Dに最適化<br>自由にするほど設定が増える", "全身の自由 · 再利用可能<br>高い初期費用 · 低い追加費用", "画像1枚 + カメラ<br>初期費用はほぼゼロ · ライブごとの費用は高め<br>目標: 全身の自由"],
+            source: "Virtuallyは開発中です。全身の動きは目標機能であり、ライブごとにGPU推論コストが発生します。"
           },
           7: {
             kicker: "解決策",
             title: "写真1枚。<br><span class=\"slide-emphasis\">10秒でライブVTuber。</span>",
-            body: "より自由な動きも、最初のフレームから始められます。",
+            body: "プロフェッショナル3Dの自由を、3D制作パイプラインなしで目指します。",
             goalLabels: ["Virtually以前", "Virtually以後"],
-            goalTexts: ["パーツ分け · リギング · トラッキング<br>数日から数週間<br>決まった動き", "写真1枚 + カメラ<br>10秒<br>自由な動き"]
+            goalTexts: ["キャラクター制作<br>数日から数週間<br>複雑な設定", "写真1枚 + カメラ<br>10秒<br>目標: 全身の自由"]
           },
           8: {
             kicker: "テクノロジー",
@@ -5565,7 +5944,7 @@ allowfullscreen
           },
           12: {
             kicker: "核心課題",
-            title: "バッチ映像は <span class=\"slide-emphasis\">AIネイティブ。</span><br>ライブはまだリギング頼みです。",
+            title: "バッチ映像は <span class=\"slide-emphasis\">AIネイティブ。</span><br>ライブはまだリグから始まります。",
             goalTexts: ["録画<br>画像 → AI<br>→ 映像", "ライブ<br>パーツ → リギング<br>→ トラッキング"]
           },
           13: {
@@ -5590,7 +5969,7 @@ allowfullscreen
           },
           16: {
             kicker: "業界の変化",
-            title: "生成が十分に良くなれば<br><span class=\"slide-emphasis\">リギングは任意になります。</span>",
+            title: "画像ベースの制作では<br><span class=\"slide-emphasis\">リギングが任意になります。</span>",
             goalLabels: ["生成AI以前", "生成AI導入後"],
             goalTexts: ["画像<br><s>パーツ · リギング<br>Cubism · トラッキング</s>", "画像 + カメラ<br>生成AI<br>映像"]
           },
@@ -5688,22 +6067,39 @@ allowfullscreen
           },
           3: {
             kicker: "问题",
-            title: "完成这么多工作<br>才勉强让<span class=\"slide-emphasis\">一张图片动起来。</span>",
+            title: "为了一个Live2D角色<br>做这么多工作也只能让<span class=\"slide-emphasis\">一张图片动起来。</span>",
             processTitle: "VTuber制作流程",
             toolTitles: ["角色插画", "拆分部件", "Cubism绑定", "模型设置", "面部追踪", "场景与OBS设置", "直播"]
           },
           5: {
-            kicker: "问题",
-            title: "准备工作很多<br>动作却<span class=\"slide-emphasis\">仍然受限。</span>",
-            body: "眨眼、微笑、嘴型和转头都能做好。<br>绑定范围之外的自由动作更难实现。",
-            source: "参考：{hakos}"
+            kicker: "Live2D",
+            title: "Live2D容易上手。<br><span class=\"slide-emphasis\">动作越自由，制作越复杂。</span>",
+            body: "它针对2D表达进行了优化。<br>全身动作需要更多手工设置。",
+            reqTitles: ["容易开始", "越自由，工作越多"],
+            reqDescriptions: ["2D模型 + 摄像头", "部件 · 绑定 · 追踪"]
+          },
+          31: {
+            kicker: "专业3D",
+            title: "3D带来<br><span class=\"slide-emphasis\">全身动作自由。</span>",
+            body: "舞蹈、转身和背面视角已经可以实现。<br>代价是复杂且昂贵的制作流程。",
+            pipelineTitle: "专业3D直播流程",
+            pipelineSteps: ["高质量<br>3D角色", "3D绑定 / 骨骼<br>+ 专业动作捕捉", "实时<br>3D引擎", "虚拟直播"],
+            source: "公开的3D舞蹈参考：{hakos} · 有公开报道描述Stellive的Akane Lize个人演唱会使用了VICON动作捕捉。{vicon}"
+          },
+          32: {
+            kicker: "取舍",
+            title: "AI Animate消除<br><span class=\"slide-emphasis\">制作上的取舍。</span>",
+            body: "无需3D制作流程，也以全身自由为目标。<br>同时追求易用性与表现力。",
+            reqTitles: ["Live2D + VTube Studio", "专业3D + 动作捕捉", "Virtually"],
+            reqDescriptions: ["容易上手 · 2D优化<br>越自由，设置越多", "全身动作自由 · 可复用<br>高前期投入 · 低追加成本", "一张图片 + 摄像头<br>前期投入近零 · 每次直播成本更高<br>目标：全身动作自由"],
+            source: "Virtually仍在开发中：全身动作是目标功能，每次直播都会产生GPU推理成本。"
           },
           7: {
             kicker: "解决方案",
             title: "一张图片。<br><span class=\"slide-emphasis\">10秒开启直播VTuber。</span>",
-            body: "从第一帧开始，就能拥有更自由的动作。",
+            body: "以专业3D的自由为目标，同时省去3D制作流程。",
             goalLabels: ["Virtually之前", "Virtually之后"],
-            goalTexts: ["拆分部件 · 绑定 · 追踪<br>几天到几周<br>固定动作", "一张图片 + 摄像头<br>10秒<br>自由动作"]
+            goalTexts: ["角色制作<br>几天到几周<br>复杂设置", "一张图片 + 摄像头<br>10秒<br>目标：全身动作自由"]
           },
           8: {
             kicker: "技术",
@@ -5727,7 +6123,7 @@ allowfullscreen
           },
           12: {
             kicker: "核心问题",
-            title: "批量视频已经<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍依赖绑定。",
+            title: "批量视频已经<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍从绑定开始。",
             goalTexts: ["录制<br>图片 → AI<br>→ 视频", "直播<br>部件 → 绑定<br>→ 追踪"]
           },
           13: {
@@ -5752,7 +6148,7 @@ allowfullscreen
           },
           16: {
             kicker: "行业变化",
-            title: "当生成效果足够好<br><span class=\"slide-emphasis\">绑定就不再是必选项。</span>",
+            title: "对于图片优先的制作<br><span class=\"slide-emphasis\">绑定可以成为可选项。</span>",
             goalLabels: ["生成式AI之前", "使用生成式AI"],
             goalTexts: ["图片<br><s>部件 · 绑定<br>Cubism · 追踪</s>", "图片 + 摄像头<br>生成式AI<br>视频"]
           },
@@ -5850,22 +6246,39 @@ allowfullscreen
           },
           3: {
             kicker: "問題",
-            title: "完成這麼多工作<br>才勉強讓<span class=\"slide-emphasis\">一張圖片動起來。</span>",
+            title: "為了一個Live2D角色<br>做這麼多工作也只能讓<span class=\"slide-emphasis\">一張圖片動起來。</span>",
             processTitle: "VTuber製作流程",
             toolTitles: ["角色插畫", "拆分部件", "Cubism綁定", "模型設定", "臉部追蹤", "場景與OBS設定", "直播"]
           },
           5: {
-            kicker: "問題",
-            title: "準備工作很多<br>動作卻<span class=\"slide-emphasis\">仍然受限。</span>",
-            body: "眨眼、微笑、嘴型和轉頭都能做好。<br>綁定範圍之外的自由動作更難實現。",
-            source: "參考：{hakos}"
+            kicker: "Live2D",
+            title: "Live2D容易上手。<br><span class=\"slide-emphasis\">動作越自由，製作越複雜。</span>",
+            body: "它針對2D表達進行最佳化。<br>全身動作需要更多手動設定。",
+            reqTitles: ["容易開始", "越自由，工作越多"],
+            reqDescriptions: ["2D模型 + 攝影機", "部件 · 綁定 · 追蹤"]
+          },
+          31: {
+            kicker: "專業3D",
+            title: "3D帶來<br><span class=\"slide-emphasis\">全身動作自由。</span>",
+            body: "舞蹈、轉身和背面視角已經可以實現。<br>代價是複雜且昂貴的製作流程。",
+            pipelineTitle: "專業3D直播流程",
+            pipelineSteps: ["高品質<br>3D角色", "3D綁定 / 骨骼<br>+ 專業動作捕捉", "即時<br>3D引擎", "虛擬直播"],
+            source: "公開的3D舞蹈參考：{hakos} · 有公開報導描述Stellive的Akane Lize個人演唱會使用了VICON動作捕捉。{vicon}"
+          },
+          32: {
+            kicker: "取捨",
+            title: "AI Animate消除<br><span class=\"slide-emphasis\">製作上的取捨。</span>",
+            body: "無需3D製作流程，也以全身自由為目標。<br>同時追求易用性與表現力。",
+            reqTitles: ["Live2D + VTube Studio", "專業3D + 動作捕捉", "Virtually"],
+            reqDescriptions: ["容易上手 · 2D最佳化<br>越自由，設定越多", "全身動作自由 · 可重複使用<br>高前期投入 · 低追加成本", "一張圖片 + 攝影機<br>前期投入近零 · 每次直播成本更高<br>目標：全身動作自由"],
+            source: "Virtually仍在開發中：全身動作是目標功能，每次直播都會產生GPU推理成本。"
           },
           7: {
             kicker: "解決方案",
             title: "一張圖片。<br><span class=\"slide-emphasis\">10秒開啟直播VTuber。</span>",
-            body: "從第一幀開始，就能擁有更自由的動作。",
+            body: "以專業3D的自由為目標，同時省去3D製作流程。",
             goalLabels: ["Virtually以前", "Virtually之後"],
-            goalTexts: ["拆分部件 · 綁定 · 追蹤<br>幾天到幾週<br>固定動作", "一張圖片 + 攝影機<br>10秒<br>自由動作"]
+            goalTexts: ["角色製作<br>幾天到幾週<br>複雜設定", "一張圖片 + 攝影機<br>10秒<br>目標：全身動作自由"]
           },
           8: {
             kicker: "技術",
@@ -5889,7 +6302,7 @@ allowfullscreen
           },
           12: {
             kicker: "核心問題",
-            title: "批次影片已經<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍依賴綁定。",
+            title: "批次影片已經<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍從綁定開始。",
             goalTexts: ["錄製<br>圖片 → AI<br>→ 影片", "直播<br>部件 → 綁定<br>→ 追蹤"]
           },
           13: {
@@ -5914,7 +6327,7 @@ allowfullscreen
           },
           16: {
             kicker: "產業變化",
-            title: "當生成效果足夠好<br><span class=\"slide-emphasis\">綁定就不再是必選項。</span>",
+            title: "對於圖片優先的製作<br><span class=\"slide-emphasis\">綁定可以成為選項。</span>",
             goalLabels: ["生成式AI之前", "使用生成式AI"],
             goalTexts: ["圖片<br><s>部件 · 綁定<br>Cubism · 追蹤</s>", "圖片 + 攝影機<br>生成式AI<br>影片"]
           },
@@ -6103,6 +6516,8 @@ allowfullscreen
         setLocalizedHTML(slide, ".virtually-cover-subtitle", data.subtitle, language);
         setLocalizedHTML(slide, ".slide-body", data.body, language);
         setLocalizedHTML(slide, ".virtually-process-title", data.processTitle, language);
+        setLocalizedHTML(slide, ".virtually-3d-pipeline-title", data.pipelineTitle, language);
+        setLocalizedList(slide, ".virtually-3d-pipeline-label", data.pipelineSteps, language);
         setLocalizedList(slide, ".slide-tool-title", data.toolTitles, language);
         setLocalizedList(slide, ".slide-goal-label", data.goalLabels, language);
         setLocalizedList(slide, ".slide-goal-text", data.goalTexts, language);
@@ -6143,28 +6558,30 @@ allowfullscreen
         2: 2,
         3: 3,
         4: 5,
-        5: 7,
-        6: 8,
-        7: 9,
-        8: 10,
-        9: 11,
-        10: 12,
-        11: 13,
-        12: 14,
-        13: 15,
-        14: 16,
-        15: 17,
-        16: 18,
-        17: 19,
-        18: 20,
-        19: 21,
-        20: 22,
-        21: 23,
-        22: 24,
-        23: 25,
-        24: 26,
-        25: 28,
-        26: 30
+        5: 31,
+        6: 32,
+        7: 7,
+        8: 8,
+        9: 9,
+        10: 10,
+        11: 11,
+        12: 12,
+        13: 13,
+        14: 14,
+        15: 15,
+        16: 16,
+        17: 17,
+        18: 18,
+        19: 19,
+        20: 20,
+        21: 21,
+        22: 22,
+        23: 23,
+        24: 24,
+        25: 25,
+        26: 26,
+        27: 28,
+        28: 30
       };
 
       if (languageMeta) {
