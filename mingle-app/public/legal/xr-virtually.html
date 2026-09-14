@@ -5597,15 +5597,19 @@
       .v-sam { display:grid; grid-template-columns:1.3fr 1fr; gap:60px; width:100%; }
       .v-sam h2 small { font-size:15px; font-weight:400; color:#777266; margin-left:10px; }
       .v-sam-blocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:22px; }
-      .v-sam-blocks > div { border-top:1px solid #ddcfb6; padding-top:15px; display:grid; gap:8px; }
+      .v-sam-korea { text-align:center; }
+      .v-sam-blocks > div { border-top:1px solid #ddcfb6; padding-top:15px; display:grid; justify-items:center; gap:8px; text-align:center; }
       .v-sam-blocks span { font-size:18px; }
       .v-sam-blocks strong { font-size:34px; letter-spacing:-.04em; }
       .v-sam-blocks strong small { font-size:15px; }
       .v-sam-blocks p { font-size:13px; color:#777266; }
-      .v-sam-global { border-left:1px solid #ddcfb6; padding-left:60px; display:flex; flex-direction:column; justify-content:center; gap:20px; }
+      .v-sam-global { border-left:1px solid #ddcfb6; padding-left:60px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; text-align:center; }
       .v-sam-global > span { font-size:18px; color:#777266; }
       .v-sam-global > strong { font-size:clamp(48px,5vw,78px); color:#b95b0b; letter-spacing:-.055em; }
       .v-sam-global p { font-size:27px; }
+      @media (min-width:901px) {
+        .v-sam { grid-template-columns:minmax(0,520px) minmax(0,1fr); gap:48px; }
+      }
       .v-chart-assumption { font-size:16px; color:#a96010; }
       .v-revenue { width:100%; display:grid; gap:24px; }
       .v-revenue-row { display:grid; grid-template-columns:85px 1fr 175px; gap:24px; align-items:center; }
@@ -5851,7 +5855,7 @@
 
 <section class="slide v-slide v-world-slide" data-page="11"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터를 넘어<br><span class="slide-emphasis">배경·맵·환경까지 AI로.</span></h1><div class="v-world"><div class="v-prompt"><strong>“달빛 아래 마법 도서관 배경 만들어줘”</strong></div><span class="v-between">→</span><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="캐릭터와 배경이 함께 있는 라이브 화면 참고"><figcaption>배경 · 공간 · 조명까지 한 번에</figcaption></figure></div><p class="v-note">확장 구상 · 첨부 화면은 목표 경험의 참고 이미지입니다. 자유로운 3D 공간 생성은 별도 개발 과제입니다.</p></article></section>
 
-<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 <small>연간 지출 추정</small></h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><span>글로벌 · 연간 추정</span><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note">자체 Bottom-up 추정 · 공식 시장 통계가 아닙니다. 캐릭터·리깅·모캡·라이브 제작 지출 중 잠재 대체 영역만 포함하며, 광고·후원·굿즈 매출은 제외합니다.</p></article></section>
+<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 · 연간 지출 추정 · 100억+</h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><h2>글로벌 · 연간 지출 추정</h2><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note">자체 Bottom-up 추정 · 공식 시장 통계가 아닙니다. 캐릭터·리깅·모캡·라이브 제작 지출 중 잠재 대체 영역만 포함하며, 광고·후원·굿즈 매출은 제외합니다.</p></article></section>
 
 <section class="slide v-slide v-revenue-slide" data-page="13"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption">조회수당 매출 · 비교 가정</p><div class="v-revenue-row"><b>숏폼</b><div class="v-bar-track"><i style="width:0.1%"></i></div><strong>0.1원</strong></div><div class="v-revenue-row"><b>롱폼</b><div class="v-bar-track"><i style="width:3%"></i></div><strong>2–3원</strong></div><div class="v-revenue-row v-revenue-live"><b>라이브</b><div class="v-bar-track"><i style="width:100%"><span style="width:40%"></span></i></div><strong>40–100원</strong></div><div class="v-chart-foot"><span>조회 1회당 매출 가정 · 막대는 상단값 / 라이브 진한 영역은 하단값</span><b>400–1,000×</b></div></div><p class="v-note">비교 시나리오 · 제시된 값을 가정했을 때의 배수입니다. 형식별 조회 정의·집계기간·후원 포함 여부가 달라 실측 평균이나 동일 조건의 수익 비교는 아닙니다.</p></article></section>
 
