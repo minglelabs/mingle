@@ -5671,6 +5671,17 @@
       .v-eco-row strong { font-size:40px; letter-spacing:-.04em; }
       .v-eco-row span { font-size:20px; color:#777266; }
       .v-eco-row > b { color:#c96a0a; font-size:32px; font-weight:400; }
+      .v-opp { display:grid; grid-template-columns:1fr auto 1fr auto 1fr auto 2.1fr; align-items:stretch; gap:12px; width:min(1240px,100%); }
+      .v-opp > .v-between { display:flex; align-items:center; justify-content:center; font-size:28px; color:#c96a0a; }
+      .v-opp-step { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:clamp(20px,2.5vh,30px) 16px; background:rgba(255,255,255,0.85); border:1px solid #ece7dd; border-radius:18px; gap:14px; min-height:280px; }
+      .v-opp-num { font-size:13px; font-weight:700; color:#a96010; background:#fdf5e7; padding:4px 10px; border-radius:999px; border:1px solid #ecd1a1; }
+      .v-opp-step strong { font-size:clamp(19px,1.65vw,24px); line-height:1.35; font-weight:700; color:#2d2a1e; word-break:keep-all; }
+      .v-opp-highlight { background:#fff6e5; border:2px solid #fbbc32; border-radius:18px; padding:22px 20px 18px; position:relative; display:flex; flex-direction:column; min-height:280px; overflow:hidden; }
+      .v-opp-highlight-head { position:relative; z-index:2; text-align:center; margin-bottom:10px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+      .v-opp-highlight-head .v-opp-num { background:#f97316; color:#fff; border-color:#ea580c; }
+      .v-opp-highlight-head strong { font-size:clamp(21px,1.9vw,26px); color:#b95b0b; line-height:1.3; word-break:keep-all; }
+      .v-opp-logo-cloud { position:relative; flex:1; min-height:180px; width:100%; }
+      .v-opp-logo { position:absolute; left:var(--x); top:var(--y); width:var(--s); height:var(--s); padding:clamp(6px,0.5vw,10px); border-radius:clamp(12px,1.2vw,16px); background:rgba(255,255,255,0.95); border:1px solid rgba(220,208,190,0.8); box-shadow:0 4px 14px rgba(185,91,11,0.08); object-fit:contain; transform:translate(-50%,-50%) rotate(var(--r)); }
       .v-final .v-title { font-size:clamp(60px,6.8vw,108px); text-align:left; }
       .v-final .v-shell { align-items:flex-start; padding-left:15vw; }
       @media(max-width:900px) {
@@ -5790,6 +5801,13 @@
         .v-eco-row strong { font-size:26px; }
         .v-eco-row span { font-size:14px; }
         .v-eco-row > b { font-size:24px; }
+        .v-opp { grid-template-columns:1fr; gap:10px; }
+        .v-opp > .v-between { transform:rotate(90deg); line-height:1; font-size:20px; }
+        .v-opp-step { min-height:auto; padding:14px; gap:8px; }
+        .v-opp-step strong { font-size:17px; }
+        .v-opp-highlight { min-height:240px; padding:16px 14px; }
+        .v-opp-highlight-head strong { font-size:18px; }
+        .v-opp-logo-cloud { min-height:150px; }
         .v-final .v-title { font-size:54px; }
       }
       @media(max-width:360px) and (max-height:650px) {
@@ -6085,7 +6103,9 @@
 
 <section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 넘고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span></span><span>기술 개발</span><span></span><span>생태계 표준 제시</span></div><div class="v-eco-row"><div class="v-eco-context"><strong>디지털 음원 산업</strong><span>2001년</span></div><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong style="color:#b95b0b">Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div class="v-eco-context"><strong>라이브 버튜버 산업</strong><span>2026년</span></div><div><strong style="color:var(--title)">중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-final" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1><div class="v-final-brand"><h2 class="v-final-brand-title slide-emphasis">Virtually</h2><p class="v-final-brand-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</p><a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/" target="_blank" rel="noopener noreferrer"><span class="slide-final-logo--linkedin" aria-hidden="true">in</span><span>LinkedIn</span></a></div></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div></div></main><script>
+<section class="slide v-slide v-opportunity-slide" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">지금이 진짜 기회인 이유는<br><span class="slide-emphasis">반도체 수출 규제 때문입니다.</span></h1><div class="v-opp"><div class="v-opp-step"><span class="v-opp-num">01</span><strong>대중국<br>반도체 규제</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">02</span><strong>중국 내<br>데이터센터 부족</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">03</span><strong>중국 AI<br>오픈소스화</strong></div><span class="v-between">→</span><div class="v-opp-highlight"><div class="v-opp-highlight-head"><span class="v-opp-num">04 · 기회</span><strong>모델/API 서빙으로<br><span class="slide-emphasis">돈을 범</span></strong></div><div class="v-opp-logo-cloud"><img class="v-opp-logo" style="--x:18%;--y:26%;--s:clamp(46px,4vw,60px);--r:-7deg" src="./assets/nebius-logo.svg" alt="Nebius"><img class="v-opp-logo" style="--x:52%;--y:22%;--s:clamp(50px,4.4vw,66px);--r:5deg" src="./assets/coreweave-logo.svg" alt="CoreWeave"><img class="v-opp-logo" style="--x:84%;--y:28%;--s:clamp(44px,3.8vw,56px);--r:-10deg" src="./assets/replicate-logo.svg" alt="Replicate"><img class="v-opp-logo" style="--x:16%;--y:66%;--s:clamp(46px,4vw,58px);--r:8deg" src="./assets/openrouter-logo.svg" alt="OpenRouter"><img class="v-opp-logo" style="--x:44%;--y:56%;--s:clamp(48px,4.2vw,64px);--r:-5deg" src="./assets/virtually-higgsfield-logo.png" alt="Higgsfield"><img class="v-opp-logo" style="--x:74%;--y:62%;--s:clamp(46px,4vw,60px);--r:9deg" src="./assets/fireworks-logo.svg" alt="Fireworks"><img class="v-opp-logo" style="--x:32%;--y:84%;--s:clamp(42px,3.6vw,54px);--r:-8deg" src="./assets/baseten-logo.svg" alt="Baseten"><img class="v-opp-logo" style="--x:64%;--y:86%;--s:clamp(42px,3.6vw,54px);--r:6deg" src="./assets/friendli-logo.svg" alt="FriendliAI"></div></div></div><p class="v-note"></p></article></section>
+
+<section class="slide v-slide v-final" data-page="19"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1><div class="v-final-brand"><h2 class="v-final-brand-title slide-emphasis">Virtually</h2><p class="v-final-brand-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</p><a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/" target="_blank" rel="noopener noreferrer"><span class="slide-final-logo--linkedin" aria-hidden="true">in</span><span>LinkedIn</span></a></div></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 19</div></div></main><script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
       const homeButton = document.getElementById("page-home-button");
@@ -6881,9 +6901,11 @@
         setManyHTML(s17, ".v-eco-row > div:nth-child(4) span", translation.slides[17].destinations.map((item) => item[1]));
         setHTML(s17, ".v-note", translation.slides[17].note);
 
-        const s18 = slide(18);
-        setHTML(s18, "h1", translation.slides[18].title);
-        setHTML(s18, ".v-final-brand-subtitle", translation.slides[18].subtitle);
+        const s19 = slide(19);
+        if (s19 && translation.slides[18]) {
+          setHTML(s19, "h1", translation.slides[18].title);
+          setHTML(s19, ".v-final-brand-subtitle", translation.slides[18].subtitle);
+        }
 
         return translation;
       }
