@@ -5590,11 +5590,11 @@
       .v-highlight { background:#fff6e5; border-color:#fbbc32; }
       .v-highlight strong,.v-highlight h2 { color:#b95b0b; }
       .v-between { font-size:40px; color:#c96a0a; text-align:center; }
-      .v-world { width:100%; display:grid; grid-template-columns:1fr 36px 1.5fr; align-items:center; gap:12px; }
+      .v-world { width:100%; max-width:1240px; display:grid; grid-template-columns:auto 32px 1fr; align-items:center; gap:12px; margin:0 auto; }
       .v-world .v-figure { height:42vh; }
       .v-prompt { display:grid; gap:0; }
       .v-prompt span { color:#777266; font-size:18px; }
-      .v-prompt strong { font-size:32px; line-height:1.4; word-break:keep-all; }
+      .v-prompt strong { font-size:clamp(22px,2.2vw,32px); line-height:1.4; white-space:nowrap; }
       .v-sam { display:grid; grid-template-columns:1.6fr 1fr; gap:60px; width:100%; }
       .v-sam h2 small { font-size:15px; font-weight:400; color:#777266; margin-left:10px; }
       .v-sam-blocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:22px; }
