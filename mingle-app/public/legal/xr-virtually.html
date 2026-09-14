@@ -5610,13 +5610,14 @@
         .v-sam { grid-template-columns:1fr 1fr; gap:clamp(32px, 4vw, 48px); }
       }
       .v-tam-slide .v-shell { gap:clamp(24px, 4vh, 48px); }
+      .v-tam-slide .v-title { white-space:nowrap; font-size:clamp(38px, 4.2vw, 58px); }
       .v-tam-header { display:grid; gap:clamp(8px, 1.2vh, 14px); }
       .v-tam-scope { font-size:clamp(13px, 1.25vw, 17px); color:#777266; letter-spacing:-.01em; font-weight:500; margin:0; line-height:1.4; word-break:keep-all; }
-      .v-tam { display:grid; grid-template-columns:1fr 1fr; gap:clamp(30px, 4vw, 56px); width:100%; align-items:center; }
+      .v-tam { display:grid; grid-template-columns:6fr 4fr; gap:clamp(30px, 4vw, 56px); width:100%; align-items:center; }
       .v-tam-korea, .v-tam-global { text-align:center; display:grid; justify-items:center; gap:clamp(14px, 2vh, 22px); }
-      .v-tam h2 { font-size:clamp(22px, 2.2vw, 30px); font-weight:700; color:#777266; letter-spacing:-.02em; margin:0; }
-      .v-tam strong { font-size:clamp(40px, 5.2vw, 76px); font-weight:800; letter-spacing:-.04em; line-height:1.15; white-space:nowrap; color:var(--title); }
-      .v-tam strong small { font-size:clamp(18px, 2vw, 28px); font-weight:600; color:#777266; margin-left:4px; }
+      .v-tam h2 { font-size:clamp(28px, 2.8vw, 40px); font-weight:800; color:#1e1b18; letter-spacing:-.03em; margin:0; }
+      .v-tam strong { font-size:clamp(28px, 3.2vw, 46px); font-weight:800; letter-spacing:-.04em; line-height:1.15; white-space:nowrap; color:var(--title); }
+      .v-tam strong small { font-size:clamp(16px, 1.6vw, 22px); font-weight:600; color:#777266; margin-left:4px; }
       .v-tam-global { border-left:1px solid #ddcfb6; padding-left:clamp(30px, 4vw, 56px); }
       .v-tam-global strong { color:#b95b0b; }
       .v-chart-assumption { font-size:29px; font-weight:800; letter-spacing:-.04em; color:#a96010; }
@@ -5763,9 +5764,9 @@
         .v-sam-blocks p { font-size:10px; }
         .v-sam-global { border-left:0; border-top:1px solid #ddcfb6; padding:16px 0 0; text-align:center; }
         .v-tam { grid-template-columns:1fr; gap:28px; }
-        .v-tam h2 { font-size:22px; }
-        .v-tam strong { font-size:clamp(36px, 7.5vw, 52px); }
-        .v-tam strong small { font-size:18px; }
+        .v-tam h2 { font-size:26px; color:#1e1b18; }
+        .v-tam strong { font-size:clamp(26px, 6vw, 38px); }
+        .v-tam strong small { font-size:16px; }
         .v-tam-global { border-left:0; border-top:1px solid #ddcfb6; padding:22px 0 0; text-align:center; }
         .v-revenue { gap:18px; padding-left:0; }
         .v-revenue-row { grid-template-columns:110px 1fr; gap:10px; }
@@ -5842,7 +5843,8 @@
         .v-sam-blocks strong { font-size:22px; }
         .v-sam-global > strong { font-size:35px; }
         .v-sam-global p { font-size:15px; }
-        .v-tam strong { font-size:clamp(30px, 8vw, 42px); }
+        .v-tam-slide .v-title { white-space:normal; font-size:clamp(26px, 6.5vw, 34px); }
+        .v-tam strong { font-size:clamp(22px, 6vw, 32px); }
         .v-roadmap > div { grid-template-columns:20px 1fr 1.4fr; }
         .v-roadmap h2 { font-size:16px; }
         .v-roadmap p { font-size:12px; }
@@ -6023,13 +6025,14 @@
           gap:14px;
         }
         html.is-mobile-viewport .v-slide[data-page="16"] .v-tam h2 {
-          font-size:15px;
+          font-size:16px;
+          color:#1e1b18;
         }
         html.is-mobile-viewport .v-slide[data-page="16"] .v-tam strong {
-          font-size:24px;
+          font-size:18px;
         }
         html.is-mobile-viewport .v-slide[data-page="16"] .v-tam strong small {
-          font-size:12px;
+          font-size:11px;
         }
         html.is-mobile-viewport .v-slide[data-page="16"] .v-tam-global {
           padding-top:12px;
@@ -6127,7 +6130,7 @@
 
 <section class="slide v-slide v-revenue-slide" data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption" style="font-size:29px;font-weight:800;letter-spacing:-.04em">조회수당 매출</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.1원</strong></div><div class="v-bar-track"><i style="width:0.1%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>2–3원</strong></div><div class="v-bar-track"><i style="width:3%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>40–100원</strong></div><div class="v-bar-track"><i style="width:70%"></i></div></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-tam-slide" data-page="16"><article class="slide-shell v-shell"><div class="v-tam-header"><h1 class="slide-title v-title">전체 버튜버<br><span class="slide-emphasis">시장 규모</span></h1><p class="v-tam-scope">VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing</p></div><div class="v-tam"><div class="v-tam-korea"><h2>국내</h2><strong>2,000억 ~ 3,000억<small> 원</small></strong></div><div class="v-tam-global"><h2>글로벌</h2><strong class="v-tam-emphasis">4조 ~ 8조<small> 원</small></strong></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide v-tam-slide" data-page="16"><article class="slide-shell v-shell"><div class="v-tam-header"><h1 class="slide-title v-title">전체 버튜버 시장 규모</h1><p class="v-tam-scope">2026년 기준 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing</p></div><div class="v-tam"><div class="v-tam-korea"><h2>국내</h2><strong>1,500억 ~ 2,000억<small> 원</small></strong></div><div class="v-tam-global"><h2>글로벌</h2><strong class="v-tam-emphasis">3조 ~ 4조<small> 원</small></strong></div></div><p class="v-note"></p></article></section>
 
 <section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 생태계의 A–Z를<br><span class="slide-emphasis">하나의 플랫폼으로.</span></h1><div class="v-roadmap"><div><span>01</span><h2>AI 글로벌 진출</h2><p>실시간 통번역으로<br>언어의 경계 없이</p></div><div><span>02</span><h2>AI 컴패니언</h2><p>방송 밖에서도<br>이어지는 캐릭터와의 관계</p></div><div><span>03</span><h2>콘텐츠 스튜디오</h2><p>AI 자동 제작 · 음악 · 숏드라마<br>웹소설 · 웹툰</p></div></div><p class="v-note"></p></article></section>
 
@@ -6270,12 +6273,12 @@
               note: "",
             },
             16: {
-              title: "Total VTuber<br><span class=\"slide-emphasis\">Market Size</span>",
-              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              title: "Total VTuber Market Size",
+              scope: "2026E · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
               koreaHeading: "Korea",
-              koreaValue: "₩200B ~ ₩300B",
+              koreaValue: "₩150B ~ ₩200B",
               globalHeading: "Global",
-              globalValue: "₩4T ~ ₩8T",
+              globalValue: "₩3T ~ ₩4T",
               note: "",
             },
             17: {
@@ -6441,12 +6444,12 @@
               note: "",
             },
             16: {
-              title: "VTuber市場<br><span class=\"slide-emphasis\">全体の規模</span>",
-              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              title: "VTuber市場全体の規模",
+              scope: "2026年基準 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
               koreaHeading: "韓国",
-              koreaValue: "2,000億〜3,000億ウォン<small> (約220億〜330億円)</small>",
+              koreaValue: "1,500億〜2,000億ウォン<small> (約165億〜220億円)</small>",
               globalHeading: "グローバル",
-              globalValue: "4兆〜8兆ウォン<small> (約4,400億〜8,800億円)</small>",
+              globalValue: "3兆〜4兆ウォン<small> (約3,300億〜4,400億円)</small>",
               note: "",
             },
             17: {
@@ -6612,12 +6615,12 @@
               note: "",
             },
             16: {
-              title: "VTuber 虚拟主播<br><span class=\"slide-emphasis\">整体市场规模</span>",
-              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              title: "VTuber 虚拟主播整体市场规模",
+              scope: "2026年基准 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
               koreaHeading: "韩国本土",
-              koreaValue: "2,000亿 – 3,000亿韩元<small> (约10亿–15亿元)</small>",
+              koreaValue: "1,500亿 – 2,000亿韩元<small> (约7.5亿–10亿元)</small>",
               globalHeading: "全球市场",
-              globalValue: "4万亿 – 8万亿韩元<small> (约200亿–400亿元)</small>",
+              globalValue: "3万亿 – 4万亿韩元<small> (约150亿–200亿元)</small>",
               note: "",
             },
             17: {
@@ -6783,12 +6786,12 @@
               note: "",
             },
             16: {
-              title: "VTuber 虛擬主播<br><span class=\"slide-emphasis\">整體市場規模</span>",
-              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              title: "VTuber 虛擬主播整體市場規模",
+              scope: "2026年基準 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
               koreaHeading: "韓國本土",
-              koreaValue: "2,000億 – 3,000億韓元<small> (約NT$ 45億–68億)</small>",
+              koreaValue: "1,500億 – 2,000億韓元<small> (約NT$ 34億–45億)</small>",
               globalHeading: "全球市場",
-              globalValue: "4兆 – 8兆韓元<small> (約NT$ 900億–1,800億)</small>",
+              globalValue: "3兆 – 4兆韓元<small> (約NT$ 680億–900億)</small>",
               note: "",
             },
             17: {
