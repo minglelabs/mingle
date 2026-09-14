@@ -6907,17 +6907,13 @@
       track.innerHTML = "";
       track.append(lastClone, ...baseSlides, firstClone);
 
-      // Load YouTube on demand; local-file embeds lack the required HTTP referrer.
+      // Load YouTube on demand in place as embedded iframe
       track.querySelectorAll(".v-youtube-play").forEach((button) => {
         button.addEventListener("click", () => {
           const box = button.closest(".v-youtube");
-          if (window.location.protocol === "file:") {
-            window.open(box.dataset.videoUrl || `https://www.youtube.com/shorts/${box.dataset.videoId}`, "_blank", "noopener,noreferrer");
-            return;
-          }
           const frame = document.createElement("iframe");
-          frame.title = virtuallyTranslation?.ui.frameTitle || "Genjutsu AI video demo";
-          frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+          frame.title = virtuallyTranslation?.ui.frameTitle || "YouTube video player";
+          frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
           frame.allowFullscreen = true;
           frame.referrerPolicy = "strict-origin-when-cross-origin";
           frame.src = `https://www.youtube.com/embed/${box.dataset.videoId}?autoplay=1&playsinline=1&rel=0`;
