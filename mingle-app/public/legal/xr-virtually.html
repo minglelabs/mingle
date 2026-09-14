@@ -5609,6 +5609,16 @@
       @media (min-width:901px) {
         .v-sam { grid-template-columns:1fr 1fr; gap:clamp(32px, 4vw, 48px); }
       }
+      .v-tam-slide .v-shell { gap:clamp(24px, 4vh, 48px); }
+      .v-tam-header { display:grid; gap:clamp(8px, 1.2vh, 14px); }
+      .v-tam-scope { font-size:clamp(13px, 1.25vw, 17px); color:#777266; letter-spacing:-.01em; font-weight:500; margin:0; line-height:1.4; word-break:keep-all; }
+      .v-tam { display:grid; grid-template-columns:1fr 1fr; gap:clamp(30px, 4vw, 56px); width:100%; align-items:center; }
+      .v-tam-korea, .v-tam-global { text-align:center; display:grid; justify-items:center; gap:clamp(14px, 2vh, 22px); }
+      .v-tam h2 { font-size:clamp(22px, 2.2vw, 30px); font-weight:700; color:#777266; letter-spacing:-.02em; margin:0; }
+      .v-tam strong { font-size:clamp(40px, 5.2vw, 76px); font-weight:800; letter-spacing:-.04em; line-height:1.15; white-space:nowrap; color:var(--title); }
+      .v-tam strong small { font-size:clamp(18px, 2vw, 28px); font-weight:600; color:#777266; margin-left:4px; }
+      .v-tam-global { border-left:1px solid #ddcfb6; padding-left:clamp(30px, 4vw, 56px); }
+      .v-tam-global strong { color:#b95b0b; }
       .v-chart-assumption { font-size:29px; font-weight:800; letter-spacing:-.04em; color:#a96010; }
       .v-revenue { width:100%; display:grid; gap:24px; padding-left:clamp(60px, 10vw, 160px); }
       .v-revenue-row { display:grid; grid-template-columns:max-content 1fr; gap:28px; align-items:center; }
@@ -5752,6 +5762,11 @@
         .v-sam-blocks strong { font-size:27px; }
         .v-sam-blocks p { font-size:10px; }
         .v-sam-global { border-left:0; border-top:1px solid #ddcfb6; padding:16px 0 0; text-align:center; }
+        .v-tam { grid-template-columns:1fr; gap:28px; }
+        .v-tam h2 { font-size:22px; }
+        .v-tam strong { font-size:clamp(36px, 7.5vw, 52px); }
+        .v-tam strong small { font-size:18px; }
+        .v-tam-global { border-left:0; border-top:1px solid #ddcfb6; padding:22px 0 0; text-align:center; }
         .v-revenue { gap:18px; padding-left:0; }
         .v-revenue-row { grid-template-columns:110px 1fr; gap:10px; }
         .v-revenue-label { gap:6px; }
@@ -5827,6 +5842,7 @@
         .v-sam-blocks strong { font-size:22px; }
         .v-sam-global > strong { font-size:35px; }
         .v-sam-global p { font-size:15px; }
+        .v-tam strong { font-size:clamp(30px, 8vw, 42px); }
         .v-roadmap > div { grid-template-columns:20px 1fr 1.4fr; }
         .v-roadmap h2 { font-size:16px; }
         .v-roadmap p { font-size:12px; }
@@ -5991,6 +6007,33 @@
         html.is-mobile-viewport .v-slide[data-page="11"] .v-shell {
           gap:2px;
         }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-shell {
+          gap:8px;
+          padding-top:10px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-title {
+          font-size:20px;
+          line-height:1.1;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam-scope {
+          font-size:10px;
+          line-height:1.2;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam {
+          gap:14px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam h2 {
+          font-size:15px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam strong {
+          font-size:24px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam strong small {
+          font-size:12px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="16"] .v-tam-global {
+          padding-top:12px;
+        }
       }
       /* Slide 6: keep each model's brand and service together while opening room for the title. */
       .v-ai-animate .v-model {
@@ -6084,13 +6127,15 @@
 
 <section class="slide v-slide v-revenue-slide" data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption" style="font-size:29px;font-weight:800;letter-spacing:-.04em">조회수당 매출</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.1원</strong></div><div class="v-bar-track"><i style="width:0.1%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>2–3원</strong></div><div class="v-bar-track"><i style="width:3%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>40–100원</strong></div><div class="v-bar-track"><i style="width:70%"></i></div></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide " data-page="16"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 생태계의 A–Z를<br><span class="slide-emphasis">하나의 플랫폼으로.</span></h1><div class="v-roadmap"><div><span>01</span><h2>AI 글로벌 진출</h2><p>실시간 통번역으로<br>언어의 경계 없이</p></div><div><span>02</span><h2>AI 컴패니언</h2><p>방송 밖에서도<br>이어지는 캐릭터와의 관계</p></div><div><span>03</span><h2>콘텐츠 스튜디오</h2><p>AI 자동 제작 · 음악 · 숏드라마<br>웹소설 · 웹툰</p></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide v-tam-slide" data-page="16"><article class="slide-shell v-shell"><div class="v-tam-header"><h1 class="slide-title v-title">전체 버튜버<br><span class="slide-emphasis">시장 규모</span></h1><p class="v-tam-scope">VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing</p></div><div class="v-tam"><div class="v-tam-korea"><h2>국내</h2><strong>2,000억 ~ 3,000억<small> 원</small></strong></div><div class="v-tam-global"><h2>글로벌</h2><strong class="v-tam-emphasis">4조 ~ 8조<small> 원</small></strong></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 넘고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span></span><span>기술 개발</span><span></span><span>생태계 표준 제시</span></div><div class="v-eco-row"><div class="v-eco-context"><strong>디지털 음원 산업</strong><span>2001년</span></div><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong style="color:#b95b0b">Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div class="v-eco-context"><strong>라이브 버튜버 산업</strong><span>2026년</span></div><div><strong style="color:var(--title)">중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 생태계의 A–Z를<br><span class="slide-emphasis">하나의 플랫폼으로.</span></h1><div class="v-roadmap"><div><span>01</span><h2>AI 글로벌 진출</h2><p>실시간 통번역으로<br>언어의 경계 없이</p></div><div><span>02</span><h2>AI 컴패니언</h2><p>방송 밖에서도<br>이어지는 캐릭터와의 관계</p></div><div><span>03</span><h2>콘텐츠 스튜디오</h2><p>AI 자동 제작 · 음악 · 숏드라마<br>웹소설 · 웹툰</p></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-opportunity-slide" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">지금이 진짜 기회인 이유는<br><span class="slide-emphasis">반도체 수출 규제 때문입니다.</span></h1><div class="v-opp"><div class="v-opp-step"><span class="v-opp-num">01</span><strong>대중국<br>반도체 규제</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">02</span><strong>중국 내<br>데이터센터 부족</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">03</span><strong>중국 AI<br>오픈소스 전략 가속</strong></div><span class="v-between">→</span><div class="v-opp-highlight"><div class="v-opp-highlight-head"><span class="v-opp-num">04 · 기회</span><strong>AI 인프라·서빙으로<br><span class="slide-emphasis">돈을 범</span></strong></div><div class="v-opp-logo-cloud"><img class="v-opp-logo" style="--x:18%;--y:26%;--s:clamp(46px,4vw,60px);--r:-7deg" src="./assets/nebius-logo.svg" alt="Nebius"><img class="v-opp-logo" style="--x:52%;--y:22%;--s:clamp(50px,4.4vw,66px);--r:5deg" src="./assets/coreweave-logo.svg" alt="CoreWeave"><img class="v-opp-logo" style="--x:84%;--y:28%;--s:clamp(44px,3.8vw,56px);--r:-10deg" src="./assets/replicate-logo.svg" alt="Replicate"><img class="v-opp-logo" style="--x:16%;--y:66%;--s:clamp(46px,4vw,58px);--r:8deg" src="./assets/openrouter-logo.svg" alt="OpenRouter"><img class="v-opp-logo" style="--x:44%;--y:56%;--s:clamp(48px,4.2vw,64px);--r:-5deg" src="./assets/virtually-higgsfield-logo.png" alt="Higgsfield"><img class="v-opp-logo" style="--x:74%;--y:62%;--s:clamp(46px,4vw,60px);--r:9deg" src="./assets/fireworks-logo.svg" alt="Fireworks"><img class="v-opp-logo" style="--x:32%;--y:84%;--s:clamp(42px,3.6vw,54px);--r:-8deg" src="./assets/baseten-logo.svg" alt="Baseten"><img class="v-opp-logo" style="--x:64%;--y:86%;--s:clamp(42px,3.6vw,54px);--r:6deg" src="./assets/friendli-logo.svg" alt="FriendliAI"></div></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide " data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 넘고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span></span><span>기술 개발</span><span></span><span>생태계 표준 제시</span></div><div class="v-eco-row"><div class="v-eco-context"><strong>디지털 음원 산업</strong><span>2001년</span></div><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong style="color:#b95b0b">Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div class="v-eco-context"><strong>라이브 버튜버 산업</strong><span>2026년</span></div><div><strong style="color:var(--title)">중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-final" data-page="19"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1><div class="v-final-brand"><h2 class="v-final-brand-title slide-emphasis">Virtually</h2><p class="v-final-brand-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</p></div></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 19</div></div></main><script>
+<section class="slide v-slide v-opportunity-slide" data-page="19"><article class="slide-shell v-shell"><h1 class="slide-title v-title">지금이 진짜 기회인 이유는<br><span class="slide-emphasis">반도체 수출 규제 때문입니다.</span></h1><div class="v-opp"><div class="v-opp-step"><span class="v-opp-num">01</span><strong>대중국<br>반도체 규제</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">02</span><strong>중국 내<br>데이터센터 부족</strong></div><span class="v-between">→</span><div class="v-opp-step"><span class="v-opp-num">03</span><strong>중국 AI<br>오픈소스 전략 가속</strong></div><span class="v-between">→</span><div class="v-opp-highlight"><div class="v-opp-highlight-head"><span class="v-opp-num">04 · 기회</span><strong>AI 인프라·서빙으로<br><span class="slide-emphasis">돈을 범</span></strong></div><div class="v-opp-logo-cloud"><img class="v-opp-logo" style="--x:18%;--y:26%;--s:clamp(46px,4vw,60px);--r:-7deg" src="./assets/nebius-logo.svg" alt="Nebius"><img class="v-opp-logo" style="--x:52%;--y:22%;--s:clamp(50px,4.4vw,66px);--r:5deg" src="./assets/coreweave-logo.svg" alt="CoreWeave"><img class="v-opp-logo" style="--x:84%;--y:28%;--s:clamp(44px,3.8vw,56px);--r:-10deg" src="./assets/replicate-logo.svg" alt="Replicate"><img class="v-opp-logo" style="--x:16%;--y:66%;--s:clamp(46px,4vw,58px);--r:8deg" src="./assets/openrouter-logo.svg" alt="OpenRouter"><img class="v-opp-logo" style="--x:44%;--y:56%;--s:clamp(48px,4.2vw,64px);--r:-5deg" src="./assets/virtually-higgsfield-logo.png" alt="Higgsfield"><img class="v-opp-logo" style="--x:74%;--y:62%;--s:clamp(46px,4vw,60px);--r:9deg" src="./assets/fireworks-logo.svg" alt="Fireworks"><img class="v-opp-logo" style="--x:32%;--y:84%;--s:clamp(42px,3.6vw,54px);--r:-8deg" src="./assets/baseten-logo.svg" alt="Baseten"><img class="v-opp-logo" style="--x:64%;--y:86%;--s:clamp(42px,3.6vw,54px);--r:6deg" src="./assets/friendli-logo.svg" alt="FriendliAI"></div></div></div><p class="v-note"></p></article></section>
+
+<section class="slide v-slide v-final" data-page="20"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1><div class="v-final-brand"><h2 class="v-final-brand-title slide-emphasis">Virtually</h2><p class="v-final-brand-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</p></div></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 20</div></div></main><script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
       const homeButton = document.getElementById("page-home-button");
@@ -6225,6 +6270,15 @@
               note: "",
             },
             16: {
+              title: "Total VTuber<br><span class=\"slide-emphasis\">Market Size</span>",
+              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              koreaHeading: "Korea",
+              koreaValue: "₩200B ~ ₩300B",
+              globalHeading: "Global",
+              globalValue: "₩4T ~ ₩8T",
+              note: "",
+            },
+            17: {
               title: "Unifying the entire VTuber ecosystem,<br><span class=\"slide-emphasis\">from A to Z, on one platform.</span>",
               roadmap: [
                 ["AI Global Reach", "Real-time speech & text translation<br>erasing language barriers worldwide"],
@@ -6233,7 +6287,7 @@
               ],
               note: "",
             },
-            17: {
+            18: {
               title: "Technology creates the marvels,<br><span class=\"slide-emphasis\">ecosystems capture the wealth.</span>",
               headers: ["", "Technology R&D", "", "Ecosystem Standard"],
               contexts: [["Digital Music Industry", "2001"], ["Live VTuber Industry", "2026"]],
@@ -6241,7 +6295,7 @@
               destinations: [["Apple", "iPod + iTunes"], ["Virtually", "Creators + Fans + Live"]],
               note: "",
             },
-            18: {
+            19: {
               title: "Why now is the defining opportunity:<br><span class=\"slide-emphasis\">Semiconductor export restrictions.</span>",
               steps: [
                 "Chip Export Controls<br>on China",
@@ -6252,7 +6306,7 @@
               highlightTitle: "Capturing Outsized Value via<br><span class=\"slide-emphasis\">AI Infra &amp; Serving</span>",
               note: "",
             },
-            19: {
+            20: {
               title: "Thank you.<br><span class=\"slide-emphasis\">Q &amp; A</span>",
               subtitle: "VTuber live streaming<br>made easy with AI",
             },
@@ -6387,6 +6441,15 @@
               note: "",
             },
             16: {
+              title: "VTuber市場<br><span class=\"slide-emphasis\">全体の規模</span>",
+              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              koreaHeading: "韓国",
+              koreaValue: "2,000億〜3,000億ウォン<small> (約220億〜330億円)</small>",
+              globalHeading: "グローバル",
+              globalValue: "4兆〜8兆ウォン<small> (約4,400億〜8,800億円)</small>",
+              note: "",
+            },
+            17: {
               title: "VTuberエコシステムのA–Zを、<br><span class=\"slide-emphasis\">ひとつのプラットフォームで完結。</span>",
               roadmap: [
                 ["AIグローバル展開", "リアルタイム音声翻訳で<br>言語の壁を完全撤廃"],
@@ -6395,7 +6458,7 @@
               ],
               note: "",
             },
-            17: {
+            18: {
               title: "技術が驚きを生み出し、<br><span class=\"slide-emphasis\">エコシステムが富を掴む。</span>",
               headers: ["", "コア技術開発", "", "エコシステムの標準化"],
               contexts: [["デジタル音楽産業", "2001年"], ["ライブVTuber産業", "2026年"]],
@@ -6403,7 +6466,7 @@
               destinations: [["Apple", "iPod + iTunes"], ["Virtually", "クリエイター + ファン + ライブ"]],
               note: "",
             },
-            18: {
+            19: {
               title: "今こそが真の好機である理由、<br><span class=\"slide-emphasis\">それは半導体輸出規制にあります。</span>",
               steps: [
                 "米国の対中先端半導体<br>輸出規制",
@@ -6414,7 +6477,7 @@
               highlightTitle: "AIインフラ・サービングで<br><span class=\"slide-emphasis\">莫大な収益を獲得</span>",
               note: "",
             },
-            19: {
+            20: {
               title: "ご清聴ありがとうございました。<br><span class=\"slide-emphasis\">Q &amp; A</span>",
               subtitle: "VTuberライブを<br>AIでかんたんに",
             },
@@ -6549,6 +6612,15 @@
               note: "",
             },
             16: {
+              title: "VTuber 虚拟主播<br><span class=\"slide-emphasis\">整体市场规模</span>",
+              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              koreaHeading: "韩国本土",
+              koreaValue: "2,000亿 – 3,000亿韩元<small> (约10亿–15亿元)</small>",
+              globalHeading: "全球市场",
+              globalValue: "4万亿 – 8万亿韩元<small> (约200亿–400亿元)</small>",
+              note: "",
+            },
+            17: {
               title: "打通虚拟人全产业链条（A–Z），<br><span class=\"slide-emphasis\">完全沉淀在 Virtually 一体化平台之中。</span>",
               roadmap: [
                 ["AI 全球破圈", "实时多语种无损语音翻译<br>无视国界，真正触达全球粉丝"],
@@ -6557,7 +6629,7 @@
               ],
               note: "",
             },
-            17: {
+            18: {
               title: "技术各显神通，<br><span class=\"slide-emphasis\">生态掌控财富。</span>",
               headers: ["", "底层技术研发", "", "定义生态标准"],
               contexts: [["数字音乐产业", "2001年"], ["虚拟直播产业", "2026年"]],
@@ -6565,7 +6637,7 @@
               destinations: [["Apple", "iPod + iTunes"], ["Virtually", "创作者 + 粉丝 + 互动生态"]],
               note: "",
             },
-            18: {
+            19: {
               title: "当下真正的时代破局点，<br><span class=\"slide-emphasis\">正源自半导体出口管制。</span>",
               steps: [
                 "对华先进芯片与半导体<br>出口全面受限",
@@ -6576,7 +6648,7 @@
               highlightTitle: "依托 AI 基础设施与模型服务<br><span class=\"slide-emphasis\">攫取丰厚商业利润</span>",
               note: "",
             },
-            19: {
+            20: {
               title: "感谢聆听<br><span class=\"slide-emphasis\">Q &amp; A</span>",
               subtitle: "让 VTuber 虚拟直播<br>用 AI 变得极致简单",
             },
@@ -6711,6 +6783,15 @@
               note: "",
             },
             16: {
+              title: "VTuber 虛擬主播<br><span class=\"slide-emphasis\">整體市場規模</span>",
+              scope: "VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              koreaHeading: "韓國本土",
+              koreaValue: "2,000億 – 3,000億韓元<small> (約NT$ 45億–68億)</small>",
+              globalHeading: "全球市場",
+              globalValue: "4兆 – 8兆韓元<small> (約NT$ 900億–1,800億)</small>",
+              note: "",
+            },
+            17: {
               title: "打通虛擬人全產業鏈條（A–Z），<br><span class=\"slide-emphasis\">完全沉澱在 Virtually 一體化平台之中。</span>",
               roadmap: [
                 ["AI 全球出海", "即時多語種無損語音翻譯<br>無視國界，真正觸達全球粉絲"],
@@ -6719,7 +6800,7 @@
               ],
               note: "",
             },
-            17: {
+            18: {
               title: "技術各顯神通，<br><span class=\"slide-emphasis\">生態掌控財富。</span>",
               headers: ["", "底層技術研發", "", "定義生態標準"],
               contexts: [["數位音樂產業", "2001年"], ["虛擬直播產業", "2026年"]],
@@ -6727,7 +6808,7 @@
               destinations: [["Apple", "iPod + iTunes"], ["Virtually", "創作者 + 粉絲 + 互動生態"]],
               note: "",
             },
-            18: {
+            19: {
               title: "當下真正的時代破局點，<br><span class=\"slide-emphasis\">正源自半導體出口管制。</span>",
               steps: [
                 "對華先進晶片與半導體<br>出口全面受限",
@@ -6738,7 +6819,7 @@
               highlightTitle: "依託 AI 基礎設施與模型服務<br><span class=\"slide-emphasis\">獲取豐厚商業利潤</span>",
               note: "",
             },
-            19: {
+            20: {
               title: "感謝聆聽<br><span class=\"slide-emphasis\">Q &amp; A</span>",
               subtitle: "讓 VTuber 虛擬直播<br>用 AI 變得極致簡單",
             },
@@ -6941,34 +7022,43 @@
 
         const s16 = slide(16);
         setHTML(s16, "h1", translation.slides[16].title);
-        setManyHTML(s16, ".v-roadmap h2", translation.slides[16].roadmap.map((item) => item[0]));
-        setManyHTML(s16, ".v-roadmap p", translation.slides[16].roadmap.map((item) => item[1]));
+        setHTML(s16, ".v-tam-scope", translation.slides[16].scope);
+        setHTML(s16, ".v-tam-korea h2", translation.slides[16].koreaHeading);
+        setHTML(s16, ".v-tam-korea strong", translation.slides[16].koreaValue);
+        setHTML(s16, ".v-tam-global h2", translation.slides[16].globalHeading);
+        setHTML(s16, ".v-tam-global strong", translation.slides[16].globalValue);
         setHTML(s16, ".v-note", translation.slides[16].note);
 
         const s17 = slide(17);
         setHTML(s17, "h1", translation.slides[17].title);
-        setManyHTML(s17, ".v-eco-head span", translation.slides[17].headers);
-        setManyHTML(s17, ".v-eco-context strong", translation.slides[17].contexts.map((item) => item[0]));
-        setManyHTML(s17, ".v-eco-context span", translation.slides[17].contexts.map((item) => item[1]));
-        setManyHTML(s17, ".v-eco-row > div:nth-child(2) strong", translation.slides[17].sources.map((item) => item[0]));
-        setManyHTML(s17, ".v-eco-row > div:nth-child(2) span", translation.slides[17].sources.map((item) => item[1]));
-        setManyHTML(s17, ".v-eco-row > div:nth-child(4) strong", translation.slides[17].destinations.map((item) => item[0]));
-        setManyHTML(s17, ".v-eco-row > div:nth-child(4) span", translation.slides[17].destinations.map((item) => item[1]));
+        setManyHTML(s17, ".v-roadmap h2", translation.slides[17].roadmap.map((item) => item[0]));
+        setManyHTML(s17, ".v-roadmap p", translation.slides[17].roadmap.map((item) => item[1]));
         setHTML(s17, ".v-note", translation.slides[17].note);
 
         const s18 = slide(18);
-        if (s18 && translation.slides[18]) {
-          setHTML(s18, "h1", translation.slides[18].title);
-          setManyHTML(s18, ".v-opp-step strong", translation.slides[18].steps);
-          setHTML(s18, ".v-opp-highlight-head .v-opp-num", translation.slides[18].highlightNum);
-          setHTML(s18, ".v-opp-highlight-head strong", translation.slides[18].highlightTitle);
-          setHTML(s18, ".v-note", translation.slides[18].note);
-        }
+        setHTML(s18, "h1", translation.slides[18].title);
+        setManyHTML(s18, ".v-eco-head span", translation.slides[18].headers);
+        setManyHTML(s18, ".v-eco-context strong", translation.slides[18].contexts.map((item) => item[0]));
+        setManyHTML(s18, ".v-eco-context span", translation.slides[18].contexts.map((item) => item[1]));
+        setManyHTML(s18, ".v-eco-row > div:nth-child(2) strong", translation.slides[18].sources.map((item) => item[0]));
+        setManyHTML(s18, ".v-eco-row > div:nth-child(2) span", translation.slides[18].sources.map((item) => item[1]));
+        setManyHTML(s18, ".v-eco-row > div:nth-child(4) strong", translation.slides[18].destinations.map((item) => item[0]));
+        setManyHTML(s18, ".v-eco-row > div:nth-child(4) span", translation.slides[18].destinations.map((item) => item[1]));
+        setHTML(s18, ".v-note", translation.slides[18].note);
 
         const s19 = slide(19);
         if (s19 && translation.slides[19]) {
           setHTML(s19, "h1", translation.slides[19].title);
-          setHTML(s19, ".v-final-brand-subtitle", translation.slides[19].subtitle);
+          setManyHTML(s19, ".v-opp-step strong", translation.slides[19].steps);
+          setHTML(s19, ".v-opp-highlight-head .v-opp-num", translation.slides[19].highlightNum);
+          setHTML(s19, ".v-opp-highlight-head strong", translation.slides[19].highlightTitle);
+          setHTML(s19, ".v-note", translation.slides[19].note);
+        }
+
+        const s20 = slide(20);
+        if (s20 && translation.slides[20]) {
+          setHTML(s20, "h1", translation.slides[20].title);
+          setHTML(s20, ".v-final-brand-subtitle", translation.slides[20].subtitle);
         }
 
         return translation;
