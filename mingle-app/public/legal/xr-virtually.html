@@ -5988,6 +5988,43 @@
           gap:2px;
         }
       }
+      /* Slide 7: keep each model's brand and service together while opening room for the title. */
+      .v-ai-animate .v-model {
+        border-left:3px solid #f97316;
+        border-bottom:0;
+      }
+      .v-ai-animate .v-model:nth-child(2) { border-left-color:#8b5cf6; }
+      .v-ai-animate .v-model:nth-child(3) { border-left-color:#14b8a6; }
+      .v-ai-animate .v-model:nth-child(4) { border-left-color:#f59e0b; }
+      .v-ai-animate .v-brand { margin-bottom:10px; }
+      @media (min-width:901px) {
+        .v-ai-animate .v-shell { gap:32px; }
+        .v-ai-animate .v-title {
+          max-width:620px;
+          font-size:clamp(40px,3.9vw,56px);
+        }
+        html[data-locale="en"] .v-ai-animate .v-title {
+          font-size:clamp(40px,3.6vw,52px);
+        }
+        .v-ai-animate .v-models {
+          flex-basis:560px;
+          width:min(560px,47vw);
+          column-gap:16px;
+          row-gap:24px;
+        }
+        .v-ai-animate .v-model {
+          padding:20px 14px 20px 16px;
+        }
+        .v-ai-animate .v-brand {
+          height:52px;
+          margin-bottom:8px;
+        }
+      }
+      @media (max-width:900px) {
+        .v-ai-animate .v-model {
+          padding:15px 8px 15px 10px;
+        }
+      }
 </style></head><body><main class="deck" aria-label="Virtually 한국어 발표자료"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
@@ -6632,6 +6669,17 @@
       };
 
       function resolveVirtuallyLocale() {
+        const params = new URLSearchParams(window.location.search);
+        const langParam = (params.get("lang") || "").toLowerCase();
+
+        if (langParam) {
+          if (langParam === "ko") return "ko";
+          if (langParam === "ja") return "ja";
+          if (langParam === "cn-tw" || langParam === "zh-tw" || langParam === "zh-hant") return "cn-TW";
+          if (langParam === "cn-zh" || langParam === "zh-cn" || langParam === "zh-hans" || langParam === "zh") return "cn-ZH";
+          if (langParam === "en") return "en";
+        }
+
         const language = String(navigator.language || navigator.userLanguage || "en").toLowerCase();
 
         if (language.startsWith("ko")) {
