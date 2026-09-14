@@ -5728,11 +5728,11 @@
         .v-cost-column strong small { font-size:11px; }
         .v-between { font-size:26px; }
         .v-cost-compare > .v-between,.v-platform > .v-between,.v-apple > .v-between,.v-world > .v-between { line-height:1; transform:rotate(90deg); }
-        .v-world { grid-template-columns:1fr; gap:20px; }
+        .v-world { grid-template-columns:minmax(0,1fr); gap:20px; min-width:0; }
         .v-world .v-figure { height:29vh; }
-        .v-prompt { text-align:center; gap:12px; }
+        .v-prompt { text-align:center; gap:12px; min-width:0; }
         .v-prompt span { font-size:14px; }
-        .v-prompt strong { font-size:25px; }
+        .v-prompt strong { font-size:25px; min-width:0; overflow-wrap:anywhere; }
         .v-sam { grid-template-columns:1fr; gap:24px; }
         .v-sam h2 { font-size:21px; }
         .v-sam h2 small { font-size:12px; }
@@ -5861,7 +5861,7 @@
         gap:clamp(48px,8vw,120px);
         padding:48px clamp(8vw,10vw,144px) 96px clamp(10vw,12vw,174px);
       }
-      .v-final .v-title { flex:0 1 46%; }
+      .v-final .v-title { flex:0 1 46%; min-width:0; overflow-wrap:anywhere; }
       .v-final-brand {
         flex:0 1 44%;
         display:grid;
@@ -5922,6 +5922,60 @@
         .v-final-brand-subtitle { font-size:18px; }
         .v-final-brand .slide-final-link--linkedin { height:38px; padding:0 12px; font-size:.82rem; }
         .v-final-brand .slide-final-logo--linkedin { width:24px; height:24px; font-size:.88rem; border-radius:6px; }
+      }
+      @media (max-width:360px) and (max-height:650px) {
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-shell {
+          gap:8px;
+          padding-top:10px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-title {
+          font-size:19px;
+          line-height:1.08;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam {
+          gap:9px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-blocks {
+          gap:7px;
+          margin-top:7px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-blocks > div {
+          gap:3px;
+          padding-top:6px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-blocks span {
+          font-size:10px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-blocks strong {
+          font-size:18px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-blocks p {
+          font-size:7px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global {
+          gap:5px;
+          padding-top:8px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global > span {
+          font-size:10px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global > strong {
+          font-size:29px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global p {
+          font-size:11px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-shell {
+          gap:10px;
+          padding-top:10px;
+        }
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-title {
+          font-size:20px;
+          line-height:1.1;
+        }
+        html.is-mobile-viewport .v-slide[data-page="10"] .v-shell {
+          gap:2px;
+        }
       }
 </style></head><body><main class="deck" aria-label="Virtually 한국어 발표자료"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
@@ -5984,6 +6038,796 @@
       const pageCounter = document.getElementById("page-counter");
       const homeButton = document.getElementById("page-home-button");
 
+      const virtuallyTranslations = {
+        en: {
+          htmlLang: "en",
+          meta: {
+            title: "Virtually — VTuber live streaming, made easy with AI",
+            description: "Virtually: VTuber live streaming, made easy with AI.",
+            ogDescription: "A virtual live stream that starts with one image.",
+            imageAlt: "VTuber live streaming, made easy with AI",
+          },
+          ui: {
+            main: "Virtually presentation",
+            controls: "Presentation navigation",
+            homeAria: "Go to first slide",
+            home: "First",
+            frameTitle: "Genjutsu AI video demo",
+          },
+          slides: {
+            1: {
+              subtitle: "VTuber live streaming<br>made easy with AI",
+              coverAlt: "Camera footage and VTuber character",
+            },
+            2: {
+              title: "Becoming a VTuber<br>is still <span class=\"slide-emphasis\">far too hard.</span>",
+              captions: ["2D · Illustration / parts & rigging / tracking", "3D · Model & rigging / mocap studio / scene & streaming"],
+              alts: ["2D character rigging in Cubism", "A Unity setup error while configuring a 3D model"],
+            },
+            3: {
+              title: "After all this work,<br><span class=\"slide-emphasis\">you can barely move one picture.</span>",
+              processHeading: "From creation to live",
+              lanes: ["2D character", "3D character"],
+              steps: ["Character illustration", "Parts separation", "2D rigging", "Facial tracking", "Modeling · textures", "Skeleton · rigging", "Motion capture studio", "Calibration · retargeting", "Scene · lighting · OBS setup", "Live operation"],
+              note: "2D focuses on basic expressions · 3D is freer, but requires a model and motion-capture setup.",
+            },
+            4: {
+              title: "Character production and operation<br><span class=\"slide-emphasis\">come with a high cost.</span>",
+              videoAria: "Play VTuber production cost video",
+              videoAlt: "Video about 2D and 3D VTuber production costs",
+              caption: "2D · 3D VTuber production costs · <a href=\"https://www.youtube.com/watch?v=Z7cfoJEfLDY\" target=\"_blank\" rel=\"noopener noreferrer\">Original video ↗</a>",
+              note: "Public production-cost examples · A single case is not a universal minimum.",
+            },
+            5: {
+              title: "AI is making<br><span class=\"slide-emphasis\">this process simpler.</span>",
+              videoAria: "Play Genjutsu video",
+              videoAlt: "Genjutsu video preview",
+              caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">Original video ↗</a>",
+              note: "Recorded-video AI transformation example · On local files, the play button opens the YouTube original.",
+            },
+            6: {
+              title: "Virtually starts a live stream<br><span class=\"slide-emphasis\">from a single photo.</span>",
+              flowInput: "One image",
+              flowTarget: "10-sec target",
+              captions: ["Character image", "Live stream"],
+              alts: ["Character image used as input", "Reference image for the target VTuber live stream"],
+              note: "Product concept · Attached images illustrate the input and target broadcast experience. They are not actual Virtually output.",
+            },
+            7: {
+              title: "Applying<br><span class=\"slide-emphasis\">AI Animate to live is the key.</span>",
+              modelAlts: ["Alibaba logo", "Higgsfield logo", "ByteDance logo", "Kling logo"],
+              note: "Technologies under review · Not all are real-time models. Latency, quality and operating cost remain product challenges.",
+            },
+            8: {
+              title: "IRIAM showed us<br><span class=\"slide-emphasis\">the demand for easy broadcasting.</span>",
+              alts: ["IRIAM PNG image and broadcast screen", "IRIAM download and annual-revenue growth chart"],
+              stats: ["Cumulative downloads · 2026.05", "Daily broadcasters · 2025.04", "Annual revenue · 2025.03"],
+              statValues: ["6.21M", "10K+", "¥8.5B+"],
+              note: "Each metric has a different reference date. Cumulative downloads are not active users.",
+            },
+            9: {
+              title: "Simple image-based broadcasting<br><span class=\"slide-emphasis\">still limits expression.</span>",
+              videoAria: "IRIAM PNG broadcasting demo",
+            },
+            10: {
+              title: "Virtually keeps expression <span class=\"slide-emphasis\">more open,</span><br>while minimizing cost.",
+              costHeadings: ["Existing high-end 3D", "Virtually"],
+              targetLabel: "Target",
+              costLabels: ["Production · setup", "Mocap operation", "Production · setup", "AI operation"],
+              costValues: ["₩1M–₩30M", "up to ₩2M<small>/ hour</small>", "₩0", "₩10K<small>/ hour</small>"],
+              note: "Proposed high-end 3D comparison scenario, not a universal price. Virtually's figures are targets before quality and cost validation. Reused 3D models may be more economical over the long term.",
+            },
+            11: {
+              title: "Beyond the character,<br><span class=\"slide-emphasis\">AI can make backgrounds, maps and environments.</span>",
+              prompt: "“Create a magical library under moonlight”",
+              caption: "Background · space · lighting in one step",
+              alt: "Reference live screen with a character and background",
+              note: "Expansion concept · The attached screen illustrates the target experience. Free-form 3D space generation remains a separate development task.",
+            },
+            12: {
+              title: "VTuber production & operations alone<br><span class=\"slide-emphasis\">Korea ₩10B+, global ₩200B+</span>",
+              koreaHeading: "Korea · estimated annual spend · ₩10B+",
+              koreaItems: [
+                ["Live2D production", "₩3–5B", "Illustration · parts · rigging"],
+                ["3D production", "₩3–6B", "Modeling · rigging · updates"],
+                ["Mocap live", "₩3.5–4.5B", "Broadcasts · showcases · concerts"],
+                ["Mocap content", "₩0.7–1.5B", "Dance · music videos · retargeting"],
+              ],
+              globalHeading: "Global · estimated annual spend",
+              globalValue: "₩200B+",
+              globalText: "Production spend already exists<br><span class=\"slide-emphasis\">replace it with software</span>",
+              note: "Bottom-up estimate · Not official market data. Includes only potentially replaceable character, rigging, mocap and live-production spend; excludes advertising, sponsorships, merchandise and creator revenue.",
+            },
+            13: {
+              title: "Live earns<br><span class=\"slide-emphasis\">400× more per view than short-form.</span>",
+              assumption: "Average revenue-per-view estimate",
+              rowLabels: ["Short-form", "Long-form", "Live"],
+              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              note: "Illustrative comparison · Multiples are based on the stated assumptions. View definitions, measurement periods and inclusion of fan support differ by format, so this is not a measured like-for-like average.",
+            },
+            14: {
+              title: "Start as a creation tool,<br><span class=\"slide-emphasis\">then become a live platform.</span>",
+              stages: [
+                ["Start", "Photo → Virtually → OBS", "Simplify creation and streaming"],
+                ["Goal", "Creators <em>↔</em> fans", "Broadcast · discovery · subscriptions · support"],
+              ],
+              takeaway: "We build <span class=\"slide-emphasis\">network effects that bring users to one another.</span>",
+              note: "Growth strategy · Build lasting creator–fan relationships beyond tool feature competition.",
+            },
+            15: {
+              title: "The VTuber ecosystem, A–Z,<br><span class=\"slide-emphasis\">in one platform.</span>",
+              roadmap: [
+                ["AI global reach", "Real-time translation<br>without language barriers"],
+                ["AI companion", "A character relationship<br>that continues beyond the stream"],
+                ["Content studio", "AI automation · music · short drama<br>web novels · webtoons"],
+              ],
+              note: "Mid- to long-term expansion",
+            },
+            16: {
+              title: "Just as Apple standardized digital music<br><span class=\"slide-emphasis\">with simple UX.</span>",
+              before: "What you had to do for every song",
+              steps: ["CD extraction", "Codec selection", "Format conversion", "Bitrate setting", "File and folder organization", "Album and artist tags", "Genre and album art", "Duplicate cleanup", "Playlist building", "Device syncing"],
+              musicLabel: "My music",
+              rightLabel: "iTunes + iPod",
+              rightTitle: "Choose. Sync. Listen.",
+              note: "<a href=\"https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/\" target=\"_blank\" rel=\"noopener noreferrer\">iPod · automatic syncing (2001)</a> · <a href=\"https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/\" target=\"_blank\" rel=\"noopener noreferrer\">iTunes Music Store (2003)</a>",
+            },
+            17: {
+              title: "Technology performs the trick,<br><span class=\"slide-emphasis\">ecosystems make the money.</span>",
+              headers: ["Industry", "Core technology", "", "Customer experience · distribution · monetization"],
+              contexts: [["Digital music industry", "2001"], ["Live VTuber industry", "2026"]],
+              sources: [["Toshiba", "Storage device"], ["Chinese AI companies", "Generative model"]],
+              destinations: [["Apple", "iPod + iTunes"], ["Virtually", "Creators + fans + live"]],
+              note: "<a href=\"https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/\" target=\"_blank\" rel=\"noopener noreferrer\">UCI's iPod value-allocation study</a> inspired this business strategy · Component suppliers also earn revenue; Virtually's platform revenue remains a goal to validate.",
+            },
+            18: {
+              title: "Thank you.<br><span class=\"slide-emphasis\">Q &amp; A</span>",
+              subtitle: "VTuber live streaming<br>made easy with AI",
+            },
+          },
+        },
+        ja: {
+          htmlLang: "ja",
+          meta: {
+            title: "Virtually — VTuberライブをAIでかんたんに",
+            description: "Virtually：VTuberライブをAIでかんたんに。",
+            ogDescription: "写真一枚から始めるバーチャルライブ。",
+            imageAlt: "VTuberライブをAIでかんたんに",
+          },
+          ui: {
+            main: "Virtually プレゼンテーション",
+            controls: "スライド移動",
+            homeAria: "最初のスライドへ",
+            home: "最初",
+            frameTitle: "Genjutsu AI動画デモ",
+          },
+          slides: {
+            1: { subtitle: "VTuberライブを<br>AIでかんたんに", coverAlt: "カメラ映像とVTuberキャラクター" },
+            2: {
+              title: "VTuberになるのは<br>今も <span class=\"slide-emphasis\">とても難しい。</span>",
+              captions: ["2D · イラスト / パーツ分け・リギング / トラッキング", "3D · モデル・リギング / モーションキャプチャースタジオ / シーン・配信"],
+              alts: ["Cubismで2Dキャラクターをリギングする画面", "3Dモデル設定中にUnityで発生したエラーの例"],
+            },
+            3: {
+              title: "これだけの作業をしても<br><span class=\"slide-emphasis\">動かせるのは、やっと一枚の絵です。</span>",
+              processHeading: "制作からライブまで",
+              lanes: ["2Dキャラクター", "3Dキャラクター"],
+              steps: ["キャラクターイラスト", "パーツ分け", "2Dリギング", "表情トラッキング", "モデリング · テクスチャ", "スケルトン · リギング", "モーションキャプチャースタジオ", "キャリブレーション · リターゲティング", "シーン · 照明 · OBS設定", "ライブ運用"],
+              note: "2Dは基本表情が中心 · 3Dは自由ですが、モデルとモーションキャプチャー環境が必要です。",
+            },
+            4: {
+              title: "キャラクター制作と運用には<br><span class=\"slide-emphasis\">大きなコストがかかります。</span>",
+              videoAria: "VTuber制作費用の動画を再生",
+              videoAlt: "2D・3D VTuberの制作費用を紹介する動画",
+              caption: "2D · 3D VTuber制作費用 · <a href=\"https://www.youtube.com/watch?v=Z7cfoJEfLDY\" target=\"_blank\" rel=\"noopener noreferrer\">元の動画 ↗</a>",
+              note: "公開されている制作費用の例 · 一つの事例を一般的な最低費用とはしません。",
+            },
+            5: {
+              title: "AIの進化で<br><span class=\"slide-emphasis\">この工程は簡単になっています。</span>",
+              videoAria: "Genjutsu動画を再生",
+              videoAlt: "Genjutsu動画のプレビュー",
+              caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">元の動画 ↗</a>",
+              note: "録画映像を使ったAI変換の例 · ローカルファイルでは再生ボタンからYouTubeの元動画を開きます。",
+            },
+            6: {
+              title: "Virtuallyなら写真一枚で<br><span class=\"slide-emphasis\">すぐにライブを始められます。</span>",
+              flowInput: "一枚入力",
+              flowTarget: "10秒目標",
+              captions: ["キャラクター画像", "ライブ配信"],
+              alts: ["入力に使うキャラクター画像", "目標とするVTuberライブ画面の参考画像"],
+              note: "プロダクト構想 · 添付画像は入力と配信体験の参考例です。Virtuallyの実際の変換結果ではありません。",
+            },
+            7: {
+              title: "AI Animate技術を<br><span class=\"slide-emphasis\">ライブに適用することが鍵です。</span>",
+              modelAlts: ["Alibabaロゴ", "Higgsfieldロゴ", "ByteDanceロゴ", "Klingロゴ"],
+              note: "検討中の技術群 · すべてがリアルタイムモデルではありません。遅延・品質・運用コストの最適化が課題です。",
+            },
+            8: {
+              title: "手軽な配信の需要を<br><span class=\"slide-emphasis\">IRIAMが示しました。</span>",
+              alts: ["IRIAMのPNG画像と配信画面", "IRIAMのダウンロード数と年間売上の成長グラフ"],
+              stats: ["累計ダウンロード · 2026.05", "1日の配信者数 · 2025.04", "年間売上 · 2025.03"],
+              statValues: ["621万", "1万+", "85億円+"],
+              note: "指標ごとに基準日が異なります。累計ダウンロード数はアクティブユーザー数ではありません。",
+            },
+            9: {
+              title: "シンプルな画像配信には<br><span class=\"slide-emphasis\">表現の限界があります。</span>",
+              videoAria: "IRIAM PNG配信デモ",
+            },
+            10: {
+              title: "Virtuallyは <span class=\"slide-emphasis\">表現を広げ、</span><br>コストを最小化します。",
+              costHeadings: ["既存のハイエンド3D", "Virtually"],
+              targetLabel: "目標",
+              costLabels: ["制作・準備", "モーションキャプチャー運用", "制作・準備", "AI運用"],
+              costValues: ["₩100万–₩3,000万", "最大 ₩200万<small>/ 時間</small>", "₩0", "₩1万<small>/ 時間</small>"],
+              note: "提案したハイエンド3Dとの比較シナリオであり、一般的な価格ではありません。Virtuallyの数値は品質と原価を検証する前の目標値です。3Dモデルを再利用できる場合、長期的には3Dの方が経済的なこともあります。",
+            },
+            11: {
+              title: "キャラクターだけでなく<br><span class=\"slide-emphasis\">背景・マップ・環境までAIで。</span>",
+              prompt: "「月明かりの魔法図書館の背景を作って」",
+              caption: "背景 · 空間 · 照明まで一度に",
+              alt: "キャラクターと背景が一緒に映るライブ画面の参考画像",
+              note: "拡張構想 · 添付画面は目標体験の参考例です。自由な3D空間生成は別途開発課題です。",
+            },
+            12: {
+              title: "VTuber制作・運用だけで<br><span class=\"slide-emphasis\">韓国 ₩10B+、グローバル ₩200B+</span>",
+              koreaHeading: "韓国 · 年間支出推定 · ₩10B+",
+              koreaItems: [
+                ["Live2D制作", "₩3–5B", "イラスト · パーツ · リギング"],
+                ["3D制作", "₩3–6B", "モデリング · リギング · 更新"],
+                ["モーションキャプチャーライブ", "₩3.5–4.5B", "配信 · ショーケース · コンサート"],
+                ["モーションキャプチャーコンテンツ", "₩0.7–1.5B", "ダンス · MV · リターゲティング"],
+              ],
+              globalHeading: "グローバル · 年間支出推定",
+              globalValue: "₩200B+",
+              globalText: "すでに支出されている制作費を<br><span class=\"slide-emphasis\">ソフトウェアで置き換える</span>",
+              note: "Bottom-up推定 · 公式市場統計ではありません。キャラクター・リギング・モーションキャプチャー・ライブ制作のうち潜在的に置き換えられる支出のみを含み、広告・スポンサー・グッズ・クリエイター収益は除外しています。",
+            },
+            13: {
+              title: "ライブの1再生あたり収益は<br><span class=\"slide-emphasis\">ショート動画の400倍以上。</span>",
+              assumption: "1再生あたりの平均収益推定",
+              rowLabels: ["ショート動画", "長尺動画", "ライブ"],
+              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              note: "比較イメージ · 倍率は提示した仮定に基づきます。形式ごとに再生の定義・集計期間・ファン支援の扱いが異なるため、実測された同条件の平均ではありません。",
+            },
+            14: {
+              title: "まずは制作ツールから、<br><span class=\"slide-emphasis\">やがてライブプラットフォームへ。</span>",
+              stages: [
+                ["開始", "写真 → Virtually → OBS", "制作と配信をシンプルに"],
+                ["目標", "クリエイター <em>↔</em> ファン", "配信 · 発見 · 登録 · 支援"],
+              ],
+              takeaway: "ユーザー同士が互いを呼び込む <span class=\"slide-emphasis\">ネットワーク効果を構築します。</span>",
+              note: "成長戦略 · ツール機能の競争を越え、クリエイターとファンが集う関係を築きます。",
+            },
+            15: {
+              title: "VTuberエコシステムのA–Zを<br><span class=\"slide-emphasis\">一つのプラットフォームに。</span>",
+              roadmap: [
+                ["AIグローバル展開", "リアルタイム翻訳で<br>言語の壁を越える"],
+                ["AIコンパニオン", "配信の外でも続く<br>キャラクターとの関係"],
+                ["コンテンツスタジオ", "AI自動制作 · 音楽 · ショートドラマ<br>Web小説 · Webtoon"],
+              ],
+              note: "中長期の拡張方針",
+            },
+            16: {
+              title: "Appleがデジタル音楽を<br><span class=\"slide-emphasis\">シンプルなUXで標準化したように。</span>",
+              before: "曲ごとに自分でやる必要があったこと",
+              steps: ["CD取り込み", "コーデック選択", "フォーマット変換", "ビットレート設定", "ファイル・フォルダ整理", "アルバム・アーティストタグ", "ジャンル・アルバムアート", "重複ファイル整理", "プレイリスト作成", "デバイス同期"],
+              musicLabel: "マイミュージック",
+              rightLabel: "iTunes + iPod",
+              rightTitle: "選ぶ。入れる。聴く。",
+              note: "<a href=\"https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/\" target=\"_blank\" rel=\"noopener noreferrer\">iPod · 自動同期（2001）</a> · <a href=\"https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/\" target=\"_blank\" rel=\"noopener noreferrer\">iTunes Music Store（2003）</a>",
+            },
+            17: {
+              title: "技術は腕を振るい、<br><span class=\"slide-emphasis\">利益はエコシステムが生みます。</span>",
+              headers: ["産業", "コア技術", "", "顧客体験 · 流通 · マネタイズ"],
+              contexts: [["デジタル音楽産業", "2001年"], ["ライブVTuber産業", "2026年"]],
+              sources: [["Toshiba", "記憶装置"], ["中国AI企業", "生成モデル"]],
+              destinations: [["Apple", "iPod + iTunes"], ["Virtually", "クリエイター + ファン + ライブ"]],
+              note: "<a href=\"https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/\" target=\"_blank\" rel=\"noopener noreferrer\">UCIのiPod価値配分研究</a>に着想を得た事業戦略 · 部品サプライヤーも収益を得ますが、Virtuallyのプラットフォーム収益はこれから検証する目標です。",
+            },
+            18: {
+              title: "ありがとうございます。<br><span class=\"slide-emphasis\">Q &amp; A</span>",
+              subtitle: "VTuberライブを<br>AIでかんたんに",
+            },
+          },
+        },
+        "cn-ZH": {
+          htmlLang: "zh-CN",
+          meta: {
+            title: "Virtually — 让 VTuber 直播用 AI 变得简单",
+            description: "Virtually：让 VTuber 直播用 AI 变得简单。",
+            ogDescription: "从一张照片开始的虚拟直播。",
+            imageAlt: "让 VTuber 直播用 AI 变得简单",
+          },
+          ui: {
+            main: "Virtually 演示文稿",
+            controls: "演示文稿导航",
+            homeAria: "返回第一张幻灯片",
+            home: "首页",
+            frameTitle: "Genjutsu AI 视频演示",
+          },
+          slides: {
+            1: { subtitle: "让 VTuber 直播<br>用 AI 变得简单", coverAlt: "摄像画面与 VTuber 角色" },
+            2: {
+              title: "成为 VTuber<br>现在仍然 <span class=\"slide-emphasis\">太难了。</span>",
+              captions: ["2D · 插画 / 分件与绑定 / 跟踪", "3D · 模型与绑定 / 动捕工作室 / 场景与直播"],
+              alts: ["在 Cubism 中绑定 2D 角色", "在 Unity 中设置 3D 模型时出现的错误示例"],
+            },
+            3: {
+              title: "做完这一切<br><span class=\"slide-emphasis\">勉强只能让一张图动起来。</span>",
+              processHeading: "从制作到直播",
+              lanes: ["2D 角色", "3D 角色"],
+              steps: ["角色插画", "拆分部件", "2D 绑定", "表情跟踪", "建模 · 纹理", "骨骼 · 绑定", "动作捕捉工作室", "校准 · 重定向", "场景 · 灯光 · OBS 设置", "直播运营"],
+              note: "2D 以基础表情为主 · 3D 更自由，但需要模型和动作捕捉环境。",
+            },
+            4: {
+              title: "角色制作与运营<br><span class=\"slide-emphasis\">都需要高昂成本。</span>",
+              videoAria: "播放 VTuber 制作成本视频",
+              videoAlt: "介绍 2D 与 3D VTuber 制作成本的视频",
+              caption: "2D · 3D VTuber 制作成本 · <a href=\"https://www.youtube.com/watch?v=Z7cfoJEfLDY\" target=\"_blank\" rel=\"noopener noreferrer\">原视频 ↗</a>",
+              note: "公开的制作成本案例 · 单一案例不能代表普遍最低成本。",
+            },
+            5: {
+              title: "随着 AI 发展<br><span class=\"slide-emphasis\">这套流程正在被简化。</span>",
+              videoAria: "播放 Genjutsu 视频",
+              videoAlt: "Genjutsu 视频预览",
+              caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">原视频 ↗</a>",
+              note: "基于录制视频的 AI 转换示例 · 在本地文件中，播放按钮会打开 YouTube 原视频。",
+            },
+            6: {
+              title: "Virtually 只需一张照片<br><span class=\"slide-emphasis\">即可开始直播。</span>",
+              flowInput: "输入一张图",
+              flowTarget: "目标 10 秒",
+              captions: ["角色图片", "直播画面"],
+              alts: ["用作输入的角色图片", "目标 VTuber 直播画面参考图"],
+              note: "产品构想 · 附图用于说明输入和目标直播体验，并非 Virtually 的实际转换结果。",
+            },
+            7: {
+              title: "AI Animate 技术的<br><span class=\"slide-emphasis\">实时应用是关键。</span>",
+              modelAlts: ["Alibaba 标志", "Higgsfield 标志", "ByteDance 标志", "Kling 标志"],
+              note: "正在评估的技术方向 · 并非全部都是实时模型。延迟、质量和运营成本的优化仍是产品课题。",
+            },
+            8: {
+              title: "IRIAM 展示了<br><span class=\"slide-emphasis\">轻松开播的需求。</span>",
+              alts: ["IRIAM PNG 图片与直播画面", "IRIAM 下载量与年收入增长图"],
+              stats: ["累计下载量 · 2026.05", "每日主播数 · 2025.04", "年收入 · 2025.03"],
+              statValues: ["621万", "1万+", "85亿日元+"],
+              note: "各项指标的参考日期不同。累计下载量不等于活跃用户数。",
+            },
+            9: {
+              title: "简单的图片直播<br><span class=\"slide-emphasis\">仍有表达局限。</span>",
+              videoAria: "IRIAM PNG 直播演示",
+            },
+            10: {
+              title: "Virtually 让表达 <span class=\"slide-emphasis\">更加自由，</span><br>同时将成本降到最低。",
+              costHeadings: ["现有高端 3D", "Virtually"],
+              targetLabel: "目标",
+              costLabels: ["制作 · 准备", "动捕运营", "制作 · 准备", "AI 运营"],
+              costValues: ["₩100万–₩3,000万", "最高 ₩200万<small>/ 小时</small>", "₩0", "₩1万<small>/ 小时</small>"],
+              note: "这是提出的高端 3D 对比场景，并非普遍价格。Virtually 的数字是质量与成本验证前的目标值。若 3D 模型可以复用，长期来看 3D 也可能更经济。",
+            },
+            11: {
+              title: "不止角色<br><span class=\"slide-emphasis\">背景、地图和环境也能由 AI 生成。</span>",
+              prompt: "“生成月光下的魔法图书馆背景”",
+              caption: "背景 · 空间 · 灯光一步完成",
+              alt: "角色与背景同时出现的直播画面参考图",
+              note: "扩展构想 · 附图用于说明目标体验。自由 3D 空间生成仍是独立的开发课题。",
+            },
+            12: {
+              title: "仅 VTuber 制作与运营<br><span class=\"slide-emphasis\">韩国 ₩10B+、全球 ₩200B+</span>",
+              koreaHeading: "韩国 · 年度支出估算 · ₩10B+",
+              koreaItems: [
+                ["Live2D 制作", "₩3–5B", "插画 · 部件 · 绑定"],
+                ["3D 制作", "₩3–6B", "建模 · 绑定 · 更新"],
+                ["动捕直播", "₩3.5–4.5B", "直播 · 展示 · 演唱会"],
+                ["动捕内容", "₩0.7–1.5B", "舞蹈 · MV · 重定向"],
+              ],
+              globalHeading: "全球 · 年度支出估算",
+              globalValue: "₩200B+",
+              globalText: "这些制作支出已经存在<br><span class=\"slide-emphasis\">用软件替代它们</span>",
+              note: "Bottom-up 估算 · 非官方市场统计。仅包含角色、绑定、动捕和虚拟直播制作中可能被替代的支出；不包含广告、赞助、周边和创作者收入。",
+            },
+            13: {
+              title: "直播每次观看的收入<br><span class=\"slide-emphasis\">是短视频的 400 倍以上。</span>",
+              assumption: "每次观看收入的平均估算",
+              rowLabels: ["短视频", "长视频", "直播"],
+              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              note: "示意性比较 · 倍数基于所述假设。不同形式的观看定义、统计周期和粉丝支持计入方式不同，因此不是实测的同条件平均值。",
+            },
+            14: {
+              title: "先从制作工具开始，<br><span class=\"slide-emphasis\">再成长为直播平台。</span>",
+              stages: [
+                ["起点", "照片 → Virtually → OBS", "简化制作与直播"],
+                ["目标", "创作者 <em>↔</em> 粉丝", "直播 · 发现 · 订阅 · 支持"],
+              ],
+              takeaway: "我们构建 <span class=\"slide-emphasis\">让用户彼此带来用户的网络效应。</span>",
+              note: "增长策略 · 超越工具功能竞争，建立创作者与粉丝长期留存的关系。",
+            },
+            15: {
+              title: "VTuber 生态 A–Z<br><span class=\"slide-emphasis\">整合进一个平台。</span>",
+              roadmap: [
+                ["AI 全球拓展", "实时翻译<br>跨越语言障碍"],
+                ["AI 伴侣", "直播之外<br>持续连接角色"],
+                ["内容工作室", "AI 自动制作 · 音乐 · 短剧<br>网络小说 · 网漫"],
+              ],
+              note: "中长期扩展方向",
+            },
+            16: {
+              title: "就像 Apple<br><span class=\"slide-emphasis\">用简单 UX 标准化数字音乐。</span>",
+              before: "每首歌都要手动完成的工作",
+              steps: ["CD 提取", "选择编解码器", "格式转换", "设置比特率", "整理文件与文件夹", "专辑与艺术家标签", "流派与专辑封面", "清理重复文件", "建立播放列表", "设备同步"],
+              musicLabel: "我的音乐",
+              rightLabel: "iTunes + iPod",
+              rightTitle: "选择。装入。聆听。",
+              note: "<a href=\"https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/\" target=\"_blank\" rel=\"noopener noreferrer\">iPod · 自动同步（2001）</a> · <a href=\"https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/\" target=\"_blank\" rel=\"noopener noreferrer\">iTunes Music Store（2003）</a>",
+            },
+            17: {
+              title: "技术负责表演，<br><span class=\"slide-emphasis\">生态系统负责赚钱。</span>",
+              headers: ["产业", "核心技术", "", "客户体验 · 分发 · 变现"],
+              contexts: [["数字音乐产业", "2001年"], ["直播 VTuber 产业", "2026年"]],
+              sources: [["Toshiba", "存储设备"], ["中国 AI 企业", "生成模型"]],
+              destinations: [["Apple", "iPod + iTunes"], ["Virtually", "创作者 + 粉丝 + 直播"]],
+              note: "本商业策略借鉴 <a href=\"https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/\" target=\"_blank\" rel=\"noopener noreferrer\">UCI 的 iPod 价值分配研究</a> · 零部件供应商也能获得收入；Virtually 的平台收入仍有待验证。",
+            },
+            18: {
+              title: "谢谢。<br><span class=\"slide-emphasis\">Q &amp; A</span>",
+              subtitle: "让 VTuber 直播<br>用 AI 变得简单",
+            },
+          },
+        },
+        "cn-TW": {
+          htmlLang: "zh-TW",
+          meta: {
+            title: "Virtually — 讓 VTuber 直播用 AI 變得簡單",
+            description: "Virtually：讓 VTuber 直播用 AI 變得簡單。",
+            ogDescription: "從一張照片開始的虛擬直播。",
+            imageAlt: "讓 VTuber 直播用 AI 變得簡單",
+          },
+          ui: {
+            main: "Virtually 簡報",
+            controls: "簡報導覽",
+            homeAria: "回到第一張投影片",
+            home: "首頁",
+            frameTitle: "Genjutsu AI 影片示範",
+          },
+          slides: {
+            1: { subtitle: "讓 VTuber 直播<br>用 AI 變得簡單", coverAlt: "攝影畫面與 VTuber 角色" },
+            2: {
+              title: "成為 VTuber<br>現在仍然 <span class=\"slide-emphasis\">太難了。</span>",
+              captions: ["2D · 插畫 / 分件與綁定 / 追蹤", "3D · 模型與綁定 / 動作捕捉工作室 / 場景與直播"],
+              alts: ["在 Cubism 中綁定 2D 角色", "在 Unity 中設定 3D 模型時出現的錯誤示例"],
+            },
+            3: {
+              title: "做完這一切<br><span class=\"slide-emphasis\">勉強只能讓一張圖動起來。</span>",
+              processHeading: "從製作到直播",
+              lanes: ["2D 角色", "3D 角色"],
+              steps: ["角色插畫", "拆分部件", "2D 綁定", "表情追蹤", "建模 · 材質", "骨骼 · 綁定", "動作捕捉工作室", "校準 · 重定向", "場景 · 燈光 · OBS 設定", "直播營運"],
+              note: "2D 以基本表情為主 · 3D 更自由，但需要模型和動作捕捉環境。",
+            },
+            4: {
+              title: "角色製作與營運<br><span class=\"slide-emphasis\">都需要高昂成本。</span>",
+              videoAria: "播放 VTuber 製作成本影片",
+              videoAlt: "介紹 2D 與 3D VTuber 製作成本的影片",
+              caption: "2D · 3D VTuber 製作成本 · <a href=\"https://www.youtube.com/watch?v=Z7cfoJEfLDY\" target=\"_blank\" rel=\"noopener noreferrer\">原始影片 ↗</a>",
+              note: "公開的製作成本案例 · 單一案例不能代表普遍最低成本。",
+            },
+            5: {
+              title: "隨著 AI 發展<br><span class=\"slide-emphasis\">這套流程正在被簡化。</span>",
+              videoAria: "播放 Genjutsu 影片",
+              videoAlt: "Genjutsu 影片預覽",
+              caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">原始影片 ↗</a>",
+              note: "基於錄製影片的 AI 轉換示例 · 在本機檔案中，播放按鈕會開啟 YouTube 原始影片。",
+            },
+            6: {
+              title: "Virtually 只需一張照片<br><span class=\"slide-emphasis\">即可開始直播。</span>",
+              flowInput: "輸入一張圖",
+              flowTarget: "目標 10 秒",
+              captions: ["角色圖片", "直播畫面"],
+              alts: ["用作輸入的角色圖片", "目標 VTuber 直播畫面參考圖"],
+              note: "產品構想 · 附圖用於說明輸入和目標直播體驗，並非 Virtually 的實際轉換結果。",
+            },
+            7: {
+              title: "AI Animate 技術的<br><span class=\"slide-emphasis\">即時應用是關鍵。</span>",
+              modelAlts: ["Alibaba 標誌", "Higgsfield 標誌", "ByteDance 標誌", "Kling 標誌"],
+              note: "正在評估的技術方向 · 並非全部都是即時模型。延遲、品質和營運成本的最佳化仍是產品課題。",
+            },
+            8: {
+              title: "IRIAM 展示了<br><span class=\"slide-emphasis\">輕鬆開播的需求。</span>",
+              alts: ["IRIAM PNG 圖片與直播畫面", "IRIAM 下載量與年營收成長圖"],
+              stats: ["累計下載量 · 2026.05", "每日主播數 · 2025.04", "年營收 · 2025.03"],
+              statValues: ["621萬", "1萬+", "85億日圓+"],
+              note: "各項指標的參考日期不同。累計下載量不等於活躍使用者數。",
+            },
+            9: {
+              title: "簡單的圖片直播<br><span class=\"slide-emphasis\">仍有表達限制。</span>",
+              videoAria: "IRIAM PNG 直播示範",
+            },
+            10: {
+              title: "Virtually 讓表達 <span class=\"slide-emphasis\">更加自由，</span><br>同時將成本降到最低。",
+              costHeadings: ["現有高階 3D", "Virtually"],
+              targetLabel: "目標",
+              costLabels: ["製作 · 準備", "動捕營運", "製作 · 準備", "AI 營運"],
+              costValues: ["₩100萬–₩3,000萬", "最高 ₩200萬<small>/ 小時</small>", "₩0", "₩1萬<small>/ 小時</small>"],
+              note: "這是提出的高階 3D 對比情境，並非普遍價格。Virtually 的數字是品質與成本驗證前的目標值。若 3D 模型可以重複使用，長期來看 3D 也可能更經濟。",
+            },
+            11: {
+              title: "不只角色<br><span class=\"slide-emphasis\">背景、地圖和環境也能由 AI 生成。</span>",
+              prompt: "「生成月光下的魔法圖書館背景」",
+              caption: "背景 · 空間 · 燈光一步完成",
+              alt: "角色與背景同時出現的直播畫面參考圖",
+              note: "擴展構想 · 附圖用於說明目標體驗。自由 3D 空間生成仍是獨立的開發課題。",
+            },
+            12: {
+              title: "僅 VTuber 製作與營運<br><span class=\"slide-emphasis\">韓國 ₩10B+、全球 ₩200B+</span>",
+              koreaHeading: "韓國 · 年度支出估算 · ₩10B+",
+              koreaItems: [
+                ["Live2D 製作", "₩3–5B", "插畫 · 部件 · 綁定"],
+                ["3D 製作", "₩3–6B", "建模 · 綁定 · 更新"],
+                ["動捕直播", "₩3.5–4.5B", "直播 · 展示 · 演唱會"],
+                ["動捕內容", "₩0.7–1.5B", "舞蹈 · MV · 重定向"],
+              ],
+              globalHeading: "全球 · 年度支出估算",
+              globalValue: "₩200B+",
+              globalText: "這些製作支出已經存在<br><span class=\"slide-emphasis\">用軟體取代它們</span>",
+              note: "Bottom-up 估算 · 非官方市場統計。僅包含角色、綁定、動捕和虛擬直播製作中可能被取代的支出；不包含廣告、贊助、周邊和創作者收入。",
+            },
+            13: {
+              title: "直播每次觀看的收入<br><span class=\"slide-emphasis\">是短影音的 400 倍以上。</span>",
+              assumption: "每次觀看收入的平均估算",
+              rowLabels: ["短影音", "長影音", "直播"],
+              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              note: "示意性比較 · 倍數基於所述假設。不同形式的觀看定義、統計週期和粉絲支持計入方式不同，因此不是實測的同條件平均值。",
+            },
+            14: {
+              title: "先從製作工具開始，<br><span class=\"slide-emphasis\">再成長為直播平台。</span>",
+              stages: [
+                ["起點", "照片 → Virtually → OBS", "簡化製作與直播"],
+                ["目標", "創作者 <em>↔</em> 粉絲", "直播 · 發現 · 訂閱 · 支持"],
+              ],
+              takeaway: "我們建立 <span class=\"slide-emphasis\">讓使用者彼此帶來使用者的網路效應。</span>",
+              note: "成長策略 · 超越工具功能競爭，建立創作者與粉絲長期留存的關係。",
+            },
+            15: {
+              title: "VTuber 生態 A–Z<br><span class=\"slide-emphasis\">整合進一個平台。</span>",
+              roadmap: [
+                ["AI 全球拓展", "即時翻譯<br>跨越語言障礙"],
+                ["AI 夥伴", "直播之外<br>持續連結角色"],
+                ["內容工作室", "AI 自動製作 · 音樂 · 短劇<br>網路小說 · 網漫"],
+              ],
+              note: "中長期擴展方向",
+            },
+            16: {
+              title: "就像 Apple<br><span class=\"slide-emphasis\">用簡單 UX 標準化數位音樂。</span>",
+              before: "每首歌都要手動完成的工作",
+              steps: ["CD 擷取", "選擇編解碼器", "格式轉換", "設定位元率", "整理檔案與資料夾", "專輯與演出者標籤", "曲風與專輯封面", "清理重複檔案", "建立播放清單", "裝置同步"],
+              musicLabel: "我的音樂",
+              rightLabel: "iTunes + iPod",
+              rightTitle: "選擇。裝入。聆聽。",
+              note: "<a href=\"https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/\" target=\"_blank\" rel=\"noopener noreferrer\">iPod · 自動同步（2001）</a> · <a href=\"https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/\" target=\"_blank\" rel=\"noopener noreferrer\">iTunes Music Store（2003）</a>",
+            },
+            17: {
+              title: "技術負責表演，<br><span class=\"slide-emphasis\">生態系統負責賺錢。</span>",
+              headers: ["產業", "核心技術", "", "客戶體驗 · 分發 · 變現"],
+              contexts: [["數位音樂產業", "2001年"], ["直播 VTuber 產業", "2026年"]],
+              sources: [["Toshiba", "儲存裝置"], ["中國 AI 企業", "生成模型"]],
+              destinations: [["Apple", "iPod + iTunes"], ["Virtually", "創作者 + 粉絲 + 直播"]],
+              note: "本商業策略借鑑 <a href=\"https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/\" target=\"_blank\" rel=\"noopener noreferrer\">UCI 的 iPod 價值分配研究</a> · 零組件供應商也能獲得收入；Virtually 的平台收入仍有待驗證。",
+            },
+            18: {
+              title: "謝謝。<br><span class=\"slide-emphasis\">Q &amp; A</span>",
+              subtitle: "讓 VTuber 直播<br>用 AI 變得簡單",
+            },
+          },
+        },
+      };
+
+      function resolveVirtuallyLocale() {
+        const language = String(navigator.language || navigator.userLanguage || "en").toLowerCase();
+
+        if (language.startsWith("ko")) {
+          return "ko";
+        }
+
+        if (language.startsWith("ja")) {
+          return "ja";
+        }
+
+        if (language.startsWith("zh-tw") || language.startsWith("zh-hk") || language.startsWith("zh-mo") || language.includes("hant")) {
+          return "cn-TW";
+        }
+
+        if (language.startsWith("zh")) {
+          return "cn-ZH";
+        }
+
+        return "en";
+      }
+
+      function applyVirtuallyI18n() {
+        const locale = resolveVirtuallyLocale();
+        const translation = virtuallyTranslations[locale];
+
+        document.documentElement.dataset.locale = locale;
+
+        if (!translation) {
+          return null;
+        }
+
+        document.documentElement.lang = translation.htmlLang;
+        document.title = translation.meta.title;
+        document.querySelector('meta[name="description"]')?.setAttribute("content", translation.meta.description);
+        document.querySelector('meta[property="og:title"]')?.setAttribute("content", translation.meta.title);
+        document.querySelector('meta[property="og:description"]')?.setAttribute("content", translation.meta.ogDescription);
+        document.querySelector('meta[property="og:image:alt"]')?.setAttribute("content", translation.meta.imageAlt);
+        document.querySelector('meta[name="twitter:title"]')?.setAttribute("content", translation.meta.title);
+        document.querySelector('meta[name="twitter:description"]')?.setAttribute("content", translation.meta.ogDescription);
+        document.querySelector("main")?.setAttribute("aria-label", translation.ui.main);
+        document.querySelector(".page-controls")?.setAttribute("aria-label", translation.ui.controls);
+        homeButton.setAttribute("aria-label", translation.ui.homeAria);
+        homeButton.querySelector("span").textContent = translation.ui.home;
+
+        const slide = (page) => track.querySelector('[data-page="' + page + '"]');
+        const setHTML = (root, selector, value) => {
+          const node = root?.querySelector(selector);
+          if (node && value !== undefined) {
+            node.innerHTML = value;
+          }
+        };
+        const setAttr = (root, selector, attribute, value) => {
+          const node = root?.querySelector(selector);
+          if (node && value !== undefined) {
+            node.setAttribute(attribute, value);
+          }
+        };
+        const setManyHTML = (root, selector, values) => {
+          root?.querySelectorAll(selector).forEach((node, index) => {
+            if (values[index] !== undefined) {
+              node.innerHTML = values[index];
+            }
+          });
+        };
+        const setManyAttr = (root, selector, attribute, values) => {
+          root?.querySelectorAll(selector).forEach((node, index) => {
+            if (values[index] !== undefined) {
+              node.setAttribute(attribute, values[index]);
+            }
+          });
+        };
+
+        const s1 = slide(1);
+        setHTML(s1, "h2", translation.slides[1].subtitle);
+        setAttr(s1, ".slide-download-qr", "alt", translation.slides[1].coverAlt);
+
+        const s2 = slide(2);
+        setHTML(s2, "h1", translation.slides[2].title);
+        setManyHTML(s2, ".v-figure figcaption", translation.slides[2].captions);
+        setManyAttr(s2, ".v-figure img", "alt", translation.slides[2].alts);
+
+        const s3 = slide(3);
+        setHTML(s3, "h1", translation.slides[3].title);
+        setHTML(s3, ".v-process > h2", translation.slides[3].processHeading);
+        setManyHTML(s3, ".v-process-lane > p", translation.slides[3].lanes);
+        setManyHTML(s3, ".v-process-step b", translation.slides[3].steps);
+        setHTML(s3, ".v-note", translation.slides[3].note);
+
+        const s4 = slide(4);
+        setHTML(s4, "h1", translation.slides[4].title);
+        setAttr(s4, ".v-youtube-play", "aria-label", translation.slides[4].videoAria);
+        setAttr(s4, ".v-youtube-play img", "alt", translation.slides[4].videoAlt);
+        setHTML(s4, ".v-caption", translation.slides[4].caption);
+        setHTML(s4, ".v-note", translation.slides[4].note);
+
+        const s5 = slide(5);
+        setHTML(s5, "h1", translation.slides[5].title);
+        setAttr(s5, ".v-youtube-play", "aria-label", translation.slides[5].videoAria);
+        setAttr(s5, ".v-youtube-play img", "alt", translation.slides[5].videoAlt);
+        setHTML(s5, ".v-caption", translation.slides[5].caption);
+        setHTML(s5, ".v-note", translation.slides[5].note);
+
+        const s6 = slide(6);
+        setHTML(s6, "h1", translation.slides[6].title);
+        setHTML(s6, ".v-flow-arrow b", translation.slides[6].flowInput);
+        setHTML(s6, ".v-flow-arrow strong", translation.slides[6].flowTarget);
+        setManyHTML(s6, ".v-figure figcaption", translation.slides[6].captions);
+        setManyAttr(s6, ".v-figure img", "alt", translation.slides[6].alts);
+        setHTML(s6, ".v-note", translation.slides[6].note);
+
+        const s7 = slide(7);
+        setHTML(s7, "h1", translation.slides[7].title);
+        setManyAttr(s7, ".v-model img", "alt", translation.slides[7].modelAlts);
+        setHTML(s7, ".v-note", translation.slides[7].note);
+
+        const s8 = slide(8);
+        setHTML(s8, "h1", translation.slides[8].title);
+        setManyAttr(s8, ".v-iriam-images img", "alt", translation.slides[8].alts);
+        setManyHTML(s8, ".v-stats strong", translation.slides[8].statValues);
+        setManyHTML(s8, ".v-stats span", translation.slides[8].stats);
+        setHTML(s8, ".v-note", translation.slides[8].note);
+
+        const s9 = slide(9);
+        setHTML(s9, "h1", translation.slides[9].title);
+        setAttr(s9, "video", "aria-label", translation.slides[9].videoAria);
+
+        const s10 = slide(10);
+        setHTML(s10, "h1", translation.slides[10].title);
+        setManyHTML(s10, ".v-cost-column h2", translation.slides[10].costHeadings);
+        setHTML(s10, ".v-cost-column h2 small", translation.slides[10].targetLabel);
+        setManyHTML(s10, ".v-cost-column > div > span", translation.slides[10].costLabels);
+        setManyHTML(s10, ".v-cost-column > div > strong", translation.slides[10].costValues);
+        setHTML(s10, ".v-note", translation.slides[10].note);
+
+        const s11 = slide(11);
+        setHTML(s11, "h1", translation.slides[11].title);
+        setHTML(s11, ".v-prompt strong", translation.slides[11].prompt);
+        setHTML(s11, ".v-world .v-figure figcaption", translation.slides[11].caption);
+        setAttr(s11, ".v-world .v-figure img", "alt", translation.slides[11].alt);
+        setHTML(s11, ".v-note", translation.slides[11].note);
+
+        const s12 = slide(12);
+        setHTML(s12, "h1", translation.slides[12].title);
+        setHTML(s12, ".v-sam-korea h2", translation.slides[12].koreaHeading);
+        setManyHTML(s12, ".v-sam-blocks span", translation.slides[12].koreaItems.map((item) => item[0]));
+        setManyHTML(s12, ".v-sam-blocks strong", translation.slides[12].koreaItems.map((item) => item[1]));
+        setManyHTML(s12, ".v-sam-blocks p", translation.slides[12].koreaItems.map((item) => item[2]));
+        setHTML(s12, ".v-sam-global h2", translation.slides[12].globalHeading);
+        setHTML(s12, ".v-sam-global > strong", translation.slides[12].globalValue);
+        setHTML(s12, ".v-sam-global p", translation.slides[12].globalText);
+        setHTML(s12, ".v-note", translation.slides[12].note);
+
+        const s13 = slide(13);
+        setHTML(s13, "h1", translation.slides[13].title);
+        setHTML(s13, ".v-chart-assumption", translation.slides[13].assumption);
+        setManyHTML(s13, ".v-revenue-label b", translation.slides[13].rowLabels);
+        setManyHTML(s13, ".v-revenue-label strong", translation.slides[13].rowValues);
+        setHTML(s13, ".v-note", translation.slides[13].note);
+
+        const s14 = slide(14);
+        setHTML(s14, "h1", translation.slides[14].title);
+        setHTML(s14, ".v-stage:nth-child(1) > span", translation.slides[14].stages[0][0]);
+        setHTML(s14, ".v-stage:nth-child(1) h2", translation.slides[14].stages[0][1]);
+        setHTML(s14, ".v-stage:nth-child(1) p", translation.slides[14].stages[0][2]);
+        setHTML(s14, ".v-stage:nth-child(3) > span", translation.slides[14].stages[1][0]);
+        setHTML(s14, ".v-stage:nth-child(3) h2", translation.slides[14].stages[1][1]);
+        setHTML(s14, ".v-stage:nth-child(3) p", translation.slides[14].stages[1][2]);
+        setHTML(s14, ".v-takeaway", translation.slides[14].takeaway);
+        setHTML(s14, ".v-note", translation.slides[14].note);
+
+        const s15 = slide(15);
+        setHTML(s15, "h1", translation.slides[15].title);
+        setManyHTML(s15, ".v-roadmap h2", translation.slides[15].roadmap.map((item) => item[0]));
+        setManyHTML(s15, ".v-roadmap p", translation.slides[15].roadmap.map((item) => item[1]));
+        setHTML(s15, ".v-note", translation.slides[15].note);
+
+        const s16 = slide(16);
+        setHTML(s16, "h1", translation.slides[16].title);
+        setHTML(s16, ".v-music-before > span", translation.slides[16].before);
+        setManyHTML(s16, ".v-file-row b", translation.slides[16].steps);
+        setHTML(s16, ".v-ipod small", translation.slides[16].musicLabel);
+        setHTML(s16, ".v-music-after p", translation.slides[16].rightLabel);
+        setHTML(s16, ".v-music-after h2", translation.slides[16].rightTitle);
+        setAttr(s16, ".v-ipod", "aria-label", translation.slides[16].musicLabel);
+        setHTML(s16, ".v-note", translation.slides[16].note);
+
+        const s17 = slide(17);
+        setHTML(s17, "h1", translation.slides[17].title);
+        setManyHTML(s17, ".v-eco-head span", translation.slides[17].headers);
+        setManyHTML(s17, ".v-eco-context strong", translation.slides[17].contexts.map((item) => item[0]));
+        setManyHTML(s17, ".v-eco-context span", translation.slides[17].contexts.map((item) => item[1]));
+        setManyHTML(s17, ".v-eco-row > div:nth-child(2) strong", translation.slides[17].sources.map((item) => item[0]));
+        setManyHTML(s17, ".v-eco-row > div:nth-child(2) span", translation.slides[17].sources.map((item) => item[1]));
+        setManyHTML(s17, ".v-eco-row > div:nth-child(4) strong", translation.slides[17].destinations.map((item) => item[0]));
+        setManyHTML(s17, ".v-eco-row > div:nth-child(4) span", translation.slides[17].destinations.map((item) => item[1]));
+        setHTML(s17, ".v-note", translation.slides[17].note);
+
+        const s18 = slide(18);
+        setHTML(s18, "h1", translation.slides[18].title);
+        setHTML(s18, ".v-final-brand-subtitle", translation.slides[18].subtitle);
+
+        return translation;
+      }
+
+      const virtuallyLocale = resolveVirtuallyLocale();
+      const virtuallyTranslation = applyVirtuallyI18n();
+
       track.querySelectorAll(".slide-shell").forEach((shell) => {
         if (shell.querySelector(".slide-side-media")) {
           shell.classList.add("slide-shell--has-side-media");
@@ -6010,7 +6854,7 @@
             return;
           }
           const frame = document.createElement("iframe");
-          frame.title = "Genjutsu AI 영상 데모";
+          frame.title = virtuallyTranslation?.ui.frameTitle || "Genjutsu AI video demo";
           frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
           frame.allowFullscreen = true;
           frame.referrerPolicy = "strict-origin-when-cross-origin";
@@ -6161,10 +7005,10 @@
         const isHorizontalIntent = Math.abs(deltaX) >= Math.abs(deltaY);
 
         if (isHorizontalIntent) {
-          return deltaX > 0 ? -1 : 1;
+          return deltaX > 0 ? 1 : -1;
         }
 
-        return deltaY < 0 ? -1 : 1;
+        return deltaY > 0 ? 1 : -1;
       }
 
       function deckWidth() {
