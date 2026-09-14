@@ -5507,13 +5507,17 @@
       .v-gallery { display:grid; grid-template-columns:1fr 1fr; width:min(1080px,100%); gap:24px; }
       .v-gallery .v-figure { height:42vh; }
       .v-gallery img { background:#fff; border:1px solid #ece7dd; }
-      .v-process-slide .v-shell { flex-direction:row; gap:5vw; }
-      .v-process-slide .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); }
-      .v-process { display:grid; gap:14px; flex-shrink:0; }
-      .v-process h2 { font-size:20px; color:#a96010; margin-bottom:4px; }
-      .v-process-step { display:flex; align-items:center; gap:20px; padding:14px 24px; background:rgba(255,255,255,.8); border:1px solid #eee6d8; border-radius:14px; }
-      .v-process-step span { font-size:15px; color:#b86b14; }
-      .v-process-step b { font-size:24px; white-space:nowrap; font-weight:600; }
+.v-process-slide .v-shell { flex-direction:row; gap:4vw; }
+.v-process-slide .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); }
+.v-process { width:min(550px,44vw); display:grid; gap:10px; flex-shrink:0; }
+.v-process h2 { font-size:20px; color:#a96010; margin-bottom:2px; }
+.v-process-columns { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.v-process-lane { display:grid; gap:8px; min-width:0; }
+.v-process-lane > p { color:#777266; font-size:14px; line-height:1.2; }
+.v-process-step { display:flex; align-items:center; gap:12px; min-height:50px; padding:10px 14px; background:rgba(255,255,255,.8); border:1px solid #eee6d8; border-radius:14px; }
+.v-process-step span { flex:none; font-size:13px; color:#b86b14; }
+.v-process-step b { font-size:18px; line-height:1.2; letter-spacing:-.04em; font-weight:600; }
+.v-process-wide { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
       .v-cost-photo .v-figure { width:min(990px,85%); height:48vh; }
       .v-video-slide .v-shell { display:grid; grid-template-columns:1.35fr .65fr; gap:5vw; }
       .v-video-slide .v-title { text-align:left; }
@@ -5641,12 +5645,16 @@
         .v-figure figcaption,.v-caption { font-size:10px; }
         .v-gallery { gap:12px; }
         .v-gallery .v-figure { height:32vh; }
-        .v-process-slide .v-shell { flex-direction:column; gap:30px; }
+        .v-process-slide .v-shell { flex-direction:column; gap:22px; }
         .v-process-slide .v-title { text-align:center; font-size:clamp(23px,5.8vw,40px); }
-        .v-process { gap:10px; }
+        .v-process { width:100%; gap:8px; }
         .v-process h2 { font-size:16px; text-align:center; }
-        .v-process-step { padding:12px 22px; }
-        .v-process-step b { font-size:20px; }
+        .v-process-columns,.v-process-wide { gap:8px; }
+        .v-process-lane { gap:6px; }
+        .v-process-lane > p { font-size:12px; }
+        .v-process-step { min-height:44px; padding:8px 10px; gap:8px; border-radius:12px; }
+        .v-process-step span { font-size:11px; }
+        .v-process-step b { font-size:14px; }
         .v-cost-photo .v-figure { width:100%; height:38vh; }
         .v-video-slide .v-shell { display:flex; gap:20px; }
         .v-video-slide .v-title { text-align:center; }
@@ -5753,8 +5761,9 @@
         .v-figure figcaption { font-size:8px; }
         .v-stats strong { font-size:20px; }
         .v-stats small { font-size:7px; }
-        .v-process-step { padding:10px 18px; }
-        .v-process-step b { font-size:18px; }
+        .v-process-step { min-height:38px; padding:6px 7px; gap:5px; }
+        .v-process-step span { font-size:9px; }
+        .v-process-step b { font-size:12px; }
         .v-model h2 { font-size:15px; }
         .v-model { padding:12px 4px; }
         .v-cost-column { padding:14px; }
@@ -5810,7 +5819,7 @@
 -->
 <section class="slide v-slide v-problem-gallery" data-page="2"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버가 되는 건<br>아직도 <span class="slide-emphasis">너무 어렵습니다.</span></h1><div class="v-gallery"><figure class="v-figure "><img src="./assets/virtually-live2d-rigging.png" alt="Cubism에서 2D 캐릭터를 리깅하는 화면"><figcaption>2D · 일러스트 / 파츠·리깅 / 트래킹</figcaption></figure><figure class="v-figure "><img src="./assets/virtually-vtuber-creation-meme.png" alt="Unity에서 3D 모델을 설정하다 겪은 오류 사례"><figcaption>3D · 모델·리깅 / 모캡 스튜디오 / 씬·송출</figcaption></figure></div></article></section>
 
-<section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>Live2D 제작 과정</h2><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>02</span><b>파츠 분리 · 리깅</b></div><div class="v-process-step"><span>03</span><b>표정 트래킹</b></div><div class="v-process-step"><span>04</span><b>OBS 연결 · 방송</b></div></div><p class="v-note">2D 방식의 표현 범위 · 자유로운 전신 표현은 별도의 3D 제작·모캡으로 구현할 수 있습니다.</p></article></section>
+<section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>제작부터 라이브까지</h2><div class="v-process-columns"><div class="v-process-lane"><p>2D 캐릭터</p><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>03</span><b>파츠 분리</b></div><div class="v-process-step"><span>05</span><b>2D 리깅</b></div><div class="v-process-step"><span>07</span><b>표정 트래킹</b></div></div><div class="v-process-lane"><p>3D 캐릭터</p><div class="v-process-step"><span>02</span><b>모델링 · 텍스처</b></div><div class="v-process-step"><span>04</span><b>스켈레톤 · 리깅</b></div><div class="v-process-step"><span>06</span><b>모션캡처 스튜디오</b></div><div class="v-process-step"><span>08</span><b>캘리브레이션 · 리타게팅</b></div></div></div><div class="v-process-wide"><div class="v-process-step"><span>09</span><b>씬 · 조명 · OBS 세팅</b></div><div class="v-process-step"><span>10</span><b>라이브 운영</b></div></div></div><p class="v-note">2D는 기본 표정 중심 · 3D는 자유롭지만 모델·모션캡처 환경이 필요합니다.</p></article></section>
 
 <section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><figure class="v-figure "><img src="./assets/virtually-production-cost.png" alt="이와 IWA의 2D·3D 버튜버 비용 영상: 모델만 1,180만 원 이상"><figcaption>제작비 공개 사례 · 이와 IWA 「2D & 3D 버튜버 방송은 돈이 얼마가 들까?」</figcaption></figure><p class="v-note">첨부 이미지의 개인 사례이며, 모든 버튜버의 최소 비용을 뜻하지 않습니다.</p></article></section>
 
