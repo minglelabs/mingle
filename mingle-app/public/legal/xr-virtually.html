@@ -5642,13 +5642,18 @@
       @media (min-width:901px) {
         .v-roadmap { width:min(900px,100%); gap:24px; }
       }
-      .v-apple { display:grid; grid-template-columns:1fr 60px 1.3fr; align-items:center; gap:32px; width:100%; }
-      .v-music-before > span { color:#777266; font-size:19px; }
-      .v-file-row { display:flex; gap:16px; margin-top:20px; }
-      .v-file-row b { font-size:22px; padding:20px; border:1px solid #ded9ce; background:#fff; border-radius:8px; font-weight:500; }
-      .v-music-after { display:flex; align-items:center; gap:30px; }
+      .v-slide[data-page="16"] .v-shell { gap:clamp(34px,5vh,52px); }
+      .v-apple { display:grid; grid-template-columns:minmax(0,1fr) 50px minmax(0,1fr); align-items:center; gap:24px; width:min(940px,100%); }
+      .v-music-before { width:100%; text-align:center; }
+      .v-music-before > span { display:block; margin-bottom:20px; }
+      .v-file-row { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:0; }
+      .v-file-row b { font-size:18px; padding:12px 8px; border:0; border-top:1px solid #ded9ce; background:transparent; border-radius:0; font-weight:500; text-align:center; }
+      .v-music-before > .v-file-row:last-child b { border-bottom:1px solid #ded9ce; }
+      .v-music-after { display:flex; align-items:center; justify-content:center; gap:22px; text-align:center; }
+      .v-music-after > div:last-child { display:grid; justify-items:center; gap:14px; }
       .v-music-after h2 { font-size:32px; }
-      .v-music-after p { margin:14px 0; font-size:26px; color:#a96010; }
+      .v-music-before > span,.v-music-after p { color:#a96010; font-size:26px; font-weight:400; letter-spacing:-.03em; }
+      .v-music-after p { margin:0; }
       .v-music-after strong { font-size:17px; font-weight:500; }
       .v-ipod { flex-shrink:0; width:130px; height:210px; border:1px solid #d5d0c5; border-radius:18px; background:#fff; padding:14px; box-shadow:0 12px 30px #51401c0a; }
       .v-ipod > div { background:#efeee4; border:1px solid #ccc9bb; border-radius:4px; height:85px; text-align:center; font-size:32px; padding-top:8px; }
@@ -5758,13 +5763,15 @@
         .v-roadmap h2 { font-size:19px; margin:0; }
         .v-roadmap p { font-size:14px; }
         .v-apple { grid-template-columns:1fr; gap:22px; }
+        .v-slide[data-page="16"] .v-shell { gap:30px; }
         .v-music-before { text-align:center; }
-        .v-music-before > span { font-size:14px; }
-        .v-file-row { justify-content:center; margin-top:10px; gap:10px; }
-        .v-file-row b { font-size:15px; padding:13px 20px; }
+        .v-music-before > span { margin-bottom:14px; }
+        .v-file-row { grid-template-columns:1fr 1fr; margin-top:0; gap:0; }
+        .v-file-row b { font-size:14px; padding:9px 4px; }
         .v-music-after { justify-content:center; gap:20px; }
+        .v-music-after > div:last-child { gap:10px; }
         .v-music-after h2 { font-size:22px; }
-        .v-music-after p { font-size:20px; margin:12px 0; }
+        .v-music-before > span,.v-music-after p { font-size:20px; }
         .v-music-after strong { font-size:12px; }
         .v-ipod { width:90px; height:148px; border-radius:12px; padding:10px; }
         .v-ipod > div { height:58px; font-size:21px; padding-top:5px; }
@@ -5805,6 +5812,19 @@
         .v-roadmap p { font-size:12px; }
         .v-stage { padding:18px; }
         .v-stage h2 { font-size:19px; }
+        .v-slide[data-page="16"] .v-title { font-size:20px; }
+        .v-slide[data-page="16"] .v-shell { gap:12px; }
+        .v-slide[data-page="16"] .v-apple { gap:10px; }
+        .v-slide[data-page="16"] .v-music-before > span { font-size:16px; margin-bottom:8px; }
+        .v-slide[data-page="16"] .v-file-row b { font-size:11px; padding:5px 2px; }
+        .v-slide[data-page="16"] .v-music-after { gap:12px; }
+        .v-slide[data-page="16"] .v-music-after > div:last-child { gap:8px; }
+        .v-slide[data-page="16"] .v-music-after h2 { font-size:17px; }
+        .v-slide[data-page="16"] .v-music-after p { font-size:16px; }
+        .v-slide[data-page="16"] .v-ipod { width:74px; height:122px; border-radius:10px; padding:7px; }
+        .v-slide[data-page="16"] .v-ipod > div { height:47px; font-size:17px; padding-top:4px; }
+        .v-slide[data-page="16"] .v-ipod small { font-size:7px; }
+        .v-slide[data-page="16"] .v-ipod > span { width:47px; height:47px; border-width:13px; margin-top:7px; }
         .v-limit .v-local-video { height:29vh; }
       }
 
@@ -5871,7 +5891,7 @@
 
 <section class="slide v-slide " data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 생태계의 A–Z를<br><span class="slide-emphasis">하나의 플랫폼으로.</span></h1><div class="v-roadmap"><div><span>01</span><h2>AI 글로벌 진출</h2><p>실시간 통번역으로<br>언어의 경계 없이</p></div><div><span>02</span><h2>AI 컴패니언</h2><p>방송 밖에서도<br>이어지는 캐릭터와의 관계</p></div><div><span>03</span><h2>콘텐츠 스튜디오</h2><p>AI 자동 제작 · 음악 · 숏드라마<br>웹소설 · 웹툰</p></div></div><p class="v-note">중장기 확장 방향</p></article></section>
 
-<section class="slide v-slide " data-page="16"><article class="slide-shell v-shell"><h1 class="slide-title v-title">애플은 디지털 음악을<br><span class="slide-emphasis">간단한 UX로 표준화했습니다.</span></h1><div class="v-apple"><div class="v-music-before"><span>각자 해야 했던 일</span><div class="v-file-row"><b>CD 추출</b><b>MP3 정리</b></div><div class="v-file-row"><b>포맷 변환</b><b>기기로 복사</b></div></div><span class="v-between">→</span><div class="v-music-after"><div class="v-ipod" aria-label="iPod 인포그래픽"><div>♫<small>나의 음악</small></div><span></span></div><div><h2>고르고. 담고. 듣기.</h2><p>iTunes + iPod</p><strong>구매 → 자동 동기화 → 재생</strong></div></div></div><p class="v-note"><a href="https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/" target="_blank" rel="noopener noreferrer">iPod·자동 동기화 (2001)</a> · <a href="https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/" target="_blank" rel="noopener noreferrer">iTunes Music Store (2003)</a></p></article></section>
+<section class="slide v-slide " data-page="16"><article class="slide-shell v-shell"><h1 class="slide-title v-title">애플이 디지털 음악을<br><span class="slide-emphasis">단순한 UX로 표준화한 것처럼.</span></h1><div class="v-apple"><div class="v-music-before"><span>한 곡마다 직접 해야 했던 일</span><div class="v-file-row"><b>CD 추출</b><b>코덱 선택</b></div><div class="v-file-row"><b>포맷 변환</b><b>비트레이트 설정</b></div><div class="v-file-row"><b>파일명 · 폴더 정리</b><b>앨범 · 아티스트 태그</b></div><div class="v-file-row"><b>장르 · 앨범아트</b><b>중복 파일 정리</b></div><div class="v-file-row"><b>재생목록 구성</b><b>기기별 동기화</b></div></div><span class="v-between">→</span><div class="v-music-after"><div class="v-ipod" aria-label="iPod 인포그래픽"><div>♫<small>나의 음악</small></div><span></span></div><div><p>iTunes + iPod</p><h2>고르고. 담고. 듣기.</h2></div></div></div><p class="v-note"><a href="https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/" target="_blank" rel="noopener noreferrer">iPod·자동 동기화 (2001)</a> · <a href="https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/" target="_blank" rel="noopener noreferrer">iTunes Music Store (2003)</a></p></article></section>
 
 <section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 부리고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span>핵심 기술</span><span></span><span>고객 경험 · 유통 · 수익화</span></div><div class="v-eco-row"><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong>Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div><strong>중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"><a href="https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/" target="_blank" rel="noopener noreferrer">UCI의 iPod 가치배분 연구</a>를 빗댄 사업 전략 · 부품사도 수익을 얻으며, Virtually의 플랫폼 수익은 검증할 목표입니다.</p></article></section>
 
