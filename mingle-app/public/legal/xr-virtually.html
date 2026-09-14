@@ -2310,6 +2310,7 @@
         align-content: center;
         justify-items: start;
         margin-top: 0;
+        margin-left: clamp(40px, 6vw, 100px);
         padding-top: 0;
         text-align: left;
       }
@@ -5507,7 +5508,7 @@
       .v-gallery { display:grid; grid-template-columns:1fr 1fr; width:min(1080px,100%); gap:24px; }
       .v-gallery .v-figure { height:42vh; }
       .v-gallery img { background:#fff; border:1px solid #ece7dd; }
-.v-process-slide .v-shell { flex-direction:row; gap:4vw; }
+.v-process-slide .v-shell { flex-direction:row; gap:4vw; padding-left:clamp(60px, 10vw, 140px); }
 .v-process-slide .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); }
 .v-process { width:min(550px,44vw); display:grid; gap:10px; flex-shrink:0; }
 .v-process h2 { font-size:20px; color:#a96010; margin-bottom:2px; }
@@ -5589,12 +5590,12 @@
       .v-highlight { background:#fff6e5; border-color:#fbbc32; }
       .v-highlight strong,.v-highlight h2 { color:#b95b0b; }
       .v-between { font-size:40px; color:#c96a0a; text-align:center; }
-      .v-world { width:100%; display:grid; grid-template-columns:.9fr 60px 1.5fr; align-items:center; gap:24px; }
+      .v-world { width:100%; display:grid; grid-template-columns:1fr 36px 1.5fr; align-items:center; gap:12px; }
       .v-world .v-figure { height:42vh; }
       .v-prompt { display:grid; gap:0; }
       .v-prompt span { color:#777266; font-size:18px; }
       .v-prompt strong { font-size:32px; line-height:1.4; word-break:keep-all; }
-      .v-sam { display:grid; grid-template-columns:1.3fr 1fr; gap:60px; width:100%; }
+      .v-sam { display:grid; grid-template-columns:1.6fr 1fr; gap:60px; width:100%; }
       .v-sam h2 small { font-size:15px; font-weight:400; color:#777266; margin-left:10px; }
       .v-sam-blocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:22px; }
       .v-sam-korea { text-align:center; }
@@ -5608,17 +5609,17 @@
       .v-sam-global > strong { font-size:clamp(48px,5vw,78px); color:#b95b0b; letter-spacing:-.055em; }
       .v-sam-global p { font-size:27px; }
       @media (min-width:901px) {
-        .v-sam { grid-template-columns:minmax(0,520px) minmax(0,1fr); gap:48px; }
+        .v-sam { grid-template-columns:minmax(0,600px) minmax(0,1fr); gap:48px; }
       }
       .v-chart-assumption { font-size:16px; color:#a96010; }
       .v-revenue { width:100%; display:grid; gap:24px; }
-      .v-revenue-row { display:grid; grid-template-columns:180px 1fr; gap:24px; align-items:center; }
+      .v-revenue-row { display:grid; grid-template-columns:210px 1fr; gap:24px; align-items:center; }
       .v-revenue-label { display:flex; align-items:baseline; gap:14px; white-space:nowrap; }
       .v-revenue-label b { font-size:24px; }
       .v-revenue-label strong { font-size:29px; }
       .v-bar-track { height:70px; border-left:1px solid #dfd6c7; display:flex; align-items:center; }
       .v-bar-track i { display:block; min-width:2px; height:100%; background:#cfc8b9; border-radius:0 6px 6px 0; }
-      .v-revenue-live .v-bar-track i { background:#ffe0a3; }
+      .v-revenue-live .v-bar-track i { background:#d3740c; }
       .v-revenue-live .v-bar-track span { display:block; height:100%; background:#d3740c; border-radius:0 6px 6px 0; }
       .v-revenue-live .v-revenue-label strong { color:#b95b0b; }
       .v-chart-foot { display:flex; align-items:center; justify-content:space-between; gap:24px; color:#777266; }
@@ -5872,7 +5873,7 @@
       }
       .v-final .v-final-brand-title {
         margin:0;
-        font-size:clamp(72px,8.2vw,124px);
+        font-size:clamp(42px,4.8vw,68px);
         line-height:.95;
         letter-spacing:-.06em;
       }
@@ -5919,7 +5920,7 @@
           flex:none;
           gap:14px;
         }
-        .v-final .v-final-brand-title { font-size:clamp(68px,20vw,100px); }
+        .v-final .v-final-brand-title { font-size:clamp(42px,12vw,62px); }
         .v-final-brand-subtitle { font-size:clamp(22px,6.5vw,32px); }
         .v-final-brand .slide-final-link--linkedin { margin-top:4px; }
       }
@@ -5929,7 +5930,7 @@
         .v-final .v-title,
         html.is-mobile-viewport .v-final .v-title { font-size:42px; }
         .v-final-brand { gap:8px; }
-        .v-final .v-final-brand-title { font-size:62px; }
+        .v-final .v-final-brand-title { font-size:42px; }
         .v-final-brand-subtitle { font-size:18px; }
         .v-final-brand .slide-final-link--linkedin { height:38px; padding:0 12px; font-size:.82rem; }
         .v-final-brand .slide-final-logo--linkedin { width:24px; height:24px; font-size:.88rem; border-radius:6px; }
@@ -6054,11 +6055,11 @@
 -->
 <section class="slide v-slide v-problem-gallery" data-page="2"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버가 되는 건<br>아직도 <span class="slide-emphasis">너무 어렵습니다.</span></h1><div class="v-gallery"><figure class="v-figure "><img src="./assets/virtually-live2d-rigging.png" alt="Cubism에서 2D 캐릭터를 리깅하는 화면"><figcaption>2D · 일러스트 / 파츠·리깅 / 트래킹</figcaption></figure><figure class="v-figure "><img src="./assets/virtually-vtuber-creation-meme.png" alt="Unity에서 3D 모델을 설정하다 겪은 오류 사례"><figcaption>3D · 모델·리깅 / 모캡 스튜디오 / 씬·송출</figcaption></figure></div></article></section>
 
-<section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>제작부터 라이브까지</h2><div class="v-process-columns"><div class="v-process-lane"><p>2D 캐릭터</p><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>03</span><b>파츠 분리</b></div><div class="v-process-step"><span>05</span><b>2D 리깅</b></div><div class="v-process-step"><span>07</span><b>표정 트래킹</b></div></div><div class="v-process-lane"><p>3D 캐릭터</p><div class="v-process-step"><span>02</span><b>모델링 · 텍스처</b></div><div class="v-process-step"><span>04</span><b>스켈레톤 · 리깅</b></div><div class="v-process-step"><span>06</span><b>모션캡처 스튜디오</b></div><div class="v-process-step"><span>08</span><b>캘리브레이션 · 리타게팅</b></div></div></div><div class="v-process-wide"><div class="v-process-step"><span>09</span><b>씬 · 조명 · OBS 세팅</b></div><div class="v-process-step"><span>10</span><b>라이브 운영</b></div></div></div><p class="v-note">2D는 기본 표정 중심 · 3D는 자유롭지만 모델·모션캡처 환경이 필요합니다.</p></article></section>
+<section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>제작부터 라이브까지</h2><div class="v-process-columns"><div class="v-process-lane"><p>2D 캐릭터</p><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>03</span><b>파츠 분리</b></div><div class="v-process-step"><span>05</span><b>2D 리깅</b></div><div class="v-process-step"><span>07</span><b>표정 트래킹</b></div></div><div class="v-process-lane"><p>3D 캐릭터</p><div class="v-process-step"><span>02</span><b>모델링 · 텍스처</b></div><div class="v-process-step"><span>04</span><b>스켈레톤 · 리깅</b></div><div class="v-process-step"><span>06</span><b>모션캡처 스튜디오</b></div><div class="v-process-step"><span>08</span><b>캘리브레이션 · 리타게팅</b></div></div></div><div class="v-process-wide"><div class="v-process-step"><span>09</span><b>씬 · 조명 · OBS 세팅</b></div><div class="v-process-step"><span>10</span><b>라이브 운영</b></div></div></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><div class="v-video-block v-longform-video"><div class="v-youtube" data-video-id="Z7cfoJEfLDY" data-video-url="https://www.youtube.com/watch?v=Z7cfoJEfLDY"><button type="button" class="v-youtube-play" aria-label="버튜버 제작 비용 영상 재생"><img src="./assets/virtually-production-cost-poster.jpg" alt="2D·3D 버튜버 제작 비용 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">2D·3D 버튜버 제작 비용 · <a href="https://www.youtube.com/watch?v=Z7cfoJEfLDY" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note">제작비 공개 사례 · 특정 사례의 비용을 모든 버튜버의 최소 비용으로 일반화하지 않습니다.</p></article></section>
+<section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><div class="v-video-block v-longform-video"><div class="v-youtube" data-video-id="Z7cfoJEfLDY" data-video-url="https://www.youtube.com/watch?v=Z7cfoJEfLDY"><button type="button" class="v-youtube-play" aria-label="버튜버 제작 비용 영상 재생"><img src="./assets/virtually-production-cost-poster.jpg" alt="2D·3D 버튜버 제작 비용 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">2D·3D 버튜버 제작 비용 · <a href="https://www.youtube.com/watch?v=Z7cfoJEfLDY" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-video-slide" data-page="5"><article class="slide-shell v-shell"><h1 class="slide-title v-title">AI의 발전으로<br><span class="slide-emphasis">이 과정이 간소화됩니다.</span></h1><div class="v-video-block"><div class="v-youtube" data-video-id="1dhuCFEOzHQ"><button type="button" class="v-youtube-play" aria-label="Genjutsu 영상 재생"><img src="./assets/virtually-genjutsu-poster.jpg" alt="Genjutsu 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">Genjutsu · <a href="https://www.youtube.com/shorts/1dhuCFEOzHQ" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note">녹화 영상 기반 AI 변환 사례 · 로컬 파일에서는 재생 버튼이 YouTube 원본을 엽니다.</p></article></section>
+<section class="slide v-slide v-video-slide" data-page="5"><article class="slide-shell v-shell"><h1 class="slide-title v-title">AI의 발전으로<br><span class="slide-emphasis">이 과정이 간소화됩니다.</span></h1><div class="v-video-block"><div class="v-youtube" data-video-id="1dhuCFEOzHQ"><button type="button" class="v-youtube-play" aria-label="Genjutsu 영상 재생"><img src="./assets/virtually-genjutsu-poster.jpg" alt="Genjutsu 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">Genjutsu · <a href="https://www.youtube.com/shorts/1dhuCFEOzHQ" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note"></p></article></section>
 
 <section class="slide v-slide v-solution" data-page="6"><article class="slide-shell v-shell"><h1 class="slide-title v-title">Virtually는 사진 한 장으로<br><span class="slide-emphasis">바로 라이브를 시작합니다.</span></h1><div class="v-image-flow"><figure class="v-figure "><img src="./assets/virtually-character-sheet.png" alt="입력할 캐릭터 이미지 참고 예시"><figcaption>캐릭터 이미지</figcaption></figure><div class="v-flow-arrow"><b>한 장 입력</b><span>→</span><strong>10초 목표</strong></div><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="목표로 하는 버튜버 방송 화면의 참고 이미지"><figcaption>라이브 방송</figcaption></figure></div><p class="v-note">제품 구상 · 첨부 이미지는 입력과 방송 경험의 참고 예시입니다. Virtually의 실제 변환 결과가 아닙니다.</p></article></section>
 
@@ -6072,9 +6073,9 @@
 
 <section class="slide v-slide v-world-slide" data-page="11"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터를 넘어<br><span class="slide-emphasis">배경·맵·환경까지 AI로.</span></h1><div class="v-world"><div class="v-prompt"><strong>“달빛 아래 마법 도서관 배경 만들어줘”</strong></div><span class="v-between">→</span><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="캐릭터와 배경이 함께 있는 라이브 화면 참고"><figcaption>배경 · 공간 · 조명까지 한 번에</figcaption></figure></div><p class="v-note">확장 구상 · 첨부 화면은 목표 경험의 참고 이미지입니다. 자유로운 3D 공간 생성은 별도 개발 과제입니다.</p></article></section>
 
-<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 · 연간 지출 추정 · 100억+</h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><h2>글로벌 · 연간 지출 추정</h2><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note">자체 Bottom-up 추정 · 공식 시장 통계가 아닙니다. 캐릭터·리깅·모캡·라이브 제작 지출 중 잠재 대체 영역만 포함하며, 광고·후원·굿즈 매출은 제외합니다.</p></article></section>
+<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">현재 캐릭터 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 · 연간 지출 추정 · 100억+</h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><h2>글로벌 · 연간 지출 추정</h2><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note">자체 Bottom-up 추정 · 공식 시장 통계가 아닙니다. 캐릭터·리깅·모캡·라이브 제작 지출 중 잠재 대체 영역만 포함하며, 광고·후원·굿즈 매출은 제외합니다.</p></article></section>
 
-<section class="slide v-slide v-revenue-slide" data-page="13"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption">조회수당 매출 평균적 추정치</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.1원</strong></div><div class="v-bar-track"><i style="width:0.1%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>2–3원</strong></div><div class="v-bar-track"><i style="width:3%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>40–100원</strong></div><div class="v-bar-track"><i style="width:100%"><span style="width:40%"></span></i></div></div></div><p class="v-note">비교 시나리오 · 제시된 값을 가정했을 때의 배수입니다. 형식별 조회 정의·집계기간·후원 포함 여부가 달라 실측 평균이나 동일 조건의 수익 비교는 아닙니다.</p></article></section>
+<section class="slide v-slide v-revenue-slide" data-page="13"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption" style="font-size:22px;font-weight:800;letter-spacing:-.04em">조회수당 매출</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.1원</strong></div><div class="v-bar-track"><i style="width:0.1%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>2–3원</strong></div><div class="v-bar-track"><i style="width:3%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>40–100원</strong></div><div class="v-bar-track"><i style="width:70%"></i></div></div></div><p class="v-note">비교 시나리오 · 제시된 값을 가정했을 때의 배수입니다. 형식별 조회 정의·집계기간·후원 포함 여부가 달라 실측 평균이나 동일 조건의 수익 비교는 아닙니다.</p></article></section>
 
 <section class="slide v-slide " data-page="14"><article class="slide-shell v-shell"><h1 class="slide-title v-title">처음에는 제작툴,<br><span class="slide-emphasis">다음에는 방송 플랫폼.</span></h1><div class="v-platform"><div class="v-stage"><span>시작</span><h2>사진 → Virtually → OBS</h2><p>제작과 송출을 간단하게</p></div><span class="v-between">→</span><div class="v-stage v-highlight"><span>목표</span><h2>창작자 <em>↔</em> 팬</h2><p>방송 · 발견 · 구독 · 후원</p></div></div><p class="v-takeaway">사용자가 서로를 데려오는 <span class="slide-emphasis">네트워크 효과를 구축합니다</span></p><p class="v-note">성장 전략 · 도구 기능 경쟁을 넘어, 창작자와 팬이 머무는 관계를 구축합니다.</p></article></section>
 
