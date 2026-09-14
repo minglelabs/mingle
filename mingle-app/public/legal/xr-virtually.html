@@ -4898,6 +4898,594 @@
           font-size: clamp(1.55rem, 7.2vw, 2.2rem);
         }
       }
+
+      .slide-shell--virtually-sam {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: clamp(12px, 1.7vh, 18px);
+        padding-top: clamp(28px, 4vh, 44px);
+        padding-inline: clamp(32px, 5.4vw, 88px);
+      }
+
+      .slide-copy--virtually-sam {
+        width: min(1240px, 100%);
+        max-width: min(1240px, 100%);
+        margin-top: 0;
+        gap: clamp(8px, 1vh, 12px);
+      }
+
+      .slide-copy--virtually-sam .slide-title {
+        font-size: clamp(2.05rem, 3.35vw, 3.8rem);
+        line-height: 1.08;
+      }
+
+      .slide-copy--virtually-sam .slide-body {
+        max-width: 920px;
+        font-size: clamp(0.9rem, 1.15vw, 1.15rem);
+        line-height: 1.35;
+      }
+
+      .virtually-sam-grid {
+        display: grid;
+        grid-template-columns: minmax(350px, 0.84fr) minmax(0, 1.16fr);
+        gap: clamp(12px, 1.5vw, 22px);
+        width: min(1240px, 100%);
+      }
+
+      .virtually-sam-region {
+        position: relative;
+        display: grid;
+        gap: clamp(8px, 1vh, 12px);
+        min-width: 0;
+        padding: clamp(16px, 1.5vw, 22px);
+        overflow: hidden;
+        border: 1px solid rgba(45, 42, 30, 0.09);
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(255, 249, 237, 0.7));
+        box-shadow: 0 18px 38px rgba(72, 57, 18, 0.1);
+      }
+
+      .virtually-sam-region--global {
+        background: linear-gradient(145deg, rgba(255, 252, 245, 0.92), rgba(255, 238, 211, 0.74));
+        box-shadow: 0 20px 42px rgba(205, 91, 8, 0.12);
+      }
+
+      .virtually-sam-region-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .virtually-sam-region-kicker,
+      .virtually-sam-region-label,
+      .virtually-sam-total-caption,
+      .virtually-sam-range,
+      .virtually-sam-category-title,
+      .virtually-sam-category-value,
+      .virtually-sam-category-detail,
+      .virtually-sam-region-name,
+      .virtually-sam-region-value,
+      .virtually-sam-stack-title,
+      .virtually-sam-target-title,
+      .virtually-sam-stack-step,
+      .virtually-sam-target-step {
+        margin: 0;
+      }
+
+      .virtually-sam-region-kicker {
+        color: #a96010;
+        font-size: clamp(1rem, 1.35vw, 1.28rem);
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .virtually-sam-region-label {
+        margin-top: 6px;
+        color: var(--body);
+        font-size: clamp(0.72rem, 0.92vw, 0.92rem);
+        font-weight: 650;
+        line-height: 1.2;
+      }
+
+      .virtually-sam-total {
+        flex: 0 0 auto;
+        text-align: right;
+      }
+
+      .virtually-sam-total strong {
+        display: block;
+        color: var(--accent-strong);
+        font-size: clamp(2.2rem, 3.25vw, 3.7rem);
+        font-weight: 850;
+        letter-spacing: -0.08em;
+        line-height: 0.9;
+        white-space: nowrap;
+      }
+
+      .virtually-sam-total-caption {
+        margin-top: 7px;
+        color: rgba(164, 71, 3, 0.78);
+        font-size: clamp(0.65rem, 0.82vw, 0.82rem);
+        font-weight: 750;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      .virtually-sam-range {
+        color: rgba(45, 42, 30, 0.62);
+        font-size: clamp(0.76rem, 0.95vw, 0.96rem);
+        font-weight: 700;
+        line-height: 1.15;
+      }
+
+      .virtually-sam-category-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(7px, 0.7vw, 10px);
+      }
+
+      .virtually-sam-category-card {
+        position: relative;
+        display: grid;
+        align-content: center;
+        min-width: 0;
+        min-height: clamp(82px, 7.2vw, 102px);
+        padding: clamp(10px, 0.9vw, 13px) clamp(9px, 0.85vw, 13px) clamp(10px, 0.9vw, 13px)
+          clamp(21px, 1.6vw, 27px);
+        overflow: hidden;
+        border: 1px solid rgba(45, 42, 30, 0.08);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .virtually-sam-category-card::before {
+        position: absolute;
+        inset: 10px auto 10px 8px;
+        width: 3px;
+        content: "";
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+      }
+
+      .virtually-sam-category-title {
+        color: #a6530b;
+        font-size: clamp(0.74rem, 0.97vw, 1rem);
+        font-weight: 800;
+        line-height: 1.12;
+      }
+
+      .virtually-sam-category-value {
+        margin-top: 4px;
+        color: var(--title);
+        font-size: clamp(1.28rem, 1.95vw, 2rem);
+        font-weight: 850;
+        letter-spacing: -0.07em;
+        line-height: 0.98;
+        white-space: nowrap;
+      }
+
+      .virtually-sam-category-detail {
+        margin-top: 5px;
+        color: rgba(45, 42, 30, 0.62);
+        font-size: clamp(0.58rem, 0.75vw, 0.76rem);
+        font-weight: 600;
+        line-height: 1.16;
+      }
+
+      .virtually-sam-region--global .virtually-sam-total strong {
+        font-size: clamp(2.45rem, 3.8vw, 4.25rem);
+      }
+
+      .virtually-sam-regions {
+        display: grid;
+        gap: clamp(7px, 0.72vw, 11px);
+        margin-top: 2px;
+      }
+
+      .virtually-sam-region-row {
+        display: grid;
+        grid-template-columns: minmax(86px, 0.48fr) minmax(120px, 1fr) auto;
+        align-items: center;
+        gap: clamp(8px, 0.9vw, 14px);
+        min-width: 0;
+      }
+
+      .virtually-sam-region-name {
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(0.76rem, 0.98vw, 1rem);
+        font-weight: 750;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      .virtually-sam-region-bar {
+        height: clamp(8px, 0.65vw, 10px);
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(164, 71, 3, 0.11);
+      }
+
+      .virtually-sam-region-bar span {
+        display: block;
+        width: var(--sam-bar);
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+        box-shadow: 0 3px 8px rgba(205, 91, 8, 0.18);
+      }
+
+      .virtually-sam-region-value {
+        color: #a6530b;
+        font-size: clamp(0.86rem, 1.12vw, 1.12rem);
+        font-weight: 850;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .virtually-sam-compression {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) 32px minmax(220px, 0.75fr);
+        align-items: center;
+        gap: clamp(10px, 1vw, 16px);
+        width: min(1240px, 100%);
+        padding: clamp(10px, 1vw, 15px) clamp(14px, 1.35vw, 21px);
+        border: 1px solid rgba(205, 91, 8, 0.16);
+        border-radius: 20px;
+        background: rgba(255, 248, 232, 0.72);
+        box-shadow: 0 14px 30px rgba(205, 91, 8, 0.09);
+      }
+
+      .virtually-sam-stack-title,
+      .virtually-sam-target-title {
+        color: #a6530b;
+        font-size: clamp(0.66rem, 0.8vw, 0.82rem);
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        line-height: 1.1;
+        text-transform: uppercase;
+      }
+
+      .virtually-sam-stack-flow,
+      .virtually-sam-target-flow {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 6px;
+      }
+
+      .virtually-sam-stack-step,
+      .virtually-sam-target-step {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 5px 8px;
+        border: 1px solid rgba(164, 71, 3, 0.11);
+        border-radius: 999px;
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(0.62rem, 0.8vw, 0.8rem);
+        font-weight: 750;
+        line-height: 1.05;
+        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .virtually-sam-target-step {
+        color: #a6530b;
+        border-color: rgba(205, 91, 8, 0.18);
+        background: rgba(255, 228, 177, 0.72);
+      }
+
+      .virtually-sam-flow-arrow,
+      .virtually-sam-compression-arrow {
+        color: var(--accent-strong);
+        font-weight: 850;
+      }
+
+      .virtually-sam-compression-arrow {
+        font-size: clamp(1.35rem, 1.9vw, 2rem);
+        line-height: 1;
+        text-align: center;
+      }
+
+      .slide-source.virtually-sam-source {
+        bottom: 64px;
+        font-size: 10px;
+        line-height: 1.28;
+      }
+
+      html.is-mobile-viewport .slide-shell--virtually-sam {
+        gap: 8px;
+        padding-top: calc(env(safe-area-inset-top) + 16px);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 68px);
+      }
+
+      html.is-mobile-viewport .slide-copy--virtually-sam {
+        gap: 6px;
+      }
+
+      html.is-mobile-viewport .slide-copy--virtually-sam .slide-title {
+        font-size: clamp(1.4rem, 6.4vw, 2.25rem);
+        line-height: 1.08;
+      }
+
+      html.is-mobile-viewport .slide-copy--virtually-sam .slide-body {
+        font-size: clamp(0.7rem, 2.8vw, 0.9rem);
+        line-height: 1.25;
+      }
+
+      html.is-mobile-viewport .virtually-sam-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region {
+        gap: 7px;
+        padding: 11px 12px;
+        border-radius: 17px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-kicker {
+        font-size: 0.8rem;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-label {
+        margin-top: 4px;
+        font-size: 0.62rem;
+      }
+
+      html.is-mobile-viewport .virtually-sam-total strong,
+      html.is-mobile-viewport .virtually-sam-region--global .virtually-sam-total strong {
+        font-size: clamp(1.75rem, 8vw, 2.55rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-total-caption,
+      html.is-mobile-viewport .virtually-sam-range {
+        margin-top: 4px;
+        font-size: 0.58rem;
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-grid {
+        gap: 6px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-card {
+        min-height: 60px;
+        padding: 8px 7px 8px 18px;
+        border-radius: 12px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-card::before {
+        inset: 8px auto 8px 7px;
+        width: 2px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-title {
+        font-size: clamp(0.62rem, 2.45vw, 0.8rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-value {
+        margin-top: 3px;
+        font-size: clamp(1.05rem, 5.5vw, 1.45rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-category-detail {
+        margin-top: 3px;
+        font-size: clamp(0.5rem, 1.95vw, 0.65rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-regions {
+        gap: 6px;
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-row {
+        grid-template-columns: minmax(65px, 0.48fr) minmax(80px, 1fr) auto;
+        gap: 7px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-name {
+        font-size: clamp(0.62rem, 2.6vw, 0.78rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-bar {
+        height: 6px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-region-value {
+        font-size: clamp(0.68rem, 2.9vw, 0.82rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-compression {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+        padding: 8px 9px;
+        border-radius: 15px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-stack-title,
+      html.is-mobile-viewport .virtually-sam-target-title {
+        font-size: 0.56rem;
+      }
+
+      html.is-mobile-viewport .virtually-sam-stack-flow,
+      html.is-mobile-viewport .virtually-sam-target-flow {
+        gap: 3px;
+        margin-top: 4px;
+      }
+
+      html.is-mobile-viewport .virtually-sam-stack-step,
+      html.is-mobile-viewport .virtually-sam-target-step {
+        min-height: 20px;
+        padding: 3px 6px;
+        font-size: clamp(0.5rem, 2.15vw, 0.65rem);
+      }
+
+      html.is-mobile-viewport .virtually-sam-compression-arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        justify-self: center;
+        width: 1.2em;
+        height: 1em;
+        font-size: 1rem;
+        transform: rotate(90deg);
+      }
+
+      html.is-mobile-viewport .slide-source.virtually-sam-source {
+        bottom: 43px;
+        font-size: 8px;
+        line-height: 1.2;
+      }
+
+      @media (max-width: 360px) and (max-height: 640px) {
+        html.is-mobile-viewport .slide-shell--virtually-sam {
+          gap: 5px;
+          padding-top: calc(env(safe-area-inset-top) + 11px);
+          padding-bottom: calc(env(safe-area-inset-bottom) + 54px);
+        }
+
+        html.is-mobile-viewport .slide-copy--virtually-sam {
+          gap: 3px;
+        }
+
+        html.is-mobile-viewport .slide-copy--virtually-sam .slide-kicker {
+          font-size: 0.72rem;
+        }
+
+        html.is-mobile-viewport .slide-copy--virtually-sam .slide-title {
+          font-size: clamp(1.16rem, 5.9vw, 1.7rem);
+        }
+
+        html.is-mobile-viewport .slide-copy--virtually-sam .slide-body {
+          font-size: 0.6rem;
+          line-height: 1.18;
+        }
+
+        html.is-mobile-viewport .virtually-sam-grid {
+          gap: 5px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region {
+          gap: 4px;
+          padding: 8px 9px;
+          border-radius: 13px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-kicker {
+          font-size: 0.68rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-label {
+          margin-top: 2px;
+          font-size: 0.52rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-total strong,
+        html.is-mobile-viewport .virtually-sam-region--global .virtually-sam-total strong {
+          font-size: 1.55rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-total-caption,
+        html.is-mobile-viewport .virtually-sam-range {
+          margin-top: 2px;
+          font-size: 0.48rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-grid {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-card {
+          min-height: 46px;
+          padding: 5px 5px 5px 14px;
+          border-radius: 9px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-card::before {
+          inset: 6px auto 6px 5px;
+          width: 2px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-title {
+          font-size: 0.52rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-value {
+          margin-top: 2px;
+          font-size: 0.86rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-category-detail {
+          display: none;
+        }
+
+        html.is-mobile-viewport .virtually-sam-regions {
+          gap: 3px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-row {
+          grid-template-columns: 52px minmax(70px, 1fr) auto;
+          gap: 5px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-name {
+          font-size: 0.52rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-bar {
+          height: 5px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-region-value {
+          font-size: 0.58rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-compression {
+          grid-template-columns: minmax(0, 1fr) 12px minmax(88px, 0.62fr);
+          align-items: center;
+          gap: 3px;
+          padding: 2px 5px;
+          border-radius: 10px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-stack-title,
+        html.is-mobile-viewport .virtually-sam-target-title {
+          font-size: 0.42rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-stack-flow,
+        html.is-mobile-viewport .virtually-sam-target-flow {
+          gap: 2px;
+          margin-top: 2px;
+        }
+
+        html.is-mobile-viewport .virtually-sam-stack-step,
+        html.is-mobile-viewport .virtually-sam-target-step {
+          min-height: 14px;
+          padding: 1px 3px;
+          font-size: 0.4rem;
+        }
+
+        html.is-mobile-viewport .virtually-sam-compression-arrow {
+          font-size: 0.8rem;
+          transform: none;
+        }
+
+        html.is-mobile-viewport .slide-source.virtually-sam-source {
+          bottom: 27px;
+          font-size: 6.5px;
+          line-height: 1.12;
+        }
+
+        html.is-mobile-viewport .virtually-sam-caveat {
+          display: none;
+        }
+      }
 </style></head><body><main class="deck" aria-label="Virtually presentation deck"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
@@ -5380,6 +5968,114 @@ allowfullscreen
 </section>
 
 <section class="slide" data-page="23">
+<article class="slide-shell slide-shell--virtually-sam">
+<div class="slide-copy slide-copy--center slide-copy--virtually-sam">
+<p class="slide-kicker">Market size</p>
+<h1 class="slide-title">The production stack already costs<br><span class="slide-emphasis">₩200B+ every year.</span></h1>
+<p class="slide-body">Estimated Annual Production Spend · production costs only, not creator revenue.</p>
+</div>
+<div class="virtually-sam-grid">
+<section class="virtually-sam-region virtually-sam-region--korea">
+<div class="virtually-sam-region-header">
+<div>
+<p class="virtually-sam-region-kicker virtually-sam-korea-title">Korea</p>
+<p class="virtually-sam-region-label virtually-sam-korea-label">Core SAM · estimated</p>
+</div>
+<div class="virtually-sam-total">
+<strong>₩14B</strong>
+<p class="virtually-sam-total-caption virtually-sam-korea-total-caption">Base ≈ ₩14B</p>
+</div>
+</div>
+<p class="virtually-sam-range virtually-sam-korea-range">₩11B–₩16.5B / year</p>
+<div class="virtually-sam-category-grid">
+<article class="virtually-sam-category-card">
+<p class="virtually-sam-category-title">Live2D production</p>
+<p class="virtually-sam-category-value">₩3–5B</p>
+<p class="virtually-sam-category-detail">Illustration · parts · rigging</p>
+</article>
+<article class="virtually-sam-category-card">
+<p class="virtually-sam-category-title">3D production</p>
+<p class="virtually-sam-category-value">₩3–6B</p>
+<p class="virtually-sam-category-detail">Modeling · rigging · updates</p>
+</article>
+<article class="virtually-sam-category-card">
+<p class="virtually-sam-category-title">Motion Capture Live</p>
+<p class="virtually-sam-category-value">₩3.5–4.5B</p>
+<p class="virtually-sam-category-detail">Broadcast · showcases · concerts</p>
+</article>
+<article class="virtually-sam-category-card">
+<p class="virtually-sam-category-title">Motion Capture Content</p>
+<p class="virtually-sam-category-value">₩0.7–1.5B</p>
+<p class="virtually-sam-category-detail">Dance · MV · retargeting</p>
+</article>
+</div>
+</section>
+<section class="virtually-sam-region virtually-sam-region--global">
+<div class="virtually-sam-region-header">
+<div>
+<p class="virtually-sam-region-kicker virtually-sam-global-title">Global</p>
+<p class="virtually-sam-region-label virtually-sam-global-label">Core SAM · estimated</p>
+</div>
+<div class="virtually-sam-total">
+<strong>₩200B+</strong>
+<p class="virtually-sam-total-caption virtually-sam-global-total-caption">Base estimate ≈ ₩226B / year</p>
+</div>
+</div>
+<div class="virtually-sam-regions">
+<div class="virtually-sam-region-row">
+<p class="virtually-sam-region-name">Japan</p>
+<div class="virtually-sam-region-bar"><span style="--sam-bar:100%"></span></div>
+<strong class="virtually-sam-region-value">₩80B</strong>
+</div>
+<div class="virtually-sam-region-row">
+<p class="virtually-sam-region-name">China</p>
+<div class="virtually-sam-region-bar"><span style="--sam-bar:94%"></span></div>
+<strong class="virtually-sam-region-value">₩75B</strong>
+</div>
+<div class="virtually-sam-region-row">
+<p class="virtually-sam-region-name">United States</p>
+<div class="virtually-sam-region-bar"><span style="--sam-bar:44%"></span></div>
+<strong class="virtually-sam-region-value">₩35B</strong>
+</div>
+<div class="virtually-sam-region-row">
+<p class="virtually-sam-region-name">Europe</p>
+<div class="virtually-sam-region-bar"><span style="--sam-bar:28%"></span></div>
+<strong class="virtually-sam-region-value">₩22B</strong>
+</div>
+<div class="virtually-sam-region-row">
+<p class="virtually-sam-region-name">Korea</p>
+<div class="virtually-sam-region-bar"><span style="--sam-bar:18%"></span></div>
+<strong class="virtually-sam-region-value">₩14B</strong>
+</div>
+</div>
+</section>
+</div>
+<div class="virtually-sam-compression">
+<div>
+<p class="virtually-sam-stack-title">Current production stack</p>
+<div class="virtually-sam-stack-flow">
+<span class="virtually-sam-stack-step">Character production</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-stack-step">Live2D / 3D rigging</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-stack-step">3D modeling</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-stack-step">Motion capture</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-stack-step">Live production</span>
+</div>
+</div>
+<div class="virtually-sam-compression-arrow" aria-hidden="true">→</div>
+<div>
+<p class="virtually-sam-target-title">Virtually target</p>
+<div class="virtually-sam-target-flow">
+<span class="virtually-sam-target-step">Image + Camera</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-target-step">Virtually</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
+<span class="virtually-sam-target-step">Live</span>
+</div>
+</div>
+</div>
+<p class="slide-source virtually-sam-source">SAM = Annual spending on character production, Live2D/3D modeling &amp; rigging, motion capture and virtual live production that could potentially be replaced by Virtually.<br>Creator revenue (merch, ads, Super Chat, memberships and tickets) is excluded.<br>Bottom-up estimates based on publicly available production pricing, mocap studio pricing and VTuber market/activity data.<br><span class="virtually-sam-caveat">Category ranges are independently estimated; totals may not equal a simple min/max sum.</span></p>
+</article>
+</section>
+
+<section class="slide" data-page="24">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--market-comparison">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--market-comparison">
 <p class="slide-kicker">Creator revenue</p>
@@ -5410,7 +6106,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="24">
+<section class="slide" data-page="25">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--goal-split">
 <p class="slide-kicker">Live economy</p>
@@ -5430,7 +6126,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="25">
+<section class="slide" data-page="26">
 <article class="slide-shell slide-shell--ai-requirements">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
 <p class="slide-kicker">Strategy</p>
@@ -5455,7 +6151,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="26">
+<section class="slide" data-page="27">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--apple-analogy">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--apple-analogy">
 <p class="slide-kicker">Analogy</p>
@@ -5487,7 +6183,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="27">
+<section class="slide" data-page="28">
 <article class="slide-shell slide-shell--ai-requirements slide-shell--ecosystem-analogy">
 <div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--ecosystem-analogy">
 <p class="slide-kicker">The ecosystem pattern</p>
@@ -5529,7 +6225,7 @@ allowfullscreen
 </article>
 </section>
 
-<section class="slide" data-page="28">
+<section class="slide" data-page="29">
 <article class="slide-shell">
 <div class="slide-copy slide-copy--center">
 <p class="slide-kicker">Vision</p>
@@ -5547,7 +6243,7 @@ allowfullscreen
           </svg>
           <span>Start</span>
         </button>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 28</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 29</div>
       </div>
     </main>
 
@@ -5830,6 +6526,28 @@ allowfullscreen
             goalTexts: ["캐릭터 이미지<br>→ 캐릭터", "프롬프트 / 이미지<br>→ 방 / 세계"],
             source: "캐릭터 + 움직임 + 세계 생성이 하나의 크리에이터 경험이 됩니다."
           },
+          33: {
+            kicker: "시장 규모",
+            title: "버튜버 제작 스택에는 이미<br><span class=\"slide-emphasis\">매년 ₩200B+가 쓰입니다.</span>",
+            body: "Estimated Annual Production Spend · 크리에이터 매출이 아닌 제작비만 포함합니다.",
+            samKoreaTitle: "국내",
+            samKoreaLabel: "Core SAM · 추정",
+            samKoreaTotalCaption: "기준 ≈ ₩14B",
+            samKoreaRange: "연간 ₩11B–₩16.5B",
+            samCategoryTitles: ["Live2D 제작", "3D 제작", "모션캡처 라이브", "모션캡처 콘텐츠"],
+            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
+            samCategoryDetails: ["일러스트 · 파츠 · 리깅", "모델링 · 리깅 · 업데이트", "방송 · 쇼케이스 · 콘서트", "춤 · MV · 리타게팅"],
+            samGlobalTitle: "글로벌",
+            samGlobalLabel: "Core SAM · 추정",
+            samGlobalTotalCaption: "기준 추정 ≈ ₩226B / year",
+            samRegionNames: ["일본", "중국", "미국", "유럽", "한국"],
+            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
+            samStackTitle: "현재 제작 스택",
+            samStackSteps: ["캐릭터 제작", "Live2D / 3D 리깅", "3D 모델링", "모션캡처", "라이브 제작"],
+            samTargetTitle: "Virtually 목표",
+            samTargetSteps: ["이미지 + 카메라", "Virtually", "라이브"],
+            source: "SAM = Virtually로 대체될 가능성이 있는 캐릭터 제작, Live2D/3D 모델링·리깅, 모션캡처, 버추얼 라이브 제작의 연간 지출입니다.<br>굿즈·광고·Super Chat·멤버십·티켓 등 크리에이터 매출은 제외합니다.<br>공개 제작 단가, 모캡 스튜디오 가격, VTuber 시장·활동 데이터를 바탕으로 한 Bottom-up estimate입니다.<br><span class=\"virtually-sam-caveat\">각 범위는 독립적으로 추정했으며 단순 최소·최대 합계와 총 SAM은 다를 수 있습니다.</span>"
+          },
           23: {
             kicker: "크리에이터 수익",
             title: "숏폼은 도달을 만들고<br><span class=\"slide-emphasis\">라이브는 수익을 만듭니다.</span>",
@@ -6008,6 +6726,28 @@ allowfullscreen
             body: "「このキャラクターのための深夜東京ラジオスタジオ」",
             goalTexts: ["キャラクター画像<br>→ キャラクター", "プロンプト / 画像<br>→ 部屋 / 世界"],
             source: "キャラクター + モーション + 世界生成を1つのクリエイター体験にします。"
+          },
+          33: {
+            kicker: "市場規模",
+            title: "VTuberの制作スタックには<br><span class=\"slide-emphasis\">年間₩200B+が使われています。</span>",
+            body: "Estimated Annual Production Spend · クリエイター収益ではなく制作費のみ。",
+            samKoreaTitle: "韓国",
+            samKoreaLabel: "Core SAM · 推定",
+            samKoreaTotalCaption: "ベース ≈ ₩14B",
+            samKoreaRange: "年間 ₩11B–₩16.5B",
+            samCategoryTitles: ["Live2D制作", "3D制作", "モーションキャプチャ・ライブ", "モーションキャプチャ・コンテンツ"],
+            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
+            samCategoryDetails: ["イラスト · パーツ · リギング", "モデリング · リギング · 更新", "配信 · ショーケース · コンサート", "ダンス · MV · リターゲティング"],
+            samGlobalTitle: "グローバル",
+            samGlobalLabel: "Core SAM · 推定",
+            samGlobalTotalCaption: "ベース推定 ≈ ₩226B / 年",
+            samRegionNames: ["日本", "中国", "米国", "欧州", "韓国"],
+            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
+            samStackTitle: "現在の制作スタック",
+            samStackSteps: ["キャラクター制作", "Live2D / 3Dリギング", "3Dモデリング", "モーションキャプチャ", "ライブ制作"],
+            samTargetTitle: "Virtuallyの目標",
+            samTargetSteps: ["画像 + カメラ", "Virtually", "ライブ"],
+            source: "SAM = Virtuallyに置き換えられる可能性がある、キャラクター制作、Live2D/3Dモデリング・リギング、モーションキャプチャ、バーチャルライブ制作の年間支出です。<br>グッズ・広告・Super Chat・メンバーシップ・チケットなどのクリエイター収益は含みません。<br>公開された制作単価、モーションキャプチャスタジオ価格、VTuber市場・活動データに基づくBottom-up estimateです。<br><span class=\"virtually-sam-caveat\">各範囲は独立推定であり、単純な最小・最大合計と総SAMは一致しない場合があります。</span>"
           },
           23: {
             kicker: "クリエイター収益",
@@ -6188,6 +6928,28 @@ allowfullscreen
             goalTexts: ["角色图片<br>→ 角色", "提示词 / 图片<br>→ 房间 / 世界"],
             source: "角色 + 动作 + 世界生成，成为一个创作者体验。"
           },
+          33: {
+            kicker: "市场规模",
+            title: "VTuber制作栈每年<br><span class=\"slide-emphasis\">已经花费超过₩200B。</span>",
+            body: "Estimated Annual Production Spend · 只计算制作支出，不含创作者收入。",
+            samKoreaTitle: "韩国",
+            samKoreaLabel: "Core SAM · 估算",
+            samKoreaTotalCaption: "基准 ≈ ₩14B",
+            samKoreaRange: "每年 ₩11B–₩16.5B",
+            samCategoryTitles: ["Live2D制作", "3D制作", "动作捕捉直播", "动作捕捉内容"],
+            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
+            samCategoryDetails: ["插画 · 部件 · 绑定", "建模 · 绑定 · 更新", "直播 · 展示 · 演唱会", "舞蹈 · MV · 重定向"],
+            samGlobalTitle: "全球",
+            samGlobalLabel: "Core SAM · 估算",
+            samGlobalTotalCaption: "基准估算 ≈ ₩226B / 年",
+            samRegionNames: ["日本", "中国", "美国", "欧洲", "韩国"],
+            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
+            samStackTitle: "现有制作栈",
+            samStackSteps: ["角色制作", "Live2D / 3D绑定", "3D建模", "动作捕捉", "直播制作"],
+            samTargetTitle: "Virtually目标",
+            samTargetSteps: ["图片 + 摄像头", "Virtually", "直播"],
+            source: "SAM = 角色制作、Live2D/3D建模与绑定、动作捕捉和虚拟直播制作的年度支出，其中一部分有可能被Virtually替代。<br>不含周边、广告、Super Chat、会员和门票等创作者收入。<br>基于公开制作价格、动作捕捉工作室价格及VTuber市场/活动数据的Bottom-up estimate。<br><span class=\"virtually-sam-caveat\">各项范围独立估算，合计可能不会等于简单的最小值/最大值相加。</span>"
+          },
           23: {
             kicker: "创作者收入",
             title: "短视频带来触达<br><span class=\"slide-emphasis\">直播带来收入。</span>",
@@ -6367,6 +7129,28 @@ allowfullscreen
             goalTexts: ["角色圖片<br>→ 角色", "提示詞 / 圖片<br>→ 房間 / 世界"],
             source: "角色 + 動作 + 世界生成，成為一個創作者體驗。"
           },
+          33: {
+            kicker: "市場規模",
+            title: "VTuber製作堆疊每年<br><span class=\"slide-emphasis\">已經花費超過₩200B。</span>",
+            body: "Estimated Annual Production Spend · 只計算製作支出，不含創作者收入。",
+            samKoreaTitle: "韓國",
+            samKoreaLabel: "Core SAM · 估算",
+            samKoreaTotalCaption: "基準 ≈ ₩14B",
+            samKoreaRange: "每年 ₩11B–₩16.5B",
+            samCategoryTitles: ["Live2D製作", "3D製作", "動作捕捉直播", "動作捕捉內容"],
+            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
+            samCategoryDetails: ["插畫 · 部件 · 綁定", "建模 · 綁定 · 更新", "直播 · 展示 · 演唱會", "舞蹈 · MV · 重定向"],
+            samGlobalTitle: "全球",
+            samGlobalLabel: "Core SAM · 估算",
+            samGlobalTotalCaption: "基準估算 ≈ ₩226B / 年",
+            samRegionNames: ["日本", "中國", "美國", "歐洲", "韓國"],
+            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
+            samStackTitle: "現有製作堆疊",
+            samStackSteps: ["角色製作", "Live2D / 3D綁定", "3D建模", "動作捕捉", "直播製作"],
+            samTargetTitle: "Virtually目標",
+            samTargetSteps: ["圖片 + 攝影機", "Virtually", "直播"],
+            source: "SAM = 角色製作、Live2D/3D建模與綁定、動作捕捉和虛擬直播製作的年度支出，其中一部分可能由Virtually取代。<br>不含周邊、廣告、Super Chat、會員和門票等創作者收入。<br>基於公開製作價格、動作捕捉工作室價格及VTuber市場/活動資料的Bottom-up estimate。<br><span class=\"virtually-sam-caveat\">各項範圍獨立估算，合計可能不等於簡單的最小值／最大值相加。</span>"
+          },
           23: {
             kicker: "創作者收入",
             title: "短影片帶來觸達<br><span class=\"slide-emphasis\">直播帶來收入。</span>",
@@ -6518,6 +7302,22 @@ allowfullscreen
         setLocalizedHTML(slide, ".virtually-process-title", data.processTitle, language);
         setLocalizedHTML(slide, ".virtually-3d-pipeline-title", data.pipelineTitle, language);
         setLocalizedList(slide, ".virtually-3d-pipeline-label", data.pipelineSteps, language);
+        setLocalizedHTML(slide, ".virtually-sam-korea-title", data.samKoreaTitle, language);
+        setLocalizedHTML(slide, ".virtually-sam-korea-label", data.samKoreaLabel, language);
+        setLocalizedHTML(slide, ".virtually-sam-korea-total-caption", data.samKoreaTotalCaption, language);
+        setLocalizedHTML(slide, ".virtually-sam-korea-range", data.samKoreaRange, language);
+        setLocalizedHTML(slide, ".virtually-sam-global-title", data.samGlobalTitle, language);
+        setLocalizedHTML(slide, ".virtually-sam-global-label", data.samGlobalLabel, language);
+        setLocalizedHTML(slide, ".virtually-sam-global-total-caption", data.samGlobalTotalCaption, language);
+        setLocalizedList(slide, ".virtually-sam-category-title", data.samCategoryTitles, language);
+        setLocalizedList(slide, ".virtually-sam-category-value", data.samCategoryValues, language);
+        setLocalizedList(slide, ".virtually-sam-category-detail", data.samCategoryDetails, language);
+        setLocalizedList(slide, ".virtually-sam-region-name", data.samRegionNames, language);
+        setLocalizedList(slide, ".virtually-sam-region-value", data.samRegionValues, language);
+        setLocalizedHTML(slide, ".virtually-sam-stack-title", data.samStackTitle, language);
+        setLocalizedList(slide, ".virtually-sam-stack-step", data.samStackSteps, language);
+        setLocalizedHTML(slide, ".virtually-sam-target-title", data.samTargetTitle, language);
+        setLocalizedList(slide, ".virtually-sam-target-step", data.samTargetSteps, language);
         setLocalizedList(slide, ".slide-tool-title", data.toolTitles, language);
         setLocalizedList(slide, ".slide-goal-label", data.goalLabels, language);
         setLocalizedList(slide, ".slide-goal-text", data.goalTexts, language);
@@ -6576,12 +7376,13 @@ allowfullscreen
         20: 20,
         21: 21,
         22: 22,
-        23: 23,
-        24: 24,
-        25: 25,
-        26: 26,
-        27: 28,
-        28: 30
+        23: 33,
+        24: 23,
+        25: 24,
+        26: 25,
+        27: 26,
+        28: 28,
+        29: 30
       };
 
       if (languageMeta) {
