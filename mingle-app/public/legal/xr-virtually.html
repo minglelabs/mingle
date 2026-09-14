@@ -1,24 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Virtually — The easiest VTuber live AI</title>
-<meta name="description" content="Virtually: the easiest VTuber live AI.">
-<meta property="og:title" content="Virtually - The easiest VTuber live AI" />
+<title>Virtually — 가장 쉬운 버튜버 라이브 AI</title>
+<meta name="description" content="Virtually: 가장 쉬운 버튜버 라이브 AI.">
+<meta property="og:title" content="Virtually - 가장 쉬운 버튜버 라이브 AI" />
 <meta
       property="og:description"
-      content="One character image. One camera. A live character."
+      content="사진 한 장으로 시작하는 버추얼 라이브."
     />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="./assets/virtually-vtuber-cover.png" />
-<meta property="og:image:alt" content="The easiest VTuber live AI" />
+<meta property="og:image:alt" content="가장 쉬운 버튜버 라이브 AI" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Virtually - The easiest VTuber live AI" />
+<meta name="twitter:title" content="Virtually - 가장 쉬운 버튜버 라이브 AI" />
 <meta
       name="twitter:description"
-      content="One character image. One camera. A live character."
+      content="사진 한 장으로 시작하는 버추얼 라이브."
     />
 <script>
       (function () {
@@ -5492,1932 +5492,355 @@
           word-break: keep-all;
         }
       }
-</style></head><body><main class="deck" aria-label="Virtually presentation deck"><div class="track" id="deck-track">
+
+      /* Korean editorial revision: retain the xr-short palette, typography and navigation. */
+      .v-shell.slide-shell { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:clamp(24px,4vh,44px); padding:48px 6.5vw 96px; }
+      .v-title.slide-title { font-size:clamp(38px,4.2vw,66px); line-height:1.23; font-weight:650; text-align:center; word-break:keep-all; overflow-wrap:normal; max-width:100%; }
+      .v-slide h2,.v-slide p,.v-slide figure { margin:0; }
+      .v-slide h2 { font-size:clamp(22px,2.1vw,34px); letter-spacing:-.04em; }
+      .v-slide p { line-height:1.5; }
+      .v-slide a { color:inherit; }
+      .v-note { position:absolute; bottom:42px; left:6.5vw; right:6.5vw; color:#777266; font-size:11px; text-align:center; line-height:1.4; }
+      .v-figure { min-width:0; display:flex; flex-direction:column; gap:12px; align-items:center; }
+      .v-figure img { display:block; width:100%; height:100%; min-height:0; object-fit:contain; border-radius:12px; }
+      .v-figure figcaption,.v-caption { color:#777266; font-size:13px; text-align:center; line-height:1.4; }
+      .v-gallery { display:grid; grid-template-columns:1fr 1fr; width:min(1080px,100%); gap:24px; }
+      .v-gallery .v-figure { height:42vh; }
+      .v-gallery img { background:#fff; border:1px solid #ece7dd; }
+      .v-process-slide .v-shell { flex-direction:row; gap:5vw; }
+      .v-process-slide .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); }
+      .v-process { display:grid; gap:14px; flex-shrink:0; }
+      .v-process h2 { font-size:20px; color:#a96010; margin-bottom:4px; }
+      .v-process-step { display:flex; align-items:center; gap:20px; padding:14px 24px; background:rgba(255,255,255,.8); border:1px solid #eee6d8; border-radius:14px; }
+      .v-process-step span { font-size:15px; color:#b86b14; }
+      .v-process-step b { font-size:24px; white-space:nowrap; font-weight:600; }
+      .v-cost-photo .v-figure { width:min(990px,85%); height:48vh; }
+      .v-video-slide .v-shell { display:grid; grid-template-columns:1.35fr .65fr; gap:5vw; }
+      .v-video-slide .v-title { text-align:left; }
+      .v-video-block { display:flex; flex-direction:column; gap:12px; align-items:center; min-height:0; }
+      .v-youtube,.v-local-video { width:auto; height:65vh; aspect-ratio:9/16; border-radius:14px; background:#111; overflow:hidden; }
+      .v-youtube { position:relative; }
+      .v-youtube-play { width:100%; height:100%; padding:0; border:0; display:block; cursor:pointer; background:#111; }
+      .v-youtube-play[hidden] { display:none; }
+      .v-youtube-play img { width:100%; height:100%; object-fit:cover; }
+      .v-play { position:absolute; inset:calc(50% - 32px) auto auto calc(50% - 32px); width:64px; height:64px; display:grid; place-items:center; color:white; background:#f03; border-radius:50%; font-size:25px; }
+      .v-youtube iframe { width:100%; height:100%; border:0; }
+      .v-image-flow { display:grid; grid-template-columns:1fr 150px 1.5fr; align-items:center; width:100%; gap:24px; }
+      .v-image-flow .v-figure { height:37vh; }
+      .v-image-flow img { background:white; border:1px solid #ece7dd; }
+      .v-flow-arrow { display:grid; justify-items:center; gap:8px; font-size:20px; white-space:nowrap; }
+      .v-flow-arrow span { font-size:52px; color:#c96a0a; line-height:1; }
+      .v-flow-arrow strong { color:#c96a0a; }
+      .v-models { width:100%; display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
+      .v-model { padding:30px 20px; border-bottom:2px solid #efcc8c; text-decoration:none; }
+      .v-brand { height:68px; display:flex; align-items:center; gap:12px; margin-bottom:26px; }
+      .v-brand img { width:44px; max-height:48px; object-fit:contain; }
+      .v-model:first-child .v-brand img { width:125px; }
+      .v-model:first-child .v-brand span { display:none; }
+      .v-brand span { font-size:18px; font-weight:600; }
+      .v-model h2 { font-size:clamp(21px,2vw,29px); white-space:nowrap; }
+      .v-inline-flow { display:flex; align-items:center; gap:30px; font-size:25px; }
+      .v-inline-flow b { color:#c96a0a; }
+      .v-iriam .v-shell { gap:22px; }
+      .v-iriam-images { display:grid; grid-template-columns:1fr 1.35fr; gap:36px; width:90%; }
+      .v-iriam-images .v-figure { height:33vh; }
+      .v-stats { width:90%; display:grid; grid-template-columns:repeat(3,1fr); }
+      .v-stats > div { display:grid; justify-items:center; gap:5px; border-right:1px solid #e5dece; }
+      .v-stats > div:last-child { border:0; }
+      .v-stats strong { font-size:clamp(32px,3.5vw,52px); color:#c96a0a; letter-spacing:-.05em; }
+      .v-stats span { font-size:17px; }
+      .v-stats small { color:#777266; font-size:11px; }
+      .v-limit .v-shell { display:grid; grid-template-columns:1.5fr .6fr; grid-template-rows:auto auto; column-gap:5vw; row-gap:32px; align-content:center; }
+      .v-limit .v-title { text-align:left; font-size:clamp(32px,3.45vw,53px); }
+      .v-limit .v-video-block { grid-row:1/3; grid-column:2; }
+      .v-limit-copy { align-self:start; }
+      .v-limit-copy h2 { font-size:26px; margin-bottom:20px; }
+      .v-limit-copy p { color:#777266; font-size:24px; }
+      .v-limit-copy small { display:block; color:#a96010; font-size:15px; margin-top:20px; }
+      .v-cost-compare { width:min(1120px,100%); display:grid; grid-template-columns:1fr 60px 1fr; align-items:center; gap:24px; }
+      .v-cost-column { border-top:3px solid #d7d0c2; padding:24px 28px; background:rgba(255,255,255,.65); border-radius:16px; }
+      .v-cost-column h2 { margin-bottom:25px; }
+      .v-cost-column h2 small { font-size:16px; font-weight:500; }
+      .v-cost-column > div { display:grid; gap:6px; margin-top:22px; }
+      .v-cost-column > div > span { color:#777266; font-size:17px; }
+      .v-cost-column strong { font-size:clamp(32px,3.2vw,50px); letter-spacing:-.05em; white-space:nowrap; }
+      .v-cost-column strong small { font-size:16px; margin-left:5px; }
+      .v-highlight { background:#fff6e5; border-color:#fbbc32; }
+      .v-highlight strong,.v-highlight h2 { color:#b95b0b; }
+      .v-between { font-size:40px; color:#c96a0a; text-align:center; }
+      .v-world { width:100%; display:grid; grid-template-columns:.9fr 60px 1.5fr; align-items:center; gap:24px; }
+      .v-world .v-figure { height:42vh; }
+      .v-prompt { display:grid; gap:22px; }
+      .v-prompt span { color:#777266; font-size:18px; }
+      .v-prompt strong { font-size:32px; line-height:1.4; word-break:keep-all; }
+      .v-sam { display:grid; grid-template-columns:1.3fr 1fr; gap:60px; width:100%; }
+      .v-sam h2 small { font-size:15px; font-weight:400; color:#777266; margin-left:10px; }
+      .v-sam-blocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:22px; }
+      .v-sam-blocks > div { border-top:1px solid #ddcfb6; padding-top:15px; display:grid; gap:8px; }
+      .v-sam-blocks span { font-size:18px; }
+      .v-sam-blocks strong { font-size:34px; letter-spacing:-.04em; }
+      .v-sam-blocks strong small { font-size:15px; }
+      .v-sam-blocks p { font-size:13px; color:#777266; }
+      .v-sam-global { border-left:1px solid #ddcfb6; padding-left:60px; display:flex; flex-direction:column; justify-content:center; gap:20px; }
+      .v-sam-global > span { font-size:18px; color:#777266; }
+      .v-sam-global > strong { font-size:clamp(48px,5vw,78px); color:#b95b0b; letter-spacing:-.055em; }
+      .v-sam-global p { font-size:27px; }
+      .v-chart-assumption { font-size:16px; color:#a96010; }
+      .v-revenue { width:100%; display:grid; gap:24px; }
+      .v-revenue-row { display:grid; grid-template-columns:85px 1fr 175px; gap:24px; align-items:center; }
+      .v-revenue-row > b { font-size:24px; }
+      .v-revenue-row > strong { font-size:29px; }
+      .v-bar-track { height:70px; border-left:1px solid #dfd6c7; display:flex; align-items:center; }
+      .v-bar-track i { display:block; min-width:2px; height:100%; background:#cfc8b9; border-radius:0 6px 6px 0; }
+      .v-revenue-live .v-bar-track i { background:#ffe0a3; }
+      .v-revenue-live .v-bar-track span { display:block; height:100%; background:#d3740c; border-radius:0 6px 6px 0; }
+      .v-revenue-live > strong { color:#b95b0b; }
+      .v-chart-foot { display:flex; align-items:center; justify-content:space-between; gap:24px; color:#777266; }
+      .v-chart-foot span { font-size:12px; }
+      .v-chart-foot b { font-size:38px; color:#c96a0a; }
+      .v-platform { display:grid; grid-template-columns:1fr 60px 1fr; gap:24px; align-items:center; width:100%; }
+      .v-stage { padding:32px; border-top:2px solid #ecd1a1; }
+      .v-stage > span { color:#a96010; font-size:18px; }
+      .v-stage h2 { margin:22px 0; font-size:29px; white-space:nowrap; }
+      .v-stage h2 em { font-style:normal; margin:0 24px; }
+      .v-stage p { font-size:21px; color:#777266; }
+      .v-takeaway { font-size:26px; }
+      .v-roadmap { display:grid; grid-template-columns:repeat(3,1fr); width:100%; gap:40px; }
+      .v-roadmap > div { padding:26px 0; border-top:2px solid #eec27b; }
+      .v-roadmap span { font-size:18px; color:#a96010; }
+      .v-roadmap h2 { margin:28px 0 20px; }
+      .v-roadmap p { font-size:23px; color:#777266; }
+      .v-apple { display:grid; grid-template-columns:1fr 60px 1.3fr; align-items:center; gap:32px; width:100%; }
+      .v-music-before > span { color:#777266; font-size:19px; }
+      .v-file-row { display:flex; gap:16px; margin-top:20px; }
+      .v-file-row b { font-size:22px; padding:20px; border:1px solid #ded9ce; background:#fff; border-radius:8px; font-weight:500; }
+      .v-music-after { display:flex; align-items:center; gap:30px; }
+      .v-music-after h2 { font-size:32px; }
+      .v-music-after p { margin:14px 0; font-size:26px; color:#a96010; }
+      .v-music-after strong { font-size:17px; font-weight:500; }
+      .v-ipod { flex-shrink:0; width:130px; height:210px; border:1px solid #d5d0c5; border-radius:18px; background:#fff; padding:14px; box-shadow:0 12px 30px #51401c0a; }
+      .v-ipod > div { background:#efeee4; border:1px solid #ccc9bb; border-radius:4px; height:85px; text-align:center; font-size:32px; padding-top:8px; }
+      .v-ipod small { display:block; font-size:12px; }
+      .v-ipod > span { display:block; border:23px solid #f0ede6; width:82px; height:82px; margin:14px auto 0; border-radius:50%; }
+      .v-ecosystem { width:min(1050px,100%); }
+      .v-eco-head,.v-eco-row { display:grid; grid-template-columns:1fr 70px 1fr; align-items:center; text-align:center; gap:24px; }
+      .v-eco-head { color:#777266; font-size:16px; margin-bottom:14px; }
+      .v-eco-row { padding:28px 20px; border-top:1px solid #e6d8c1; }
+      .v-eco-row > div { display:grid; gap:12px; }
+      .v-eco-row strong { font-size:40px; letter-spacing:-.04em; }
+      .v-eco-row span { font-size:20px; color:#777266; }
+      .v-eco-row > b { color:#c96a0a; font-size:32px; font-weight:400; }
+      .v-final .v-title { font-size:clamp(60px,6.8vw,108px); text-align:left; }
+      .v-final .v-shell { align-items:flex-start; padding-left:15vw; }
+      @media(max-width:900px) {
+        .v-shell.slide-shell { padding:26px 22px 92px; gap:22px; }
+        .v-title.slide-title { font-size:clamp(23px,5.8vw,40px); line-height:1.28; }
+        .v-note { left:22px; right:22px; bottom:36px; font-size:9px; line-height:1.35; }
+        .v-slide h2 { font-size:21px; }
+        .v-figure { gap:8px; }
+        .v-figure figcaption,.v-caption { font-size:10px; }
+        .v-gallery { gap:12px; }
+        .v-gallery .v-figure { height:32vh; }
+        .v-process-slide .v-shell { flex-direction:column; gap:30px; }
+        .v-process-slide .v-title { text-align:center; font-size:clamp(23px,5.8vw,40px); }
+        .v-process { gap:10px; }
+        .v-process h2 { font-size:16px; text-align:center; }
+        .v-process-step { padding:12px 22px; }
+        .v-process-step b { font-size:20px; }
+        .v-cost-photo .v-figure { width:100%; height:38vh; }
+        .v-video-slide .v-shell { display:flex; gap:20px; }
+        .v-video-slide .v-title { text-align:center; }
+        .v-youtube,.v-local-video { height:48vh; max-width:100%; }
+        .v-image-flow { grid-template-columns:1fr; gap:12px; }
+        .v-image-flow .v-figure { height:22vh; }
+        .v-flow-arrow { display:flex; justify-content:center; gap:12px; font-size:15px; }
+        .v-flow-arrow span { font-size:24px; transform:rotate(90deg); }
+        .v-models { grid-template-columns:1fr 1fr; gap:14px; }
+        .v-model { padding:15px 8px; }
+        .v-brand { height:40px; gap:7px; margin-bottom:15px; }
+        .v-brand img { width:29px; max-height:34px; }
+        .v-model:first-child .v-brand img { width:110px; }
+        .v-brand span { font-size:13px; }
+        .v-model h2 { font-size:18px; }
+        .v-inline-flow { gap:10px; font-size:15px; }
+        .v-iriam-images { width:100%; grid-template-columns:1fr; gap:14px; }
+        .v-iriam-images .v-figure { height:20vh; }
+        .v-iriam .v-shell { gap:18px; }
+        .v-stats { width:100%; gap:3px; }
+        .v-stats strong { font-size:clamp(21px,5.5vw,34px); white-space:nowrap; }
+        .v-stats span { font-size:11px; }
+        .v-stats small { font-size:8px; text-align:center; }
+        .v-limit .v-shell { display:flex; gap:18px; }
+        .v-limit .v-title { text-align:center; font-size:clamp(22px,5.5vw,34px); }
+        .v-limit-copy { align-self:center; text-align:center; }
+        .v-limit-copy h2 { font-size:18px; margin-bottom:8px; }
+        .v-limit-copy p { font-size:15px; }
+        .v-limit-copy small { font-size:11px; margin-top:8px; }
+        .v-limit .v-local-video { height:35vh; }
+        .v-cost-compare { grid-template-columns:1fr; gap:8px; }
+        .v-cost-column { padding:18px 22px; }
+        .v-cost-column h2 { margin-bottom:8px; font-size:21px; }
+        .v-cost-column h2 small { font-size:13px; }
+        .v-cost-column > div { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px; }
+        .v-cost-column > div > span { font-size:12px; }
+        .v-cost-column strong { font-size:27px; }
+        .v-cost-column strong small { font-size:11px; }
+        .v-between { font-size:26px; }
+        .v-cost-compare > .v-between,.v-platform > .v-between,.v-apple > .v-between,.v-world > .v-between { line-height:1; transform:rotate(90deg); }
+        .v-world { grid-template-columns:1fr; gap:20px; }
+        .v-world .v-figure { height:29vh; }
+        .v-prompt { text-align:center; gap:12px; }
+        .v-prompt span { font-size:14px; }
+        .v-prompt strong { font-size:25px; }
+        .v-sam { grid-template-columns:1fr; gap:24px; }
+        .v-sam h2 { font-size:21px; }
+        .v-sam h2 small { font-size:12px; }
+        .v-sam-blocks { gap:16px; margin-top:14px; }
+        .v-sam-blocks > div { gap:6px; padding-top:10px; }
+        .v-sam-blocks span { font-size:14px; }
+        .v-sam-blocks strong { font-size:27px; }
+        .v-sam-blocks p { font-size:10px; }
+        .v-sam-global { border-left:0; border-top:1px solid #ddcfb6; padding:16px 0 0; gap:9px; text-align:center; }
+        .v-sam-global > span { font-size:14px; }
+        .v-sam-global > strong { font-size:48px; }
+        .v-sam-global p { font-size:18px; }
+        .v-revenue { gap:18px; }
+        .v-revenue-row { grid-template-columns:45px 1fr 84px; gap:10px; }
+        .v-revenue-row > b { font-size:16px; }
+        .v-revenue-row > strong { font-size:17px; }
+        .v-bar-track { height:53px; }
+        .v-chart-foot { align-items:flex-end; }
+        .v-chart-foot span { font-size:9px; max-width:170px; }
+        .v-chart-foot b { font-size:24px; white-space:nowrap; }
+        .v-platform { grid-template-columns:1fr; gap:12px; }
+        .v-stage { padding:22px; }
+        .v-stage > span { font-size:14px; }
+        .v-stage h2 { font-size:22px; margin:14px 0; }
+        .v-stage p { font-size:16px; }
+        .v-takeaway { font-size:17px; text-align:center; word-break:keep-all; }
+        .v-roadmap { grid-template-columns:1fr; gap:8px; }
+        .v-roadmap > div { display:grid; grid-template-columns:27px 1fr 1.4fr; align-items:center; gap:10px; padding:21px 0; }
+        .v-roadmap span { font-size:12px; }
+        .v-roadmap h2 { font-size:19px; margin:0; }
+        .v-roadmap p { font-size:14px; }
+        .v-apple { grid-template-columns:1fr; gap:22px; }
+        .v-music-before { text-align:center; }
+        .v-music-before > span { font-size:14px; }
+        .v-file-row { justify-content:center; margin-top:10px; gap:10px; }
+        .v-file-row b { font-size:15px; padding:13px 20px; }
+        .v-music-after { justify-content:center; gap:20px; }
+        .v-music-after h2 { font-size:22px; }
+        .v-music-after p { font-size:20px; margin:12px 0; }
+        .v-music-after strong { font-size:12px; }
+        .v-ipod { width:90px; height:148px; border-radius:12px; padding:10px; }
+        .v-ipod > div { height:58px; font-size:21px; padding-top:5px; }
+        .v-ipod small { font-size:9px; }
+        .v-ipod > span { width:58px; height:58px; border-width:16px; margin-top:9px; }
+        .v-eco-head,.v-eco-row { grid-template-columns:1fr 24px 1fr; gap:10px; }
+        .v-eco-head { font-size:11px; }
+        .v-eco-row { padding:25px 6px; }
+        .v-eco-row strong { font-size:26px; }
+        .v-eco-row span { font-size:14px; }
+        .v-eco-row > b { font-size:24px; }
+        .v-final .v-title { font-size:54px; }
+      }
+      @media(max-width:360px) and (max-height:650px) {
+        .v-shell.slide-shell { padding:18px 18px 90px; gap:16px; }
+        .v-title.slide-title,.v-process-slide .v-title { font-size:22px; }
+        .v-note { font-size:8px; left:18px; right:18px; }
+        .v-iriam .v-shell { gap:12px; }
+        .v-iriam-images .v-figure { height:17vh; }
+        .v-figure figcaption { font-size:8px; }
+        .v-stats strong { font-size:20px; }
+        .v-stats small { font-size:7px; }
+        .v-process-step { padding:10px 18px; }
+        .v-process-step b { font-size:18px; }
+        .v-model h2 { font-size:15px; }
+        .v-model { padding:12px 4px; }
+        .v-cost-column { padding:14px; }
+        .v-cost-column strong { font-size:23px; }
+        .v-cost-column > div > span { font-size:10px; }
+        .v-sam { gap:16px; }
+        .v-sam-blocks { gap:12px; }
+        .v-sam-blocks strong { font-size:22px; }
+        .v-sam-global > strong { font-size:35px; }
+        .v-sam-global p { font-size:15px; }
+        .v-roadmap > div { grid-template-columns:20px 1fr 1.4fr; }
+        .v-roadmap h2 { font-size:16px; }
+        .v-roadmap p { font-size:12px; }
+        .v-stage { padding:18px; }
+        .v-stage h2 { font-size:19px; }
+        .v-limit .v-local-video { height:29vh; }
+      }
+
+      /* Reserve the notes/navigation area at every mobile size. */
+      @media (max-width:900px) {
+        html.is-mobile-viewport .v-shell.slide-shell { padding:24px 22px 96px; }
+        html.is-mobile-viewport .v-title.slide-title { font-size:clamp(26px,6.7vw,40px); }
+        html.is-mobile-viewport .v-final .v-title { font-size:54px; }
+      }
+      @media (max-width:360px) and (max-height:650px) {
+        html.is-mobile-viewport .v-shell.slide-shell { padding:18px 18px 90px; }
+        html.is-mobile-viewport .v-title.slide-title { font-size:24px; }
+        html.is-mobile-viewport .v-final .v-title { font-size:48px; }
+      }
+</style></head><body><main class="deck" aria-label="Virtually 한국어 발표자료"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
 <div class="slide-copy slide-copy--download-qr">
 <h1 class="slide-title"><span class="slide-emphasis">Virtually</span></h1>
-<h2 class="slide-title virtually-cover-subtitle">The easiest VTuber live AI</h2>
+<h2 class="slide-title virtually-cover-subtitle">가장 쉬운 버튜버 라이브 AI</h2>
 </div>
 <div class="slide-side-media slide-side-media--download-qr">
 <div class="slide-download-qr-link">
-<img class="slide-download-qr" style="object-fit:contain" src="./assets/virtually-vtuber-cover.png" alt="VTuber character and live camera transformation">
+<img class="slide-download-qr" style="object-fit:contain" src="./assets/virtually-vtuber-cover.png" alt="카메라 영상과 버튜버 캐릭터">
 </div>
 </div>
 </article>
 </section>
 
-<section class="slide" data-page="2">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Problem</p>
-<h1 class="slide-title">Becoming a VTuber<br>is still <span class="slide-emphasis">too hard.</span></h1>
-<p class="slide-body">A single character still passes through multiple production and broadcast steps before the first live stream.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements virtually-rigging-pair">
-<div class="slide-market-grid virtually-rigging-gallery">
-<figure class="virtually-rigging-card">
-<img src="./assets/virtually-live2d-rigging.png" alt="Cubism rigging interface with character parameters">
-</figure>
-<figure class="virtually-rigging-card virtually-rigging-card--meme">
-<img src="./assets/virtually-vtuber-creation-meme.png" alt="A VTuber creation troubleshooting post showing a complex Unity character setup">
-</figure>
-</div>
-</div>
-</article>
-</section>
+<!-- Editorial/source notes (Korean review, September 2026):
+     The five screenshots and PNGStreamingDemo.mp4 were supplied by the user.
+     Production costs, the Virtually cost target, SAM, and revenue-per-view values
+     are presentation assumptions supplied by the user, not audited market data.
+     Logo sources: alibabagroup.com/en-US/ (embedded logo), bytedance.com/en/
+     (embedded icon), higgsfield.ai/icon.png, kling.ai/logo-180x180.png.
+     YouTube thumbnail: i.ytimg.com/vi/1dhuCFEOzHQ/maxresdefault.jpg.
+     Preserve these source distinctions when translating this Korean revision.
+-->
+<section class="slide v-slide v-problem-gallery" data-page="2"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버가 되는 건<br>아직도 <span class="slide-emphasis">너무 어렵습니다.</span></h1><div class="v-gallery"><figure class="v-figure "><img src="./assets/virtually-live2d-rigging.png" alt="Cubism에서 2D 캐릭터를 리깅하는 화면"><figcaption>2D · 일러스트 / 파츠·리깅 / 트래킹</figcaption></figure><figure class="v-figure "><img src="./assets/virtually-vtuber-creation-meme.png" alt="Unity에서 3D 모델을 설정하다 겪은 오류 사례"><figcaption>3D · 모델·리깅 / 모캡 스튜디오 / 씬·송출</figcaption></figure></div></article></section>
 
-<section class="slide" data-page="3">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--with-side-media slide-copy--vtuber-process">
-<p class="slide-kicker">Problem</p>
-<h1 class="slide-title">After all this work,<br><span class="slide-emphasis">just one picture moves.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--virtually-process">
-<div class="virtually-process">
-<h2 class="virtually-process-title">Live2D VTuber creation process</h2>
-<div class="slide-tool-items">
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">01</span><h3 class="slide-tool-title">Character illustration</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">02</span><h3 class="slide-tool-title">Parts separation</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">03</span><h3 class="slide-tool-title">Rigging</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">04</span><h3 class="slide-tool-title">Model setup</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">05</span><h3 class="slide-tool-title">Face tracking</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">06</span><h3 class="slide-tool-title">Scene and OBS setup</h3></div>
-</article>
-<article class="slide-tool-item slide-tool-item--numbered">
-<div class="slide-tool-heading"><span class="slide-tool-step-number">07</span><h3 class="slide-tool-title">Live stream</h3></div>
-</article>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>Live2D 제작 과정</h2><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>02</span><b>파츠 분리 · 리깅</b></div><div class="v-process-step"><span>03</span><b>표정 트래킹</b></div><div class="v-process-step"><span>04</span><b>OBS 연결 · 방송</b></div></div><p class="v-note">2D 방식의 표현 범위 · 자유로운 전신 표현은 별도의 3D 제작·모캡으로 구현할 수 있습니다.</p></article></section>
 
-<section class="slide" data-page="4">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Live2D</p>
-<h1 class="slide-title">Live2D is accessible.<br><span class="slide-emphasis">Freedom gets complex.</span></h1>
-<p class="slide-body">Optimized for 2D expressions.<br>Full-body motion takes more manual setup.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements virtually-limited-comparison">
-<div class="slide-ai-requirements-grid virtually-limited-comparison-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Easy to start</h2>
-<p class="slide-ai-requirement-description">2D model + camera</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">More freedom, more work</h2>
-<p class="slide-ai-requirement-description">Parts · rigging · tracking</p>
-</article>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><figure class="v-figure "><img src="./assets/virtually-production-cost.png" alt="이와 IWA의 2D·3D 버튜버 비용 영상: 모델만 1,180만 원 이상"><figcaption>제작비 공개 사례 · 이와 IWA 「2D & 3D 버튜버 방송은 돈이 얼마가 들까?」</figcaption></figure><p class="v-note">첨부 이미지의 개인 사례이며, 모든 버튜버의 최소 비용을 뜻하지 않습니다.</p></article></section>
 
-<section class="slide" data-page="5">
-<article class="slide-shell slide-shell--has-side-media">
-<div class="slide-copy slide-copy--with-side-media slide-copy--virtually-3d">
-<p class="slide-kicker">Professional 3D</p>
-<h1 class="slide-title">3D unlocks<br><span class="slide-emphasis">full-body freedom.</span></h1>
-<p class="slide-body">Dance, turns and back views are already possible.<br>The trade-off is a complex, expensive pipeline.</p>
-</div>
-<div class="slide-side-media slide-side-media--virtually-3d">
-<div class="virtually-3d-pipeline-panel">
-<div class="virtually-3d-reference">
-<iframe
-class="slide-short-video virtually-3d-reference-video"
-src="https://www.youtube.com/embed/EEYbf4PiuKY?playsinline=1&rel=0&enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=EEYbf4PiuKY&controls=0&modestbranding=1"
-title="Public 3D VTuber dance example"
-allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-referrerpolicy="strict-origin-when-cross-origin"
-allowfullscreen
-></iframe>
-</div>
-<h2 class="virtually-3d-pipeline-title">Professional 3D live pipeline</h2>
-<div class="virtually-3d-pipeline">
-<article class="virtually-3d-pipeline-step">
-<span class="virtually-3d-pipeline-number">01</span>
-<p class="virtually-3d-pipeline-label">High-quality<br>3D character</p>
-</article>
-<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
-<article class="virtually-3d-pipeline-step">
-<span class="virtually-3d-pipeline-number">02</span>
-<p class="virtually-3d-pipeline-label">3D rigging / skeleton<br>+ professional motion capture</p>
-</article>
-<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
-<article class="virtually-3d-pipeline-step">
-<span class="virtually-3d-pipeline-number">03</span>
-<p class="virtually-3d-pipeline-label">Real-time<br>3D engine</p>
-</article>
-<span class="virtually-3d-pipeline-arrow" aria-hidden="true">→</span>
-<article class="virtually-3d-pipeline-step">
-<span class="virtually-3d-pipeline-number">04</span>
-<p class="virtually-3d-pipeline-label">Virtual live</p>
-</article>
-</div>
-</div>
-</div>
-<p class="slide-source">A public 3D dance reference: <a href="https://www.youtube.com/watch?v=EEYbf4PiuKY" target="_blank" rel="noopener noreferrer">Hakos Baelz 3D performance video</a> · A public report on Stellive’s Akane Lize solo concert describes a VICON motion-capture setup. <a href="https://press.todayan.com/newsRead.php?no=1038883" target="_blank" rel="noopener noreferrer">VISOL / Todayan report</a></p>
-</article>
-</section>
+<section class="slide v-slide v-video-slide" data-page="5"><article class="slide-shell v-shell"><h1 class="slide-title v-title">AI의 발전으로<br><span class="slide-emphasis">이 과정이 간소화됩니다.</span></h1><div class="v-video-block"><div class="v-youtube" data-video-id="1dhuCFEOzHQ"><button type="button" class="v-youtube-play" aria-label="Genjutsu 영상 재생"><img src="./assets/virtually-genjutsu-poster.jpg" alt="Genjutsu 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">Genjutsu · <a href="https://www.youtube.com/shorts/1dhuCFEOzHQ" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note">녹화 영상 기반 AI 변환 사례 · 로컬 파일에서는 재생 버튼이 YouTube 원본을 엽니다.</p></article></section>
 
-<section class="slide" data-page="6">
-<article class="slide-shell slide-shell--ai-requirements slide-shell--virtually-tradeoff">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">The trade-off</p>
-<h1 class="slide-title">AI Animate removes<br><span class="slide-emphasis">the production trade-off.</span></h1>
-<p class="slide-body">Full-body freedom without the 3D production pipeline.<br>Virtually targets both accessibility and expressiveness.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid virtually-tradeoff-grid">
-<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--live2d">
-<h2 class="slide-ai-requirement-title">Live2D + VTube Studio</h2>
-<p class="slide-ai-requirement-description">Accessible · 2D optimized<br>Setup grows with freedom</p>
-</article>
-<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--3d">
-<h2 class="slide-ai-requirement-title">Professional 3D + Mocap</h2>
-<p class="slide-ai-requirement-description">Full-body freedom · Reusable<br>High upfront · Low marginal</p>
-</article>
-<article class="slide-ai-requirement virtually-tradeoff-card virtually-tradeoff-card--virtually">
-<h2 class="slide-ai-requirement-title">Virtually</h2>
-<p class="slide-ai-requirement-description">One image + camera<br>Near-zero upfront · Higher marginal<br>Target: full-body freedom</p>
-</article>
-</div>
-</div>
-<p class="slide-source">Virtually is still in development: full-body motion is a target, with GPU inference cost on each live session.</p>
-</article>
-</section>
+<section class="slide v-slide v-solution" data-page="6"><article class="slide-shell v-shell"><h1 class="slide-title v-title">Virtually는 사진 한 장으로<br><span class="slide-emphasis">바로 라이브를 시작합니다.</span></h1><div class="v-image-flow"><figure class="v-figure "><img src="./assets/virtually-character-sheet.png" alt="입력할 캐릭터 이미지 참고 예시"><figcaption>캐릭터 이미지</figcaption></figure><div class="v-flow-arrow"><b>한 장 입력</b><span>→</span><strong>10초 목표</strong></div><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="목표로 하는 버튜버 방송 화면의 참고 이미지"><figcaption>라이브 방송</figcaption></figure></div><p class="v-note">제품 구상 · 첨부 이미지는 입력과 방송 경험의 참고 예시입니다. Virtually의 실제 변환 결과가 아닙니다.</p></article></section>
 
-<section class="slide" data-page="7">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Solution</p>
-<h1 class="slide-title">One image.<br><span class="slide-emphasis">Live in ten seconds.</span></h1>
-<p class="slide-body">We target professional 3D freedom, without the 3D production pipeline.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left slide-goal--labeled">
-<p class="slide-goal-label">Before Virtually</p>
-<p class="slide-goal-text">Character production<br>Days to weeks<br>Complex setup</p>
-</div>
-<div class="slide-goal slide-goal--right slide-goal--labeled">
-<p class="slide-goal-label">After Virtually</p>
-<p class="slide-goal-text"><span class="slide-goal-emphasis">One image + camera</span><br>10 seconds<br>Target: full-body freedom</p>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide " data-page="7"><article class="slide-shell v-shell"><h1 class="slide-title v-title">AI Animate 기술의<br><span class="slide-emphasis">라이브 적용이 핵심입니다.</span></h1><div class="v-models"><a class="v-model" href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer"><div class="v-brand"><img src="./assets/virtually-alibaba-logo.png" alt="Alibaba 로고"><span>Alibaba</span></div><h2>Wan Animate 2</h2></a><a class="v-model" href="https://higgsfield.ai/" target="_blank" rel="noopener noreferrer"><div class="v-brand"><img src="./assets/virtually-higgsfield-logo.png" alt="Higgsfield 로고"><span>Higgsfield</span></div><h2>Genjutsu</h2></a><a class="v-model" href="https://arxiv.org/abs/2601.21716" target="_blank" rel="noopener noreferrer"><div class="v-brand"><img src="./assets/virtually-bytedance-logo.png" alt="ByteDance 로고"><span>ByteDance</span></div><h2>DreamActor M2</h2></a><a class="v-model" href="https://kling.ai/" target="_blank" rel="noopener noreferrer"><div class="v-brand"><img src="./assets/virtually-kling-logo.png" alt="Kling 로고"><span>Kling</span></div><h2>Motion Control</h2></a></div><div class="v-inline-flow"><span>사진 + 카메라</span><span>→</span><b>실시간 생성</b><span>→</span><span>라이브</span></div><p class="v-note">검토하는 기술 계열 · 모두가 실시간 모델은 아닙니다. 지연·품질·운영비 최적화가 제품 개발 과제입니다.</p></article></section>
 
-<section class="slide" data-page="8">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Technology</p>
-<h1 class="slide-title"><span class="slide-emphasis">AI Live Animate</span><br>makes a live VTuber<br>from one image.</h1>
-<p class="slide-body">It generates live character frames from one image and camera motion.</p>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-iriam" data-page="8"><article class="slide-shell v-shell"><h1 class="slide-title v-title">쉬운 방송의 수요,<br><span class="slide-emphasis">IRIAM이 보여줬습니다.</span></h1><div class="v-iriam-images"><figure class="v-figure "><img src="./assets/virtually-iriam-png-guide.png" alt="IRIAM의 PNG 이미지와 방송 화면"><figcaption>이미지로 시작하는 방송 · 첨부 PNG 방식 예시</figcaption></figure><figure class="v-figure "><img src="./assets/virtually-iriam-growth.png" alt="IRIAM 다운로드 및 연매출 성장 그래프"><figcaption>성장 추이 · 첨부 자료는 2024.01 기준</figcaption></figure></div><div class="v-stats"><div><strong>621만</strong><span>누적 다운로드 · 일본</span><small><a href="https://dena.com/jp/news/5387/" target="_blank" rel="noopener noreferrer">DeNA · 2026.05</a></small></div><div><strong>1만+</strong><span>일일 방송자</span><small><a href="https://info.iriam.com/iriamふんわりジャーナル/iriamのアプリの外での取り組みについて" target="_blank" rel="noopener noreferrer">IRIAM · 2025.04</a></small></div><div><strong>85억 엔+</strong><span>연간 매출</span><small><a href="https://hrmos.co/pages/iriam/jobs/1772810334476865584" target="_blank" rel="noopener noreferrer">회사 공개 · 2025.03 기준</a></small></div></div><p class="v-note">지표별 공개 기준일이 다릅니다. 누적 다운로드는 활성 이용자 수가 아닙니다.</p></article></section>
 
-<section class="slide" data-page="9">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Proof</p>
-<h1 class="slide-title">Recorded motion<br>is already <span class="slide-emphasis">more expressive.</span></h1>
-<p class="slide-body">AI Animate removes parts and rigging from character video.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left slide-goal--labeled">
-<p class="slide-goal-label">Before AI Animate</p>
-<p class="slide-goal-text">Image +<br>driving video</p>
-</div>
-<div class="slide-goal slide-goal--right slide-goal--labeled">
-<p class="slide-goal-label">With AI Animate</p>
-<p class="slide-goal-text">AI-generated<br>character video</p>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-limit" data-page="9"><article class="slide-shell v-shell"><h1 class="slide-title v-title">하지만 간단한 이미지 방송은<br><span class="slide-emphasis">표현의 한계가 있습니다.</span></h1><div class="v-limit-copy"><h2>눈·입 표정 전환 중심</h2><p>전신 춤 · 회전 · 뒷모습은<br>이 방식으로 만들기 어렵습니다.</p><small>IRIAM 미국판 PNG 모드</small></div><div class="v-video-block"><video class="v-local-video" src="./assets/virtually-iriam-png-demo.mp4" poster="./assets/virtually-iriam-png-poster.jpg" controls muted loop playsinline preload="metadata" aria-label="IRIAM 미국판 PNG 방송 데모"></video></div><p class="v-note"><a href="https://base.us.iriam.com/illustration-guide-for-iriam-png-streaming" target="_blank" rel="noopener noreferrer">PNG 공식 가이드</a> · 일본판 자동 모델링과 구분됩니다. IRIAM도 <a href="https://prtimes.jp/main/html/rd/p/000000044.000070082.html" target="_blank" rel="noopener noreferrer">자체 머신러닝 기술을 개선 중</a>입니다.</p></article></section>
 
-<section class="slide" data-page="10">
-<article class="slide-shell slide-shell--has-side-media">
-<div class="slide-copy slide-copy--with-side-media slide-copy--virtually-recorded-motion">
-<p class="slide-kicker">Result</p>
-<h1 class="slide-title"><span class="slide-emphasis">More freedom</span><br>in recorded motion.</h1>
-</div>
-<div class="slide-side-media slide-side-media--virtually-recorded-motion">
-<iframe
-class="slide-short-video virtually-recorded-motion-video"
-src="https://www.youtube.com/embed/-OnJS4JA-v4?playsinline=1&rel=0&enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=-OnJS4JA-v4&controls=0&modestbranding=1"
-title="Wan-Animate-2 dance motion transfer demo"
-allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-referrerpolicy="strict-origin-when-cross-origin"
-allowfullscreen
-></iframe>
-</div>
-<p class="slide-source">Recorded dance video → AI character motion transfer. <a href="https://www.youtube.com/watch?v=-OnJS4JA-v4" target="_blank" rel="noopener noreferrer">YouTube demo</a></p>
-</article>
-</section>
+<section class="slide v-slide v-costs" data-page="10"><article class="slide-shell v-shell"><h1 class="slide-title v-title">Virtually는 <span class="slide-emphasis">표현은 더 자유롭게,</span><br>비용은 최소화합니다.</h1><div class="v-cost-compare"><div class="v-cost-column"><h2>기존 고급 3D</h2><div><span>제작 · 준비</span><strong>500만 원~</strong></div><div><span>모캡 운영</span><strong>최대 200만 원<small>/ 시간</small></strong></div></div><span class="v-between">→</span><div class="v-cost-column v-highlight"><h2>Virtually <small>목표</small></h2><div><span>추가 모델 제작 · 준비</span><strong>0원</strong></div><div><span>AI 운영</span><strong>1만 원<small>/ 시간</small></strong></div></div></div><p class="v-note">제안한 고급 3D 비교 시나리오이며 보편 가격이 아닙니다. Virtually는 이미지 보유 시 목표치로, 품질·원가 검증 전입니다. 기존 3D는 모델 재사용 시 장기적으로 더 경제적일 수 있습니다.</p></article></section>
 
-<section class="slide" data-page="11">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">AI Animate</p>
-<h1 class="slide-title">From moving parameters<br>to <span class="slide-emphasis">generating frames.</span></h1>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left slide-goal--labeled">
-<p class="slide-goal-label">Before generative AI</p>
-<p class="slide-goal-text">Camera → tracking<br>→ parameters<br>→ rigged model</p>
-</div>
-<div class="slide-goal slide-goal--right slide-goal--labeled">
-<p class="slide-goal-label">With generative AI</p>
-<p class="slide-goal-text">Image + video<br>→ generative model<br>→ video</p>
-</div>
-</div>
-</div>
-<p class="slide-source">Direction based on <a href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer">Wan-Animate-2</a> and its end-to-end character animation framework.</p>
-</article>
-</section>
+<section class="slide v-slide v-world-slide" data-page="11"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터를 넘어<br><span class="slide-emphasis">배경·맵·환경까지 AI로.</span></h1><div class="v-world"><div class="v-prompt"><span>만들고 싶은 장면</span><strong>“달빛 아래 마법 도서관”</strong></div><span class="v-between">→</span><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="캐릭터와 배경이 함께 있는 라이브 화면 참고"><figcaption>배경 · 공간 · 조명까지 한 번에</figcaption></figure></div><p class="v-note">확장 구상 · 첨부 화면은 목표 경험의 참고 이미지입니다. 자유로운 3D 공간 생성은 별도 개발 과제입니다.</p></article></section>
 
-<section class="slide" data-page="12">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Core problem</p>
-<h1 class="slide-title">Batch is <span class="slide-emphasis">AI native.</span><br>Live still starts with a rig.</h1>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Recorded<br>Image → AI<br>→ Video</p>
-</div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Live<br>Parts → Rigging<br>→ Tracking</p>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 <small>연간 지출 추정</small></h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><span>글로벌 · 연간 추정</span><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note">자체 Bottom-up 추정 · 공식 시장 통계가 아닙니다. 캐릭터·리깅·모캡·라이브 제작 지출 중 잠재 대체 영역만 포함하며, 광고·후원·굿즈 매출은 제외합니다.</p></article></section>
 
-<section class="slide" data-page="13">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Cause</p>
-<h1 class="slide-title">The barrier was <span class="slide-emphasis">latency.</span></h1>
-<p class="slide-body">Frame cadence is not end-to-end latency.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Batch<br>Seconds to<br>minutes</p>
-</div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Live target<br>One frame every<br>33–50 ms</p>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide v-revenue-slide" data-page="13"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption">조회수당 매출 · 비교 가정</p><div class="v-revenue-row"><b>숏폼</b><div class="v-bar-track"><i style="width:0.1%"></i></div><strong>0.1원</strong></div><div class="v-revenue-row"><b>롱폼</b><div class="v-bar-track"><i style="width:3%"></i></div><strong>2–3원</strong></div><div class="v-revenue-row v-revenue-live"><b>라이브</b><div class="v-bar-track"><i style="width:100%"><span style="width:40%"></span></i></div><strong>40–100원</strong></div><div class="v-chart-foot"><span>조회 1회당 매출 가정 · 막대는 상단값 / 라이브 진한 영역은 하단값</span><b>400–1,000×</b></div></div><p class="v-note">비교 시나리오 · 제시된 값을 가정했을 때의 배수입니다. 형식별 조회 정의·집계기간·후원 포함 여부가 달라 실측 평균이나 동일 조건의 수익 비교는 아닙니다.</p></article></section>
 
-<section class="slide" data-page="14">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Why now</p>
-<h1 class="slide-title">Research is crossing<br>the <span class="slide-emphasis">real-time barrier.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Wan-Animate-2</h2>
-<p class="slide-ai-requirement-description">Base / Distillation weights and inference code released Aug 07, 2026.</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Wan-Animate-2 Lite</h2>
-<p class="slide-ai-requirement-description">Streaming variant described; separate Lite release not confirmed.</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">LiveAnimate</h2>
-<p class="slide-ai-requirement-description">Streaming research; inference / training code coming soon.</p>
-</article>
-</div>
-</div>
-<p class="slide-source">
-<a href="https://github.com/Wan-Video/Wan-Animate-2" target="_blank" rel="noopener noreferrer">Wan-Animate-2 official repository</a> · <a href="https://github.com/liveanimate/LiveAnimate" target="_blank" rel="noopener noreferrer">LiveAnimate official repository</a>
-</p>
-</article>
-</section>
+<section class="slide v-slide " data-page="14"><article class="slide-shell v-shell"><h1 class="slide-title v-title">처음에는 제작툴,<br><span class="slide-emphasis">다음에는 방송 플랫폼.</span></h1><div class="v-platform"><div class="v-stage"><span>시작</span><h2>사진 → Virtually → OBS</h2><p>제작과 송출을 간단하게</p></div><span class="v-between">→</span><div class="v-stage v-highlight"><span>성장</span><h2>창작자 <em>↔</em> 팬</h2><p>방송 · 발견 · 구독 · 후원</p></div></div><p class="v-takeaway">사용자가 서로를 데려오는 <span class="slide-emphasis">네트워크 효과</span></p><p class="v-note">성장 전략 · 도구 기능 경쟁을 넘어, 창작자와 팬이 머무는 관계를 구축합니다.</p></article></section>
 
-<section class="slide" data-page="15">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Why now</p>
-<h1 class="slide-title">Generative animation<br>is <span class="slide-emphasis">entering Live.</span></h1>
-<p class="slide-body">14B research model on 2× H100 GPUs.<br>Not a consumer product specification.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Reference image<br>+ streaming pose</p>
-</div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Character stream<br>19.63 FPS</p>
-</div>
-</div>
-</div>
-<p class="slide-source">
-<a href="https://arxiv.org/abs/2608.11745" target="_blank" rel="noopener noreferrer">LiveAnimate paper</a> · <a href="https://github.com/liveanimate/LiveAnimate" target="_blank" rel="noopener noreferrer">official project repository</a>
-</p>
-</article>
-</section>
+<section class="slide v-slide " data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">버튜버 생태계의 A–Z를<br><span class="slide-emphasis">하나의 플랫폼으로.</span></h1><div class="v-roadmap"><div><span>01</span><h2>콘텐츠 제작</h2><p>음악 · 숏드라마<br>웹소설 · 웹툰</p></div><div><span>02</span><h2>AI 컴패니언</h2><p>방송 밖에서도<br>이어지는 캐릭터와의 관계</p></div><div><span>03</span><h2>글로벌 연결</h2><p>실시간 통번역으로<br>언어의 경계 없이</p></div></div><p class="v-note">중장기 확장 방향</p></article></section>
 
-<section class="slide" data-page="16">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Industry shift</p>
-<h1 class="slide-title">For image-first creation,<br><span class="slide-emphasis">rigging can become optional.</span></h1>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left slide-goal--labeled">
-<p class="slide-goal-label">Before generative AI</p>
-<p class="slide-goal-text">Image<br>
-<s>Parts · Rigging<br>Cubism · Tracking</s>
-</p>
-</div>
-<div class="slide-goal slide-goal--right slide-goal--labeled">
-<p class="slide-goal-label">With generative AI</p>
-<p class="slide-goal-text">Image + camera<br>Generative AI<br>Video</p>
-</div>
-</div>
-</div>
-</article>
-</section>
+<section class="slide v-slide " data-page="16"><article class="slide-shell v-shell"><h1 class="slide-title v-title">애플은 디지털 음악을<br><span class="slide-emphasis">간단한 UX로 표준화했습니다.</span></h1><div class="v-apple"><div class="v-music-before"><span>각자 해야 했던 일</span><div class="v-file-row"><b>CD 추출</b><b>MP3 정리</b></div><div class="v-file-row"><b>포맷 변환</b><b>기기로 복사</b></div></div><span class="v-between">→</span><div class="v-music-after"><div class="v-ipod" aria-label="iPod 인포그래픽"><div>♫<small>나의 음악</small></div><span></span></div><div><h2>고르고. 담고. 듣기.</h2><p>iTunes + iPod</p><strong>구매 → 자동 동기화 → 재생</strong></div></div></div><p class="v-note"><a href="https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/" target="_blank" rel="noopener noreferrer">iPod·자동 동기화 (2001)</a> · <a href="https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/" target="_blank" rel="noopener noreferrer">iTunes Music Store (2003)</a></p></article></section>
 
-<section class="slide" data-page="17">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Our ambition</p>
-<h1 class="slide-title">We are building<br><span class="slide-emphasis">Korea’s IRIAM.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Click-to-create</h2>
-<p class="slide-ai-requirement-description">One illustration → Live</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Live platform</h2>
-<p class="slide-ai-requirement-description">Streaming · gifts · community</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Network effects</h2>
-<p class="slide-ai-requirement-description">Creators ↔ fans</p>
-</article>
-</div>
-</div>
-<p class="slide-source">IRIAM shows the demand for turning one illustration into a live character and building the community around it. <a href="https://support.us.iriam.com/hc/en-us/articles/22481664441881-Streaming-on-IRIAM" target="_blank" rel="noopener noreferrer">IRIAM official FAQ</a></p>
-</article>
-</section>
+<section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 부리고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span>핵심 기술</span><span></span><span>고객 경험 · 유통 · 수익화</span></div><div class="v-eco-row"><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong>Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div><strong>중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"><a href="https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/" target="_blank" rel="noopener noreferrer">UCI의 iPod 가치배분 연구</a>를 빗댄 사업 전략 · 부품사도 수익을 얻으며, Virtually의 플랫폼 수익은 검증할 목표입니다.</p></article></section>
 
-<section class="slide" data-page="18">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">UX</p>
-<h1 class="slide-title">One image. One camera.<br><span class="slide-emphasis">Go live.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">01 · Upload character</h2>
-<p class="slide-ai-requirement-description">Start with one image.</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">02 · Turn camera on</h2>
-<p class="slide-ai-requirement-description">Webcam or iPhone.</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">03 · Move → 04 · Go live</h2>
-<p class="slide-ai-requirement-description">Let the character follow.</p>
-</article>
-</div>
-</div>
-</article>
-</section>
-
-<section class="slide" data-page="19">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Product</p>
-<h1 class="slide-title">From production<br><span class="slide-emphasis">to OBS.</span></h1>
-<p class="slide-body">AI-native rigging + tracking → Virtually<br>→ Virtual camera / OBS source → OBS<br>
-<br>YouTube · CHZZK · SOOP · Twitch</p>
-</div>
-</article>
-</section>
-
-<section class="slide" data-page="20">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Product vision</p>
-<h1 class="slide-title">Eventually,<br><span class="slide-emphasis">the PC can disappear.</span></h1>
-<p class="slide-body">iPhone → Virtually → Cloud inference<br>→ Character stream → Broadcast<br>
-<br>A phone-first experience, powered by generative motion.</p>
-</div>
-</article>
-</section>
-
-<section class="slide" data-page="21">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Expansion</p>
-<h1 class="slide-title">The same identity.<br><span class="slide-emphasis">Beyond broadcasting.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">1 : N</h2>
-<p class="slide-ai-requirement-description">Live streaming</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">1 : 1</h2>
-<p class="slide-ai-requirement-description">Video calls · random chat</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">N : N</h2>
-<p class="slide-ai-requirement-description">Voice / video rooms</p>
-</article>
-</div>
-</div>
-<p class="slide-source">Gaming · Dating · Social · Telepresence · AI characters</p>
-</article>
-</section>
-
-<section class="slide" data-page="22">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Expansion vision</p>
-<h1 class="slide-title"><span class="slide-emphasis">Generate the world</span><br>around the character.</h1>
-<p class="slide-body">“A late-night Tokyo radio studio for this character.”</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Character image<br>→ Character</p>
-</div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Prompt / image<br>→ Room / world</p>
-</div>
-</div>
-</div>
-<p class="slide-source">Character + motion + world generation becomes one creator experience.</p>
-</article>
-</section>
-
-<section class="slide" data-page="23">
-<article class="slide-shell slide-shell--virtually-sam">
-<div class="slide-copy slide-copy--center slide-copy--virtually-sam">
-<p class="slide-kicker">Market size</p>
-<h1 class="slide-title">The production stack already costs<br><span class="slide-emphasis">₩200B+ every year.</span></h1>
-<p class="slide-body">Estimated Annual Production Spend · production costs only, not creator revenue.</p>
-</div>
-<div class="virtually-sam-grid">
-<section class="virtually-sam-region virtually-sam-region--korea">
-<div class="virtually-sam-region-header">
-<div>
-<p class="virtually-sam-region-kicker virtually-sam-korea-title">Korea</p>
-<p class="virtually-sam-region-label virtually-sam-korea-label">Core SAM · estimated</p>
-</div>
-<div class="virtually-sam-total">
-<strong>₩14B</strong>
-<p class="virtually-sam-total-caption virtually-sam-korea-total-caption">Base ≈ ₩14B</p>
-</div>
-</div>
-<p class="virtually-sam-range virtually-sam-korea-range">₩11B–₩16.5B / year</p>
-<div class="virtually-sam-category-grid">
-<article class="virtually-sam-category-card">
-<p class="virtually-sam-category-title">Live2D production</p>
-<p class="virtually-sam-category-value">₩3–5B</p>
-<p class="virtually-sam-category-detail">Illustration · parts · rigging</p>
-</article>
-<article class="virtually-sam-category-card">
-<p class="virtually-sam-category-title">3D production</p>
-<p class="virtually-sam-category-value">₩3–6B</p>
-<p class="virtually-sam-category-detail">Modeling · rigging · updates</p>
-</article>
-<article class="virtually-sam-category-card">
-<p class="virtually-sam-category-title">Motion Capture Live</p>
-<p class="virtually-sam-category-value">₩3.5–4.5B</p>
-<p class="virtually-sam-category-detail">Broadcast · showcases · concerts</p>
-</article>
-<article class="virtually-sam-category-card">
-<p class="virtually-sam-category-title">Motion Capture Content</p>
-<p class="virtually-sam-category-value">₩0.7–1.5B</p>
-<p class="virtually-sam-category-detail">Dance · MV · retargeting</p>
-</article>
-</div>
-</section>
-<section class="virtually-sam-region virtually-sam-region--global">
-<div class="virtually-sam-region-header">
-<div>
-<p class="virtually-sam-region-kicker virtually-sam-global-title">Global</p>
-<p class="virtually-sam-region-label virtually-sam-global-label">Core SAM · estimated</p>
-</div>
-<div class="virtually-sam-total">
-<strong>₩200B+</strong>
-<p class="virtually-sam-total-caption virtually-sam-global-total-caption">Base estimate ≈ ₩226B / year</p>
-</div>
-</div>
-<div class="virtually-sam-regions">
-<div class="virtually-sam-region-row">
-<p class="virtually-sam-region-name">Japan</p>
-<div class="virtually-sam-region-bar"><span style="--sam-bar:100%"></span></div>
-<strong class="virtually-sam-region-value">₩80B</strong>
-</div>
-<div class="virtually-sam-region-row">
-<p class="virtually-sam-region-name">China</p>
-<div class="virtually-sam-region-bar"><span style="--sam-bar:94%"></span></div>
-<strong class="virtually-sam-region-value">₩75B</strong>
-</div>
-<div class="virtually-sam-region-row">
-<p class="virtually-sam-region-name">United States</p>
-<div class="virtually-sam-region-bar"><span style="--sam-bar:44%"></span></div>
-<strong class="virtually-sam-region-value">₩35B</strong>
-</div>
-<div class="virtually-sam-region-row">
-<p class="virtually-sam-region-name">Europe</p>
-<div class="virtually-sam-region-bar"><span style="--sam-bar:28%"></span></div>
-<strong class="virtually-sam-region-value">₩22B</strong>
-</div>
-<div class="virtually-sam-region-row">
-<p class="virtually-sam-region-name">Korea</p>
-<div class="virtually-sam-region-bar"><span style="--sam-bar:18%"></span></div>
-<strong class="virtually-sam-region-value">₩14B</strong>
-</div>
-</div>
-</section>
-</div>
-<div class="virtually-sam-compression">
-<div>
-<p class="virtually-sam-stack-title">Current production stack</p>
-<div class="virtually-sam-stack-flow">
-<span class="virtually-sam-stack-step">Character production</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-stack-step">Live2D / 3D rigging</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-stack-step">3D modeling</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-stack-step">Motion capture</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-stack-step">Live production</span>
-</div>
-</div>
-<div class="virtually-sam-compression-arrow" aria-hidden="true">→</div>
-<div>
-<p class="virtually-sam-target-title">Virtually target</p>
-<div class="virtually-sam-target-flow">
-<span class="virtually-sam-target-step">Image + Camera</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-target-step">Virtually</span><span class="virtually-sam-flow-arrow" aria-hidden="true">→</span>
-<span class="virtually-sam-target-step">Live</span>
-</div>
-</div>
-</div>
-<p class="slide-source virtually-sam-source">SAM = Annual spending on character production, Live2D/3D modeling &amp; rigging, motion capture and virtual live production that could potentially be replaced by Virtually.<br>Creator revenue (merch, ads, Super Chat, memberships and tickets) is excluded.<br>Bottom-up estimates based on publicly available production pricing, mocap studio pricing and VTuber market/activity data.<br><span class="virtually-sam-caveat">Category ranges are independently estimated; totals may not equal a simple min/max sum.</span></p>
-</article>
-</section>
-
-<section class="slide" data-page="24">
-<article class="slide-shell slide-shell--ai-requirements slide-shell--market-comparison">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--market-comparison">
-<p class="slide-kicker">Creator revenue</p>
-<h1 class="slide-title">Shorts bring reach.<br><span class="slide-emphasis">Live builds revenue.</span></h1>
-<p class="slide-body">Revenue per 1,000 views · long-form = 100%<br>Live adds fan funding beyond ads.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid slide-market-comparison-grid">
-<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--shorts">
-<h2 class="slide-ai-requirement-title">Shorts</h2>
-<p class="slide-market-comparison-value">3–14%</p>
-<p class="slide-ai-requirement-description">Ad RPM vs. long-form</p>
-</article>
-<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--longform">
-<h2 class="slide-ai-requirement-title">Long-form</h2>
-<p class="slide-market-comparison-value">100%</p>
-<p class="slide-ai-requirement-description">Ad RPM baseline</p>
-</article>
-<article class="slide-ai-requirement slide-market-comparison-card slide-market-comparison-card--live">
-<h2 class="slide-ai-requirement-title">Live</h2>
-<p class="slide-market-comparison-value">124%</p>
-<p class="slide-ai-requirement-description">Ad RPM at 8+ streams / month<br>+ fan funding</p>
-</article>
-</div>
-</div>
-<p class="slide-source">Directional RPM index; long-form = 100%. Shorts = 3–14% of long-form RPM. Live = 124% ad RPM at 8+ streams / month; fan funding excluded. <a href="https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026" target="_blank" rel="noopener noreferrer">AIR Shorts study</a> · <a href="https://air.io/en/monetization/how-much-does-youtube-pay-for-1-million-views?pubDate=20251211" target="_blank" rel="noopener noreferrer">AIR Live study</a> · <a href="https://support.google.com/youtube/answer/11912533?co=YOUTUBE._YTVideoType%3Dlivestream&amp;hl=en" target="_blank" rel="noopener noreferrer">YouTube monetization</a>
-</p>
-</article>
-</section>
-
-<section class="slide" data-page="25">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--goal-split">
-<p class="slide-kicker">Live economy</p>
-<h1 class="slide-title">Live monetizes <span class="slide-emphasis">relationships.</span></h1>
-<p class="slide-body">Also sponsorship and commerce.<br>64 / 100 top-Superchat channels were VTubers in the brief’s May 2024 snapshot; verification pending.</p>
-<div class="slide-goal-columns">
-<div class="slide-goal slide-goal--left">
-<p class="slide-goal-text">Recorded<br>Ads</p>
-</div>
-<div class="slide-goal slide-goal--right">
-<p class="slide-goal-text">Live<br>Ads · Super Chat<br>Members · Gifts</p>
-</div>
-</div>
-</div>
-<p class="slide-source">*Directional figure from the source brief’s Playboard snapshot; refresh the ranking before external circulation. <a href="https://playboard.co/en/youtube-ranking/most-superchatted-v-tuber-channels-in-worldwide-yearly" target="_blank" rel="noopener noreferrer">Playboard reference</a>
-</p>
-</article>
-</section>
-
-<section class="slide" data-page="26">
-<article class="slide-shell slide-shell--ai-requirements">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-<p class="slide-kicker">Strategy</p>
-<h1 class="slide-title">Start with the engine.<br><span class="slide-emphasis">Grow into the platform.</span></h1>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid">
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Phase 1 · Creator tools</h2>
-<p class="slide-ai-requirement-description">Rigging + tracking → OBS</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Phase 2 · Korea’s IRIAM</h2>
-<p class="slide-ai-requirement-description">Direct Live · creators · fans</p>
-</article>
-<article class="slide-ai-requirement">
-<h2 class="slide-ai-requirement-title">Phase 3 · Global platform</h2>
-<p class="slide-ai-requirement-description">Japan and beyond</p>
-</article>
-</div>
-</div>
-</article>
-</section>
-
-<section class="slide" data-page="27">
-<article class="slide-shell slide-shell--ai-requirements slide-shell--apple-analogy">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--apple-analogy">
-<p class="slide-kicker">Analogy</p>
-<h1 class="slide-title">Apple won digital music<br><span class="slide-emphasis">by making it simple.</span></h1>
-<p class="slide-body">Thirty years ago, one UX standard connected a fragmented market.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ai-requirements-grid slide-apple-comparison-grid">
-<article class="slide-ai-requirement slide-apple-comparison-card slide-apple-comparison-card--before">
-<h2 class="slide-ai-requirement-title">Before Apple</h2>
-<div class="slide-apple-chip-list">
-<span>MP3</span><span>CD ripping</span><span>Downloads</span><span>Players</span><span>File management</span><span>Sync</span>
-</div>
-<p class="slide-ai-requirement-description">Scattered tools</p>
-</article>
-<div class="slide-apple-comparison-arrow" aria-hidden="true">→</div>
-<article class="slide-ai-requirement slide-apple-comparison-card slide-apple-comparison-card--after">
-<h2 class="slide-ai-requirement-title">Apple’s standard</h2>
-<div class="slide-apple-chip-list">
-<span>iTunes</span><span>Music Store</span><span>iPod</span>
-</div>
-<p class="slide-apple-sequence">Discover → Buy → Manage → Sync → Listen</p>
-<p class="slide-ai-requirement-description">One connected UX</p>
-</article>
-</div>
-</div>
-<p class="slide-source">Apple reported 70M+ songs purchased in year one and more than 70% of legal downloads for singles and albums. <a href="https://www.apple.com/newsroom/2004/04/28iTunes-Celebrates-Its-First-Anniversary-Over-70-Million-Songs-Purchased/" target="_blank" rel="noopener noreferrer">Apple press release</a>
-</p>
-</article>
-</section>
-
-<section class="slide" data-page="28">
-<article class="slide-shell slide-shell--ai-requirements slide-shell--ecosystem-analogy">
-<div class="slide-copy slide-copy--center slide-copy--ai-requirements slide-copy--ecosystem-analogy">
-<p class="slide-kicker">The ecosystem pattern</p>
-<h1 class="slide-title">Technology enables the market.<br><span class="slide-emphasis">The ecosystem captures the value.</span></h1>
-<p class="slide-body">Apple showed the pattern. Virtually starts in Korea and grows into a global platform that can replace IRIAM in Japan.</p>
-</div>
-<div class="slide-side-media slide-side-media--ai-requirements">
-<div class="slide-ecosystem-matrix">
-<p class="slide-ecosystem-heading slide-ecosystem-heading--technology">Technology<span>provider</span></p>
-<p class="slide-ecosystem-heading slide-ecosystem-heading--ecosystem">Ecosystem<span>owner</span></p>
-<p class="slide-ecosystem-row-label slide-ecosystem-row-label--then">Then<span>Digital music</span></p>
-<article class="slide-ecosystem-card slide-ecosystem-card--technology slide-ecosystem-card--then">
-<h2 class="slide-ecosystem-card-title">Toshiba</h2>
-<p class="slide-ecosystem-card-detail">5 GB drive</p>
-<p class="slide-ecosystem-card-value">Technology provider</p>
-</article>
-<div class="slide-ecosystem-arrow slide-ecosystem-arrow--then" aria-hidden="true">→</div>
-<article class="slide-ecosystem-card slide-ecosystem-card--ecosystem slide-ecosystem-card--then">
-<h2 class="slide-ecosystem-card-title">Apple</h2>
-<p class="slide-ecosystem-card-detail">iPod + iTunes</p>
-<p class="slide-ecosystem-card-value">Ecosystem owner</p>
-</article>
-<p class="slide-ecosystem-row-label slide-ecosystem-row-label--now">Now<span>Live avatars</span></p>
-<article class="slide-ecosystem-card slide-ecosystem-card--technology slide-ecosystem-card--now">
-<h2 class="slide-ecosystem-card-title">China AI companies</h2>
-<p class="slide-ecosystem-card-detail">Qwen · Wan · Alibaba</p>
-<p class="slide-ecosystem-card-value">Technology providers</p>
-</article>
-<div class="slide-ecosystem-arrow slide-ecosystem-arrow--now" aria-hidden="true">→</div>
-<article class="slide-ecosystem-card slide-ecosystem-card--ecosystem slide-ecosystem-card--now">
-<h2 class="slide-ecosystem-card-title">Virtually</h2>
-<p class="slide-ecosystem-card-detail">Live creator layer</p>
-<p class="slide-ecosystem-card-value">Ecosystem owner</p>
-</article>
-</div>
-</div>
-<p class="slide-source">The Computer History Museum identifies Toshiba’s 1.8-inch MK5002MAL 5 GB drive as storage used in the first iPod. <a href="https://www.computerhistory.org/storageengine/miniature-disk-drives-enable-mobile-computing/" target="_blank" rel="noopener noreferrer">CHM source</a>
-</p>
-</article>
-</section>
-
-<section class="slide" data-page="29">
-<article class="slide-shell">
-<div class="slide-copy slide-copy--center">
-<p class="slide-kicker">Vision</p>
-<h1 class="slide-title"><span class="slide-emphasis">Virtually</span><br>Any image. Any motion. Live.</h1>
-<p class="slide-body">Character · Animation · Live · Calls · Social<br>Worlds · Marketplace · Gifts · Creators · Fans<br>
-<br>Own the ecosystem, not just the model.<br>Virtual identity infrastructure for creators.</p>
-</div>
-</article>
-</section>
-</div>
-      <div class="page-controls" aria-label="Presentation navigation">
-        <button class="page-home-button" id="page-home-button" type="button" aria-label="Go to first slide">
-          <svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path d="M10.5 3.5 6 8l4.5 4.5" />
-          </svg>
-          <span>Start</span>
-        </button>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 29</div>
-      </div>
-    </main>
-
-<script>
-      const I18N_LINK_URLS = {
-        hakos: "https://www.youtube.com/watch?v=EEYbf4PiuKY",
-        wan: "https://github.com/Wan-Video/Wan-Animate-2",
-        wanDemo: "https://www.youtube.com/watch?v=-OnJS4JA-v4",
-        liveanimate: "https://github.com/liveanimate/LiveAnimate",
-        livePaper: "https://arxiv.org/abs/2608.11745",
-        airShorts: "https://air.io/en/air-data-findings/youtube-shorts-rpm-vs-long-form-how-much-do-shorts-earn-in-2026",
-        airLive: "https://air.io/en/monetization/how-much-does-youtube-pay-for-1-million-views?pubDate=20251211",
-        youtube: "https://support.google.com/youtube/answer/11912533?co=YOUTUBE._YTVideoType%3Dlivestream&hl=en",
-        playboard: "https://playboard.co/en/youtube-ranking/most-superchatted-v-tuber-channels-in-worldwide-yearly",
-        apple: "https://www.apple.com/newsroom/2004/04/28iTunes-Celebrates-Its-First-Anniversary-Over-70-Million-Songs-Purchased/",
-        chm: "https://www.computerhistory.org/storageengine/miniature-disk-drives-enable-mobile-computing/",
-        iriam: "https://support.us.iriam.com/hc/en-us/articles/22481664441881-Streaming-on-IRIAM",
-        vicon: "https://press.todayan.com/newsRead.php?no=1038883"
-      };
-
-      const I18N_LINK_LABELS = {
-        en: {
-          hakos: "Hakos Baelz 3D performance video",
-          wan: "Wan-Animate-2 official repository",
-          wanDemo: "YouTube demo",
-          liveanimate: "LiveAnimate official repository",
-          livePaper: "LiveAnimate paper",
-          airShorts: "AIR Shorts study",
-          airLive: "AIR Live study",
-          youtube: "YouTube monetization guide",
-          playboard: "Playboard reference",
-          apple: "Apple press release",
-          chm: "CHM source",
-          iriam: "IRIAM official FAQ",
-          vicon: "VISOL / Todayan report"
-        },
-        ko: {
-          hakos: "Hakos Baelz 3D 퍼포먼스 영상",
-          wan: "Wan-Animate-2 공식 저장소",
-          wanDemo: "YouTube 데모",
-          liveanimate: "LiveAnimate 공식 저장소",
-          livePaper: "LiveAnimate 논문",
-          airShorts: "AIR Shorts 연구",
-          airLive: "AIR Live 연구",
-          youtube: "YouTube 수익화 안내",
-          playboard: "Playboard 참고",
-          apple: "Apple 보도자료",
-          chm: "CHM 자료",
-          iriam: "IRIAM 공식 FAQ",
-          vicon: "VISOL / Todayan 보도자료"
-        },
-        ja: {
-          hakos: "Hakos Baelz 3Dパフォーマンス動画",
-          wan: "Wan-Animate-2公式リポジトリ",
-          wanDemo: "YouTubeデモ",
-          liveanimate: "LiveAnimate公式リポジトリ",
-          livePaper: "LiveAnimate論文",
-          airShorts: "AIR Shorts調査",
-          airLive: "AIR Live調査",
-          youtube: "YouTube収益化ガイド",
-          playboard: "Playboard参考",
-          apple: "Appleプレスリリース",
-          chm: "CHM資料",
-          iriam: "IRIAM公式FAQ",
-          vicon: "VISOL / Todayan報道"
-        },
-        "cn-ZH": {
-          hakos: "Hakos Baelz 3D舞蹈视频",
-          wan: "Wan-Animate-2官方仓库",
-          wanDemo: "YouTube演示",
-          liveanimate: "LiveAnimate官方仓库",
-          livePaper: "LiveAnimate论文",
-          airShorts: "AIR Shorts研究",
-          airLive: "AIR Live研究",
-          youtube: "YouTube变现指南",
-          playboard: "Playboard参考",
-          apple: "Apple新闻稿",
-          chm: "CHM资料",
-          iriam: "IRIAM官方FAQ",
-          vicon: "VISOL / Todayan报道"
-        },
-        "cn-TW": {
-          hakos: "Hakos Baelz 3D舞蹈影片",
-          wan: "Wan-Animate-2官方儲存庫",
-          wanDemo: "YouTube示範",
-          liveanimate: "LiveAnimate官方儲存庫",
-          livePaper: "LiveAnimate論文",
-          airShorts: "AIR Shorts研究",
-          airLive: "AIR Live研究",
-          youtube: "YouTube營利指南",
-          playboard: "Playboard參考",
-          apple: "Apple新聞稿",
-          chm: "CHM資料",
-          iriam: "IRIAM官方FAQ",
-          vicon: "VISOL / Todayan報導"
-        }
-      };
-
-      const I18N_META = {
-        en: {
-          htmlLang: "en",
-          deckLabel: "Virtually presentation deck",
-          homeLabel: "Go to first slide",
-          homeText: "Start",
-          title: "Virtually — The easiest VTuber live AI",
-          description: "Virtually: the easiest VTuber live AI.",
-          ogDescription: "One image. Ten seconds. A live VTuber.",
-          imageAlt: "The easiest VTuber live AI"
-        },
-        ko: {
-          htmlLang: "ko",
-          deckLabel: "Virtually 프레젠테이션",
-          homeLabel: "첫 슬라이드로 이동",
-          homeText: "처음",
-          title: "Virtually — 가장 쉬운 버튜버 라이브 AI",
-          description: "사진 한 장으로 10초 만에 시작하는 가장 쉬운 버튜버 라이브 AI.",
-          ogDescription: "사진 한 장. 10초. 라이브 버튜버.",
-          imageAlt: "가장 쉬운 버튜버 라이브 AI"
-        },
-        ja: {
-          htmlLang: "ja",
-          deckLabel: "Virtually プレゼンテーション",
-          homeLabel: "最初のスライドへ移動",
-          homeText: "最初",
-          title: "Virtually — 簡単VTuberライブAI",
-          description: "1枚の画像から10秒で始める、簡単VTuberライブAI。",
-          ogDescription: "1枚の画像。10秒。ライブVTuber。",
-          imageAlt: "簡単VTuberライブAI"
-        },
-        "cn-ZH": {
-          htmlLang: "zh-CN",
-          deckLabel: "Virtually 演示文稿",
-          homeLabel: "返回第一张幻灯片",
-          homeText: "开始",
-          title: "Virtually — 最简单的VTuber直播AI",
-          description: "从一张图片开始，10秒开启最简单的VTuber直播AI。",
-          ogDescription: "一张图片。10秒。直播VTuber。",
-          imageAlt: "最简单的VTuber直播AI"
-        },
-        "cn-TW": {
-          htmlLang: "zh-TW",
-          deckLabel: "Virtually 簡報",
-          homeLabel: "返回第一張投影片",
-          homeText: "開始",
-          title: "Virtually — 最簡單的VTuber直播AI",
-          description: "從一張圖片開始，10秒開啟最簡單的VTuber直播AI。",
-          ogDescription: "一張圖片。10秒。直播VTuber。",
-          imageAlt: "最簡單的VTuber直播AI"
-        }
-      };
-
-      const I18N = {
-        ko: {
-          1: { subtitle: "가장 쉬운 버튜버 라이브 AI" },
-          2: {
-            kicker: "문제",
-            title: "버튜버가 되는 건<br>아직도 <span class=\"slide-emphasis\">너무 어렵습니다.</span>",
-            body: "한 캐릭터가 첫 라이브를 하기까지 여러 제작·방송 단계를 거쳐야 합니다."
-          },
-          3: {
-            kicker: "문제",
-            title: "이 모든 작업을 해도<br><span class=\"slide-emphasis\">겨우 그림 하나 움직입니다.</span>",
-            processTitle: "Live2D 버튜버 제작 과정",
-            toolTitles: ["캐릭터 일러스트", "파트 분리", "리깅", "모델 설정", "얼굴 트래킹", "장면·OBS 설정", "라이브 방송"]
-          },
-          5: {
-            kicker: "Live2D",
-            title: "Live2D는 접근하기 쉽습니다.<br><span class=\"slide-emphasis\">자유로운 움직임은 복잡해집니다.</span>",
-            body: "2D 표현에 최적화되어 있습니다.<br>전신 움직임에는 더 많은 수작업이 필요합니다.",
-            reqTitles: ["시작하기 쉬움", "자유로울수록 더 많은 작업"],
-            reqDescriptions: ["2D 모델 + 카메라", "파트 · 리깅 · 트래킹"]
-          },
-          31: {
-            kicker: "고급 3D",
-            title: "3D는<br><span class=\"slide-emphasis\">전신의 자유를 엽니다.</span>",
-            body: "춤·회전·뒷모습은 이미 가능합니다.<br>대신 복잡하고 비싼 파이프라인이 필요합니다.",
-            pipelineTitle: "프로페셔널 3D 라이브 파이프라인",
-            pipelineSteps: ["고품질<br>3D 캐릭터", "3D 리깅 / 스켈레톤<br>+ 전문 모션캡처", "실시간<br>3D 엔진", "버추얼 라이브"],
-            source: "공개된 3D 춤 참고 영상: {hakos} · 스텔라이브 아카네 리제 솔로 콘서트에 VICON 모션캡처가 사용됐다는 공개 보도가 있습니다. {vicon}"
-          },
-          32: {
-            kicker: "트레이드오프",
-            title: "AI Animate는<br><span class=\"slide-emphasis\">제작 트레이드오프를 없앱니다.</span>",
-            body: "3D 제작 파이프라인 없이 전신의 자유를 목표로 합니다.<br>접근성과 표현력을 함께 겨냥합니다.",
-            reqTitles: ["Live2D + VTube Studio", "프로페셔널 3D + 모션캡처", "Virtually"],
-            reqDescriptions: ["접근하기 쉬움 · 2D 최적화<br>자유로울수록 설정 증가", "전신의 자유 · 재사용 가능<br>높은 초기비용 · 낮은 추가비용", "사진 한 장 + 카메라<br>거의 없는 초기비용 · 높은 라이브당 비용<br>목표: 전신의 자유"],
-            source: "Virtually는 아직 개발 중입니다. 전신 움직임은 목표 기능이며 라이브마다 GPU 추론비용이 발생합니다."
-          },
-          7: {
-            kicker: "해결책",
-            title: "사진 한 장.<br><span class=\"slide-emphasis\">10초면 라이브 버튜버.</span>",
-            body: "프로페셔널 3D의 자유를, 3D 제작 파이프라인 없이 목표로 합니다.",
-            goalLabels: ["Virtually 이전", "Virtually 이후"],
-            goalTexts: ["캐릭터 제작<br>며칠에서 몇 주<br>복잡한 설정", "사진 한 장 + 카메라<br>10초<br>목표: 전신의 자유"]
-          },
-          8: {
-            kicker: "기술",
-            title: "<span class=\"slide-emphasis\">AI Live Animate</span>로<br>사진 한 장이 라이브 버튜버가 됩니다.",
-            body: "사진 한 장과 카메라 움직임으로 라이브 캐릭터 프레임을 생성합니다."
-          },
-          9: {
-            kicker: "검증",
-            title: "녹화된 움직임도<br><span class=\"slide-emphasis\">더 자유로워지고 있습니다.</span>",
-            body: "AI Animate는 캐릭터 영상에서 파트 분리와 리깅을 없앱니다.",
-            goalLabels: ["AI Animate 이전", "AI Animate 적용 후"],
-            goalTexts: ["이미지 +<br>구동 영상", "AI 생성<br>캐릭터 영상"]
-          },
-          10: { kicker: "결과", title: "녹화된 움직임에<br><span class=\"slide-emphasis\">더 많은 자유를.</span>", source: "녹화된 춤 영상 → AI 캐릭터 움직임 전이. {wanDemo}" },
-          11: {
-            kicker: "AI Animate",
-            title: "움직임 파라미터에서<br><span class=\"slide-emphasis\">프레임 생성으로.</span>",
-            goalLabels: ["생성형 AI 이전", "생성형 AI 적용"],
-            goalTexts: ["카메라 → 트래킹<br>→ 파라미터<br>→ 리깅 모델", "이미지 + 영상<br>→ 생성 모델<br>→ 영상"],
-            source: "{wan}와 엔드투엔드 캐릭터 애니메이션 프레임워크를 참고한 방향입니다."
-          },
-          12: {
-            kicker: "핵심 문제",
-            title: "배치 영상은 <span class=\"slide-emphasis\">AI 네이티브.</span><br>라이브는 아직 리깅에서 시작합니다.",
-            goalTexts: ["녹화<br>이미지 → AI<br>→ 영상", "라이브<br>파트 → 리깅<br>→ 트래킹"]
-          },
-          13: {
-            kicker: "원인",
-            title: "장벽은 <span class=\"slide-emphasis\">지연시간.</span>",
-            body: "프레임 속도와 엔드투엔드 지연시간은 다릅니다.",
-            goalTexts: ["배치<br>수 초에서<br>수 분", "라이브 목표<br>한 프레임마다<br>33–50ms"]
-          },
-          14: {
-            kicker: "지금인 이유",
-            title: "연구가<br><span class=\"slide-emphasis\">실시간 장벽을 넘고 있습니다.</span>",
-            reqTitles: ["Wan-Animate-2", "Wan-Animate-2 Lite", "LiveAnimate"],
-            reqDescriptions: ["Base·Distillation 가중치와 추론 코드가 2026년 8월 7일 공개되었습니다.", "스트리밍 변형이 소개되었지만 별도 Lite 공개는 확인되지 않았습니다.", "스트리밍 연구 프로젝트이며 추론·학습 코드는 공개 예정입니다."],
-            source: "{wan} · {liveanimate}"
-          },
-          15: {
-            kicker: "지금인 이유",
-            title: "생성형 애니메이션이<br><span class=\"slide-emphasis\">라이브로 들어오고 있습니다.</span>",
-            body: "2× H100 GPU에서 실행한 14B 연구 모델입니다.<br>소비자용 제품 사양은 아닙니다.",
-            goalTexts: ["참조 이미지<br>+ 스트리밍 포즈", "캐릭터 스트림<br>19.63 FPS"],
-            source: "{livePaper} · {liveanimate}"
-          },
-          16: {
-            kicker: "산업 변화",
-            title: "이미지 기반 제작에서는<br><span class=\"slide-emphasis\">리깅이 선택이 될 수 있습니다.</span>",
-            goalLabels: ["생성형 AI 이전", "생성형 AI 적용"],
-            goalTexts: ["이미지<br><s>파트 · 리깅<br>Cubism · 트래킹</s>", "이미지 + 카메라<br>생성형 AI<br>영상"]
-          },
-          17: {
-            kicker: "우리의 목표",
-            title: "우리는<br><span class=\"slide-emphasis\">한국의 IRIAM을 만듭니다.</span>",
-            reqTitles: ["딸깍 제작", "라이브 플랫폼", "네트워크 효과"],
-            reqDescriptions: ["일러스트 한 장 → 라이브", "방송 · 선물 · 커뮤니티", "크리에이터 ↔ 팬"],
-            source: "IRIAM은 일러스트 한 장을 라이브 캐릭터로 만들고 그 주변에 커뮤니티를 쌓는 수요를 보여줍니다. {iriam}"
-          },
-          18: {
-            kicker: "사용 경험",
-            title: "이미지 한 장. 카메라 한 대.<br><span class=\"slide-emphasis\">바로 라이브.</span>",
-            reqTitles: ["01 · 캐릭터 업로드", "02 · 카메라 켜기", "03 · 움직이기 → 04 · 라이브"],
-            reqDescriptions: ["이미지 한 장으로 시작합니다.", "웹캠 또는 iPhone.", "캐릭터가 움직임을 따라갑니다."]
-          },
-          19: {
-            kicker: "제품",
-            title: "제작에서<br><span class=\"slide-emphasis\">OBS까지.</span>",
-            body: "AI 네이티브 리깅 + 트래킹 → Virtually<br>→ 가상 카메라 / OBS 소스 → OBS<br><br>YouTube · CHZZK · SOOP · Twitch"
-          },
-          20: {
-            kicker: "제품 비전",
-            title: "언젠가는<br><span class=\"slide-emphasis\">PC도 사라질 수 있습니다.</span>",
-            body: "iPhone → Virtually → 클라우드 추론<br>→ 캐릭터 스트림 → 방송<br><br>생성형 움직임으로 구동되는 모바일 우선 경험입니다."
-          },
-          21: {
-            kicker: "확장",
-            title: "같은 정체성으로<br><span class=\"slide-emphasis\">방송을 넘어섭니다.</span>",
-            reqDescriptions: ["라이브 방송", "영상 통화 · 랜덤 채팅", "음성 / 영상 룸"],
-            source: "게임 · 데이팅 · 소셜 · 텔레프레즌스 · AI 캐릭터"
-          },
-          22: {
-            kicker: "확장 비전",
-            title: "캐릭터 주변의 세계를<br><span class=\"slide-emphasis\">생성합니다.</span>",
-            body: "「이 캐릭터를 위한 심야 도쿄 라디오 스튜디오」",
-            goalTexts: ["캐릭터 이미지<br>→ 캐릭터", "프롬프트 / 이미지<br>→ 방 / 세계"],
-            source: "캐릭터 + 움직임 + 세계 생성이 하나의 크리에이터 경험이 됩니다."
-          },
-          33: {
-            kicker: "시장 규모",
-            title: "버튜버 제작 스택에는 이미<br><span class=\"slide-emphasis\">매년 ₩200B+가 쓰입니다.</span>",
-            body: "Estimated Annual Production Spend · 크리에이터 매출이 아닌 제작비만 포함합니다.",
-            samKoreaTitle: "국내",
-            samKoreaLabel: "Core SAM · 추정",
-            samKoreaTotalCaption: "기준 ≈ ₩14B",
-            samKoreaRange: "연간 ₩11B–₩16.5B",
-            samCategoryTitles: ["Live2D 제작", "3D 제작", "모션캡처 라이브", "모션캡처 콘텐츠"],
-            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
-            samCategoryDetails: ["일러스트 · 파츠 · 리깅", "모델링 · 리깅 · 업데이트", "방송 · 쇼케이스 · 콘서트", "춤 · MV · 리타게팅"],
-            samGlobalTitle: "글로벌",
-            samGlobalLabel: "Core SAM · 추정",
-            samGlobalTotalCaption: "기준 추정 ≈ ₩226B / year",
-            samRegionNames: ["일본", "중국", "미국", "유럽", "한국"],
-            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
-            samStackTitle: "현재 제작 스택",
-            samStackSteps: ["캐릭터 제작", "Live2D / 3D 리깅", "3D 모델링", "모션캡처", "라이브 제작"],
-            samTargetTitle: "Virtually 목표",
-            samTargetSteps: ["이미지 + 카메라", "Virtually", "라이브"],
-            source: "SAM = Virtually로 대체될 가능성이 있는 캐릭터 제작, Live2D/3D 모델링·리깅, 모션캡처, 버추얼 라이브 제작의 연간 지출입니다.<br>굿즈·광고·Super Chat·멤버십·티켓 등 크리에이터 매출은 제외합니다.<br>공개 제작 단가, 모캡 스튜디오 가격, VTuber 시장·활동 데이터를 바탕으로 한 Bottom-up estimate입니다.<br><span class=\"virtually-sam-caveat\">각 범위는 독립적으로 추정했으며 단순 최소·최대 합계와 총 SAM은 다를 수 있습니다.</span>"
-          },
-          23: {
-            kicker: "크리에이터 수익",
-            title: "숏폼은 도달을 만들고<br><span class=\"slide-emphasis\">라이브는 수익을 만듭니다.</span>",
-            body: "조회수 1,000회당 수익 · 롱폼 = 100%<br>라이브는 광고 외 팬 후원을 더합니다.",
-            reqTitles: ["숏폼", "롱폼", "라이브"],
-            values: ["3–14%", "100%", "124%"],
-            reqDescriptions: ["롱폼 대비 광고 RPM", "광고 RPM 기준", "월 8회 이상 방송의 광고 RPM<br>+ 팬 후원"],
-            source: "방향성 지표; 롱폼 = 100%. 숏폼 = 롱폼 RPM의 3–14%. 라이브 = 월 8회 이상 방송 기준 광고 RPM 124%; 팬 후원 제외. {airShorts} · {airLive} · {youtube}"
-          },
-          24: {
-            kicker: "라이브 경제",
-            title: "라이브는 <span class=\"slide-emphasis\">관계를 수익화합니다.</span>",
-            body: "스폰서십과 커머스도 있습니다.<br>브리프의 2024년 5월 스냅샷에서는 상위 Super Chat 채널 100개 중 64개가 VTuber였습니다; 검증이 필요합니다.",
-            goalTexts: ["녹화<br>광고", "라이브<br>광고 · Super Chat<br>멤버십 · 선물"],
-            source: "*브리프의 Playboard 스냅샷을 바탕으로 한 방향성 수치입니다; 외부 공유 전 순위를 갱신해야 합니다. {playboard}"
-          },
-          25: {
-            kicker: "전략",
-            title: "엔진에서 시작해<br><span class=\"slide-emphasis\">플랫폼으로 성장합니다.</span>",
-            reqTitles: ["1단계 · 크리에이터 도구", "2단계 · 한국의 IRIAM", "3단계 · 글로벌 플랫폼"],
-            reqDescriptions: ["리깅 + 트래킹 → OBS", "직접 라이브 · 크리에이터 · 팬", "일본과 그 너머"]
-          },
-          26: {
-            kicker: "비유",
-            title: "Apple은 디지털 음악을<br><span class=\"slide-emphasis\">간단하게 만들어 평정했습니다.</span>",
-            body: "30년 전, 하나의 UX 표준이 파편화된 시장을 연결했습니다.",
-            reqTitles: ["Apple 이전", "Apple의 표준"],
-            chips: [["MP3", "CD 리핑", "다운로드", "플레이어", "파일 관리", "동기화"], ["iTunes", "Music Store", "iPod"]],
-            reqDescriptions: ["흩어진 도구", "하나로 연결된 UX"],
-            sequence: "발견 → 구매 → 관리 → 동기화 → 감상",
-            source: "Apple은 첫해에 7,000만 곡 이상이 구매되었고 싱글·앨범 합법 다운로드의 70% 이상을 차지했다고 발표했습니다. {apple}"
-          },
-          28: {
-            kicker: "생태계 패턴",
-            title: "기술은 시장을 열고<br><span class=\"slide-emphasis\">생태계가 가치를 가져갑니다.</span>",
-            body: "Apple이 보여준 패턴처럼, Virtually는 한국에서 시작해 장기적으로 일본의 IRIAM을 대체할 글로벌 플랫폼으로 성장합니다.",
-            ecosystemHeadings: ["기술<br><span>제공자</span>", "생태계<br><span>소유자</span>"],
-            ecosystemRows: ["그때<span>디지털 음악</span>", "지금<span>라이브 아바타</span>"],
-            ecosystemCardTitles: ["Toshiba", "Apple", "중국 AI 기업", "Virtually"],
-            ecosystemCardDetails: ["5GB 드라이브", "iPod + iTunes", "Qwen · Wan · Alibaba", "라이브 크리에이터 레이어"],
-            ecosystemCardValues: ["기술 제공자", "생태계 소유자", "기술 제공자", "생태계 소유자"],
-            source: "Computer History Museum은 첫 iPod에 Toshiba의 1.8인치 MK5002MAL 5GB 드라이브가 사용되었다고 설명합니다. {chm}"
-          },
-          30: {
-            kicker: "비전",
-            title: "<span class=\"slide-emphasis\">Virtually</span><br>어떤 이미지든. 어떤 움직임이든. 라이브.",
-            body: "캐릭터 · 애니메이션 · 라이브 · 통화 · 소셜<br>세계 · 마켓플레이스 · 선물 · 크리에이터 · 팬<br><br>모델이 아니라 생태계를 소유합니다.<br>크리에이터를 위한 버추얼 아이덴티티 인프라입니다."
-          }
-        },
-        ja: {
-          1: { subtitle: "簡単VTuberライブAI" },
-          2: {
-            kicker: "課題",
-            title: "VTuberになるのは<br>今も <span class=\"slide-emphasis\">難しすぎます。</span>",
-            body: "1つのキャラクターが初配信するまでに、多くの制作・配信工程を通ります。"
-          },
-          3: {
-            kicker: "課題",
-            title: "これだけ作業しても<br><span class=\"slide-emphasis\">やっと1枚の絵が動くだけです。</span>",
-            processTitle: "Live2D VTuber制作プロセス",
-            toolTitles: ["キャラクターイラスト", "パーツ分け", "リギング", "モデル設定", "顔トラッキング", "シーン・OBS設定", "ライブ配信"]
-          },
-          5: {
-            kicker: "Live2D",
-            title: "Live2Dは始めやすいです。<br><span class=\"slide-emphasis\">自由な動きほど複雑になります。</span>",
-            body: "2D表現に最適化されています。<br>全身の動きには、より多くの手作業が必要です。",
-            reqTitles: ["始めやすい", "自由にするほど作業が増える"],
-            reqDescriptions: ["2Dモデル + カメラ", "パーツ · リギング · トラッキング"]
-          },
-          31: {
-            kicker: "プロフェッショナル3D",
-            title: "3Dなら<br><span class=\"slide-emphasis\">全身の自由が生まれます。</span>",
-            body: "ダンス・回転・背面はすでに実現できます。<br>その代わり、複雑で高価なパイプラインが必要です。",
-            pipelineTitle: "プロフェッショナル3Dライブパイプライン",
-            pipelineSteps: ["高品質な<br>3Dキャラクター", "3Dリギング / スケルトン<br>+ プロ向けモーションキャプチャ", "リアルタイム<br>3Dエンジン", "バーチャルライブ"],
-            source: "公開された3Dダンス参考: {hakos} · Stelliveのアカネ・リゼ ソロコンサートでVICONモーションキャプチャが使われたとする公開報道があります。{vicon}"
-          },
-          32: {
-            kicker: "トレードオフ",
-            title: "AI Animateは<br><span class=\"slide-emphasis\">制作のトレードオフをなくします。</span>",
-            body: "3D制作パイプラインなしで、全身の自由を目指します。<br>アクセスしやすさと表現力を同時に狙います。",
-            reqTitles: ["Live2D + VTube Studio", "プロフェッショナル3D + モーションキャプチャ", "Virtually"],
-            reqDescriptions: ["始めやすい · 2Dに最適化<br>自由にするほど設定が増える", "全身の自由 · 再利用可能<br>高い初期費用 · 低い追加費用", "画像1枚 + カメラ<br>初期費用はほぼゼロ · ライブごとの費用は高め<br>目標: 全身の自由"],
-            source: "Virtuallyは開発中です。全身の動きは目標機能であり、ライブごとにGPU推論コストが発生します。"
-          },
-          7: {
-            kicker: "解決策",
-            title: "写真1枚。<br><span class=\"slide-emphasis\">10秒でライブVTuber。</span>",
-            body: "プロフェッショナル3Dの自由を、3D制作パイプラインなしで目指します。",
-            goalLabels: ["Virtually以前", "Virtually以後"],
-            goalTexts: ["キャラクター制作<br>数日から数週間<br>複雑な設定", "写真1枚 + カメラ<br>10秒<br>目標: 全身の自由"]
-          },
-          8: {
-            kicker: "テクノロジー",
-            title: "<span class=\"slide-emphasis\">AI Live Animate</span>で<br>1枚の写真がライブVTuberになります。",
-            body: "1枚の写真とカメラの動きから、ライブキャラクターのフレームを生成します。"
-          },
-          9: {
-            kicker: "検証",
-            title: "録画モーションも<br><span class=\"slide-emphasis\">もっと自由になります。</span>",
-            body: "AI Animateはキャラクター映像からパーツ分けとリギングをなくします。",
-            goalLabels: ["AI Animate以前", "AI Animate導入後"],
-            goalTexts: ["画像 +<br>駆動映像", "AI生成<br>キャラクター映像"]
-          },
-          10: { kicker: "結果", title: "録画モーションに<br><span class=\"slide-emphasis\">もっと自由を。</span>", source: "録画ダンス映像 → AIキャラクターへモーション転送。{wanDemo}" },
-          11: {
-            kicker: "AI Animate",
-            title: "動きのパラメータから<br><span class=\"slide-emphasis\">フレーム生成へ。</span>",
-            goalLabels: ["生成AI以前", "生成AI導入後"],
-            goalTexts: ["カメラ → トラッキング<br>→ パラメータ<br>→ リグモデル", "画像 + 映像<br>→ 生成モデル<br>→ 映像"],
-            source: "{wan}のエンドツーエンド・キャラクターアニメーションの考え方を参考にしています。"
-          },
-          12: {
-            kicker: "核心課題",
-            title: "バッチ映像は <span class=\"slide-emphasis\">AIネイティブ。</span><br>ライブはまだリグから始まります。",
-            goalTexts: ["録画<br>画像 → AI<br>→ 映像", "ライブ<br>パーツ → リギング<br>→ トラッキング"]
-          },
-          13: {
-            kicker: "原因",
-            title: "壁は <span class=\"slide-emphasis\">レイテンシー。</span>",
-            body: "フレームレートとエンドツーエンドの遅延は別のものです。",
-            goalTexts: ["バッチ<br>数秒から<br>数分", "ライブ目標<br>1フレーム毎に<br>33–50ms"]
-          },
-          14: {
-            kicker: "今である理由",
-            title: "研究が<br><span class=\"slide-emphasis\">リアルタイムへ進んでいます。</span>",
-            reqTitles: ["Wan-Animate-2", "Wan-Animate-2 Lite", "LiveAnimate"],
-            reqDescriptions: ["Base・Distillationの重みと推論コードが2026年8月7日に公開されました。", "ストリーミング版が説明されていますが、別Lite版の公開は未確認です。", "ストリーミング研究で、推論・学習コードは近日公開予定です。"],
-            source: "{wan} · {liveanimate}"
-          },
-          15: {
-            kicker: "今である理由",
-            title: "生成アニメーションが<br><span class=\"slide-emphasis\">ライブに入ってきています。</span>",
-            body: "2× H100 GPUで動かした14B研究モデルです。<br>コンシューマー向け製品仕様ではありません。",
-            goalTexts: ["参照画像<br>+ ストリーミングポーズ", "キャラクター<br>19.63 FPS"],
-            source: "{livePaper} · {liveanimate}"
-          },
-          16: {
-            kicker: "業界の変化",
-            title: "画像ベースの制作では<br><span class=\"slide-emphasis\">リギングが任意になります。</span>",
-            goalLabels: ["生成AI以前", "生成AI導入後"],
-            goalTexts: ["画像<br><s>パーツ · リギング<br>Cubism · トラッキング</s>", "画像 + カメラ<br>生成AI<br>映像"]
-          },
-          17: {
-            kicker: "私たちの目標",
-            title: "私たちは<br><span class=\"slide-emphasis\">韓国のIRIAMをつくります。</span>",
-            reqTitles: ["ワンクリック制作", "ライブプラットフォーム", "ネットワーク効果"],
-            reqDescriptions: ["イラスト1枚 → ライブ", "配信 · ギフト · コミュニティ", "クリエイター ↔ ファン"],
-            source: "IRIAMは1枚のイラストをライブキャラクターにし、その周りにコミュニティを築く需要を示しました。{iriam}"
-          },
-          18: {
-            kicker: "UX",
-            title: "画像1枚。カメラ1台。<br><span class=\"slide-emphasis\">すぐにライブ。</span>",
-            reqTitles: ["01 · キャラクターをアップロード", "02 · カメラをオン", "03 · 動く → 04 · 配信"],
-            reqDescriptions: ["1枚の画像から始めます。", "ウェブカメラまたはiPhone。", "キャラクターが動きに追従します。"]
-          },
-          19: {
-            kicker: "プロダクト",
-            title: "制作から<br><span class=\"slide-emphasis\">OBSへ。</span>",
-            body: "AIネイティブなリギング + トラッキング → Virtually<br>→ バーチャルカメラ / OBSソース → OBS<br><br>YouTube · CHZZK · SOOP · Twitch"
-          },
-          20: {
-            kicker: "プロダクトビジョン",
-            title: "いつかは<br><span class=\"slide-emphasis\">PCも消せます。</span>",
-            body: "iPhone → Virtually → クラウド推論<br>→ キャラクターストリーム → 配信<br><br>生成モーションで動くモバイルファースト体験です。"
-          },
-          21: {
-            kicker: "拡張",
-            title: "同じアイデンティティで<br><span class=\"slide-emphasis\">配信の先へ。</span>",
-            reqDescriptions: ["ライブ配信", "ビデオ通話 · ランダムチャット", "音声 / ビデオルーム"],
-            source: "ゲーム · デーティング · ソーシャル · テレプレゼンス · AIキャラクター"
-          },
-          22: {
-            kicker: "拡張ビジョン",
-            title: "キャラクターの周りの世界を<br><span class=\"slide-emphasis\">生成します。</span>",
-            body: "「このキャラクターのための深夜東京ラジオスタジオ」",
-            goalTexts: ["キャラクター画像<br>→ キャラクター", "プロンプト / 画像<br>→ 部屋 / 世界"],
-            source: "キャラクター + モーション + 世界生成を1つのクリエイター体験にします。"
-          },
-          33: {
-            kicker: "市場規模",
-            title: "VTuberの制作スタックには<br><span class=\"slide-emphasis\">年間₩200B+が使われています。</span>",
-            body: "Estimated Annual Production Spend · クリエイター収益ではなく制作費のみ。",
-            samKoreaTitle: "韓国",
-            samKoreaLabel: "Core SAM · 推定",
-            samKoreaTotalCaption: "ベース ≈ ₩14B",
-            samKoreaRange: "年間 ₩11B–₩16.5B",
-            samCategoryTitles: ["Live2D制作", "3D制作", "モーションキャプチャ・ライブ", "モーションキャプチャ・コンテンツ"],
-            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
-            samCategoryDetails: ["イラスト · パーツ · リギング", "モデリング · リギング · 更新", "配信 · ショーケース · コンサート", "ダンス · MV · リターゲティング"],
-            samGlobalTitle: "グローバル",
-            samGlobalLabel: "Core SAM · 推定",
-            samGlobalTotalCaption: "ベース推定 ≈ ₩226B / 年",
-            samRegionNames: ["日本", "中国", "米国", "欧州", "韓国"],
-            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
-            samStackTitle: "現在の制作スタック",
-            samStackSteps: ["キャラクター制作", "Live2D / 3Dリギング", "3Dモデリング", "モーションキャプチャ", "ライブ制作"],
-            samTargetTitle: "Virtuallyの目標",
-            samTargetSteps: ["画像 + カメラ", "Virtually", "ライブ"],
-            source: "SAM = Virtuallyに置き換えられる可能性がある、キャラクター制作、Live2D/3Dモデリング・リギング、モーションキャプチャ、バーチャルライブ制作の年間支出です。<br>グッズ・広告・Super Chat・メンバーシップ・チケットなどのクリエイター収益は含みません。<br>公開された制作単価、モーションキャプチャスタジオ価格、VTuber市場・活動データに基づくBottom-up estimateです。<br><span class=\"virtually-sam-caveat\">各範囲は独立推定であり、単純な最小・最大合計と総SAMは一致しない場合があります。</span>"
-          },
-          23: {
-            kicker: "クリエイター収益",
-            title: "ショートはリーチを生み<br><span class=\"slide-emphasis\">ライブは収益を生みます。</span>",
-            body: "1,000再生あたりの収益 · 長尺 = 100%<br>ライブは広告以外にファン支援を加えます。",
-            reqTitles: ["ショート", "長尺", "ライブ"],
-            values: ["3–14%", "100%", "124%"],
-            reqDescriptions: ["長尺に対する広告RPM", "広告RPMの基準", "月8回以上配信時の広告RPM<br>+ ファン支援"],
-            source: "方向性の指標; 長尺 = 100%。ショート = 長尺RPMの3–14%。ライブ = 月8回以上配信時の広告RPM 124%; ファン支援は除外。{airShorts} · {airLive} · {youtube}"
-          },
-          24: {
-            kicker: "ライブ経済",
-            title: "ライブは <span class=\"slide-emphasis\">関係を収益化します。</span>",
-            body: "スポンサーシップとコマースもあります。<br>ブリーフの2024年5月スナップショットでは、Super Chat上位100チャンネルの64がVTuberでした。要検証です。",
-            goalTexts: ["録画<br>広告", "ライブ<br>広告 · Super Chat<br>メンバー · ギフト"],
-            source: "*ブリーフのPlayboardスナップショットによる方向性の数字です。外部共有前にランキングを更新してください。{playboard}"
-          },
-          25: {
-            kicker: "戦略",
-            title: "エンジンから<br><span class=\"slide-emphasis\">プラットフォームへ。</span>",
-            reqTitles: ["フェーズ1 · クリエイターツール", "フェーズ2 · 韓国のIRIAM", "フェーズ3 · グローバルプラットフォーム"],
-            reqDescriptions: ["リギング + トラッキング → OBS", "直接ライブ · クリエイター · ファン", "日本とその先へ"]
-          },
-          26: {
-            kicker: "たとえ",
-            title: "Appleはデジタル音楽を<br><span class=\"slide-emphasis\">シンプルにして制しました。</span>",
-            body: "30年前、1つのUX標準が分断された市場をつなぎました。",
-            reqTitles: ["Apple以前", "Appleの標準"],
-            chips: [["MP3", "CDリッピング", "ダウンロード", "プレーヤー", "ファイル管理", "同期"], ["iTunes", "Music Store", "iPod"]],
-            reqDescriptions: ["分散したツール", "つながった1つのUX"],
-            sequence: "見つける → 買う → 管理 → 同期 → 聴く",
-            source: "Appleは初年度に7,000万曲以上が購入され、シングルとアルバムの合法ダウンロードの70%以上を占めたと発表しました。{apple}"
-          },
-          28: {
-            kicker: "エコシステムのパターン",
-            title: "技術が市場を開き<br><span class=\"slide-emphasis\">エコシステムが価値を取ります。</span>",
-            body: "Appleが示したように、Virtuallyは韓国から始めて、長期的に日本のIRIAMに代わるグローバルプラットフォームへ成長します。",
-            ecosystemHeadings: ["技術<br><span>提供者</span>", "エコシステム<br><span>所有者</span>"],
-            ecosystemRows: ["当時<span>デジタル音楽</span>", "現在<span>ライブアバター</span>"],
-            ecosystemCardTitles: ["Toshiba", "Apple", "中国のAI企業", "Virtually"],
-            ecosystemCardDetails: ["5GBドライブ", "iPod + iTunes", "Qwen · Wan · Alibaba", "ライブクリエイターレイヤー"],
-            ecosystemCardValues: ["技術提供者", "エコシステム所有者", "技術提供者", "エコシステム所有者"],
-            source: "Computer History Museumは、最初のiPodにToshibaの1.8インチMK5002MAL 5GBドライブが使われたと説明しています。{chm}"
-          },
-          30: {
-            kicker: "ビジョン",
-            title: "<span class=\"slide-emphasis\">Virtually</span><br>どんな画像も。どんな動きも。ライブ。",
-            body: "キャラクター · アニメーション · ライブ · 通話 · ソーシャル<br>世界 · マーケットプレイス · ギフト · クリエイター · ファン<br><br>モデルではなく、エコシステムを持ちます。<br>クリエイターのためのバーチャルアイデンティティ基盤です。"
-          }
-        },
-        "cn-ZH": {
-          1: { subtitle: "最简单的VTuber直播AI" },
-          2: {
-            kicker: "问题",
-            title: "成为VTuber<br>仍然 <span class=\"slide-emphasis\">太难了。</span>",
-            body: "一个角色在第一次直播前，仍要经历多个制作和播出环节。"
-          },
-          3: {
-            kicker: "问题",
-            title: "做了这么多工作<br><span class=\"slide-emphasis\">也只是让一张图片动起来。</span>",
-            processTitle: "Live2D VTuber制作流程",
-            toolTitles: ["角色插画", "拆分部件", "绑定", "模型设置", "面部追踪", "场景与OBS设置", "直播"]
-          },
-          5: {
-            kicker: "Live2D",
-            title: "Live2D容易上手。<br><span class=\"slide-emphasis\">动作越自由，制作越复杂。</span>",
-            body: "它针对2D表达进行了优化。<br>全身动作需要更多手工设置。",
-            reqTitles: ["容易开始", "越自由，工作越多"],
-            reqDescriptions: ["2D模型 + 摄像头", "部件 · 绑定 · 追踪"]
-          },
-          31: {
-            kicker: "专业3D",
-            title: "3D带来<br><span class=\"slide-emphasis\">全身动作自由。</span>",
-            body: "舞蹈、转身和背面视角已经可以实现。<br>代价是复杂且昂贵的制作流程。",
-            pipelineTitle: "专业3D直播流程",
-            pipelineSteps: ["高质量<br>3D角色", "3D绑定 / 骨骼<br>+ 专业动作捕捉", "实时<br>3D引擎", "虚拟直播"],
-            source: "公开的3D舞蹈参考：{hakos} · 有公开报道描述Stellive的Akane Lize个人演唱会使用了VICON动作捕捉。{vicon}"
-          },
-          32: {
-            kicker: "取舍",
-            title: "AI Animate消除<br><span class=\"slide-emphasis\">制作上的取舍。</span>",
-            body: "无需3D制作流程，也以全身自由为目标。<br>同时追求易用性与表现力。",
-            reqTitles: ["Live2D + VTube Studio", "专业3D + 动作捕捉", "Virtually"],
-            reqDescriptions: ["容易上手 · 2D优化<br>越自由，设置越多", "全身动作自由 · 可复用<br>高前期投入 · 低追加成本", "一张图片 + 摄像头<br>前期投入近零 · 每次直播成本更高<br>目标：全身动作自由"],
-            source: "Virtually仍在开发中：全身动作是目标功能，每次直播都会产生GPU推理成本。"
-          },
-          7: {
-            kicker: "解决方案",
-            title: "一张图片。<br><span class=\"slide-emphasis\">10秒开启直播VTuber。</span>",
-            body: "以专业3D的自由为目标，同时省去3D制作流程。",
-            goalLabels: ["Virtually之前", "Virtually之后"],
-            goalTexts: ["角色制作<br>几天到几周<br>复杂设置", "一张图片 + 摄像头<br>10秒<br>目标：全身动作自由"]
-          },
-          8: {
-            kicker: "技术",
-            title: "<span class=\"slide-emphasis\">AI Live Animate</span><br>让一张照片变成直播VTuber。",
-            body: "从一张照片和摄像头动作生成直播角色画面。"
-          },
-          9: {
-            kicker: "验证",
-            title: "录制动作也在变得<br><span class=\"slide-emphasis\">更自由。</span>",
-            body: "AI Animate让角色视频不再需要拆分部件和绑定。",
-            goalLabels: ["AI Animate之前", "使用AI Animate"],
-            goalTexts: ["图片 +<br>驱动视频", "AI生成的<br>角色视频"]
-          },
-          10: { kicker: "结果", title: "让录制动作<br><span class=\"slide-emphasis\">拥有更多自由。</span>", source: "录制舞蹈视频 → AI角色动作迁移。{wanDemo}" },
-          11: {
-            kicker: "AI Animate",
-            title: "从动作参数<br>到<span class=\"slide-emphasis\">生成画面。</span>",
-            goalLabels: ["生成式AI之前", "使用生成式AI"],
-            goalTexts: ["摄像头 → 追踪<br>→ 参数<br>→ 绑定模型", "图片 + 视频<br>→ 生成模型<br>→ 视频"],
-            source: "参考{wan}及其端到端角色动画框架。"
-          },
-          12: {
-            kicker: "核心问题",
-            title: "批量视频已经<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍从绑定开始。",
-            goalTexts: ["录制<br>图片 → AI<br>→ 视频", "直播<br>部件 → 绑定<br>→ 追踪"]
-          },
-          13: {
-            kicker: "原因",
-            title: "障碍是<span class=\"slide-emphasis\">延迟。</span>",
-            body: "帧率不等于端到端延迟。",
-            goalTexts: ["批量<br>几秒到<br>几分钟", "直播目标<br>每帧<br>33–50ms"]
-          },
-          14: {
-            kicker: "为什么是现在",
-            title: "研究正在跨过<br><span class=\"slide-emphasis\">实时性门槛。</span>",
-            reqTitles: ["Wan-Animate-2", "Wan-Animate-2 Lite", "LiveAnimate"],
-            reqDescriptions: ["Base / Distillation权重与推理代码已于2026年8月7日发布。", "已描述流式版本，但尚未确认独立Lite版本发布。", "流式研究项目；推理和训练代码即将发布。"],
-            source: "{wan} · {liveanimate}"
-          },
-          15: {
-            kicker: "为什么是现在",
-            title: "生成式动画正在<br><span class=\"slide-emphasis\">进入直播。</span>",
-            body: "这是在2× H100 GPU上运行的14B研究模型。<br>不是面向消费者的产品规格。",
-            goalTexts: ["参考图片<br>+ 流式姿态", "角色流<br>19.63 FPS"],
-            source: "{livePaper} · {liveanimate}"
-          },
-          16: {
-            kicker: "行业变化",
-            title: "对于图片优先的制作<br><span class=\"slide-emphasis\">绑定可以成为可选项。</span>",
-            goalLabels: ["生成式AI之前", "使用生成式AI"],
-            goalTexts: ["图片<br><s>部件 · 绑定<br>Cubism · 追踪</s>", "图片 + 摄像头<br>生成式AI<br>视频"]
-          },
-          17: {
-            kicker: "我们的目标",
-            title: "我们要打造<br><span class=\"slide-emphasis\">韩国的IRIAM。</span>",
-            reqTitles: ["一键制作", "直播平台", "网络效应"],
-            reqDescriptions: ["一张插画 → 直播", "直播 · 礼物 · 社区", "创作者 ↔ 粉丝"],
-            source: "IRIAM展示了把一张插画变成直播角色，并围绕它建立社区的需求。{iriam}"
-          },
-          18: {
-            kicker: "体验",
-            title: "一张图片。一台摄像头。<br><span class=\"slide-emphasis\">立即直播。</span>",
-            reqTitles: ["01 · 上传角色", "02 · 打开摄像头", "03 · 移动 → 04 · 直播"],
-            reqDescriptions: ["从一张图片开始。", "摄像头或iPhone。", "让角色跟随动作。"]
-          },
-          19: {
-            kicker: "产品",
-            title: "从制作<br><span class=\"slide-emphasis\">到OBS。</span>",
-            body: "原生AI绑定 + 追踪 → Virtually<br>→ 虚拟摄像头 / OBS源 → OBS<br><br>YouTube · CHZZK · SOOP · Twitch"
-          },
-          20: {
-            kicker: "产品愿景",
-            title: "最终<br><span class=\"slide-emphasis\">PC可以消失。</span>",
-            body: "iPhone → Virtually → 云端推理<br>→ 角色流 → 播出<br><br>由生成式动作驱动的移动优先体验。"
-          },
-          21: {
-            kicker: "扩展",
-            title: "同一个身份<br><span class=\"slide-emphasis\">走出直播。</span>",
-            reqDescriptions: ["直播", "视频通话 · 随机聊天", "语音 / 视频房间"],
-            source: "游戏 · 约会 · 社交 · 远程临场 · AI角色"
-          },
-          22: {
-            kicker: "扩展愿景",
-            title: "生成角色周围的<br><span class=\"slide-emphasis\">世界。</span>",
-            body: "“为这个角色生成一间深夜东京广播工作室。”",
-            goalTexts: ["角色图片<br>→ 角色", "提示词 / 图片<br>→ 房间 / 世界"],
-            source: "角色 + 动作 + 世界生成，成为一个创作者体验。"
-          },
-          33: {
-            kicker: "市场规模",
-            title: "VTuber制作栈每年<br><span class=\"slide-emphasis\">已经花费超过₩200B。</span>",
-            body: "Estimated Annual Production Spend · 只计算制作支出，不含创作者收入。",
-            samKoreaTitle: "韩国",
-            samKoreaLabel: "Core SAM · 估算",
-            samKoreaTotalCaption: "基准 ≈ ₩14B",
-            samKoreaRange: "每年 ₩11B–₩16.5B",
-            samCategoryTitles: ["Live2D制作", "3D制作", "动作捕捉直播", "动作捕捉内容"],
-            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
-            samCategoryDetails: ["插画 · 部件 · 绑定", "建模 · 绑定 · 更新", "直播 · 展示 · 演唱会", "舞蹈 · MV · 重定向"],
-            samGlobalTitle: "全球",
-            samGlobalLabel: "Core SAM · 估算",
-            samGlobalTotalCaption: "基准估算 ≈ ₩226B / 年",
-            samRegionNames: ["日本", "中国", "美国", "欧洲", "韩国"],
-            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
-            samStackTitle: "现有制作栈",
-            samStackSteps: ["角色制作", "Live2D / 3D绑定", "3D建模", "动作捕捉", "直播制作"],
-            samTargetTitle: "Virtually目标",
-            samTargetSteps: ["图片 + 摄像头", "Virtually", "直播"],
-            source: "SAM = 角色制作、Live2D/3D建模与绑定、动作捕捉和虚拟直播制作的年度支出，其中一部分有可能被Virtually替代。<br>不含周边、广告、Super Chat、会员和门票等创作者收入。<br>基于公开制作价格、动作捕捉工作室价格及VTuber市场/活动数据的Bottom-up estimate。<br><span class=\"virtually-sam-caveat\">各项范围独立估算，合计可能不会等于简单的最小值/最大值相加。</span>"
-          },
-          23: {
-            kicker: "创作者收入",
-            title: "短视频带来触达<br><span class=\"slide-emphasis\">直播带来收入。</span>",
-            body: "每1,000次观看的收入 · 长视频 = 100%<br>直播在广告之外增加粉丝支持。",
-            reqTitles: ["短视频", "长视频", "直播"],
-            values: ["3–14%", "100%", "124%"],
-            reqDescriptions: ["相对长视频的广告RPM", "广告RPM基准", "每月8次以上直播的广告RPM<br>+ 粉丝支持"],
-            source: "方向性RPM指数；长视频 = 100%。短视频 = 长视频RPM的3–14%。直播 = 每月8次以上直播时广告RPM的124%；不含粉丝支持。{airShorts} · {airLive} · {youtube}"
-          },
-          24: {
-            kicker: "直播经济",
-            title: "直播将<span class=\"slide-emphasis\">关系变现。</span>",
-            body: "还有赞助与商业化。<br>简报的2024年5月快照中，Super Chat排名前100的频道有64个是VTuber；仍需核验。",
-            goalTexts: ["录制<br>广告", "直播<br>广告 · Super Chat<br>会员 · 礼物"],
-            source: "*根据简报中的Playboard快照得出的方向性数据；对外发布前请更新排名。{playboard}"
-          },
-          25: {
-            kicker: "战略",
-            title: "从引擎开始<br><span class=\"slide-emphasis\">成长为平台。</span>",
-            reqTitles: ["阶段1 · 创作者工具", "阶段2 · 韩国的IRIAM", "阶段3 · 全球平台"],
-            reqDescriptions: ["绑定 + 追踪 → OBS", "直接直播 · 创作者 · 粉丝", "日本及更远"]
-          },
-          26: {
-            kicker: "类比",
-            title: "Apple让数字音乐<br><span class=\"slide-emphasis\">变简单并赢下市场。</span>",
-            body: "30年前，一个UX标准连接了碎片化的市场。",
-            reqTitles: ["Apple之前", "Apple的标准"],
-            chips: [["MP3", "CD转录", "下载", "播放器", "文件管理", "同步"], ["iTunes", "Music Store", "iPod"]],
-            reqDescriptions: ["分散的工具", "连接起来的UX"],
-            sequence: "发现 → 购买 → 管理 → 同步 → 聆听",
-            source: "Apple宣布第一年购买歌曲超过7,000万首，并占单曲和专辑合法下载量的70%以上。{apple}"
-          },
-          28: {
-            kicker: "生态模式",
-            title: "技术打开市场<br><span class=\"slide-emphasis\">生态掌握价值。</span>",
-            body: "正如Apple所示，Virtually从韩国开始，长期成长为能够在日本取代IRIAM的全球平台。",
-            ecosystemHeadings: ["技术<br><span>提供者</span>", "生态<br><span>所有者</span>"],
-            ecosystemRows: ["当时<span>数字音乐</span>", "现在<span>直播头像</span>"],
-            ecosystemCardTitles: ["Toshiba", "Apple", "中国AI企业", "Virtually"],
-            ecosystemCardDetails: ["5GB硬盘", "iPod + iTunes", "Qwen · Wan · Alibaba", "直播创作者层"],
-            ecosystemCardValues: ["技术提供者", "生态所有者", "技术提供者", "生态所有者"],
-            source: "Computer History Museum说明，第一代iPod使用了Toshiba的1.8英寸MK5002MAL 5GB硬盘。{chm}"
-          },
-          30: {
-            kicker: "愿景",
-            title: "<span class=\"slide-emphasis\">Virtually</span><br>任何图片。任何动作。直播。",
-            body: "角色 · 动画 · 直播 · 通话 · 社交<br>世界 · 市场 · 礼物 · 创作者 · 粉丝<br><br>拥有生态，而不只是模型。<br>面向创作者的虚拟身份基础设施。"
-          }
-        },
-        "cn-TW": {
-          1: { subtitle: "最簡單的VTuber直播AI" },
-          2: {
-            kicker: "問題",
-            title: "成為VTuber<br>仍然 <span class=\"slide-emphasis\">太難了。</span>",
-            body: "一個角色在第一次直播前，仍要經歷多個製作與播出環節。"
-          },
-          3: {
-            kicker: "問題",
-            title: "做了這麼多工作<br><span class=\"slide-emphasis\">也只是讓一張圖片動起來。</span>",
-            processTitle: "Live2D VTuber製作流程",
-            toolTitles: ["角色插畫", "拆分部件", "綁定", "模型設定", "臉部追蹤", "場景與OBS設定", "直播"]
-          },
-          5: {
-            kicker: "Live2D",
-            title: "Live2D容易上手。<br><span class=\"slide-emphasis\">動作越自由，製作越複雜。</span>",
-            body: "它針對2D表達進行最佳化。<br>全身動作需要更多手動設定。",
-            reqTitles: ["容易開始", "越自由，工作越多"],
-            reqDescriptions: ["2D模型 + 攝影機", "部件 · 綁定 · 追蹤"]
-          },
-          31: {
-            kicker: "專業3D",
-            title: "3D帶來<br><span class=\"slide-emphasis\">全身動作自由。</span>",
-            body: "舞蹈、轉身和背面視角已經可以實現。<br>代價是複雜且昂貴的製作流程。",
-            pipelineTitle: "專業3D直播流程",
-            pipelineSteps: ["高品質<br>3D角色", "3D綁定 / 骨骼<br>+ 專業動作捕捉", "即時<br>3D引擎", "虛擬直播"],
-            source: "公開的3D舞蹈參考：{hakos} · 有公開報導描述Stellive的Akane Lize個人演唱會使用了VICON動作捕捉。{vicon}"
-          },
-          32: {
-            kicker: "取捨",
-            title: "AI Animate消除<br><span class=\"slide-emphasis\">製作上的取捨。</span>",
-            body: "無需3D製作流程，也以全身自由為目標。<br>同時追求易用性與表現力。",
-            reqTitles: ["Live2D + VTube Studio", "專業3D + 動作捕捉", "Virtually"],
-            reqDescriptions: ["容易上手 · 2D最佳化<br>越自由，設定越多", "全身動作自由 · 可重複使用<br>高前期投入 · 低追加成本", "一張圖片 + 攝影機<br>前期投入近零 · 每次直播成本更高<br>目標：全身動作自由"],
-            source: "Virtually仍在開發中：全身動作是目標功能，每次直播都會產生GPU推理成本。"
-          },
-          7: {
-            kicker: "解決方案",
-            title: "一張圖片。<br><span class=\"slide-emphasis\">10秒開啟直播VTuber。</span>",
-            body: "以專業3D的自由為目標，同時省去3D製作流程。",
-            goalLabels: ["Virtually以前", "Virtually之後"],
-            goalTexts: ["角色製作<br>幾天到幾週<br>複雜設定", "一張圖片 + 攝影機<br>10秒<br>目標：全身動作自由"]
-          },
-          8: {
-            kicker: "技術",
-            title: "<span class=\"slide-emphasis\">AI Live Animate</span><br>讓一張照片變成直播VTuber。",
-            body: "從一張照片和攝影機動作生成直播角色畫面。"
-          },
-          9: {
-            kicker: "驗證",
-            title: "錄製動作也在變得<br><span class=\"slide-emphasis\">更自由。</span>",
-            body: "AI Animate讓角色影片不再需要拆分部件和綁定。",
-            goalLabels: ["AI Animate以前", "使用AI Animate"],
-            goalTexts: ["圖片 +<br>驅動影片", "AI生成的<br>角色影片"]
-          },
-          10: { kicker: "結果", title: "讓錄製動作<br><span class=\"slide-emphasis\">擁有更多自由。</span>", source: "錄製舞蹈影片 → AI角色動作轉移。{wanDemo}" },
-          11: {
-            kicker: "AI Animate",
-            title: "從動作參數<br>到<span class=\"slide-emphasis\">生成畫面。</span>",
-            goalLabels: ["生成式AI之前", "使用生成式AI"],
-            goalTexts: ["攝影機 → 追蹤<br>→ 參數<br>→ 綁定模型", "圖片 + 影片<br>→ 生成模型<br>→ 影片"],
-            source: "參考{wan}及其端到端角色動畫框架。"
-          },
-          12: {
-            kicker: "核心問題",
-            title: "批次影片已經<span class=\"slide-emphasis\">原生AI化。</span><br>直播仍從綁定開始。",
-            goalTexts: ["錄製<br>圖片 → AI<br>→ 影片", "直播<br>部件 → 綁定<br>→ 追蹤"]
-          },
-          13: {
-            kicker: "原因",
-            title: "障礙是<span class=\"slide-emphasis\">延遲。</span>",
-            body: "影格率不等於端到端延遲。",
-            goalTexts: ["批次<br>幾秒到<br>幾分鐘", "直播目標<br>每影格<br>33–50ms"]
-          },
-          14: {
-            kicker: "為什麼是現在",
-            title: "研究正在跨過<br><span class=\"slide-emphasis\">即時性門檻。</span>",
-            reqTitles: ["Wan-Animate-2", "Wan-Animate-2 Lite", "LiveAnimate"],
-            reqDescriptions: ["Base / Distillation權重與推理程式碼已於2026年8月7日發布。", "已描述串流版本，但尚未確認獨立Lite版本發布。", "串流研究專案；推理與訓練程式碼即將發布。"],
-            source: "{wan} · {liveanimate}"
-          },
-          15: {
-            kicker: "為什麼是現在",
-            title: "生成式動畫正在<br><span class=\"slide-emphasis\">進入直播。</span>",
-            body: "這是在2× H100 GPU上執行的14B研究模型。<br>不是面向消費者的產品規格。",
-            goalTexts: ["參考圖片<br>+ 串流姿態", "角色串流<br>19.63 FPS"],
-            source: "{livePaper} · {liveanimate}"
-          },
-          16: {
-            kicker: "產業變化",
-            title: "對於圖片優先的製作<br><span class=\"slide-emphasis\">綁定可以成為選項。</span>",
-            goalLabels: ["生成式AI之前", "使用生成式AI"],
-            goalTexts: ["圖片<br><s>部件 · 綁定<br>Cubism · 追蹤</s>", "圖片 + 攝影機<br>生成式AI<br>影片"]
-          },
-          17: {
-            kicker: "我們的目標",
-            title: "我們要打造<br><span class=\"slide-emphasis\">韓國的IRIAM。</span>",
-            reqTitles: ["一鍵製作", "直播平台", "網路效應"],
-            reqDescriptions: ["一張插畫 → 直播", "直播 · 禮物 · 社群", "創作者 ↔ 粉絲"],
-            source: "IRIAM展示了把一張插畫變成直播角色，並圍繞它建立社群的需求。{iriam}"
-          },
-          18: {
-            kicker: "體驗",
-            title: "一張圖片。一台攝影機。<br><span class=\"slide-emphasis\">立即直播。</span>",
-            reqTitles: ["01 · 上傳角色", "02 · 開啟攝影機", "03 · 移動 → 04 · 直播"],
-            reqDescriptions: ["從一張圖片開始。", "攝影機或iPhone。", "讓角色跟隨動作。"]
-          },
-          19: {
-            kicker: "產品",
-            title: "從製作<br><span class=\"slide-emphasis\">到OBS。</span>",
-            body: "原生AI綁定 + 追蹤 → Virtually<br>→ 虛擬攝影機 / OBS來源 → OBS<br><br>YouTube · CHZZK · SOOP · Twitch"
-          },
-          20: {
-            kicker: "產品願景",
-            title: "最終<br><span class=\"slide-emphasis\">PC可以消失。</span>",
-            body: "iPhone → Virtually → 雲端推理<br>→ 角色串流 → 播出<br><br>由生成式動作驅動的行動優先體驗。"
-          },
-          21: {
-            kicker: "擴展",
-            title: "同一個身份<br><span class=\"slide-emphasis\">走出直播。</span>",
-            reqDescriptions: ["直播", "視訊通話 · 隨機聊天", "語音 / 視訊房間"],
-            source: "遊戲 · 約會 · 社交 · 遠端臨場 · AI角色"
-          },
-          22: {
-            kicker: "擴展願景",
-            title: "生成角色周圍的<br><span class=\"slide-emphasis\">世界。</span>",
-            body: "「為這個角色生成一間深夜東京廣播工作室。」",
-            goalTexts: ["角色圖片<br>→ 角色", "提示詞 / 圖片<br>→ 房間 / 世界"],
-            source: "角色 + 動作 + 世界生成，成為一個創作者體驗。"
-          },
-          33: {
-            kicker: "市場規模",
-            title: "VTuber製作堆疊每年<br><span class=\"slide-emphasis\">已經花費超過₩200B。</span>",
-            body: "Estimated Annual Production Spend · 只計算製作支出，不含創作者收入。",
-            samKoreaTitle: "韓國",
-            samKoreaLabel: "Core SAM · 估算",
-            samKoreaTotalCaption: "基準 ≈ ₩14B",
-            samKoreaRange: "每年 ₩11B–₩16.5B",
-            samCategoryTitles: ["Live2D製作", "3D製作", "動作捕捉直播", "動作捕捉內容"],
-            samCategoryValues: ["₩3–5B", "₩3–6B", "₩3.5–4.5B", "₩0.7–1.5B"],
-            samCategoryDetails: ["插畫 · 部件 · 綁定", "建模 · 綁定 · 更新", "直播 · 展示 · 演唱會", "舞蹈 · MV · 重定向"],
-            samGlobalTitle: "全球",
-            samGlobalLabel: "Core SAM · 估算",
-            samGlobalTotalCaption: "基準估算 ≈ ₩226B / 年",
-            samRegionNames: ["日本", "中國", "美國", "歐洲", "韓國"],
-            samRegionValues: ["₩80B", "₩75B", "₩35B", "₩22B", "₩14B"],
-            samStackTitle: "現有製作堆疊",
-            samStackSteps: ["角色製作", "Live2D / 3D綁定", "3D建模", "動作捕捉", "直播製作"],
-            samTargetTitle: "Virtually目標",
-            samTargetSteps: ["圖片 + 攝影機", "Virtually", "直播"],
-            source: "SAM = 角色製作、Live2D/3D建模與綁定、動作捕捉和虛擬直播製作的年度支出，其中一部分可能由Virtually取代。<br>不含周邊、廣告、Super Chat、會員和門票等創作者收入。<br>基於公開製作價格、動作捕捉工作室價格及VTuber市場/活動資料的Bottom-up estimate。<br><span class=\"virtually-sam-caveat\">各項範圍獨立估算，合計可能不等於簡單的最小值／最大值相加。</span>"
-          },
-          23: {
-            kicker: "創作者收入",
-            title: "短影片帶來觸達<br><span class=\"slide-emphasis\">直播帶來收入。</span>",
-            body: "每1,000次觀看的收入 · 長影片 = 100%<br>直播在廣告之外增加粉絲支持。",
-            reqTitles: ["短影片", "長影片", "直播"],
-            values: ["3–14%", "100%", "124%"],
-            reqDescriptions: ["相對長影片的廣告RPM", "廣告RPM基準", "每月8次以上直播的廣告RPM<br>+ 粉絲支持"],
-            source: "方向性RPM指數；長影片 = 100%。短影片 = 長影片RPM的3–14%。直播 = 每月8次以上直播時廣告RPM的124%；不含粉絲支持。{airShorts} · {airLive} · {youtube}"
-          },
-          24: {
-            kicker: "直播經濟",
-            title: "直播將<span class=\"slide-emphasis\">關係變現。</span>",
-            body: "還有贊助與商業化。<br>簡報的2024年5月快照中，Super Chat排名前100的頻道有64個是VTuber；仍需核驗。",
-            goalTexts: ["錄製<br>廣告", "直播<br>廣告 · Super Chat<br>會員 · 禮物"],
-            source: "*根據簡報中的Playboard快照得出的方向性資料；對外發布前請更新排名。{playboard}"
-          },
-          25: {
-            kicker: "策略",
-            title: "從引擎開始<br><span class=\"slide-emphasis\">成長為平台。</span>",
-            reqTitles: ["階段1 · 創作者工具", "階段2 · 韓國的IRIAM", "階段3 · 全球平台"],
-            reqDescriptions: ["綁定 + 追蹤 → OBS", "直接直播 · 創作者 · 粉絲", "日本及更遠"]
-          },
-          26: {
-            kicker: "類比",
-            title: "Apple讓數位音樂<br><span class=\"slide-emphasis\">變簡單並贏下市場。</span>",
-            body: "30年前，一個UX標準連結了碎片化的市場。",
-            reqTitles: ["Apple之前", "Apple的標準"],
-            chips: [["MP3", "CD轉錄", "下載", "播放器", "檔案管理", "同步"], ["iTunes", "Music Store", "iPod"]],
-            reqDescriptions: ["分散的工具", "連結起來的UX"],
-            sequence: "發現 → 購買 → 管理 → 同步 → 聆聽",
-            source: "Apple宣布第一年購買歌曲超過7,000萬首，並佔單曲和專輯合法下載量的70%以上。{apple}"
-          },
-          28: {
-            kicker: "生態模式",
-            title: "技術打開市場<br><span class=\"slide-emphasis\">生態掌握價值。</span>",
-            body: "正如Apple所示，Virtually從韓國開始，長期成長為能在日本取代IRIAM的全球平台。",
-            ecosystemHeadings: ["技術<br><span>提供者</span>", "生態<br><span>所有者</span>"],
-            ecosystemRows: ["當時<span>數位音樂</span>", "現在<span>直播虛擬形象</span>"],
-            ecosystemCardTitles: ["Toshiba", "Apple", "中國AI企業", "Virtually"],
-            ecosystemCardDetails: ["5GB硬碟", "iPod + iTunes", "Qwen · Wan · Alibaba", "直播創作者層"],
-            ecosystemCardValues: ["技術提供者", "生態所有者", "技術提供者", "生態所有者"],
-            source: "Computer History Museum說明，第一代iPod使用了Toshiba的1.8英寸MK5002MAL 5GB硬碟。{chm}"
-          },
-          30: {
-            kicker: "願景",
-            title: "<span class=\"slide-emphasis\">Virtually</span><br>任何圖片。任何動作。直播。",
-            body: "角色 · 動畫 · 直播 · 通話 · 社交<br>世界 · 市場 · 禮物 · 創作者 · 粉絲<br><br>擁有生態，而不只是模型。<br>面向創作者的虛擬身份基礎設施。"
-          }
-        }
-      };
-
-      function normalizeLanguage(rawLanguage) {
-        const normalized = String(rawLanguage ?? "").trim().replace(/_/g, "-").toLowerCase();
-
-        if (normalized.startsWith("ko")) {
-          return "ko";
-        }
-
-        if (normalized.startsWith("ja")) {
-          return "ja";
-        }
-
-        if (
-          normalized === "cn-tw"
-          || normalized.startsWith("zh-tw")
-          || normalized.startsWith("zh-hk")
-          || normalized.startsWith("zh-mo")
-          || normalized.startsWith("zh-hant")
-        ) {
-          return "cn-TW";
-        }
-
-        if (
-          normalized === "cn-zh"
-          || normalized.startsWith("zh")
-          || normalized.startsWith("cn")
-        ) {
-          return "cn-ZH";
-        }
-
-        if (normalized.startsWith("en")) {
-          return "en";
-        }
-
-        return null;
-      }
-
-      function detectLanguage() {
-        const queryLanguage = new URLSearchParams(window.location.search).get("lang");
-        const requestedLanguage = normalizeLanguage(queryLanguage);
-
-        if (requestedLanguage) {
-          return requestedLanguage;
-        }
-
-        const browserLanguages = Array.isArray(navigator.languages) ? navigator.languages : [];
-        const candidates = [...browserLanguages, navigator.language];
-
-        return candidates.map(normalizeLanguage).find(Boolean) ?? "en";
-      }
-
-      function linkMarkup(linkKey, language) {
-        const label = I18N_LINK_LABELS[language]?.[linkKey] ?? linkKey;
-        const href = I18N_LINK_URLS[linkKey];
-
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-      }
-
-      function interpolateLinks(value, language) {
-        if (typeof value !== "string") {
-          return value;
-        }
-
-        return Object.keys(I18N_LINK_URLS).reduce(
-          (result, linkKey) => result.split(`{${linkKey}}`).join(linkMarkup(linkKey, language)),
-          value
-        );
-      }
-
-      function setLocalizedHTML(root, selector, value, language, index = 0) {
-        if (value === undefined || value === null) {
-          return;
-        }
-
-        const element = root.querySelectorAll(selector)[index];
-
-        if (element) {
-          element.innerHTML = interpolateLinks(value, language);
-        }
-      }
-
-      function setLocalizedList(root, selector, values, language) {
-        if (!Array.isArray(values)) {
-          return;
-        }
-
-        root.querySelectorAll(selector).forEach((element, index) => {
-          if (values[index] !== undefined) {
-            element.innerHTML = interpolateLinks(values[index], language);
-          }
-        });
-      }
-
-      function applyLocalizedSlide(slide, data, language) {
-        setLocalizedHTML(slide, ".slide-kicker", data.kicker, language);
-        setLocalizedHTML(slide, ".slide-title:not(.virtually-cover-subtitle)", data.title, language);
-        setLocalizedHTML(slide, ".virtually-cover-subtitle", data.subtitle, language);
-        setLocalizedHTML(slide, ".slide-body", data.body, language);
-        setLocalizedHTML(slide, ".virtually-process-title", data.processTitle, language);
-        setLocalizedHTML(slide, ".virtually-3d-pipeline-title", data.pipelineTitle, language);
-        setLocalizedList(slide, ".virtually-3d-pipeline-label", data.pipelineSteps, language);
-        setLocalizedHTML(slide, ".virtually-sam-korea-title", data.samKoreaTitle, language);
-        setLocalizedHTML(slide, ".virtually-sam-korea-label", data.samKoreaLabel, language);
-        setLocalizedHTML(slide, ".virtually-sam-korea-total-caption", data.samKoreaTotalCaption, language);
-        setLocalizedHTML(slide, ".virtually-sam-korea-range", data.samKoreaRange, language);
-        setLocalizedHTML(slide, ".virtually-sam-global-title", data.samGlobalTitle, language);
-        setLocalizedHTML(slide, ".virtually-sam-global-label", data.samGlobalLabel, language);
-        setLocalizedHTML(slide, ".virtually-sam-global-total-caption", data.samGlobalTotalCaption, language);
-        setLocalizedList(slide, ".virtually-sam-category-title", data.samCategoryTitles, language);
-        setLocalizedList(slide, ".virtually-sam-category-value", data.samCategoryValues, language);
-        setLocalizedList(slide, ".virtually-sam-category-detail", data.samCategoryDetails, language);
-        setLocalizedList(slide, ".virtually-sam-region-name", data.samRegionNames, language);
-        setLocalizedList(slide, ".virtually-sam-region-value", data.samRegionValues, language);
-        setLocalizedHTML(slide, ".virtually-sam-stack-title", data.samStackTitle, language);
-        setLocalizedList(slide, ".virtually-sam-stack-step", data.samStackSteps, language);
-        setLocalizedHTML(slide, ".virtually-sam-target-title", data.samTargetTitle, language);
-        setLocalizedList(slide, ".virtually-sam-target-step", data.samTargetSteps, language);
-        setLocalizedList(slide, ".slide-tool-title", data.toolTitles, language);
-        setLocalizedList(slide, ".slide-goal-label", data.goalLabels, language);
-        setLocalizedList(slide, ".slide-goal-text", data.goalTexts, language);
-        setLocalizedList(slide, ".slide-ai-requirement-title", data.reqTitles, language);
-        setLocalizedList(slide, ".slide-ai-requirement-description", data.reqDescriptions, language);
-        setLocalizedList(slide, ".slide-market-comparison-value", data.values, language);
-        setLocalizedHTML(slide, ".slide-apple-sequence", data.sequence, language);
-        setLocalizedList(slide, ".slide-ecosystem-heading", data.ecosystemHeadings, language);
-        setLocalizedList(slide, ".slide-ecosystem-row-label", data.ecosystemRows, language);
-        setLocalizedList(slide, ".slide-ecosystem-card-title", data.ecosystemCardTitles, language);
-        setLocalizedList(slide, ".slide-ecosystem-card-detail", data.ecosystemCardDetails, language);
-        setLocalizedList(slide, ".slide-ecosystem-card-value", data.ecosystemCardValues, language);
-
-        if (Array.isArray(data.chips)) {
-          slide.querySelectorAll(".slide-apple-chip-list").forEach((chipList, listIndex) => {
-            const labels = data.chips[listIndex];
-
-            if (!Array.isArray(labels)) {
-              return;
-            }
-
-            chipList.querySelectorAll("span").forEach((chip, chipIndex) => {
-              if (labels[chipIndex] !== undefined) {
-                chip.textContent = labels[chipIndex];
-              }
-            });
-          });
-        }
-
-        setLocalizedHTML(slide, ".slide-source", data.source, language);
-      }
-
-      const detectedLanguage = detectLanguage();
-      const languageMeta = I18N_META[detectedLanguage];
-      const localizedSlides = I18N[detectedLanguage];
-      const LOCALIZATION_PAGE_MAP = {
-        1: 1,
-        2: 2,
-        3: 3,
-        4: 5,
-        5: 31,
-        6: 32,
-        7: 7,
-        8: 8,
-        9: 9,
-        10: 10,
-        11: 11,
-        12: 12,
-        13: 13,
-        14: 14,
-        15: 15,
-        16: 16,
-        17: 17,
-        18: 18,
-        19: 19,
-        20: 20,
-        21: 21,
-        22: 22,
-        23: 33,
-        24: 23,
-        25: 24,
-        26: 25,
-        27: 26,
-        28: 28,
-        29: 30
-      };
-
-      if (languageMeta) {
-        document.documentElement.lang = languageMeta.htmlLang;
-        document.documentElement.dataset.language = detectedLanguage;
-        document.title = languageMeta.title;
-
-        document.querySelector('meta[name="description"]')?.setAttribute("content", languageMeta.description);
-        document.querySelector('meta[property="og:title"]')?.setAttribute("content", languageMeta.title);
-        document.querySelector('meta[property="og:description"]')?.setAttribute("content", languageMeta.ogDescription);
-        document.querySelector('meta[property="og:image:alt"]')?.setAttribute("content", languageMeta.imageAlt);
-        document.querySelector('meta[name="twitter:title"]')?.setAttribute("content", languageMeta.title);
-        document.querySelector('meta[name="twitter:description"]')?.setAttribute("content", languageMeta.ogDescription);
-        document.querySelector("main")?.setAttribute("aria-label", languageMeta.deckLabel);
-        document.querySelector("#page-home-button")?.setAttribute("aria-label", languageMeta.homeLabel);
-        document.querySelector("#page-home-button span")?.replaceChildren(document.createTextNode(languageMeta.homeText));
-        document.querySelector('img.slide-download-qr')?.setAttribute("alt", languageMeta.imageAlt);
-      }
-
-      if (localizedSlides) {
-        document.querySelectorAll("#deck-track .slide").forEach((slide) => {
-          const pageData = localizedSlides[LOCALIZATION_PAGE_MAP[slide.dataset.page] ?? slide.dataset.page];
-
-          if (pageData) {
-            applyLocalizedSlide(slide, pageData, detectedLanguage);
-          }
-        });
-      }
-
+<section class="slide v-slide v-final" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div></div></main><script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
       const homeButton = document.getElementById("page-home-button");
@@ -7439,50 +5862,30 @@ allowfullscreen
       track.innerHTML = "";
       track.append(lastClone, ...baseSlides, firstClone);
 
-      const shortVideos = Array.from(track.querySelectorAll(".slide-short-video"));
-      const DEFAULT_VIDEO_PLAYBACK_RATE = 1.5;
-      let youtubePlayersInitialized = false;
-
-      function initializeShortVideoPlayers() {
-        if (!window.YT?.Player || youtubePlayersInitialized) {
-          return;
-        }
-
-        youtubePlayersInitialized = true;
-
-        shortVideos.forEach((videoFrame) => {
-          new window.YT.Player(videoFrame, {
-            events: {
-              onReady(event) {
-                event.target.setPlaybackRate(DEFAULT_VIDEO_PLAYBACK_RATE);
-              }
-            }
-          });
-        });
-      }
-
-      if (shortVideos.length > 0) {
-        shortVideos.forEach((videoFrame) => {
-          const videoSource = new URL(videoFrame.src, window.location.href);
-
-          if (window.location.protocol === "http:" || window.location.protocol === "https:") {
-            videoSource.searchParams.set("origin", window.location.origin);
+      // Load YouTube on demand; local-file embeds lack the required HTTP referrer.
+      track.querySelectorAll(".v-youtube-play").forEach((button) => {
+        button.addEventListener("click", () => {
+          const box = button.closest(".v-youtube");
+          if (window.location.protocol === "file:") {
+            window.open(`https://www.youtube.com/shorts/${box.dataset.videoId}`, "_blank", "noopener,noreferrer");
+            return;
           }
-
-          videoFrame.src = videoSource.toString();
+          const frame = document.createElement("iframe");
+          frame.title = "Genjutsu AI 영상 데모";
+          frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+          frame.allowFullscreen = true;
+          frame.referrerPolicy = "strict-origin-when-cross-origin";
+          frame.src = `https://www.youtube.com/embed/${box.dataset.videoId}?autoplay=1&playsinline=1&rel=0`;
+          button.hidden = true;
+          box.append(frame);
         });
-
-        window.onYouTubeIframeAPIReady = initializeShortVideoPlayers;
-
-        if (window.YT?.Player) {
-          initializeShortVideoPlayers();
-        } else {
-          const youtubeApiScript = document.createElement("script");
-          youtubeApiScript.src = "https://www.youtube.com/iframe_api";
-          document.head.append(youtubeApiScript);
-        }
-      }
-
+      });
+      // Media controls must not trigger deck gestures.
+      track.querySelectorAll("video, .v-youtube, a, button").forEach((element) => {
+        ["click", "touchstart", "touchmove", "touchend", "keydown", "keyup", "wheel"].forEach((type) => {
+          element.addEventListener(type, (event) => event.stopPropagation());
+        });
+      });
       const allSlides = Array.from(track.querySelectorAll(".slide"));
       const DESKTOP_TAP_DURATION_MS = 260;
       const MOBILE_TAP_DURATION_MS = 360;
@@ -7666,6 +6069,14 @@ allowfullscreen
           const isActive = index === activeIndex;
           slide.classList.toggle("is-active", isActive);
           slide.setAttribute("aria-hidden", String(!isActive));
+          slide.inert = !isActive;
+          if (!isActive) {
+            slide.querySelectorAll("video").forEach((video) => video.pause());
+            slide.querySelectorAll(".v-youtube iframe").forEach((frame) => {
+              frame.parentElement.querySelector("button").hidden = false;
+              frame.remove();
+            });
+          }
         });
 
         const currentNumber = String(realSlideNumber(activeIndex)).padStart(2, "0");
