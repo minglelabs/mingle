@@ -5659,10 +5659,13 @@
       .v-ipod > div { background:#efeee4; border:1px solid #ccc9bb; border-radius:4px; height:85px; text-align:center; font-size:32px; padding-top:8px; }
       .v-ipod small { display:block; font-size:12px; }
       .v-ipod > span { display:block; border:23px solid #f0ede6; width:82px; height:82px; margin:14px auto 0; border-radius:50%; }
-      .v-ecosystem { width:min(1050px,100%); }
-      .v-eco-head,.v-eco-row { display:grid; grid-template-columns:1fr 70px 1fr; align-items:center; text-align:center; gap:24px; }
+      .v-ecosystem { width:min(900px,100%); }
+      .v-eco-head,.v-eco-row { display:grid; grid-template-columns:210px minmax(0,1fr) 44px minmax(0,1fr); align-items:center; text-align:center; gap:12px; }
       .v-eco-head { color:#777266; font-size:16px; margin-bottom:14px; }
-      .v-eco-row { padding:28px 20px; border-top:1px solid #e6d8c1; }
+      .v-eco-row { padding:24px 12px; border-top:1px solid #e6d8c1; }
+      .v-eco-context { display:grid; justify-items:start; align-content:center; gap:6px; text-align:left; }
+      .v-eco-row .v-eco-context strong { color:#a96010; font-size:20px; line-height:1.2; letter-spacing:-.04em; white-space:nowrap; }
+      .v-eco-context span { color:#777266; font-size:15px; }
       .v-eco-row > div { display:grid; gap:12px; }
       .v-eco-row strong { font-size:40px; letter-spacing:-.04em; }
       .v-eco-row span { font-size:20px; color:#777266; }
@@ -5777,9 +5780,12 @@
         .v-ipod > div { height:58px; font-size:21px; padding-top:5px; }
         .v-ipod small { font-size:9px; }
         .v-ipod > span { width:58px; height:58px; border-width:16px; margin-top:9px; }
-        .v-eco-head,.v-eco-row { grid-template-columns:1fr 24px 1fr; gap:10px; }
+        .v-eco-head,.v-eco-row { grid-template-columns:92px minmax(0,1fr) 24px minmax(0,1fr); gap:8px; }
         .v-eco-head { font-size:11px; }
-        .v-eco-row { padding:25px 6px; }
+        .v-eco-row { padding:22px 4px; }
+        .v-eco-context { gap:4px; }
+        .v-eco-row .v-eco-context strong { font-size:13px; white-space:normal; word-break:keep-all; }
+        .v-eco-context span { font-size:11px; }
         .v-eco-row strong { font-size:26px; }
         .v-eco-row span { font-size:14px; }
         .v-eco-row > b { font-size:24px; }
@@ -5825,6 +5831,15 @@
         .v-slide[data-page="16"] .v-ipod > div { height:47px; font-size:17px; padding-top:4px; }
         .v-slide[data-page="16"] .v-ipod small { font-size:7px; }
         .v-slide[data-page="16"] .v-ipod > span { width:47px; height:47px; border-width:13px; margin-top:7px; }
+        .v-eco-head,.v-eco-row { grid-template-columns:78px minmax(0,1fr) 20px minmax(0,1fr); gap:5px; }
+        .v-eco-head { font-size:9px; }
+        .v-eco-row { padding:20px 2px; }
+        .v-eco-context { gap:3px; }
+        .v-eco-row .v-eco-context strong { font-size:11px; }
+        .v-eco-context span { font-size:9px; }
+        .v-eco-row strong { font-size:22px; }
+        .v-eco-row span { font-size:12px; }
+        .v-eco-row > b { font-size:21px; }
         .v-limit .v-local-video { height:29vh; }
       }
 
@@ -5893,7 +5908,7 @@
 
 <section class="slide v-slide " data-page="16"><article class="slide-shell v-shell"><h1 class="slide-title v-title">애플이 디지털 음악을<br><span class="slide-emphasis">단순한 UX로 표준화한 것처럼.</span></h1><div class="v-apple"><div class="v-music-before"><span>한 곡마다 직접 해야 했던 일</span><div class="v-file-row"><b>CD 추출</b><b>코덱 선택</b></div><div class="v-file-row"><b>포맷 변환</b><b>비트레이트 설정</b></div><div class="v-file-row"><b>파일명 · 폴더 정리</b><b>앨범 · 아티스트 태그</b></div><div class="v-file-row"><b>장르 · 앨범아트</b><b>중복 파일 정리</b></div><div class="v-file-row"><b>재생목록 구성</b><b>기기별 동기화</b></div></div><span class="v-between">→</span><div class="v-music-after"><div class="v-ipod" aria-label="iPod 인포그래픽"><div>♫<small>나의 음악</small></div><span></span></div><div><p>iTunes + iPod</p><h2>고르고. 담고. 듣기.</h2></div></div></div><p class="v-note"><a href="https://www.apple.com/newsroom/2001/10/23Apple-Presents-iPod/" target="_blank" rel="noopener noreferrer">iPod·자동 동기화 (2001)</a> · <a href="https://www.apple.com/newsroom/2003/04/28Apple-Launches-the-iTunes-Music-Store/" target="_blank" rel="noopener noreferrer">iTunes Music Store (2003)</a></p></article></section>
 
-<section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 부리고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span>핵심 기술</span><span></span><span>고객 경험 · 유통 · 수익화</span></div><div class="v-eco-row"><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong>Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div><strong>중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"><a href="https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/" target="_blank" rel="noopener noreferrer">UCI의 iPod 가치배분 연구</a>를 빗댄 사업 전략 · 부품사도 수익을 얻으며, Virtually의 플랫폼 수익은 검증할 목표입니다.</p></article></section>
+<section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 부리고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span>산업</span><span>핵심 기술</span><span></span><span>고객 경험 · 유통 · 수익화</span></div><div class="v-eco-row"><div class="v-eco-context"><strong>디지털 음원 산업</strong><span>2001년</span></div><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong>Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div class="v-eco-context"><strong>라이브 버튜버 산업</strong><span>2026년</span></div><div><strong>중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"><a href="https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/" target="_blank" rel="noopener noreferrer">UCI의 iPod 가치배분 연구</a>를 빗댄 사업 전략 · 부품사도 수익을 얻으며, Virtually의 플랫폼 수익은 검증할 목표입니다.</p></article></section>
 
 <section class="slide v-slide v-final" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div></div></main><script>
       const track = document.getElementById("deck-track");
