@@ -5595,21 +5595,19 @@
       .v-prompt { display:grid; gap:0; }
       .v-prompt span { color:#777266; font-size:18px; }
       .v-prompt strong { font-size:clamp(22px,2.2vw,32px); line-height:1.4; white-space:nowrap; }
-      .v-sam { display:grid; grid-template-columns:1.6fr 1fr; gap:60px; width:100%; }
+      .v-sam { display:grid; grid-template-columns:1fr 1fr; gap:clamp(30px, 4vw, 56px); width:100%; }
+      .v-sam h2 { font-size:clamp(18px, 1.8vw, 24px); }
       .v-sam h2 small { font-size:15px; font-weight:400; color:#777266; margin-left:10px; }
       .v-sam-blocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:22px; }
-      .v-sam-korea { text-align:center; }
+      .v-sam-korea, .v-sam-global { text-align:center; }
       .v-sam-blocks > div { border-top:1px solid #ddcfb6; padding-top:15px; display:grid; justify-items:center; gap:8px; text-align:center; }
       .v-sam-blocks span { font-size:18px; }
       .v-sam-blocks strong { font-size:34px; letter-spacing:-.04em; }
       .v-sam-blocks strong small { font-size:15px; }
       .v-sam-blocks p { font-size:13px; color:#777266; }
-      .v-sam-global { border-left:1px solid #ddcfb6; padding-left:60px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; text-align:center; }
-      .v-sam-global > span { font-size:18px; color:#777266; }
-      .v-sam-global > strong { font-size:clamp(48px,5vw,78px); color:#b95b0b; letter-spacing:-.055em; }
-      .v-sam-global p { font-size:27px; }
+      .v-sam-global { border-left:1px solid #ddcfb6; padding-left:clamp(30px, 4vw, 56px); }
       @media (min-width:901px) {
-        .v-sam { grid-template-columns:minmax(0,600px) minmax(0,1fr); gap:48px; }
+        .v-sam { grid-template-columns:1fr 1fr; gap:clamp(32px, 4vw, 48px); }
       }
       .v-chart-assumption { font-size:29px; font-weight:800; letter-spacing:-.04em; color:#a96010; }
       .v-revenue { width:100%; display:grid; gap:24px; padding-left:clamp(60px, 10vw, 160px); }
@@ -5753,10 +5751,7 @@
         .v-sam-blocks span { font-size:14px; }
         .v-sam-blocks strong { font-size:27px; }
         .v-sam-blocks p { font-size:10px; }
-        .v-sam-global { border-left:0; border-top:1px solid #ddcfb6; padding:16px 0 0; gap:9px; text-align:center; }
-        .v-sam-global > span { font-size:14px; }
-        .v-sam-global > strong { font-size:48px; }
-        .v-sam-global p { font-size:18px; }
+        .v-sam-global { border-left:0; border-top:1px solid #ddcfb6; padding:16px 0 0; text-align:center; }
         .v-revenue { gap:18px; padding-left:0; }
         .v-revenue-row { grid-template-columns:110px 1fr; gap:10px; }
         .v-revenue-label { gap:6px; }
@@ -5983,17 +5978,7 @@
           font-size:7px;
         }
         html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global {
-          gap:5px;
           padding-top:8px;
-        }
-        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global > span {
-          font-size:10px;
-        }
-        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global > strong {
-          font-size:29px;
-        }
-        html.is-mobile-viewport .v-slide[data-page="12"] .v-sam-global p {
-          font-size:11px;
         }
         html.is-mobile-viewport .v-slide[data-page="13"] .v-shell {
           gap:10px;
@@ -6091,7 +6076,7 @@
 
 <section class="slide v-slide v-world-slide" data-page="11"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터를 넘어<br><span class="slide-emphasis">배경·맵·환경까지 AI로.</span></h1><div class="v-world"><div class="v-prompt"><strong>“달빛 아래 마법 도서관 배경 만들어줘”</strong></div><span class="v-between">→</span><figure class="v-figure "><img src="./assets/virtually-broadcast-reference.png" alt="캐릭터와 배경이 함께 있는 라이브 화면 참고"><figcaption>배경 · 공간 · 조명까지 한 번에</figcaption></figure></div><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">현재 캐릭터 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 · 연간 지출 추정 · 100억+</h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><h2>글로벌 · 연간 지출 추정</h2><strong>2,000억+</strong><p>이미 지출되는 제작비를<br><span class="slide-emphasis">소프트웨어로 대체</span></p></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide v-market" data-page="12"><article class="slide-shell v-shell"><h1 class="slide-title v-title">현재 캐릭터 제작·운영에만<br><span class="slide-emphasis">국내 100억+, 글로벌 2,000억+</span></h1><div class="v-sam"><div class="v-sam-korea"><h2>국내 · 연간 지출 추정 · 100억+</h2><div class="v-sam-blocks"><div><span>Live2D 제작</span><strong>30–50억<small> 원</small></strong><p>일러스트 · 파츠 · 리깅</p></div><div><span>3D 제작</span><strong>30–60억<small> 원</small></strong><p>모델링 · 리깅 · 업데이트</p></div><div><span>모캡 라이브</span><strong>35–45억<small> 원</small></strong><p>방송 · 쇼케이스 · 콘서트</p></div><div><span>모캡 콘텐츠</span><strong>7–15억<small> 원</small></strong><p>춤 · MV · 리타게팅</p></div></div></div><div class="v-sam-global"><h2>글로벌 · 연간 지출 추정 · 2,000억+</h2><div class="v-sam-blocks"><div><span>일본</span><strong>600억+<small> 원</small></strong><p>600–1,000억 · 5.7배</p></div><div><span>중국</span><strong>500억+<small> 원</small></strong><p>500–1,000억 · 5.4배</p></div><div><span>미국</span><strong>300억+<small> 원</small></strong><p>250–500억 · 2.5배</p></div><div><span>유럽</span><strong>200억+<small> 원</small></strong><p>150–300억 · 1.6배</p></div></div></div></div><p class="v-note"></p></article></section>
 
 <section class="slide v-slide " data-page="13"><article class="slide-shell v-shell"><h1 class="slide-title v-title">처음에는 제작툴,<br><span class="slide-emphasis">다음에는 방송 플랫폼.</span></h1><div class="v-platform"><div class="v-stage"><span>시작</span><h2>사진 → Virtually → OBS</h2><p>제작과 송출을 간단하게</p></div><span class="v-between">→</span><div class="v-stage v-highlight"><span>목표</span><h2>창작자 <em>↔</em> 팬</h2><p>방송 · 발견 · 구독 · 후원</p></div></div><p class="v-takeaway">사용자가 서로를 데려오는 <span class="slide-emphasis">네트워크 효과를 구축합니다</span></p><p class="v-note"></p></article></section>
 
@@ -6205,9 +6190,13 @@
                 ["Mocap Live Ops", "₩3.5–4.5B", "Live Streams · Showcases · Concerts"],
                 ["Mocap Content", "₩0.7–1.5B", "Dance · Music Videos · Retargeting"],
               ],
-              globalHeading: "Global · Estimated Annual Spend",
-              globalValue: "₩200B+",
-              globalText: "Replacing existing production budgets<br><span class=\"slide-emphasis\">purely through intelligent software</span>",
+              globalHeading: "Global · Estimated Annual Spend · ₩200B+",
+              globalItems: [
+                ["Japan", "₩60B+<small> KRW</small>", "₩60–100B · ~5.7× KR"],
+                ["China", "₩50B+<small> KRW</small>", "₩50–100B · ~5.4× KR"],
+                ["US", "₩30B+<small> KRW</small>", "₩25–50B · ~2.5× KR"],
+                ["Europe", "₩20B+<small> KRW</small>", "₩15–30B · ~1.6× KR"],
+              ],
               note: "",
             },
             13: {
@@ -6363,9 +6352,13 @@
                 ["モキャップライブ", "₩3.5–4.5B", "定期配信 · ショーケース · ライブ"],
                 ["モキャップコンテンツ", "₩0.7–1.5B", "ダンス動画 · MV · リターゲティング"],
               ],
-              globalHeading: "グローバル市場 · 年間支出推定",
-              globalValue: "₩200B+ (~220億円+)",
-              globalText: "既存の巨額な制作コストを<br><span class=\"slide-emphasis\">ソフトウェアで丸ごと置き換える</span>",
+              globalHeading: "グローバル市場 · 年間支出推定 · ₩200B+",
+              globalItems: [
+                ["日本", "₩60B+<small> (66億円+)</small>", "₩60–100B · 韓国の約5.7倍"],
+                ["中国", "₩50B+<small> (55億円+)</small>", "₩50–100B · 韓国の約5.4倍"],
+                ["米国", "₩30B+<small> (33億円+)</small>", "₩25–50B · 韓国の約2.5倍"],
+                ["欧州", "₩20B+<small> (22億円+)</small>", "₩15–30B · 韓国の約1.6倍"],
+              ],
               note: "",
             },
             13: {
@@ -6521,9 +6514,13 @@
                 ["动捕现场直播", "35–45亿韩元", "日常直播 · 新品发布会 · 虚拟演唱会"],
                 ["动捕内容制作", "7–15亿韩元", "舞蹈动作 · MV · 动捕数据重定向"],
               ],
-              globalHeading: "全球市场 · 预计年度可替代支出",
-              globalValue: "2,000亿韩元+ (~1.5亿美元)",
-              globalText: "直接侵蚀既有的高昂制作预算，<br><span class=\"slide-emphasis\">以轻资产软件全面颠覆与取代</span>",
+              globalHeading: "全球市场 · 预计年度可替代支出 · 2,000亿韩元+",
+              globalItems: [
+                ["日本", "₩60B+", "₩60–100B · 约韩国 5.7倍"],
+                ["中国", "₩50B+", "₩50–100B · 约韩国 5.4倍"],
+                ["美国", "₩30B+", "₩25–50B · 约韩国 2.5倍"],
+                ["欧洲", "₩20B+", "₩15–30B · 约韩国 1.6倍"],
+              ],
               note: "",
             },
             13: {
@@ -6679,9 +6676,13 @@
                 ["動捕現場直播", "35–45億韓元", "日常直播 · 新品發表會 · 虛擬演唱會"],
                 ["動捕內容製作", "7–15億韓元", "舞蹈動作 · MV · 動捕數據重定向"],
               ],
-              globalHeading: "全球市場 · 預計年度可替代支出",
-              globalValue: "2,000億韓元+ (~1.5億美元)",
-              globalText: "直接侵蝕既有的高昂製作預算，<br><span class=\"slide-emphasis\">以輕資產軟體全面顛覆與取代</span>",
+              globalHeading: "全球市場 · 預計年度可替代支出 · 2,000億韓元+",
+              globalItems: [
+                ["日本", "₩60B+", "₩60–100B · 約韓國 5.7倍"],
+                ["中國", "₩50B+", "₩50–100B · 約韓國 5.4倍"],
+                ["美國", "₩30B+", "₩25–50B · 約韓國 2.5倍"],
+                ["歐洲", "₩20B+", "₩15–30B · 約韓國 1.6倍"],
+              ],
               note: "",
             },
             13: {
@@ -6901,12 +6902,13 @@
         const s12 = slide(12);
         setHTML(s12, "h1", translation.slides[12].title);
         setHTML(s12, ".v-sam-korea h2", translation.slides[12].koreaHeading);
-        setManyHTML(s12, ".v-sam-blocks span", translation.slides[12].koreaItems.map((item) => item[0]));
-        setManyHTML(s12, ".v-sam-blocks strong", translation.slides[12].koreaItems.map((item) => item[1]));
-        setManyHTML(s12, ".v-sam-blocks p", translation.slides[12].koreaItems.map((item) => item[2]));
+        setManyHTML(s12, ".v-sam-korea .v-sam-blocks span", translation.slides[12].koreaItems.map((item) => item[0]));
+        setManyHTML(s12, ".v-sam-korea .v-sam-blocks strong", translation.slides[12].koreaItems.map((item) => item[1]));
+        setManyHTML(s12, ".v-sam-korea .v-sam-blocks p", translation.slides[12].koreaItems.map((item) => item[2]));
         setHTML(s12, ".v-sam-global h2", translation.slides[12].globalHeading);
-        setHTML(s12, ".v-sam-global > strong", translation.slides[12].globalValue);
-        setHTML(s12, ".v-sam-global p", translation.slides[12].globalText);
+        setManyHTML(s12, ".v-sam-global .v-sam-blocks span", translation.slides[12].globalItems.map((item) => item[0]));
+        setManyHTML(s12, ".v-sam-global .v-sam-blocks strong", translation.slides[12].globalItems.map((item) => item[1]));
+        setManyHTML(s12, ".v-sam-global .v-sam-blocks p", translation.slides[12].globalItems.map((item) => item[2]));
         setHTML(s12, ".v-note", translation.slides[12].note);
 
         const s13 = slide(13);
