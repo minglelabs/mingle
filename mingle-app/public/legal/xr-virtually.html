@@ -4,18 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Virtually — 가장 쉬운 버튜버 라이브 AI</title>
-<meta name="description" content="Virtually: 가장 쉬운 버튜버 라이브 AI.">
-<meta property="og:title" content="Virtually - 가장 쉬운 버튜버 라이브 AI" />
+<title>Virtually — 버튜버 라이브를 AI로 쉽고 간단하게</title>
+<meta name="description" content="Virtually: 버튜버 라이브를 AI로 쉽고 간단하게.">
+<meta property="og:title" content="Virtually - 버튜버 라이브를 AI로 쉽고 간단하게" />
 <meta
       property="og:description"
       content="사진 한 장으로 시작하는 버추얼 라이브."
     />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="./assets/virtually-vtuber-cover.png" />
-<meta property="og:image:alt" content="가장 쉬운 버튜버 라이브 AI" />
+<meta property="og:image:alt" content="버튜버 라이브를 AI로 쉽고 간단하게" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Virtually - 가장 쉬운 버튜버 라이브 AI" />
+<meta name="twitter:title" content="Virtually - 버튜버 라이브를 AI로 쉽고 간단하게" />
 <meta
       name="twitter:description"
       content="사진 한 장으로 시작하는 버추얼 라이브."
@@ -5854,12 +5854,81 @@
         html.is-mobile-viewport .v-title.slide-title { font-size:24px; }
         html.is-mobile-viewport .v-final .v-title { font-size:48px; }
       }
+      .v-final .v-shell {
+        flex-direction:row;
+        align-items:center;
+        justify-content:space-between;
+        gap:clamp(48px,8vw,120px);
+        padding:48px clamp(8vw,10vw,144px) 96px clamp(10vw,12vw,174px);
+      }
+      .v-final .v-title { flex:0 1 46%; }
+      .v-final-brand {
+        flex:0 1 44%;
+        display:grid;
+        justify-items:start;
+        align-content:center;
+        gap:22px;
+        text-align:left;
+      }
+      .v-final .v-final-brand-title {
+        margin:0;
+        font-size:clamp(72px,8.2vw,124px);
+        line-height:.95;
+        letter-spacing:-.06em;
+      }
+      .v-final-brand-subtitle {
+        margin:0;
+        color:var(--title);
+        font-size:clamp(26px,2.5vw,38px);
+        line-height:1.22;
+        font-weight:600;
+        letter-spacing:-.04em;
+      }
+      .v-final-brand .slide-final-link--linkedin { margin-top:8px; }
+      @media (max-width:900px) {
+        .v-final .v-shell {
+          flex-direction:column;
+          align-items:flex-start;
+          justify-content:center;
+          gap:32px;
+          padding:26px 22px 92px;
+        }
+        html.is-mobile-viewport .v-final .v-shell {
+          padding:24px 22px 96px;
+        }
+        .v-final .v-title {
+          flex:none;
+          font-size:clamp(48px,14vw,72px);
+        }
+        html.is-mobile-viewport .v-final .v-title {
+          font-size:clamp(48px,14vw,72px);
+        }
+        .v-final-brand {
+          width:100%;
+          flex:none;
+          gap:14px;
+        }
+        .v-final .v-final-brand-title { font-size:clamp(68px,20vw,100px); }
+        .v-final-brand-subtitle { font-size:clamp(22px,6.5vw,32px); }
+        .v-final-brand .slide-final-link--linkedin { margin-top:4px; }
+      }
+      @media (max-width:360px) and (max-height:650px) {
+        .v-final .v-shell { gap:16px; padding:18px 18px 90px; }
+        html.is-mobile-viewport .v-final .v-shell { padding:18px 18px 90px; }
+        .v-final .v-title,
+        html.is-mobile-viewport .v-final .v-title { font-size:42px; }
+        .v-final-brand { gap:8px; }
+        .v-final .v-final-brand-title { font-size:62px; }
+        .v-final-brand-subtitle { font-size:18px; }
+        .v-final-brand .slide-final-link--linkedin { height:38px; padding:0 12px; font-size:.82rem; }
+        .v-final-brand .slide-final-logo--linkedin { width:24px; height:24px; font-size:.88rem; border-radius:6px; }
+      }
 </style></head><body><main class="deck" aria-label="Virtually 한국어 발표자료"><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
 <div class="slide-copy slide-copy--download-qr">
 <h1 class="slide-title"><span class="slide-emphasis">Virtually</span></h1>
-<h2 class="slide-title virtually-cover-subtitle">가장 쉬운 버튜버 라이브 AI</h2>
+<h2 class="slide-title virtually-cover-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</h2>
 </div>
 <div class="slide-side-media slide-side-media--download-qr">
 <div class="slide-download-qr-link">
@@ -5910,7 +5979,7 @@
 
 <section class="slide v-slide " data-page="17"><article class="slide-shell v-shell"><h1 class="slide-title v-title">기술은 재주를 부리고,<br><span class="slide-emphasis">생태계는 돈을 법니다.</span></h1><div class="v-ecosystem"><div class="v-eco-head"><span>산업</span><span>핵심 기술</span><span></span><span>고객 경험 · 유통 · 수익화</span></div><div class="v-eco-row"><div class="v-eco-context"><strong>디지털 음원 산업</strong><span>2001년</span></div><div><strong>Toshiba</strong><span>저장장치</span></div><b>→</b><div><strong>Apple</strong><span>iPod + iTunes</span></div></div><div class="v-eco-row v-highlight"><div class="v-eco-context"><strong>라이브 버튜버 산업</strong><span>2026년</span></div><div><strong>중국 AI 기업</strong><span>생성 모델</span></div><b>→</b><div><strong>Virtually</strong><span>창작자 + 팬 + 라이브</span></div></div></div><p class="v-note"><a href="https://www.calit2.uci.edu/2008/04/07/post-innovationgoesglobal/" target="_blank" rel="noopener noreferrer">UCI의 iPod 가치배분 연구</a>를 빗댄 사업 전략 · 부품사도 수익을 얻으며, Virtually의 플랫폼 수익은 검증할 목표입니다.</p></article></section>
 
-<section class="slide v-slide v-final" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div></div></main><script>
+<section class="slide v-slide v-final" data-page="18"><article class="slide-shell v-shell"><h1 class="slide-title v-title">감사합니다.<br><span class="slide-emphasis">Q &amp; A</span></h1><div class="v-final-brand"><h2 class="v-final-brand-title slide-emphasis">Virtually</h2><p class="v-final-brand-subtitle">버튜버 라이브를<br>AI로 쉽고 간단하게</p><a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/" target="_blank" rel="noopener noreferrer"><span class="slide-final-logo--linkedin" aria-hidden="true">in</span><span>LinkedIn</span></a></div></article></section></div><div class="page-controls" aria-label="발표자료 탐색"><button class="page-home-button" id="page-home-button" type="button" aria-label="첫 장으로"><svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5 6 8l4.5 4.5" /></svg><span>처음</span></button><div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div></div></main><script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
       const homeButton = document.getElementById("page-home-button");
