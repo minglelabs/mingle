@@ -5519,6 +5519,8 @@
 .v-process-step b { font-size:18px; line-height:1.2; letter-spacing:-.04em; font-weight:600; }
 .v-process-wide { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
       .v-cost-photo .v-figure { width:min(990px,85%); height:48vh; }
+      .v-cost-photo .v-longform-video { width:100%; }
+      .v-cost-photo .v-longform-video .v-youtube { width:auto; height:48vh; aspect-ratio:16/9; max-width:85vw; }
       .v-video-slide .v-shell { display:grid; grid-template-columns:1.35fr .65fr; gap:5vw; }
       .v-video-slide .v-title { text-align:left; }
       .v-video-block { display:flex; flex-direction:column; gap:12px; align-items:center; min-height:0; }
@@ -5656,6 +5658,7 @@
         .v-process-step span { font-size:11px; }
         .v-process-step b { font-size:14px; }
         .v-cost-photo .v-figure { width:100%; height:38vh; }
+        .v-cost-photo .v-longform-video .v-youtube { width:100%; height:auto; max-width:100%; aspect-ratio:16/9; }
         .v-video-slide .v-shell { display:flex; gap:20px; }
         .v-video-slide .v-title { text-align:center; }
         .v-youtube,.v-local-video { height:48vh; max-width:100%; }
@@ -5821,7 +5824,7 @@
 
 <section class="slide v-slide v-process-slide" data-page="3"><article class="slide-shell v-shell"><h1 class="slide-title v-title">이 모든 작업 끝에<br><span class="slide-emphasis">겨우 그림 하나 움직입니다.</span></h1><div class="v-process"><h2>제작부터 라이브까지</h2><div class="v-process-columns"><div class="v-process-lane"><p>2D 캐릭터</p><div class="v-process-step"><span>01</span><b>캐릭터 일러스트</b></div><div class="v-process-step"><span>03</span><b>파츠 분리</b></div><div class="v-process-step"><span>05</span><b>2D 리깅</b></div><div class="v-process-step"><span>07</span><b>표정 트래킹</b></div></div><div class="v-process-lane"><p>3D 캐릭터</p><div class="v-process-step"><span>02</span><b>모델링 · 텍스처</b></div><div class="v-process-step"><span>04</span><b>스켈레톤 · 리깅</b></div><div class="v-process-step"><span>06</span><b>모션캡처 스튜디오</b></div><div class="v-process-step"><span>08</span><b>캘리브레이션 · 리타게팅</b></div></div></div><div class="v-process-wide"><div class="v-process-step"><span>09</span><b>씬 · 조명 · OBS 세팅</b></div><div class="v-process-step"><span>10</span><b>라이브 운영</b></div></div></div><p class="v-note">2D는 기본 표정 중심 · 3D는 자유롭지만 모델·모션캡처 환경이 필요합니다.</p></article></section>
 
-<section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><figure class="v-figure "><img src="./assets/virtually-production-cost.png" alt="이와 IWA의 2D·3D 버튜버 비용 영상: 모델만 1,180만 원 이상"><figcaption>제작비 공개 사례 · 이와 IWA 「2D & 3D 버튜버 방송은 돈이 얼마가 들까?」</figcaption></figure><p class="v-note">첨부 이미지의 개인 사례이며, 모든 버튜버의 최소 비용을 뜻하지 않습니다.</p></article></section>
+<section class="slide v-slide v-cost-photo" data-page="4"><article class="slide-shell v-shell"><h1 class="slide-title v-title">캐릭터 제작도, 운영도<br><span class="slide-emphasis">큰 비용이 들어갑니다.</span></h1><div class="v-video-block v-longform-video"><div class="v-youtube" data-video-id="Z7cfoJEfLDY" data-video-url="https://www.youtube.com/watch?v=Z7cfoJEfLDY"><button type="button" class="v-youtube-play" aria-label="버튜버 제작 비용 영상 재생"><img src="./assets/virtually-production-cost-poster.jpg" alt="2D·3D 버튜버 제작 비용 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">2D·3D 버튜버 제작 비용 · <a href="https://www.youtube.com/watch?v=Z7cfoJEfLDY" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note">제작비 공개 사례 · 특정 사례의 비용을 모든 버튜버의 최소 비용으로 일반화하지 않습니다.</p></article></section>
 
 <section class="slide v-slide v-video-slide" data-page="5"><article class="slide-shell v-shell"><h1 class="slide-title v-title">AI의 발전으로<br><span class="slide-emphasis">이 과정이 간소화됩니다.</span></h1><div class="v-video-block"><div class="v-youtube" data-video-id="1dhuCFEOzHQ"><button type="button" class="v-youtube-play" aria-label="Genjutsu 영상 재생"><img src="./assets/virtually-genjutsu-poster.jpg" alt="Genjutsu 영상 미리보기"><span class="v-play">▶</span></button></div><p class="v-caption">Genjutsu · <a href="https://www.youtube.com/shorts/1dhuCFEOzHQ" target="_blank" rel="noopener noreferrer">원본 영상 ↗</a></p></div><p class="v-note">녹화 영상 기반 AI 변환 사례 · 로컬 파일에서는 재생 버튼이 YouTube 원본을 엽니다.</p></article></section>
 
@@ -5876,7 +5879,7 @@
         button.addEventListener("click", () => {
           const box = button.closest(".v-youtube");
           if (window.location.protocol === "file:") {
-            window.open(`https://www.youtube.com/shorts/${box.dataset.videoId}`, "_blank", "noopener,noreferrer");
+            window.open(box.dataset.videoUrl || `https://www.youtube.com/shorts/${box.dataset.videoId}`, "_blank", "noopener,noreferrer");
             return;
           }
           const frame = document.createElement("iframe");
