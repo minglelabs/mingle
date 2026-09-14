@@ -5885,6 +5885,17 @@
         letter-spacing:-.04em;
       }
       .v-final-brand .slide-final-link--linkedin { margin-top:8px; }
+      @media (min-width:901px) {
+        html[data-locale="ja"] .v-final .v-title {
+          font-size:clamp(56px,5.7vw,82px);
+          word-break:normal;
+          overflow-wrap:normal;
+        }
+        html[data-locale="cn-ZH"] .v-music-after h2,
+        html[data-locale="cn-TW"] .v-music-after h2 {
+          font-size:29px;
+        }
+      }
       @media (max-width:900px) {
         .v-final .v-shell {
           flex-direction:column;
@@ -6825,7 +6836,6 @@
         return translation;
       }
 
-      const virtuallyLocale = resolveVirtuallyLocale();
       const virtuallyTranslation = applyVirtuallyI18n();
 
       track.querySelectorAll(".slide-shell").forEach((shell) => {
