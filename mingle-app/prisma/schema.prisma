@@ -309,6 +309,15 @@ model AppConversationChannel {
   // literally zero DB footprint for the invitee before a message is sent, not
   // just zero visibility.
   pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
+  // Public read-only "spectate" link. shareToken is minted once and kept
+  // stable across on/off toggles so re-enabling doesn't invalidate a link
+  // people already have — every read path gates on shareEnabled live
+  // instead, so turning this off blocks new views immediately without
+  // needing a separate revocation list.
+  shareEnabled               Boolean   @default(false) @map("share_enabled")
+  shareToken                 String?   @unique @map("share_token")
+  sharedByUserId             String?   @map("shared_by_user_id")
+  sharedAt                   DateTime? @map("shared_at")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 

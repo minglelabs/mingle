@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -72,6 +73,12 @@ export type ConversationChannelSummary = {
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
+  // Whether this room currently has a public read-only "spectate" link —
+  // see setConversationChannelSharing. shareToken is only meaningful once
+  // shareEnabled is true; the settings screen builds the shareable URL from
+  // it (see conversation-share-link.ts).
+  shareEnabled: boolean;
+  shareToken: string | null;
 };
 
 export type ConversationHydrationUtterance = {
@@ -156,6 +163,8 @@ type ConversationChannelRecord = {
   updatedAt: Date;
   pausedAt: Date | null;
   userEditedTitleAt: Date | null;
+  shareEnabled: boolean;
+  shareToken: string | null;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -177,6 +186,8 @@ const conversationChannelSelect = {
   updatedAt: true,
   pausedAt: true,
   userEditedTitleAt: true,
+  shareEnabled: true,
+  shareToken: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -844,6 +855,8 @@ function serializeConversationChannel(
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
+    shareEnabled: record.shareEnabled,
+    shareToken: record.shareToken,
   };
 }
 
@@ -2151,6 +2164,41 @@ export async function getConversationSessionKeyForMember(args: {
   return record?.sessionKey ?? null;
 }
 
+// Any member can see whether the room is currently shared (so they know a
+// spectate link exists even if they weren't the one who turned it on) — only
+// setConversationChannelSharing (turning it on/off) stays owner-gated.
+export async function getConversationChannelSharing(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ shareEnabled: boolean; shareToken: string | null } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { shareEnabled: true, shareToken: true },
+  });
+  return record ?? null;
+}
+
+// Share-gated equivalent of getConversationSessionKeyForMember above, used to
+// mint a spectator's realtime token. Gates on the same live shareEnabled
+// check as getConversationHydrationStateForShare, not membership.
+export async function getConversationSessionKeyForShare(args: {
+  shareToken: string;
+}): Promise<string | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      shareToken: args.shareToken,
+      shareEnabled: true,
+      ...buildVisibleConversationWhere(),
+    },
+    select: { sessionKey: true },
+  });
+  return record?.sessionKey ?? null;
+}
+
 // Marks only the caller's membership row as read. The message list remains
 // the source of truth; this timestamp is just the per-user cursor used by the
 // conversation-list unread aggregate.
@@ -2375,6 +2423,59 @@ export async function getConversationHydrationStateForUser(args: {
     return null;
   }
 
+  return getConversationHydrationStateForRecord({
+    conversationRecord,
+    viewerUserId: args.userId,
+    before: args.before,
+  });
+}
+
+// Public read-only "spectate" link lookup — gates on a live shareToken +
+// shareEnabled check instead of membership, so toggling sharing off blocks
+// new views on the very next call. viewerUserId is a synthetic id that never
+// matches a real member: every "viewer-facing" resolver below
+// (resolveViewerFacingTitle, resolveOtherMemberAvatars, etc.) already
+// degrades to its room-wide/no-personalization fallback when the viewer id
+// matches nobody, which is exactly the right behavior for someone who isn't
+// a member — e.g. resolveOtherMemberAvatars ends up including every real
+// member instead of excluding "self".
+export type ConversationSpectateHydrationState = ConversationHydrationState & {
+  sharedByUserId: string | null;
+};
+
+export async function getConversationHydrationStateForShare(args: {
+  shareToken: string;
+  before?: ConversationHydrationCursor | null;
+}): Promise<ConversationSpectateHydrationState | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      shareToken: args.shareToken,
+      shareEnabled: true,
+      ...buildVisibleConversationWhere(),
+    },
+    select: { ...conversationChannelSelect, sharedByUserId: true },
+  });
+
+  if (!conversationRecord) {
+    return null;
+  }
+
+  const state = await getConversationHydrationStateForRecord({
+    conversationRecord,
+    viewerUserId: `spectator:${args.shareToken}`,
+    before: args.before,
+  });
+
+  return { ...state, sharedByUserId: conversationRecord.sharedByUserId };
+}
+
+async function getConversationHydrationStateForRecord(args: {
+  conversationRecord: ConversationChannelRecord;
+  viewerUserId: string;
+  before?: ConversationHydrationCursor | null;
+}): Promise<ConversationHydrationState> {
+  const conversationRecord = args.conversationRecord;
+
   const beforeDate = typeof args.before?.createdAtMs === "number"
     && Number.isFinite(args.before.createdAtMs)
     && args.before.createdAtMs > 0
@@ -2478,7 +2579,7 @@ export async function getConversationHydrationStateForUser(args: {
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
-    args.userId,
+    args.viewerUserId,
     membersByChannelId,
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
@@ -2577,27 +2678,27 @@ export async function getConversationHydrationStateForUser(args: {
       resolveViewerFacingTitle(
         conversationRecord.title,
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         pendingInviteeProfiles,
         conversationRecord.userEditedTitleAt,
       ),
       resolveViewerFacingDisplayLanguage(
         conversationRecord.defaultDisplayLanguage,
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         conversationRecord.pendingInviteeUserIds,
         pendingInviteeProfiles,
       ),
       resolveViewerFacingStatus(
         conversationRecord.status,
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         conversationRecord.pendingInviteeUserIds,
       ),
       resolveViewerFacingPausedAt(
         conversationRecord.pausedAt,
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         conversationRecord.pendingInviteeUserIds,
       ),
       isMultiMember,
@@ -2605,19 +2706,19 @@ export async function getConversationHydrationStateForUser(args: {
         conversationRecord.selectedLanguages,
         membersByChannelId.get(conversationRecord.id),
         conversationRecord.pendingInviteeUserIds,
-        args.userId,
+        args.viewerUserId,
         pendingInviteeProfiles,
       ),
       resolveViewerOwnSelectedLanguages(
         conversationRecord.selectedLanguages,
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         conversationRecord.pendingInviteeUserIds,
       ),
       Boolean(blockedCounterpartUserId),
       resolveOtherMemberAvatars(
         membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        args.viewerUserId,
         blockedCounterpartUserId,
         pendingInviteeProfiles,
       ),
@@ -2704,6 +2805,46 @@ export async function deleteConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_delete_conflict");
+}
+
+// Owner-only, same gate as deleteConversationChannel above: turning a room
+// public exposes every member's messages to anyone with the link, which is
+// at least as consequential as deleting the room for everyone. shareToken is
+// minted once and kept stable across on/off toggles — re-enabling reuses the
+// same link instead of invalidating whatever people already have. Disabling
+// only flips shareEnabled; every read path (getConversationHydrationStateForShare,
+// the spectate realtime-token mint) gates on that flag live, so the old link
+// goes dead on its very next use with no separate revocation step needed.
+export async function setConversationChannelSharing(args: {
+  conversationId: string;
+  userId: string;
+  enabled: boolean;
+}): Promise<ConversationChannelSummary | null> {
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+      members: { some: { userId: args.userId, leftAt: null } },
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true, shareToken: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const shareToken = args.enabled
+    ? (existing.shareToken || crypto.randomBytes(16).toString("base64url"))
+    : existing.shareToken;
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: args.enabled
+      ? { shareEnabled: true, shareToken, sharedByUserId: args.userId, sharedAt: new Date() }
+      : { shareEnabled: false },
+    select: conversationChannelSelect,
+  });
+  return serializeConversationChannel(record);
 }
 
 // Member-level equivalent of deleteConversationChannel above, for a shared

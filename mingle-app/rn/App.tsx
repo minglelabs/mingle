@@ -103,6 +103,10 @@ import {
   buildNativeProfileLinkEventScript,
   parseNativeProfileLink,
 } from './src/profileLink';
+import {
+  buildNativeConversationShareWebUrl,
+  parseNativeConversationShareLink,
+} from './src/conversationShareLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -453,6 +457,28 @@ const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
   normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
 );
 const PROFILE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+const CONVERSATION_SHARE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+
+// Native Alert has no i18n plumbing of its own — App.tsx otherwise renders
+// only the WebView, so this is the one bit of native-side UI text. Keyed by
+// versionPolicyLocale, which is already resolved from the device locale.
+const CONVERSATION_SHARE_CONFIRM_COPY: Record<string, { message: string; confirm: string; cancel: string }> = {
+  ko: { message: '공유된 대화방을 보시겠습니까?', confirm: '보기', cancel: '취소' },
+  en: { message: 'Open this shared conversation?', confirm: 'Open', cancel: 'Cancel' },
+  ja: { message: '共有された会話を見ますか？', confirm: '開く', cancel: 'キャンセル' },
+  'zh-CN': { message: '要打开这个共享对话吗？', confirm: '打开', cancel: '取消' },
+  'zh-TW': { message: '要打開這個共享對話嗎？', confirm: '打開', cancel: '取消' },
+  fr: { message: 'Ouvrir cette conversation partagée ?', confirm: 'Ouvrir', cancel: 'Annuler' },
+  de: { message: 'Diese geteilte Unterhaltung öffnen?', confirm: 'Öffnen', cancel: 'Abbrechen' },
+  es: { message: '¿Abrir esta conversación compartida?', confirm: 'Abrir', cancel: 'Cancelar' },
+  pt: { message: 'Abrir esta conversa compartilhada?', confirm: 'Abrir', cancel: 'Cancelar' },
+  it: { message: 'Aprire questa conversazione condivisa?', confirm: 'Apri', cancel: 'Annulla' },
+  ru: { message: 'Открыть этот общий разговор?', confirm: 'Открыть', cancel: 'Отмена' },
+  ar: { message: 'فتح هذه المحادثة المشتركة؟', confirm: 'فتح', cancel: 'إلغاء' },
+  hi: { message: 'इस शेयर की गई बातचीत को खोलें?', confirm: 'खोलें', cancel: 'रद्द करें' },
+  th: { message: 'เปิดบทสนทนาที่แชร์นี้ไหม?', confirm: 'เปิด', cancel: 'ยกเลิก' },
+  vi: { message: 'Mở cuộc trò chuyện được chia sẻ này?', confirm: 'Mở', cancel: 'Hủy' },
+};
 
 function getProfileLinkUserIdHint(userId: string): string {
   const normalizedUserId = userId.trim();
@@ -1289,6 +1315,8 @@ function AppInner(): React.JSX.Element {
   const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const profileLinkNavigationSequenceRef = useRef(0);
+  const lastHandledConversationShareLinkRef = useRef('');
+  const lastHandledConversationShareLinkAtRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1561,6 +1589,76 @@ function AppInner(): React.JSX.Element {
     }
     return handled;
   }, [handleIncomingProfileLink]);
+  // Unlike profile links (which overlay on top of whatever's currently
+  // showing, via dispatchProfileLinkToWebView's injected DOM event), a
+  // conversation-share link fully navigates the WebView away from
+  // whatever it was showing — so it asks first with a native Alert
+  // (independent of WebView readiness) rather than jumping straight in.
+  const navigateWebViewToConversationShare = useCallback((targetUrl: string) => {
+    const webView = webViewRef.current;
+    const script = `window.location.href = ${JSON.stringify(targetUrl)}; true;`;
+    if (webView) {
+      webView.injectJavaScript(script);
+      return;
+    }
+    // True cold start: the WebView hasn't mounted yet when the confirm
+    // Alert resolves. A few short retries covers the normal boot window
+    // without needing to hook into the native pending-link storage that
+    // AppDelegate.swift/MainActivity.kt use for profile links.
+    [300, 800, 1_500].forEach((delayMs) => {
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(script);
+      }, delayMs);
+    });
+  }, []);
+  const handleIncomingConversationShareLink = useCallback((rawUrl: string) => {
+    const candidateOrigins = [
+      activeWebAppBaseUrl,
+      WEB_APP_BASE_URL,
+      FALLBACK_WEB_APP_BASE_URL,
+    ].filter(Boolean);
+    const parsed = candidateOrigins
+      .map((origin) => parseNativeConversationShareLink(rawUrl, origin))
+      .find((value) => value !== null);
+    if (!parsed) return false;
+
+    const targetUrl = buildNativeConversationShareWebUrl({
+      baseUrl: activeWebAppBaseUrl || WEB_APP_BASE_URL,
+      shareToken: parsed.shareToken,
+    });
+    if (!targetUrl) return false;
+
+    const confirmCopy = CONVERSATION_SHARE_CONFIRM_COPY[versionPolicyLocale] ?? CONVERSATION_SHARE_CONFIRM_COPY.en;
+    // iOS can drop an Alert.alert() call made in the same tick as the app
+    // resuming from background (which is exactly when the 'url' Linking
+    // event fires for this flow — Safari → app-switch). A short delay lets
+    // the resume finish before the Alert tries to present.
+    setTimeout(() => {
+      Alert.alert(confirmCopy.message, undefined, [
+        { text: confirmCopy.cancel, style: 'cancel' },
+        { text: confirmCopy.confirm, onPress: () => navigateWebViewToConversationShare(targetUrl) },
+      ]);
+    }, 350);
+    return true;
+  }, [activeWebAppBaseUrl, navigateWebViewToConversationShare, versionPolicyLocale]);
+  const handleIncomingConversationShareLinkOnce = useCallback((rawUrl: string) => {
+    const normalizedUrl = rawUrl.trim();
+    if (!normalizedUrl) return false;
+    const now = Date.now();
+    if (
+      lastHandledConversationShareLinkRef.current === normalizedUrl
+      && now - lastHandledConversationShareLinkAtRef.current < CONVERSATION_SHARE_LINK_DUPLICATE_WINDOW_MS
+    ) {
+      return true;
+    }
+
+    const handled = handleIncomingConversationShareLink(normalizedUrl);
+    if (handled) {
+      lastHandledConversationShareLinkRef.current = normalizedUrl;
+      lastHandledConversationShareLinkAtRef.current = now;
+    }
+    return handled;
+  }, [handleIncomingConversationShareLink]);
   const consumePendingProfileLink = useCallback(async () => {
     const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
     if (!getPendingProfileLink) return;
@@ -1603,12 +1701,15 @@ function AppInner(): React.JSX.Element {
       recordProfileLinkTrace('webview_profile_link_intercepted');
       return false;
     }
+    if (rawUrl && handleIncomingConversationShareLinkOnce(rawUrl)) {
+      return false;
+    }
     if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
       openNativeExternalUrl(rawUrl);
       return false;
     }
     return true;
-  }, [handleIncomingProfileLinkOnce]);
+  }, [handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce]);
   const flushPendingProfileLinkToWeb = useCallback(() => {
     const pendingUserId = pendingProfileLinkUserIdRef.current;
     if (!pendingUserId || !isPageReadyRef.current) return;
@@ -1640,7 +1741,15 @@ function AppInner(): React.JSX.Element {
     const handleUrl = (rawUrl: string | null | undefined) => {
       if (!mounted || typeof rawUrl !== 'string') return;
       recordProfileLinkTrace('react_native_linking_event');
-      handleIncomingProfileLinkOnce(rawUrl);
+      if (handleIncomingProfileLinkOnce(rawUrl)) return;
+      if (handleIncomingConversationShareLinkOnce(rawUrl)) return;
+      // TEMP DIAGNOSTIC — remove once the conversation-share deep link is
+      // confirmed working end to end. Shows the raw incoming URL so we can
+      // tell, without any console/Metro access, whether this handler is
+      // even reached and what the URL actually looked like.
+      setTimeout(() => {
+        Alert.alert('DEBUG: incoming URL', rawUrl);
+      }, 350);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
@@ -1659,7 +1768,7 @@ function AppInner(): React.JSX.Element {
       pendingProfileLinkRetryTimersRef.current = [];
       clearPendingProfileRouteRetries();
     };
-  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
+  }, [clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {

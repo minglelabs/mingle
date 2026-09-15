@@ -64,6 +64,10 @@ function buildConversationSummary(
     pausedAt: Object.prototype.hasOwnProperty.call(overrides, "pausedAt")
       ? (overrides.pausedAt as string | null)
       : "2026-04-12T10:00:00.000Z",
+    shareEnabled: overrides.shareEnabled ?? false,
+    shareToken: Object.prototype.hasOwnProperty.call(overrides, "shareToken")
+      ? (overrides.shareToken as string | null)
+      : null,
   };
 }
 

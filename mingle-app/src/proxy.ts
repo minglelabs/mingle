@@ -31,7 +31,11 @@ function pickPreferredLocale(headerValue: string | null): AppLocale {
 export function shouldBypassLocaleRedirect(pathname: string): boolean {
   const segments = pathname.split("/").filter(Boolean);
   const first = segments[0];
-  return first === "admin" || first === "p" || first === ".well-known";
+  // "s" is the public conversation-spectate link (see
+  // conversation-share-link.ts) — same locale-less shape as "p" (profile
+  // links): its own page resolves locale itself from the accept-language
+  // header instead of a URL segment.
+  return first === "admin" || first === "p" || first === "s" || first === ".well-known";
 }
 
 export function proxy(request: NextRequest) {
