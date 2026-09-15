@@ -5683,17 +5683,41 @@
       .v-tam strong small { font-size:clamp(16px, 1.6vw, 22px); font-weight:600; color:#777266; margin-left:4px; }
       .v-tam-global { border-left:1px solid #ddcfb6; padding-left:clamp(30px, 4vw, 56px); }
       .v-tam-global strong { color:#b95b0b; }
-      .v-chart-assumption { font-size:29px; font-weight:800; letter-spacing:-.04em; color:#a96010; }
-      .v-revenue { width:100%; display:grid; gap:24px; padding-left:clamp(60px, 10vw, 160px); }
-      .v-revenue-row { display:grid; grid-template-columns:max-content 1fr; gap:28px; align-items:center; }
-      .v-revenue-label { display:flex; align-items:baseline; gap:16px; white-space:nowrap; }
-      .v-revenue-label b { font-size:29px; }
-      .v-revenue-label strong { font-size:29px; }
-      .v-bar-track { height:70px; border-left:1px solid #dfd6c7; display:flex; align-items:center; }
-      .v-bar-track i { display:block; min-width:2px; height:100%; background:#cfc8b9; border-radius:0 6px 6px 0; }
-      .v-revenue-live .v-bar-track i { background:#d3740c; }
-      .v-revenue-live .v-bar-track span { display:block; height:100%; background:#d3740c; border-radius:0 6px 6px 0; }
-      .v-revenue-live .v-revenue-label strong { color:#b95b0b; }
+      .v-chart-assumption {
+        grid-column: 1 / -1;
+        font-size: 29px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        color: #a96010;
+        margin: 0;
+      }
+      .v-revenue {
+        width: 100%;
+        max-width: 1100px;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        column-gap: 28px;
+        row-gap: 24px;
+        align-items: center;
+        padding-left: clamp(40px, 7vw, 140px);
+      }
+      .v-revenue-row {
+        display: contents;
+      }
+      .v-revenue-label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 24px;
+        white-space: nowrap;
+      }
+      .v-revenue-label b { font-size: 29px; }
+      .v-revenue-label strong { font-size: 29px; }
+      .v-bar-track { height: 70px; border-left: 2px solid #dfd6c7; display: flex; align-items: center; width: 100%; }
+      .v-bar-track i { display: block; min-width: 2px; height: 100%; background: #cfc8b9; border-radius: 0 6px 6px 0; }
+      .v-revenue-live .v-bar-track i { background: #d3740c; }
+      .v-revenue-live .v-bar-track span { display: block; height: 100%; background: #d3740c; border-radius: 0 6px 6px 0; }
+      .v-revenue-live .v-revenue-label strong { color: #b95b0b; }
       .v-chart-foot { display:flex; align-items:center; justify-content:space-between; gap:24px; color:#777266; }
       .v-chart-foot span { font-size:12px; }
       .v-chart-foot b { font-size:38px; color:#c96a0a; }
@@ -5831,9 +5855,9 @@
         .v-tam strong { font-size:clamp(26px, 6vw, 38px); }
         .v-tam strong small { font-size:16px; }
         .v-tam-global { border-left:0; border-top:1px solid #ddcfb6; padding:22px 0 0; text-align:center; }
-        .v-revenue { gap:18px; padding-left:0; }
-        .v-revenue-row { grid-template-columns:110px 1fr; gap:10px; }
-        .v-revenue-label { gap:6px; }
+        .v-revenue { display:grid; grid-template-columns:max-content 1fr; column-gap:14px; row-gap:18px; padding-left:0; }
+        .v-revenue-row { display:contents; }
+        .v-revenue-label { gap:8px; }
         .v-revenue-label b { font-size:16px; }
         .v-revenue-label strong { font-size:17px; }
         .v-bar-track { height:53px; }
@@ -6331,7 +6355,7 @@
 
 <section class="slide v-slide " data-page="14"><article class="slide-shell v-shell"><h1 class="slide-title v-title">처음에는 제작툴,<br><span class="slide-emphasis">다음에는 방송 플랫폼.</span></h1><div class="v-platform"><div class="v-stage"><span>시작</span><h2>사진 → Virtually → OBS</h2><p>제작과 송출을 간단하게</p></div><span class="v-between">→</span><div class="v-stage v-highlight"><span>목표</span><h2>창작자 <em>↔</em> 팬</h2><p>방송 · 발견 · 구독 · 후원</p></div></div><p class="v-takeaway">사용자가 서로를 데려오는 <span class="slide-emphasis">네트워크 효과를 구축합니다</span></p><p class="v-note"></p></article></section>
 
-<section class="slide v-slide v-revenue-slide" data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 조회수당 매출은<br><span class="slide-emphasis">숏폼의 400배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption" style="font-size:29px;font-weight:800;letter-spacing:-.04em">조회수당 매출</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.1원</strong></div><div class="v-bar-track"><i style="width:0.1%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>2–3원</strong></div><div class="v-bar-track"><i style="width:3%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>40–100원</strong></div><div class="v-bar-track"><i style="width:70%"></i></div></div></div><p class="v-note"></p></article></section>
+<section class="slide v-slide v-revenue-slide" data-page="15"><article class="slide-shell v-shell"><h1 class="slide-title v-title">라이브의 시청자당 매출은<br><span class="slide-emphasis">숏폼의 백 배 이상</span></h1><div class="v-revenue"><p class="v-chart-assumption" style="font-size:29px;font-weight:800;letter-spacing:-.04em">시청자당 매출</p><div class="v-revenue-row"><div class="v-revenue-label"><b>숏폼</b><strong>0.3원</strong></div><div class="v-bar-track"><i style="width:0.6%"></i></div></div><div class="v-revenue-row"><div class="v-revenue-label"><b>롱폼</b><strong>5원</strong></div><div class="v-bar-track"><i style="width:7.5%"></i></div></div><div class="v-revenue-row v-revenue-live"><div class="v-revenue-label"><b>라이브</b><strong>50원</strong></div><div class="v-bar-track"><i style="width:75%"></i></div></div></div><p class="v-note"></p></article></section>
 
 <section class="slide v-slide v-tam-slide" data-page="16"><article class="slide-shell v-shell"><div class="v-tam-header"><h1 class="slide-title v-title">전체 버튜버 시장 규모</h1><p class="v-tam-scope">2026년 기준 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing</p></div><div class="v-tam"><div class="v-tam-korea"><h2>국내</h2><strong>1,500억 ~ 2,000억<small> 원</small></strong></div><div class="v-tam-global"><h2>글로벌</h2><strong class="v-tam-emphasis">3조 ~ 4조<small> 원</small></strong></div></div><p class="v-note"></p></article></section>
 
@@ -6469,10 +6493,10 @@
               note: "",
             },
             15: {
-              title: "라이브의 조회수당 매출은<br><span class=\"slide-emphasis\">숏폼의 400배 이상</span>",
-              assumption: "조회수당 매출",
+              title: "라이브의 시청자당 매출은<br><span class=\"slide-emphasis\">숏폼의 백 배 이상</span>",
+              assumption: "시청자당 매출",
               rowLabels: ["숏폼", "롱폼", "라이브"],
-              rowValues: ["0.1원", "2–3원", "40–100원"],
+              rowValues: ["0.3원", "5원", "50원"],
               note: "",
             },
             16: {
@@ -6640,10 +6664,10 @@
               note: "",
             },
             15: {
-              title: "Live streaming monetizes<br><span class=\"slide-emphasis\">over 400× higher per view than short-form.</span>",
-              assumption: "Revenue Per View",
+              title: "Live streaming monetizes<br><span class=\"slide-emphasis\">over 100× higher per viewer than short-form.</span>",
+              assumption: "Revenue Per Viewer",
               rowLabels: ["Short-form", "Long-form", "Live Stream"],
-              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              rowValues: ["₩0.3", "₩5", "₩50"],
               note: "",
             },
             16: {
@@ -6811,10 +6835,10 @@
               note: "",
             },
             15: {
-              title: "ライブ配信の1再生あたり収益は、<br><span class=\"slide-emphasis\">ショート動画の400倍以上。</span>",
-              assumption: "1再生あたりの平均収益",
+              title: "ライブ配信の視聴者あたり収益は、<br><span class=\"slide-emphasis\">ショート動画の100倍以上。</span>",
+              assumption: "視聴者あたりの平均収益",
               rowLabels: ["ショート動画", "長尺動画", "ライブ配信"],
-              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              rowValues: ["₩0.3", "₩5", "₩50"],
               note: "",
             },
             16: {
@@ -6982,10 +7006,10 @@
               note: "",
             },
             15: {
-              title: "实时直播的单次观看商业变现力，<br><span class=\"slide-emphasis\">是短视频的 400 倍以上。</span>",
-              assumption: "单次观看变现价值",
+              title: "实时直播的单观众商业变现力，<br><span class=\"slide-emphasis\">是短视频的百倍以上。</span>",
+              assumption: "每位观众变现价值",
               rowLabels: ["短视频", "中长视频", "实时直播"],
-              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              rowValues: ["₩0.3", "₩5", "₩50"],
               note: "",
             },
             16: {
@@ -7153,10 +7177,10 @@
               note: "",
             },
             15: {
-              title: "即時直播的單次觀看商業變現力，<br><span class=\"slide-emphasis\">是短影音的 400 倍以上。</span>",
-              assumption: "單次觀看變現價值",
+              title: "即時直播的單一觀眾商業變現力，<br><span class=\"slide-emphasis\">是短影音的百倍以上。</span>",
+              assumption: "單一觀眾變現價值",
               rowLabels: ["短影音", "中長影音", "即時直播"],
-              rowValues: ["₩0.1", "₩2–3", "₩40–100"],
+              rowValues: ["₩0.3", "₩5", "₩50"],
               note: "",
             },
             16: {
