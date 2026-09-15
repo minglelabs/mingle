@@ -5509,26 +5509,72 @@
       .v-gallery { display:grid; grid-template-columns:1fr 1fr; width:min(1080px,100%); gap:24px; }
       .v-gallery .v-figure { height:42vh; }
       .v-gallery img { background:#fff; border:1px solid #ece7dd; }
-.v-process-slide .v-shell { flex-direction:row; gap:4vw; padding-left:clamp(60px, 10vw, 140px); }
-.v-process-slide .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); }
-.v-process { width:min(550px,44vw); display:grid; gap:10px; flex-shrink:0; }
-.v-process h2 { font-size:20px; color:#a96010; margin-bottom:2px; text-align:center; }
-.v-process-columns { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.v-process-lane { display:grid; gap:8px; min-width:0; }
-.v-process-lane > p { color:#777266; font-size:14px; line-height:1.2; text-align:center; }
-.v-process-step { display:flex; align-items:center; gap:12px; min-height:50px; padding:10px 14px; background:rgba(255,255,255,.8); border:1px solid #eee6d8; border-radius:14px; }
-.v-process-step span { flex:none; font-size:13px; color:#b86b14; }
-.v-process-step b { font-size:18px; line-height:1.2; letter-spacing:-.04em; font-weight:600; }
-.v-process-wide { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .v-process-slide .v-shell {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: clamp(32px, 4vw, 64px);
+        padding: 48px clamp(48px, 6vw, 100px) 96px;
+      }
+      .v-process-slide .v-title {
+        flex: 1 1 0;
+        min-width: 0;
+        text-align: left;
+        font-size: clamp(36px, 4vw, 60px);
+        line-height: 1.24;
+      }
+      .v-process {
+        flex: 0 0 auto;
+        width: min(550px, 44vw);
+        display: grid;
+        gap: 10px;
+      }
+      .v-process h2 { font-size:20px; color:#a96010; margin-bottom:2px; text-align:center; }
+      .v-process-columns { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .v-process-lane { display:grid; gap:8px; min-width:0; }
+      .v-process-lane > p { color:#777266; font-size:14px; line-height:1.2; text-align:center; }
+      .v-process-step { display:flex; align-items:center; gap:12px; min-height:50px; padding:10px 14px; background:rgba(255,255,255,.8); border:1px solid #eee6d8; border-radius:14px; }
+      .v-process-step span { flex:none; font-size:13px; color:#b86b14; }
+      .v-process-step b { font-size:18px; line-height:1.2; letter-spacing:-.04em; font-weight:600; }
+      .v-process-wide { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
       .v-cost-photo .v-figure { width:min(990px,85%); height:48vh; }
       .v-cost-photo .v-longform-video { width:100%; }
       .v-cost-photo .v-longform-video .v-youtube { width:auto; height:48vh; aspect-ratio:16/9; max-width:85vw; }
-      .v-video-slide .v-shell { display:grid; grid-template-columns:1.35fr .65fr; gap:5vw; }
-      .v-video-slide .v-title { text-align:left; }
+      .v-video-slide .v-shell {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: clamp(32px, 5vw, 80px);
+        padding: 48px clamp(48px, 7vw, 120px) 96px;
+      }
+      .v-video-slide .v-title {
+        flex: 1 1 0;
+        min-width: 0;
+        text-align: left;
+        font-size: clamp(36px, 4vw, 60px);
+        line-height: 1.25;
+      }
+      .v-video-slide .v-video-block {
+        flex: 0 0 auto;
+        transform: none;
+      }
       @media (min-width:901px) {
-        .v-video-slide .v-shell { grid-template-columns:1.15fr .85fr; gap:4vw; }
-        .v-video-slide .v-title { font-size:clamp(40px,4.6vw,72px); max-width:685px; }
-        .v-video-slide .v-video-block { transform:translateX(-72px); }
+        .v-video-slide .v-shell {
+          display: flex;
+          flex-direction: row;
+          justify-content: space-between;
+          align-items: center;
+          gap: clamp(32px, 5vw, 80px);
+        }
+        .v-video-slide .v-title {
+          font-size: clamp(38px, 4.2vw, 62px);
+          max-width: none;
+        }
+        .v-video-slide .v-video-block {
+          flex: 0 0 auto;
+          transform: none;
+        }
       }
       .v-video-block { display:flex; flex-direction:column; gap:12px; align-items:center; min-height:0; }
       .v-youtube,.v-local-video { width:auto; height:65vh; aspect-ratio:9/16; border-radius:14px; background:#111; overflow:hidden; }
@@ -5559,7 +5605,7 @@
         .v-ai-animate .v-models { flex:0 1 570px; width:min(570px,47vw); grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px 30px; }
         .v-ai-animate .v-model { padding:20px 14px; border-bottom:0; }
         .v-ai-animate .v-brand { margin-bottom:18px; }
-        .v-limit .v-video-block { transform:translateX(-72px); }
+        .v-limit .v-video-block { transform:none; }
       }
       .v-inline-flow { display:flex; align-items:center; gap:30px; font-size:25px; }
       .v-inline-flow b { color:#c96a0a; }
@@ -5572,9 +5618,25 @@
       .v-stats strong { font-size:clamp(32px,3.5vw,52px); color:#c96a0a; letter-spacing:-.05em; }
       .v-stats span { font-size:17px; }
       .v-stats small { color:#777266; font-size:11px; }
-      .v-limit .v-shell { display:grid; grid-template-columns:1.15fr .85fr; grid-template-rows:auto; column-gap:4vw; align-content:center; }
-      .v-limit .v-title { text-align:left; font-size:clamp(40px,4.6vw,72px); max-width:685px; }
-      .v-limit .v-video-block { grid-row:1; grid-column:2; }
+      .v-limit .v-shell {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: clamp(32px, 5vw, 80px);
+        padding: 48px clamp(48px, 7vw, 120px) 96px;
+      }
+      .v-limit .v-title {
+        flex: 1 1 0;
+        min-width: 0;
+        text-align: left;
+        font-size: clamp(36px, 4vw, 60px);
+        line-height: 1.25;
+      }
+      .v-limit .v-video-block {
+        flex: 0 0 auto;
+        transform: none;
+      }
       .v-cost-compare { width:min(1120px,100%); display:grid; grid-template-columns:minmax(0,1fr) 60px minmax(0,1fr); align-items:center; gap:24px; }
       .v-cost-column { min-width:0; border-top:3px solid #d7d0c2; padding:24px 28px; background:rgba(255,255,255,.65); border-radius:16px; text-align:center; }
       .v-cost-column h2 { margin-bottom:25px; }
@@ -6057,8 +6119,11 @@
         html[data-locale="en"] .v-ai-animate .v-title {
           font-size:clamp(40px,3.6vw,52px);
         }
-        html[data-locale="ja"] .v-ai-animate .v-title {
-          font-size:clamp(36px,3.2vw,44px);
+        html[data-locale="ja"] .v-ai-animate .v-title,
+        html[data-locale="cn-ZH"] .v-ai-animate .v-title,
+        html[data-locale="cn-TW"] .v-ai-animate .v-title {
+          font-size:clamp(30px,3.0vw,42px);
+          line-height:1.28;
         }
         .v-ai-animate .v-models {
           flex-basis:560px;
@@ -6072,6 +6137,83 @@
         .v-ai-animate .v-brand {
           height:52px;
           margin-bottom:8px;
+        }
+
+        /* Slide 3, 5, 10 & General CJK layout safety */
+        html[data-locale="ja"] .v-process-slide .v-title,
+        html[data-locale="cn-ZH"] .v-process-slide .v-title,
+        html[data-locale="cn-TW"] .v-process-slide .v-title {
+          font-size:clamp(30px,3.2vw,46px);
+          line-height:1.28;
+        }
+
+        html[data-locale="ja"] .v-video-slide .v-title,
+        html[data-locale="cn-ZH"] .v-video-slide .v-title,
+        html[data-locale="cn-TW"] .v-video-slide .v-title {
+          font-size:clamp(30px,3.2vw,48px);
+          line-height:1.28;
+        }
+
+        html[data-locale="ja"] .v-limit .v-title,
+        html[data-locale="cn-ZH"] .v-limit .v-title,
+        html[data-locale="cn-TW"] .v-limit .v-title {
+          font-size:clamp(30px,3.2vw,48px);
+          line-height:1.28;
+        }
+
+        html[data-locale="ja"] .v-solution .v-title,
+        html[data-locale="cn-ZH"] .v-solution .v-title,
+        html[data-locale="cn-TW"] .v-solution .v-title {
+          font-size:clamp(32px,3.5vw,52px);
+          line-height:1.25;
+        }
+
+        html[data-locale="ja"] .v-slide[data-page="8"] .v-title,
+        html[data-locale="cn-ZH"] .v-slide[data-page="8"] .v-title,
+        html[data-locale="cn-TW"] .v-slide[data-page="8"] .v-title {
+          font-size:clamp(30px,3.2vw,48px);
+          line-height:1.25;
+        }
+
+        html[data-locale="ja"] .v-costs .v-title,
+        html[data-locale="cn-ZH"] .v-costs .v-title,
+        html[data-locale="cn-TW"] .v-costs .v-title {
+          font-size:clamp(32px,3.4vw,52px);
+          line-height:1.25;
+        }
+
+        html[data-locale="ja"] .v-world-slide .v-title,
+        html[data-locale="cn-ZH"] .v-world-slide .v-title,
+        html[data-locale="cn-TW"] .v-world-slide .v-title {
+          font-size:clamp(32px,3.4vw,50px);
+          line-height:1.25;
+        }
+
+        html[data-locale="ja"] .v-tam strong,
+        html[data-locale="cn-ZH"] .v-tam strong,
+        html[data-locale="cn-TW"] .v-tam strong {
+          font-size:clamp(24px,2.6vw,38px);
+          white-space:normal;
+        }
+
+        html[data-locale="ja"] .v-tam-scope,
+        html[data-locale="cn-ZH"] .v-tam-scope,
+        html[data-locale="cn-TW"] .v-tam-scope {
+          word-break:break-word;
+        }
+
+        html[data-locale="ja"] .v-opp-step strong,
+        html[data-locale="cn-ZH"] .v-opp-step strong,
+        html[data-locale="cn-TW"] .v-opp-step strong {
+          font-size:clamp(16px,1.4vw,20px);
+          line-height:1.3;
+        }
+
+        html[data-locale="ja"] .v-opp-highlight-head strong,
+        html[data-locale="cn-ZH"] .v-opp-highlight-head strong,
+        html[data-locale="cn-TW"] .v-opp-highlight-head strong {
+          font-size:clamp(18px,1.6vw,22px);
+          line-height:1.3;
         }
       }
       @media (max-width:900px) {
@@ -6573,7 +6715,7 @@
               alts: ["Live2D Cubismでの2Dキャラクターリギング画面", "Unity環境で3Dモデル設定中に直面する技術的エラーの例"],
             },
             3: {
-              title: "これだけ膨大な工程を経ても、<br><span class=\"slide-emphasis\">動かせるのはたった一枚の絵です。</span>",
+              title: "これだけ膨大な工程を経ても、<br><span class=\"slide-emphasis\">動かせるのは、たった一枚の絵。</span>",
               processHeading: "キャラクター制作から本番配信まで",
               lanes: ["2Dキャラクター", "3Dキャラクター"],
               steps: ["キャラクターイラスト制作", "パーツ分解・レイヤー分け", "2Dモデリング (リギング)", "表情トラッキング設定", "3Dモデリング · テクスチャ", "スケルトン · ボーン設定", "モーションキャプチャースタジオ", "キャリブレーション · リターゲティング", "シーン · ライティング · OBS設定", "リアルタイム配信運用"],
@@ -6587,14 +6729,14 @@
               note: "",
             },
             5: {
-              title: "生成AIの急速な進化が、<br><span class=\"slide-emphasis\">この重厚な工程を一気に圧縮します。</span>",
+              title: "生成AIの急速な進化が、<br><span class=\"slide-emphasis\">この重厚な工程を一気に圧縮。</span>",
               videoAria: "Genjutsu動画を再生",
               videoAlt: "Genjutsu動画のプレビュー",
               caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">元の動画 ↗</a>",
               note: "",
             },
             6: {
-              title: "最先端のAI Animate技術を<br><span class=\"slide-emphasis\">リアルタイム配信へ適用することが核心です。</span>",
+              title: "最先端のAI Animate技術を<br><span class=\"slide-emphasis\">リアルタイム配信へ適用することが核心。</span>",
               modelAlts: ["Alibabaロゴ", "Higgsfieldロゴ", "ByteDanceロゴ", "Klingロゴ"],
               note: "",
             },
@@ -6623,7 +6765,7 @@
               note: "",
             },
             10: {
-              title: "しかし、IRIAMの現行技術には<br><span class=\"slide-emphasis\">明確な表現力の限界が存在します。</span>",
+              title: "しかし、IRIAMの現行技術には<br><span class=\"slide-emphasis\">明確な表現力の限界があります。</span>",
               videoAria: "IRIAM PNG配信デモ",
             },
             11: {
@@ -6744,7 +6886,7 @@
               alts: ["在 Cubism 中对 2D 角色进行精细绑定的画面", "在 Unity 中设置 3D 模型时遇到的报错示例"],
             },
             3: {
-              title: "历经这一整套繁复流程，<br><span class=\"slide-emphasis\">最终却仅仅只能让一张图勉强动起来。</span>",
+              title: "历经这一整套繁复流程，<br><span class=\"slide-emphasis\">最终仅能让一张图片勉强动起来。</span>",
               processHeading: "从制作孵化到开播运营全链路",
               lanes: ["2D 虚拟形象", "3D 虚拟形象"],
               steps: ["角色原画设计", "图层精细拆件", "2D 骨骼绑定", "面部捕捉算法映射", "3D 建模 · 贴图绘制", "骨骼构建 · 权重绑定", "专业动捕棚预约", "动捕校准 · 重定向", "场景 · 灯光 · OBS 推流设置", "直播日常运营"],
@@ -6758,14 +6900,14 @@
               note: "",
             },
             5: {
-              title: "生成式 AI 的爆发，<br><span class=\"slide-emphasis\">正在彻底瓦解这一繁重流水线。</span>",
+              title: "生成式 AI 的爆发，<br><span class=\"slide-emphasis\">彻底重塑这一繁重流水线。</span>",
               videoAria: "播放 Genjutsu 视频演示",
               videoAlt: "Genjutsu 视频预览",
               caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">查看原视频 ↗</a>",
               note: "",
             },
             6: {
-              title: "将顶尖的 AI Animate 动画模型<br><span class=\"slide-emphasis\">下沉至实时推流场景，是我们的核心壁垒。</span>",
+              title: "将顶尖 AI Animate 模型<br><span class=\"slide-emphasis\">应用于实时推流，是核心壁垒。</span>",
               modelAlts: ["Alibaba 标志", "Higgsfield 标志", "ByteDance 标志", "Kling 标志"],
               note: "",
             },
@@ -6794,7 +6936,7 @@
               note: "",
             },
             10: {
-              title: "但受限于底层技术，<br><span class=\"slide-emphasis\">IRIAM 在表现力上存在难以逾越的天花板。</span>",
+              title: "但受限于底层技术，<br><span class=\"slide-emphasis\">IRIAM 在表现力上存在天花板。</span>",
               videoAria: "IRIAM 静态图片推流演示",
             },
             11: {
@@ -6915,7 +7057,7 @@
               alts: ["在 Cubism 中對 2D 角色進行精細綁定的畫面", "在 Unity 中設定 3D 模型時遇到的報錯示例"],
             },
             3: {
-              title: "歷經這一整套繁複流程，<br><span class=\"slide-emphasis\">最終卻僅僅只能讓一張圖勉強動起來。</span>",
+              title: "歷經這一整套繁複流程，<br><span class=\"slide-emphasis\">最終僅能讓一張圖片勉強動起來。</span>",
               processHeading: "從製作孵化到開播營運全鏈路",
               lanes: ["2D 虛擬形象", "3D 虛擬形象"],
               steps: ["角色原畫設計", "圖層精細拆件", "2D 骨骼綁定", "臉部捕捉演算法映射", "3D 建模 · 貼圖繪製", "骨骼構建 · 權重綁定", "專業動捕棚預約", "動捕校準 · 重定向", "場景 · 燈光 · OBS 串流設定", "直播日常營運"],
@@ -6929,14 +7071,14 @@
               note: "",
             },
             5: {
-              title: "生成式 AI 的爆發，<br><span class=\"slide-emphasis\">正在徹底瓦解這一繁重流水線。</span>",
+              title: "生成式 AI 的爆發，<br><span class=\"slide-emphasis\">徹底重塑這一繁重流水線。</span>",
               videoAria: "播放 Genjutsu 影片示範",
               videoAlt: "Genjutsu 影片預覽",
               caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">查看原始影片 ↗</a>",
               note: "",
             },
             6: {
-              title: "將頂尖的 AI Animate 動畫模型<br><span class=\"slide-emphasis\">下沉至即時串流場景，是我們的核心壁壘。</span>",
+              title: "將頂尖 AI Animate 模型<br><span class=\"slide-emphasis\">應用於即時串流，是核心壁壘。</span>",
               modelAlts: ["Alibaba 標誌", "Higgsfield 標誌", "ByteDance 標誌", "Kling 標誌"],
               note: "",
             },
@@ -6965,7 +7107,7 @@
               note: "",
             },
             10: {
-              title: "但受限於底層技術，<br><span class=\"slide-emphasis\">IRIAM 在表現力上存在難以逾越的天花板。</span>",
+              title: "但受限於底層技術，<br><span class=\"slide-emphasis\">IRIAM 在表現力上存在天花板。</span>",
               videoAria: "IRIAM 靜態圖片串流示範",
             },
             11: {
