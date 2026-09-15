@@ -6079,7 +6079,68 @@
           padding:15px 8px 15px 10px;
         }
       }
-</style></head><body><main class="deck" aria-label="Virtually 한국어 발표자료"><div class="track" id="deck-track">
+      .v-lang-switcher {
+        position: fixed;
+        top: clamp(14px, 2.2vw, 24px);
+        right: clamp(16px, 2.8vw, 36px);
+        z-index: 100;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+        background: rgba(255, 253, 247, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(220, 208, 190, 0.7);
+        border-radius: 999px;
+        box-shadow: 0 2px 12px rgba(45, 42, 30, 0.07);
+      }
+      .v-lang-btn {
+        border: 0;
+        background: none;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: #777266;
+        cursor: pointer;
+        line-height: 1;
+        transition: all 0.15s ease;
+        user-select: none;
+      }
+      .v-lang-btn:hover {
+        color: #1e1b18;
+        background: rgba(45, 42, 30, 0.06);
+      }
+      .v-lang-btn.is-active {
+        background: #1e1b18;
+        color: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      }
+      @media (max-width: 600px) {
+        .v-lang-switcher {
+          top: 10px;
+          right: 10px;
+          padding: 2px;
+        }
+        .v-lang-btn {
+          padding: 4px 7px;
+          font-size: 10px;
+        }
+      }
+      @media (max-width: 360px) and (max-height: 650px) {
+        .v-lang-switcher {
+          top: 8px;
+          right: 8px;
+        }
+        .v-lang-btn {
+          padding: 3px 5px;
+          font-size: 9px;
+        }
+      }
+</style></head><body><main class="deck" aria-label="Virtually 발표자료"><nav class="v-lang-switcher" aria-label="언어 선택 (Language)"><button type="button" class="v-lang-btn is-active" data-lang="ko" aria-label="한국어">KO</button><button type="button" class="v-lang-btn" data-lang="en" aria-label="English">EN</button><button type="button" class="v-lang-btn" data-lang="ja" aria-label="日本語">JA</button><button type="button" class="v-lang-btn" data-lang="cn-ZH" aria-label="简体中文">简</button><button type="button" class="v-lang-btn" data-lang="cn-TW" aria-label="繁體中文">繁</button></nav><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
 <div class="slide-copy slide-copy--download-qr">
@@ -6145,6 +6206,177 @@
       const homeButton = document.getElementById("page-home-button");
 
       const virtuallyTranslations = {
+        ko: {
+          htmlLang: "ko",
+          meta: {
+            title: "Virtually — 버튜버 라이브를 AI로 쉽고 간단하게",
+            description: "Virtually: 버튜버 라이브를 AI로 쉽고 간단하게.",
+            ogDescription: "From a single image to a live interactive broadcast.",
+            imageAlt: "버튜버 라이브를 AI로 쉽고 간단하게",
+          },
+          ui: {
+            main: "Virtually 발표자료",
+            controls: "발표자료 탐색",
+            homeAria: "첫 장으로",
+            home: "처음",
+            frameTitle: "Genjutsu AI 영상 데모",
+          },
+          slides: {
+            1: {
+              subtitle: "버튜버 라이브를<br>AI로 쉽고 간단하게",
+              coverAlt: "카메라 영상과 버튜버 캐릭터",
+            },
+            2: {
+              title: "버튜버가 되는 건<br>아직도 <span class=\"slide-emphasis\">너무 어렵습니다.</span>",
+              captions: ["2D · 일러스트 / 파츠·리깅 / 트래킹", "3D · 모델·리깅 / 모캡 스튜디오 / 씬·송출"],
+              alts: ["Cubism에서 2D 캐릭터를 리깅하는 화면", "Unity에서 3D 모델을 설정하다 겪은 오류 사례"],
+            },
+            3: {
+              title: "이 모든 작업 끝에<br><span class=\"slide-emphasis\">겨우 그림 하나 움직입니다.</span>",
+              processHeading: "제작부터 라이브까지",
+              lanes: ["2D 캐릭터", "3D 캐릭터"],
+              steps: ["캐릭터 일러스트", "파츠 분리", "2D 리깅", "표정 트래킹", "모델링 · 텍스처", "스켈레톤 · 리깅", "모션캡처 스튜디오", "캘리브레이션 · 리타게팅", "씬 · 조명 · OBS 세팅", "라이브 운영"],
+              note: "",
+            },
+            4: {
+              title: "캐릭터 제작도, 운영도<br><span class=\"slide-emphasis\">큰 비용이 들어갑니다.</span>",
+              videoAria: "버튜버 제작 비용 영상 재생",
+              videoAlt: "2D·3D 버튜버 제작 비용 영상 미리보기",
+              caption: "2D·3D 버튜버 제작 비용 · <a href=\"https://www.youtube.com/watch?v=Z7cfoJEfLDY&amp;t=10s\" target=\"_blank\" rel=\"noopener noreferrer\">원본 영상 ↗</a>",
+              note: "",
+            },
+            5: {
+              title: "AI의 발전으로<br><span class=\"slide-emphasis\">이 과정이 간소화됩니다.</span>",
+              videoAria: "Genjutsu 영상 재생",
+              videoAlt: "Genjutsu 영상 미리보기",
+              caption: "Genjutsu · <a href=\"https://www.youtube.com/shorts/1dhuCFEOzHQ\" target=\"_blank\" rel=\"noopener noreferrer\">원본 영상 ↗</a>",
+              note: "",
+            },
+            6: {
+              title: "AI Animate 기술의<br><span class=\"slide-emphasis\">라이브 적용이 핵심입니다.</span>",
+              modelAlts: ["Alibaba 로고", "Higgsfield 로고", "ByteDance 로고", "Kling 로고"],
+              note: "",
+            },
+            7: {
+              title: "Virtually는 사진 한 장으로<br><span class=\"slide-emphasis\">바로 라이브를 시작합니다.</span>",
+              flowInput: "한 장 입력",
+              flowTarget: "10초 목표",
+              captions: ["캐릭터 이미지", "라이브 방송"],
+              alts: ["입력할 캐릭터 이미지 참고 예시", "목표로 하는 버튜버 방송 화면의 참고 이미지"],
+              note: "",
+            },
+            8: {
+              title: "애플이 디지털 음악을<br><span class=\"slide-emphasis\">단순한 UX로 표준화한 것처럼.</span>",
+              before: "한 곡마다 직접 해야 했던 일",
+              steps: ["CD 추출", "코덱 선택", "포맷 변환", "비트레이트 설정", "파일명 · 폴더 정리", "앨범 · 아티스트 태그", "장르 · 앨범아트", "중복 파일 정리", "재생목록 구성", "기기별 동기화"],
+              musicLabel: "나의 음악",
+              rightLabel: "iTunes + iPod",
+              rightTitle: "고르고. 담고. 듣기.",
+              note: "",
+            },
+            9: {
+              title: "제작 간소화의 수요,<br><span class=\"slide-emphasis\">IRIAM이 보여줬습니다.</span>",
+              alts: ["IRIAM의 PNG 이미지와 방송 화면", "IRIAM 다운로드 및 연매출 성장 그래프"],
+              stats: ["누적 다운로드 2026.05", "일일 방송자 2025.04", "연간 매출 2025.03"],
+              statValues: ["621만", "1만+", "85억 엔+"],
+              note: "",
+            },
+            10: {
+              title: "하지만 IRIAM의 기술엔<br><span class=\"slide-emphasis\">표현의 한계가 있습니다.</span>",
+              videoAria: "IRIAM 미국판 PNG 방송 데모",
+            },
+            11: {
+              title: "AI로 <span class=\"slide-emphasis\">표현은 더 자유롭게,</span><br>비용은 최소화합니다.",
+              costHeadings: ["기존 고급 3D", "Virtually"],
+              targetLabel: "목표",
+              costLabels: ["제작 · 준비", "모캡 운영", "제작 · 준비", "AI 운영"],
+              costValues: ["100만 원 ~ 3,000만 원", "최대 200만 원<small>/ 시간</small>", "0원", "1만 원<small>/ 시간</small>"],
+              note: "",
+            },
+            12: {
+              title: "캐릭터를 넘어<br><span class=\"slide-emphasis\">배경·맵·환경까지 AI로.</span>",
+              prompt: "“달빛 아래 마법 도서관 배경 만들어줘”",
+              caption: "배경 · 공간 · 조명까지 한 번에",
+              alt: "캐릭터와 배경이 함께 있는 라이브 화면 참고",
+              note: "",
+            },
+            13: {
+              title: "현재 캐릭터 제작·운영에만<br><span class=\"slide-emphasis\">국내 100억+, 글로벌 2,000억+</span>",
+              koreaHeading: "국내 · 연간 지출 추정 · 100억+",
+              koreaItems: [
+                ["Live2D 제작", "30–50억<small> 원</small>", "일러스트 · 파츠 · 리깅"],
+                ["3D 제작", "30–60억<small> 원</small>", "모델링 · 리깅 · 업데이트"],
+                ["모캡 라이브", "35–45억<small> 원</small>", "방송 · 쇼케이스 · 콘서트"],
+                ["모캡 콘텐츠", "7–15억<small> 원</small>", "춤 · MV · 리타게팅"],
+              ],
+              globalHeading: "글로벌 · 연간 지출 추정 · 2,000억+",
+              globalItems: [
+                ["일본", "600억+<small> 원</small>", "600–1,000억 · 5.7배"],
+                ["중국", "500억+<small> 원</small>", "500–1,000억 · 5.4배"],
+                ["미국", "300억+<small> 원</small>", "250–500억 · 2.5배"],
+                ["유럽", "200억+<small> 원</small>", "150–300억 · 1.6배"],
+              ],
+              note: "",
+            },
+            14: {
+              title: "처음에는 제작툴,<br><span class=\"slide-emphasis\">다음에는 방송 플랫폼.</span>",
+              stages: [
+                ["시작", "사진 → Virtually → OBS", "제작과 송출을 간단하게"],
+                ["목표", "창작자 <em>↔</em> 팬", "방송 · 발견 · 구독 · 후원"],
+              ],
+              takeaway: "사용자가 서로를 데려오는 <span class=\"slide-emphasis\">네트워크 효과를 구축합니다</span>",
+              note: "",
+            },
+            15: {
+              title: "라이브의 조회수당 매출은<br><span class=\"slide-emphasis\">숏폼의 400배 이상</span>",
+              assumption: "조회수당 매출",
+              rowLabels: ["숏폼", "롱폼", "라이브"],
+              rowValues: ["0.1원", "2–3원", "40–100원"],
+              note: "",
+            },
+            16: {
+              title: "전체 버튜버 시장 규모",
+              scope: "2026년 기준 · VTubers &amp; Virtual Idols — Streaming, Donations, Ads, Merch, Music, Events, Sponsorships &amp; Licensing",
+              koreaHeading: "국내",
+              koreaValue: "1,500억 ~ 2,000억<small> 원</small>",
+              globalHeading: "글로벌",
+              globalValue: "3조 ~ 4조<small> 원</small>",
+              note: "",
+            },
+            17: {
+              title: "버튜버 생태계의 A–Z를<br><span class=\"slide-emphasis\">하나의 플랫폼으로.</span>",
+              roadmap: [
+                ["AI 글로벌 진출", "실시간 통번역으로<br>언어의 경계 없이"],
+                ["AI 컴패니언", "방송 밖에서도<br>이어지는 캐릭터와의 관계"],
+                ["콘텐츠 스튜디오", "AI 자동 제작 · 음악 · 숏드라마<br>웹소설 · 웹툰"],
+              ],
+              note: "",
+            },
+            18: {
+              title: "기술은 재주를 넘고,<br><span class=\"slide-emphasis\">생태계는 돈을 법니다.</span>",
+              headers: ["", "기술 개발", "", "생태계 표준 제시"],
+              contexts: [["디지털 음원 산업", "2001년"], ["라이브 버튜버 산업", "2026년"]],
+              sources: [["Toshiba", "저장장치"], ["중국 AI 기업", "생성 모델"]],
+              destinations: [["Apple", "iPod + iTunes"], ["Virtually", "창작자 + 팬 + 라이브"]],
+              note: "",
+            },
+            19: {
+              title: "지금이 진짜 기회인 이유는<br><span class=\"slide-emphasis\">반도체 수출 규제 때문입니다.</span>",
+              steps: [
+                "대중국<br>반도체 규제",
+                "중국 내<br>데이터센터 부족",
+                "중국 AI<br>오픈소스 전략 가속",
+              ],
+              highlightNum: "04 · 기회",
+              highlightTitle: "AI 인프라·서빙으로<br><span class=\"slide-emphasis\">돈을 범</span>",
+              note: "",
+            },
+            20: {
+              title: "감사합니다.<br><span class=\"slide-emphasis\">Q &amp; A</span>",
+              subtitle: "버튜버 라이브를<br>AI로 쉽고 간단하게",
+            },
+          },
+        },
         en: {
           htmlLang: "en",
           meta: {
@@ -6864,15 +7096,23 @@
         return "en";
       }
 
-      function applyVirtuallyI18n() {
-        const locale = resolveVirtuallyLocale();
+      let virtuallyTranslation = null;
+
+      function applyVirtuallyI18n(requestedLocale) {
+        const locale = requestedLocale || resolveVirtuallyLocale();
         const translation = virtuallyTranslations[locale];
 
         document.documentElement.dataset.locale = locale;
 
+        document.querySelectorAll(".v-lang-btn").forEach((btn) => {
+          btn.classList.toggle("is-active", btn.dataset.lang === locale);
+        });
+
         if (!translation) {
           return null;
         }
+
+        virtuallyTranslation = translation;
 
         document.documentElement.lang = translation.htmlLang;
         document.title = translation.meta.title;
@@ -6887,7 +7127,7 @@
         homeButton.setAttribute("aria-label", translation.ui.homeAria);
         homeButton.querySelector("span").textContent = translation.ui.home;
 
-        const slide = (page) => track.querySelector('[data-page="' + page + '"]');
+        const getSlides = (page) => track.querySelectorAll('[data-page="' + page + '"]');
         const setHTML = (root, selector, value) => {
           const node = root?.querySelector(selector);
           if (node && value !== undefined) {
@@ -6915,160 +7155,165 @@
           });
         };
 
-        const s1 = slide(1);
-        setHTML(s1, "h2", translation.slides[1].subtitle);
-        setAttr(s1, ".slide-download-qr", "alt", translation.slides[1].coverAlt);
-
-        const s2 = slide(2);
-        setHTML(s2, "h1", translation.slides[2].title);
-        setManyHTML(s2, ".v-figure figcaption", translation.slides[2].captions);
-        setManyAttr(s2, ".v-figure img", "alt", translation.slides[2].alts);
-
-        const s3 = slide(3);
-        setHTML(s3, "h1", translation.slides[3].title);
-        setHTML(s3, ".v-process > h2", translation.slides[3].processHeading);
-        setManyHTML(s3, ".v-process-lane > p", translation.slides[3].lanes);
-        setManyHTML(s3, ".v-process-step b", translation.slides[3].steps);
-        setHTML(s3, ".v-note", translation.slides[3].note);
-
-        const s4 = slide(4);
-        setHTML(s4, "h1", translation.slides[4].title);
-        setAttr(s4, ".v-youtube-play", "aria-label", translation.slides[4].videoAria);
-        setAttr(s4, ".v-youtube-play img", "alt", translation.slides[4].videoAlt);
-        setHTML(s4, ".v-caption", translation.slides[4].caption);
-        setHTML(s4, ".v-note", translation.slides[4].note);
-
-        const s5 = slide(5);
-        setHTML(s5, "h1", translation.slides[5].title);
-        setAttr(s5, ".v-youtube-play", "aria-label", translation.slides[5].videoAria);
-        setAttr(s5, ".v-youtube-play img", "alt", translation.slides[5].videoAlt);
-        setHTML(s5, ".v-caption", translation.slides[5].caption);
-        setHTML(s5, ".v-note", translation.slides[5].note);
-
-        const s6 = slide(6);
-        setHTML(s6, "h1", translation.slides[6].title);
-        setManyAttr(s6, ".v-model img", "alt", translation.slides[6].modelAlts);
-        setHTML(s6, ".v-note", translation.slides[6].note);
-
-        const s7 = slide(7);
-        setHTML(s7, "h1", translation.slides[7].title);
-        setHTML(s7, ".v-flow-arrow b", translation.slides[7].flowInput);
-        setHTML(s7, ".v-flow-arrow strong", translation.slides[7].flowTarget);
-        setManyHTML(s7, ".v-figure figcaption", translation.slides[7].captions);
-        setManyAttr(s7, ".v-figure img", "alt", translation.slides[7].alts);
-        setHTML(s7, ".v-note", translation.slides[7].note);
-
-        const s8 = slide(8);
-        setHTML(s8, "h1", translation.slides[8].title);
-        setHTML(s8, ".v-music-before > span", translation.slides[8].before);
-        setManyHTML(s8, ".v-file-row b", translation.slides[8].steps);
-        setHTML(s8, ".v-ipod small", translation.slides[8].musicLabel);
-        setHTML(s8, ".v-music-after p", translation.slides[8].rightLabel);
-        setHTML(s8, ".v-music-after h2", translation.slides[8].rightTitle);
-        setAttr(s8, ".v-ipod", "aria-label", translation.slides[8].musicLabel);
-        setHTML(s8, ".v-note", translation.slides[8].note);
-
-        const s9 = slide(9);
-        setHTML(s9, "h1", translation.slides[9].title);
-        setManyAttr(s9, ".v-iriam-images img", "alt", translation.slides[9].alts);
-        setManyHTML(s9, ".v-stats strong", translation.slides[9].statValues);
-        setManyHTML(s9, ".v-stats span", translation.slides[9].stats);
-        setHTML(s9, ".v-note", translation.slides[9].note);
-
-        const s10 = slide(10);
-        setHTML(s10, "h1", translation.slides[10].title);
-        setAttr(s10, "video", "aria-label", translation.slides[10].videoAria);
-
-        const s11 = slide(11);
-        setHTML(s11, "h1", translation.slides[11].title);
-        setManyHTML(s11, ".v-cost-column h2", translation.slides[11].costHeadings);
-        setHTML(s11, ".v-cost-column h2 small", translation.slides[11].targetLabel);
-        setManyHTML(s11, ".v-cost-column > div > span", translation.slides[11].costLabels);
-        setManyHTML(s11, ".v-cost-column > div > strong", translation.slides[11].costValues);
-        setHTML(s11, ".v-note", translation.slides[11].note);
-
-        const s12 = slide(12);
-        setHTML(s12, "h1", translation.slides[12].title);
-        setHTML(s12, ".v-prompt strong", translation.slides[12].prompt);
-        setHTML(s12, ".v-world .v-figure figcaption", translation.slides[12].caption);
-        setAttr(s12, ".v-world .v-figure img", "alt", translation.slides[12].alt);
-        setHTML(s12, ".v-note", translation.slides[12].note);
-
-        const s13 = slide(13);
-        setHTML(s13, "h1", translation.slides[13].title);
-        setHTML(s13, ".v-sam-korea h2", translation.slides[13].koreaHeading);
-        setManyHTML(s13, ".v-sam-korea .v-sam-blocks span", translation.slides[13].koreaItems.map((item) => item[0]));
-        setManyHTML(s13, ".v-sam-korea .v-sam-blocks strong", translation.slides[13].koreaItems.map((item) => item[1]));
-        setManyHTML(s13, ".v-sam-korea .v-sam-blocks p", translation.slides[13].koreaItems.map((item) => item[2]));
-        setHTML(s13, ".v-sam-global h2", translation.slides[13].globalHeading);
-        setManyHTML(s13, ".v-sam-global .v-sam-blocks span", translation.slides[13].globalItems.map((item) => item[0]));
-        setManyHTML(s13, ".v-sam-global .v-sam-blocks strong", translation.slides[13].globalItems.map((item) => item[1]));
-        setManyHTML(s13, ".v-sam-global .v-sam-blocks p", translation.slides[13].globalItems.map((item) => item[2]));
-        setHTML(s13, ".v-note", translation.slides[13].note);
-
-        const s14 = slide(14);
-        setHTML(s14, "h1", translation.slides[14].title);
-        setHTML(s14, ".v-stage:nth-child(1) > span", translation.slides[14].stages[0][0]);
-        setHTML(s14, ".v-stage:nth-child(1) h2", translation.slides[14].stages[0][1]);
-        setHTML(s14, ".v-stage:nth-child(1) p", translation.slides[14].stages[0][2]);
-        setHTML(s14, ".v-stage:nth-child(3) > span", translation.slides[14].stages[1][0]);
-        setHTML(s14, ".v-stage:nth-child(3) h2", translation.slides[14].stages[1][1]);
-        setHTML(s14, ".v-stage:nth-child(3) p", translation.slides[14].stages[1][2]);
-        setHTML(s14, ".v-takeaway", translation.slides[14].takeaway);
-        setHTML(s14, ".v-note", translation.slides[14].note);
-
-        const s15 = slide(15);
-        setHTML(s15, "h1", translation.slides[15].title);
-        setHTML(s15, ".v-chart-assumption", translation.slides[15].assumption);
-        setManyHTML(s15, ".v-revenue-label b", translation.slides[15].rowLabels);
-        setManyHTML(s15, ".v-revenue-label strong", translation.slides[15].rowValues);
-        setHTML(s15, ".v-note", translation.slides[15].note);
-
-        const s16 = slide(16);
-        setHTML(s16, "h1", translation.slides[16].title);
-        setHTML(s16, ".v-tam-scope", translation.slides[16].scope);
-        setHTML(s16, ".v-tam-korea h2", translation.slides[16].koreaHeading);
-        setHTML(s16, ".v-tam-korea strong", translation.slides[16].koreaValue);
-        setHTML(s16, ".v-tam-global h2", translation.slides[16].globalHeading);
-        setHTML(s16, ".v-tam-global strong", translation.slides[16].globalValue);
-        setHTML(s16, ".v-note", translation.slides[16].note);
-
-        const s17 = slide(17);
-        setHTML(s17, "h1", translation.slides[17].title);
-        setManyHTML(s17, ".v-roadmap h2", translation.slides[17].roadmap.map((item) => item[0]));
-        setManyHTML(s17, ".v-roadmap p", translation.slides[17].roadmap.map((item) => item[1]));
-        setHTML(s17, ".v-note", translation.slides[17].note);
-
-        const s18 = slide(18);
-        setHTML(s18, "h1", translation.slides[18].title);
-        setManyHTML(s18, ".v-eco-head span", translation.slides[18].headers);
-        setManyHTML(s18, ".v-eco-context strong", translation.slides[18].contexts.map((item) => item[0]));
-        setManyHTML(s18, ".v-eco-context span", translation.slides[18].contexts.map((item) => item[1]));
-        setManyHTML(s18, ".v-eco-row > div:nth-child(2) strong", translation.slides[18].sources.map((item) => item[0]));
-        setManyHTML(s18, ".v-eco-row > div:nth-child(2) span", translation.slides[18].sources.map((item) => item[1]));
-        setManyHTML(s18, ".v-eco-row > div:nth-child(4) strong", translation.slides[18].destinations.map((item) => item[0]));
-        setManyHTML(s18, ".v-eco-row > div:nth-child(4) span", translation.slides[18].destinations.map((item) => item[1]));
-        setHTML(s18, ".v-note", translation.slides[18].note);
-
-        const s19 = slide(19);
-        if (s19 && translation.slides[19]) {
-          setHTML(s19, "h1", translation.slides[19].title);
-          setManyHTML(s19, ".v-opp-step strong", translation.slides[19].steps);
-          setHTML(s19, ".v-opp-highlight-head .v-opp-num", translation.slides[19].highlightNum);
-          setHTML(s19, ".v-opp-highlight-head strong", translation.slides[19].highlightTitle);
-          setHTML(s19, ".v-note", translation.slides[19].note);
-        }
-
-        const s20 = slide(20);
-        if (s20 && translation.slides[20]) {
-          setHTML(s20, "h1", translation.slides[20].title);
-          setHTML(s20, ".v-final-brand-subtitle", translation.slides[20].subtitle);
+        for (let page = 1; page <= 20; page++) {
+          getSlides(page).forEach((s) => {
+            if (page === 1) {
+              setHTML(s, "h2", translation.slides[1].subtitle);
+              setAttr(s, ".slide-download-qr", "alt", translation.slides[1].coverAlt);
+            } else if (page === 2) {
+              setHTML(s, "h1", translation.slides[2].title);
+              setManyHTML(s, ".v-figure figcaption", translation.slides[2].captions);
+              setManyAttr(s, ".v-figure img", "alt", translation.slides[2].alts);
+            } else if (page === 3) {
+              setHTML(s, "h1", translation.slides[3].title);
+              setHTML(s, ".v-process > h2", translation.slides[3].processHeading);
+              setManyHTML(s, ".v-process-lane > p", translation.slides[3].lanes);
+              setManyHTML(s, ".v-process-step b", translation.slides[3].steps);
+              setHTML(s, ".v-note", translation.slides[3].note);
+            } else if (page === 4) {
+              setHTML(s, "h1", translation.slides[4].title);
+              setAttr(s, ".v-youtube-play", "aria-label", translation.slides[4].videoAria);
+              setAttr(s, ".v-youtube-play img", "alt", translation.slides[4].videoAlt);
+              setHTML(s, ".v-caption", translation.slides[4].caption);
+              setHTML(s, ".v-note", translation.slides[4].note);
+            } else if (page === 5) {
+              setHTML(s, "h1", translation.slides[5].title);
+              setAttr(s, ".v-youtube-play", "aria-label", translation.slides[5].videoAria);
+              setAttr(s, ".v-youtube-play img", "alt", translation.slides[5].videoAlt);
+              setHTML(s, ".v-caption", translation.slides[5].caption);
+              setHTML(s, ".v-note", translation.slides[5].note);
+            } else if (page === 6) {
+              setHTML(s, "h1", translation.slides[6].title);
+              setManyAttr(s, ".v-model img", "alt", translation.slides[6].modelAlts);
+              setHTML(s, ".v-note", translation.slides[6].note);
+            } else if (page === 7) {
+              setHTML(s, "h1", translation.slides[7].title);
+              setHTML(s, ".v-flow-arrow b", translation.slides[7].flowInput);
+              setHTML(s, ".v-flow-arrow strong", translation.slides[7].flowTarget);
+              setManyHTML(s, ".v-figure figcaption", translation.slides[7].captions);
+              setManyAttr(s, ".v-figure img", "alt", translation.slides[7].alts);
+              setHTML(s, ".v-note", translation.slides[7].note);
+            } else if (page === 8) {
+              setHTML(s, "h1", translation.slides[8].title);
+              setHTML(s, ".v-music-before > span", translation.slides[8].before);
+              setManyHTML(s, ".v-file-row b", translation.slides[8].steps);
+              setHTML(s, ".v-ipod small", translation.slides[8].musicLabel);
+              setHTML(s, ".v-music-after p", translation.slides[8].rightLabel);
+              setHTML(s, ".v-music-after h2", translation.slides[8].rightTitle);
+              setAttr(s, ".v-ipod", "aria-label", translation.slides[8].musicLabel);
+              setHTML(s, ".v-note", translation.slides[8].note);
+            } else if (page === 9) {
+              setHTML(s, "h1", translation.slides[9].title);
+              setManyAttr(s, ".v-iriam-images img", "alt", translation.slides[9].alts);
+              setManyHTML(s, ".v-stats strong", translation.slides[9].statValues);
+              setManyHTML(s, ".v-stats span", translation.slides[9].stats);
+              setHTML(s, ".v-note", translation.slides[9].note);
+            } else if (page === 10) {
+              setHTML(s, "h1", translation.slides[10].title);
+              setAttr(s, "video", "aria-label", translation.slides[10].videoAria);
+            } else if (page === 11) {
+              setHTML(s, "h1", translation.slides[11].title);
+              setManyHTML(s, ".v-cost-column h2", translation.slides[11].costHeadings);
+              setHTML(s, ".v-cost-column h2 small", translation.slides[11].targetLabel);
+              setManyHTML(s, ".v-cost-column > div > span", translation.slides[11].costLabels);
+              setManyHTML(s, ".v-cost-column > div > strong", translation.slides[11].costValues);
+              setHTML(s, ".v-note", translation.slides[11].note);
+            } else if (page === 12) {
+              setHTML(s, "h1", translation.slides[12].title);
+              setHTML(s, ".v-prompt strong", translation.slides[12].prompt);
+              setHTML(s, ".v-world .v-figure figcaption", translation.slides[12].caption);
+              setAttr(s, ".v-world .v-figure img", "alt", translation.slides[12].alt);
+              setHTML(s, ".v-note", translation.slides[12].note);
+            } else if (page === 13) {
+              setHTML(s, "h1", translation.slides[13].title);
+              setHTML(s, ".v-sam-korea h2", translation.slides[13].koreaHeading);
+              setManyHTML(s, ".v-sam-korea .v-sam-blocks span", translation.slides[13].koreaItems.map((item) => item[0]));
+              setManyHTML(s, ".v-sam-korea .v-sam-blocks strong", translation.slides[13].koreaItems.map((item) => item[1]));
+              setManyHTML(s, ".v-sam-korea .v-sam-blocks p", translation.slides[13].koreaItems.map((item) => item[2]));
+              setHTML(s, ".v-sam-global h2", translation.slides[13].globalHeading);
+              setManyHTML(s, ".v-sam-global .v-sam-blocks span", translation.slides[13].globalItems.map((item) => item[0]));
+              setManyHTML(s, ".v-sam-global .v-sam-blocks strong", translation.slides[13].globalItems.map((item) => item[1]));
+              setManyHTML(s, ".v-sam-global .v-sam-blocks p", translation.slides[13].globalItems.map((item) => item[2]));
+              setHTML(s, ".v-note", translation.slides[13].note);
+            } else if (page === 14) {
+              setHTML(s, "h1", translation.slides[14].title);
+              setHTML(s, ".v-stage:nth-child(1) > span", translation.slides[14].stages[0][0]);
+              setHTML(s, ".v-stage:nth-child(1) h2", translation.slides[14].stages[0][1]);
+              setHTML(s, ".v-stage:nth-child(1) p", translation.slides[14].stages[0][2]);
+              setHTML(s, ".v-stage:nth-child(3) > span", translation.slides[14].stages[1][0]);
+              setHTML(s, ".v-stage:nth-child(3) h2", translation.slides[14].stages[1][1]);
+              setHTML(s, ".v-stage:nth-child(3) p", translation.slides[14].stages[1][2]);
+              setHTML(s, ".v-takeaway", translation.slides[14].takeaway);
+              setHTML(s, ".v-note", translation.slides[14].note);
+            } else if (page === 15) {
+              setHTML(s, "h1", translation.slides[15].title);
+              setHTML(s, ".v-chart-assumption", translation.slides[15].assumption);
+              setManyHTML(s, ".v-revenue-label b", translation.slides[15].rowLabels);
+              setManyHTML(s, ".v-revenue-label strong", translation.slides[15].rowValues);
+              setHTML(s, ".v-note", translation.slides[15].note);
+            } else if (page === 16) {
+              setHTML(s, "h1", translation.slides[16].title);
+              setHTML(s, ".v-tam-scope", translation.slides[16].scope);
+              setHTML(s, ".v-tam-korea h2", translation.slides[16].koreaHeading);
+              setHTML(s, ".v-tam-korea strong", translation.slides[16].koreaValue);
+              setHTML(s, ".v-tam-global h2", translation.slides[16].globalHeading);
+              setHTML(s, ".v-tam-global strong", translation.slides[16].globalValue);
+              setHTML(s, ".v-note", translation.slides[16].note);
+            } else if (page === 17) {
+              setHTML(s, "h1", translation.slides[17].title);
+              setManyHTML(s, ".v-roadmap h2", translation.slides[17].roadmap.map((item) => item[0]));
+              setManyHTML(s, ".v-roadmap p", translation.slides[17].roadmap.map((item) => item[1]));
+              setHTML(s, ".v-note", translation.slides[17].note);
+            } else if (page === 18) {
+              setHTML(s, "h1", translation.slides[18].title);
+              setManyHTML(s, ".v-eco-head span", translation.slides[18].headers);
+              setManyHTML(s, ".v-eco-context strong", translation.slides[18].contexts.map((item) => item[0]));
+              setManyHTML(s, ".v-eco-context span", translation.slides[18].contexts.map((item) => item[1]));
+              setManyHTML(s, ".v-eco-row > div:nth-child(2) strong", translation.slides[18].sources.map((item) => item[0]));
+              setManyHTML(s, ".v-eco-row > div:nth-child(2) span", translation.slides[18].sources.map((item) => item[1]));
+              setManyHTML(s, ".v-eco-row > div:nth-child(4) strong", translation.slides[18].destinations.map((item) => item[0]));
+              setManyHTML(s, ".v-eco-row > div:nth-child(4) span", translation.slides[18].destinations.map((item) => item[1]));
+              setHTML(s, ".v-note", translation.slides[18].note);
+            } else if (page === 19) {
+              if (translation.slides[19]) {
+                setHTML(s, "h1", translation.slides[19].title);
+                setManyHTML(s, ".v-opp-step strong", translation.slides[19].steps);
+                setHTML(s, ".v-opp-highlight-head .v-opp-num", translation.slides[19].highlightNum);
+                setHTML(s, ".v-opp-highlight-head strong", translation.slides[19].highlightTitle);
+                setHTML(s, ".v-note", translation.slides[19].note);
+              }
+            } else if (page === 20) {
+              if (translation.slides[20]) {
+                setHTML(s, "h1", translation.slides[20].title);
+                setHTML(s, ".v-final-brand-subtitle", translation.slides[20].subtitle);
+              }
+            }
+          });
         }
 
         return translation;
       }
 
-      const virtuallyTranslation = applyVirtuallyI18n();
+      applyVirtuallyI18n();
+
+      document.querySelectorAll(".v-lang-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetLang = btn.dataset.lang;
+          applyVirtuallyI18n(targetLang);
+
+          const url = new URL(window.location.href);
+          if (targetLang === "ko") {
+            url.searchParams.delete("lang");
+          } else if (targetLang === "cn-ZH") {
+            url.searchParams.set("lang", "zh-cn");
+          } else if (targetLang === "cn-TW") {
+            url.searchParams.set("lang", "zh-tw");
+          } else {
+            url.searchParams.set("lang", targetLang);
+          }
+          window.history.replaceState({}, "", url.toString());
+        });
+      });
 
       track.querySelectorAll(".slide-shell").forEach((shell) => {
         if (shell.querySelector(".slide-side-media")) {
