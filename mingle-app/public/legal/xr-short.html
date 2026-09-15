@@ -3668,6 +3668,71 @@
           transition: none;
         }
       }
+
+      @media print {
+        @page {
+          size: 13.333333in 7.5in;
+          margin: 0;
+        }
+
+        html,
+        body {
+          width: 13.333333in;
+          height: max-content !important;
+          min-height: 0 !important;
+          overflow: visible;
+          background: #fffdf7;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .deck {
+          width: 13.333333in;
+          height: max-content !important;
+          min-height: 0 !important;
+          overflow: visible;
+        }
+
+        .track {
+          position: static;
+          display: block;
+          width: 100%;
+          height: max-content !important;
+          min-height: 0 !important;
+          will-change: auto;
+          transform: none !important;
+          transition: none !important;
+        }
+
+        .slide {
+          position: relative;
+          flex: none !important;
+          display: block;
+          width: 13.333333in;
+          height: 7.5in;
+          min-height: 7.5in;
+          overflow: visible;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          break-after: page;
+          page-break-after: always;
+        }
+
+        .track > .slide:nth-of-type(n + 3) {
+          break-before: page;
+          page-break-before: always;
+        }
+
+        .slide:last-of-type {
+          break-after: auto;
+          page-break-after: auto;
+        }
+
+        .slide[data-clone],
+        .page-controls {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
