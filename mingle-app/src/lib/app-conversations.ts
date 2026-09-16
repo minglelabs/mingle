@@ -73,11 +73,10 @@ export type ConversationChannelSummary = {
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
-  // Whether this room currently has a public read-only "spectate" link —
-  // see setConversationChannelSharing. shareToken is only meaningful once
-  // shareEnabled is true; the settings screen builds the shareable URL from
-  // it (see conversation-share-link.ts).
-  shareEnabled: boolean;
+  // Non-null once this room has ever been shared — see
+  // createOrRefreshConversationShareLink. No on/off state: the settings
+  // screen builds the shareable URL from this token whenever it's present
+  // (see conversation-share-link.ts).
   shareToken: string | null;
 };
 
@@ -163,8 +162,8 @@ type ConversationChannelRecord = {
   updatedAt: Date;
   pausedAt: Date | null;
   userEditedTitleAt: Date | null;
-  shareEnabled: boolean;
   shareToken: string | null;
+  sharedAt: Date | null;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -186,8 +185,8 @@ const conversationChannelSelect = {
   updatedAt: true,
   pausedAt: true,
   userEditedTitleAt: true,
-  shareEnabled: true,
   shareToken: true,
+  sharedAt: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -855,7 +854,6 @@ function serializeConversationChannel(
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
-    shareEnabled: record.shareEnabled,
     shareToken: record.shareToken,
   };
 }
@@ -2164,39 +2162,22 @@ export async function getConversationSessionKeyForMember(args: {
   return record?.sessionKey ?? null;
 }
 
-// Any member can see whether the room is currently shared (so they know a
-// spectate link exists even if they weren't the one who turned it on) — only
-// setConversationChannelSharing (turning it on/off) stays owner-gated.
+// Any member can see whether the room has ever been shared and when the
+// current snapshot was taken (so they know a link exists even if they
+// weren't the one who created it).
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareEnabled: boolean; shareToken: string | null } | null> {
+}): Promise<{ shareToken: string | null; sharedAt: Date | null } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareEnabled: true, shareToken: true },
+    select: { shareToken: true, sharedAt: true },
   });
   return record ?? null;
-}
-
-// Share-gated equivalent of getConversationSessionKeyForMember above, used to
-// mint a spectator's realtime token. Gates on the same live shareEnabled
-// check as getConversationHydrationStateForShare, not membership.
-export async function getConversationSessionKeyForShare(args: {
-  shareToken: string;
-}): Promise<string | null> {
-  const record = await prisma.appConversationChannel.findFirst({
-    where: {
-      shareToken: args.shareToken,
-      shareEnabled: true,
-      ...buildVisibleConversationWhere(),
-    },
-    select: { sessionKey: true },
-  });
-  return record?.sessionKey ?? null;
 }
 
 // Marks only the caller's membership row as read. The message list remains
@@ -2430,15 +2411,16 @@ export async function getConversationHydrationStateForUser(args: {
   });
 }
 
-// Public read-only "spectate" link lookup — gates on a live shareToken +
-// shareEnabled check instead of membership, so toggling sharing off blocks
-// new views on the very next call. viewerUserId is a synthetic id that never
-// matches a real member: every "viewer-facing" resolver below
-// (resolveViewerFacingTitle, resolveOtherMemberAvatars, etc.) already
-// degrades to its room-wide/no-personalization fallback when the viewer id
-// matches nobody, which is exactly the right behavior for someone who isn't
-// a member — e.g. resolveOtherMemberAvatars ends up including every real
-// member instead of excluding "self".
+// Public read-only "spectate" link lookup — gates on shareToken existing
+// (no on/off state) instead of membership, and caps the message query at
+// the snapshot's sharedAt cutoff instead of always showing the latest.
+// viewerUserId is a synthetic id that never matches a real member: every
+// "viewer-facing" resolver below (resolveViewerFacingTitle,
+// resolveOtherMemberAvatars, etc.) already degrades to its
+// room-wide/no-personalization fallback when the viewer id matches nobody,
+// which is exactly the right behavior for someone who isn't a member — e.g.
+// resolveOtherMemberAvatars ends up including every real member instead of
+// excluding "self".
 export type ConversationSpectateHydrationState = ConversationHydrationState & {
   sharedByUserId: string | null;
 };
@@ -2450,7 +2432,6 @@ export async function getConversationHydrationStateForShare(args: {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
       shareToken: args.shareToken,
-      shareEnabled: true,
       ...buildVisibleConversationWhere(),
     },
     select: { ...conversationChannelSelect, sharedByUserId: true },
@@ -2464,6 +2445,7 @@ export async function getConversationHydrationStateForShare(args: {
     conversationRecord,
     viewerUserId: `spectator:${args.shareToken}`,
     before: args.before,
+    upperBoundCreatedAt: conversationRecord.sharedAt,
   });
 
   return { ...state, sharedByUserId: conversationRecord.sharedByUserId };
@@ -2473,6 +2455,10 @@ async function getConversationHydrationStateForRecord(args: {
   conversationRecord: ConversationChannelRecord;
   viewerUserId: string;
   before?: ConversationHydrationCursor | null;
+  // Caps the message query at a fixed point in time instead of always
+  // showing the latest — used only by the share/snapshot path above; the
+  // member path never passes this, so its behavior is unchanged.
+  upperBoundCreatedAt?: Date | null;
 }): Promise<ConversationHydrationState> {
   const conversationRecord = args.conversationRecord;
 
@@ -2482,9 +2468,13 @@ async function getConversationHydrationStateForRecord(args: {
     ? new Date(args.before.createdAtMs)
     : null;
   const beforeMessageId = (args.before?.messageId || "").trim();
+  const upperBoundWhere: Prisma.AppMessageWhereInput = args.upperBoundCreatedAt
+    ? { createdAt: { lte: args.upperBoundCreatedAt } }
+    : {};
   const messageWhere: Prisma.AppMessageWhereInput = {
     sessionKey: conversationRecord.sessionKey,
     ...buildVisibleMessageWhere(),
+    ...upperBoundWhere,
     ...(beforeDate && beforeMessageId
       ? {
           AND: [
@@ -2515,6 +2505,7 @@ async function getConversationHydrationStateForRecord(args: {
       where: {
         sessionKey: conversationRecord.sessionKey,
         ...buildVisibleMessageWhere(),
+        ...upperBoundWhere,
       },
     }),
     prisma.appMessage.findMany({
@@ -2807,24 +2798,22 @@ export async function deleteConversationChannel(args: {
   throw new Error("conversation_channel_delete_conflict");
 }
 
-// Owner-only, same gate as deleteConversationChannel above: turning a room
-// public exposes every member's messages to anyone with the link, which is
-// at least as consequential as deleting the room for everyone. shareToken is
-// minted once and kept stable across on/off toggles — re-enabling reuses the
-// same link instead of invalidating whatever people already have. Disabling
-// only flips shareEnabled; every read path (getConversationHydrationStateForShare,
-// the spectate realtime-token mint) gates on that flag live, so the old link
-// goes dead on its very next use with no separate revocation step needed.
-export async function setConversationChannelSharing(args: {
+// Any member can create or refresh the room's share link — unlike
+// deleteConversationChannel this isn't owner-only, since it's a repeatable,
+// non-destructive action (no on/off state to fight over). shareToken is
+// minted once and kept stable across refreshes so a link people already
+// have keeps working; sharedAt always jumps to now(), moving the snapshot
+// cutoff getConversationHydrationStateForShare reads forward. There's no
+// "turn sharing off" — a link stops working only if the room itself gets
+// deleted (buildVisibleConversationWhere already filters those out).
+export async function createOrRefreshConversationShareLink(args: {
   conversationId: string;
   userId: string;
-  enabled: boolean;
 }): Promise<ConversationChannelSummary | null> {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
-      members: { some: { userId: args.userId, leftAt: null } },
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true, shareToken: true },
@@ -2834,14 +2823,10 @@ export async function setConversationChannelSharing(args: {
     return null;
   }
 
-  const shareToken = args.enabled
-    ? (existing.shareToken || crypto.randomBytes(16).toString("base64url"))
-    : existing.shareToken;
+  const shareToken = existing.shareToken || crypto.randomBytes(16).toString("base64url");
   const record = await prisma.appConversationChannel.update({
     where: { id: args.conversationId },
-    data: args.enabled
-      ? { shareEnabled: true, shareToken, sharedByUserId: args.userId, sharedAt: new Date() }
-      : { shareEnabled: false },
+    data: { shareToken, sharedByUserId: args.userId, sharedAt: new Date() },
     select: conversationChannelSelect,
   });
   return serializeConversationChannel(record);

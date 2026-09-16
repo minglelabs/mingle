@@ -62,7 +62,6 @@ export default function ConversationSpectateScreen({
   // not a hydration diff.
   const [isAndroid, setIsAndroid] = useState(false);
   const [isIos, setIsIos] = useState(false);
-  const [isOpenAppConfirmVisible, setIsOpenAppConfirmVisible] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Chat-app-standard behavior: land on the newest message, not the
   // oldest of the fetched batch. Stays pinned to the bottom as live
@@ -106,16 +105,16 @@ export default function ConversationSpectateScreen({
   const inviterName = inviter?.name?.trim() || copy.userFallback;
   const isNotFound = !isValidToken || status === "not_found";
 
-  // "밍글 앱에서 보기" asks for confirmation first, but the actual launch
-  // still has to be a real <a> click, not a window.location.href
-  // assignment from a plain button — mobile browsers are far more willing
-  // to honor a custom URL scheme when it comes from an anchor's own click
-  // activation than from a script-driven redirect, even one triggered
-  // synchronously inside another click handler. Same reliability trick as
-  // profile-link-install-screen.tsx's handleOpenInApp: update the anchor's
-  // href right before its default navigation runs.
-  const handleConfirmOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {
-    setIsOpenAppConfirmVisible(false);
+  // One click, straight to the launch attempt — same shape as the App
+  // Store/Play Store links right below it, no extra custom confirm step in
+  // between (the app itself still asks to confirm once it opens). Has to be
+  // a real <a> click, not a window.location.href assignment from a plain
+  // button — mobile browsers are far more willing to honor a custom URL
+  // scheme from an anchor's own click activation than from a script-driven
+  // redirect. Same reliability trick as profile-link-install-screen.tsx's
+  // handleOpenInApp: update the anchor's href right before its default
+  // navigation runs.
+  const handleOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!appUrl) {
       event.preventDefault();
       return;
@@ -193,15 +192,15 @@ export default function ConversationSpectateScreen({
         </div>
 
         <div className="shrink-0 border-t border-slate-100 px-5 py-4">
-          <button
-            type="button"
-            onClick={() => setIsOpenAppConfirmVisible(true)}
+          <a
+            href={appUrl ?? "#"}
+            onClick={handleOpenInApp}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F3C35A] px-5 py-4 text-base font-semibold text-[#2D2A1E] shadow-[0_10px_24px_rgba(243,195,90,0.28)] transition hover:bg-[#EAB54A] active:scale-[0.99]"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/mingle-icon.png" alt="" className="h-5 w-5 rounded-[5px]" aria-hidden="true" />
             {copy.openInApp}
-          </button>
+          </a>
 
           <div className="mt-3 grid gap-3">
             {iosAppStoreUrl && (!isAndroid || isIos) ? (
@@ -227,40 +226,6 @@ export default function ConversationSpectateScreen({
           </div>
         </div>
       </section>
-
-      {isOpenAppConfirmVisible ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-5"
-          onClick={() => setIsOpenAppConfirmVisible(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
-          >
-            <p className="text-sm leading-relaxed text-gray-700">{copy.openInAppConfirmMessage}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setIsOpenAppConfirmVisible(false)}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-              >
-                {copy.cancelLabel}
-              </button>
-              <a
-                href={appUrl ?? "#"}
-                onClick={handleConfirmOpenInApp}
-                autoFocus
-                className="inline-flex h-10 items-center justify-center rounded-lg text-sm font-semibold text-[#2D2A1E] transition-colors"
-                style={{ backgroundImage: "linear-gradient(90deg, #F3C35A 0%, #EAB54A 100%)" }}
-              >
-                {copy.openInApp}
-              </a>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }

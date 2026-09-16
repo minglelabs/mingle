@@ -1648,9 +1648,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [renameConversationValue, setRenameConversationValue] = useState(conversationTitle ?? '')
   const [isRenamingConversation, setIsRenamingConversation] = useState(false)
   const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
-  const [shareEnabled, setShareEnabled] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
-  const [isTogglingSharing, setIsTogglingSharing] = useState(false)
+  const [isGeneratingShareLink, setIsGeneratingShareLink] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
@@ -4300,9 +4299,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     roomManagementCopy.renameSuccessToastLabel,
   ])
 
-  // Lazily loads the room's current spectate-link status when the
-  // management screen is opened, instead of threading shareEnabled/shareUrl
-  // down as two more props everywhere this component is rendered.
+  // Lazily loads the room's current share link (if any) when the
+  // management screen is opened, instead of threading shareUrl down as
+  // another prop everywhere this component is rendered.
   useEffect(() => {
     if (menuScreen !== 'conversation-management' || !conversationId) return
     let cancelled = false
@@ -4318,22 +4317,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareEnabled?: unknown; shareToken?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
-        const nextShareEnabled = body.shareEnabled === true
         const nextShareToken = typeof body.shareToken === 'string' ? body.shareToken : null
-        setShareEnabled(nextShareEnabled)
-        setShareUrl(
-          nextShareEnabled && nextShareToken
-            ? buildConversationShareUrl(window.location.origin, nextShareToken)
-            : null,
-        )
+        setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
       })
       .catch(() => {
-        // Leave whatever was already shown — the toggle below surfaces its
-        // own error toast on an actual attempted change.
+        // Leave whatever was already shown — the button below surfaces its
+        // own error toast on an actual attempted (re-)share.
       })
 
     return () => {
@@ -4341,52 +4334,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [conversationId, menuScreen, nativeAppUpdate, resolveConversationSessionKey])
 
-  const handleToggleConversationSharing = useCallback(async () => {
-    if (isTogglingSharing || !conversationId) return
-    const nextEnabled = !shareEnabled
-    setIsTogglingSharing(true)
+  const handleCreateOrRefreshShareLink = useCallback(async () => {
+    if (isGeneratingShareLink || !conversationId) return
+    setIsGeneratingShareLink(true)
 
     try {
       const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/share`), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...buildTrackingRequestHeaders({
-            sessionKey: resolveConversationSessionKey(),
-            trackingUserId: getOrCreateTrackingUserId(),
-            nativeAppUpdate,
-          }),
-        },
-        body: JSON.stringify({ enabled: nextEnabled }),
+        headers: buildTrackingRequestHeaders({
+          sessionKey: resolveConversationSessionKey(),
+          trackingUserId: getOrCreateTrackingUserId(),
+          nativeAppUpdate,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error(`conversation_share_toggle_failed:${response.status}`)
+        throw new Error(`conversation_share_link_failed:${response.status}`)
       }
 
       const body = await response.json() as { shareToken?: unknown }
       const nextShareToken = typeof body.shareToken === 'string' ? body.shareToken : null
-      setShareEnabled(nextEnabled)
-      setShareUrl(
-        nextEnabled && nextShareToken
-          ? buildConversationShareUrl(window.location.origin, nextShareToken)
-          : null,
-      )
-      toast.success(nextEnabled ? roomManagementCopy.shareEnabledToastLabel : roomManagementCopy.shareDisabledToastLabel)
+      setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
+      toast.success(roomManagementCopy.shareLinkCreatedToastLabel)
     } catch {
       toast.error(roomManagementCopy.shareErrorToastLabel)
     } finally {
-      setIsTogglingSharing(false)
+      setIsGeneratingShareLink(false)
     }
   }, [
     conversationId,
-    isTogglingSharing,
+    isGeneratingShareLink,
     nativeAppUpdate,
     resolveConversationSessionKey,
-    roomManagementCopy.shareDisabledToastLabel,
-    roomManagementCopy.shareEnabledToastLabel,
     roomManagementCopy.shareErrorToastLabel,
-    shareEnabled,
+    roomManagementCopy.shareLinkCreatedToastLabel,
   ])
 
   const handleCopyShareLink = useCallback(async () => {
@@ -7014,27 +6995,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </button>
 
                           <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[0.98rem] font-medium text-gray-900">{roomManagementCopy.shareToggleLabel}</p>
-                                <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{roomManagementCopy.shareToggleDescription}</p>
-                              </div>
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={shareEnabled}
-                                aria-label={roomManagementCopy.shareToggleLabel}
-                                onClick={() => void handleToggleConversationSharing()}
-                                disabled={!conversationId || isTogglingSharing}
-                                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${shareEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                              >
-                                <span
-                                  className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-                                  style={{ transform: shareEnabled ? 'translateX(20px)' : 'translateX(0px)' }}
-                                />
-                              </button>
-                            </div>
-                            {shareEnabled && shareUrl ? (
+                            <p className="text-[0.98rem] font-medium text-gray-900">
+                              {shareUrl ? roomManagementCopy.shareRefreshButtonLabel : roomManagementCopy.shareCreateButtonLabel}
+                            </p>
+                            <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{roomManagementCopy.shareDescription}</p>
+                            <button
+                              type="button"
+                              onClick={() => void handleCreateOrRefreshShareLink()}
+                              disabled={!conversationId || isGeneratingShareLink}
+                              className="mt-3 flex h-10 w-full items-center justify-center rounded-xl bg-amber-500 text-[0.9rem] font-semibold text-white transition-colors active:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isGeneratingShareLink
+                                ? roomManagementCopy.shareButtonLoadingLabel
+                                : (shareUrl ? roomManagementCopy.shareRefreshButtonLabel : roomManagementCopy.shareCreateButtonLabel)}
+                            </button>
+                            {shareUrl ? (
                               <div className="mt-3 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
                                 <span className="min-w-0 flex-1 truncate text-[0.85rem] text-gray-600">{shareUrl}</span>
                                 <button

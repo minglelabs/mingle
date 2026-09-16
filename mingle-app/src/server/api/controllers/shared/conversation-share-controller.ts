@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   type ConversationHydrationCursor,
   getConversationHydrationStateForShare,
-  getConversationSessionKeyForShare,
 } from "@/lib/app-conversations";
-import { mintConversationRealtimeToken } from "@/server/conversation-realtime";
 
 export const runtime = "nodejs";
 
-// Fully public: no getServerSession/auth import anywhere in this file. Every
-// entry point below gates on the room's live shareToken + shareEnabled
-// state instead of a session, so a viewer never needs a Mingle account, and
-// turning sharing off blocks the very next request.
+// Fully public: no getServerSession/auth import anywhere in this file. Gates
+// on the room's shareToken existing (no on/off state) instead of a session,
+// so a viewer never needs a Mingle account. Returns a fixed snapshot —
+// messages up to the share's sharedAt cutoff — not a live feed, so this is
+// a plain single fetch with no realtime channel to mint a token for.
 
 function readConversationHydrationCursor(
   request: NextRequest,
@@ -57,25 +56,4 @@ export async function getConversationSpectateStateResponse(
   }
 
   return NextResponse.json(state);
-}
-
-// Mints the token a spectator hands mingle-messaging to open a read-only push
-// channel for this room. mingle-messaging's WebSocket connection is
-// subscribe-only by construction (publish only happens over a separate
-// server-to-server secret-authed call) — there's no "send" capability to
-// strip from this token, so it's minted the same way a member's is, just
-// keyed to a synthetic spectator id instead of a real userId.
-export async function getConversationSpectateRealtimeTokenResponse(
-  shareToken: string,
-) {
-  const sessionKey = await getConversationSessionKeyForShare({ shareToken });
-  if (!sessionKey) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-
-  const token = mintConversationRealtimeToken({ sessionKey, userId: `spectator:${shareToken}` });
-  // Realtime push is unconfigured in this environment — not an error the
-  // caller needs to see, since the client falls back to polling the state
-  // endpoint above.
-  return NextResponse.json({ token });
 }

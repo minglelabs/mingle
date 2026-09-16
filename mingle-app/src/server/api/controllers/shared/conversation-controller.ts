@@ -21,7 +21,7 @@ import {
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelTitle,
   getConversationChannelSharing,
-  setConversationChannelSharing,
+  createOrRefreshConversationShareLink,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
@@ -548,15 +548,15 @@ export async function leaveConversationResponse(
 }
 
 // Any member can read current sharing status (so they know a spectate link
-// exists even if they didn't create it) — only the POST toggle below stays
-// owner-gated. Returns the bare shareToken rather than a computed absolute
-// URL: this server's view of its own request origin (request.nextUrl.origin)
-// doesn't reliably match what the caller's browser actually used to reach
-// it — e.g. behind the LAN-IP/tunnel setups CLAUDE.md's iOS local-network
-// testing section describes, where the request can arrive with a Host
-// header of "localhost" even though the device reached it over the LAN.
-// The client builds the shareable URL itself from window.location.origin,
-// the same pattern profile-share-screen.tsx already uses for profile links.
+// exists even if they didn't create it). Returns the bare shareToken rather
+// than a computed absolute URL: this server's view of its own request
+// origin (request.nextUrl.origin) doesn't reliably match what the caller's
+// browser actually used to reach it — e.g. behind the LAN-IP/tunnel setups
+// CLAUDE.md's iOS local-network testing section describes, where the
+// request can arrive with a Host header of "localhost" even though the
+// device reached it over the LAN. The client builds the shareable URL
+// itself from window.location.origin, the same pattern
+// profile-share-screen.tsx already uses for profile links.
 export async function getConversationShareResponse(
   request: NextRequest,
   conversationId: string,
@@ -581,14 +581,14 @@ export async function getConversationShareResponse(
   }
 
   return NextResponse.json({
-    shareEnabled: sharing.shareEnabled,
     shareToken: sharing.shareToken,
+    sharedAt: sharing.sharedAt?.toISOString() ?? null,
   });
 }
 
-// Owner-only toggle for the room's public read-only "spectate" link — see
-// setConversationChannelSharing's doc comment for why this stays owner-gated
-// like delete-for-everyone instead of open to any member.
+// Any member can create or refresh the room's share link — see
+// createOrRefreshConversationShareLink's doc comment for why this isn't
+// owner-only. No body: this always (re-)shares as of now.
 export async function postConversationShareResponse(
   request: NextRequest,
   conversationId: string,
@@ -603,21 +603,9 @@ export async function postConversationShareResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { enabled?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-  }
-
-  if (typeof body.enabled !== "boolean") {
-    return NextResponse.json({ error: "invalid_enabled" }, { status: 400 });
-  }
-
-  const conversation = await setConversationChannelSharing({
+  const conversation = await createOrRefreshConversationShareLink({
     conversationId,
     userId: resolvedUser.userId,
-    enabled: body.enabled,
   });
 
   if (!conversation) {
@@ -632,7 +620,6 @@ export async function postConversationShareResponse(
     : resolvedUser.identity;
   const response = NextResponse.json({
     conversation,
-    shareEnabled: conversation.shareEnabled,
     shareToken: conversation.shareToken,
   });
   applyTrackingCookies(request, response, trackingHints);
