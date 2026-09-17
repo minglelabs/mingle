@@ -13,6 +13,7 @@ on:
   pull_request:
     branches:
       - main
+      - codex/messenger-tabs-device-test
     paths:
       - "mingle-app/**"
       - "mingle-stt/**"
@@ -145,6 +146,28 @@ jobs:
 
       - name: Run TDD suite (unit)
         run: pnpm test:unit
+
+  stt-tests:
+    name: STT Transport and Segmentation Tests
+    needs: push-context
+    if: ${{ github.event_name != 'push' || needs.push-context.outputs.run_tests_on_push == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mingle-stt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.1
+          cache: pnpm
+          cache-dependency-path: mingle-stt/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
 
   live-tests:
     name: Live Integration (STT + Finalize, Opt-In)
