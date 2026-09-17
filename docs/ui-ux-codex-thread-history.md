@@ -1,5 +1,17 @@
 # UI/UX Codex Thread History
 
+## 2026-09-17 — Bound Soniox startup and propagate terminal STT failures
+
+- Surface: Shared STT server and the conversation WebView STT hook on iOS, Android, and web.
+- Evidence: Connections 513 and 524 reported Soniox 408 before client disconnection 30.0s and 22.5s later. The old server only logged provider errors and discarded audio received while the provider socket was connecting. These code defects are confirmed; the logs do not prove that either caused the upstream request timeouts.
+- User impact: Early speech could disappear and a terminal provider failure could leave the app displaying a stale recording/connection state until the sockets eventually closed.
+- Resolution: Buffer up to five seconds of PCM (also bounded to 512 queued chunks), send it in order after the provider configuration, bound the provider handshake to 10s, and reject slow-provider backpressure explicitly. Never restart a connection after Stop or accept a second configuration on the same client connection.
+- Audio gaps: Send Soniox's JSON keepalive every 5s only while audio is absent. End sessions with no first audio after 15s, or with a 30s ongoing input gap, so keepalive cannot hide a dead microphone or retain paid sessions indefinitely. Normal silence is still valid PCM and does not trigger this timeout.
+- Failure behavior: Flush the pending transcript once, settle any pending finalize, send a structured error and close immediately with code 1011. Stop-in-progress still receives its acknowledgement. Dispose queues and timers on Stop, disconnect, and failure; force-close an unresponsive client after 5s.
+- Diagnostics: Record provider error type/request ID and aggregate audio counts/timestamps at failures and upstream close. Do not record audio payloads or transcript content. Record requested language hints separately from the legacy `languages` field; the existing disabled-hints behavior is unchanged.
+- Authentication scope: The Google callback in the attachment had no cookies at all, then the next attempt succeeded. This branch already uses provider-specific SameSite cookies (Google Lax, Apple None). The attachment does not establish why that browser lost its cookies; no state/PKCE validation is bypassed or weakened.
+- Verification: All 57 STT tests (including 12 new transport regressions), the STT production build, all 1,540 web unit tests, web TypeScript and targeted ESLint passed. Local mock-WebSocket tests cover ordered startup audio, silence, duplicate configuration, handshake timeout, upstream 408 without provider close, abrupt disconnect, Stop races, final transcript/ack ordering, keepalive, missing audio and bounded buffers. These tests need no external API keys. Added the STT suite/build to CI, including PRs targeting the messenger branch. Physical-device and production-provider validation remain pending; deployment requires the web and STT services, with no native binary or database migration change.
+
 ## 2026-09-12 - Keep diagonal edge swipe-back gestures from becoming scrolls
 
 - Surface: All full-screen panels and nested pages using the shared `SlideSurface`, including notifications, profiles, follow lists, location, sharing, room settings, and language selection.

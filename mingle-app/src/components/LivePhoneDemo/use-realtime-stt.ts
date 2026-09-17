@@ -2,6 +2,7 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
@@ -5350,6 +5351,9 @@ export default function useRealtimeSTT({
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.close', details)
     console.warn('[MingleSTT] transport.close', details || {})
+    // A terminal provider error is followed by a socket close. Keep the error
+    // state until its existing reset timer fires, rather than hiding it at once.
+    if (connectionStatusRef.current === 'error') return
     const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
 
@@ -5400,6 +5404,11 @@ export default function useRealtimeSTT({
   ])
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
+    const serverError = parseSttServerError(message)
+    if (serverError) {
+      handleSttTransportError({ native: useNativeSttRef.current, ...serverError })
+      return
+    }
     if (message.status === 'ready') {
       if (useNativeSttRef.current && (isStoppingRef.current || nativeStopRequestedRef.current
         || nativeStopIntent.isStopped(nativeStopIntentKeyRef.current))) return
@@ -5677,6 +5686,7 @@ export default function useRealtimeSTT({
     bumpMessageCountForNewUtterance,
     bumpPendingTurnRenderVersion,
     finalizePendingTurnsLocallyForStop,
+    handleSttTransportError,
     finalizeTurnWithTranslation,
     getCurrentTargetLanguages,
     logClientEvent,
