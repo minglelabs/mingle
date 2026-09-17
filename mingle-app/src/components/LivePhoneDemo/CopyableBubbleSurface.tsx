@@ -43,6 +43,14 @@ type TooltipPos =
   | { side: 'above'; bottom: number; left: number }
   | { side: 'below'; top: number; left: number }
 
+export function chooseTooltipSide(aboveSpace: number, belowSpace: number): 'above' | 'below' {
+  const availableAbove = Math.max(0, aboveSpace)
+  const availableBelow = Math.max(0, belowSpace)
+  return availableAbove >= TOOLTIP_ESTIMATED_MAX_HEIGHT_PX || availableAbove >= availableBelow
+    ? 'above'
+    : 'below'
+}
+
 export default function CopyableBubbleSurface({
   text,
   allText,
@@ -87,8 +95,8 @@ export default function CopyableBubbleSurface({
     const rect = surfaceRef.current?.getBoundingClientRect()
     if (!rect) return null
     const left = Math.max(120, Math.min(window.innerWidth - 120, rect.left + rect.width / 2))
-    // 위쪽 공간이 충분하면 버블 위에, 부족하면 버블 아래에 표시
-    if (rect.top - TOOLTIP_GAP_PX >= TOOLTIP_ESTIMATED_MAX_HEIGHT_PX) {
+    const side = chooseTooltipSide(rect.top - TOOLTIP_GAP_PX, window.innerHeight - rect.bottom - TOOLTIP_GAP_PX)
+    if (side === 'above') {
       return {
         side: 'above',
         bottom: window.innerHeight - rect.top + TOOLTIP_GAP_PX,
@@ -175,7 +183,7 @@ export default function CopyableBubbleSurface({
       onTouchCancel={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="w-[230px] max-w-[calc(100vw-16px)] rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+      <div className="max-h-[calc(100dvh-16px)] w-[230px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
         <MessageReactionPicker onSelect={closeMenu} />
         <button
           type="button"

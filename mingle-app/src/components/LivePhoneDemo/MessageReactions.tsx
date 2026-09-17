@@ -182,7 +182,7 @@ function ReactionBadge({ row, locale, pending, onSelect, onShowParticipants }: {
     onContextMenu={event => { event.preventDefault(); clearPress(); suppressClick.current = true; onShowParticipants() }}
     onKeyDown={event => {
       if (event.key === 'ContextMenu' || (event.shiftKey && (event.key === 'F10' || event.key === 'Enter'))) {
-        event.preventDefault(); onShowParticipants()
+        event.preventDefault(); suppressClick.current = true; onShowParticipants()
       } else if (event.key === 'Enter' || event.key === ' ') suppressClick.current = false
     }}
     onClick={event => {

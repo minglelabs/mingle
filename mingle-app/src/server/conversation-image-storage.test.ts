@@ -45,6 +45,9 @@ describe('private conversation image storage', () => {
       bucketName: 'private-conversations',
     })
   })
+  it.each(['CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID', 'CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY'])('rejects a partial private credential pair: %s', key => {
+    expect(readConversationImageStorageConfig({ ...env, [key]: 'private-only' })).toBeNull()
+  })
   it.each(['CLOUDFLARE_R2_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY'])('rejects incomplete credentials: %s', key => {
     expect(readConversationImageStorageConfig({ ...env, [key]: '' })).toBeNull()
   })
