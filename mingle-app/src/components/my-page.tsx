@@ -8,6 +8,8 @@ import ProfileImageCropper, {
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import FollowListScreen from "@/components/follow-list-screen";
+import ProfileBio from "@/components/profile-bio";
+import { BIO_CHANGED_EVENT } from "@/lib/profile-bio";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
@@ -95,6 +97,7 @@ type MyPageProps = {
 };
 
 type ProfileRecord = {
+  bioDraft?: string | null;
   image: string | null;
   imageCropScale: number | null;
   imageCropX: number | null;
@@ -1363,6 +1366,7 @@ function ProfileEditPanel({
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
 }) {
+  const { data: editingSession } = useSession();
   const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
   const [bio, setBio] = useState(initialBio);
@@ -1375,6 +1379,10 @@ function ProfileEditPanel({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
   });
+  const saveEpoch = useRef(0);
+  const editOpenRef = useRef(open);
+  editOpenRef.current = open;
+  useEffect(() => { saveEpoch.current += 1; }, [open]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const copy = {
@@ -1431,6 +1439,7 @@ function ProfileEditPanel({
   const handleSave = useCallback(async () => {
     if (isSaving) return;
 
+    const epoch = saveEpoch.current;
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -1445,7 +1454,7 @@ function ProfileEditPanel({
         birthDate: hasBirthDate ? birthDate : null,
       });
       if (saved === "saved") {
-        onClose();
+        if (editOpenRef.current && epoch === saveEpoch.current) onClose();
       } else {
         setSaveError(saved === "handle_taken" ? copy.handleTaken : saved === "handle_invalid" ? copy.handleInvalid : copy.saveError);
       }
@@ -1474,7 +1483,6 @@ function ProfileEditPanel({
             <button
               type="button"
               onClick={onClose}
-              disabled={isSaving}
               className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:opacity-50"
               aria-label={copy.cancelAction}
             >
@@ -1545,6 +1553,7 @@ function ProfileEditPanel({
                   className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] leading-relaxed outline-none transition focus:border-gray-400 focus:bg-white"
                 />
                 <span className="mt-1 block text-right text-[12px] text-gray-400">{bio.length}/160</span>
+                {editingSession?.user?.id && <ProfileBio userId={editingSession.user.id} locale={locale} editing />}
               </label>
 
               <fieldset className="min-w-0 w-full max-w-full">
@@ -1665,6 +1674,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }, [locationPermission]);
 
   const sessionUserId = session?.user?.id ?? "";
+  const currentAccountRef = useRef(sessionUserId);
+  currentAccountRef.current = sessionUserId;
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
@@ -1874,6 +1885,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           handle: typeof data.handle === "string" ? data.handle : null,
           name: typeof data.name === "string" ? data.name : null,
           bio: typeof data.bio === "string" ? data.bio : null,
+          bioDraft: typeof data.bioDraft === "string" ? data.bioDraft : data.bioDraft === null ? null : undefined,
           nationality: typeof data.nationality === "string" ? data.nationality : null,
           primaryLanguages: sanitizeSttLanguageSelection(
             data.primaryLanguages,
@@ -1984,6 +1996,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }, []);
 
   const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
+    if (!sessionUserId) return "failed";
     try {
       if (draft.imageFile) {
         const imageFormData = new FormData();
@@ -1994,11 +2007,13 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
         const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
           method: "POST",
+          headers: { "x-mingle-expected-account-id": sessionUserId },
           body: imageFormData,
         });
         if (!imageResponse.ok) return "failed";
 
         const imageSaved = await imageResponse.json() as Partial<ProfileRecord>;
+        if (currentAccountRef.current !== sessionUserId) return "failed";
         setProfile((current) => ({
           ...current,
           image: typeof imageSaved.image === "string" ? imageSaved.image : current.image,
@@ -2010,7 +2025,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
       const response = await fetch(buildClientApiPath("/profile"), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-mingle-expected-account-id": sessionUserId },
         body: JSON.stringify({
           handle: draft.handle,
           name: draft.name,
@@ -2037,11 +2052,13 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       }
 
       const saved = await response.json() as Partial<ProfileRecord>;
+      if (currentAccountRef.current !== sessionUserId) return "failed";
       setProfile((current) => ({
         ...current,
         handle: typeof saved.handle === "string" ? saved.handle : current.handle,
         name: typeof saved.name === "string" ? saved.name : saved.name === null ? null : current.name,
         bio: typeof saved.bio === "string" ? saved.bio : saved.bio === null ? null : current.bio,
+        bioDraft: typeof saved.bioDraft === "string" ? saved.bioDraft : saved.bioDraft === null ? null : current.bioDraft,
         birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         primaryLanguages: sanitizeSttLanguageSelection(
@@ -2049,11 +2066,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           typeof saved.nationality === "string" && saved.nationality ? [saved.nationality] : [],
         ),
       }));
+      window.dispatchEvent(new Event(BIO_CHANGED_EVENT));
       return "saved";
     } catch {
       return "failed";
     }
-  }, []);
+  }, [sessionUserId]);
 
   const handleSavePrimaryLanguages = useCallback(async (languages: SttLanguageCode[]) => {
     try {
@@ -2144,7 +2162,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           x: profile.imageCropX,
           y: profile.imageCropY,
         }}
-        initialBio={profile.bio ?? ""}
+        initialBio={profile.bioDraft !== undefined ? profile.bioDraft ?? "" : profile.bio ?? ""}
         initialName={name}
         initialHandle={profile.handle ?? ""}
         initialPrimaryLanguages={primaryLanguages}
@@ -2212,6 +2230,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         name={name}
         handle={profile.handle}
         bio={bio}
+        bioUserId={sessionUserId}
+        locale={locale}
         languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? "Primary language"}
         languageName={nationalityName}
         closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
@@ -2288,7 +2308,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               onClearLocation={handleClearLocation}
               onMapOpenChange={handleLocationMapOpenChange}
             />
-            {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
+            <ProfileBio userId={sessionUserId} initialBio={bio} locale={locale} />
           </div>
 
           <div className="mt-4 flex gap-2">

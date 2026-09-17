@@ -1,3 +1,4 @@
+import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -75,6 +76,7 @@ export type ConversationChannelSummary = {
 };
 
 export type ConversationHydrationUtterance = {
+  image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
   id: string;
@@ -2561,6 +2563,8 @@ export async function getConversationHydrationStateForUser(args: {
       ...readStringArray(metadata?.translationTargetLanguages),
       ...Object.keys(translations),
     ])];
+    const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
+    const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
@@ -2573,6 +2577,7 @@ export async function getConversationHydrationStateForUser(args: {
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
+      ...(image ? { image } : {}),
       originalText: sourceContent?.text?.trim() || "",
       originalLang: (message.sourceLanguage || "").trim() || "unknown",
       targetLanguages,
@@ -2590,7 +2595,7 @@ export async function getConversationHydrationStateForUser(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: isMultiMemberAtMessage && message.userId
+      speakerName: (isMultiMemberAtMessage || image) && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -2599,13 +2604,13 @@ export async function getConversationHydrationStateForUser(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: isMultiMemberAtMessage ? message.userId : null,
+      speakerUserId: (isMultiMemberAtMessage || image) ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: isMultiMemberAtMessage && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
     };

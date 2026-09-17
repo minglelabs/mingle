@@ -11,6 +11,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   clearNativeAuthAttempt,
@@ -1959,6 +1960,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   return (
     <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
       {isLiveDemoMounted ? (
+        <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
@@ -2034,6 +2036,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           isBlockedCounterpart={props.isBlockedCounterpart}
           isMultiMember={props.isMultiMember}
         />
+        </MessageReactionsProvider>
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
           <Loader2 size={24} className="animate-spin" aria-hidden />

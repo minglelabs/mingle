@@ -1,5 +1,7 @@
 'use client'
 
+import ConversationImageComposer from './ConversationImageComposer'
+
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 
@@ -4268,6 +4270,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startRecording,
     stopRecording,
     submitExternalUtterance,
+    refreshConversationMessages,
     clearConversationHistory,
     prepareForDeletion,
     isActive,
@@ -8276,7 +8279,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
                     <div
-                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none"
+                      className="flex min-w-0 flex-1 items-end overflow-visible rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none"
                       style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
                     >
                       <div className="flex min-w-0 flex-1 items-end px-1">
@@ -8292,6 +8295,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </div>
 
+                      {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
+                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer} /> : (
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
                         data-qa="live-demo-keyboard-close"
@@ -8306,6 +8311,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <Keyboard size={18} strokeWidth={2.2} />
                       </motion.button>
+                      )}
                     </div>
 
                     <button
@@ -8454,7 +8460,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   </motion.div>
 
-                  <div className="self-end justify-self-end">
+                  <div className="flex items-center gap-1 self-end justify-self-end">
+                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale} onSent={() => void refreshConversationMessages('push')} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"

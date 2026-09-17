@@ -12,6 +12,9 @@ import {
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
+import ConversationImageBubble from './ConversationImageBubble'
+import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
+import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -59,6 +62,7 @@ function SpeakingIndicator({ label }: { label: string }) {
 }
 
 export interface Utterance {
+  image?: ConversationMessageImage
   id: string
   speaker?: string
   speakerAvatarSeed?: string
@@ -592,6 +596,7 @@ function ChatBubble({
   onOpenProfile,
   bubbleDisplayMode = DEFAULT_BUBBLE_DISPLAY_MODE,
 }: ChatBubbleProps) {
+  const messageImage = normalizeConversationMessageImage(utterance.image)
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -844,7 +849,7 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
     && (Boolean(speakerName) || shouldShowCollapsedHeaderLanguages)
@@ -941,7 +946,7 @@ function ChatBubble({
     </div>
   )
 
-  const bubbleContentSwitch = (
+  const bubbleContentSwitch = messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
         <motion.div
@@ -1055,7 +1060,7 @@ function ChatBubble({
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
       {bubbleTimestamp}
-      {bubbleControls}
+      {!messageImage && bubbleControls}
     </div>
   )
 
@@ -1066,7 +1071,7 @@ function ChatBubble({
       layout
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
       className={isOwnMessage
-        ? 'flex min-w-0 max-w-full items-end gap-px'
+        ? 'flex min-w-0 max-w-full flex-col items-end gap-px'
         : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
@@ -1086,17 +1091,19 @@ function ChatBubble({
           </>
         )}
       </div>
+      <MessageReactionBadges />
     </motion.div>
   )
 
   const bubbleContent = isOwnMessage
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
+  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>{bubbleContent}</MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
     return (
       <div className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}>
-        {bubbleContent}
+        {reactiveContent}
       </div>
     )
   }
@@ -1108,7 +1115,7 @@ function ChatBubble({
       transition={{ duration: 0.3 }}
       className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}
     >
-      {bubbleContent}
+      {reactiveContent}
     </motion.div>
   )
 }
@@ -1131,6 +1138,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     const pu = prev.utterance
     const nu = next.utterance
     if (pu.id !== nu.id) return false
+    if (pu.image !== nu.image) return false
     if (pu.speaker !== nu.speaker) return false
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false

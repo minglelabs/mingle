@@ -188,10 +188,10 @@ describe('api-contract namespace guard', () => {
   })
 
   it.each([
-    'ios/v2.0.0', 'ios/v2.0.1', 'ios/v2.0.2', 'ios/v2.0.3',
-    'android/v2.0.0', 'android/v2.0.1', 'android/v2.0.2', 'android/v2.0.3',
+    'ios/v2.0.0', 'ios/v2.0.1', 'ios/v2.0.2', 'ios/v2.0.3', 'ios/v2.0.4',
+    'android/v2.0.0', 'android/v2.0.1', 'android/v2.0.2', 'android/v2.0.3', 'android/v2.0.4',
   ])('keeps the installed app namespace when a newer server supplies the WebView: %s', async namespace => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.3'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v2.0.4'
     process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v2_0_0'
     stubBrowserRuntime({ search: `?nativeUi=1&apiNamespace=${encodeURIComponent(namespace)}` })
     const contract = await loadApiContractModule()

@@ -1,5 +1,6 @@
 "use client";
 
+import { DISPLAY_LANGUAGE_CHANGED_EVENT } from "@/lib/profile-bio";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { compatiblePendingWorkNamespaces } from "@/lib/pending-work-api-namespace";
 import { EXPECTED_ACCOUNT_HEADER } from "@/lib/request-account-guard";
@@ -540,6 +541,7 @@ async function performFlush(input: {
           const acknowledged = acknowledgeConversationMutation(input.identity, record);
           if (acknowledged) {
             delivered += 1;
+            if (record.kind === "default-display-language" && typeof window !== "undefined") window.dispatchEvent(new Event(DISPLAY_LANGUAGE_CHANGED_EVENT));
           }
           await input.onSuccess?.(record, response, acknowledged);
           continue;

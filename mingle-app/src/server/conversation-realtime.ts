@@ -119,7 +119,7 @@ export function mintConversationListRealtimeToken(userId: string): string | null
  * The returned promise is awaited by message handlers so a serverless request
  * does not terminate before the publish request has been handed to messaging.
  */
-export async function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = [], utterance?: Record<string, unknown>): Promise<void> {
+export async function notifyConversationMessage(sessionKey: string, memberUserIds: string[] = [], utterance?: Record<string, unknown>, options?: { timeoutMs: number }): Promise<void> {
   const secret = readRealtimeSecret();
   const publishUrl = resolveConversationEventsPublishUrl();
   const normalizedSessionKey = sessionKey.trim();
@@ -136,6 +136,7 @@ export async function notifyConversationMessage(sessionKey: string, memberUserId
         authorization: `Bearer ${secret}`,
       },
       body: JSON.stringify({ sessionKey: normalizedSessionKey || undefined, keys: listKeys, ...(utterance ? { utterance } : {}) }),
+      ...(options ? { signal: AbortSignal.timeout(options.timeoutMs) } : {}),
     });
     if (!response.ok) {
       console.warn("[conversation-realtime] publish_failed", { status: response.status });
