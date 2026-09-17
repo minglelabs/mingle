@@ -4,12 +4,14 @@ import { NextRequest } from "next/server";
 const {
   mockGetServerSession,
   mockGetConversationChannelSharing,
-  mockCreateOrRefreshConversationShareLink,
+  mockSetConversationShareEnabled,
+  mockRefreshConversationShareSnapshot,
   mockResolveOrCreateUserIdForRequest,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockGetConversationChannelSharing: vi.fn(),
-  mockCreateOrRefreshConversationShareLink: vi.fn(),
+  mockSetConversationShareEnabled: vi.fn(),
+  mockRefreshConversationShareSnapshot: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
 }));
 
@@ -23,7 +25,8 @@ vi.mock("@/lib/auth-options", () => ({
 
 vi.mock("@/lib/app-conversations", () => ({
   getConversationChannelSharing: mockGetConversationChannelSharing,
-  createOrRefreshConversationShareLink: mockCreateOrRefreshConversationShareLink,
+  setConversationShareEnabled: mockSetConversationShareEnabled,
+  refreshConversationShareSnapshot: mockRefreshConversationShareSnapshot,
 }));
 
 vi.mock("@/lib/request-user-identity", () => ({
@@ -36,9 +39,11 @@ vi.mock("@/lib/app-analytics", () => ({
 
 import { GET, POST } from "@/app/api/conversations/[conversationId]/share/route";
 
-function postShareRequest() {
+function postShareRequest(body: unknown) {
   return new NextRequest("https://example.com/api/conversations/conv-a/share", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
@@ -54,7 +59,11 @@ describe("/api/conversations/[conversationId]/share route", () => {
   });
 
   it("returns sharing status for any member", async () => {
-    mockGetConversationChannelSharing.mockResolvedValue({ shareToken: "tok-a", sharedAt: new Date("2026-01-01T00:00:00.000Z") });
+    mockGetConversationChannelSharing.mockResolvedValue({
+      shareToken: "tok-a",
+      shareEnabled: true,
+      sharedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
 
     const response = await GET(
       new NextRequest("https://example.com/api/conversations/conv-a/share"),
@@ -63,7 +72,7 @@ describe("/api/conversations/[conversationId]/share route", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json).toEqual({ shareToken: "tok-a", sharedAt: "2026-01-01T00:00:00.000Z" });
+    expect(json).toEqual({ shareToken: "tok-a", shareEnabled: true, sharedAt: "2026-01-01T00:00:00.000Z" });
     expect(mockGetConversationChannelSharing).toHaveBeenCalledWith({
       conversationId: "conv-a",
       userId: "user-a",
@@ -81,31 +90,99 @@ describe("/api/conversations/[conversationId]/share route", () => {
     expect(response.status).toBe(404);
   });
 
-  it("creates or refreshes the share link and returns the share token", async () => {
-    mockCreateOrRefreshConversationShareLink.mockResolvedValue({
+  it("toggles sharing on and returns the share token", async () => {
+    mockSetConversationShareEnabled.mockResolvedValue({
       id: "conv-a",
       shareToken: "tok-a",
+      shareEnabled: true,
     });
 
     const response = await POST(
-      postShareRequest(),
+      postShareRequest({ enabled: true }),
       { params: Promise.resolve({ conversationId: "conv-a" }) },
     );
     const json = await response.json();
 
     expect(response.status).toBe(200);
     expect(json.shareToken).toBe("tok-a");
-    expect(mockCreateOrRefreshConversationShareLink).toHaveBeenCalledWith({
+    expect(json.shareEnabled).toBe(true);
+    expect(mockSetConversationShareEnabled).toHaveBeenCalledWith({
       conversationId: "conv-a",
       userId: "user-a",
+      enabled: true,
+    });
+    expect(mockRefreshConversationShareSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("toggles sharing off", async () => {
+    mockSetConversationShareEnabled.mockResolvedValue({
+      id: "conv-a",
+      shareToken: "tok-a",
+      shareEnabled: false,
+    });
+
+    const response = await POST(
+      postShareRequest({ enabled: false }),
+      { params: Promise.resolve({ conversationId: "conv-a" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.shareEnabled).toBe(false);
+    expect(mockSetConversationShareEnabled).toHaveBeenCalledWith({
+      conversationId: "conv-a",
+      userId: "user-a",
+      enabled: false,
     });
   });
 
-  it("returns not_found when the caller isn't a member of the room", async () => {
-    mockCreateOrRefreshConversationShareLink.mockResolvedValue(null);
+  it("refreshes the snapshot without touching the toggle", async () => {
+    mockRefreshConversationShareSnapshot.mockResolvedValue({
+      id: "conv-a",
+      shareToken: "tok-a",
+      shareEnabled: true,
+    });
 
     const response = await POST(
-      postShareRequest(),
+      postShareRequest({ refresh: true }),
+      { params: Promise.resolve({ conversationId: "conv-a" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.shareToken).toBe("tok-a");
+    expect(mockRefreshConversationShareSnapshot).toHaveBeenCalledWith({
+      conversationId: "conv-a",
+      userId: "user-a",
+    });
+    expect(mockSetConversationShareEnabled).not.toHaveBeenCalled();
+  });
+
+  it("returns invalid_body when neither enabled nor refresh is given", async () => {
+    const response = await POST(
+      postShareRequest({}),
+      { params: Promise.resolve({ conversationId: "conv-a" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetConversationShareEnabled).not.toHaveBeenCalled();
+    expect(mockRefreshConversationShareSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("returns invalid_body when both enabled and refresh are given", async () => {
+    const response = await POST(
+      postShareRequest({ enabled: true, refresh: true }),
+      { params: Promise.resolve({ conversationId: "conv-a" }) },
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns not_found when the caller isn't a member of the room", async () => {
+    mockSetConversationShareEnabled.mockResolvedValue(null);
+
+    const response = await POST(
+      postShareRequest({ enabled: true }),
       { params: Promise.resolve({ conversationId: "conv-a" }) },
     );
 
@@ -120,11 +197,11 @@ describe("/api/conversations/[conversationId]/share route", () => {
     });
 
     const response = await POST(
-      postShareRequest(),
+      postShareRequest({ enabled: true }),
       { params: Promise.resolve({ conversationId: "conv-a" }) },
     );
 
     expect(response.status).toBe(401);
-    expect(mockCreateOrRefreshConversationShareLink).not.toHaveBeenCalled();
+    expect(mockSetConversationShareEnabled).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Play, Smartphone } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
 import {
   buildConversationShareAppUrl,
@@ -14,7 +14,7 @@ import {
   getConversationSpectateCopy,
   type ConversationSpectateLocale,
 } from "@/components/conversation-spectate-copy";
-import { useConversationSpectate } from "@/components/use-conversation-spectate";
+import { useConversationSpectate, type ConversationSpectateState } from "@/components/use-conversation-spectate";
 
 export type ConversationSpectateInviter = {
   name: string | null;
@@ -31,6 +31,20 @@ type ConversationSpectateScreenProps = {
   locale: ConversationSpectateLocale;
   initialRoomTitle: string;
   inviter: ConversationSpectateInviter | null;
+  initialState: ConversationSpectateState | null;
+  // True the moment the server already knows (from its own hydration fetch)
+  // that this token doesn't resolve to a shared conversation — lets the
+  // "no longer shared" card render on the very first paint instead of
+  // flashing the normal chat card while the client re-confirms the same
+  // thing over the network. See page.tsx.
+  initialNotFound: boolean;
+  // Detected from the request's User-Agent header, server-side — see
+  // page.tsx. Passing this down instead of re-detecting from
+  // navigator.userAgent after mount means the correct store button(s)
+  // render from the very first paint instead of both showing briefly and
+  // then narrowing to one.
+  initialIsAndroid: boolean;
+  initialIsIos: boolean;
 };
 
 function AppleLogo() {
@@ -48,20 +62,26 @@ export default function ConversationSpectateScreen({
   locale,
   initialRoomTitle,
   inviter,
+  initialState,
+  initialNotFound,
+  initialIsAndroid,
+  initialIsIos,
 }: ConversationSpectateScreenProps) {
   const copy = getConversationSpectateCopy(locale);
   const isValidToken = isValidConversationShareToken(shareToken);
-  const { status, state } = useConversationSpectate(isValidToken ? shareToken : null);
+  const { status, state } = useConversationSpectate(
+    isValidToken ? shareToken : null,
+    initialState,
+    initialNotFound,
+  );
   const appUrl = isValidToken ? buildConversationShareAppUrl(shareToken) : null;
-  // Read navigator only after mount, not during render: the server has no
-  // navigator at all, so computing this straight from render would make the
-  // very first client render disagree with the server-rendered HTML
-  // (both store buttons showing on the server, one hidden on an iOS/Android
-  // client) and trip a hydration mismatch. Starting both false on both
-  // sides and refining once after mount is a plain post-mount state update,
-  // not a hydration diff.
-  const [isAndroid, setIsAndroid] = useState(false);
-  const [isIos, setIsIos] = useState(false);
+  // isAndroid/isIos come straight from the server's own User-Agent-header
+  // detection (see page.tsx) and never change after that: the request that
+  // rendered this page and the client hydrating it are the same device, so
+  // there's nothing to "correct" after mount the way a client-only
+  // navigator.userAgent read would need to.
+  const isAndroid = initialIsAndroid;
+  const isIos = initialIsIos;
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Chat-app-standard behavior: land on the newest message, not the
   // oldest of the fetched batch. Stays pinned to the bottom as live
@@ -86,19 +106,6 @@ export default function ConversationSpectateScreen({
     if (!container || !isPinnedToBottomRef.current) return;
     container.scrollTop = container.scrollHeight;
   }, [state?.utterances]);
-  // Deferred via queueMicrotask, matching LivePhoneDemo.tsx's persisted-
-  // preferences hydration effect, so this doesn't trip the
-  // react-hooks/set-state-in-effect rule.
-  useEffect(() => {
-    const schedule = typeof queueMicrotask === "function"
-      ? queueMicrotask
-      : (callback: () => void) => { void Promise.resolve().then(callback) };
-
-    schedule(() => {
-      setIsAndroid(/android/i.test(navigator.userAgent));
-      setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    });
-  }, []);
   const launchNonceRef = useRef(0);
 
   const roomTitle = state?.roomTitle || initialRoomTitle;

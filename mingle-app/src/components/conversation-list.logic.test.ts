@@ -67,6 +67,7 @@ function buildConversationSummary(
     shareToken: Object.prototype.hasOwnProperty.call(overrides, "shareToken")
       ? (overrides.shareToken as string | null)
       : null,
+    shareEnabled: overrides.shareEnabled ?? false,
   };
 }
 

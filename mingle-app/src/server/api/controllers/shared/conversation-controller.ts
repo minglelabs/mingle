@@ -21,7 +21,8 @@ import {
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelTitle,
   getConversationChannelSharing,
-  createOrRefreshConversationShareLink,
+  setConversationShareEnabled,
+  refreshConversationShareSnapshot,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
@@ -582,13 +583,15 @@ export async function getConversationShareResponse(
 
   return NextResponse.json({
     shareToken: sharing.shareToken,
+    shareEnabled: sharing.shareEnabled,
     sharedAt: sharing.sharedAt?.toISOString() ?? null,
   });
 }
 
-// Any member can create or refresh the room's share link — see
-// createOrRefreshConversationShareLink's doc comment for why this isn't
-// owner-only. No body: this always (re-)shares as of now.
+// Any member can toggle sharing on/off or refresh the snapshot — see
+// setConversationShareEnabled's doc comment for why this isn't owner-only.
+// Body is exactly one of `{ enabled: boolean }` (toggle) or
+// `{ refresh: true }` (re-take the snapshot without changing on/off state).
 export async function postConversationShareResponse(
   request: NextRequest,
   conversationId: string,
@@ -603,10 +606,29 @@ export async function postConversationShareResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const conversation = await createOrRefreshConversationShareLink({
-    conversationId,
-    userId: resolvedUser.userId,
-  });
+  let body: { enabled?: unknown; refresh?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const hasEnabled = typeof body.enabled === "boolean";
+  const hasRefresh = body.refresh === true;
+  if (hasEnabled === hasRefresh) {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+
+  const conversation = hasEnabled
+    ? await setConversationShareEnabled({
+        conversationId,
+        userId: resolvedUser.userId,
+        enabled: body.enabled as boolean,
+      })
+    : await refreshConversationShareSnapshot({
+        conversationId,
+        userId: resolvedUser.userId,
+      });
 
   if (!conversation) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -621,6 +643,7 @@ export async function postConversationShareResponse(
   const response = NextResponse.json({
     conversation,
     shareToken: conversation.shareToken,
+    shareEnabled: conversation.shareEnabled,
   });
   applyTrackingCookies(request, response, trackingHints);
   return response;
