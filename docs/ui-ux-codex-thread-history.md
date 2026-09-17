@@ -2290,6 +2290,12 @@
 - Validation: 75 targeted tests passed, covering participant authorization/pagination, request timeouts/cancellation, notification timeout, and existing message/menu/timestamp behavior. Browser checks using actual components and local API/DB confirmed the own-message badge starts below the message, both participant names appear, switching to an empty kind works, Escape restores focus, and short taps still remove only the viewer's reaction. Simulated touch-pointer holds opened the list without changing the count; pointer movement canceled the hold without changing the count. Physical phone long-press was not exercised.
 - Deployment: No additional migration, environment variable, or native rebuild. The previously generated `20260908135150_add_message_reactions` remains the only migration required by PR #219.
 
+## 2026-09-17 — Re-review PR #219 interaction and storage edge cases
+
+- Review findings: A keyboard context-menu action on a reaction badge opened the participant list but left the following synthetic click able to toggle that reaction. The copy/reaction menu also always chose below the message when the upper space was short, which could place a bottom-of-viewport menu outside the visible area. A partially configured private R2 credential pair could be combined with the public profile pair and produce an invalid mixed credential.
+- Resolution: Mark keyboard participant actions as click-suppressed, choose the menu side with the greater available viewport space, constrain the menu height to the viewport, and fail closed when only one private credential is configured. No schema or migration change was needed.
+- Validation: Added focused side-selection and credential-pair tests; the complete unit suite (1,636 tests), TypeScript validation, and targeted ESLint checks passed. User-owned uncommitted composer UI changes remain untouched.
+
 ## 2026-09-08 — Send conversation photos from the existing composer
 
 - Request and decision: Add photo/image messages on the same `codex/message-reactions` branch. The user selected replacing the keyboard-close icon inside the text field with a plus menu containing Choose photo and Hide keyboard. Keep the microphone, input width, and send control. Voice mode exposes the same plus beside its keyboard button.
