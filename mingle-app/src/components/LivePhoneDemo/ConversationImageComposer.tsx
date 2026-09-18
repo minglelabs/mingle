@@ -251,8 +251,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
         setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
       }} />
     {open && !chosen && createPortal(<>
-      <div className="fixed inset-0 z-[99]" onPointerDown={() => setOpen(false)} />
-      <div ref={diagMenuRef} role="group" aria-label={copy.attach} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} className="fixed z-[100] min-w-44 rounded-2xl border border-gray-200 bg-white p-1.5 text-gray-700 shadow-lg" style={anchor}>
+      {/* Conversation rooms use z-index 101. Keep this portal above that surface
+          so the menu remains visible and receives taps on iOS WKWebView. */}
+      <div className="fixed inset-0 z-[110]" onPointerDown={() => setOpen(false)} />
+      <div ref={diagMenuRef} role="group" aria-label={copy.attach} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} className="fixed z-[111] min-w-44 rounded-2xl border border-gray-200 bg-white p-1.5 text-gray-700 shadow-lg" style={anchor}>
         <button type="button" onClick={() => input.current?.click()} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Photo size={20} strokeWidth={2.15} />{copy.choose}</button>
         {onCloseKeyboard && <button type="button" onClick={() => { close(); onCloseKeyboard() }} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Keyboard size={20} />{copy.closeKeyboard}</button>}
         {error && <p role="alert" className="max-w-60 px-3 text-sm text-red-600">{error}</p>}

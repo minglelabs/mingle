@@ -82,4 +82,14 @@ describe('conversation image composer touch interaction', () => {
     expect(menuMeasureSource).toContain('MR3:')
     expect(menuMeasureSource).toContain('requestAnimationFrame')
   })
+
+  it('keeps the portaled attachment menu above the active conversation surface', () => {
+    const menuSource = sourceBetween(
+      '{open && !chosen && createPortal',
+      'document.body)}',
+    )
+
+    expect(menuSource).toContain('z-[110]')
+    expect(menuSource).toContain('z-[111]')
+  })
 })
