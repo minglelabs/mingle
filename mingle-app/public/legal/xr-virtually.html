@@ -6297,6 +6297,152 @@
           letter-spacing: 0.05em;
         }
       }
+
+      /* Mobile-only fit fixes for the Virtually deck. */
+      @media (max-width: 900px) {
+        html.is-mobile-viewport .slide-copy--download-qr {
+          margin-left: 0;
+        }
+
+        html.is-mobile-viewport .v-limit .v-local-video {
+          width: auto;
+          height: min(48vh, 360px);
+          max-width: 100%;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-shell {
+          gap: clamp(8px, 1.4vh, 12px);
+          padding-top: calc(env(safe-area-inset-top) + 16px);
+          padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-title {
+          font-size: clamp(20px, 5.8vw, 30px);
+          line-height: 1.18;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          align-items: stretch;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp > .v-between {
+          display: none;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-step {
+          min-height: 0;
+          padding: 10px 8px;
+          border-radius: 14px;
+          gap: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-num {
+          padding: 3px 8px;
+          font-size: 11px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-step strong {
+          font-size: clamp(12px, 3.5vw, 16px);
+          line-height: 1.18;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-highlight {
+          grid-column: 1 / -1;
+          min-height: 0;
+          padding: 10px 10px 8px;
+          border-radius: 16px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-highlight-head {
+          margin-bottom: 4px;
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-highlight-head strong {
+          font-size: clamp(14px, 4.2vw, 18px);
+          line-height: 1.2;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-logo-cloud {
+          min-height: clamp(92px, 25vw, 126px);
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="19"] .v-opp-logo {
+          width: clamp(34px, 10vw, 46px);
+          height: clamp(34px, 10vw, 46px);
+          padding: 5px;
+          border-radius: 10px;
+        }
+      }
+
+      @media (max-width: 360px) and (max-height: 650px) {
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-shell {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-shell {
+          justify-content: flex-start;
+          gap: 4px;
+          padding-top: calc(env(safe-area-inset-top) + 12px);
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-compare {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column {
+          padding: 8px 12px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column h2 {
+          margin-bottom: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column > div {
+          gap: 4px;
+          margin-top: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-between {
+          font-size: 22px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-shell {
+          justify-content: flex-start;
+          gap: 6px;
+          padding-top: calc(env(safe-area-inset-top) + 10px);
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-title {
+          font-size: 18px;
+          line-height: 1.05;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks {
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks > div {
+          gap: 2px;
+          padding-top: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-global {
+          padding-top: 4px;
+        }
+      }
 </style></head><body><main class="deck" aria-label="Virtually 발표자료"><nav class="v-lang-switcher" aria-label="언어 선택 (Language)"><button type="button" class="v-lang-btn" data-lang="en" aria-label="English">EN</button><button type="button" class="v-lang-btn" data-lang="ja" aria-label="日本語">JA</button><button type="button" class="v-lang-btn" data-lang="cn-ZH" aria-label="简体中文">简</button><button type="button" class="v-lang-btn" data-lang="cn-TW" aria-label="繁體中文">繁</button><button type="button" class="v-lang-btn is-active" data-lang="ko" aria-label="한국어">KO</button></nav><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
