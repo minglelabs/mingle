@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { Image as Photo, Keyboard, Loader2, Plus, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { CONVERSATION_IMAGE_MAX_BYTES, conversationImageCopy } from '@/lib/conversation-image'
@@ -18,9 +18,46 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const [error, setError] = useState<string | null>(null)
   const request = useRef<AbortController | null>(null)
   const mounted = useRef(true)
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; request.current?.abort() } }, [])
+  const pointerClickSuppressionRef = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      request.current?.abort()
+    }
+  }, [])
   useEffect(() => () => { if (chosen) URL.revokeObjectURL(chosen.url) }, [chosen])
   const close = useCallback(() => { if (!request.current) { setOpen(false); setChosen(null); setError(null) } }, [])
+  const toggleAttachmentMenu = useCallback((trigger: HTMLButtonElement) => {
+    const rect = trigger.getBoundingClientRect()
+    setAnchor({ right: Math.max(8, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 8 })
+    setOpen(value => !value)
+  }, [])
+  const handleAttachmentPointerDown = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    if (onCloseKeyboard) event.preventDefault()
+  }, [onCloseKeyboard])
+  const handleAttachmentPointerUp = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    if (!onCloseKeyboard || event.button !== 0) return
+
+    // WKWebView can suppress the synthetic click after pointerdown's default is
+    // prevented to keep the textarea focused. Pointer-up is still delivered.
+    pointerClickSuppressionRef.current = true
+    toggleAttachmentMenu(event.currentTarget)
+  }, [onCloseKeyboard, toggleAttachmentMenu])
+  const handleAttachmentClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    if (!onCloseKeyboard) {
+      input.current?.click()
+      return
+    }
+
+    // A pointer activation already opened the menu on pointer-up. Preserve
+    // click-only keyboard and assistive-technology activation (detail === 0).
+    if (event.detail > 0 && pointerClickSuppressionRef.current) {
+      pointerClickSuppressionRef.current = false
+      return
+    }
+    toggleAttachmentMenu(event.currentTarget)
+  }, [onCloseKeyboard, toggleAttachmentMenu])
   const send = async () => {
     if (!chosen || request.current) return
     const controller = new AbortController(); request.current = controller
@@ -37,8 +74,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   }
   return <>
     <button type="button" data-qa="live-demo-attachment-open" aria-label={onCloseKeyboard ? copy.attach : copy.choose}
-      onPointerDown={event => event.preventDefault()}
-      onClick={event => { if (!onCloseKeyboard) { input.current?.click(); return }; const rect = event.currentTarget.getBoundingClientRect(); setAnchor({ right: Math.max(8, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 8 }); setOpen(value => !value) }}
+      aria-expanded={onCloseKeyboard ? open : undefined}
+      onPointerDown={handleAttachmentPointerDown}
+      onPointerUp={handleAttachmentPointerUp}
+      onClick={handleAttachmentClick}
       style={onCloseKeyboard ? undefined : { width: voiceButtonSize, height: voiceButtonSize }}
       className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}</button>
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
