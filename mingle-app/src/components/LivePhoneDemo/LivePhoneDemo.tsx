@@ -2018,6 +2018,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
@@ -2241,7 +2242,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
   ])
-  const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
+  const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -8296,7 +8297,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
-                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer} /> : (
+                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
+                        onMenuOpenChange={setIsAttachmentMenuOpen} /> : (
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
                         data-qa="live-demo-keyboard-close"
@@ -8461,7 +8463,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </motion.div>
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
-                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale} onSent={() => void refreshConversationMessages('push')} />}
+                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
+                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"

@@ -32,8 +32,8 @@ function isDiagActiveInitial(): boolean {
   } catch { return false }
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, voiceButtonSize = 33 }: {
-  conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; voiceButtonSize?: number
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33 }: {
+  conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
 }) {
   const copy = resolveConversationImageCopy(locale)
   const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
@@ -178,6 +178,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       }
     }
   }, [])
+  useEffect(() => {
+    onMenuOpenChange?.(open)
+    return () => onMenuOpenChange?.(false)
+  }, [onMenuOpenChange, open])
   useEffect(() => () => { if (chosen) URL.revokeObjectURL(chosen.url) }, [chosen])
   const close = useCallback(() => { if (!request.current) { setOpen(false); setChosen(null); setError(null) } }, [])
   useEffect(() => {

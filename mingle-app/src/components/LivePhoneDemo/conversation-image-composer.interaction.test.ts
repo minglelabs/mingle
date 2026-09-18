@@ -100,4 +100,10 @@ describe('conversation image composer touch interaction', () => {
     expect(source).not.toContain('document.activeElement.blur()')
     expect(source).toContain('copy.switchToVoiceMode')
   })
+
+  it('reports attachment overlay state so native banners can stay behind overlays', () => {
+    expect(source).toContain('onMenuOpenChange?: (open: boolean) => void')
+    expect(source).toContain('onMenuOpenChange?.(open)')
+    expect(source).toContain('onMenuOpenChange?.(false)')
+  })
 })

@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-09-18 Native bottom banner obscured the attachment tooltip
+
+### `2026-09-18-attachment-tooltip-native-banner-overlay` | UI/UX issue found
+
+1. **The attachment tooltip could render behind a bottom native AdMob banner**
+   Problem: The attachment tooltip is rendered inside the WKWebView with a high CSS `z-index`, but the AdMob banner is a React Native sibling outside the WebView. A WebView element cannot paint above that native sibling, so the lower part of the tooltip was hidden whenever the conversation banner occupied the bottom edge.
+   Fix: The conversation now treats the attachment menu and image preview as native-overlay state. While the composer reports its `open` state, the existing native overlay bridge hides the conversation banner; closing or unmounting the composer reports `false`, and the native conversation banner is restored through the existing zone transition. Browser/Web-only sessions are unchanged because the bridge is unavailable there.
+   Data change: None. This is a native banner visibility and WebView overlay coordination fix.
+   Verification: Focused composer interaction tests, TypeScript, ESLint, and the existing native banner-zone tests passed. Physical TestFlight verification remains pending.
+
 ## 2026-08-23 Speaker-based message bubble color
 
 ### `2026-08-23-speaker-based-message-bubble-color` | UI/UX issue found
