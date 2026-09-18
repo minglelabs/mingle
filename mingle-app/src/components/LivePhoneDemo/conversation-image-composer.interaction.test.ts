@@ -13,27 +13,7 @@ function sourceBetween(startMarker: string, endMarker: string): string {
 }
 
 describe('conversation image composer touch interaction', () => {
-  it('opens the keyboard-composer attachment menu on pointer-up after preserving textarea focus', () => {
-    const pointerDownSource = sourceBetween(
-      'const handleAttachmentPointerDown = useCallback',
-      'const handleAttachmentPointerUp = useCallback',
-    )
-    const pointerUpSource = sourceBetween(
-      'const handleAttachmentPointerUp = useCallback',
-      'const handleAttachmentClick = useCallback',
-    )
-    const triggerSource = sourceBetween(
-      '<button type="button" data-qa="live-demo-attachment-open"',
-      '<input ref={input}',
-    )
-
-    expect(pointerDownSource).toContain('event.preventDefault()')
-    expect(pointerUpSource).toContain('toggleAttachmentMenu(event.currentTarget)')
-    expect(triggerSource).toContain('onPointerDown={handleAttachmentPointerDown}')
-    expect(triggerSource).toContain('onPointerUp={handleAttachmentPointerUp}')
-  })
-
-  it('does not double-toggle after a pointer click and keeps click-only activation available', () => {
+  it('uses the ordinary button click after dismissing the keyboard focus', () => {
     const clickSource = sourceBetween(
       'const handleAttachmentClick = useCallback',
       'const send = async () => {',
@@ -43,9 +23,20 @@ describe('conversation image composer touch interaction', () => {
       '<input ref={input}',
     )
 
-    expect(clickSource).toContain('event.detail > 0 && pointerClickSuppressionRef.current')
-    expect(clickSource).toContain('toggleAttachmentMenu(event.currentTarget)')
+    expect(clickSource).toContain('document.activeElement instanceof HTMLElement')
+    expect(clickSource).toContain('document.activeElement.blur()')
+    expect(clickSource).toContain('openAttachmentMenu(event.currentTarget)')
     expect(triggerSource).toContain('onClick={handleAttachmentClick}')
+  })
+
+  it('does not suppress WebView touch clicks with a custom pointer lifecycle', () => {
+    const triggerSource = sourceBetween(
+      '<button type="button" data-qa="live-demo-attachment-open"',
+      '<input ref={input}',
+    )
+
+    expect(triggerSource).not.toContain('onPointerDown=')
+    expect(triggerSource).not.toContain('onPointerUp=')
     expect(triggerSource).toContain('aria-expanded={onCloseKeyboard ? open : undefined}')
   })
 })
