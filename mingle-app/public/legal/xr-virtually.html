@@ -6443,6 +6443,332 @@
           padding-top: 4px;
         }
       }
+
+      /* Keep the dense business slides readable on short mobile viewports. */
+      @media (max-width: 900px) and (max-height: 650px) {
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-shell,
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-shell,
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-shell,
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-shell,
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-shell,
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-shell {
+          justify-content: flex-start;
+          padding-top: calc(env(safe-area-inset-top) + 10px);
+          padding-bottom: calc(env(safe-area-inset-bottom) + 84px);
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-shell {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="9"] .v-shell {
+          justify-content: flex-start;
+          gap: 12px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="9"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-apple {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-music-before > span {
+          font-size: 16px;
+          margin-bottom: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-file-row b {
+          font-size: 11px;
+          padding: 5px 2px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-music-after {
+          gap: 12px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-music-after > div:last-child {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-music-after h2 {
+          font-size: 17px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-music-after p {
+          font-size: 16px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-ipod {
+          width: 74px;
+          height: 122px;
+          border-radius: 10px;
+          padding: 7px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-ipod > div {
+          height: 47px;
+          font-size: 17px;
+          padding-top: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-ipod small {
+          font-size: 7px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="8"] .v-ipod > span {
+          width: 47px;
+          height: 47px;
+          border-width: 13px;
+          margin-top: 7px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-shell {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-compare {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column {
+          padding: 8px 12px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column h2 {
+          margin-bottom: 4px;
+          font-size: 19px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column > div {
+          gap: 4px;
+          margin-top: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column > div > span {
+          font-size: 10px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column strong {
+          font-size: 23px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-cost-column strong small {
+          font-size: 9px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="11"] .v-between {
+          font-size: 22px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-shell {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-world {
+          gap: 10px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-world > .v-between {
+          justify-self: center;
+          width: max-content;
+          height: auto;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-prompt strong {
+          font-size: 20px;
+          line-height: 1.2;
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-world .v-figure {
+          height: 24vh;
+          max-height: 136px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-world .v-figure figcaption {
+          font-size: 10px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-shell {
+          gap: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-title {
+          font-size: 18px;
+          line-height: 1.05;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam h2 {
+          font-size: 16px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks {
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks > div {
+          gap: 2px;
+          padding-top: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks > div:nth-child(n + 3) {
+          display: none;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks span {
+          font-size: 10px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks strong {
+          font-size: 18px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-blocks p {
+          font-size: 7px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="13"] .v-sam-global {
+          padding-top: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-shell {
+          gap: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-stage {
+          padding: 12px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-stage h2 {
+          font-size: 18px;
+          margin: 8px 0;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-stage p {
+          font-size: 13px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="14"] .v-takeaway {
+          font-size: 14px;
+          line-height: 1.2;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-shell {
+          gap: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-roadmap {
+          gap: 4px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-roadmap > div {
+          grid-template-columns: 20px minmax(0, 1fr) 1.4fr;
+          gap: 6px;
+          padding: 8px 0;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-roadmap span {
+          font-size: 11px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-roadmap h2 {
+          font-size: 16px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="17"] .v-roadmap p {
+          font-size: 12px;
+          line-height: 1.25;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-shell {
+          gap: 8px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-title {
+          font-size: 20px;
+          line-height: 1.1;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-head,
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row {
+          grid-template-columns: 78px minmax(0, 1fr) 20px minmax(0, 1fr);
+          gap: 5px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-head {
+          font-size: 9px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row {
+          padding: 10px 2px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-context {
+          gap: 3px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row > div {
+          min-width: 0;
+          gap: 6px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row .v-eco-context strong {
+          font-size: 11px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-context span {
+          font-size: 9px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row strong {
+          font-size: 22px;
+          overflow-wrap: anywhere;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row span {
+          font-size: 12px;
+          overflow-wrap: anywhere;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row > b {
+          font-size: 21px;
+        }
+      }
 </style></head><body><main class="deck" aria-label="Virtually 발표자료"><nav class="v-lang-switcher" aria-label="언어 선택 (Language)"><button type="button" class="v-lang-btn" data-lang="en" aria-label="English">EN</button><button type="button" class="v-lang-btn" data-lang="ja" aria-label="日本語">JA</button><button type="button" class="v-lang-btn" data-lang="cn-ZH" aria-label="简体中文">简</button><button type="button" class="v-lang-btn" data-lang="cn-TW" aria-label="繁體中文">繁</button><button type="button" class="v-lang-btn is-active" data-lang="ko" aria-label="한국어">KO</button></nav><div class="track" id="deck-track">
 <section class="slide slide--hero" data-page="1">
 <article class="slide-shell slide-shell--download-qr">
