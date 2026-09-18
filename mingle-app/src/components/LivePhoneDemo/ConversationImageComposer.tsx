@@ -1,10 +1,12 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import { Image as Photo, Keyboard, Loader2, Plus, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { CONVERSATION_IMAGE_MAX_BYTES, conversationImageCopy } from '@/lib/conversation-image'
+import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
+import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
+import { chooseTooltipSide } from './CopyableBubbleSurface'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -33,8 +35,8 @@ function isDiagActiveInitial(): boolean {
 export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, voiceButtonSize = 33 }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; voiceButtonSize?: number
 }) {
-  const copy = conversationImageCopy(locale)
-  const [anchor, setAnchor] = useState({ right: 8, bottom: 48 })
+  const copy = resolveConversationImageCopy(locale)
+  const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
   const input = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState<{ file: File; url: string; id: string } | null>(null)
@@ -51,6 +53,9 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const diagLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const diagSuppressClickRef = useRef(false)
   const diagTouchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const attachmentPointerActivationRef = useRef(false)
+  const attachmentClickSuppressionRef = useRef(false)
+  const attachmentClickSuppressionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pushDiag = useCallback((tag: string) => {
     if (!diagT0Ref.current) diagT0Ref.current = Date.now()
@@ -133,10 +138,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   useEffect(() => () => { cancelLongPress() }, [cancelLongPress])
 
   // Log the rendered menu's position — measured at 3 key intervals (immediate, rAF, 250ms)
-  const diagMenuRef = useRef<HTMLDivElement>(null)
+  const attachmentMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (!diagEnabled || !open || chosen || !diagMenuRef.current) return
-    const node = diagMenuRef.current
+    if (!diagEnabled || !open || chosen || !attachmentMenuRef.current) return
+    const node = attachmentMenuRef.current
 
     // MR1: immediate mount
     const r1 = node.getBoundingClientRect()
@@ -168,10 +173,40 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     return () => {
       mounted.current = false
       request.current?.abort()
+      if (attachmentClickSuppressionTimerRef.current) {
+        clearTimeout(attachmentClickSuppressionTimerRef.current)
+      }
     }
   }, [])
   useEffect(() => () => { if (chosen) URL.revokeObjectURL(chosen.url) }, [chosen])
   const close = useCallback(() => { if (!request.current) { setOpen(false); setChosen(null); setError(null) } }, [])
+  useEffect(() => {
+    if (!open || chosen) return
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        close()
+        return
+      }
+      if (attachmentMenuRef.current?.contains(target)) return
+      close()
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true)
+    document.addEventListener('keydown', handleEscape)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
+      document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [chosen, close, open])
   const openAttachmentMenu = useCallback((trigger: HTMLButtonElement) => {
     const rect = trigger.getBoundingClientRect()
     const vp = window.visualViewport
@@ -181,7 +216,11 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       pushDiag(`IH:${window.innerHeight} VH:${Math.round(vp?.height ?? 0)} VO:${Math.round(vp?.offsetTop ?? 0)}`)
     }
 
-    setAnchor({ right: Math.max(8, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 8 })
+    const left = Math.max(120, Math.min(window.innerWidth - 120, rect.left + rect.width / 2))
+    const side = chooseTooltipSide(rect.top - 8, window.innerHeight - rect.bottom - 8)
+    setAnchor(side === 'above'
+      ? { side, bottom: window.innerHeight - rect.top + 8, left }
+      : { side, top: rect.bottom + 8, left })
     setOpen(true)
   }, [diagEnabled, pushDiag])
   const handleAttachmentClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -192,14 +231,23 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       return
     }
 
+    // Pointer-up opens the menu when pointer-down is prevented to keep the
+    // software keyboard focused. Consume only its compatibility click; a
+    // keyboard/assistive-technology click (detail === 0) still opens it.
+    if (event.detail > 0 && attachmentClickSuppressionRef.current) {
+      attachmentClickSuppressionRef.current = false
+      if (attachmentClickSuppressionTimerRef.current) {
+        clearTimeout(attachmentClickSuppressionTimerRef.current)
+        attachmentClickSuppressionTimerRef.current = null
+      }
+      return
+    }
+
     if (!onCloseKeyboard) {
       input.current?.click()
       return
     }
 
-    // Let WKWebView complete the ordinary button click. Preventing pointer-down
-    // can suppress that click while the software keyboard is visible.
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     openAttachmentMenu(event.currentTarget)
   }, [onCloseKeyboard, openAttachmentMenu, diagEnabled, pushDiag])
 
@@ -210,6 +258,28 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const handleDiagPointerDown = useCallback(() => { pushDiag('PD') }, [pushDiag])
   const handleDiagPointerUp = useCallback(() => { pushDiag('PU') }, [pushDiag])
   const handleDiagPointerCancel = useCallback(() => { pushDiag('PC') }, [pushDiag])
+
+  const handleAttachmentPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    attachmentPointerActivationRef.current = Boolean(onCloseKeyboard)
+    if (onCloseKeyboard) event.preventDefault()
+    if (diagEnabled) handleDiagPointerDown()
+  }, [diagEnabled, handleDiagPointerDown, onCloseKeyboard])
+
+  const handleAttachmentPointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (diagEnabled) handleDiagPointerUp()
+    if (!onCloseKeyboard || event.button !== 0 || !attachmentPointerActivationRef.current) return
+
+    attachmentPointerActivationRef.current = false
+    if (diagSuppressClickRef.current) return
+
+    attachmentClickSuppressionRef.current = true
+    attachmentClickSuppressionTimerRef.current = setTimeout(() => {
+      attachmentClickSuppressionRef.current = false
+      attachmentClickSuppressionTimerRef.current = null
+    }, 500)
+    openAttachmentMenu(event.currentTarget)
+  }, [diagEnabled, handleDiagPointerUp, onCloseKeyboard, openAttachmentMenu])
+
   const handleDiagClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     if (!diagSuppressClickRef.current) pushDiag('CK')
     handleAttachmentClick(event)
@@ -237,9 +307,13 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       onTouchMove={handleTouchMove}
       onTouchEnd={() => { cancelLongPress(); if (diagEnabled) handleDiagTouchEnd() }}
       onTouchCancel={() => { cancelLongPress(); if (diagEnabled) handleDiagTouchCancel() }}
-      onPointerDown={diagEnabled ? handleDiagPointerDown : undefined}
-      onPointerUp={diagEnabled ? handleDiagPointerUp : undefined}
-      onPointerCancel={() => { cancelLongPress(); if (diagEnabled) handleDiagPointerCancel() }}
+      onPointerDown={handleAttachmentPointerDown}
+      onPointerUp={handleAttachmentPointerUp}
+      onPointerCancel={() => {
+        attachmentPointerActivationRef.current = false
+        cancelLongPress()
+        if (diagEnabled) handleDiagPointerCancel()
+      }}
       onClick={diagEnabled ? handleDiagClick : handleAttachmentClick}
       style={onCloseKeyboard ? undefined : { width: voiceButtonSize, height: voiceButtonSize }}
       className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}</button>
@@ -250,16 +324,47 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); return }
         setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
       }} />
-    {open && !chosen && createPortal(<>
-      {/* Conversation rooms use z-index 101. Keep this portal above that surface
-          so the menu remains visible and receives taps on iOS WKWebView. */}
-      <div className="fixed inset-0 z-[110]" onPointerDown={() => setOpen(false)} />
-      <div ref={diagMenuRef} role="group" aria-label={copy.attach} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} className="fixed z-[111] min-w-44 rounded-2xl border border-gray-200 bg-white p-1.5 text-gray-700 shadow-lg" style={anchor}>
-        <button type="button" onClick={() => input.current?.click()} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Photo size={20} strokeWidth={2.15} />{copy.choose}</button>
-        {onCloseKeyboard && <button type="button" onClick={() => { close(); onCloseKeyboard() }} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50"><Keyboard size={20} />{copy.closeKeyboard}</button>}
-        {error && <p role="alert" className="max-w-60 px-3 text-sm text-red-600">{error}</p>}
-      </div>
-    </>, document.body)}
+    {open && !chosen && createPortal(
+      <div
+        ref={attachmentMenuRef}
+        data-attachment-menu
+        style={anchor.side === 'above'
+          ? { position: 'fixed', bottom: anchor.bottom, left: anchor.left, transform: 'translateX(-50%)', zIndex: 9999 }
+          : { position: 'fixed', top: anchor.top, left: anchor.left, transform: 'translateX(-50%)', zIndex: 9999 }}
+        onTouchStart={event => event.stopPropagation()}
+        onTouchEnd={event => event.stopPropagation()}
+        onTouchCancel={event => event.stopPropagation()}
+        onPointerDown={event => event.stopPropagation()}
+      >
+        <div className="max-h-[calc(100dvh-16px)] w-[230px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+          <button
+            type="button"
+            aria-label={copy.choose}
+            onClick={event => { event.preventDefault(); event.stopPropagation(); input.current?.click() }}
+            className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${onCloseKeyboard ? 'rounded-t-2xl' : 'rounded-2xl'}`}
+          >
+            <span>{copy.choose}</span>
+            <Photo className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.15} />
+          </button>
+          {onCloseKeyboard && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <button
+                type="button"
+                aria-label={copy.switchToVoiceMode}
+                onClick={event => { event.preventDefault(); event.stopPropagation(); close(); onCloseKeyboard() }}
+                className="flex w-full items-center justify-between rounded-b-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+              >
+                <span>{copy.switchToVoiceMode}</span>
+                <Keyboard className="h-4 w-4 shrink-0 text-slate-400" />
+              </button>
+            </>
+          )}
+          {error && <p role="alert" className="px-4 py-3 text-[13px] text-red-600">{error}</p>}
+        </div>
+      </div>,
+      document.body,
+    )}
     {open && chosen && <MessageMediaDialog title={chosen ? copy.preview : copy.attach} onClose={close}>
       <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{chosen ? copy.preview : copy.attach}</h2><button type="button" disabled={pending} aria-label={copy.close} onClick={close} className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40"><X size={20} /></button></div>
       <>

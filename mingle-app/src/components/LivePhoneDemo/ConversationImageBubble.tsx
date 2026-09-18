@@ -2,7 +2,8 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react'
 import { X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { conversationImageCopy, type ConversationMessageImage } from '@/lib/conversation-image'
+import { type ConversationMessageImage } from '@/lib/conversation-image'
+import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageMediaDialog from './MessageMediaDialog'
 
@@ -179,7 +180,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError }: {
 }
 
 export default function ConversationImageBubble({ image, locale }: { image: ConversationMessageImage; locale: string }) {
-  const copy = conversationImageCopy(locale)
+  const copy = resolveConversationImageCopy(locale)
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)

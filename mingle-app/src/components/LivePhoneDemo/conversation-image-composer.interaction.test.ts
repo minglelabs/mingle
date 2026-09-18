@@ -13,19 +13,18 @@ function sourceBetween(startMarker: string, endMarker: string): string {
 }
 
 describe('conversation image composer touch interaction', () => {
-  it('uses the ordinary button click after dismissing the keyboard focus', () => {
+  it('keeps keyboard focus while retaining click and pointer activation', () => {
     const clickSource = sourceBetween(
       'const handleAttachmentClick = useCallback',
       'const send = async () => {',
     )
 
-    expect(clickSource).toContain('document.activeElement instanceof HTMLElement')
-    expect(clickSource).toContain('document.activeElement.blur()')
     expect(clickSource).toContain('openAttachmentMenu(event.currentTarget)')
-    expect(clickSource).toContain('handleAttachmentClick')
+    expect(source).toContain('handleAttachmentPointerUp')
+    expect(source).toContain('event.preventDefault()')
   })
 
-  it('does not unconditionally suppress WebView touch clicks with a custom pointer lifecycle', () => {
+  it('preserves keyboard focus while handling the WebView pointer lifecycle', () => {
     const triggerSource = sourceBetween(
       '<button type="button" data-qa="live-demo-attachment-open"',
       '<input ref={input}',
@@ -33,13 +32,15 @@ describe('conversation image composer touch interaction', () => {
 
     const pointerDownMatch = triggerSource.match(/onPointerDown=\{([^}]+)\}/)
     if (pointerDownMatch) {
-      expect(pointerDownMatch[1]).toContain('diagEnabled')
+      expect(pointerDownMatch[1]).toContain('handleAttachmentPointerDown')
     }
     const pointerUpMatch = triggerSource.match(/onPointerUp=\{([^}]+)\}/)
     if (pointerUpMatch) {
-      expect(pointerUpMatch[1]).toContain('diagEnabled')
+      expect(pointerUpMatch[1]).toContain('handleAttachmentPointerUp')
     }
     expect(triggerSource).toContain('aria-expanded={onCloseKeyboard ? open : undefined}')
+    expect(source).toContain('if (onCloseKeyboard) event.preventDefault()')
+    expect(source).toContain('openAttachmentMenu(event.currentTarget)')
   })
 
   it('activates diagnostic mode via long-press and preserves URL / window fallback', () => {
@@ -61,7 +62,8 @@ describe('conversation image composer touch interaction', () => {
       '<input ref={input}',
     )
     // onPointerCancel must always trigger cancelLongPress, even if diag is disabled
-    expect(triggerSource).toContain('onPointerCancel={() => { cancelLongPress()')
+    expect(triggerSource).toContain('onPointerCancel')
+    expect(triggerSource).toContain('cancelLongPress()')
   })
 
   it('only enables diagnostic long-press in keyboard mode', () => {
@@ -74,7 +76,7 @@ describe('conversation image composer touch interaction', () => {
 
   it('measures menu position at three key intervals (immediate, rAF, 250ms settled)', () => {
     const menuMeasureSource = sourceBetween(
-      'const diagMenuRef',
+      'const attachmentMenuRef',
       '// ── End diagnostic hooks',
     )
     expect(menuMeasureSource).toContain('MR1:')
@@ -86,10 +88,16 @@ describe('conversation image composer touch interaction', () => {
   it('keeps the portaled attachment menu above the active conversation surface', () => {
     const menuSource = sourceBetween(
       '{open && !chosen && createPortal',
-      'document.body)}',
+      'document.body,',
     )
 
-    expect(menuSource).toContain('z-[110]')
-    expect(menuSource).toContain('z-[111]')
+    expect(menuSource).toContain('zIndex: 9999')
+    expect(menuSource).toContain('rounded-2xl border border-[#e5e7eb] bg-white')
+    expect(menuSource).toContain('shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]')
+  })
+
+  it('keeps the keyboard open while offering the voice-mode switch', () => {
+    expect(source).not.toContain('document.activeElement.blur()')
+    expect(source).toContain('copy.switchToVoiceMode')
   })
 })

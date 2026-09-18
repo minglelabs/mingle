@@ -338,8 +338,8 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
   livePhoneDemo: {
     composer: {
       manualSpeakerLabel: string;
-      openKeyboardLabel: string;
-      closeKeyboardLabel: string;
+      switchToKeyboardModeLabel: string;
+      switchToVoiceModeLabel: string;
       composerPlaceholder: string;
       sendMessageLabel: string;
       blockedComposerMessage: string;

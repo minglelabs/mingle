@@ -8302,7 +8302,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         data-qa="live-demo-keyboard-close"
                         type="button"
                         onClick={handleToggleComposer}
-                        aria-label={composerCopy.closeKeyboardLabel}
+                        aria-label={composerCopy.switchToVoiceModeLabel}
                         className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
                         style={{
                           width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
@@ -8468,7 +8468,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       type="button"
                       onPointerDown={(event) => event.preventDefault()}
                       onClick={handleToggleComposer}
-                      aria-label={composerCopy.openKeyboardLabel}
+                      aria-label={composerCopy.switchToKeyboardModeLabel}
                       className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
                       style={{
                         width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
