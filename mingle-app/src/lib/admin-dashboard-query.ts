@@ -19,7 +19,7 @@ import {
  * is already stored in, no timezone conversion needed.
  */
 const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_at")`;
-const USAGE_METRIC_VERSION = 1;
+const USAGE_METRIC_VERSION = 2;
 
 type RawDayCount = { day: Date; value: bigint | number };
 type RawDayLatency = { day: Date; avg_ms: number | null; p95_ms: number | null };
@@ -178,14 +178,19 @@ async function queryMessageCount(
 }
 
 /**
- * Usage is a per-user cumulative counter in app_event_logs. Sum each positive
- * delta between snapshots, carrying the last snapshot before the range into the
- * window so the first day is not undercounted. A counter reset contributes zero.
- * This deliberately does not use app_messages duration fields: those are
- * per-turn client diagnostics and can be corrupted by a suspended/stale timer.
- * Look up only the last pre-range snapshot per active user using the existing
- * user/created_at/id index. DISTINCT ON over all earlier events can scan the
- * entire log table even when only today and yesterday need recalculation.
+ * Usage is a cumulative counter scoped to a client session (a conversation for
+ * current clients), not one global counter per user. Client-event requests are
+ * asynchronous and can arrive out of order, so first collapse each
+ * user/session/day to its high-water mark. Differencing every raw event would
+ * otherwise both mix counters from separate rooms and recount stale retries.
+ * Carry the last snapshot before the range into the window. When a session has
+ * no earlier snapshot, use its first in-range observation as a conservative
+ * baseline so new sessions still retain their within-day increment without
+ * imputing use before their first event. Non-null and legacy null session keys
+ * use separate baseline branches so each lookup remains indexable. A counter
+ * reset contributes zero. This deliberately does not use app_messages duration
+ * fields: those are per-turn client diagnostics and can be corrupted by a
+ * suspended/stale timer.
  */
 async function queryUsageSeconds(
   range: AdminDashboardDateRange,
@@ -193,47 +198,88 @@ async function queryUsageSeconds(
 ): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
     `with usage_in_range as materialized (
-       select el."user_id", el."id", el."created_at", el."usage_sec"
+       select
+         el."user_id",
+         el."session_key",
+         date_trunc('day', el."created_at") as day,
+         max(el."usage_sec") as "usage_sec",
+         (array_agg(el."usage_sec" order by el."created_at" asc, el."id" asc))[1] as "first_usage_sec"
        from "app"."app_event_logs" as el${platform === "all" ? "" : "\n       join \"app\".\"app_users\" as u on u.\"id\" = el.\"user_id\""}
        where el."user_id" is not null
          and el."usage_sec" is not null
          and el."created_at" >= $1 and el."created_at" < $2${buildPlatformFilter(platform)}
+       group by el."user_id", el."session_key", date_trunc('day', el."created_at")
      ),
-     usage_users as materialized (
-       select distinct "user_id"
-       from usage_in_range
+     usage_first_in_range as materialized (
+       select "user_id", "session_key", "first_usage_sec"
+       from (
+         select
+           "user_id",
+           "session_key",
+           "first_usage_sec",
+           row_number() over (
+             partition by "user_id", "session_key"
+             order by day asc
+           ) as snapshot_rank
+         from usage_in_range
+       ) as ranked
+       where snapshot_rank = 1
      ),
      usage_before_start as materialized (
-       select baseline."user_id", baseline."id", baseline."created_at", baseline."usage_sec"
-       from usage_users as uu
-       cross join lateral (
-         select el."user_id", el."id", el."created_at", el."usage_sec"
+       select
+         first."user_id",
+         first."session_key",
+         ($1::timestamp - interval '1 day') as day,
+         coalesce(baseline."usage_sec", first."first_usage_sec") as "usage_sec"
+       from usage_first_in_range as first
+       left join lateral (
+         select el."usage_sec"
          from "app"."app_event_logs" as el
-         where el."user_id" = uu."user_id"
+         where el."user_id" = first."user_id"
+           and el."session_key" = first."session_key"
            and el."usage_sec" is not null
            and el."created_at" < $1
          order by el."created_at" desc, el."id" desc
          limit 1
-       ) as baseline
+       ) as baseline on true
+       where first."session_key" is not null
+       union all
+       select
+         first."user_id",
+         first."session_key",
+         ($1::timestamp - interval '1 day') as day,
+         coalesce(baseline."usage_sec", first."first_usage_sec") as "usage_sec"
+       from usage_first_in_range as first
+       left join lateral (
+         select el."usage_sec"
+         from "app"."app_event_logs" as el
+         where el."user_id" = first."user_id"
+           and el."session_key" is null
+           and el."usage_sec" is not null
+           and el."created_at" < $1
+         order by el."created_at" desc, el."id" desc
+         limit 1
+       ) as baseline on true
+       where first."session_key" is null
      ),
-     usage_events as materialized (
-       select "user_id", "id", "created_at", "usage_sec"
+     usage_daily as materialized (
+       select "user_id", "session_key", day, "usage_sec"
        from usage_before_start
        union all
-       select "user_id", "id", "created_at", "usage_sec"
+       select "user_id", "session_key", day, "usage_sec"
        from usage_in_range
      ),
      usage_snapshots as (
        select
-         "created_at",
+         day,
          "usage_sec",
          lag("usage_sec") over (
-           partition by "user_id"
-           order by "created_at" asc, "id" asc
+           partition by "user_id", "session_key"
+           order by day asc
          ) as previous_usage_sec
-       from usage_events
+       from usage_daily
      )
-     select ${DAY_BUCKET_EXPR("usage_snapshots")} as day,
+     select day,
        coalesce(sum(
          case
            when previous_usage_sec is null then 0::bigint
@@ -242,7 +288,7 @@ async function queryUsageSeconds(
          end
        ), 0)::bigint as value
      from usage_snapshots
-     where "created_at" >= $1 and "created_at" < $2
+     where day >= $1 and day < $2
      group by day
      order by day`,
     ...buildQueryParams(range, platform),

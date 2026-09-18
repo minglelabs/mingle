@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
-  it("uses one indexed pre-range usage snapshot per active user instead of scanning all history", async () => {
+  it("uses one indexed pre-range usage snapshot per active session instead of scanning all history", async () => {
     const today = resolveTodayKey(new Date());
     setRawMetricResults(today);
 
@@ -56,15 +56,33 @@ describe("loadAdminDashboardMetrics", () => {
 
     const usageQuery = mocks.queryRawUnsafe.mock.calls[3][0] as string;
     const baselineQuery = usageQuery.split("usage_before_start as materialized (")[1]
-      .split("usage_events as materialized (")[0];
-    expect(baselineQuery).toContain("from usage_users as uu");
-    expect(baselineQuery).toContain("cross join lateral (");
-    expect(baselineQuery).toContain('el."user_id" = uu."user_id"');
+      .split("usage_daily as materialized (")[0];
+    expect(baselineQuery).toContain("from usage_first_in_range as first");
+    expect(baselineQuery).toContain("left join lateral (");
+    expect(baselineQuery).toContain('el."user_id" = first."user_id"');
+    expect(baselineQuery).toContain('el."session_key" = first."session_key"');
+    expect(baselineQuery).toContain('where first."session_key" is not null');
+    expect(baselineQuery).toContain('and el."session_key" is null');
+    expect(baselineQuery).toContain('where first."session_key" is null');
     expect(baselineQuery).toContain('el."usage_sec" is not null');
     expect(baselineQuery).toContain('el."created_at" < $1');
     expect(baselineQuery).toContain('order by el."created_at" desc, el."id" desc');
     expect(baselineQuery).toContain("limit 1");
     expect(baselineQuery).not.toContain("distinct on");
+  });
+
+  it("uses per-session daily high-water marks for usage snapshots", async () => {
+    const today = resolveTodayKey(new Date());
+    setRawMetricResults(today);
+
+    await loadAdminDashboardMetrics(makeRange([today]));
+
+    const usageQuery = mocks.queryRawUnsafe.mock.calls[3][0] as string;
+    expect(usageQuery).toContain('max(el."usage_sec") as "usage_sec"');
+    expect(usageQuery).toContain('(array_agg(el."usage_sec" order by el."created_at" asc, el."id" asc))[1] as "first_usage_sec"');
+    expect(usageQuery).toContain('group by el."user_id", el."session_key", date_trunc(\'day\', el."created_at")');
+    expect(usageQuery).toContain('coalesce(baseline."usage_sec", first."first_usage_sec")');
+    expect(usageQuery).toContain('partition by "user_id", "session_key"');
   });
 
   it.each(["all", "android", "ios"] as const)(
@@ -78,7 +96,7 @@ describe("loadAdminDashboardMetrics", () => {
         dauCount: 8,
         messageCount: 7,
         usageSeconds: 6,
-        usageMetricVersion: 1,
+        usageMetricVersion: 2,
         sttAvgMs: null,
         sttP95Ms: null,
         translationAvgMs: null,
@@ -111,7 +129,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: index + 2,
       messageCount: index + 3,
       usageSeconds: index + 4,
-      usageMetricVersion: 1,
+      usageMetricVersion: 2,
       sttAvgMs: index + 5,
       sttP95Ms: index + 6,
       translationAvgMs: index + 7,
@@ -137,7 +155,7 @@ describe("loadAdminDashboardMetrics", () => {
       .filter((day) => day !== missingDay)
       .map((day) => ({
         day: rawDay(day), signupCount: 9, dauCount: 8, messageCount: 7,
-        usageSeconds: 6, usageMetricVersion: 1, sttAvgMs: null, sttP95Ms: null,
+        usageSeconds: 6, usageMetricVersion: 2, sttAvgMs: null, sttP95Ms: null,
         translationAvgMs: null, translationP95Ms: null,
       })));
     setRawMetricResults(missingDay);
@@ -183,7 +201,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 0,
       messageCount: 0,
       usageSeconds: 0,
-      usageMetricVersion: 1,
+      usageMetricVersion: 2,
       sttAvgMs: null,
       translationAvgMs: null,
     });
@@ -201,7 +219,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 1,
       messageCount: 1,
       usageSeconds: 999999,
-      usageMetricVersion: 0,
+      usageMetricVersion: 1,
       sttAvgMs: 1,
       sttP95Ms: 1,
       translationAvgMs: 1,
@@ -216,7 +234,7 @@ describe("loadAdminDashboardMetrics", () => {
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.upsert.mock.calls[0][0].update).toMatchObject({
       usageSeconds: 5,
-      usageMetricVersion: 1,
+      usageMetricVersion: 2,
     });
     expect(metrics[0].points[0].value).toBe(5);
   });
@@ -245,7 +263,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 8,
       messageCount: 7,
       usageSeconds: 6,
-      usageMetricVersion: 1,
+      usageMetricVersion: 2,
       sttAvgMs: null,
       sttP95Ms: null,
       translationAvgMs: null,
@@ -301,7 +319,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 8,
       messageCount: 7,
       usageSeconds: 6,
-      usageMetricVersion: 1,
+      usageMetricVersion: 2,
       sttAvgMs: null,
       sttP95Ms: null,
       translationAvgMs: null,
