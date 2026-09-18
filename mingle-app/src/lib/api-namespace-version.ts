@@ -6,7 +6,21 @@ type ApiNamespaceVersion = {
 const SILENCE_SLIDER_LOCK_THRESHOLD: readonly [number, number, number] = [1, 0, 4]
 
 function normalizeApiNamespace(raw: string): string {
-  return raw.trim().replace(/^\/+/, '').replace(/\/+$/, '')
+  const trimmed = raw.trim()
+  // Some native client builds double-encode this query param (e.g. "ios%2Fv1.1.4"
+  // arrives as the literal text "ios%2Fv1.1.4" instead of "ios/v1.1.4" after a
+  // single decode). Recover the intended value by decoding once more when the
+  // string still contains a percent-encoded slash rather than a real one.
+  const recovered = !trimmed.includes('/') && /%2F/i.test(trimmed)
+    ? (() => {
+        try {
+          return decodeURIComponent(trimmed)
+        } catch {
+          return trimmed
+        }
+      })()
+    : trimmed
+  return recovered.replace(/^\/+/, '').replace(/\/+$/, '')
 }
 
 export function compareApiNamespaceVersions(

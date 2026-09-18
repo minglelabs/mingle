@@ -8,6 +8,11 @@ import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemoLegacy from "@/components/LivePhoneDemo/LivePhoneDemoLegacy";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
+import { unregisterNativePushToken } from "@/lib/native-push";
+import {
+  captureMingleClientEvent,
+  resetMinglePostHogIdentity,
+} from "@/lib/posthog-client";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -822,6 +827,9 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
         window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
         return;
       }
+      if (signupResponse.status === 201) {
+        captureMingleClientEvent("mingle_signup_completed", { method: "email" });
+      }
 
       const signInResponse = await signIn("email-password", {
         email,
@@ -939,7 +947,10 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
 
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
-    void signOut({ callbackUrl: signedOutCallbackUrl });
+    void unregisterNativePushToken().finally(() => {
+      resetMinglePostHogIdentity();
+      void signOut({ callbackUrl: signedOutCallbackUrl });
+    });
   }, [isDeletingAccount, signedOutCallbackUrl]);
 
   const handleDeleteAccount = useCallback(async () => {
@@ -952,6 +963,8 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
+      await unregisterNativePushToken();
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);
@@ -1273,7 +1286,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                   className="flex w-[300%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   style={{ transform: `translateX(-${(emailSheetSlideIndex * 100) / 3}%)` }}
                 >
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthLoginTitle}
@@ -1371,7 +1384,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthSignupTitle}
@@ -1490,7 +1503,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative flex items-start justify-between gap-3">
                       <button
                         type="button"
@@ -1578,7 +1591,6 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
         <LivePhoneDemoLegacy
           enableAutoTTS
           uiLocale={props.locale}
-          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
           usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}

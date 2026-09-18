@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -11,10 +11,22 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { signIn, signOut, useSession } from "next-auth/react";
+import {
+  clearNativeAuthAttempt,
+  readNativeAuthAttempt,
+  saveNativeAuthAttempt,
+  NATIVE_AUTH_ATTEMPT_TTL_MS,
+} from "@/lib/native-auth-attempt";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
+import LivePhoneDemo, {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
+  type LatestUtterancePayload,
+  type LivePhoneDemoRef,
+} from "@/components/LivePhoneDemo/LivePhoneDemo";
 import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
@@ -25,7 +37,21 @@ import {
   type AuthPanelStep,
 } from "@/components/mingle-home.auth-contract";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
+import {
+  readPendingBirthDate,
+  readPendingPrimaryLanguages,
+} from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
+import {
+  captureMingleClientEvent,
+  resetMinglePostHogIdentity,
+} from "@/lib/posthog-client";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -35,16 +61,26 @@ type MingleHomeProps = {
   headerMode?: "default" | "conversation";
   onBack?: () => void;
   onConversationDeleted?: () => void;
+  onConversationTitleChange?: (title: string) => void | Promise<void>;
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>;
   conversationTitle?: string;
   conversationId?: string;
+  preferredDisplayLanguage?: string | null;
+  preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialOtherMembers?: ConversationChannelOtherMember[];
   initialSelectedLanguages?: string[];
+  initialOwnSelectedLanguages?: string[];
+  selectedLanguagesAttribution?: Record<string, string[]>;
   initialSpeechLanguages?: string[];
   initialTranslationLanguagesLinked?: boolean;
+  initialDefaultDisplayLanguage?: string | null;
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
+  /** Render only the existing authentication surface without mounting a room. */
+  authOnly?: boolean;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<{
     switchedFromLiveConversation: boolean;
@@ -52,31 +88,37 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
-  onLatestUtteranceChange?: (payload: {
-    preview: string;
-    createdAt: string;
-    speaker?: string;
-    speakerAvatarSeed?: string;
-    speakerAvatarIndex?: number;
-  }) => void;
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void;
+  onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
     usageSec: number;
     messageCount: number;
   }) => void;
-  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
-  onSpeechLanguagesChange?: (speechLanguages: string[]) => void;
-  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void;
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void | Promise<void>;
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void | Promise<void>;
+  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>;
+  onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
+  onOpenProfile?: (userId: string) => void;
+  isBlockedCounterpart?: boolean;
+  isMultiMember?: boolean;
 };
 
 export type MingleHomeRef = {
   startRecording: () => Promise<void>;
-  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  stopRecording: (options?: {
+    deferRunningStateChange?: boolean;
+    discardPendingFinalization?: boolean;
+    forceNativeStop?: boolean;
+  }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
+  requestCloseTopmostOverlay: () => boolean;
+  resetNavigationOverlays: () => Promise<void>;
 };
 
-// Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
-const REQUIRE_AUTH_FOR_TRANSLATOR = false;
+// Conversation rooms require an authenticated account so the existing Apple,
+// Google, and email sign-in surface is available before translation starts.
+const REQUIRE_AUTH_FOR_TRANSLATOR = true;
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
 const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
@@ -136,7 +178,11 @@ type NativeAuthPendingResponse =
 
 type LegalSheetKind = "privacy" | "terms";
 type EmailAuthSheetMode = "login" | "signup" | "forgot";
-type EmailAuthErrorCode = "required" | "invalid_email" | "password_mismatch";
+type EmailAuthErrorCode =
+  | "required"
+  | "invalid_email"
+  | "password_mismatch"
+  | "email_already_registered";
 const LEGAL_SHEET_EXIT_MS = 240;
 const EMAIL_SHEET_EXIT_MS = 240;
 
@@ -248,6 +294,21 @@ function GoogleMark() {
         d="M12.25 21.6c2.7 0 4.97-.9 6.63-2.44l-3.23-2.65c-.9.63-2.06 1.06-3.4 1.06-2.9 0-4.72-1.96-5.51-4.58L3.4 15.33C5.05 18.98 8.4 21.6 12.25 21.6Z"
       />
     </svg>
+  );
+}
+
+function AgreementCheckMark({ checked, disabled }: { checked: boolean; disabled: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border transition-colors ${
+        checked
+          ? "border-[#F3C35A] bg-[#F3C35A] text-[#2D2A1E]"
+          : "border-white/35 bg-transparent text-transparent"
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      {checked ? <Check size={14} strokeWidth={3} /> : null}
+    </span>
   );
 }
 
@@ -379,6 +440,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [signupName, setSignupName] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
+  const signupPasswordConfirmRef = useRef<HTMLInputElement | null>(null);
+  const [emailSheetKeyboardInsetPx, setEmailSheetKeyboardInsetPx] = useState(0);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const pendingNativeProviderRef = useRef<NativeAuthProvider | null>(null);
@@ -448,6 +511,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     }
   }, []);
 
+  const resetSignupSetup = useCallback(() => {
+    setEmailAuthErrorCode(null);
+  }, []);
+
   const clearNativeAuthTimeout = useCallback(() => {
     if (nativeAuthTimeoutRef.current) {
       clearTimeout(nativeAuthTimeoutRef.current);
@@ -481,6 +548,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
 
@@ -560,6 +628,27 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   );
 
   useEffect(() => {
+    if (!isNativeAuthBridgeEnabled() || status === "authenticated") return;
+    if (pendingNativeProviderRef.current) return;
+    const attempt = readNativeAuthAttempt();
+    if (!attempt) return;
+    pendingNativeRequestIdRef.current = attempt.requestId;
+    pendingNativeProviderRef.current = attempt.provider;
+    setIsSigningIn(true);
+    setSigningInProvider(attempt.provider);
+    startNativeAuthPoller(attempt.requestId, attempt.provider);
+    nativeAuthTimeoutRef.current = setTimeout(() => {
+      if (pendingNativeRequestIdRef.current !== attempt.requestId) return;
+      clearNativeAuthPoller();
+      clearNativeAuthAttempt();
+      pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
+      setIsSigningIn(false);
+      setSigningInProvider(null);
+    }, Math.max(0, attempt.startedAt + NATIVE_AUTH_ATTEMPT_TTL_MS - Date.now()));
+  }, [clearNativeAuthPoller, startNativeAuthPoller, status]);
+
+  useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = props.locale;
     }
@@ -572,6 +661,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       // Clearing them too early can cause the ASWebAuthSession callback to be ignored,
       // which prevents signIn from running and leaves the UI stuck on the login screen.
       const hasActiveFlow = pendingNativeProviderRef.current !== null;
+      // An unauthenticated session refresh is expected while the external
+      // browser is signing in. Keep the request, spinner and poller alive.
+      if (hasActiveFlow && status !== "authenticated") return;
 
       clearNativeAuthTimeout();
       clearNativeAuthPoller();
@@ -595,10 +687,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       setSignupName("");
       setSignupPassword("");
       setSignupPasswordConfirm("");
+      resetSignupSetup();
       setForgotPasswordEmail("");
 
-      if (!hasActiveFlow) {
-        // Reset refs only when no flow is active. Active flows reset them after completion.
+      if (!hasActiveFlow || status === "authenticated") {
+        // Retire the request when the session is established or no flow is active.
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
       }
@@ -615,7 +709,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         }
       }
     }
-  }, [clearEmailSheetCloseTimer, clearNativeAuthPoller, clearNativeAuthTimeout, status]);
+  }, [clearEmailSheetCloseTimer, clearNativeAuthPoller, clearNativeAuthTimeout, resetSignupSetup, status]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -650,6 +744,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       if (detail.type === "error") {
         clearNativeAuthPoller();
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
         setIsSigningIn(false);
@@ -663,6 +758,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }
 
       clearNativeAuthPoller();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
       const bridgeToken = (detail.bridgeToken || "").trim();
@@ -720,6 +816,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
   const handleSocialSignIn = useCallback(
     (provider: "apple" | "google") => {
+      // Guard synchronously: a second tap must not replace the request that
+      // the native browser is already completing.
+      if (pendingNativeProviderRef.current) return;
       setIsSigningIn(true);
       setSigningInProvider(provider);
       const nativeBridgeEnabled =
@@ -751,6 +850,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               startUrl: startUrl.toString(),
             },
           };
+          saveNativeAuthAttempt({ requestId, provider, startedAt: Date.now() });
           pendingNativeRequestIdRef.current = requestId;
           pendingNativeProviderRef.current = provider;
           clearNativeAuthTimeout();
@@ -758,6 +858,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           nativeAuthTimeoutRef.current = setTimeout(() => {
             if (pendingNativeProviderRef.current !== provider) return;
             clearNativeAuthPoller();
+            clearNativeAuthAttempt();
             pendingNativeRequestIdRef.current = null;
             pendingNativeProviderRef.current = null;
             setIsSigningIn(false);
@@ -769,6 +870,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         } catch {
           clearNativeAuthPoller();
           clearNativeAuthTimeout();
+          clearNativeAuthAttempt();
           pendingNativeRequestIdRef.current = null;
           pendingNativeProviderRef.current = null;
           setIsSigningIn(false);
@@ -853,9 +955,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     (nextMode: EmailAuthSheetMode) => {
       if (isEmailSubmitting) return;
       setEmailAuthErrorCode(null);
+      resetSignupSetup();
       setEmailSheetMode(nextMode);
     },
-    [isEmailSubmitting],
+    [isEmailSubmitting, resetSignupSetup],
   );
 
   const handleOpenEmailSheet = useCallback(() => {
@@ -865,7 +968,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     setEmailSheetMode("login");
     setEmailAuthErrorCode(null);
     setIsEmailSubmitting(false);
-  }, [clearEmailSheetCloseTimer]);
+    resetSignupSetup();
+  }, [clearEmailSheetCloseTimer, resetSignupSetup]);
 
   const handleCloseEmailSheet = useCallback(() => {
     if (isEmailSubmitting) return;
@@ -878,6 +982,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       setEmailSheetMode("login");
       setEmailAuthErrorCode(null);
       setIsEmailSubmitting(false);
+      resetSignupSetup();
       emailSheetCloseTimerRef.current = null;
     }, EMAIL_SHEET_EXIT_MS);
   }, [
@@ -885,6 +990,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     isEmailSheetClosing,
     isEmailSheetOpen,
     isEmailSubmitting,
+    resetSignupSetup,
   ]);
 
   const handleEmailSignInSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
@@ -958,6 +1064,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     setEmailAuthErrorCode(null);
     setIsEmailSubmitting(true);
 
+    const pendingPrimaryLanguages = readPendingPrimaryLanguages();
+    const primaryLanguages = pendingPrimaryLanguages.length > 0
+      ? pendingPrimaryLanguages
+      : deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1);
+    const pendingBirthDate = readPendingBirthDate() ?? "2000-01-01";
+
     try {
       const signupResponse = await fetch("/api/auth/signup", {
         method: "POST",
@@ -966,12 +1078,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           email,
           name,
           password,
+          primaryLanguages,
+          birthDate: pendingBirthDate,
         }),
       });
       if (!signupResponse.ok && signupResponse.status !== 409) {
         setIsEmailSubmitting(false);
         window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
         return;
+      }
+      if (signupResponse.status === 201) {
+        captureMingleClientEvent("mingle_signup_completed", { method: "email" });
       }
 
       const signInResponse = await signIn("email-password", {
@@ -1003,6 +1120,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     isEmailSubmitting,
     props.dictionary.profile.emailAuthFailedMessage,
     props.dictionary.profile.emailAuthNotReadyMessage,
+    props.locale,
     signupEmail,
     signupName,
     signupPassword,
@@ -1074,12 +1192,78 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   ]);
 
   useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      legalSheetKind
+      || isEmailSheetOpen
+      || authPanelStep === "terms"
+    );
+    if (!props.authOnly && !canHandleAndroidBack) return;
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [authPanelStep, isEmailSheetOpen, legalSheetKind, props.authOnly]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (legalSheetKind) {
+      handleCloseLegalSheet();
+      return true;
+    }
+    if (isEmailSheetOpen) {
+      handleCloseEmailSheet();
+      return true;
+    }
+    if (authPanelStep === "terms") {
+      handleBackToProviderSelect();
+      return true;
+    }
+    if (isSigningIn || isEmailSubmitting) return true;
+    return false;
+  }, 30), [
+    authPanelStep,
+    handleBackToProviderSelect,
+    handleCloseEmailSheet,
+    handleCloseLegalSheet,
+    isEmailSheetOpen,
+    isEmailSubmitting,
+    isSigningIn,
+    legalSheetKind,
+  ]);
+
+  useEffect(() => {
+    if (!isEmailSheetOpen || typeof window === "undefined") {
+      setEmailSheetKeyboardInsetPx(0);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const syncKeyboardInset = () => {
+      const nextInsetPx = resolveKeyboardViewportInsetPx(viewport);
+      setEmailSheetKeyboardInsetPx((currentInsetPx) => (
+        resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx)
+      ));
+    };
+
+    syncKeyboardInset();
+    viewport.addEventListener("resize", syncKeyboardInset);
+    viewport.addEventListener("scroll", syncKeyboardInset);
+
+    return () => {
+      viewport.removeEventListener("resize", syncKeyboardInset);
+      viewport.removeEventListener("scroll", syncKeyboardInset);
+    };
+  }, [isEmailSheetOpen]);
+
+  useEffect(() => {
     return () => {
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
       clearLegalSheetCloseTimer();
       clearEmailSheetCloseTimer();
       pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
     };
   }, [
     clearEmailSheetCloseTimer,
@@ -1099,10 +1283,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       livePhoneDemoRef.current?.prepareForDeletion();
     },
     isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+    requestCloseTopmostOverlay: () => livePhoneDemoRef.current?.requestCloseTopmostOverlay() ?? false,
+    resetNavigationOverlays: async () => {
+      await livePhoneDemoRef.current?.resetNavigationOverlays();
+    },
   }), []);
 
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
+    resetMinglePostHogIdentity();
     void signOut({ callbackUrl: signedOutCallbackUrl });
   }, [isDeletingAccount, signedOutCallbackUrl]);
 
@@ -1116,6 +1305,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
+      resetMinglePostHogIdentity();
       await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);
@@ -1292,19 +1482,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </h2>
                     <button
                       type="button"
+                      role="checkbox"
+                      aria-checked={hasAgreedAllRequiredTerms}
                       onClick={handleAgreeAllRequiredTerms}
                       disabled={disabled}
                       className="mt-4 flex h-10 w-full items-center gap-2.5 rounded-xl bg-white/8 px-3.5 text-left text-[0.9rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <span
-                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.62rem] ${
-                          hasAgreedAllRequiredTerms
-                            ? "border-rose-400 bg-rose-500 text-white"
-                            : "border-white/25 text-transparent"
-                        }`}
-                      >
-                        ✓
-                      </span>
+                      <AgreementCheckMark checked={hasAgreedAllRequiredTerms} disabled={disabled} />
                       <span className="inline-flex h-full items-center leading-none">
                         {props.dictionary.profile.agreeToAll}
                       </span>
@@ -1312,13 +1496,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
                     <div className="mt-1.5 space-y-0.5">
                       <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
-                        <input
-                          type="checkbox"
-                          checked={agreedPrivacy}
-                          onChange={(event) => setAgreedPrivacy(event.target.checked)}
-                          disabled={disabled}
-                          className="h-4 w-4 accent-rose-500"
-                        />
+                        <label className={`inline-flex shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={agreedPrivacy}
+                            onChange={(event) => setAgreedPrivacy(event.target.checked)}
+                            disabled={disabled}
+                            aria-label={props.dictionary.profile.privacyPolicyRequired}
+                            className="sr-only"
+                          />
+                          <AgreementCheckMark checked={agreedPrivacy} disabled={disabled} />
+                        </label>
                         <button
                           type="button"
                           onClick={() => handleOpenLegalSheet("privacy")}
@@ -1328,13 +1516,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         </button>
                       </div>
                       <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
-                        <input
-                          type="checkbox"
-                          checked={agreedTerms}
-                          onChange={(event) => setAgreedTerms(event.target.checked)}
-                          disabled={disabled}
-                          className="h-4 w-4 accent-rose-500"
-                        />
+                        <label className={`inline-flex shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={agreedTerms}
+                            onChange={(event) => setAgreedTerms(event.target.checked)}
+                            disabled={disabled}
+                            aria-label={props.dictionary.profile.termsOfUseRequired}
+                            className="sr-only"
+                          />
+                          <AgreementCheckMark checked={agreedTerms} disabled={disabled} />
+                        </label>
                         <button
                           type="button"
                           onClick={() => handleOpenLegalSheet("terms")}
@@ -1423,6 +1615,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               animation: isEmailSheetClosing
                 ? "email-overlay-out 0.22s ease both"
                 : "email-overlay-in 0.2s ease both",
+              paddingBottom: emailSheetKeyboardInsetPx,
             }}
             onClick={handleCloseEmailSheet}
           >
@@ -1436,6 +1629,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 animation: isEmailSheetClosing
                   ? "email-sheet-out 0.24s cubic-bezier(0.4, 0, 0.2, 1) both"
                   : "email-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both",
+                maxHeight: emailSheetKeyboardInsetPx > 0
+                  ? `calc(88vh - ${emailSheetKeyboardInsetPx}px)`
+                  : undefined,
               }}
             >
               <div className="overflow-hidden">
@@ -1443,7 +1639,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                   className="flex w-[300%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   style={{ transform: `translateX(-${(emailSheetSlideIndex * 100) / 3}%)` }}
                 >
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
                       <h2 className="text-[2rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthLoginTitle}
@@ -1541,12 +1737,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
-                      <h2 className="text-[2rem] font-bold leading-tight">
+                      <h2 className="text-[1.85rem] font-bold leading-tight">
                         {props.dictionary.profile.emailAuthSignupTitle}
                       </h2>
-                      <p className="mt-2 text-[1.1rem] text-slate-500">
+                      <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
                         {props.dictionary.profile.emailAuthSignupSubtitle}
                       </p>
                       <button
@@ -1601,9 +1797,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                           setSignupPassword(event.target.value);
                           setEmailAuthErrorCode(null);
                         }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            signupPasswordConfirmRef.current?.focus();
+                          }
+                        }}
+                        onFocus={(event) => {
+                          event.target.scrollIntoView({ block: "center", behavior: "smooth" });
+                        }}
                         disabled={emailSheetDisabled}
                         autoComplete="new-password"
                         type="password"
+                        enterKeyHint="next"
                         className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
                         placeholder={props.dictionary.profile.passwordFieldPlaceholder}
                       />
@@ -1612,14 +1818,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         {props.dictionary.profile.passwordConfirmFieldLabel}
                       </label>
                       <input
+                        ref={signupPasswordConfirmRef}
                         value={signupPasswordConfirm}
                         onChange={(event) => {
                           setSignupPasswordConfirm(event.target.value);
                           setEmailAuthErrorCode(null);
                         }}
+                        onFocus={(event) => {
+                          event.target.scrollIntoView({ block: "center", behavior: "smooth" });
+                        }}
                         disabled={emailSheetDisabled}
                         autoComplete="new-password"
                         type="password"
+                        enterKeyHint="done"
                         className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
                         placeholder={props.dictionary.profile.passwordConfirmFieldPlaceholder}
                       />
@@ -1631,12 +1842,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       <button
                         type="submit"
                         disabled={emailSheetDisabled}
-                        className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
                       >
                         {isEmailSubmitting ? (
-                          <Loader2 size={18} className="animate-spin" aria-hidden />
+                          <Loader2 size={20} className="animate-spin text-white" aria-hidden />
                         ) : (
-                          props.dictionary.profile.emailSignUpAction
+                          props.dictionary.profile.emailAuthSignupTitle
                         )}
                       </button>
 
@@ -1660,7 +1871,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </form>
                   </div>
 
-                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                  <div className="min-h-0 max-h-[88vh] w-1/3 shrink-0 overflow-y-auto overscroll-contain px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative flex items-start justify-between gap-3">
                       <button
                         type="button"
@@ -1742,14 +1953,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     );
   }
 
+  if (props.authOnly) {
+    return null;
+  }
+
   return (
     <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
       {isLiveDemoMounted ? (
+        <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
-          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
+          dictionary={props.dictionary}
           usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}
@@ -1790,23 +2006,37 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          onConversationTitleChange={props.onConversationTitleChange}
+          onConversationRemoveRequested={props.onConversationRemoveRequested}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
+          preferredDisplayLanguage={props.preferredDisplayLanguage}
+          preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialOtherMembers={props.initialOtherMembers}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
+          selectedLanguagesAttribution={props.selectedLanguagesAttribution}
           initialSpeechLanguages={props.initialSpeechLanguages}
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
+          initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
+          onLatestUtterancePreviewChange={props.onLatestUtterancePreviewChange}
           onConversationStatsChange={props.onConversationStatsChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
           onSpeechLanguagesChange={props.onSpeechLanguagesChange}
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
+          onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
+          onOpenProfile={props.onOpenProfile}
+          isBlockedCounterpart={props.isBlockedCounterpart}
+          isMultiMember={props.isMultiMember}
         />
+        </MessageReactionsProvider>
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
           <Loader2 size={24} className="animate-spin" aria-hidden />

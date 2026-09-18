@@ -2,10 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   ensureTrackingContext,
   parseClientContext,
+  recordTrackedUserActivity,
   upsertTrackedUser,
+  type ClientContext,
   type TrackingContext,
 } from "@/lib/app-analytics";
+import { parseApiNamespaceVersion } from "@/lib/api-namespace-version";
 import { prisma } from "@/lib/prisma";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 
 export type SessionUserIdentity = {
   id: string;
@@ -27,6 +31,37 @@ export function normalizeSessionUserIdentity(
     externalUserId: "",
     sessionKey: "",
   };
+}
+
+function hasAuthenticatedSessionIdentity(identity: SessionUserIdentity): boolean {
+  return Boolean(identity.id || identity.email);
+}
+
+// Anonymous User rows are a compatibility mechanism for pre-account clients.
+// Current (2.x+) and unversioned routes are account-only by default. Requiring
+// an explicit 1.x namespace keeps a missing/late session from silently routing
+// current app data into a device-cookie-owned User.
+export function requestAllowsLegacyAnonymousUser(request: Request): boolean {
+  const pathname = (() => {
+    try {
+      return new URL(request.url).pathname;
+    } catch {
+      return "";
+    }
+  })();
+  const pathNamespace = pathname.match(
+    /^\/api\/((?:android|ios)\/v\d+\.\d+\.\d+)(?:\/|$)/,
+  )?.[1] ?? "";
+  const headerNamespace = sanitizeRequestIdentityValue(
+    request.headers.get("x-mingle-api-namespace"),
+  );
+  const parsedPathNamespace = parseApiNamespaceVersion(pathNamespace);
+  if (!parsedPathNamespace || parsedPathNamespace.version[0] !== 1) {
+    return false;
+  }
+
+  const parsedHeaderNamespace = parseApiNamespaceVersion(headerNamespace);
+  return !parsedHeaderNamespace || parsedHeaderNamespace.version[0] === 1;
 }
 
 function readCookieValue(request: Request, cookieName: string): string {
@@ -51,6 +86,7 @@ function readCookieValue(request: Request, cookieName: string): string {
 export function resolveTrackingExternalUserId(request: Request): string {
   return sanitizeRequestIdentityValue(
     request.headers.get("x-mingle-user-id")
+    || request.headers.get("x-posthog-distinct-id")
     || readCookieValue(request, "mingle_uid")
     || null,
   );
@@ -128,6 +164,36 @@ export async function findUserIdForIdentity(identity: SessionUserIdentity): Prom
   return null;
 }
 
+export async function resolveUserIdForTrackedWrite(args: {
+  request: NextRequest;
+  session: { user?: { id?: unknown; email?: unknown } } | null;
+  tracking: TrackingContext;
+  clientContext: ClientContext;
+}): Promise<string> {
+  if (!matchesExpectedAccount(args.request, args.session)) return "";
+  const sessionIdentity = normalizeSessionUserIdentity(args.session);
+  if (hasAuthenticatedSessionIdentity(sessionIdentity)) {
+    const userId = await findUserIdForIdentity(sessionIdentity);
+    if (!userId) return "";
+
+    await recordTrackedUserActivity({
+      userId,
+      tracking: args.tracking,
+      clientContext: args.clientContext,
+    });
+    return userId;
+  }
+
+  if (!requestAllowsLegacyAnonymousUser(args.request)) {
+    return "";
+  }
+
+  return upsertTrackedUser({
+    tracking: args.tracking,
+    clientContext: args.clientContext,
+  });
+}
+
 export async function resolveOrCreateUserIdForRequest(args: {
   request: NextRequest;
   session: { user?: { id?: unknown; email?: unknown } } | null;
@@ -137,11 +203,26 @@ export async function resolveOrCreateUserIdForRequest(args: {
   identity: SessionUserIdentity;
   tracking: TrackingContext | null;
 }> {
-  const identity = {
-    ...normalizeSessionUserIdentity(args.session),
+  const sessionIdentity = normalizeSessionUserIdentity(args.session);
+  const identity: SessionUserIdentity = {
+    ...sessionIdentity,
     externalUserId: resolveTrackingExternalUserId(args.request),
     sessionKey: resolveTrackingSessionKey(args.request),
   };
+
+  if (!matchesExpectedAccount(args.request, args.session)) {
+    return { userId: "", identity, tracking: null };
+  }
+
+  if (hasAuthenticatedSessionIdentity(sessionIdentity)) {
+    const userId = await findUserIdForIdentity(sessionIdentity);
+    return { userId: userId || "", identity, tracking: null };
+  }
+
+  if (!requestAllowsLegacyAnonymousUser(args.request)) {
+    return { userId: "", identity, tracking: null };
+  }
+
   const userId = await findUserIdForIdentity(identity);
   if (userId) {
     return { userId, identity, tracking: null };

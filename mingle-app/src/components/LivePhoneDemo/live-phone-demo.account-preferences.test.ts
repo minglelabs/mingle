@@ -9,7 +9,10 @@ import {
   buildHydratedAccountPreferences,
   normalizeSonioxEndpointMaxDelayPreference,
   normalizeSonioxManualFinalizeSilencePreference,
+  resolveAccountPreferencesSyncRetryDelayMs,
   serializeAccountPreferencesSyncState,
+  shouldApplyAccountPreferencesHydration,
+  shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
   type LivePhoneDemoAccountPreferences,
@@ -27,6 +30,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'expanded',
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
@@ -37,6 +41,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'expanded',
       sttSegmentationMode: null,
     })
   })
@@ -62,6 +67,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: 'expanded',
       sttSegmentationMode: null,
     })
   })
@@ -84,6 +90,7 @@ describe('buildHydratedAccountPreferences', () => {
       inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
+      bubbleDisplayMode: 'expanded',
       sttSegmentationMode: null,
     })
   })
@@ -123,6 +130,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        bubbleDisplayMode: 'expanded',
         sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
@@ -140,6 +148,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
       sttSegmentationMode: null,
     }
 
@@ -167,6 +176,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        bubbleDisplayMode: 'expanded',
         sttSegmentationMode: null,
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
@@ -179,6 +189,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
+        bubbleDisplayMode: 'collapsed',
         sttSegmentationMode: null,
       }),
     })).toBe(true)
@@ -199,9 +210,55 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
+        bubbleDisplayMode: 'collapsed',
         sttSegmentationMode: null,
       },
       lastSyncedStateKey: null,
+    })).toBe(false)
+  })
+})
+
+describe('account preference sync retry', () => {
+  it('backs off retries with a bounded delay', () => {
+    expect(resolveAccountPreferencesSyncRetryDelayMs(1)).toBe(2_000)
+    expect(resolveAccountPreferencesSyncRetryDelayMs(2)).toBe(4_000)
+    expect(resolveAccountPreferencesSyncRetryDelayMs(10)).toBe(60_000)
+  })
+
+  it('only retries pending preferences while syncing is enabled and mounted', () => {
+    expect(shouldRetryAccountPreferencesSync({
+      allowSync: true,
+      pendingSync: true,
+      mounted: true,
+    })).toBe(true)
+    expect(shouldRetryAccountPreferencesSync({
+      allowSync: false,
+      pendingSync: true,
+      mounted: true,
+    })).toBe(false)
+    expect(shouldRetryAccountPreferencesSync({
+      allowSync: true,
+      pendingSync: false,
+      mounted: true,
+    })).toBe(false)
+    expect(shouldRetryAccountPreferencesSync({
+      allowSync: true,
+      pendingSync: true,
+      mounted: false,
+    })).toBe(false)
+  })
+})
+
+describe('shouldApplyAccountPreferencesHydration', () => {
+  it('accepts a server snapshot only when no local edit happened after the request began', () => {
+    expect(shouldApplyAccountPreferencesHydration({
+      hydrationStartedAtLocalRevision: 4,
+      currentLocalRevision: 4,
+    })).toBe(true)
+
+    expect(shouldApplyAccountPreferencesHydration({
+      hydrationStartedAtLocalRevision: 4,
+      currentLocalRevision: 5,
     })).toBe(false)
   })
 })
@@ -265,6 +322,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
       sttSegmentationMode: null,
     })).toEqual({
       textSizeLevel: 4,
@@ -276,6 +334,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
+      bubbleDisplayMode: 'collapsed',
       sttSegmentationMode: null,
     })
   })

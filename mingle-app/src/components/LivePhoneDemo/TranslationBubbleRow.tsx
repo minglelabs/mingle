@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from 'react'
-import { getSttLanguageFlag } from '@/lib/stt-languages'
+import LanguageFlag from '@/components/language-flag'
 import { cn } from '@/lib/utils'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 
@@ -50,7 +50,7 @@ export default function TranslationBubbleRow({
         metaClassName,
       )}
     >
-      <span className="text-base leading-none">{getSttLanguageFlag(lang)}</span>
+      <LanguageFlag language={lang} className="text-base leading-none" />
       <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
       {accessory}
     </span>
@@ -120,7 +120,7 @@ export default function TranslationBubbleRow({
               metaClassName,
             )}
           >
-            <span className="text-base leading-none">{getSttLanguageFlag(lang)}</span>
+            <LanguageFlag language={lang} className="text-base leading-none" />
             <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
             {accessory}
           </div>

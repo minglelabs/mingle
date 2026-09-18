@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { resolveAccountStatus } from "@/server/account-status";
 
 function first(value: string | null): string {
   return value?.trim() ?? "";
@@ -20,7 +21,24 @@ export async function GET(request: Request) {
 
   const user = await prisma.user.findUnique({
     where: { externalUserId: userId },
-    select: { id: true, externalUserId: true, email: true, name: true },
+    select: {
+      id: true,
+      externalUserId: true,
+      email: true,
+      name: true,
+      handle: true,
+      isActive: true,
+      isDeleted: true,
+      deactivatedAt: true,
+      withdrawnAt: true,
+      scheduledDeleteAt: true,
+      deletedAt: true,
+      createdAt: true,
+      lastSeenAt: true,
+      latestClientPlatform: true,
+      latestAppVersion: true,
+      latestApiNamespace: true,
+    },
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -52,7 +70,24 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    user: { externalUserId: user.externalUserId, email: user.email, name: user.name },
+    user: {
+      externalUserId: user.externalUserId,
+      email: user.email,
+      name: user.name,
+      handle: user.handle,
+      accountStatus: resolveAccountStatus(user),
+      isActive: user.isActive,
+      isDeleted: user.isDeleted,
+      deactivatedAt: user.deactivatedAt?.toISOString() ?? null,
+      withdrawnAt: user.withdrawnAt?.toISOString() ?? null,
+      scheduledDeleteAt: user.scheduledDeleteAt?.toISOString() ?? null,
+      deletedAt: user.deletedAt?.toISOString() ?? null,
+      createdAt: user.createdAt.toISOString(),
+      lastSeenAt: user.lastSeenAt.toISOString(),
+      latestClientPlatform: user.latestClientPlatform,
+      latestAppVersion: user.latestAppVersion,
+      latestApiNamespace: user.latestApiNamespace,
+    },
     channelCount: channels.length,
     channels: channels.map((channel) => {
       const counts = messageCounts.get(channel.sessionKey) ?? { total: 0, active: 0, deleted: 0, latestMessageAt: null };

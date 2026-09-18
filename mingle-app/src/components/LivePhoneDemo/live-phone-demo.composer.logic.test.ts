@@ -5,6 +5,7 @@ import {
   resolveNativeBottomBannerOverlayInsetPx,
   resolveScrollToBottomButtonBottomPx,
   resolveStableKeyboardViewportInsetPx,
+  resolveComposerDraftStorageKey,
   resizeComposerTextarea,
 } from './LivePhoneDemo'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
@@ -21,6 +22,7 @@ describe('live phone demo composer logic', () => {
       closeKeyboardLabel: '텍스트 입력 닫기',
       composerPlaceholder: '메시지를 입력하세요',
       sendMessageLabel: '메시지 보내기',
+      blockedComposerMessage: '차단된 사용자입니다',
     })
   })
 
@@ -31,6 +33,7 @@ describe('live phone demo composer logic', () => {
       closeKeyboardLabel: 'Close text input',
       composerPlaceholder: 'Type a message',
       sendMessageLabel: 'Send message',
+      blockedComposerMessage: 'This user is blocked.',
     })
   })
 
@@ -74,6 +77,15 @@ describe('live phone demo composer logic', () => {
       currentIsComposerOpen: true,
       persistedInputMode: 'voice',
     })).toBe(false)
+  })
+
+  it('keeps composer drafts in separate storage keys for separate conversations', () => {
+    const firstConversationKey = resolveComposerDraftStorageKey('conversation-a', 'conversation-a')
+    const secondConversationKey = resolveComposerDraftStorageKey('conversation-b', 'conversation-b')
+
+    expect(firstConversationKey).not.toBe(secondConversationKey)
+    expect(resolveComposerDraftStorageKey('conversation-a', 'conversation-a')).toBe(firstConversationKey)
+    expect(resolveComposerDraftStorageKey()).toBe('mingle_live_phone_demo_composer_draft_v1')
   })
 
   it('raises the scroll-to-bottom button above a bottom banner in native runtime', () => {

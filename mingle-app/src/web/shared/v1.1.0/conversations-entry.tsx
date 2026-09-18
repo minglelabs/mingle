@@ -1,10 +1,18 @@
 import { cookies, headers } from "next/headers";
 import { getServerSession } from "next-auth";
 import ConversationList from "@/components/conversation-list";
+import {
+  listConversationChannelsForUser,
+  type ConversationChannelSummary,
+} from "@/lib/app-conversations";
+import { getUserProfile } from "@/server/user-profile";
 import { getDictionary } from "@/i18n";
 import type { AppLocale } from "@/i18n/config";
-import { listConversationChannelsForUser } from "@/lib/app-conversations";
-import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import {
+  getAuthOptions,
+  isAppleOAuthConfigured,
+  isGoogleOAuthConfigured,
+} from "@/lib/auth-options";
 import {
   findUserIdForIdentity,
   normalizeSessionUserIdentity,
@@ -35,10 +43,18 @@ export default async function V110ConversationsEntry({
   locale,
   searchParams,
 }: V110ConversationsEntryProps) {
-  const session = await getServerSession(getAuthOptions());
   const requestHeaders = await headers();
   const cookieStore = await cookies();
   const initialNativeUi = readSearchParamValue(searchParams, "nativeUi") === "1";
+  const initialConversationId = readSearchParamValue(searchParams, "conversation");
+  const isExplicitNativeTabRoot = initialNativeUi
+    && readSearchParamValue(searchParams, "nativeTabRoot") === "1"
+    && !initialConversationId;
+  // Native tab navigation must be able to commit the list route before the
+  // Railway database round-trip finishes. The client list performs one
+  // identity-aware refresh after mount, so doing the same user lookup and
+  // channel query here would only make the tab switch wait twice.
+  const session = isExplicitNativeTabRoot ? null : await getServerSession(getAuthOptions());
   const identity = {
     ...normalizeSessionUserIdentity(session),
     externalUserId: sanitizeRequestIdentityValue(
@@ -50,20 +66,36 @@ export default async function V110ConversationsEntry({
       || cookieStore.get("mingle_sid")?.value,
     ),
   };
-  const userId = await findUserIdForIdentity(identity);
-  const initialConversations = userId
-    ? await listConversationChannelsForUser(userId, {
-        includeMessageSummaries: !initialNativeUi,
-      })
-    : [];
+  let initialConversations: ConversationChannelSummary[] = [];
+  let initialPrimaryLanguage: string | null = null;
+  let initialPrimaryLanguages: string[] = [];
+  let initialDefaultConversationLanguages: string[] = [];
+  if (!isExplicitNativeTabRoot) {
+    const userId = await findUserIdForIdentity(identity);
+    if (userId) {
+      const [nextConversations, profile] = await Promise.all([
+        listConversationChannelsForUser(userId, {
+          includeMessageSummaries: true,
+        }),
+        getUserProfile(userId),
+      ]);
+      initialConversations = nextConversations;
+      initialPrimaryLanguage = profile?.nationality ?? null;
+      initialPrimaryLanguages = profile?.primaryLanguages ?? [];
+      initialDefaultConversationLanguages = profile?.defaultConversationLanguages ?? [];
+    }
+  }
 
   return (
     <ConversationList
       locale={locale as AppLocale}
       dictionary={getDictionary(locale as AppLocale)}
       initialConversations={initialConversations}
-      initialConversationsRequireRefresh={initialNativeUi}
-      initialConversationIdToOpen={readSearchParamValue(searchParams, "conversation") || null}
+      initialConversationsRequireRefresh={isExplicitNativeTabRoot}
+      initialConversationIdToOpen={initialConversationId || null}
+      initialPrimaryLanguage={initialPrimaryLanguage}
+      initialPrimaryLanguages={initialPrimaryLanguages}
+      initialDefaultConversationLanguages={initialDefaultConversationLanguages}
       initialNativeUi={initialNativeUi}
       initialNativeBannerPosition={readSearchParamValue(searchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeTopInsetPx"))}
@@ -73,7 +105,7 @@ export default async function V110ConversationsEntry({
       initialNativeConversationBottomInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeConversationBottomInsetPx"))}
       initialTrackingExternalUserId={identity.externalUserId}
       initialTrackingSessionKey={identity.sessionKey}
-      appleOAuthEnabled={false}
+      appleOAuthEnabled={isAppleOAuthConfigured()}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
     />
   );

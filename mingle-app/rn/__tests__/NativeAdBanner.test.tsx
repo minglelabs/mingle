@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
-import { NativeAdBanner } from '../App';
+import { NativeAdBanner, shouldHideNativeBannersForPathname } from '../App';
 
 function BannerAdMock(props: Record<string, unknown>) {
   return React.createElement('BannerAd', props);
@@ -17,6 +17,13 @@ function createAdModule() {
 }
 
 describe('NativeAdBanner', () => {
+  it('hides native banners on localized and non-localized auth routes', () => {
+    expect(shouldHideNativeBannersForPathname('/ko/auth')).toBe(true);
+    expect(shouldHideNativeBannersForPathname('/auth')).toBe(true);
+    expect(shouldHideNativeBannersForPathname('/ko/conversations')).toBe(false);
+    expect(shouldHideNativeBannersForPathname('/ko/mypage')).toBe(false);
+  });
+
   it('keeps the banner slot visible until the creative loads', async () => {
     const consoleErrorSpy = jest
       .spyOn(console, 'error')

@@ -183,6 +183,18 @@ function setAuthenticatedTranslationModel(model: string | null) {
 }
 
 describe('/api/translate/finalize route', () => {
+  it('rejects an old-account translation recovery before looking up preferences or calling AI', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'new_account' } })
+    const { POST } = await import('./route')
+    const response = await POST(new Request('https://mingle.example/api/translate/finalize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mingle-expected-account-id': 'old_account' },
+      body: JSON.stringify({ text: 'Hello', targetLanguages: ['ko'], isFinal: true }),
+    }) as never)
+    expect(response.status).toBe(401)
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     ensureTrackingContextMock.mockReturnValue({
@@ -1013,7 +1025,7 @@ describe('/api/translate/finalize route', () => {
       isFinal: false,
     }, {
       'x-mingle-user-id': 'anon_test_user',
-    }) as never)
+    }, 'http://localhost:3000/api/ios/v1.1.4/translate/finalize') as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)
@@ -1068,7 +1080,7 @@ describe('/api/translate/finalize route', () => {
       sessionKey: 'sess_test_user',
     }, {
       'x-mingle-session-key': 'sess_test_user',
-    }) as never)
+    }, 'http://localhost:3000/api/ios/v1.1.4/translate/finalize') as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)

@@ -6,4 +6,10 @@ export {
   getConversationRouteForAndroidV1_1_0 as getConversationRouteForAndroidV1_1_4,
   patchConversationForAndroidV1_1_0 as patchConversationForAndroidV1_1_4,
   patchConversationRouteForAndroidV1_1_0 as patchConversationRouteForAndroidV1_1_4,
+  getConversationRealtimeTokenForAndroidV1_1_0 as getConversationRealtimeTokenForAndroidV1_1_4,
+  getConversationRealtimeTokenRouteForAndroidV1_1_0 as getConversationRealtimeTokenRouteForAndroidV1_1_4,
+  getConversationMembersForAndroidV1_1_0 as getConversationMembersForAndroidV1_1_4,
+  getConversationMembersRouteForAndroidV1_1_0 as getConversationMembersRouteForAndroidV1_1_4,
+  postConversationMembersForAndroidV1_1_0 as postConversationMembersForAndroidV1_1_4,
+  postConversationMembersRouteForAndroidV1_1_0 as postConversationMembersRouteForAndroidV1_1_4,
 } from "@/server/api/controllers/android/v1.1.0/conversation-controller";

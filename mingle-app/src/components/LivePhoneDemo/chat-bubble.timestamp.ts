@@ -37,26 +37,12 @@ function formatDateLine(date: Date, includeYear: boolean): string {
 
 function formatTimeLines(date: Date, locale: string): string[] {
   try {
-    const parts = new Intl.DateTimeFormat(locale, {
+    const timeLine = new Intl.DateTimeFormat(locale, {
       hour: "numeric",
       minute: "2-digit",
-    }).formatToParts(date);
+    }).format(date).trim();
 
-    let hour = "";
-    let minute = "";
-    let dayPeriod = "";
-
-    for (const part of parts) {
-      if (part.type === "hour") hour = part.value;
-      if (part.type === "minute") minute = part.value;
-      if (part.type === "dayPeriod") dayPeriod = part.value.trim();
-    }
-
-    const timeLine = hour && minute
-      ? `${hour}:${minute}`
-      : formatDate(date, locale, { hour: "numeric", minute: "2-digit" });
-
-    return dayPeriod ? [timeLine, dayPeriod] : [timeLine];
+    return timeLine ? [timeLine] : [];
   } catch {
     return [formatDate(date, "en", { hour: "numeric", minute: "2-digit" })];
   }

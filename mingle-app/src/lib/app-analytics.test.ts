@@ -3,13 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockAppEventLogCreate,
   mockAppEventLogUpsert,
+  mockCaptureMingleEvent,
+  mockUserUpdate,
 } = vi.hoisted(() => ({
   mockAppEventLogCreate: vi.fn(),
   mockAppEventLogUpsert: vi.fn(),
+  mockCaptureMingleEvent: vi.fn(),
+  mockUserUpdate: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: {
+      update: mockUserUpdate,
+    },
     appEventLog: {
       create: mockAppEventLogCreate,
       upsert: mockAppEventLogUpsert,
@@ -17,7 +24,16 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { createTrackedEventLog, type ClientContext, type TrackingContext } from "@/lib/app-analytics";
+vi.mock("@/lib/posthog-server", () => ({
+  captureMingleEvent: mockCaptureMingleEvent,
+}));
+
+import {
+  createTrackedEventLog,
+  recordTrackedUserActivity,
+  type ClientContext,
+  type TrackingContext,
+} from "@/lib/app-analytics";
 
 const tracking: TrackingContext = {
   externalUserId: "anon_1",
@@ -49,6 +65,13 @@ const clientContext: ClientContext = {
 describe("createTrackedEventLog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("updates translation metadata without counting another message send", async () => {
+    await createTrackedEventLog({ userId: "user-1", tracking, clientContext,
+      eventType: "stt_turn_finalized", messageId: "msg-1", metadata: { translations: { en: "Hello" } }, skipAnalyticsCapture: true });
+    expect(mockAppEventLogUpsert).toHaveBeenCalledOnce();
+    expect(mockCaptureMingleEvent).not.toHaveBeenCalled();
   });
 
   it("upserts keyed on messageId + eventType so a retried finalize updates the same row atomically", async () => {
@@ -140,5 +163,108 @@ describe("createTrackedEventLog", () => {
     expect(mockAppEventLogCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "stt_session_started" }),
     }));
+  });
+
+  it("forwards release-safe analytics properties without message text", async () => {
+    await createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext: {
+        ...clientContext,
+        apiNamespace: "android/v2.0.0",
+        appVersion: "2.0.0",
+        clientPlatform: "android",
+        language: "ko",
+        pathname: "/conversation",
+      },
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: {
+        sourceLanguage: "ko",
+        sourceText: "비공개 원문",
+        translations: { en: "Private translation" },
+        translationLanguages: ["en", "ja"],
+        model: "model-id",
+        clientMetadata: {
+          speaker: "self",
+          reason: "manual_text_input",
+          sourceText: "또 다른 비공개 원문",
+        },
+      },
+    });
+
+    expect(mockCaptureMingleEvent).toHaveBeenCalledWith({
+      distinctId: "anon_1",
+      event: "mingle_stt_turn_finalized",
+      properties: expect.objectContaining({
+        app_version: "2.0.0",
+        api_namespace: "android/v2.0.0",
+        client_platform: "android",
+        translation_language_count: 2,
+        speaker: "self",
+        message_input_mode: "keyboard",
+        has_message: true,
+      }),
+    });
+
+    expect(mockCaptureMingleEvent).toHaveBeenCalledWith({
+      distinctId: "anon_1",
+      event: "mingle_message_sent",
+      properties: expect.objectContaining({
+        message_input_mode: "keyboard",
+        has_message: true,
+      }),
+    });
+
+    const capturedProperties = mockCaptureMingleEvent.mock.calls.at(-1)?.[0]?.properties;
+    expect(capturedProperties).not.toHaveProperty("sourceText");
+    expect(capturedProperties).not.toHaveProperty("translations");
+  });
+});
+
+describe("recordTrackedUserActivity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUserUpdate.mockResolvedValue({
+      id: "account-user-1",
+      totalUsageSec: 0,
+      appVersionHistory: [],
+      apiNamespaceHistory: [],
+    });
+  });
+
+  it("enriches the canonical account by id without adopting the device tracking id", async () => {
+    await recordTrackedUserActivity({
+      userId: "account-user-1",
+      tracking: {
+        ...tracking,
+        externalUserId: "anon_device_that_must_not_become_the_owner",
+        ipAddress: "127.0.0.1",
+      },
+      clientContext: {
+        ...clientContext,
+        apiNamespace: "ios/v2.0.0",
+        appVersion: "2.0.0",
+        usageSec: 12,
+      },
+    });
+
+    expect(mockUserUpdate).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: { id: "account-user-1" },
+      data: expect.objectContaining({
+        latestIpAddress: "127.0.0.1",
+        latestApiNamespace: "ios/v2.0.0",
+        latestAppVersion: "2.0.0",
+      }),
+    }));
+    expect(mockUserUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty("externalUserId");
+    expect(mockUserUpdate).toHaveBeenNthCalledWith(2, {
+      where: { id: "account-user-1" },
+      data: {
+        totalUsageSec: 12,
+        appVersionHistory: ["2.0.0"],
+        apiNamespaceHistory: ["ios/v2.0.0"],
+      },
+    });
   });
 });

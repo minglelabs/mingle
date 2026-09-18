@@ -1,22 +1,25 @@
 # Railway Single-Service Deployment
 
-This document describes the new Railway path for running `mingle-app` and
-`mingle-stt` inside one Railway service. It does not replace or modify the
-current Vercel and Fly deployments.
+This document describes the new Railway path for running `mingle-app`,
+`mingle-stt`, and `mingle-messaging` inside one Railway service. It does not
+replace or modify the current Vercel and Fly deployments.
 
 ## Architecture
 
 - Railway builds from the repository root with `railway.json`.
-- `Dockerfile.railway` installs, builds, and packages `mingle-app` and
-  `mingle-stt`.
-- `railway/start-single-service.mjs` starts both servers on internal ports:
+- `Dockerfile.railway` installs, builds, and packages `mingle-app`,
+  `mingle-stt`, and `mingle-messaging`.
+- `railway/start-single-service.mjs` starts all three servers on internal ports:
   - `mingle-app`: `3000`
   - `mingle-stt`: `3001`
+  - `mingle-messaging`: `3002`
 - The Railway-facing process listens on `$PORT`.
 - HTTP traffic is proxied to `mingle-app`.
 - WebSocket traffic under `/stt` is proxied to `mingle-stt`.
-- `/railway/health` returns `200` only when both internal ports are accepting
-  connections.
+- WebSocket traffic under `/conversation-events` and the matching publish
+  endpoint are proxied to `mingle-messaging`.
+- `/railway/health` returns `200` only when all three internal ports are
+  accepting connections.
 
 ## Railway Service Setup
 
@@ -39,6 +42,10 @@ NEXTAUTH_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_SITE_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_WS_PATH=/stt
 MINGLE_STT_WS_PATH=/stt
+MINGLE_MESSAGING_WS_PATH=/conversation-events
+MINGLE_MESSAGING_PUBLISH_PATH=/conversation-events/publish
+MINGLE_MESSAGING_URL=http://127.0.0.1:3002
+MINGLE_REALTIME_SECRET=
 SONIOX_API_KEY=
 TRANSLATE_PROVIDER=gemini
 ```
@@ -70,9 +77,10 @@ RN_ADMOB_BANNER_UNIT_ID_IOS=
 RN_ADMOB_BANNER_UNIT_ID_ANDROID=
 ```
 
-Leave `NEXT_PUBLIC_WS_URL` unset for this single-service deployment. The web
-client uses `NEXT_PUBLIC_WS_PATH=/stt`, so the browser connects to the same
-Railway domain with `wss://<domain>/stt`.
+Leave `NEXT_PUBLIC_WS_URL` and `NEXT_PUBLIC_MESSAGING_WS_URL` unset for this
+single-service deployment. The web client uses `NEXT_PUBLIC_WS_PATH=/stt` for
+STT and derives the messaging WebSocket from the same Railway domain at
+`wss://<domain>/conversation-events`.
 
 ## Database Migration
 
@@ -107,3 +115,58 @@ endpoint is:
 ```text
 wss://<railway-domain>/stt
 ```
+
+The conversation realtime endpoint is:
+
+```text
+wss://<railway-domain>/conversation-events
+```
+
+## PR 219: Conversation Photos and Biography Translation
+
+Before merging the feature branch into the automatically deployed branch:
+
+1. Create a dedicated R2 bucket for conversation photos in the existing R2 account.
+   Keep **Public Development URL (r2.dev) disabled**, attach **no custom domains**,
+   and do not expose this bucket through a public Worker. Do not disable the public
+   profile bucket; profile photos still use its public URLs.
+2. Set `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME` on the web server and the selected
+   devbox Vault record when testing locally. `R2_CONVERSATION_BUCKET_NAME` is an
+   accepted alias. The bucket must differ from both public profile bucket settings.
+   Prefer a private-bucket token in `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` and
+   `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` (or their `R2_CONVERSATION_*`
+   aliases). If those are omitted, the existing profile credential variables are
+   reused for backwards compatibility. Ensure the selected credential grants object
+   read/write/delete access to the new bucket; a credential scoped only to the profile
+   bucket cannot upload conversation photos.
+3. Confirm the existing `GEMINI_API_KEY` is configured for biography translations.
+   Apply the pending Prisma migrations to the target database before web deployment:
+   `20260908135150_add_message_reactions` and
+   `20260908144017_add_profile_bio_translations`. The build generates Prisma Client
+   but does not apply migrations. Use the production `db:migrate:deploy` procedure
+   above; do not replay SQL already applied manually without reconciling migration
+   history. These review fixes add no third migration.
+4. Upload a generated test photo through the authenticated app. Verify a second
+   room member can view it, outsiders/anonymous app requests cannot, and the new
+   bucket has no anonymous object-serving endpoint. Verify photo arrival generates
+   a notification on a backgrounded device with existing APNs/FCM configuration.
+   Retrying the same client message ID must not generate another notification.
+5. Include the iOS photo-library usage description in the next native build and
+   test the actual picker on iOS and Android. Any mobile marketing-version change
+   must retain the matching platform API namespace.
+
+Conversation photo reads, writes, and deletes use only the private bucket. There
+is no public-bucket fallback or client-visible storage URL. Missing private
+configuration, or selecting the known public bucket, fails closed with HTTP 503.
+The application cannot infer all Cloudflare public routes from S3 credentials;
+private bucket access settings must be verified as part of provisioning. If an
+earlier experimental build stored persistent conversation images in the public
+bucket, copy those exact object keys into the private bucket, verify authenticated
+reads, and remove the public originals (and any cached copies) before exposure.
+Changing an environment variable alone does not make old public objects private.
+
+Photo push delivery uses the existing conversation-message APNs/FCM helper after
+the response, so provider delays/failures do not change a saved photo into a failed
+send. Only the request that inserted the message schedules notification; matching
+retries and concurrent losing requests do not send it again. As with existing
+notifications, this is best-effort delivery, not a durable notification outbox.

@@ -1,13 +1,15 @@
 import type { Prisma } from '@prisma/client/index'
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import {
   createTrackedEventLog,
   ensureTrackingContext,
   parseClientContext,
   sanitizeNonNegativeInt,
-  upsertTrackedUser,
 } from '@/lib/app-analytics'
+import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -15,10 +17,19 @@ import {
 import {
   normalizeLang,
   sanitizeJsonObject,
+  sanitizeTargetLanguages,
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
+import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
+import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
+import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import {
+  isMessageSenderBlockedInConversation,
+  listChannelMemberUserIdsBySessionKey,
+  materializePendingConversationInvitees,
+} from '@/lib/app-conversations'
 
 export const runtime = 'nodejs'
 
@@ -27,6 +38,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_session_stopped',
   'stt_turn_started',
   'stt_turn_finalized',
+  'conversation_hydration_order_preserved',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
@@ -170,6 +182,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const translationCompletionTokens = sanitizeNonNegativeInt(body.translationCompletionTokens)
   const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
   const translations = sanitizeTranslations(body.translations)
+  const requestedTargetLanguages = sanitizeTargetLanguages(body.targetLanguages)
   const clientMetadata = sanitizeJsonObject(body.metadata)
   const clientContext = parseClientContext(body.clientContext)
   const usageSecFromBody = sanitizeNonNegativeInt(body.usageSec)
@@ -188,14 +201,49 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const userId = await upsertTrackedUser({ tracking, clientContext })
+    const session = await getServerSession(getAuthOptions())
+    const userId = await resolveUserIdForTrackedWrite({
+      request,
+      session,
+      tracking,
+      clientContext,
+    })
+    if (!userId) {
+      const unauthorizedResponse = NextResponse.json(
+        { error: 'authenticated_user_required' },
+        { status: 401 },
+      )
+      ensureTrackingContext(request, unauthorizedResponse, {
+        externalUserIdHint: tracking.externalUserId,
+        sessionKeyHint: tracking.sessionKey,
+      })
+      return unauthorizedResponse
+    }
     let messageId: string | null = null
 
+    if (eventType === 'stt_turn_started' && body.reserveOrder === true && clientMessageId) {
+      if (await isMessageSenderBlockedInConversation({ sessionKey: tracking.sessionKey, userId })) {
+        return NextResponse.json({ error: 'conversation_unavailable' }, { status: 403 })
+      }
+      return NextResponse.json({ ok: true, orderReceipt: await reserveConversationVoiceOrder({
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      }) })
+    }
+
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
-      const shouldIgnoreDueToConversationClear = await shouldSkipFinalizedTurnPersistence({
-        clientMessageId,
-        sessionKey: tracking.sessionKey,
-      })
+      const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
+        shouldSkipFinalizedTurnPersistence({
+          clientMessageId,
+          sessionKey: tracking.sessionKey,
+        }),
+        // Defense in depth behind the client's own composer/mic gating — a
+        // block between the two members of this room means neither side's
+        // messages should persist any more, even from a stale client.
+        isMessageSenderBlockedInConversation({
+          sessionKey: tracking.sessionKey,
+          userId,
+        }),
+      ])
 
       const messageMetadata: Prisma.JsonObject = {
         clientMessageId,
@@ -204,10 +252,22 @@ export async function handleLogClientEventV1(request: NextRequest) {
         infrastructureProvider: infrastructureProvider ?? null,
         model: model ?? null,
         translationLanguages: Object.keys(translations),
+        translationTargetLanguages: sanitizeTargetLanguages([
+          ...requestedTargetLanguages,
+          ...Object.keys(translations),
+        ]),
       }
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      const orderScope = { userId, sessionKey: tracking.sessionKey, clientMessageId }
+      let orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, orderScope)
+      if (orderStartedAtMs === null && !shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+        // Finalization can beat the first socket echo. Resolve the SAME live
+        // reservation instead of falling back to the later DB creation time.
+        orderStartedAtMs = verifyVoiceOrderReceipt(await reserveConversationVoiceOrder(orderScope), orderScope)
+      }
+      if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
       if (
@@ -220,50 +280,87 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear) {
-        const message = await prisma.appMessage.upsert({
-          where: {
-            sessionKey_clientMessageId: {
+      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+        const message = await prisma.$transaction(async tx => {
+          // Serialize source/translation/retry writes even before the row exists.
+          // Never erase or replace a persisted display-order key on an update.
+          const lockKey = JSON.stringify([tracking.sessionKey, clientMessageId])
+          await tx.$queryRaw`SELECT true AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+          const existing = await tx.appMessage.findUnique({
+            where: { sessionKey_clientMessageId: { sessionKey: tracking.sessionKey, clientMessageId } },
+            select: { metadata: true, createdAt: true },
+          })
+          if (existing) {
+            const metadata = sanitizeJsonObject(existing.metadata)
+            const previousTargetLanguages = sanitizeTargetLanguages(metadata?.translationTargetLanguages)
+            if (requestedTargetLanguages.length === 0 && previousTargetLanguages.length > 0) {
+              messageMetadata.translationTargetLanguages = sanitizeTargetLanguages([
+                ...previousTargetLanguages,
+                ...Object.keys(translations),
+              ])
+            }
+            const savedOrder = metadata?.orderStartedAtMs
+            messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
+              ? savedOrder : existing.createdAt.getTime()
+          }
+          return tx.appMessage.upsert({
+            where: {
+              sessionKey_clientMessageId: {
+                sessionKey: tracking.sessionKey,
+                clientMessageId,
+              },
+            },
+            create: {
+              user: {
+                connect: { id: userId },
+              },
               sessionKey: tracking.sessionKey,
               clientMessageId,
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-          },
-          create: {
-            user: {
-              connect: { id: userId },
+            update: {
+              user: {
+                connect: { id: userId },
+              },
+              isDeleted: false,
+              sourceLanguage,
+              translationProvider: infrastructureProvider ?? provider ?? undefined,
+              translationModel: model ?? undefined,
+              translationPromptTokens: translationPromptTokens ?? undefined,
+              translationCompletionTokens: translationCompletionTokens ?? undefined,
+              translationTotalTokens: translationTotalTokens ?? undefined,
+              sttDurationMs,
+              totalDurationMs,
+              metadata: messageMetadata,
             },
-            sessionKey: tracking.sessionKey,
-            clientMessageId,
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          update: {
-            user: {
-              connect: { id: userId },
+            select: {
+              id: true,
+              createdAt: true,
+              metadata: true,
+              user: { select: { name: true, image: true } },
             },
-            isDeleted: false,
-            sourceLanguage,
-            translationProvider: infrastructureProvider ?? provider ?? undefined,
-            translationModel: model ?? undefined,
-            translationPromptTokens: translationPromptTokens ?? undefined,
-            translationCompletionTokens: translationCompletionTokens ?? undefined,
-            translationTotalTokens: translationTotalTokens ?? undefined,
-            sttDurationMs,
-            totalDurationMs,
-            metadata: messageMetadata,
-          },
-          select: {
-            id: true,
-          },
+          })
         })
+        const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
+        orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
+          ? persistedOrder : message.createdAt.getTime()
+        const persistedMetadata = sanitizeJsonObject(message.metadata)
+        const persistedTargetLanguages = sanitizeTargetLanguages(
+          persistedMetadata?.translationTargetLanguages ?? messageMetadata.translationTargetLanguages,
+        )
+        const committedTargetLanguages = sanitizeTargetLanguages([
+          ...persistedTargetLanguages,
+          ...Object.keys(translations),
+        ])
         messageId = message.id
 
         await prisma.appMessageContent.upsert({
@@ -318,12 +415,82 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         }
 
+        // An invitee gets no DB record and can't see the room at all until
+        // this, the owner's first real message — see
+        // pendingInviteeUserIds' doc comment. Must run before the
+        // notify below, so a freshly-materialized member's push actually
+        // reaches them. Passing this message's own createdAt keeps THIS
+        // message itself already bubble-attributed as multi-member — see
+        // materializePendingConversationInvitees's joinedAt doc comment.
+        let committedMemberUserIds: string[] | null = null
         try {
-          await maybeGenerateConversationTitleForSession({
-            sessionKey: tracking.sessionKey,
-          })
+          if (body.translationUpdate !== true) {
+            committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          }
+          if (Array.isArray(committedMemberUserIds)) {
+            console.info('[conversation-message] membership-ready', {
+              messageId,
+              memberCount: committedMemberUserIds.length,
+            })
+          }
         } catch (error) {
-          console.error('Conversation auto title generation failed:', error)
+          console.error('Materializing pending conversation invitees failed:', error)
+        }
+
+        // If this was the first message in a pending-invite room, use the
+        // member IDs returned from the committed materialization transaction.
+        // Otherwise, use the current membership snapshot for an already-live
+        // room. In both cases the list fan-out is based on a stable member set.
+        const memberUserIds = committedMemberUserIds
+          ?? await listChannelMemberUserIdsBySessionKey(tracking.sessionKey).catch(() => [])
+        try {
+          // Lets any other member's already-open room — and their conversation
+          // LIST screen — pick this up without waiting on their own poll cycle.
+          // The publish helper absorbs transport failures, but awaiting it here
+          // keeps the request alive long enough for the messaging service to
+          // receive the event instead of dropping it after the response ends.
+          // Retained membership rows include departed users. Match history's
+          // point-in-time attribution; a solo turn retried after an invitation
+          // must not suddenly become an account-attributed shared-room bubble.
+          const sharedAtMessage = memberUserIds.length >= 2 && await prisma.appConversationChannelMember.count({
+            where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
+              OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
+          }).then(count => count >= 2).catch(() => false)
+          if (sharedAtMessage) {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
+              id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
+              translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
+              targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
+              serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
+              speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+            })
+          } else {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          }
+        } catch (error) {
+          console.error('Conversation realtime notification failed:', error)
+        }
+        // Translation availability must be published before optional AI title
+        // generation, which can stall independently of message delivery.
+        if (body.translationPending !== true) {
+          try {
+            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+          } catch (error) {
+            console.error('Conversation auto title generation failed:', error)
+          }
+        }
+        if (messageId && body.translationUpdate !== true) {
+          try {
+            await sendPushNotificationForConversationMessage({
+              messageId,
+              sessionKey: tracking.sessionKey,
+              sourceText,
+              senderUserId: userId,
+              memberUserIds,
+            })
+          } catch (error) {
+            console.error('Conversation message push failed:', error)
+          }
         }
       }
     }
@@ -351,6 +518,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
       sessionKey: tracking.sessionKey,
       messageId,
       eventType,
+      ...(body.translationUpdate === true ? { skipAnalyticsCapture: true } : {}),
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
 

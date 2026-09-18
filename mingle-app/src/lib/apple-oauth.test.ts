@@ -94,4 +94,21 @@ describe("apple-oauth", () => {
     expect(credentials?.source).toBe("generated_secret");
     expect(credentials?.clientSecret).toBeTruthy();
   });
+
+  it("supports runtime values escaped by multiple dotenv serialization layers", () => {
+    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const credentials = resolveAppleOAuthCredentials({
+      env: {
+        AUTH_APPLE_ID: "com.mingle.web",
+        AUTH_APPLE_TEAM_ID: "TEAM123456",
+        AUTH_APPLE_KEY_ID: "KEY1234567",
+        AUTH_APPLE_PRIVATE_KEY: privateKeyPem.replace(/\n/g, "\\\\\\\\n"),
+      },
+      nowEpochSeconds: 1_700_000_000,
+    });
+
+    expect(credentials?.source).toBe("generated_secret");
+    expect(credentials?.clientSecret).toBeTruthy();
+  });
 });

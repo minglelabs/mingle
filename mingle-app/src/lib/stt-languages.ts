@@ -12,7 +12,8 @@ export type SttLanguageOption = {
 }
 
 export const DEFAULT_STT_LANGUAGES = ['en', 'ko', 'ja'] as const satisfies readonly SttLanguageCode[]
-const DEFAULT_STT_LANGUAGE_SET = new Set<SttLanguageCode>(DEFAULT_STT_LANGUAGES)
+export const MAX_STT_LANGUAGE_SELECTION = 5
+export const DEFAULT_CONVERSATION_LANGUAGE_COUNT = 3
 
 const STT_LANGUAGE_FLAG_MAP: Record<TranslationLanguageCode, string> = {
   af: '🇿🇦',
@@ -103,6 +104,30 @@ export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode |
   return isSupportedSttLanguageCode(selectableCode) ? selectableCode : ''
 }
 
+export function getSttLanguageDisplayName(
+  rawValue: string,
+  locale = 'en',
+): string | null {
+  const canonical = canonicalizeSttLanguageCode(rawValue)
+  if (!canonical) return null
+
+  const fallback = STT_LANGUAGE_OPTIONS.find((option) => option.code === canonical)?.englishName ?? null
+  const locales = [locale.trim(), 'en'].filter((candidate, index, candidates) => (
+    candidate.length > 0 && candidates.indexOf(candidate) === index
+  ))
+
+  for (const displayLocale of locales) {
+    try {
+      const displayName = new Intl.DisplayNames([displayLocale], { type: 'language' }).of(canonical)?.trim()
+      if (displayName) return displayName
+    } catch {
+      // Try the English fallback locale before using the catalog name.
+    }
+  }
+
+  return fallback
+}
+
 export function canonicalizeSonioxLanguageHintCode(rawValue: string): string {
   const canonical = canonicalizeTranslationLanguageCode(rawValue)
   if (!canonical) return ''
@@ -128,7 +153,7 @@ export function sanitizeSttLanguageSelection(
     const normalized = canonicalizeSttLanguageCode(item)
     if (!normalized || deduped.includes(normalized)) continue
     deduped.push(normalized)
-    if (deduped.length >= 5) break
+    if (deduped.length >= MAX_STT_LANGUAGE_SELECTION) break
   }
 
   return deduped.length > 0
@@ -136,24 +161,62 @@ export function sanitizeSttLanguageSelection(
     : (fallback.length > 0 ? [...fallback] : [])
 }
 
+// A member may select at most MAX_STT_LANGUAGE_SELECTION languages, but a
+// shared room displays/translates the union of every member's selections.
+// Keep this normalization separate so the room union is not silently clipped
+// back to one member's five-language limit on the client.
+export function sanitizeSttLanguageUnion(
+  rawValue: unknown,
+  fallbackLanguages: readonly string[] = [],
+): SttLanguageCode[] {
+  const fallback = fallbackLanguages
+    .map((language) => canonicalizeSttLanguageCode(language))
+    .filter((language): language is SttLanguageCode => Boolean(language));
+
+  if (!Array.isArray(rawValue)) {
+    return fallback.length > 0 ? [...new Set(fallback)] : [];
+  }
+
+  const deduped: SttLanguageCode[] = [];
+  for (const item of rawValue) {
+    if (typeof item !== 'string') continue;
+    const normalized = canonicalizeSttLanguageCode(item);
+    if (!normalized || deduped.includes(normalized)) continue;
+    deduped.push(normalized);
+  }
+
+  return deduped.length > 0
+    ? deduped
+    : (fallback.length > 0 ? [...new Set(fallback)] : []);
+}
+
 export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | undefined): SttLanguageCode[] {
   const localeLanguage = typeof rawLocale === 'string'
     ? canonicalizeSttLanguageCode(rawLocale)
     : ''
 
-  if (!localeLanguage || DEFAULT_STT_LANGUAGE_SET.has(localeLanguage)) {
+  if (!localeLanguage) {
     return [...DEFAULT_STT_LANGUAGES]
   }
 
-  const prioritized: SttLanguageCode[] = ['en', localeLanguage, 'ko', 'ja']
-  const deduped: SttLanguageCode[] = []
-  for (const language of prioritized) {
-    if (deduped.includes(language)) continue
-    deduped.push(language)
-    if (deduped.length >= DEFAULT_STT_LANGUAGES.length) break
-  }
+  return sanitizeSttLanguageSelection(
+    [localeLanguage, ...DEFAULT_STT_LANGUAGES],
+    DEFAULT_STT_LANGUAGES,
+  ).slice(0, DEFAULT_CONVERSATION_LANGUAGE_COUNT)
+}
 
-  return deduped
+export function deriveDefaultConversationLanguages(
+  primaryLanguages: readonly string[] | string | null | undefined,
+  rawLocale?: string | null,
+): SttLanguageCode[] {
+  const normalizedPrimaryLanguages = Array.isArray(primaryLanguages)
+    ? sanitizeSttLanguageSelection(primaryLanguages)
+    : typeof primaryLanguages === 'string'
+      ? sanitizeSttLanguageSelection([primaryLanguages])
+      : []
+  const preferredLanguage = normalizedPrimaryLanguages[0]
+
+  return deriveDefaultSttLanguagesForLocale(preferredLanguage || rawLocale)
 }
 
 export function getSttLanguageFlag(rawValue: string): string {

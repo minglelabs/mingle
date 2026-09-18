@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
 import {
   createTrackedEventLog,
   ensureTrackingContext,
   fireAndForgetDbWrite,
   parseClientContext,
-  upsertTrackedUser,
 } from '@/lib/app-analytics'
+import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
 import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
@@ -51,6 +53,10 @@ export async function handleTtsInworldV1(request: NextRequest) {
   }
 
   const voiceId = requestedVoiceId || await resolveVoiceId(authHeader, language)
+  // Start session verification alongside the upstream TTS request. Auth
+  // failure must never delay or fail audio delivery; it only suppresses the
+  // optional current-client analytics write.
+  const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
   try {
     const response = await fetch(`${INWORLD_API_BASE}/tts/v1/voice`, {
@@ -81,7 +87,13 @@ export async function handleTtsInworldV1(request: NextRequest) {
 
       const tracking = ensureTrackingContext(request, errorResponse, { sessionKeyHint })
       fireAndForgetDbWrite('tts.inworld.failed', async () => {
-        const userId = await upsertTrackedUser({ tracking, clientContext })
+        const userId = await resolveUserIdForTrackedWrite({
+          request,
+          session: await sessionPromise,
+          tracking,
+          clientContext,
+        })
+        if (!userId) return
         await createTrackedEventLog({
           userId,
           tracking,
@@ -122,7 +134,13 @@ export async function handleTtsInworldV1(request: NextRequest) {
 
     const tracking = ensureTrackingContext(request, audioResponse, { sessionKeyHint })
     fireAndForgetDbWrite('tts.inworld.success', async () => {
-      const userId = await upsertTrackedUser({ tracking, clientContext })
+      const userId = await resolveUserIdForTrackedWrite({
+        request,
+        session: await sessionPromise,
+        tracking,
+        clientContext,
+      })
+      if (!userId) return
       await createTrackedEventLog({
         userId,
         tracking,

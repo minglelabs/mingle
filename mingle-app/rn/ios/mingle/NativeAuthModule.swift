@@ -194,7 +194,7 @@ class NativeAuthModule: NSObject, ASWebAuthenticationPresentationContextProvidin
         let authorizationCode = resolveUTF8String(from: credential.authorizationCode)
         let callbackURL = resolveCallbackPathFromStartURL(context.startURL)
         let requestId = resolveRequestId(resolveQueryItem(named: "requestId", in: context.startURL))
-        let displayName = resolveDisplayName(from: credential.fullName)
+        let name = resolveName(from: credential.fullName)
         let email = (credential.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         exchangeAppleCredential(
@@ -203,7 +203,7 @@ class NativeAuthModule: NSObject, ASWebAuthenticationPresentationContextProvidin
             authorizationCode: authorizationCode,
             callbackURL: callbackURL,
             requestId: requestId,
-            name: displayName,
+            name: name,
             email: email
         )
     }
@@ -347,7 +347,7 @@ class NativeAuthModule: NSObject, ASWebAuthenticationPresentationContextProvidin
         return object as? [String: Any] ?? [:]
     }
 
-    private func resolveDisplayName(from nameComponents: PersonNameComponents?) -> String {
+    private func resolveName(from nameComponents: PersonNameComponents?) -> String {
         guard let nameComponents else { return "" }
         let givenName = (nameComponents.givenName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let familyName = (nameComponents.familyName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

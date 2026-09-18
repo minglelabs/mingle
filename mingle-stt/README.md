@@ -49,6 +49,9 @@ changing server-wide environment variables.
 `mingle-stt` loads `.env.local` first, then `.env` in this directory.
 If these variables are missing, it safely falls back to the defaults above.
 
+Conversation realtime delivery is handled by the separate `mingle-messaging`
+service. `mingle-stt` only owns speech-to-text WebSocket sessions.
+
 ## Railway
 
 This folder includes `railway.json` and is intended to be used as the Railway

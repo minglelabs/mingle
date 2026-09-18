@@ -90,6 +90,8 @@ export function buildNativeNavigationBridgeScript(): string {
 
     var NATIVE_NAV_INDEX_KEY = '${NATIVE_NAV_INDEX_KEY}';
     var NATIVE_NAV_RAW_STATE_KEY = '${NATIVE_NAV_RAW_STATE_KEY}';
+    var CONVERSATION_HISTORY_ROUTE_STATE_KEY = '__MINGLE_CONVERSATION_HISTORY_ROUTE__';
+    var NATIVE_TAB_ROOT_QUERY_KEY = 'nativeTabRoot';
     var currentHistoryIndex = 0;
 
     var isMergeableState = function (state) {
@@ -125,6 +127,56 @@ export function buildNativeNavigationBridgeScript(): string {
       return wrappedState;
     };
 
+    var summarizeHistoryState = function (state) {
+      if (state === null) return { kind: 'null' };
+      if (typeof state === 'undefined') return { kind: 'undefined' };
+      if (typeof state !== 'object' || Array.isArray(state)) {
+        return { kind: typeof state };
+      }
+      return {
+        kind: 'object',
+        conversationId: typeof state.conversationId === 'string' ? state.conversationId : null,
+        conversationRoute: typeof state[CONVERSATION_HISTORY_ROUTE_STATE_KEY] === 'string'
+          ? state[CONVERSATION_HISTORY_ROUTE_STATE_KEY]
+          : (state[CONVERSATION_HISTORY_ROUTE_STATE_KEY] === null ? null : undefined),
+        nativeNavigationIndex: readHistoryIndex(state),
+        searchOverlayOpen: state.__mingleConversationSearchOpen === true,
+      };
+    };
+
+    var postHistoryDebug = function (eventName, details) {
+      if (window['${NATIVE_QA_BRIDGE_WINDOW_FLAG}'] !== true) return;
+      var bridge = window.ReactNativeWebView;
+      if (!bridge || typeof bridge.postMessage !== 'function') return;
+
+      var historyLength = typeof window.history.length === 'number'
+        ? Math.max(0, Math.floor(window.history.length))
+        : 0;
+      var payload = {
+        event: eventName,
+        timestamp: Date.now(),
+        url: window.location.href,
+        historyLength: historyLength,
+        currentHistoryIndex: currentHistoryIndex,
+        historyState: summarizeHistoryState(window.history.state),
+      };
+      if (details && typeof details === 'object') {
+        for (var detailKey in details) {
+          if (Object.prototype.hasOwnProperty.call(details, detailKey)) {
+            payload[detailKey] = details[detailKey];
+          }
+        }
+      }
+      try {
+        bridge.postMessage(JSON.stringify({
+          type: 'native_history_debug',
+          payload: payload,
+        }));
+      } catch (error) {
+        // Ignore diagnostic bridge failures.
+      }
+    };
+
     var ensureStampedCurrentEntry = function (fallbackIndex) {
       currentHistoryIndex = fallbackIndex;
       try {
@@ -143,6 +195,12 @@ export function buildNativeNavigationBridgeScript(): string {
       if (!bridge || typeof bridge.postMessage !== 'function') {
         return;
       }
+      var isTabRoot = false;
+      try {
+        isTabRoot = new URL(window.location.href).searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === '1';
+      } catch (error) {
+        isTabRoot = false;
+      }
       var historyLength = typeof window.history.length === 'number'
         ? Math.max(0, Math.floor(window.history.length))
         : 0;
@@ -151,8 +209,8 @@ export function buildNativeNavigationBridgeScript(): string {
           type: 'native_navigation_state',
           payload: {
             url: window.location.href,
-            canGoBack: currentHistoryIndex > 0,
-            canGoForward: historyLength > currentHistoryIndex + 1,
+            canGoBack: !isTabRoot && currentHistoryIndex > 0,
+            canGoForward: !isTabRoot && historyLength > currentHistoryIndex + 1,
           }
         }));
       } catch (error) {
@@ -166,6 +224,8 @@ export function buildNativeNavigationBridgeScript(): string {
         return;
       }
       window.history[methodName] = function () {
+        var previousUrl = window.location.href;
+        var previousState = window.history.state;
         var nextIndex = methodName === 'pushState'
           ? currentHistoryIndex + 1
           : currentHistoryIndex;
@@ -177,6 +237,12 @@ export function buildNativeNavigationBridgeScript(): string {
         var result = original.apply(window.history, nextArgs);
         currentHistoryIndex = nextIndex;
         postCurrentUrl();
+        postHistoryDebug('history-' + methodName, {
+          previousUrl: previousUrl,
+          previousState: summarizeHistoryState(previousState),
+          requestedState: summarizeHistoryState(arguments[0]),
+          nextIndex: nextIndex,
+        });
         return result;
       };
     };
@@ -191,6 +257,9 @@ export function buildNativeNavigationBridgeScript(): string {
     wrapHistoryMethod('pushState');
     wrapHistoryMethod('replaceState');
     window.addEventListener('popstate', function (event) {
+      var previousIndex = currentHistoryIndex;
+      var eventState = event && event.state;
+      var previousState = window.history.state;
       var nextIndex = readHistoryIndex(event && event.state);
       if (nextIndex === null) {
         nextIndex = readHistoryIndex(window.history.state);
@@ -201,6 +270,12 @@ export function buildNativeNavigationBridgeScript(): string {
         currentHistoryIndex = nextIndex;
       }
       postCurrentUrl();
+      postHistoryDebug('popstate', {
+        previousIndex: previousIndex,
+        nextIndex: currentHistoryIndex,
+        eventState: summarizeHistoryState(eventState),
+        previousState: summarizeHistoryState(previousState),
+      });
     });
     window.addEventListener('hashchange', postCurrentUrl);
     postCurrentUrl();

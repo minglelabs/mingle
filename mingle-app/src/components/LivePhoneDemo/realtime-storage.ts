@@ -54,3 +54,13 @@ export function getOrCreateTrackingUserId(): string {
     return createTrackingUserId()
   }
 }
+
+export function resetTrackingUserId(): string {
+  if (typeof window === 'undefined') return createTrackingUserId()
+  try {
+    window.localStorage.removeItem(LS_KEY_TRACKING_USER)
+  } catch {
+    // Fall through to an in-memory ID when storage is unavailable.
+  }
+  return getOrCreateTrackingUserId()
+}

@@ -31,7 +31,7 @@ function pickPreferredLocale(headerValue: string | null): AppLocale {
 export function shouldBypassLocaleRedirect(pathname: string): boolean {
   const segments = pathname.split("/").filter(Boolean);
   const first = segments[0];
-  return first === "admin";
+  return first === "admin" || first === "p" || first === ".well-known";
 }
 
 export function proxy(request: NextRequest) {

@@ -17,6 +17,9 @@ type NativeBackHandlerWindow = Window & {
   [NATIVE_BACK_DISPATCHER_KEY]?: () => boolean;
   [NATIVE_BACK_ORDER_KEY]?: number;
   [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
+  ReactNativeWebView?: {
+    postMessage?: (message: string) => void;
+  };
 };
 
 function resolveNativeBackHandlerWindow(): NativeBackHandlerWindow | null {
@@ -82,6 +85,24 @@ export function registerNativeBackHandler(
     if (handlerIndex < 0) return;
     nextHandlers.splice(handlerIndex, 1);
   };
+}
+
+export function postNativeAndroidBackCapability(canHandleAndroidBack: boolean): void {
+  const bridgeWindow = resolveNativeBackHandlerWindow();
+  const postMessage = bridgeWindow?.ReactNativeWebView?.postMessage;
+  if (!bridgeWindow || typeof postMessage !== "function") return;
+
+  try {
+    bridgeWindow.ReactNativeWebView?.postMessage(JSON.stringify({
+      type: "native_navigation_state",
+      payload: {
+        canHandleAndroidBack,
+        url: bridgeWindow.location.href,
+      },
+    }));
+  } catch {
+    // Keep browser navigation unchanged when the native bridge is unavailable.
+  }
 }
 
 export function clearNativeHistoryBackAnimateFlag(): void {

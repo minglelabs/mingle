@@ -588,6 +588,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           >
             대시보드
           </Link>
+          <Link
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+            href="/admin/reports"
+          >
+            신고함
+          </Link>
           <form action={logoutAdminAction}>
             <button
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

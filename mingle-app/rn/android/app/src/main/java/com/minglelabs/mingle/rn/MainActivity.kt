@@ -1,5 +1,7 @@
 package com.minglelabs.mingle.rn
 
+import android.content.Intent
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -12,6 +14,19 @@ class MainActivity : ReactActivity() {
    * rendering of the component.
    */
   override fun getMainComponentName(): String = "mingle"
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent?.dataString)
+    super.onCreate(savedInstanceState)
+  }
+
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    if (intent != null) {
+      setIntent(intent)
+      NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent.dataString)
+    }
+  }
 
   /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]

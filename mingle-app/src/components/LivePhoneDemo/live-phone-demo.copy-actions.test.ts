@@ -8,6 +8,7 @@ describe('live-phone-demo.copy-actions', () => {
     expect(copy.copyBubbleLabel).toBe('복사')
     expect(copy.copyAllBubblesLabel).toBe('전체 복사')
     expect(copy.copiedToastLabel).toBe('복사됨')
+    expect(copy.playingIndicatorLabel).toBe('재생 중')
   })
 
   it('falls back to English for unsupported translated locales', () => {
@@ -15,6 +16,7 @@ describe('live-phone-demo.copy-actions', () => {
     expect(copy.copyBubbleLabel).toBe('Copy')
     expect(copy.copyAllBubblesLabel).toBe('Copy All')
     expect(copy.copiedToastLabel).toBe('Copied')
+    expect(copy.playingIndicatorLabel).toBe('Playing')
   })
 
   it('defines copy menu and copied toast labels for all 15 legal-document locales', () => {
@@ -25,6 +27,9 @@ describe('live-phone-demo.copy-actions', () => {
       expect(copy.copyBubbleLabel.trim().length).toBeGreaterThan(0)
       expect(copy.copyAllBubblesLabel.trim().length).toBeGreaterThan(0)
       expect(copy.copiedToastLabel.trim().length).toBeGreaterThan(0)
+      expect(copy.playingIndicatorLabel.trim().length).toBeGreaterThan(0)
+      expect(copy.originalLanguageLabel.trim().length).toBeGreaterThan(0)
+      expect(copy.translationLanguageLabel.trim().length).toBeGreaterThan(0)
     }
   })
 })

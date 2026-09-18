@@ -4,8 +4,9 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import Link from "next/link";
 import { getSttLanguageFlag } from "@/lib/stt-languages";
 import { getTranslationLanguageName } from "@/lib/translation-languages";
+import type { AccountStatusCode } from "@/server/account-status";
 
-const CONVERSATION_CACHE_VERSION = "v3";
+const CONVERSATION_CACHE_VERSION = "v4";
 
 function readSessionCache<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -67,6 +68,24 @@ function StatusBadge({ deleted }: { deleted: boolean | null }) {
   );
 }
 
+const ACCOUNT_STATUS_LABELS: Record<AccountStatusCode, string> = {
+  active: "활성",
+  deactivated: "비활성화",
+  withdrawal_pending: "탈퇴 유예 중",
+  deleted: "삭제됨",
+};
+
+const ACCOUNT_STATUS_STYLES: Record<AccountStatusCode, string> = {
+  active: "bg-[#e3f3e9] text-[#28734b]",
+  deactivated: "bg-[#fff4dc] text-[#8a5a00]",
+  withdrawal_pending: "bg-[#fbe5e1] text-[#9b3c2f]",
+  deleted: "bg-[#ebe9e4] text-[#5f5d58]",
+};
+
+function AccountStatusBadge({ status }: { status: AccountStatusCode }) {
+  return <span className={`rounded px-2 py-1 text-[11px] font-semibold ${ACCOUNT_STATUS_STYLES[status]}`}>{ACCOUNT_STATUS_LABELS[status]}</span>;
+}
+
 function LanguageBadge({ content }: { content: AdminConversationContent }) {
   const languageName = getTranslationLanguageName(content.language) ?? content.language;
   const isSource = content.contentType === "SOURCE";
@@ -114,8 +133,26 @@ export function AdminConversationList({ channels }: { channels: AdminConversatio
 
 type ConversationDataChannel = Omit<AdminConversationSummary, "href">;
 type ConversationDataRoom = Pick<ConversationDataChannel, "id" | "title" | "sessionKey" | "isDeleted" | "createdAt" | "updatedAt">;
+type ConversationDataUser = {
+  externalUserId: string | null;
+  email: string | null;
+  name: string | null;
+  handle: string | null;
+  accountStatus: AccountStatusCode;
+  isActive: boolean;
+  isDeleted: boolean | null;
+  deactivatedAt: string | null;
+  withdrawnAt: string | null;
+  scheduledDeleteAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  latestClientPlatform: string | null;
+  latestAppVersion: string | null;
+  latestApiNamespace: string | null;
+};
 type ConversationData = {
-  user: { externalUserId: string | null; email: string | null; name: string | null };
+  user: ConversationDataUser;
   channelCount: number;
   channels: ConversationDataChannel[];
   selectedChannel: ConversationDataRoom | null;
@@ -275,7 +312,25 @@ export function AdminConversationBrowser(props: AdminConversationBrowserProps) {
 
   return (
     <>
-      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm"><div><h2 className="font-semibold">{visibleData.user.name || visibleData.user.email || "사용자"}</h2><p className="mt-1 break-all text-xs text-[#6f6d68]">{visibleData.user.externalUserId}</p><p className="mt-1 text-xs text-[#6f6d68]">대화방 {visibleData.channelCount}개 · 브라우저 캐시를 먼저 표시한 뒤 백그라운드에서 갱신합니다.</p></div><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></section>
+      <section className="mb-5 rounded-xl border border-[#e5e3dc] bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{visibleData.user.name || visibleData.user.email || "사용자"}</h2><AccountStatusBadge status={visibleData.user.accountStatus} /></div>
+            <p className="mt-1 break-all text-xs text-[#6f6d68]">{visibleData.user.externalUserId}</p>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#6f6d68]"><span>핸들: {visibleData.user.handle ? `@${visibleData.user.handle}` : "없음"}</span><span>플랫폼: {visibleData.user.latestClientPlatform || "알 수 없음"}</span><span>앱 버전: {visibleData.user.latestAppVersion || "알 수 없음"}</span><span>API: {visibleData.user.latestApiNamespace || "알 수 없음"}</span></div>
+            <p className="mt-2 text-xs text-[#6f6d68]">대화방 {visibleData.channelCount}개 · 가입 {formatDate(visibleData.user.createdAt)} · 최근 접속 {formatDate(visibleData.user.lastSeenAt)}</p>
+          </div>
+          <div className="w-full rounded-lg border border-[#eeeae2] bg-[#f7f6f2] p-3 text-xs text-[#6f6d68] md:w-72">
+            <div className="flex items-center justify-between gap-3"><h3 className="font-semibold text-[#3f3d38]">현재 계정 상태</h3><AccountStatusBadge status={visibleData.user.accountStatus} /></div>
+            {visibleData.user.deactivatedAt ? <p className="mt-2">비활성화: {formatDate(visibleData.user.deactivatedAt)}</p> : null}
+            {visibleData.user.withdrawnAt ? <p className="mt-1">탈퇴 요청: {formatDate(visibleData.user.withdrawnAt)}</p> : null}
+            {visibleData.user.scheduledDeleteAt ? <p className="mt-1">삭제 예정: {formatDate(visibleData.user.scheduledDeleteAt)}</p> : null}
+            {visibleData.user.deletedAt ? <p className="mt-1">삭제 처리: {formatDate(visibleData.user.deletedAt)}</p> : null}
+            {!visibleData.user.deactivatedAt && !visibleData.user.withdrawnAt && !visibleData.user.deletedAt ? <p className="mt-2">현재 계정 이용이 가능한 상태입니다.</p> : null}
+          </div>
+        </div>
+        <div className="mt-3 flex justify-end"><CacheUpdateButton visible={hasUpdate} onClick={applyUpdate} /></div>
+      </section>
       {visibleError ? <p className="mb-4 rounded-lg bg-[#fff4dc] p-3 text-xs text-[#8a5a00]">{visibleError}</p> : null}
       <section className="mb-5 grid gap-2 rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm md:grid-cols-3"><label className="text-xs font-semibold text-[#6f6d68]">대화방 삭제 여부<select value={channelDeleted} onChange={(event) => { setChannelDeleted(event.target.value as DeletedFilter); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">메시지 삭제 여부<select value={messageDeleted} onChange={(event) => setMessageDeleted(event.target.value as DeletedFilter)} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="all">전체</option><option value="active">삭제되지 않음</option><option value="deleted">삭제됨</option></select></label><label className="text-xs font-semibold text-[#6f6d68]">대화방 정렬<select value={sort} onChange={(event) => { setSort(event.target.value as ChannelSort); setListPage(1); }} className="mt-1 block w-full rounded-md border border-[#d9d6ce] px-3 py-2 text-sm"><option value="updated-desc">최근 수정순</option><option value="updated-asc">오래된 수정순</option><option value="created-desc">최근 생성순</option><option value="created-asc">오래된 생성순</option><option value="latest-message-desc">최근 메시지 최신순</option><option value="title-asc">제목 가나다순</option><option value="title-desc">제목 가나다 역순</option></select></label></section>
       {!props.channelId ? (

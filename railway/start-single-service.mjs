@@ -7,18 +7,28 @@ import net from 'node:net';
 const DEFAULT_PUBLIC_PORT = 8080;
 const DEFAULT_APP_PORT = 3000;
 const DEFAULT_STT_PORT = 3001;
+const DEFAULT_MESSAGING_PORT = 3002;
 const DEFAULT_HEALTH_PATH = '/railway/health';
 const DEFAULT_STT_WS_PATH = '/stt';
+const DEFAULT_MESSAGING_WS_PATH = '/conversation-events';
+const DEFAULT_MESSAGING_PUBLISH_PATH = '/conversation-events/publish';
 const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
 
 const publicPort = parseInteger(process.env.PORT, DEFAULT_PUBLIC_PORT);
 const appPort = parseInteger(process.env.MINGLE_APP_PORT, DEFAULT_APP_PORT);
 const sttPort = parseInteger(process.env.MINGLE_STT_PORT, DEFAULT_STT_PORT);
+const messagingPort = parseInteger(process.env.MINGLE_MESSAGING_PORT, DEFAULT_MESSAGING_PORT);
 const bindHost = process.env.MINGLE_RAILWAY_BIND_HOST || '0.0.0.0';
 const targetHost = process.env.MINGLE_RAILWAY_TARGET_HOST || '127.0.0.1';
 const healthPath = normalizePath(process.env.MINGLE_RAILWAY_HEALTH_PATH || DEFAULT_HEALTH_PATH);
 const sttWsPath = normalizePath(
   process.env.MINGLE_STT_WS_PATH || process.env.NEXT_PUBLIC_WS_PATH || DEFAULT_STT_WS_PATH,
+);
+const messagingWsPath = normalizePath(
+  process.env.MINGLE_MESSAGING_WS_PATH || DEFAULT_MESSAGING_WS_PATH,
+);
+const messagingPublishPath = normalizePath(
+  process.env.MINGLE_MESSAGING_PUBLISH_PATH || DEFAULT_MESSAGING_PUBLISH_PATH,
 );
 const shutdownGraceMs = parseInteger(process.env.MINGLE_RAILWAY_SHUTDOWN_GRACE_MS, DEFAULT_SHUTDOWN_GRACE_MS);
 const children = new Map();
@@ -149,13 +159,18 @@ function waitForPort(port, timeoutMs = 500) {
 }
 
 async function handleHealth(_req, res) {
-  const [appAccepting, sttAccepting] = await Promise.all([
+  const [appAccepting, sttAccepting, messagingAccepting] = await Promise.all([
     waitForPort(appPort),
     waitForPort(sttPort),
+    waitForPort(messagingPort),
   ]);
   const appAlive = isChildAlive('mingle-app');
   const sttAlive = isChildAlive('mingle-stt');
-  const ok = appAlive && sttAlive && appAccepting && sttAccepting;
+  const messagingAlive = isChildAlive('mingle-messaging');
+  const ok = (
+    appAlive && sttAlive && messagingAlive
+    && appAccepting && sttAccepting && messagingAccepting
+  );
 
   res.writeHead(ok ? 200 : 503, {
     'content-type': 'application/json; charset=utf-8',
@@ -165,6 +180,13 @@ async function handleHealth(_req, res) {
     ok,
     app: { alive: appAlive, accepting: appAccepting, port: appPort },
     stt: { alive: sttAlive, accepting: sttAccepting, port: sttPort, path: sttWsPath },
+    messaging: {
+      alive: messagingAlive,
+      accepting: messagingAccepting,
+      port: messagingPort,
+      path: messagingWsPath,
+      publishPath: messagingPublishPath,
+    },
   }));
 }
 
@@ -183,11 +205,11 @@ function appendForwardedHeaders(req, headers) {
   };
 }
 
-function proxyHttpToApp(req, res) {
+function proxyHttpToService(req, res, targetPort, label) {
   const upstreamHeaders = appendForwardedHeaders(req, stripHopByHopHeaders(req.headers));
   const upstreamReq = http.request({
     host: targetHost,
-    port: appPort,
+    port: targetPort,
     method: req.method,
     path: req.url,
     headers: upstreamHeaders,
@@ -197,11 +219,11 @@ function proxyHttpToApp(req, res) {
   });
 
   upstreamReq.setTimeout(120_000, () => {
-    upstreamReq.destroy(new Error('mingle-app upstream timed out'));
+    upstreamReq.destroy(new Error(`${label} upstream timed out`));
   });
 
   upstreamReq.on('error', (error) => {
-    console.error(`[railway] mingle-app proxy error: ${error.message}`);
+    console.error(`[railway] ${label} proxy error: ${error.message}`);
     if (!res.headersSent) {
       res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
     }
@@ -209,6 +231,10 @@ function proxyHttpToApp(req, res) {
   });
 
   req.pipe(upstreamReq);
+}
+
+function proxyHttpToApp(req, res) {
+  proxyHttpToService(req, res, appPort, 'mingle-app');
 }
 
 function writeUpgradeRequest(req, targetPort, upstream, head) {
@@ -260,10 +286,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (isPathMatch(req.url, messagingPublishPath)) {
+    proxyHttpToService(req, res, messagingPort, 'mingle-messaging');
+    return;
+  }
+
   proxyHttpToApp(req, res);
 });
 
 server.on('upgrade', (req, socket, head) => {
+  if (isPathMatch(req.url, messagingWsPath)) {
+    proxyUpgrade(req, socket, head, messagingPort, 'mingle-messaging');
+    return;
+  }
+
   if (isPathMatch(req.url, sttWsPath)) {
     proxyUpgrade(req, socket, head, sttPort, 'mingle-stt');
     return;
@@ -309,9 +345,14 @@ spawnService('mingle-app', 'pnpm', ['--dir', '/app/mingle-app', 'start'], {
 spawnService('mingle-stt', 'pnpm', ['--dir', '/app/mingle-stt', 'start'], {
   PORT: String(sttPort),
 });
+spawnService('mingle-messaging', 'pnpm', ['--dir', '/app/mingle-messaging', 'start'], {
+  PORT: String(messagingPort),
+});
 
 server.listen(publicPort, bindHost, () => {
   console.log(
-    `[railway] listening on ${bindHost}:${publicPort}; app=${targetHost}:${appPort}; stt=${targetHost}:${sttPort}${sttWsPath}`,
+    `[railway] listening on ${bindHost}:${publicPort}; app=${targetHost}:${appPort}; `
+      + `stt=${targetHost}:${sttPort}${sttWsPath}; `
+      + `messaging=${targetHost}:${messagingPort}${messagingWsPath}`,
   );
 });

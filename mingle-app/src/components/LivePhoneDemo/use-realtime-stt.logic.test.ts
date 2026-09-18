@@ -13,9 +13,11 @@ import {
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
+  getConversationEventsWsUrl,
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  findConversationHydrationOrderConflicts,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   mergeServerHydrationUtteranceIntoStoreState,
@@ -27,7 +29,7 @@ import {
   parseRecentStoredUtterances,
   persistMessageCountSnapshot,
   persistUtterancesSnapshot,
-  pruneUnresolvedTranslationTargets,
+  normalizeTranslationTargets,
   rememberRecentFinalizedUtterance,
   replaceFinalizedUtteranceSourceInStoreState,
   resolveLogClientEventMaxAttempts,
@@ -35,6 +37,7 @@ import {
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldBlockNativeSttSessionEvent,
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
@@ -69,6 +72,7 @@ function createLocalStorageMock(seed: Record<string, string> = {}) {
 describe('use-realtime-stt pure logic', () => {
   const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL
   const originalWsPath = process.env.NEXT_PUBLIC_WS_PATH
+  const originalMessagingWsUrl = process.env.NEXT_PUBLIC_MESSAGING_WS_URL
 
   afterEach(() => {
     if (originalWsUrl === undefined) {
@@ -80,6 +84,11 @@ describe('use-realtime-stt pure logic', () => {
       delete process.env.NEXT_PUBLIC_WS_PATH
     } else {
       process.env.NEXT_PUBLIC_WS_PATH = originalWsPath
+    }
+    if (originalMessagingWsUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_MESSAGING_WS_URL
+    } else {
+      process.env.NEXT_PUBLIC_MESSAGING_WS_URL = originalMessagingWsUrl
     }
     vi.unstubAllGlobals()
   })
@@ -115,6 +124,32 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('derives the conversation-events push URL from the same origin as the STT websocket', () => {
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://mingle-1-1-4-production.up.railway.app/stt'
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('wss://mingle-1-1-4-production.up.railway.app/conversation-events')
+  })
+
+  it('prefers the dedicated messaging WebSocket URL when configured', () => {
+    process.env.NEXT_PUBLIC_MESSAGING_WS_URL = 'wss://messaging.example.com'
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://stt.example.com/stt'
+
+    expect(getConversationEventsWsUrl()).toBe('wss://messaging.example.com/conversation-events')
+  })
+
+  it('derives the conversation-events push URL from an inferred (non-env-override) ws URL too', () => {
+    delete process.env.NEXT_PUBLIC_WS_URL
+    delete process.env.NEXT_PUBLIC_WS_PATH
+    vi.stubGlobal('window', {
+      location: { hostname: 'mingle.local', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('ws://mingle.local:3001/conversation-events')
   })
 
   it('parses only recent stored utterances without full-history parsing', () => {
@@ -369,6 +404,133 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 2,
       },
     ])
+  })
+
+  it('keeps a completed local translation when the source-only delivery snapshot arrives late', () => {
+    const local = { id: 'durable-one', originalText: '안녕하세요', originalLang: 'ko',
+      translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local, translations: {}, translationFinalized: {}, createdAtMs: 200,
+    })
+    expect(next.utterances[0]).toMatchObject({ translations: { en: 'Hello' }, translationFinalized: { en: true }, createdAtMs: 100 })
+  })
+
+  it('adopts durable waiting targets when a source snapshot reaches an empty local row', () => {
+    const local = {
+      id: 'durable-waiting',
+      originalText: 'hello',
+      originalLang: 'en',
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    }
+    const next = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), {
+      ...local,
+      targetLanguages: ['ko', 'ja'],
+      createdAtMs: 200,
+    })
+
+    expect(next.utterances[0]).toMatchObject({
+      targetLanguages: ['ko', 'ja'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 100,
+    })
+  })
+
+  it('preserves the room store reference when server hydration is unchanged', () => {
+    const utterance = {
+      id: 'u-server',
+      originalText: 'same source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'same translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 2,
+    }
+    const store = createUtteranceStoreState([utterance])
+
+    expect(mergeServerHydrationUtteranceIntoStoreState(store, {
+      ...utterance,
+      targetLanguages: [...utterance.targetLanguages],
+      translations: { ...utterance.translations },
+      translationFinalized: { ...utterance.translationFinalized },
+    })).toBe(store)
+  })
+
+  it('preserves local speech order when server persistence time would move a finalized turn', () => {
+    const localCreatedAtMs = 1700000000004
+    const liveCreatedAtMs = 1700000000005
+    const serverCreatedAtMs = 1700000001000
+    const finalizedId = `u-${localCreatedAtMs}-4`
+    const liveId = `u-${liveCreatedAtMs}-5`
+    const localStore = createUtteranceStoreState([
+      {
+        id: finalizedId,
+        originalText: 'Fourth locally finalized turn',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: localCreatedAtMs,
+      },
+    ])
+    const serverUtterance = {
+      id: finalizedId,
+      originalText: 'Fourth server-confirmed turn',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: '네 번째 서버 확정 발화' },
+      translationFinalized: { ko: true },
+      createdAtMs: serverCreatedAtMs,
+    }
+    const liveUtterance = {
+      id: liveId,
+      originalText: 'Fifth live turn',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: liveCreatedAtMs,
+    }
+
+    const conflicts = findConversationHydrationOrderConflicts({
+      localUtterances: localStore.utterances,
+      liveUtterances: [liveUtterance],
+      serverUtterances: [serverUtterance],
+    })
+    expect(conflicts).toEqual([
+      {
+        utteranceId: finalizedId,
+        localCreatedAtMs,
+        serverCreatedAtMs,
+        crossedUtteranceIds: [liveId],
+        crossedLiveUtteranceIds: [liveId],
+      },
+    ])
+
+    const mergedStore = mergeServerHydrationUtteranceIntoStoreState(localStore, serverUtterance)
+    expect(mergedStore.utterances[0]).toEqual(expect.objectContaining({
+      id: finalizedId,
+      originalText: 'Fourth server-confirmed turn',
+      createdAtMs: localCreatedAtMs,
+    }))
+    expect(mergeDisplayUtterances({
+      utterances: mergedStore.utterances,
+      liveUtterances: [liveUtterance],
+    }).map((utterance) => utterance.id)).toEqual([finalizedId, liveId])
+  })
+
+  it('does not report hydration timestamp drift that cannot change visible order', () => {
+    expect(findConversationHydrationOrderConflicts({
+      localUtterances: [
+        { id: 'u-local', createdAtMs: 100 },
+        { id: 'u-later', createdAtMs: 300 },
+      ],
+      liveUtterances: [],
+      serverUtterances: [{ id: 'u-local', createdAtMs: 200 }],
+    })).toEqual([])
   })
 
   it('applies pending translation updates on top of a server hydrated utterance', () => {
@@ -750,6 +912,25 @@ describe('use-realtime-stt pure logic', () => {
     })).toBeNull()
   })
 
+  it('blocks native events from a different session generation', () => {
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-a',
+      activeSessionId: 'session-a',
+    })).toBe(false)
+
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: 'session-old',
+      activeSessionId: 'session-a',
+    })).toBe(true)
+
+    // Older native shells do not include a session ID, so conversation
+    // filtering remains the compatibility guard at the event consumer.
+    expect(shouldBlockNativeSttSessionEvent({
+      eventSessionId: undefined,
+      activeSessionId: 'session-a',
+    })).toBe(false)
+  })
+
   it('does not re-enter running UI state while a native stop is pending', () => {
     expect(shouldApplyNativeBridgeConnectionStatus({
       nextConnectionStatus: resolveConnectionStatusFromNativeBridgeStatus({
@@ -926,6 +1107,44 @@ describe('use-realtime-stt pure logic', () => {
       partialTranslations: {},
       languages: ['en', 'ko'],
     })).toBeNull()
+  })
+
+  it('stamps a live utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
+        language: 'en',
+      },
+      partialTranscript: 'Still speaking',
+      partialLang: 'en-US',
+      partialTranslations: {},
+      languages: ['en'],
+      viewerUserId: 'user-1',
+      viewerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.speakerUserId).toBe('user-1')
+    expect(built?.speakerImage).toBe('https://cdn/me.jpg')
+  })
+
+  it('stamps a locally finalized utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildFinalizedUtterancePayload({
+      rawText: 'hello',
+      rawLanguage: 'en',
+      languages: ['en'],
+      partialTranslations: {},
+      utteranceSerial: 1,
+      nowMs: 1700000000000,
+      speakerUserId: 'user-1',
+      speakerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.utterance.speakerUserId).toBe('user-1')
+    expect(built?.utterance.speakerImage).toBe('https://cdn/me.jpg')
   })
 
   it('builds live utterances for all pending speakers in chronological order', () => {
@@ -2203,8 +2422,27 @@ describe('use-realtime-stt pure logic', () => {
     )).toBe(false)
   })
 
-  it('prunes unresolved target languages after the final translation attempt settles', () => {
-    expect(pruneUnresolvedTranslationTargets({
+  it('keeps all local translation targets when a partially translated draft is finalized', () => {
+    const payload = buildFinalizedUtterancePayload({
+      utteranceId: 'local-waiting', utteranceSerial: 1, rawText: 'hello world', rawLanguage: 'en',
+      languages: ['en', 'ko', 'ja'], partialTranslations: { ko: '중간 번역' },
+    })!
+    const store = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([]), payload.utterance, {
+      translations: { ko: '중간 번역' }, priorities: new Map([['ko', { kind: 'partial', seq: 1 }]]),
+    })
+    expect(store.utterances[0].targetLanguages).toEqual(['ko', 'ja'])
+    expect(store.utterances[0].translations).toEqual({ ko: '중간 번역' })
+    expect(store.utterances[0].translationFinalized).toEqual({ ko: false })
+    const final = applyTranslationToUtteranceStoreState({
+      store, utteranceId: 'local-waiting', translations: { ko: '최종 번역', ja: '最終翻訳' },
+      priority: { kind: 'final', seq: 2 }, markFinalized: true,
+    })
+    expect(final.utterances[0].targetLanguages).toEqual(['ko', 'ja'])
+    expect(final.utterances[0].translations).toEqual({ ko: '최종 번역', ja: '最終翻訳' })
+  })
+
+  it('preserves unresolved target rows after the final translation attempt settles', () => {
+    expect(normalizeTranslationTargets({
       targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '안녕하세요',
@@ -2215,18 +2453,19 @@ describe('use-realtime-stt pure logic', () => {
         ja: false,
       },
     })).toEqual({
-      targetLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '안녕하세요',
       },
       translationFinalized: {
         ko: true,
+        ja: false,
       },
     })
   })
 
   it('preserves interim finalization flags for available partial translations', () => {
-    expect(pruneUnresolvedTranslationTargets({
+    expect(normalizeTranslationTargets({
       targetLanguages: ['ko', 'ja'],
       translations: {
         ko: '부분 번역',

@@ -1,10 +1,38 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-function loadEnvFile(filePath) {
+const inheritedEnvKeys = new Set(Object.keys(process.env));
+
+const WORKTREE_ENV_KEYS = new Set([
+  'DEVBOX_WORKTREE_NAME',
+  'DEVBOX_ROOT_DIR',
+  'DEVBOX_PROFILE',
+  'DEVBOX_WEB_PORT',
+  'DEVBOX_STT_PORT',
+  'DEVBOX_MESSAGING_PORT',
+  'DEVBOX_METRO_PORT',
+  'DEVBOX_NGROK_API_PORT',
+  'DEVBOX_SITE_URL',
+  'DEVBOX_RN_WS_URL',
+  'DEVBOX_RN_MESSAGING_WS_URL',
+  'DEVBOX_PUBLIC_WS_URL',
+  'DEVBOX_PUBLIC_MESSAGING_WS_URL',
+  'DEVBOX_TEST_API_BASE_URL',
+  'DEVBOX_TEST_WS_URL',
+  'NEXT_PUBLIC_SITE_URL',
+  'NEXTAUTH_URL',
+  'NEXT_PUBLIC_WS_PORT',
+  'NEXT_PUBLIC_WS_URL',
+  'NEXT_PUBLIC_MESSAGING_WS_URL',
+  'MINGLE_MESSAGING_URL',
+  'MINGLE_TEST_API_BASE_URL',
+  'MINGLE_TEST_WS_URL',
+]);
+
+function loadEnvFile(filePath, { override = false, onlyKeys = null, excludeKeys = null } = {}) {
   if (!existsSync(filePath)) return;
 
   const raw = readFileSync(filePath, 'utf8');
@@ -19,6 +47,9 @@ function loadEnvFile(filePath) {
 
     const key = trimmed.slice(0, separatorIndex).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if (onlyKeys && !onlyKeys.has(key)) continue;
+    if (excludeKeys && excludeKeys.has(key)) continue;
+    if (inheritedEnvKeys.has(key)) continue;
 
     let value = trimmed.slice(separatorIndex + 1);
     if (
@@ -28,7 +59,7 @@ function loadEnvFile(filePath) {
       value = value.slice(1, -1);
     }
 
-    if (process.env[key] === undefined) {
+    if (override || process.env[key] === undefined) {
       process.env[key] = value;
     }
   }
@@ -51,6 +82,29 @@ function findClosestFile(startDir, fileName) {
   }
 }
 
+function findMainWorktreeRoot(startDir) {
+  try {
+    const output = execFileSync(
+      'git',
+      ['-C', resolve(startDir), 'worktree', 'list', '--porcelain'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    let worktreePath = null;
+
+    for (const line of output.split(/\r?\n/)) {
+      if (line.startsWith('worktree ')) {
+        worktreePath = line.slice('worktree '.length).trim();
+      } else if (line === 'branch refs/heads/main' && worktreePath) {
+        return resolve(worktreePath);
+      }
+    }
+  } catch {
+    // Direct package commands should still work when git is unavailable.
+  }
+
+  return null;
+}
+
 function ensurePrismaAppSchemaUrl(rawValue) {
   if (typeof rawValue !== 'string') return rawValue;
   const trimmed = rawValue.trim();
@@ -68,14 +122,21 @@ function ensurePrismaAppSchemaUrl(rawValue) {
 }
 
 const cwd = process.cwd();
-const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
 const localEnvPath = findClosestFile(cwd, '.env.local');
+const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
+const mainWorktreeRoot = findMainWorktreeRoot(cwd);
+const mainRootEnvPath = mainWorktreeRoot ? resolve(mainWorktreeRoot, '.env.local') : localEnvPath;
 
-if (devboxEnvPath) {
-  loadEnvFile(devboxEnvPath);
-}
 if (localEnvPath) {
   loadEnvFile(localEnvPath);
+}
+if (mainRootEnvPath) {
+  loadEnvFile(mainRootEnvPath, { override: true, excludeKeys: WORKTREE_ENV_KEYS });
+}
+if (devboxEnvPath) {
+  // .devbox.env is a derived source for worktree runtime values only. Legacy
+  // shared entries are intentionally ignored after the root env migration.
+  loadEnvFile(devboxEnvPath, { override: true, onlyKeys: WORKTREE_ENV_KEYS });
 }
 
 if (process.env.DATABASE_URL !== undefined) {

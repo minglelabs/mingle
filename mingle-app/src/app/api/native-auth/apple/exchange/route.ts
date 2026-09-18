@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createNativeAuthBridgeToken, resolveNativeAuthRequestId, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultHandle } from "@/lib/handles";
+import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 
 export const runtime = "nodejs";
 
@@ -256,24 +258,44 @@ async function verifyAppleIdentityToken(idToken: string): Promise<AppleIdentityT
   return verifiedPayload;
 }
 
-async function upsertNativeAppleUser(args: {
+export async function upsertNativeAppleUser(args: {
   appleSubject: string;
   email: string;
   name: string;
-}) {
+}): Promise<{
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+  created: boolean;
+}> {
   const now = new Date();
   const externalUserId = `apple:${args.appleSubject}`.slice(0, 128);
-  const displayName = args.name || "Mingle User";
+  const name = args.name || "Mingle User";
+  const accountKey = {
+    provider: "apple",
+    providerAccountId: args.appleSubject,
+  };
 
-  const existingByExternal = await prisma.user.findUnique({
-    where: { externalUserId },
-    select: { id: true, email: true, name: true },
+  // The NextAuth Account relation is the durable OAuth identity. Native Apple
+  // sign-in used to rely only on User.externalUserId, which a later credentials
+  // bridge callback could overwrite with the internal User id.
+  const existingAccount = await prisma.account.findUnique({
+    where: {
+      provider_providerAccountId: accountKey,
+    },
+    select: {
+      user: {
+        select: { id: true, email: true, name: true },
+      },
+    },
   });
-  if (existingByExternal) {
-    return prisma.user.update({
-      where: { id: existingByExternal.id },
+  if (existingAccount?.user) {
+    const user = await prisma.user.update({
+      where: { id: existingAccount.user.id },
       data: {
-        name: displayName,
+        name: existingAccount.user.name ? undefined : name,
         email: args.email || undefined,
         lastSeenAt: now,
       },
@@ -283,18 +305,83 @@ async function upsertNativeAppleUser(args: {
         email: true,
       },
     });
+    return { user, created: false };
+  }
+
+  const linkAccount = async (userId: string): Promise<string> => {
+    const linkedAccount = await prisma.account.upsert({
+      where: {
+        provider_providerAccountId: accountKey,
+      },
+      create: {
+        userId,
+        type: "oauth",
+        ...accountKey,
+      },
+      // Never transfer an existing provider identity to another User. The
+      // initial lookup handles existing links; this empty update is only an
+      // idempotent guard for repeated exchange requests.
+      update: {},
+      select: { userId: true },
+    });
+    return linkedAccount.userId;
+  };
+
+  const resolveLinkedUser = async (candidateUser: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  }) => {
+    const linkedUserId = await linkAccount(candidateUser.id);
+    if (linkedUserId === candidateUser.id) return candidateUser;
+
+    // A concurrent exchange may have inserted the provider link after our
+    // initial lookup. The Account relation wins; never issue a bridge token
+    // for a different candidate User.
+    return prisma.user.update({
+      where: { id: linkedUserId },
+      data: {
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+  };
+
+  const existingByExternal = await prisma.user.findUnique({
+    where: { externalUserId },
+    select: { id: true, email: true, name: true },
+  });
+  if (existingByExternal) {
+    const user = await prisma.user.update({
+      where: { id: existingByExternal.id },
+      data: {
+        name: existingByExternal.name ? undefined : name,
+        email: args.email || undefined,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+    return { user: await resolveLinkedUser(user), created: false };
   }
 
   if (args.email) {
     const existingByEmail = await prisma.user.findUnique({
       where: { email: args.email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (existingByEmail) {
-      return prisma.user.update({
+      const user = await prisma.user.update({
         where: { id: existingByEmail.id },
         data: {
-          name: displayName,
+          name: existingByEmail.name ? undefined : name,
           externalUserId,
           lastSeenAt: now,
         },
@@ -304,23 +391,30 @@ async function upsertNativeAppleUser(args: {
           email: true,
         },
       });
+      return { user: await resolveLinkedUser(user), created: false };
     }
   }
 
-  return prisma.user.create({
-    data: {
-      name: displayName,
-      email: args.email || undefined,
-      externalUserId,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  const user = await createWithDefaultHandle(
+    { name: name, email: args.email, id: externalUserId },
+    (handle) => prisma.user.create({
+      data: {
+        name: name,
+        handle,
+        email: args.email || undefined,
+        externalUserId,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    }),
+  );
+  const linkedUser = await resolveLinkedUser(user);
+  return { user: linkedUser, created: linkedUser.id === user.id };
 }
 
 export async function POST(request: NextRequest) {
@@ -382,11 +476,22 @@ export async function POST(request: NextRequest) {
     email: string | null;
   };
   try {
-    user = await upsertNativeAppleUser({
+    const upserted = await upsertNativeAppleUser({
       appleSubject: tokenPayload.sub,
       email,
       name,
     });
+    user = upserted.user;
+    if (upserted.created) {
+      try {
+        await ensureSignupWelcomeOnboarding({
+          userId: user.id,
+          locale: "en",
+        });
+      } catch (error) {
+        console.error("[signup-welcome] native Apple onboarding failed", error);
+      }
+    }
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
     console.error(`[native-auth/apple/exchange] user upsert failed reason=${reason}`);

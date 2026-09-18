@@ -60,8 +60,9 @@ describe("native navigation bridge helpers", () => {
     const script = buildNativeNavigationBridgeScript();
 
     expect(script).toContain(NATIVE_NAV_INDEX_KEY);
-    expect(script).toContain("canGoBack: currentHistoryIndex > 0");
-    expect(script).toContain("canGoForward: historyLength > currentHistoryIndex + 1");
+    expect(script).toContain("canGoBack: !isTabRoot && currentHistoryIndex > 0");
+    expect(script).toContain("canGoForward: !isTabRoot && historyLength > currentHistoryIndex + 1");
+    expect(script).toContain("NATIVE_TAB_ROOT_QUERY_KEY");
     expect(script).toContain("wrapHistoryMethod('pushState')");
     expect(script).toContain("wrapHistoryMethod('replaceState')");
   });

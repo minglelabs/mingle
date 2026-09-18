@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { matchesExpectedAccount } from "@/lib/request-account-guard";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import {
@@ -11,15 +12,17 @@ import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
 } from "@/lib/translation-models";
+import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
 
 export const runtime = "nodejs";
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
-const DEFAULT_TEXT_SIZE_LEVEL = 2;
+const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 5000;
 const DEFAULT_SILENCE_MS = 1000;
+const DEFAULT_BUBBLE_DISPLAY_MODE = "expanded";
 const MIN_ENDPOINT_MAX_DELAY_MS = 500;
 const MAX_ENDPOINT_MAX_DELAY_MS = 3000;
 const DEFAULT_ENDPOINT_MAX_DELAY_MS = 3000;
@@ -27,6 +30,7 @@ const MIN_ENDPOINT_TUNING_STEP = 0;
 const MAX_ENDPOINT_TUNING_STEP = 4;
 const DEFAULT_ENDPOINT_TUNING_STEP = 2;
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
+const BUBBLE_DISPLAY_MODES = new Set(["expanded", "collapsed"]);
 const STT_SEGMENTATION_MODES = new Set(["fin", "end"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
@@ -37,6 +41,7 @@ type PreferencesBody = {
   sonioxEndpointTuningStep?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
+  bubbleDisplayMode?: unknown;
   sttSegmentationMode?: unknown;
 };
 
@@ -55,6 +60,7 @@ type UserPreferencesRecord = {
   demoEndpointTuningStep: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
+  demoBubbleDisplayMode: string | null;
   sttSegmentationMode: string | null;
 };
 
@@ -91,6 +97,14 @@ function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
   const normalized = value.trim().toLowerCase();
   return AD_BANNER_POSITIONS.has(normalized)
     ? (normalized as "top" | "bottom")
+    : null;
+}
+
+function normalizeBubbleDisplayMode(value: unknown): "expanded" | "collapsed" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return BUBBLE_DISPLAY_MODES.has(normalized)
+    ? (normalized as "expanded" | "collapsed")
     : null;
 }
 
@@ -245,6 +259,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoEndpointTuningStep: true,
     translationModel: true,
     adBannerPosition: true,
+    demoBubbleDisplayMode: true,
     sttSegmentationMode: true,
   } as const;
 
@@ -307,10 +322,16 @@ export async function GET(request: Request) {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
   const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
-    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+    ...sessionIdentity,
+    externalUserId: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+      : "",
+    sessionKey: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingSessionKey(request) || tracking.sessionKey
+      : "",
   };
   logAccountPreferencesDebug("get_request", {
     headerExternalUserId: resolveTrackingExternalUserId(request) || null,
@@ -327,7 +348,10 @@ export async function GET(request: Request) {
   if (preferences) {
     await syncUserVersionContext(preferences.id, request);
   }
-  if (!preferences && identity.externalUserId) {
+  if (!preferences && hasIdentity(sessionIdentity)) {
+    return NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
+  }
+  if (!preferences && allowLegacyAnonymousUser && identity.externalUserId) {
     await upsertTrackedUser({
       tracking,
       clientContext: {
@@ -346,6 +370,8 @@ export async function GET(request: Request) {
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
+    bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
+      ?? DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: normalizeSttSegmentationMode(preferences?.sttSegmentationMode),
   });
   ensureTrackingContext(nextRequest, response, {
@@ -358,16 +384,25 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  if (!matchesExpectedAccount(request, session)) {
+    return NextResponse.json({ error: "account_changed" }, { status: 401 });
+  }
   const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const sessionIdentity = normalizeSessionUserIdentity(session);
+  const allowLegacyAnonymousUser = requestAllowsLegacyAnonymousUser(request);
   const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
-    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+    ...sessionIdentity,
+    externalUserId: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingExternalUserId(request) || tracking.externalUserId
+      : "",
+    sessionKey: !hasIdentity(sessionIdentity) && allowLegacyAnonymousUser
+      ? resolveTrackingSessionKey(request) || tracking.sessionKey
+      : "",
   };
   logAccountPreferencesDebug("patch_request", {
     headerExternalUserId: resolveTrackingExternalUserId(request) || null,
@@ -401,6 +436,7 @@ export async function PATCH(request: Request) {
   );
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
   const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
   const hasNextSttSegmentationMode = hasValidSttSegmentationMode(body);
   if (
@@ -410,6 +446,7 @@ export async function PATCH(request: Request) {
     && nextEndpointTuningStep === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
+    && nextBubbleDisplayMode === null
     && !hasNextSttSegmentationMode
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
@@ -422,6 +459,7 @@ export async function PATCH(request: Request) {
     ...(nextEndpointTuningStep !== null ? { demoEndpointTuningStep: nextEndpointTuningStep } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
     ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
   };
 
@@ -461,6 +499,10 @@ export async function PATCH(request: Request) {
       });
       return NextResponse.json({ ok: true });
     }
+  }
+
+  if (hasIdentity(sessionIdentity)) {
+    return NextResponse.json({ error: "authenticated_user_not_found" }, { status: 401 });
   }
 
   if (identity.externalUserId) {
@@ -507,6 +549,10 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ ok: true });
       }
     }
+  }
+
+  if (!allowLegacyAnonymousUser) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const createdUserId = await upsertTrackedUser({

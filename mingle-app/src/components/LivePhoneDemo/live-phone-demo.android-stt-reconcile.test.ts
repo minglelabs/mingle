@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldRunNativeConnectingWatchdog,
+  shouldTakeOverNativeSttOwnerForMessage,
   shouldPromoteConnectionStatusFromNativeActivity,
 } from './use-realtime-stt'
 
@@ -40,6 +42,55 @@ describe('Android native STT reconcile contracts', () => {
   it('does not re-promote Android native activity once the UI is already running', () => {
     expect(shouldPromoteConnectionStatusFromNativeActivity({
       previousConnectionStatus: 'ready',
+    })).toBe(false)
+  })
+
+  it('reclaims a stale native owner only for an explicitly matching room message', () => {
+    expect(shouldTakeOverNativeSttOwnerForMessage({
+      hasActiveOwner: true,
+      isCurrentOwner: false,
+      messageConversationId: 'room-a',
+      currentConversationId: 'room-a',
+    })).toBe(true)
+
+    expect(shouldTakeOverNativeSttOwnerForMessage({
+      hasActiveOwner: true,
+      isCurrentOwner: false,
+      messageConversationId: 'room-b',
+      currentConversationId: 'room-a',
+    })).toBe(false)
+
+    expect(shouldTakeOverNativeSttOwnerForMessage({
+      hasActiveOwner: true,
+      isCurrentOwner: false,
+      currentConversationId: 'room-a',
+    })).toBe(false)
+  })
+
+  it('runs the connecting watchdog only for the active native owner', () => {
+    expect(shouldRunNativeConnectingWatchdog({
+      connectionStatus: 'connecting',
+      useNativeStt: true,
+      isCurrentOwner: true,
+    })).toBe(true)
+
+    expect(shouldRunNativeConnectingWatchdog({
+      connectionStatus: 'connecting',
+      useNativeStt: true,
+      isCurrentOwner: false,
+    })).toBe(false)
+
+    expect(shouldRunNativeConnectingWatchdog({
+      connectionStatus: 'connecting',
+      useNativeStt: true,
+      isCurrentOwner: true,
+      nativeStopRequested: true,
+    })).toBe(false)
+
+    expect(shouldRunNativeConnectingWatchdog({
+      connectionStatus: 'ready',
+      useNativeStt: true,
+      isCurrentOwner: true,
     })).toBe(false)
   })
 })

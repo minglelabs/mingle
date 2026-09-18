@@ -178,6 +178,7 @@
 }
 
 .mobile-canvas-shell {
+  width: var(--mingle-mobile-canvas-scaled-width, 400px);
   height: 100svh;
   min-height: 100svh;
   overflow: hidden;
@@ -185,11 +186,25 @@
 
 .mobile-canvas-frame {
   width: 400px;
-  height: 100svh;
-  min-height: 100svh;
+  height: var(--mingle-mobile-canvas-frame-height, 100svh);
+  min-height: var(--mingle-mobile-canvas-frame-height, 100svh);
+  transform: var(--mingle-mobile-canvas-transform, none);
   transform-origin: top left;
-  will-change: transform;
+  will-change: var(--mingle-mobile-canvas-will-change, auto);
   overflow: hidden;
+}
+
+/* The scaled canvas is taller in layout pixels than its visible shell.
+   Unlike hidden, clip prevents focus/scrollIntoView from scrolling that shell
+   and moving the search header and tabs with it. Only the results may scroll. */
+.mobile-canvas-stage:has(.connect-page),
+.mobile-canvas-shell:has(.connect-page),
+.mobile-canvas-frame:has(> .connect-page) {
+  overflow: clip;
+}
+
+.connect-page[data-keyboard-open="true"] > .connect-bottom-tabs {
+  display: none;
 }
 
 @layer utilities {

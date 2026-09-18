@@ -8,12 +8,15 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import ConversationEmptyState from './ConversationEmptyState'
+import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import {
   buildLanguageSelectorHistoryState,
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
+import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt-legacy'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
@@ -24,7 +27,6 @@ import {
   DEFAULT_STT_LANGUAGES,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
-  getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
   DEFAULT_INPUT_MODE,
@@ -66,6 +68,11 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_BUBBLE_DISPLAY_MODE,
+  type LivePhoneDemoBubbleDisplayMode,
+} from './live-phone-demo.bubble-display'
+import { resolveLivePhoneDemoMessageSpacingClass } from './live-phone-demo.message-spacing'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -99,6 +106,7 @@ import {
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
 import { LivePhoneDemoFeedbackMessageText } from './live-phone-demo.feedback-links'
+import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
@@ -135,22 +143,12 @@ const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const LANG_SELECTOR_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
-const EMPTY_STATE_ARROW_END_Y = 78
-const EMPTY_STATE_ARROW_HEAD_Y = 72
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
-
-type LivePhoneDemoComposerCopy = {
-  manualSpeakerLabel: string
-  openKeyboardLabel: string
-  closeKeyboardLabel: string
-  composerPlaceholder: string
-  sendMessageLabel: string
-}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -266,38 +264,6 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
 
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
-}
-
-export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDemoComposerCopy {
-  const locale = (uiLocale || '').trim().toLowerCase()
-
-  if (locale.startsWith('ko')) {
-    return {
-      manualSpeakerLabel: '나',
-      openKeyboardLabel: '텍스트 입력 열기',
-      closeKeyboardLabel: '텍스트 입력 닫기',
-      composerPlaceholder: '메시지를 입력하세요',
-      sendMessageLabel: '메시지 보내기',
-    }
-  }
-
-  if (locale.startsWith('ja')) {
-    return {
-      manualSpeakerLabel: '自分',
-      openKeyboardLabel: 'テキスト入力を開く',
-      closeKeyboardLabel: 'テキスト入力を閉じる',
-      composerPlaceholder: 'メッセージを入力',
-      sendMessageLabel: 'メッセージを送信',
-    }
-  }
-
-  return {
-    manualSpeakerLabel: 'You',
-    openKeyboardLabel: 'Open text input',
-    closeKeyboardLabel: 'Close text input',
-    composerPlaceholder: 'Type a message',
-    sendMessageLabel: 'Send message',
-  }
 }
 
 export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
@@ -692,7 +658,6 @@ interface LivePhoneDemoProps {
   onLimitReached?: () => void
   enableAutoTTS?: boolean
   uiLocale: string
-  tapPlayToStartLabel: string
   usageLimitReachedLabel: string
   usageLimitRetryHintLabel: string
   connectingLabel: string
@@ -833,7 +798,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLimitReached,
   enableAutoTTS = false,
   uiLocale,
-  tapPlayToStartLabel,
   usageLimitReachedLabel,
   usageLimitRetryHintLabel,
   connectingLabel,
@@ -885,6 +849,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [sonioxEndpointMaxDelayMs, setSonioxEndpointMaxDelayMs] = useState<number>(DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS)
   const [sonioxEndpointTuningStep, setSonioxEndpointTuningStep] = useState<number>(DEFAULT_SONIOX_ENDPOINT_TUNING_STEP)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
+  const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(DEFAULT_BUBBLE_DISPLAY_MODE)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
@@ -979,6 +944,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
+    bubbleDisplayMode: DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: DEFAULT_STT_SEGMENTATION_PREFERENCE,
   })
   const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
@@ -991,8 +957,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
+    bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -1386,6 +1353,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxEndpointMaxDelayMs(hydratedPreferences.sonioxEndpointMaxDelayMs)
         setSonioxEndpointTuningStep(hydratedPreferences.sonioxEndpointTuningStep)
         setTranslationModel(hydratedPreferences.translationModel)
+        setBubbleDisplayMode(hydratedPreferences.bubbleDisplayMode)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
         if (persistedInputModeRef.current === null) {
           setIsComposerOpen(hydratedPreferences.inputMode === 'text')
@@ -3340,7 +3308,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
-  const isCenteredMenuLayout = viewportWidthPx >= 640
   const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
@@ -3382,15 +3349,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
-  const showEmptyState = utterances.length === 0
-    && liveUtterances.length === 0
-    && !partialTranscript
-    && !demoTypingText
-    && !demoTypingLang
-    && !isDemoAnimating
-    && !isActive
-    && !isError
-    && !isLimitReached
+  const showEmptyState = shouldShowConversationEmptyState({
+    utteranceCount: utterances.length,
+    liveUtteranceCount: liveUtterances.length,
+    hasPartialTranscript: Boolean(partialTranscript),
+    hasDemoTypingText: Boolean(demoTypingText),
+    hasDemoTypingLanguage: Boolean(demoTypingLang),
+    isDemoAnimating,
+    isError,
+    isLimitReached,
+    hasComposerDraft: Boolean(composerDraft.trim()),
+  })
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
@@ -3446,7 +3415,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="text-[1.35rem]"
                     title={lang.toUpperCase()}
                   >
-                    {getSttLanguageFlag(lang)}
+                    <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
                   </span>
                 ))}
                 <ChevronDown
@@ -3462,11 +3431,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isOpen={langSelectorOpen}
                   onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
                   selectedLanguages={selectedLanguages}
-                  speechLanguages={selectedLanguages}
-                  translationLanguagesLinked={true}
                   onToggleLanguage={handleToggleLanguage}
-                  onToggleSpeechLanguage={handleToggleLanguage}
-                  onTranslationLanguagesLinkedChange={() => {}}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}
@@ -3509,7 +3474,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="absolute inset-0 z-50 overflow-hidden bg-black/42"
+              className="absolute inset-0 z-50 overflow-hidden bg-transparent"
               onClick={requestCloseMenuPanel}
             >
               <div className="flex h-full w-full justify-end sm:justify-center">
@@ -3525,11 +3490,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   onClick={(event) => event.stopPropagation()}
                   className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
-                  style={{
-                    boxShadow: isCenteredMenuLayout
-                      ? '0 22px 64px rgba(15, 23, 42, 0.24)'
-                      : '-18px 0 40px rgba(15, 23, 42, 0.22)',
-                  }}
                 >
                   <motion.div
                     initial={false}
@@ -3590,7 +3550,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                         className={`${chatBubbleTextClassName} min-w-0 flex-1 truncate font-normal text-gray-900`}
                                       >
                                         <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                          <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                          <LanguageFlag language={textSizePreviewLanguage} className="text-base leading-none" />
                                           <span className="text-[11px] font-semibold uppercase leading-none">
                                             {textSizePreviewBadgeLabel}
                                           </span>
@@ -3653,7 +3613,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                                       className={`${optionTextClassName} truncate font-normal text-gray-900`}
                                                     >
                                                       <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                                        <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                                        <LanguageFlag language={textSizePreviewLanguage} className="text-base leading-none" />
                                                         <span className="text-[11px] font-semibold uppercase leading-none">
                                                           {textSizePreviewBadgeLabel}
                                                         </span>
@@ -4409,7 +4369,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
               onPointerDown={markUserScrollIntent}
-              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
+              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={{
                 paddingTop: chatPaddingTop,
                 paddingBottom: chatPaddingBottom,
@@ -4426,9 +4386,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </button>
               )}
               <AnimatePresence mode="popLayout">
-                {displayUtterances.map((u) => (
+                {displayUtterances.map((u, index) => (
                   <div
                     key={u.id}
+                    className={resolveLivePhoneDemoMessageSpacingClass(displayUtterances[index - 1], u)}
                     data-utterance-created-at={
                       (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
                         ? String(Math.floor(u.createdAtMs))
@@ -4438,11 +4399,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <ChatBubble
                       utterance={u}
                       uiLocale={uiLocale}
+                      languageOrder={selectedLanguages}
                       isDraft={draftUtteranceIds.has(u.id)}
                       onPlayOriginal={handlePlayOriginalBubbleTts}
                       onPlayTranslation={handlePlayTranslationBubbleTts}
                       bubbleTextClassName={chatBubbleTextClassName}
                       speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
+                      bubbleDisplayMode={bubbleDisplayMode}
                     />
                   </div>
                 ))}
@@ -4462,7 +4425,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div className="min-w-0">
                     <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
                       <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
-                        <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
+                        <LanguageFlag language={demoTypingLang} className="text-base leading-none" />
                         <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
                       </span>
                       <span className="align-middle">
@@ -4588,11 +4551,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   className="pointer-events-none absolute inset-x-0 z-30 flex justify-center"
                   style={{ bottom: copyToastBottomOffsetPx }}
                 >
-                  <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)]">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <div className="flex items-center gap-2 rounded-full bg-black px-4 py-2.5 text-white shadow-[0_4px_16px_rgba(15,23,42,0.24),0_1px_4px_rgba(0,0,0,0.2)]">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-black">
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
-                    <span className="text-[14px] font-medium text-gray-800">
+                    <span className="text-[14px] font-medium text-white">
                       {copyActionCopy.copiedToastLabel}
                     </span>
                   </div>
@@ -4600,37 +4563,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {showEmptyState && (
-              <div className="pointer-events-none absolute inset-0 z-10">
-                <p
-                  className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
-                  style={{ top: '48%' }}
-                >
-                  {tapPlayToStartLabel}
-                </p>
-                <div
-                  className="absolute left-1/2 w-7 -translate-x-1/2"
-                  style={{
-                    top: 'calc(48% + 24px)',
-                    bottom: '16px',
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 100"
-                    preserveAspectRatio="none"
-                    className="h-full w-full text-gray-300/95"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <ConversationEmptyState uiLocale={uiLocale} />
             )}
           </div>
 
