@@ -6445,7 +6445,7 @@
       }
 
       /* Keep the dense business slides readable on short mobile viewports. */
-      @media (max-width: 900px) and (max-height: 650px) {
+      @media (max-width: 900px) and (max-height: 820px) {
         html.is-mobile-viewport .v-slide[data-page="8"] .v-shell,
         html.is-mobile-viewport .v-slide[data-page="11"] .v-shell,
         html.is-mobile-viewport .v-slide[data-page="12"] .v-shell,
@@ -6767,6 +6767,35 @@
 
         html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row > b {
           font-size: 21px;
+        }
+      }
+
+      /* Keep long mobile labels inside their columns at every mobile height. */
+      @media (max-width: 900px) {
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-prompt strong {
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="12"] .v-world > .v-between {
+          justify-self: center;
+          width: max-content;
+          height: auto;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-head,
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row {
+          grid-template-columns: 78px minmax(0, 1fr) 20px minmax(0, 1fr);
+          gap: 5px;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row > div {
+          min-width: 0;
+        }
+
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row strong,
+        html.is-mobile-viewport .v-slide[data-page="18"] .v-eco-row span {
+          overflow-wrap: anywhere;
         }
       }
 </style></head><body><main class="deck" aria-label="Virtually 발표자료"><nav class="v-lang-switcher" aria-label="언어 선택 (Language)"><button type="button" class="v-lang-btn" data-lang="en" aria-label="English">EN</button><button type="button" class="v-lang-btn" data-lang="ja" aria-label="日本語">JA</button><button type="button" class="v-lang-btn" data-lang="cn-ZH" aria-label="简体中文">简</button><button type="button" class="v-lang-btn" data-lang="cn-TW" aria-label="繁體中文">繁</button><button type="button" class="v-lang-btn is-active" data-lang="ko" aria-label="한국어">KO</button></nav><div class="track" id="deck-track">
