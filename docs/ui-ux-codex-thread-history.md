@@ -2434,3 +2434,402 @@
 - Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
 - Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
 - Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.
+## 2026-09-02 — Short XR presentation goal split
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation needed an additional third page to explain the two competing motivations behind the language-exchange problem. The existing centered slide treatment did not provide enough visual separation or emphasis for the two goals.
+- User impact: Viewers could not immediately distinguish between wanting to make foreign friends and wanting to learn a foreign language, which weakened the problem framing in the short presentation.
+- Resolution: Added a centered third slide with the `문제` kicker and `닭 vs 달걀 문제` title. Added a responsive two-column goal layout with larger type, separate accent treatments, gradient key-color bars, soft tinted panels, and mobile sizing that preserves the side-by-side comparison. Updated the static page counter to six slides; the existing slide navigation continues to derive the final count from the slide elements.
+- Tests: Verified six top-level `.slide` elements, confirmed the requested page order and text, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR goal slide kicker alignment follow-up
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new third slide used centered content, but the absolutely positioned `문제` kicker still inherited the default left anchor from the generic slide-copy style.
+- User impact: The kicker appeared on the left while the title and two goal cards were centered, creating a visible alignment inconsistency at the top of the slide.
+- Resolution: Centered the goal slide kicker independently with a 50% anchor and horizontal translation. The rule applies across desktop and mobile layouts.
+- Tests: Rechecked the third-slide DOM layout and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market comparison slide
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a market-context page showing that multiple product categories already address parts of the foreign-friend and language-learning problem. A plain competitor list would not communicate the breadth of the market or keep the slide visually scannable.
+- User impact: Without a compact market map, viewers could miss the distinction between language exchange, sincere voice conversation, global dating, and offline meetups, as well as the competitive context for Mingle.
+- Resolution: Added a fourth slide with a left-aligned `시장` message and a right-side 2x2 category grid. Each category uses a distinct key color, soft tinted panel, and irregularly scattered local service icons without divider lines. Grouped K Friends, HelloTalk, Tandem, Hilokal, and Yeetalk under `언어교환`; Maum, Connecting, and Wakie under `진솔한 음성 대화`; Meeff, Azar, Tinder, and Yubo under `글로벌 데이팅`; and Timeleft and Meetup under `오프라인 모임`. Added local app artwork assets and updated the presentation count to seven slides.
+- Tests: Verified the page-four text, category counts, local image loading, and `04 / 07` counter in the local browser at desktop and mobile sizes. Confirmed no viewport overflow and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category simplification
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The category panels on the market slide added visual weight that competed with the service icons and made the market map feel more like four separate cards than one comparison field.
+- User impact: Viewers could focus on the panel decoration instead of quickly scanning the category names and the services grouped beneath them.
+- Resolution: Removed category backgrounds, rounded-card treatment, shadows, glow ornaments, and corner dots. Kept the 2x2 placement, category names, per-category title colors, and irregular icon clouds as the only visual structure.
+- Tests: Rechecked the market slide at desktop and mobile sizes, confirmed all 14 local icons load, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After simplifying the market slide to names and icons, category labels were left-aligned, the overall grid sat too close to the viewport edge, and the icon clouds left too much unused space inside each 2x2 area.
+- User impact: The category groups felt visually unbalanced and the service icons had less emphasis than the market comparison needed.
+- Resolution: Centered every category title, added balanced outer padding around the market grid, reduced the internal category and icon-cloud insets, and increased the title and icon scale while preserving the irregular positions and responsive 2x2 layout.
+- Tests: Verified all four titles use centered alignment, all 14 local icons load, the `04 / 07` counter remains correct, page three remains centered, and the layout has no body overflow at desktop and mobile sizes.
+
+## 2026-09-02 — Short XR language-exchange market proof page
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/logo-market-kfriends-blue.jpg`
+- Issue: The market comparison needed to show the scale of the language-exchange category before the broader four-category map. The existing Kfriends artwork represented a separate service from the provided KFriends app, so the competitor set also needed both apps without conflating their download sizes.
+- User impact: Viewers could not immediately see how many large language-exchange services compete in this space or distinguish the two similarly named KFriends products.
+- Resolution: Added a centered fourth slide stating that many language-exchange services still do not solve the chicken-and-egg problem. Added a single horizontal row of six apps ordered by estimated Android downloads—HelloTalk, Tandem, Yeetalk, K-Friends, Hilokal, and Kfriends—with each app name and estimate on two lines. Added the provided blue KFriends artwork as a separate local asset and added it to the language-exchange group on the following market map slide. Removed residual logo shadows so the category areas remain visually flat.
+- Tests: Verified the new page as `04 / 08`, the moved market map as `05 / 08`, six horizontal overview items, six language-category icons, local image loading, centered page-four content, no body overflow on desktop/mobile, and no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The language-exchange proof page made the language-exchange group redundant on the following market map, while the remaining categories were still shown as a 2x2 side panel beside left-aligned copy.
+- User impact: The market page did not read as a single centered comparison, and the three remaining competitive spaces were harder to scan as a sequence.
+- Resolution: Removed the language-exchange category from the market map, centered the market kicker and title, and changed the remaining sincere voice conversation, global dating, and offline meetup groups to one horizontal row. Preserved the irregular icon scattering within each category and added responsive sizing for the three-column layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the three category titles and icon counts of 3/4/2, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR download estimate refresh
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/logo-market-kof.png`
+- Issue: The language-exchange proof page presented Android-only figures without making the platform scope clear. The final Kfriends entry also represented the smaller Bibimbap Story app, while KOF had a larger publicly visible Android footprint and was a better market comparison.
+- User impact: The scale comparison understated several competitors and made the source scope of the figures ambiguous. The similarly named Kfriends entry could also distract from the more relevant KOF competitor.
+- Resolution: Recalculated the rounded figures using public Android and iOS indicators where available: HelloTalk `약 7,000만+`, Tandem `약 3,500만+`, Yeetalk `약 1,100만`, K-Friends `약 450만`, Hilokal `약 170만`, and KOF `약 60만`. Replaced the Bibimbap Story Kfriends artwork with a local KOF icon, added a platform-scope caption, and increased the app-name and estimate type sizes while preserving the six-item horizontal row. KOF is marked as Google Play-based because no matching Apple App Store listing was found.
+- Tests: Verified page `04 / 08` at desktop and mobile sizes, confirmed the six apps remain in descending order, confirmed all local images load, checked the page-five 3/4/2 category layout for regression, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market title and spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The market page title needed to explain the broader connection-market problem, while the scattered competitor icons sat too far below their category labels.
+- User impact: The message was less specific than intended, and the large vertical gaps weakened the visual relationship between each category and its services.
+- Resolution: Replaced the market title with the requested two-line statement about abundant services and recurring language barriers. Reduced the category logo-cloud inset for the three-column market row on desktop and mobile, preserving the irregular icon positions and centered layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the exact title text and three category titles, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR goal resolution and flow cue
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new solution pages needed a clearer visual distinction between the language-learning goal that translation removes and the resulting conversation flow from that solved state.
+- User impact: The original second goal looked equally active on the first solution page, and the relationship between the updated right-side message and the left-side social goal was not immediately apparent on the following page.
+- Resolution: Added the existing `xr.html`-style red cross treatment to the first solution page's language-learning goal, reduced that goal's text opacity, and overlaid a large `통번역 제공` badge at its right edge. Added a large curved right-to-left arrow across the second solution page while preserving the two-column goal content and responsive layout.
+- Tests: Verified pages `06 / 10` and `07 / 10` at desktop and mobile sizes, confirmed the cross, badge, and arrow render without viewport overflow, confirmed the updated right-side message remains visible, and checked for browser console warnings or errors.
+
+## 2026-09-03 — Short XR cause and four-category market page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened presentation needed a centered cause page after the two goal slides, with the language-exchange category restored as the first part of the broader service landscape. The existing three-category market page also left more separation between categories and scattered icons than necessary.
+- User impact: The reason social-linking services have not provided translation was not stated before the presentation moved on, and the market comparison was less compact than the intended visual rhythm.
+- Resolution: Added a new eighth slide with the requested centered cause title and a four-column market row ordered as language exchange, sincere voice conversation, global dating, and offline meetups. Reused the six language-exchange app icons from the download proof page, reduced the fifth-page category gap, and tightened its irregular icon distribution while preserving the flat category treatment and key colors. The four-column row becomes a responsive 2x2 layout on mobile.
+- Tests: Verified pages `05 / 11` and `08 / 11` at desktop and mobile sizes, confirmed all category titles and 15 local icons load, confirmed the requested title and page order, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI requirement problem page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened presentation needed to explain why existing AI could not satisfy the demanding requirements of a social-linking conversation before presenting the solution.
+- User impact: The transition from the market and cause slides to the proposed translation service lacked a concrete explanation of the technical and cost barriers.
+- Resolution: Added a centered ninth slide with the requested problem kicker and title, followed by seven compact requirement cards covering continuous translation, speech recognition, multilingual ability, real-time translation, language switching, speaker separation, and price. The cards use a responsive three-column layout on desktop and a readable single-column layout on mobile.
+- Tests: Verified page `09 / 12` at desktop and mobile sizes, confirmed all seven labels and descriptions, confirmed the title is centered, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI cost and performance page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new AI requirement page needed a follow-up explanation of why existing translation services still fall short on price and practical conversation performance.
+- User impact: The presentation moved directly from the seven requirement gaps to the solution without showing concrete examples of the current service limitations.
+- Resolution: Added a new tenth slide based on page nine of `xr.html`, preserving its original cause kicker, title, and four service cards for Felo Translator, Google Translator, Apple Translator, and Papago. The existing responsive tool-card styles are reused, and the page counter now reflects 13 total slides.
+- Tests: Verified page `10 / 13` at desktop and mobile sizes, confirmed all four service logos and descriptions load, confirmed the title and card stack remain within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 8 icon scale refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The four-category service landscape page still felt sparse because its scattered app icons were too small for the available category areas.
+- User impact: The service clusters read as disconnected points, weakening the comparison between each category and the apps inside it.
+- Resolution: Increased the page-eight category icons to approximately 1.5 times their previous size while preserving their irregular positions, so the existing centers naturally produce tighter spacing. Applied the same scale increase to the responsive mobile layout while keeping the four-category page as a 2x2 grid.
+- Tests: Verified page `08 / 13` at desktop and mobile sizes, confirmed all 15 local icons load, checked that the enlarged clusters stay within their category areas and the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 9 compact requirement cards
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The eight AI requirement details became too wide and left excessive empty space after the speaker-separation item was split into separate speech and speaker separation gaps.
+- User impact: The requirement comparison felt sparse, and the distinction between sentence segmentation and multi-speaker separation was not visible.
+- Resolution: Reworked the ninth slide into a compact four-column desktop grid with narrower cards, kept a single readable column on mobile, and split the former `발화 분리` item into `발화 분리 — 문장 단위로 끊어주질 않음` and `발화자 분리 — 여럿이 말해도 분리가 안됨`.
+- Tests: Verified page `09 / 13` at desktop and mobile sizes, confirmed all eight labels and descriptions in order, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven flow arrow was drawn across most of both goal cards, used a gradient, and did not visually stay within the space between the two goals.
+- User impact: The arrow competed with the goal copy and made the intended right-to-left transition feel imprecise.
+- Resolution: Changed the arrow to a solid red stroke and recalculated its path from the right card's inner-left 10% point to the left card's inner-right 10% point. The geometry is recalculated on load and viewport changes so the relationship remains correct across desktop and mobile layouts.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the solid red stroke and endpoint alignment against both goal boxes, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI capability comparison pages
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The AI requirement problem page needed a ninth capability to explain the text-only limitation of existing voice interpretation, and the following page needed to present the corresponding AI-enabled solution capabilities in the same visual language.
+- User impact: Voice interpretation was missing from the requirement comparison, the price item used a negative label after the comparison shifted toward value, and the solution transition did not directly map the nine problem requirements to nine achievable capabilities.
+- Resolution: Added `음성 통역 — 텍스트밖에 출력 안됨` to page nine and renamed `비싼 가격` to `가성비`. Changed the shared requirement grid to three columns, producing a 3x3 layout for the nine desktop cards while retaining a single readable column on mobile. Replaced the former page-ten service-cost list with a copied requirement-card layout using the `해결책` kicker, the requested AI title, and the nine solution pairs for continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value.
+- Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed all nine labels and descriptions on both pages, confirmed the desktop cards form three equal columns and three rows, confirmed the exact solution title and kicker, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement card width refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: Changing the requirement grid from four columns to three left the full 1080px media width in place, so each card became substantially wider than the preceding requirement cards.
+- User impact: The 3x3 comparison lost the compact card rhythm established on the earlier page, and the larger cards made the requirement groups feel too spread out.
+- Resolution: Constrained the shared requirement grid to a centered maximum width of 810px. This keeps the three-column desktop cards at approximately their previous 260px width while preserving the 3x3 structure and letting the mobile layout continue to use the full responsive content width.
+- Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed centered desktop cards at approximately 261px each, confirmed three rows and three columns on desktop, confirmed all nine cards remain full-width and readable on mobile, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow vertical alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After the arrow endpoints were shortened to the inner edges of the two goal cards, the arrow remained anchored near the cards' top edge instead of sitting at the visual center of the lower content.
+- User impact: The arrow looked disconnected from the two messages and made the intended right-to-left flow cue feel top-heavy.
+- Resolution: Centered the arrow element vertically against the goal-card row with a 50% anchor and vertical translation. Updated the SVG path baseline and control points so the red arrow stroke itself, including its head, sits at the cards' vertical midpoint across responsive sizes.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the arrow center matches the goal-card center, confirmed the short red path and inner-edge endpoints remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 5 market icon density
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The three-category market page used smaller app icons and wider visual gaps than the later four-category market page, making the earlier comparison feel sparse and inconsistent.
+- User impact: The voice conversation, global dating, and offline meetup groups received less visual emphasis, and the relationship between each category and its services was weaker than on page eight.
+- Resolution: Reused page eight's enlarged icon scale, irregular positions, tighter cloud inset, and reduced category gap for page five while retaining its three-column layout and removing the language-exchange category from that copied structure. Synchronized the static page counter with the user's removal of the redundant former solution-proof page, bringing the current deck fallback count to 12.
+- Tests: Verified pages `05 / 12` and `08 / 12` at desktop and mobile sizes, confirmed page five contains only the three requested categories and nine local icons, confirmed page-five icon dimensions match page eight's corresponding groups, confirmed the three-category row remains centered and within the viewport, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement order alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The ninth-page problem cards used a different order from the corresponding solution cards on page ten, so related capabilities did not line up when the two pages were compared.
+- User impact: Viewers had to mentally remap the requirement pairs instead of scanning the problem and solution pages in the same sequence.
+- Resolution: Reordered page nine to match page ten exactly: continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value. Preserved the page-nine title and descriptions already customized by the user.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed the nine title sequences match exactly, confirmed the desktop 3x3 grids and mobile single-column layout remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrowhead visibility
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven arrow was correctly positioned at the goal-card center, but its arrowhead wings were too narrow and one wing visually blended into the curved stem.
+- User impact: The direction cue could be read as an incomplete or uneven arrow, reducing the clarity of the right-to-left flow between the two messages.
+- Resolution: Expanded the arrowhead rise and drop to approximately twice their previous angles while keeping the arrow's position, solid red color, curved stem, and inner-edge endpoints unchanged. Updated the static SVG fallback to match the responsive JavaScript-generated geometry.
+- Tests: Verified page `07 / 12` at desktop and mobile sizes, confirmed both arrowhead wings are visibly separated from the stem, confirmed the arrow remains centered between the goal cards, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement bar color separation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The requirement cards on pages nine and ten shared an orange-to-red gradient bar, so the problem and solution pages did not have distinct visual states.
+- User impact: The problem/solution contrast was weaker, and the gradient added unnecessary visual noise to each card's left edge.
+- Resolution: Removed the gradient from the shared bar style. Page nine now uses a solid red bar (`#dc2626`), while page ten uses the solid primary brand accent (`var(--accent)`) so the two pages remain visually related but clearly differentiated.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed all nine bars on each page use solid colors with no background image, confirmed the expected red and accent RGB values, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR solution bar blue refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The solution page's yellow requirement bars felt too close to the warm page palette and did not provide enough contrast with the problem page's red bars.
+- User impact: The problem/solution distinction felt less crisp, and the solution cards did not convey a calm, reliable finish.
+- Resolution: Replaced the solution-page bars with a solid blue solution accent (`#2563eb`) while keeping the problem-page bars solid red and removing gradients from both states.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed page nine uses solid `rgb(220, 38, 38)` bars and page ten uses solid `rgb(37, 99, 235)` bars, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR video start position
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve Mingle video needed to open at the relevant moment from the shared YouTube link, but the watch-page `t=43s` syntax is not the correct parameter for an embedded player.
+- User impact: Viewers would begin at the default video position instead of the intended 43-second context.
+- Resolution: Added YouTube's embed-compatible `start=43` parameter to the existing `/embed/Esq6htnQj98` source while preserving the inline-playback and related-video settings.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe keeps video ID `Esq6htnQj98` and resolves `start=43`, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR default video playback rate
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve video needed to begin at the requested 43-second point and play at a faster default speed for the presentation flow.
+- User impact: Viewers would otherwise need to manually change the YouTube playback speed every time they started the video.
+- Resolution: Enabled the YouTube IFrame Player API for the short-video iframe, set the page origin dynamically for both local HTTP previews and production, and apply a `1.5x` playback rate in the player's ready callback. The existing `start=43` position remains unchanged.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe retains video ID `Esq6htnQj98`, resolves `start=43`, includes `enablejsapi=1` and the current HTTP origin, confirmed the YouTube API initializes, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR voice conversation bridge page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to show the initial workaround of keeping a voice-conversation service open alongside Mingle before presenting the final integrated experience.
+- User impact: The story moved from the requirement solution directly to the final video, leaving the practical two-service usage step unexplained.
+- Resolution: Added a new thirteenth slide after the video slide with the `밍글` kicker and the requested title, reusing the original page-fourteen HelloTalk Voiceroom and Mingle image stack from `xr.html`. The runtime counter derives its total from the slide count.
+- Tests: Verified page `13 / 13` at desktop and mobile sizes, confirmed both local images load and the stacked layout stays within the slide, confirmed the page counter and total slide count, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to follow the two-service workaround with direct customer evidence from people who had tried Mingle.
+- User impact: The presentation lacked a concise proof point showing why the experience was positively received after the workaround and feature comparison.
+- Resolution: Added a new fourteenth slide after the voice-conversation bridge page with the `고객 반응` kicker, the requested title, and three right-side reaction cards based on the original page-fifteen response layout from `xr.html`. Replaced the source reactions with the requested continuous-translation, cross-language comprehension, and speech-recognition statements, and updated the static page counter to `01 / 14`.
+- Tests: Verified page `14 / 14` at desktop and mobile sizes, confirmed all three reaction cards and their exact text render in the right-side stack, confirmed the card stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer dependence page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed a follow-up page showing that some users had begun relying on Mingle during their regular HelloTalk conversations.
+- User impact: Positive reactions were presented without a concrete usage signal showing repeated, habitual behavior.
+- Resolution: Added a new fifteenth slide after the reaction-card page using the original page-seventeen layout from `xr.html`. Changed its kicker to `고객 반응`, preserved the original title and usage evidence, and reused the HelloTalk Voiceroom and Mingle image stack. Updated the static page counter to `01 / 15`.
+- Tests: Verified page `15 / 15` at desktop and mobile sizes, confirmed the requested kicker, title, usage copy, and both local images render, confirmed the image stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle demand page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/xiaohongshu-pip-mingle.png`
+- Issue: The short presentation needed to show demand for using Mingle as an add-on subtitle layer over an unrelated live-streaming service.
+- User impact: The customer-proof sequence did not show that Mingle can accompany picture-in-picture viewing outside a dedicated socialing service.
+- Resolution: Added a sixteenth left-aligned slide with the `고객 반응` kicker, the requested title, the attached Xiaohongshu PIP screenshot on the right, and a centered two-line explanation below it. Updated the static page counter to `01 / 16`.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed the attached image loads, confirmed the caption remains below the image, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle use-case collage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/roblox-mobile-home.jpg`, `mingle-app/public/legal/assets/discord-mobile-chat.png`
+- Issue: The add-on subtitle demand page needed to show that the use case extends beyond Xiaohongshu to other mobile-first services, including an active Roblox use case and interest in Discord.
+- User impact: The single screenshot communicated one example but did not make the broader cross-service demand visually concrete.
+- Resolution: Added Roblox and Discord mobile UI screens behind the Xiaohongshu PIP screenshot, keeping Xiaohongshu visually on top. Added the requested left-bottom body copy, including the statement that a user is already using Mingle with Roblox and that users sometimes want Mingle for content without subtitles.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed all three images load with the intended z-order, confirmed the body copy remains under the left title, confirmed the caption remains under the image collage, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline and work translation reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed to acknowledge translation demand beyond social and content use cases, including offline and work contexts.
+- User impact: The presentation ended the add-on subtitle examples without signaling that Mingle is also being considered for practical offline and workplace interpretation.
+- Resolution: Extended page sixteen's left body copy with Discord interest and the broader no-subtitle-content demand, added `로블록스, 디스코드와도 함께 사용` to the right-side caption, and added a seventeenth left-aligned slide with the `고객 반응` kicker and requested title. Updated the static page counter to `01 / 17`.
+- Tests: Verified pages `16 / 17` and `17 / 17` at desktop and mobile sizes, confirmed page sixteen's three-line caption remains below the collage, confirmed page seventeen's left alignment and exact title, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work media proof page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/offline-work-mingle.png`
+- Issue: The offline and workplace translation reaction page needed a concrete visual proof point alongside its left-aligned message.
+- User impact: Page seventeen communicated the claim only as text, so the practical use case had less visual weight than the preceding add-on subtitle examples.
+- Resolution: Added the attached mobile screenshot as a right-side media element on page seventeen, using the same left-copy/right-visual composition as page sixteen while preserving the requested kicker and title.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the attached image loads, confirmed the title remains left-aligned and the image stays on the right on desktop, confirmed the mobile layout stacks without clipping, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work visual treatment refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seventeen screenshot was styled as a large rounded card and lacked the requested contextual caption.
+- User impact: The visual felt heavier than page sixteen, and the salon and foreign-tourist use case was not explained below the screenshot.
+- Resolution: Removed the decorative border radius and shadow, reduced the screenshot scale, and added the caption `미용실 사장님들이 외국인 관광객 대면할 때 많이 사용` below the image while keeping the image as a plain right-side visual.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the image and caption stay within the slide, confirmed the caption remains below the image, confirmed no horizontal overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work customer evidence copy
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The offline and workplace translation page needed concrete examples to support its customer-reaction claim.
+- User impact: The slide showed the use-case heading and screenshot, but did not explain the kinds of people already finding practical value in Mingle.
+- Resolution: Added the requested lower-left body copy describing an African young man who found interpreter work with Mingle despite limited English and a person who appears to guide Japanese tourists around Seoul.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the body copy sits below the left-aligned title, confirmed the image and caption remain visible, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline meetup competitor coverage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/logo-market-couchsurfing.jpg`
+- Issue: The offline-meetup category on the market pages represented the space with only Timeleft and Meetup.
+- User impact: The category understated the breadth of established services used to connect travelers and locals in person.
+- Resolution: Added the Couchsurfing app icon to the offline-meetup logo cloud on pages five and nine, using the same scattered presentation and a slightly larger scale for the prominent competitor.
+- Tests: Verified pages `05 / 17` and `09 / 17` at desktop and mobile sizes, confirmed all three offline-meetup icons load on both pages, confirmed the icons stay within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR seven customer experience categories
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a single summary page showing the seven concrete user experiences Mingle plans to address individually.
+- User impact: The preceding customer-reaction pages demonstrated demand through examples, but did not make the full set of target experiences easy to scan in one view.
+- Resolution: Added an eighteenth centered slide with the `고객` kicker and requested two-line title. Added seven transparent category areas with one to three irregularly scattered service icons each: online cultural exchange, voice-call services, add-on subtitles, offline meetups, tourist-facing offline response, tourist information/consultation/reservations, and multilingual meetings. Added local App Store artwork for Immersive Translate, Caplo, Konest, Fresha, and Gangnam Unni, and reused the existing HelloTalk, K-Friends, Discord, Couchsurfing, Google Translate, and Cuckoo assets.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed all seven category titles and 11 icons load, confirmed the title and category labels are centered, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR vision and business model continuation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation stopped after the seven customer experience categories and did not carry the source deck's vision and business model conclusion.
+- User impact: Viewers could not continue from the customer summary into the stated AI-native SNS goal and the two business model diagrams.
+- Resolution: Added the source deck's ultimate-goal slide followed by the business Venn diagram and business matrix as pages nineteen through twenty-one. Reused the existing local business diagram assets and updated the static page counter to `01 / 21`.
+- Tests: Verified pages `19 / 21`, `20 / 21`, and `21 / 21` at desktop and mobile sizes, confirmed the vision text and both diagram images render, confirmed the images stay within the slide, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR team and closing pages
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation ended after the business model diagrams and omitted the source deck's team-recruitment and closing Q&A pages.
+- User impact: The deck had no closing invitation for prospective team members and no final contact, repository, social, or app-download links.
+- Resolution: Added the source deck's `팀원 구합니다` page and `감사합니다. Q & A` page as pages twenty-two and twenty-three, including the original closing links and store badges. Updated the static page counter to `01 / 23`.
+- Tests: Verified pages `22 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the recruitment copy and all closing links/badges render, confirmed local assets load, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR customer experience category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The seven-category customer summary used one desktop row, which made each category narrow and reduced the readability of its label and app icons.
+- User impact: The category map felt too spread across the page while the individual services appeared too small.
+- Resolution: Changed the page-eighteen desktop summary to a centered four-plus-three flex layout, enlarged category titles and app icons, and kept each category's icons in a compact horizontal row. Preserved a responsive two-column/four-row mobile layout with the final category centered.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed four categories in the first desktop row and three in the second, confirmed seven categories and 11 local icons load, confirmed all per-category icon rows are horizontal, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — XR Venn diagram asset correction
+
+- Surface: `mingle-app/public/legal/xr.html`, `mingle-app/public/legal/xr-short.html`, and `mingle-app/public/legal/assets/business-venndiagram.png`
+- Issue: The Venn diagram used an earlier image containing a typo.
+- User impact: The same incorrect diagram appeared on the corresponding Venn page in both the full and shortened XR decks.
+- Resolution: Replaced the shared Venn diagram asset with the corrected attached image, so both decks update through their existing single-image page without changing the business matrix page or any other slide.
+- Tests: Verified the corrected asset matches the attached PNG byte-for-byte, confirmed it loads on the Venn page in both decks, confirmed the matrix asset remains unchanged, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends acquisition goal slide
+
+- Surface: `mingle-app/public/legal/xr-short.html` and the two new K-Friends screenshot assets under `mingle-app/public/legal/assets/`
+- Issue: The deck needed a concrete first-goal slide explaining the plan to absorb K-Friends users, supported by evidence from the competing app's product screens.
+- User impact: The strategic goal lacked a visual anchor and the age of K-Friends' product updates was not immediately visible.
+- Resolution: Added page nineteen with left-aligned goal copy, two slightly overlapping K-Friends mobile screenshots, and a compact caption pairing the K-Friends logo with `Kfriends 앱 화면. 2년에 한 번씩 업데이트.`. Shifted the existing business, vision, recruitment, and Q&A pages to follow it and updated the initial page counter to twenty-four.
+- Tests: Verified the new screenshots and logo load locally, confirmed the two images overlap slightly in the right-side media area, checked the caption at desktop and mobile sizes, confirmed the page counter and total slide count are twenty-four, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends screenshot sizing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The two K-Friends screenshots on page nineteen were smaller than the neighboring mobile-screen examples and their decorative rotations made the composition feel unstable.
+- User impact: The evidence screens were harder to inspect and the right-side visual did not match the deck's established phone-screen treatment.
+- Resolution: Matched the screenshot height to the page-seventeen mobile-screen scale, removed the rotations, and retained only a slight horizontal overlap between the two images on desktop and mobile.
+- Tests: Rechecked page `19 / 24` at desktop and mobile sizes, confirmed the images remain fully visible with a small overlap, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends screenshot order refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The K-Friends version-history screen was on the left, while the user wanted the app screen to lead the composition from the left.
+- User impact: The visual emphasis did not follow the intended reading order for the competing app evidence.
+- Resolution: Moved the version-history screen to the right and kept the story app screen on the left with the foreground z-index, preserving the slight overlap and existing scale at desktop and mobile sizes.
+- Tests: Verified page `19 / 24` at desktop and mobile sizes, confirmed the story screen is left and in front of the version-history screen, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR video start time and caption default
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve YouTube demonstration needed to begin later in the source video, without showing YouTube captions by default.
+- User impact: Viewers could see the demonstration begin before the intended moment and could get duplicate captions alongside Mingle's translated output.
+- Resolution: Changed the embedded video start time to 57 seconds and added YouTube's `cc_load_policy=0` parameter so captions remain off on initial playback.
+- Tests: Confirmed the page-twelve iframe source contains `start=57` and `cc_load_policy=0`, and confirmed the embed retains inline playback and the existing playback-rate initialization.
+
+## 2026-09-03 — Short XR smart download QR and closing alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
+- Issue: The opening and closing QR codes led to the general landing page, requiring an extra tap before a viewer could install Mingle.
+- User impact: Scanning the QR code did not take iOS and Android viewers directly to their respective app stores, and the closing slide did not visually center its Q&A title within the left content area.
+- Resolution: Added a QR-only smart-link route that detects iOS or Android from request headers and redirects directly to the matching store, with the normal landing page as the unknown-platform fallback. Repointed the QR asset and both QR anchors to that route, placed the Mingle app icon above each QR code, and centered the page-twenty-three Q&A composition within its left column.
+- Tests: Verified iOS, Android, client-hint, and fallback redirect destinations with route tests; confirmed the QR asset encodes the smart-link route; and verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes with the icon, QR, title alignment, and no viewport overflow.
+
+## 2026-09-03 — Short XR QR label refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The Mingle app icon above the QR code appeared by itself without explaining what it represented.
+- User impact: The download visual on pages one and twenty-three felt disconnected, and the relationship between the icon and QR code was not immediately clear.
+- Resolution: Grouped the smaller Mingle app icon with the label `Mingle 다운로드 링크` above both QR codes and added a centered downward-pointing finger emoji between the label and QR code. Kept the compact treatment responsive for mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the label, icon, and pointer appear in the requested order, confirmed the Q&A title remains centered within the left column, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR QR label typography refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The QR label `Mingle 다운로드 링크` was too small and visually heavier than the adjacent app icon and QR treatment.
+- User impact: The download callout was less readable at a glance and felt overly bold on both desktop and mobile layouts.
+- Resolution: Increased the label size and reduced its font weight for pages one and twenty-three, with a responsive mobile size that remains within the existing QR media column.
+- Tests: Verified the label typography at desktop and mobile viewport sizes and confirmed no horizontal overflow or QR layout shift.
