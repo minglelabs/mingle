@@ -3598,19 +3598,12 @@
       }
 
       html.is-mobile-viewport .page-controls {
-        right: auto;
-        left: 50%;
+        right: clamp(14px, 4vw, 24px);
         bottom: calc(env(safe-area-inset-bottom) + 16px);
-        transform: translateX(-50%);
-        flex-direction: row-reverse;
+        flex-direction: row;
         gap: 12px;
         font-size: 0.72rem;
         letter-spacing: 0.08em;
-      }
-
-      html.is-mobile-viewport .page-home-button {
-        position: static;
-        transform: none;
       }
 
       @media (prefers-reduced-motion: reduce) {
