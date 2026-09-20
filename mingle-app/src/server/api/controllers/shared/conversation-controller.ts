@@ -23,6 +23,7 @@ import {
   getConversationChannelSharing,
   setConversationShareEnabled,
   refreshConversationShareSnapshot,
+  joinConversationChannelViaShareToken,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
@@ -645,6 +646,62 @@ export async function postConversationShareResponse(
     shareToken: conversation.shareToken,
     shareEnabled: conversation.shareEnabled,
   });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+// Called from NativeConversationShareOverlay's "join" button — turns the
+// current session's user into a real member of the shared room, same as
+// postConversationMembersResponse's invite acceptance, just self-initiated
+// off a shareToken instead of an inviter naming a specific userId.
+export async function postConversationShareJoinResponse(
+  request: NextRequest,
+  shareToken: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let conversation;
+  try {
+    conversation = await joinConversationChannelViaShareToken({
+      shareToken,
+      userId: resolvedUser.userId,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "room_full") {
+      return NextResponse.json({ error: "room_full" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
+    if (error instanceof Error && error.message === "target_user_not_found") {
+      return NextResponse.json({ error: "target_user_not_found" }, { status: 404 });
+    }
+    console.error("[conversations] share_join_failed", error);
+    return NextResponse.json({ error: "conversation_channel_join_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({ conversation });
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }

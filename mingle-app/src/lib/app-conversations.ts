@@ -866,8 +866,29 @@ function normalizeConversationPreview(rawValue: string | null | undefined): stri
   return (rawValue || "").replace(/\s+/g, " ").trim();
 }
 
+// Prefers the translation matching the viewer's own resolved display
+// language over the speaker's original-language text, so the conversation
+// list preview reads in the same language the viewer sees inside the room.
+// Falls back to the original text when there is no display language, no
+// matching translation, or the display language is the source language.
+function resolveLatestMessagePreviewForViewer(
+  latestMessage: { preview: string; translations: Record<string, string> } | undefined,
+  viewerDisplayLanguage: string | null | undefined,
+): string | undefined {
+  if (!latestMessage) return undefined;
+  const translatedPreview = viewerDisplayLanguage
+    ? latestMessage.translations[viewerDisplayLanguage.trim()]
+    : undefined;
+  return translatedPreview || latestMessage.preview;
+}
+
 type LatestMessageSummary = {
   preview: string;
+  // Finalized translations of the preview, keyed by language — same shape
+  // the in-room hydration builds (see the utterances.map translations loop
+  // below) — so the list preview can show the viewer's own display language
+  // instead of always the speaker's original language.
+  translations: Record<string, string>;
   createdAt: string | null;
   speaker: string | null;
   speakerAvatarSeed: string | null;
@@ -919,12 +940,10 @@ async function listLatestMessageSummaryBySessionKey(
       sourceLanguage: true,
       metadata: true,
       contents: {
-        where: {
-          contentType: "SOURCE",
-          ...buildVisibleMessageContentWhere(),
-        },
+        where: buildVisibleMessageContentWhere(),
         orderBy: { createdAt: "asc" },
         select: {
+          contentType: true,
           language: true,
           text: true,
         },
@@ -934,15 +953,25 @@ async function listLatestMessageSummaryBySessionKey(
 
   const summaryBySessionKey = new Map<string, LatestMessageSummary>();
   for (const message of latestMessages) {
-    const sourceContent = message.contents.find((content) => content.language === message.sourceLanguage)
-      || message.contents[0]
+    const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
+    const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
+      || sourceContents[0]
       || null;
     const preview = normalizeConversationPreview(sourceContent?.text);
+    const translations: Record<string, string> = {};
+    for (const content of message.contents) {
+      if (content.contentType !== "TRANSLATION_FINAL") continue;
+      const language = content.language.trim();
+      const text = normalizeConversationPreview(content.text);
+      if (!language || !text) continue;
+      translations[language] = text;
+    }
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     if (!message.sessionKey) continue;
     summaryBySessionKey.set(message.sessionKey, {
       preview,
+      translations,
       createdAt: message.createdAt.toISOString(),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
@@ -1096,9 +1125,16 @@ async function serializeConversationChannelWithPreview(
   const blockedCounterpartByChannelId = viewerUserId
     ? await resolveBlockedCounterpartUserIdByChannelId(viewerUserId, membersByChannelId)
     : new Map<string, string>();
+  const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
+    record.defaultDisplayLanguage,
+    membersByChannelId.get(record.id),
+    viewerUserId,
+    record.pendingInviteeUserIds,
+    pendingInviteeProfiles,
+  );
   return serializeConversationChannel(
     record,
-    latestMessage?.preview,
+    resolveLatestMessagePreviewForViewer(latestMessage, viewerFacingDisplayLanguage),
     latestMessage?.createdAt,
     latestMessage?.speaker,
     latestMessage?.speakerAvatarSeed,
@@ -1106,7 +1142,7 @@ async function serializeConversationChannelWithPreview(
     undefined,
     undefined,
     resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, pendingInviteeProfiles, record.userEditedTitleAt),
-    resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds, pendingInviteeProfiles),
+    viewerFacingDisplayLanguage,
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
     resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
@@ -1206,9 +1242,16 @@ async function listConversationChannelsForMember(
   return records
     .map((record) => {
       const latestMessage = latestMessageSummaryBySessionKey.get(record.sessionKey);
+      const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
+        record.defaultDisplayLanguage,
+        membersByChannelId.get(record.id),
+        viewerUserId,
+        record.pendingInviteeUserIds,
+        resolvePendingInviteeProfiles(record),
+      );
       return serializeConversationChannel(
         record,
-        latestMessage?.preview,
+        resolveLatestMessagePreviewForViewer(latestMessage, viewerFacingDisplayLanguage),
         latestMessage?.createdAt,
         latestMessage?.speaker,
         latestMessage?.speakerAvatarSeed,
@@ -1216,7 +1259,7 @@ async function listConversationChannelsForMember(
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
         unreadMessageCountByChannelId.get(record.id) ?? 0,
         resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId, resolvePendingInviteeProfiles(record), record.userEditedTitleAt),
-        resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds, resolvePendingInviteeProfiles(record)),
+        viewerFacingDisplayLanguage,
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId, record.pendingInviteeUserIds),
         resolveEffectiveMemberCount(membersByChannelId.get(record.id), record.pendingInviteeUserIds) >= 2,
@@ -2458,6 +2501,80 @@ export async function getConversationHydrationStateForShare(args: {
   return { ...state, sharedByUserId: conversationRecord.sharedByUserId };
 }
 
+// Turns a spectate-link viewer into a real member — same member-row shape as
+// materializePendingConversationInvitees, but written immediately instead of
+// deferred behind pendingInviteeUserIds/first-message materialization, since
+// here the joining user is the one initiating, not someone else's invitee.
+export async function joinConversationChannelViaShareToken(args: {
+  shareToken: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      shareToken: args.shareToken,
+      shareEnabled: true,
+      ...buildVisibleConversationWhere(),
+    },
+    select: { ...conversationChannelSelect, ownerUserId: true },
+  });
+  if (!conversationRecord) return null;
+  if (conversationRecord.ownerUserId === args.userId) {
+    return serializeConversationChannelWithPreview(conversationRecord, args.userId);
+  }
+
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+  const activeMembers = filterActiveMembers(membersByChannelId.get(conversationRecord.id));
+  if (activeMembers.some((member) => member.userId === args.userId)) {
+    // Already a member (e.g. reopening the same share link) — no-op, just
+    // hand back the channel so the caller can navigate straight in.
+    return serializeConversationChannelWithPreview(conversationRecord, args.userId);
+  }
+  if (activeMembers.length + 1 > MAX_CONVERSATION_MEMBERS) {
+    throw new Error("room_full");
+  }
+
+  await assertNoBlockAmong(args.userId, [
+    conversationRecord.ownerUserId,
+    ...activeMembers.map((member) => member.userId),
+  ]);
+
+  const joiningUser = await prisma.user.findUnique({
+    where: { id: args.userId },
+    select: { defaultConversationLanguages: true, defaultDisplayLanguage: true },
+  });
+  if (!joiningUser) throw new Error("target_user_not_found");
+
+  const selectedLanguages = resolveDefaultConversationLanguages(joiningUser.defaultConversationLanguages);
+  const defaultDisplayLanguage = resolvePersistedDisplayLanguage(joiningUser.defaultDisplayLanguage);
+
+  const record = await prisma.$transaction(async (tx) => {
+    // createMany + skipDuplicates (same shape as
+    // materializePendingConversationInvitees) instead of a plain create, so
+    // a race with a second concurrent join/materialization for this same
+    // user can't throw a unique-constraint error here.
+    await tx.appConversationChannelMember.createMany({
+      data: [{
+        channelId: conversationRecord.id,
+        userId: args.userId,
+        role: "member",
+        status: conversationRecord.status,
+        pausedAt: conversationRecord.pausedAt,
+        selectedLanguages,
+        ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
+          ? { displayLanguage: defaultDisplayLanguage }
+          : {}),
+      }],
+      skipDuplicates: true,
+    });
+    return tx.appConversationChannel.findUniqueOrThrow({
+      where: { id: conversationRecord.id },
+      select: conversationChannelSelect,
+    });
+  });
+
+  return serializeConversationChannelWithPreview(record, args.userId);
+}
+
 async function getConversationHydrationStateForRecord(args: {
   conversationRecord: ConversationChannelRecord;
   viewerUserId: string;
@@ -2663,14 +2780,40 @@ async function getConversationHydrationStateForRecord(args: {
     invitedAtMs: invite.createdAt.getTime(),
   }));
 
+  // This endpoint already loaded the room's messages (including their
+  // translations) to build `utterances` below — reuse the last one for the
+  // list's latest-message preview instead of leaving it unset. An unset
+  // preview isn't just a blank field: ConversationList's upsertConversation
+  // merge treats an absent value as "nothing changed" and keeps whatever
+  // preview was already on screen, so a viewer whose list refresh hits this
+  // endpoint (the realtime single-conversation refetch, or opening the room)
+  // would keep seeing a stale/earlier message here instead of this one.
+  const latestUtterance = utterances.at(-1) ?? null;
+  const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
+    conversationRecord.defaultDisplayLanguage,
+    membersByChannelId.get(conversationRecord.id),
+    args.viewerUserId,
+    conversationRecord.pendingInviteeUserIds,
+    pendingInviteeProfiles,
+  );
+  const latestMessagePreview = latestUtterance
+    ? resolveLatestMessagePreviewForViewer(
+        {
+          preview: normalizeConversationPreview(latestUtterance.originalText),
+          translations: latestUtterance.translations,
+        },
+        viewerFacingDisplayLanguage,
+      )
+    : undefined;
+
   return {
     conversation: serializeConversationChannel(
       conversationRecord,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      latestMessagePreview,
+      latestUtterance ? new Date(latestUtterance.createdAtMs).toISOString() : undefined,
+      latestUtterance?.speaker ?? undefined,
+      latestUtterance?.speakerAvatarSeed ?? undefined,
+      latestUtterance?.speakerAvatarIndex ?? undefined,
       undefined,
       undefined,
       resolveViewerFacingTitle(
@@ -2680,13 +2823,7 @@ async function getConversationHydrationStateForRecord(args: {
         pendingInviteeProfiles,
         conversationRecord.userEditedTitleAt,
       ),
-      resolveViewerFacingDisplayLanguage(
-        conversationRecord.defaultDisplayLanguage,
-        membersByChannelId.get(conversationRecord.id),
-        args.viewerUserId,
-        conversationRecord.pendingInviteeUserIds,
-        pendingInviteeProfiles,
-      ),
+      viewerFacingDisplayLanguage,
       resolveViewerFacingStatus(
         conversationRecord.status,
         membersByChannelId.get(conversationRecord.id),

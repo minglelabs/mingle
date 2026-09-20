@@ -8,6 +8,7 @@ import { MAX_CONVERSATION_MEMBERS } from "@/lib/app-conversations";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { showRouteTransitionCurtain } from "@/lib/route-transition-curtain";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
 import { motion, useAnimationControls } from "framer-motion";
@@ -25,6 +26,22 @@ type InviteFriendsScreenProps = {
   // owner had been using alone. Reuses the exact same follower/following
   // picker; only the submit target, copy, and success navigation differ.
   conversationId?: string;
+  // Set when this screen is embedded as another layer of the room's own
+  // menu stack (LivePhoneDemo's 'invite' screen) instead of being routed to
+  // as its own page (/conversations/add-members). When present, closing —
+  // via the header back button or after a successful add — just calls this
+  // instead of any router navigation, and the outer full-screen route
+  // chrome (fixed overlay + its own slide-in/out) is skipped, since the
+  // parent layer already provides both.
+  onRequestClose?: () => void;
+  // Embedded mode keeps this component mounted for the room's whole
+  // lifetime (see conversation-participants-panel.tsx's identical `active`
+  // prop) so its content survives the parent SlideSurface's close-slide
+  // instead of vanishing mid-animation into a blank panel. `active` gates
+  // its data fetching and native side effects the same way — on by default,
+  // since the standalone-page use (no onRequestClose) is always "active"
+  // for its whole mounted lifetime anyway.
+  active?: boolean;
 };
 
 type InviteFriendsUser = {
@@ -59,7 +76,7 @@ function AvatarCircle({ image, size }: { image: string | null; size: number }) {
   );
 }
 
-export default function InviteFriendsScreen({ dictionary, locale, conversationId }: InviteFriendsScreenProps) {
+export default function InviteFriendsScreen({ dictionary, locale, conversationId, onRequestClose, active = true }: InviteFriendsScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -139,6 +156,54 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     if (isMountedRef.current) navigateBack();
   }, [motionControls, navigateBack]);
 
+  // Only reachable now by visiting /conversations/add-members directly —
+  // the room's participants panel opens the invite picker as an in-page
+  // menu screen instead (see LivePhoneDemo's 'invite' screen), which never
+  // routes here and so never needs any of this. Kept as a working fallback
+  // for a direct/bookmarked visit to this route, which always arrives via a
+  // real router.push from the room it's inviting into, so returning after a
+  // successful invite always has one known destination: the room entry
+  // pushed FROM to get here. Earlier code chose between router.back() and a
+  // reconstructed push by checking
+  // `window.history.length > 1` (navigateBack's generic "cancel" logic,
+  // still used below) — but that length check is unreliable inside a native
+  // WebView tab, often under-reporting even right after a real push, which
+  // silently forced the reconstructed-push fallback every time and dropped
+  // `?conversation=` in the process. Since this call site's history shape is
+  // never ambiguous, skip the check and call router.back() directly.
+  //
+  // This also isn't just about avoiding that flaky check: this page reads
+  // cookies()/headers()/searchParams, so it's a fully dynamic route with
+  // staleTimes.dynamic = 0 — a router.push() back to it, even to the exact
+  // original URL, always triggers a fresh RSC fetch over the network. Real
+  // back/forward navigation is the one case Next.js's Router Cache always
+  // reuses regardless of staleness, so router.back() is the only way to
+  // return with no network round trip and no flash.
+  const navigateBackToConversation = useCallback(() => {
+    if (!normalizedConversationId) {
+      navigateBack();
+      return;
+    }
+    router.back();
+  }, [navigateBack, normalizedConversationId, router]);
+
+  // router.back() replaces this whole page's tree with conversation-list.tsx's
+  // in one React commit, but the browser doesn't paint that commit
+  // instantly — remounting a component that size is real synchronous work,
+  // and on-device that boundary was visible for a frame regardless of what
+  // this screen's own exit animation did (a slide made it worse — two
+  // disconnected motions; a fade only shrank the gap, it didn't close it).
+  // showRouteTransitionCurtain() covers the screen through that boundary
+  // instead: it lives in the root layout, so it survives the navigation and
+  // only lifts once the destination has actually painted. Nothing needs to
+  // animate out here anymore — the curtain hides it.
+  const handleBackToConversation = useCallback(() => {
+    if (!isMountedRef.current || isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    showRouteTransitionCurtain();
+    navigateBackToConversation();
+  }, [navigateBackToConversation]);
+
   const toggleUser = useCallback((user: InviteFriendsUser) => {
     setSelectedUsers((current) => {
       if (current.some((candidate) => candidate.id === user.id)) {
@@ -195,13 +260,15 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   }, [normalizedConversationId, selectedUsers]);
 
   useEffect(() => {
+    if (!active) return;
     postNativeBannerZone("hidden");
-  }, []);
+  }, [active]);
 
   // Solo/shared rooms both expose the same members endpoint — fetch it only
   // in "add to existing room" mode, to hide already-in-the-room people from
   // the picker below.
   useEffect(() => {
+    if (!active) return;
     if (!normalizedConversationId) {
       setExistingMemberIds(new Set());
       return;
@@ -227,7 +294,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     return () => {
       cancelled = true;
     };
-  }, [normalizedConversationId]);
+  }, [active, normalizedConversationId]);
 
   // Same set of people already has a room together — offer a choice instead
   // of silently reusing it (which would be confusing for a group, unlike
@@ -241,7 +308,11 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     try {
       if (isAddingToExistingConversation) {
         await requestMemberInvite();
-        await handleBack();
+        if (onRequestClose) {
+          onRequestClose();
+        } else {
+          await handleBackToConversation();
+        }
         return;
       }
       const { conversationId, reused } = await requestConversationStart(false);
@@ -256,10 +327,11 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
       setIsStarting(false);
     }
   }, [
-    handleBack,
+    handleBackToConversation,
     isAddingToExistingConversation,
     isStarting,
     navigateToConversation,
+    onRequestClose,
     requestConversationStart,
     requestMemberInvite,
     selectedUsers,
@@ -296,6 +368,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   }, [locale, motionControls, router]);
 
   useEffect(() => {
+    if (!active) return;
     const requestSequence = ++requestSequenceRef.current;
     const timeoutId = window.setTimeout(() => {
       void fetch(buildClientApiPath(`/profile/${activeTab}?q=${encodeURIComponent(normalizedQuery)}`), {
@@ -322,15 +395,10 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     }, 220);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeTab, normalizedQuery]);
+  }, [active, activeTab, normalizedQuery]);
 
-  return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-white">
-      <motion.main
-        initial={{ x: "100%" }}
-        animate={motionControls}
-        className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
-      >
+  const content = (
+    <>
         <header
           className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
           style={{
@@ -340,7 +408,17 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
         >
           <button
             type="button"
-            onClick={() => void handleBack()}
+            onClick={() => {
+              if (onRequestClose) {
+                onRequestClose();
+                return;
+              }
+              if (isAddingToExistingConversation) {
+                handleBackToConversation();
+                return;
+              }
+              void handleBack();
+            }}
             className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
             aria-label={labels.back}
           >
@@ -515,20 +593,46 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
             {isStarting ? <Loader2 size={20} className="animate-spin" /> : submitButtonLabel}
           </button>
         </div>
+    </>
+  );
+
+  const existingConversationDialog = existingConversationId ? (
+    <ExistingConversationChoiceDialog
+      title={copy.inviteFriendsExistingConversationTitle}
+      message={copy.inviteFriendsExistingConversationMessage}
+      createNewLabel={copy.inviteFriendsCreateNewAction}
+      continueLabel={copy.inviteFriendsContinuePreviousAction}
+      isPending={isStarting}
+      onCreateNew={handleCreateNewDespiteExisting}
+      onContinue={handleContinuePreviousConversation}
+      onDismiss={() => setExistingConversationId(null)}
+    />
+  ) : null;
+
+  // Embedded in the room's own menu stack (LivePhoneDemo's 'invite' screen):
+  // the parent motion.section/SlideSurface already provides full-screen
+  // positioning and the slide transition, so skip this screen's own copy of
+  // both instead of nesting them.
+  if (onRequestClose) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950">
+        {content}
+        {existingConversationDialog}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-white">
+      <motion.main
+        initial={{ x: "100%" }}
+        animate={motionControls}
+        className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+      >
+        {content}
       </motion.main>
 
-      {existingConversationId ? (
-        <ExistingConversationChoiceDialog
-          title={copy.inviteFriendsExistingConversationTitle}
-          message={copy.inviteFriendsExistingConversationMessage}
-          createNewLabel={copy.inviteFriendsCreateNewAction}
-          continueLabel={copy.inviteFriendsContinuePreviousAction}
-          isPending={isStarting}
-          onCreateNew={handleCreateNewDespiteExisting}
-          onContinue={handleContinuePreviousConversation}
-          onDismiss={() => setExistingConversationId(null)}
-        />
-      ) : null}
+      {existingConversationDialog}
     </div>
   );
 }

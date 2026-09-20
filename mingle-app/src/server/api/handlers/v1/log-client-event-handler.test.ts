@@ -45,19 +45,25 @@ vi.mock("@/lib/request-user-identity", () => ({
   resolveSessionAwareUserId: mockResolveSessionAwareUserId,
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const txClient = {
     appMessage: {
       upsert: mockAppMessageUpsert,
     },
     appMessageContent: {
       upsert: mockAppMessageContentUpsert,
     },
-    appEventLog: {
-      findFirst: mockAppEventLogFindFirst,
+  };
+  return {
+    prisma: {
+      ...txClient,
+      appEventLog: {
+        findFirst: mockAppEventLogFindFirst,
+      },
+      $transaction: (callback: (tx: typeof txClient) => unknown) => callback(txClient),
     },
-  },
-}));
+  };
+});
 
 vi.mock("@/lib/app-analytics", () => ({
   createTrackedEventLog: mockCreateTrackedEventLog,

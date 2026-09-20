@@ -1820,9 +1820,19 @@ export default function ConversationList({
     initialConversationsRequireRefresh,
     warmSnapshot: initialWarmSnapshot,
   });
-  const initialConversationToOpen = initialConversationIdToOpen
+  // A client-side transition into this route (router.push/back from another
+  // page) can serve a router-cached render of this server component whose
+  // `initialConversationIdToOpen` prop reflects an earlier `?conversation=`
+  // value rather than the one actually being navigated to. Prefer the URL
+  // the browser is really on for this synchronous initial-state read, so the
+  // correct room opens on the very first render instead of a stale/empty
+  // list flashing before the routeConversationId effect further down
+  // corrects it a frame later.
+  const initialConversationIdToOpenResolved =
+    readConversationIdFromWindow() || initialConversationIdToOpen;
+  const initialConversationToOpen = initialConversationIdToOpenResolved
     ? initialListState.conversations.find(
-        (conversation) => conversation.id === initialConversationIdToOpen,
+        (conversation) => conversation.id === initialConversationIdToOpenResolved,
       ) ?? null
     : null;
   const copy = useMemo(
@@ -1972,7 +1982,17 @@ export default function ConversationList({
   const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>("resolving");
   const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
-  const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
+  // A mount that starts with a conversation already active (SSR props, a
+  // deep link, or a client-side remount after a real route round trip like
+  // returning from add-members) isn't the user "opening" a room — it's the
+  // room already being there. Default to "instant" in that case so the
+  // very first render doesn't play SlideSurface's slide-in-from-the-right
+  // entrance, which otherwise exposes the list underneath for its duration.
+  // openConversationSummary resets this to "animate" for every genuine
+  // user-initiated open (see its `enterMode` param below).
+  const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>(() => (
+    initialConversationToOpen ? "instant" : "animate"
+  ));
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(initialListState.timeLabelsReady);
   const [rowActionMenu, setRowActionMenu] = useState<ConversationRowActionMenuState | null>(null);
@@ -3193,16 +3213,17 @@ export default function ConversationList({
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
     payload: LatestUtterancePayload,
+    isNewUtterance: boolean,
   ) => {
     const normalizedPreview = payload.preview.trim();
     if (!normalizedPreview) return;
     const normalizedCreatedAt = payload.createdAt.trim();
     if (!normalizedCreatedAt) return;
 
-    clearConversationInterimPreview(conversationId);
+    if (isNewUtterance) clearConversationInterimPreview(conversationId);
 
     const isActiveConversation = activeConversationRef.current?.id === conversationId;
-    if (isActiveConversation) {
+    if (isActiveConversation && isNewUtterance) {
       markConversationAsRead(conversationId);
     }
 
@@ -3221,7 +3242,7 @@ export default function ConversationList({
           typeof payload.speakerAvatarIndex === "number" && Number.isInteger(payload.speakerAvatarIndex)
             ? payload.speakerAvatarIndex
             : conversation.latestSpeakerAvatarIndex ?? null,
-        ...(isActiveConversation ? { unreadMessageCount: 0 } : {}),
+        ...(isActiveConversation && isNewUtterance ? { unreadMessageCount: 0 } : {}),
       };
     }).sort(compareConversationRecency));
   }, [clearConversationInterimPreview, markConversationAsRead]);
@@ -3319,18 +3340,6 @@ export default function ConversationList({
     postNativeBannerZone("hidden");
     openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
   }, [openConversationSurface]);
-
-  // Reuses invite-friends-screen.tsx's picker (see its conversationId prop)
-  // in "add to this room" mode instead of a bespoke invite UI.
-  const openInviteMembers = useCallback((conversationId: string) => {
-    const normalizedConversationId = conversationId.trim();
-    if (!normalizedConversationId || typeof window === "undefined") return;
-
-    const path = buildPathWithCurrentSearchParams(`/${locale}/conversations/add-members`);
-    const url = new URL(path, window.location.origin);
-    url.searchParams.set("conversation", normalizedConversationId);
-    router.push(`${url.pathname}${url.search}`);
-  }, [locale, router]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -5434,6 +5443,11 @@ export default function ConversationList({
                   <SlideSurface
                     key={conversation.id}
                     open={isVisible}
+                    // overlayEnterMode is "instant" only for the conversation this
+                    // mount already started open with; every later user-initiated
+                    // open runs through openConversationSummary, which resets it
+                    // to "animate" first — so a fresh explicit click still slides in.
+                    transitionMode={conversation.id === activeConversation?.id ? overlayEnterMode : "animate"}
                     onClose={() => void handleCloseActiveConversation()}
                     onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
                     ariaLabel={conversation.title}
@@ -5463,7 +5477,6 @@ export default function ConversationList({
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
                         onOpenProfile={openConversationProfile}
-                        onInvite={() => openInviteMembers(conversation.id)}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}
@@ -5493,8 +5506,8 @@ export default function ConversationList({
                         onSttSessionRunningChange={(isRunning) => {
                           handleConversationRunningChange(conversation.id, isRunning);
                         }}
-                        onLatestUtteranceChange={(payload) => {
-                          handleConversationLatestUtteranceChange(conversation.id, payload);
+                        onLatestUtteranceChange={(payload, isNewUtterance) => {
+                          handleConversationLatestUtteranceChange(conversation.id, payload, isNewUtterance);
                         }}
                         onLatestUtterancePreviewChange={(payload) => {
                           handleConversationLatestUtterancePreviewChange(conversation.id, payload);

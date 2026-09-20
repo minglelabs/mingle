@@ -122,6 +122,7 @@ import {
   getConversationSessionKeyForMember,
   inviteMembersToConversationChannel,
   isMessageSenderBlockedInConversation,
+  joinConversationChannelViaShareToken,
   leaveConversationChannel,
   listChannelMemberUserIdsBySessionKey,
   listConversationChannelsForExternalUserId,
@@ -1134,14 +1135,14 @@ describe("app-conversations", () => {
         createdAt: new Date("2026-04-12T09:30:00.000Z"),
         sourceLanguage: "en",
         metadata: null,
-        contents: [{ language: "en", text: "older message" }],
+        contents: [{ contentType: "SOURCE", language: "en", text: "older message" }],
       },
       {
         sessionKey: "session-b",
         createdAt: new Date("2026-04-12T11:30:00.000Z"),
         sourceLanguage: "en",
         metadata: null,
-        contents: [{ language: "en", text: "newest message" }],
+        contents: [{ contentType: "SOURCE", language: "en", text: "newest message" }],
       },
     ]);
     mockAppMessageGroupBy.mockResolvedValue([
@@ -1181,6 +1182,46 @@ describe("app-conversations", () => {
         _all: true,
       },
     });
+  });
+
+  it("shows the viewer's own display-language translation in the list preview, not the speaker's original language", async () => {
+    mockFindConversationMany.mockResolvedValue([{
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["it", "ko"],
+      speechLanguages: ["it"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    }]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["it", "ko"], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: "it", selectedLanguages: ["it", "ko"], user: { name: "Bob", handle: "bob" } },
+    ]);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        sessionKey: "session-dm",
+        createdAt: new Date("2026-04-12T09:30:00.000Z"),
+        sourceLanguage: "it",
+        metadata: null,
+        contents: [
+          { contentType: "SOURCE", language: "it", text: "Ciao" },
+          { contentType: "TRANSLATION_FINAL", language: "ko", text: "안녕" },
+        ],
+      },
+    ]);
+
+    const conversations = await listConversationChannelsForUser("user-1");
+
+    expect(conversations[0]).toEqual(expect.objectContaining({
+      latestMessagePreview: "안녕",
+    }));
   });
 
   it("includes the unread message count returned for each viewer membership", async () => {
@@ -1309,6 +1350,59 @@ describe("app-conversations", () => {
       createdAtMs: new Date("2026-04-12T09:00:00.000Z").getTime(),
       messageId: "msg-old",
     });
+    // Regression coverage: this endpoint used to leave latestMessagePreview
+    // (and friends) unset entirely, which meant the realtime single-conversation
+    // refetch silently never updated the conversation list's preview — see
+    // resolveLatestMessagePreviewForViewer's usage below.
+    expect(state?.conversation.latestMessagePreview).toBe("new source");
+    expect(state?.conversation.latestMessageAt).toBe(new Date("2026-04-12T10:00:00.000Z").toISOString());
+    expect(state?.conversation.latestSpeaker).toBe("1");
+    expect(state?.conversation.latestSpeakerAvatarSeed).toBe("seed-a");
+    expect(state?.conversation.latestSpeakerAvatarIndex).toBe(4);
+  });
+
+  it("shows the viewer's own display-language translation as the hydrated conversation's latest message preview", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["it", "ko"],
+      speechLanguages: ["it"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["it", "ko"], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: "it", selectedLanguages: ["it", "ko"], user: { name: "Bob", handle: "bob" } },
+    ]);
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(1);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        id: "msg-it",
+        clientMessageId: "u-it",
+        sourceLanguage: "it",
+        createdAt: new Date("2026-04-12T09:30:00.000Z"),
+        metadata: null,
+        contents: [
+          { contentType: "SOURCE", language: "it", text: "Ciao" },
+          { contentType: "TRANSLATION_FINAL", language: "ko", text: "안녕" },
+        ],
+      },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-dm",
+      userId: "user-1",
+    });
+
+    expect(state?.conversation.latestMessagePreview).toBe("안녕");
   });
 
   it("populates speakerImage from membership only once the room has 2+ real members", async () => {
@@ -1846,6 +1940,129 @@ describe("app-conversations", () => {
         inviteeUserIds: ["user-2"],
       })).rejects.toThrow("target_user_blocked");
       expect(mockUpdateConversation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("joinConversationChannelViaShareToken", () => {
+    const sharedRecord = {
+      id: "conv-shared",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-shared",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+      userEditedTitleAt: null,
+      shareToken: "token-abc",
+      shareEnabled: true,
+      sharedAt: new Date("2026-04-12T08:00:00.000Z"),
+      ownerUserId: "user-1",
+    };
+
+    it("returns null when no enabled share matches the token", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-missing",
+        userId: "user-2",
+      });
+
+      expect(result).toBeNull();
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("no-ops and hands back the channel when the caller is the owner", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-1",
+      });
+
+      // serializeConversationChannelWithPreview always does its own member
+      // lookup for viewer-facing rendering — only the write path is skipped.
+      expect(result).not.toBeNull();
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("no-ops and hands back the channel when the caller is already an active member", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-shared", userId: "user-1", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-shared", userId: "user-2", selectedLanguages: ["en"], user: { name: "Bob", handle: "bob" } },
+      ]);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      });
+
+      expect(result).not.toBeNull();
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("creates a new member row for a first-time joiner and returns the updated channel", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-shared", userId: "user-1", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+      ]);
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["ko"],
+        defaultDisplayLanguage: "ko",
+      });
+      mockFindConversationUniqueOrThrow.mockResolvedValue({ ...sharedRecord, pendingInviteeUserIds: [] });
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      });
+
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          channelId: "conv-shared",
+          userId: "user-2",
+          role: "member",
+          selectedLanguages: ["ko"],
+          displayLanguage: "ko",
+        })],
+        skipDuplicates: true,
+      });
+      expect(result).not.toBeNull();
+    });
+
+    it("throws room_full once the room is already at MAX_CONVERSATION_MEMBERS", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue(
+        Array.from({ length: 10 }, (_, index) => ({
+          channelId: "conv-shared",
+          userId: `user-${index + 1}`,
+          selectedLanguages: ["en"],
+          user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
+        })),
+      );
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-99",
+      })).rejects.toThrow("room_full");
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("throws target_user_blocked when a block exists between the joiner and the owner", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([]);
+      mockUserBlockFindFirst.mockResolvedValue({ blockerId: "user-1" });
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      })).rejects.toThrow("target_user_blocked");
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
     });
   });
 

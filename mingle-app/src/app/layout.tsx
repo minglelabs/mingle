@@ -8,6 +8,8 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
+import NativeConversationShareOverlay from "@/components/native-conversation-share-overlay";
+import RouteTransitionCurtain from "@/components/route-transition-curtain";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { TtsSettingsProvider } from "@/context/tts-settings";
 import { getAuthOptions } from "@/lib/auth-options";
@@ -92,6 +94,8 @@ export default async function RootLayout({
               <MobileCanvasShell>
                 {children}
                 <NativeProfileLinkOverlay />
+                <NativeConversationShareOverlay />
+                <RouteTransitionCurtain />
               </MobileCanvasShell>
               <Toaster
                 position="bottom-center"

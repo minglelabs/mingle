@@ -12,6 +12,48 @@ export type NativeConversationShareLink = {
   source: "https" | "mingle";
 };
 
+export const NATIVE_CONVERSATION_SHARE_EVENT = "mingle:native-conversation-share";
+export const NATIVE_CONVERSATION_SHARE_WINDOW_KEY = "__MINGLE_PENDING_NATIVE_CONVERSATION_SHARE";
+
+export type NativeConversationShareOverlayRequest = {
+  shareToken: string;
+  linkNonce: string;
+  navigationSequence: number;
+};
+
+// Mirrors profileLink.ts's buildNativeProfileLinkEventScript: dispatches a
+// CustomEvent into the currently-loaded page (and stashes the same payload
+// on window as a fallback for a listener that hasn't mounted yet) instead of
+// navigating the WebView away, so NativeConversationShareOverlay can render
+// an in-app-only read-only view on top of whatever screen was already open.
+export function buildNativeConversationShareEventScript(
+  request: NativeConversationShareOverlayRequest,
+): string {
+  const serializedRequest = JSON.stringify(request);
+  return `(function () { const detail = ${serializedRequest}; window[${JSON.stringify(NATIVE_CONVERSATION_SHARE_WINDOW_KEY)}] = detail; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_CONVERSATION_SHARE_EVENT)}, { detail })); })(); true;`;
+}
+
+// RN's built-in URL polyfill (react-native/Libraries/Blob/URL.js) only
+// parses hostname/pathname via regexes anchored on `https?://` — for any
+// other scheme (like `mingle:`), `.hostname` is always "" and `.pathname`
+// is always "/" no matter what the URL actually contains. Parse the
+// authority and path manually for the custom-scheme branch instead of
+// relying on those getters. (Mirrors profileLink.ts's identical helper.)
+function parseCustomSchemeAuthorityAndPath(
+  rawValue: string,
+  protocol: string,
+): { host: string; path: string } | null {
+  if (!rawValue.startsWith(protocol)) return null;
+  const afterScheme = rawValue.slice(protocol.length).replace(/^\/\//, "");
+  const withoutQueryOrHash = afterScheme.split(/[?#]/)[0];
+  const slashIndex = withoutQueryOrHash.indexOf("/");
+  if (slashIndex === -1) return { host: withoutQueryOrHash, path: "" };
+  return {
+    host: withoutQueryOrHash.slice(0, slashIndex),
+    path: withoutQueryOrHash.slice(slashIndex),
+  };
+}
+
 function normalizeShareToken(rawValue: string): string | null {
   let decodedValue = rawValue.trim();
   try {
@@ -40,8 +82,9 @@ export function parseNativeConversationShareLink(
   }
 
   if (CONVERSATION_SHARE_APP_SCHEMES.has(url.protocol)) {
-    if (url.hostname !== CONVERSATION_SHARE_APP_SCHEME_HOST) return null;
-    const shareToken = normalizeShareToken(url.pathname.replace(/^\//, ""));
+    const authority = parseCustomSchemeAuthorityAndPath(normalizedValue, url.protocol);
+    if (!authority || authority.host !== CONVERSATION_SHARE_APP_SCHEME_HOST) return null;
+    const shareToken = normalizeShareToken(authority.path.replace(/^\//, ""));
     return shareToken ? { shareToken, source: "mingle" } : null;
   }
 
