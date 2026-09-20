@@ -43,6 +43,8 @@ function buildConversation() {
     createdAt: "2026-08-26T00:00:00.000Z",
     updatedAt: "2026-08-26T00:00:00.000Z",
     pausedAt: null,
+    shareToken: null,
+    shareEnabled: false,
   };
 }
 

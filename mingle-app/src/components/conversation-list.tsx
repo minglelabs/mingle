@@ -5659,11 +5659,6 @@ export default function ConversationList({
                   <SlideSurface
                     key={conversation.id}
                     open={isVisible}
-                    // overlayEnterMode is "instant" only for the conversation this
-                    // mount already started open with; every later user-initiated
-                    // open runs through openConversationSummary, which resets it
-                    // to "animate" first — so a fresh explicit click still slides in.
-                    transitionMode={conversation.id === activeConversation?.id ? overlayEnterMode : "animate"}
                     onClose={() => void handleCloseActiveConversation()}
                     onRequestClose={() => handleConversationSurfaceRequestClose(conversation.id)}
                     ariaLabel={conversation.title}
