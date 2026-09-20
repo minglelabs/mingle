@@ -174,6 +174,28 @@ test('handleConversationEventsPublish rejects an unconfigured server secret', as
     assert.equal(response.statusCode, 401);
 });
 
+test('order reservations are authenticated, idempotent and never broadcast an invalidation', async () => {
+    const bus = new ConversationEventBus();
+    const socket = new FakeSocket();
+    bus.subscribe('sess_a', socket as unknown as import('ws').WebSocket);
+    const call = async (payload: object, authorization = `Bearer ${SECRET}`) => {
+        const request = new FakeRequest(JSON.stringify(payload), { authorization });
+        const response = new FakeResponse();
+        const pending = handleConversationEventsPublish(request as unknown as import('http').IncomingMessage,
+            response as unknown as import('http').ServerResponse, SECRET, bus);
+        request.emitBody();
+        await pending;
+        return response;
+    };
+    const payload = { sessionKey: 'sess_a', userId: 'alice', clientMessageId: 'voice', reserveOrder: true };
+    assert.equal((await call(payload, 'Bearer wrong')).statusCode, 401);
+    assert.equal((await call({ ...payload, clientMessageId: '' })).statusCode, 400);
+    const first = await call(payload);
+    assert.equal(first.statusCode, 200);
+    assert.equal(JSON.parse(first.body).startedAtMs, JSON.parse((await call(payload)).body).startedAtMs);
+    assert.equal(socket.sent.length, 0);
+});
+
 test('handleConversationEventsPublish publishes to subscribers on a valid request', async () => {
     const bus = new ConversationEventBus();
     const socket = new FakeSocket();

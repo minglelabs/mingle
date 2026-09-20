@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  shouldAnchorConversationEntry,
   deriveNewMessageAutoScrollState,
   resolveNewMessageAutoScrollTargetTop,
   type ChatScrollMessageCountSnapshot,
@@ -39,6 +40,15 @@ function resolveNewMessageAutoScroll(input: {
 }
 
 describe('new-message near-bottom auto-scroll', () => {
+  it('anchors cached entry without waiting for the server and never repeats for new messages', () => {
+    const entry = { isVisible: true, isStorageHydrated: true, hasAnchored: false, messageCount: 20, isServerPending: true }
+    expect(shouldAnchorConversationEntry(entry)).toBe(true)
+    expect(shouldAnchorConversationEntry({ ...entry, hasAnchored: true, messageCount: 21 })).toBe(false)
+    expect(shouldAnchorConversationEntry({ ...entry, hasAnchored: true, isServerPending: false })).toBe(false)
+    expect(shouldAnchorConversationEntry({ ...entry, isVisible: false })).toBe(false)
+    expect(shouldAnchorConversationEntry({ ...entry, messageCount: 0 })).toBe(false)
+    expect(shouldAnchorConversationEntry({ ...entry, messageCount: 0, isServerPending: false })).toBe(true)
+  })
   it('scrolls to the appended bottom when a committed chat item arrives while the user is at bottom', () => {
     const previousClientHeight = 620
     const previousScrollHeight = 3_200

@@ -1,5 +1,358 @@
 # UI/UX Codex Thread History
 
+## 2026-09-17 — Bound Soniox startup and propagate terminal STT failures
+
+- Surface: Shared STT server and the conversation WebView STT hook on iOS, Android, and web.
+- Evidence: Connections 513 and 524 reported Soniox 408 before client disconnection 30.0s and 22.5s later. The old server only logged provider errors and discarded audio received while the provider socket was connecting. These code defects are confirmed; the logs do not prove that either caused the upstream request timeouts.
+- User impact: Early speech could disappear and a terminal provider failure could leave the app displaying a stale recording/connection state until the sockets eventually closed.
+- Resolution: Buffer up to five seconds of PCM (also bounded to 512 queued chunks), send it in order after the provider configuration, bound the provider handshake to 10s, and reject slow-provider backpressure explicitly. Never restart a connection after Stop or accept a second configuration on the same client connection.
+- Audio gaps: Send Soniox's JSON keepalive every 5s only while audio is absent. End sessions with no first audio after 15s, or with a 30s ongoing input gap, so keepalive cannot hide a dead microphone or retain paid sessions indefinitely. Normal silence is still valid PCM and does not trigger this timeout.
+- Failure behavior: Flush the pending transcript once, settle any pending finalize, send a structured error and close immediately with code 1011. Stop-in-progress still receives its acknowledgement. Dispose queues and timers on Stop, disconnect, and failure; force-close an unresponsive client after 5s.
+- Diagnostics: Record provider error type/request ID and aggregate audio counts/timestamps at failures and upstream close. Do not record audio payloads or transcript content. Record requested language hints separately from the legacy `languages` field; the existing disabled-hints behavior is unchanged.
+- Authentication scope: The Google callback in the attachment had no cookies at all, then the next attempt succeeded. This branch already uses provider-specific SameSite cookies (Google Lax, Apple None). The attachment does not establish why that browser lost its cookies; no state/PKCE validation is bypassed or weakened.
+- Verification: All 57 STT tests (including 12 new transport regressions), the STT production build, all 1,540 web unit tests, web TypeScript and targeted ESLint passed. Local mock-WebSocket tests cover ordered startup audio, silence, duplicate configuration, handshake timeout, upstream 408 without provider close, abrupt disconnect, Stop races, final transcript/ack ordering, keepalive, missing audio and bounded buffers. These tests need no external API keys. Added the STT suite/build to CI, including PRs targeting the messenger branch. Physical-device and production-provider validation remain pending; deployment requires the web and STT services, with no native binary or database migration change.
+
+## 2026-09-12 - Keep diagonal edge swipe-back gestures from becoming scrolls
+
+- Surface: All full-screen panels and nested pages using the shared `SlideSurface`, including notifications, profiles, follow lists, location, sharing, room settings, and language selection.
+- User report: On iOS, an edge-swipe-back that includes a small upward or downward component can begin moving the panel to the right, then hand control to the panel's vertical scroller. The panel returns toward its original position while the content scrolls, making the gesture feel like a failed close. The issue is intermittent and is not caused by a small hit area.
+- Cause: The surface starts an x-axis Framer Motion drag at the left edge while keeping `touch-action: pan-y`. Its direction lock can classify an early diagonal sample as vertical, after which the browser's scroll handling wins and the panel drag is interrupted.
+- Resolution: When a touch starts inside the existing 32px left-edge zone, claim the gesture immediately by temporarily changing only that surface's touch action to `none`, prevent scrolling after a small movement threshold, and keep the drag on the x axis without Framer's first-sample direction lock. Restore the caller's original touch action on pointer/touch end or cancellation. Touches outside the edge zone continue using the existing vertical scrolling behavior; button dimensions and content layout are unchanged.
+- Compatibility: The native iOS WebView suppression already owned by `SlideSurface` remains unchanged. No route, history, API, database, Prisma migration, mobile/API namespace, or translation behavior changes are required.
+- Verification: A WebKit fixture with a long scrollable surface confirmed `pan-y → none → pan-y` for an edge gesture. Targeted edge/history tests passed (16 tests), TypeScript no-emit and targeted ESLint passed, and `git diff --check` passed. A physical iOS device run is still required to confirm the exact reported diagonal gesture on WKWebView after the new WebView bundle is deployed.
+
+## 2026-09-12 - Preserve language-selector open intent on iOS
+
+- User report: The room header's language selector intermittently fails to appear until it is tapped several times on iOS. The user confirmed the tap target is large enough and that this behavior was not present previously. Keep the existing button dimensions, flag layout, and language-selection UI.
+- Reproduced failure: A WebKit touch-enabled browser fixture used the pre-fix room's actual open/close/popstate callbacks and the real LanguageSelector/SlideSurface. Delay the browser's back traversal by 350 ms, close the selector, and tap the header again 40 ms later. The second tap sets the selector open, but the earlier traversal subsequently sets it closed. Repeated trigger activation also alternates between opening and closing. The initial ordinary tap opened normally in this fixture; this does not establish that every physical-device report has the same cause.
+- Resolution: Extract selector navigation into a room-instance-owned controller and React hook. Opening is idempotent, closing updates local visibility immediately, and only one close traversal may be in flight. A new open during that traversal shows the selector immediately and adds exactly one fresh history entry after the old close completes. Another close, a hidden room, or a different URL cancels the reopen intent. Preserve Next.js and conversation-route state; do not use a timed iOS back/forward correction loop for this selector.
+- Isolation: Include the owning room instance in the selector history marker. Background/running rooms ignore another room's selector events, and their cleanup cannot erase its marker. The existing full-screen slide animation, language-option behavior, keyboard search, member-cache refresh, and native back-handler priorities are unchanged. This change does not enlarge the touch area, add a network dependency, or alter conversation language defaults.
+- Verification: The same WebKit fixture keeps the reopened selector visible at its final on-screen position after the delayed traversal, and repeated activation keeps it open with a single overlay entry. Twelve close/reopen cycles at 25/120/400 ms intervals, Escape, and browser back/forward also pass with room history preserved. Unit regression cases cover delayed close/reopen, duplicate close, the latest close winning, browser back/forward, room/route changes, background room isolation, menu cancellation, and owner-only cleanup. All 165 non-live test files / 1,536 tests pass, along with TypeScript no-emit and targeted ESLint. Physical iOS app testing has not been performed in this change; the fixture is WebKit automation, not a connected WKWebView session.
+- Delivery: WebView code only on `codex/messenger-tabs-device-test`. No production database writes, Prisma migration, mobile rebuild, store release, or mobile/API namespace change is required. After the web deployment completes, reopen the iOS app and verify a single tap as well as closing and immediately reopening the selector.
+
+## 2026-09-09 - Paginate crowded user search results
+
+- Surface: Explore/search tab user results on web, iOS WebView, and Android WebView.
+- Issue: User search returned only one server page of 20 users. When a query matched more users, the list silently ended after the first viewport-sized page, so users could not discover the remaining matches or tell whether more results existed.
+- Resolution: Add deterministic cursor pagination ordered by `updatedAt` and `id`, keeping the existing account, block, deactivated-user, and anonymous-user filters. The API returns at most 20 users plus an opaque `nextCursor`; malformed cursors are rejected before the database query. The client resets pagination for every new query, appends de-duplicated pages, and keeps the cursor in the scoped search cache and history snapshot.
+- Interaction: Keep the first result page visible while loading additional pages. Show a localized “Load more” action below the results and automatically request the next page when the sentinel approaches the scroll viewport. The button remains available as an explicit fallback, shows a loading state during the request, and exposes a retryable error without discarding already-loaded users. The control is hidden when the server reports the final page.
+- Compatibility: This is a Web/API change only. No Prisma migration, native code, mobile version, or API namespace change is required; existing versioned search routes re-export the shared handler.
+- Verification: Search-route tests cover the 20-user page boundary, cursor emission, and malformed-cursor rejection. Search-cache tests cover cursor persistence, pending-query clearing, namespace/account isolation, anonymous filtering, and stale snapshots. Targeted Vitest, TypeScript no-emit, targeted ESLint, and whitespace checks pass. Physical iOS/Android scrolling and real authenticated Devbox data remain manual follow-up checks.
+
+## 2026-09-08 - PR 217 delayed translation preview refresh
+
+- Issue: The conversation list reported a finalized utterance only once per ID. Translations arriving after source finalization, corrected final translations, and display-language changes updated the room bubble but left its list preview stale.
+- Resolution: Compare the latest reported message content as well as its ID. Publish same-message preview changes while preserving the original reported timestamp. Only a new message clears the interim preview or triggers read-state updates, so a late translation cannot erase the next live utterance's preview.
+- Verification: Regression coverage follows one finalized message through original text, delayed translation, final correction, duplicate updates, and display-language changes; it also checks a new message with identical text and stable timestamps for legacy messages without creation times. All 616 related conversation and bubble tests, full TypeScript checking, and ESLint for the changed components passed.
+- Deployment: No new Prisma migration, environment variable, native rebuild, mobile version change, or API namespace change is required. PR 216 and PR 217 use existing message content and language fields.
+
+## 2026-09-08 - Prepare the unified 2.0.3 store release
+
+- Integrated service-branch PR #215 before release. Retained timestamp-descendant scroll anchors and calendar-day dividers while preserving the Local-first branch's canonical speech-start ordering and message-ID tie breaker. Both branches' issue histories remain intact.
+- Set iOS marketing version/API namespace to 2.0.3 (build 105) and Android version/API namespace to 2.0.3 (version code 97). Extended Android 2.0.2/2.0.3 aliases and compatible pending-work namespaces to preserve installed 2.x server behavior and recover an upgrading user's queued work.
+- Production packages use the verified Railway production web/STT endpoints, production client configuration, release signing and disabled QA bridges. Production Vault currently lacks the public runtime URLs, so archive arguments explicitly provide the verified production endpoints without changing Vault secrets or using development tunnels.
+- Do not raise minimum/recommended/latest-version server policy before store availability. This release preparation does not add a Prisma migration or change those policies. Store submissions and server deployment must be verified independently from successful local builds.
+
+## 2026-09-08 - Stream counterpart speech before finalization
+
+- Surface: Shared conversation bubbles, the same mounted room's hidden list consumer, and conversation WebSocket delivery.
+- Report and cause: The recipient still waited until speech finalized, then fetched room history after an invalidation. Reserving speech-start order did not transmit partial text. Local development history requests also added seconds of DB/network latency; changing the tunnel alone could not remove the finalization gate.
+- Resolution: Coalesce each local turn's latest partial into bounded WebSocket updates (at most four frames/second per room hook, with one-second unchanged heartbeats). The receiver renders an ephemeral bubble immediately and replaces it by the committed message with the same client ID. Source and final translations travel in the committed payload without waiting for a room GET or optional title generation. Late source-only updates retain already received translations. Server-signed first-preview time also supplies the durable voice-order receipt. The existing HTTP reservation remains a fallback.
+- Safety: Read and write capabilities are separate, account/room scoped, refreshed every 20 seconds and expire after 30 seconds. Membership and write-block checks run when granting capabilities. Legacy tokens cannot opt themselves into content streaming. Sender ID and name come from signed server claims, not preview fields; frames, memory, sequence and backpressure are bounded. Commit tombstones reject late partial resurrection. Account/room/namespace changes isolate client state; temporary previews never enter localStorage or the durable outbox. Durable source/translation retry and reconnect hydration remain intact, with a visible-room recovery check at least once per minute even during uninterrupted preview traffic. Shared payload attribution checks membership at the persisted message timestamp, preserving historical solo/diarized messages after joins or departures.
+- Compatibility and limits: Legacy sockets and all conversation-list topics retain invalidations. Mid-speech previews cover an already subscribed room (including its mounted hidden consumer), not every unopened room in the list. Pending invitees still become members at the first persisted message and cannot receive its earlier partial. Offline recipients recover persisted messages after reconnect, not transient speech history. Partial text expires after 15 seconds without updates; finalized previews have a 120-second grace per received frame while durable persistence continues independently. Permission revocation has a maximum existing-capability lifetime of 30 seconds. STT/provider and network latency before partial text exists is not eliminated.
+- Verification: 159 web test files / 1,472 tests and 20 messaging tests pass. Web and messaging TypeScript checks and targeted web ESLint pass. Isolated real WebSocket clients verify reception before finalization, committed translations, legacy compatibility and room separation. Additional regressions cover expired/cross-account capabilities, spoofed identities, late-frame fences, offline coalescing, preview expiry, final-translation preservation, signed ordering and historical solo attribution. These tests do not use production conversations or substitute for physical microphone tests. Live provider tests require a separate configured harness and were not validated.
+- Deployment: No new environment variable, migration, native code or version change. Deploy both mingle-app and mingle-messaging; updating the web service alone cannot enable the new transport. The existing native apps can load the updated WebView. Device checks: reopen both apps, speak a long sentence and verify counterpart text appears before stopping; verify one bubble survives source/final translation delivery, ordering agrees on both devices, and reading older messages does not force-scroll to the bottom.
+- Local runtime verification: Restarted this worktree's Devbox with `secret/mingle/prod` and the named Cloudflare tunnel. Public web and messaging health endpoints returned 200. Two synthetic subscribers in a unique, otherwise unused room received a partial through the actual Cloudflare endpoint in 135 ms, followed by the synthetic committed translation payload. This checks transport only, not microphone recognition or DB persistence; it wrote no production messages and sent no audio.
+
+## 2026-09-08 - Keep native Stop intent stable through trailing events
+
+- Surface: Shared iOS/Android WebView STT controls and the React Native stop lifecycle bridge.
+- Resolution: Keep a bounded, account/API-namespace/conversation-scoped in-memory Stop intent shared by visible and hidden hooks. ACK, close, error, and the existing five-second fallback end the pending wait but do not clear the intent; a subsequent explicit native Start clears it. Ignore live status replay before session adoption while stopped and prevent trailing activity from reopening the control. Do not reuse a stopped cached session on restart.
+- Compatibility: Installed iOS shells can still emit an early synthetic stopped status. That status no longer completes the WebView stop wait or retires the pending identity. Actual ACK/close resolves it, with the existing timeout retaining a restart escape route. Parse messages before activity promotion: control ACKs, pong, and malformed messages are not recording activity. Final transcripts remain eligible for processing while stopped; partial transcripts do not reopen a completed turn.
+- Native correction: Emit stopping before calling the native stop API. Promise resolution means request acceptance, so preserve stopping until the real terminal event (or preserve a terminal state already delivered by Android). Stop acceptance no longer emits a synthetic stopped event or prematurely retires the native identity. Existing stale-session filtering remains; this change does not add generation metadata to Swift.
+- Verification: The complete web suite passed 158 files / 1,464 tests, followed by a four-test focused lifecycle suite including an additional timeout regression. All 13 RN suites / 68 tests and both TypeScript checks passed. Targeted web ESLint passed. RN ESLint could not initialize because the RN ESLint 8 runner loaded a parent ESLint 9 rule implementation; no lint success is claimed for RN. Jest reported a post-suite open-handle warning. The lifecycle regression exercises ordered early stopped/running/final/ACK/closed/stale-ready events through the production guards and shared registry; it is not a real microphone or mounted-device integration test.
+- Deployment and limits: No DB migration, environment variable, or API/app version change is introduced. The WebView protection supports currently installed shells after the updated page loads. The RN correction requires a rebuilt installed app bundle and was not installed in this change. Stop intent is in-memory, not durable across a full WebView process reload. Device voice testing remains with the user: verify Stop stays on Start, last words persist, and an intentional subsequent Start records normally, including room/list transitions.
+
+## 2026-09-08 - Diagnose recurring iOS Stop/Start control flicker
+
+- Observation: Pressing Stop briefly shows Start, then Stop again, then Start, particularly on iOS. This investigation reads current source/history only; it does not establish physical microphone restart or measure the reported 100-ms transitions on a device.
+- Existing protection remains: The May 25 stop-pending status/activity guards from `1908e2de` are still present. Recent voice-order/translation/entry changes did not remove them.
+- Lifecycle mismatch: iOS NativeSTTModule.stop calls beginGracefulStop and immediately resolves the native promise while its socket remains alive for trailing transcripts/stop_recording_ack. React Native handleNativeStop treats that promise resolution as completion and emits stopped with stopping:false. The WebView's idle-status handler clears nativeStopRequested and resolves the pending stop; the awaiting stop routine then clears isStopping. These protections are therefore gone before native cleanup necessarily finishes.
+- Re-entry path: iOS emits raw messages with conversation ID but no session-generation ID/event sequence. Once the early stopped event clears the active identity, these untagged trailing messages are not rejected by the retired-session filter. The WebView promotes idle to ready for any accepted native message BEFORE inspecting whether it is merely stop_recording_ack. Swift itself emits that ack message before calling finishGracefulStop/close, so even an acknowledgement can create the observed ready/idle flash. No new Start command or microphone restart is required for this UI transition.
+- Historical interaction: The explicit RN stopped notification was added in `1efd5d1e` (conversation-scoped native sessions), and later restart/handoff work (`91a6e9f3`, `b367ae93`) added/refined idle-driven stop completion. Android has session IDs, status sequences, and explicit stopping metadata that reduce exposure; the shared acknowledgement/promotion logic still deserves regression coverage there.
+- Proposed correction: Distinguish stop request acceptance from actual capture/transport termination; preserve stop intent until a genuine terminal lifecycle event. Parse control messages before promoting activity and never let stop acknowledgements promote ready. Identify retired generations end-to-end and allow final transcript persistence without reopening the UI. Add an ordered integration regression covering tap, early native promise completion, trailing final text/ack, close, and an intentional subsequent Start, rather than testing only guards with isStopping=true.
+- Scope: Diagnosis recorded only; no product/native code, installation, configuration, or production data changes were made.
+
+## 2026-09-08 - Remove the translation waiting label
+
+- User request: Remove the visible translation-pending/original-fallback explanatory text from message bubbles.
+- Resolution: Remove the label and its unused localized copy. Preserve original-text fallback, the existing interim indicator, translation retries, and automatic preferred-language selection when translations arrive.
+- Verification: Rendering regressions cover both pending and retrying states, asserting that the original remains visible without the waiting label. No native rebuild, schema migration, or runtime configuration change is required.
+
+## 2026-09-08 - Preserve voice start order, follow arriving translations, and anchor only on entry
+
+- Voice order: On a new local pending voice turn with recognized text, request an authenticated, account/session/message-scoped server start receipt through the existing client-event handler. The server checks current room membership/block eligibility, timestamps receipt at request entry, and signs it with a domain-separated HMAC using the existing messaging secret. Finalization verifies signature, scope, non-future timestamp, and 30-day expiry, then stores the verified start time in message metadata. Shared-room canonical display ordering uses that time plus the DB message ID. Database creation time, unread calculations, membership attribution, and pagination cursors remain based on persistence time; no empty draft messages are inserted.
+- Reservation lifecycle: Deduplicate per owner/API/session/message, bound the in-memory cache to 200 entries with 30-minute expiry, abort the request after 3.5 seconds, and wait at most 200 additional milliseconds for an in-flight receipt when finalizing short speech. Persist the receipt into the durable message journal before source transmission and reuse it for translation updates and retries. Missing/failed/expired reservations, unavailable signing configuration, final-only STT events, and offline starts fall back to persistence order rather than trusting a device timestamp or withholding the message. This reserves order; it does not stream another member's unfinished speech. Existing messages are not backfilled. History pages still represent persistence windows and are merged into display order on the client.
+- Translation display: Replace the mount-time automatic language snapshot with a derived choice that follows available languages and the viewer's preferences. Keep only explicit per-message language choices in state. A counterpart source-only snapshot can initially show the original and then switch to the preferred translation when it arrives; a manual original-language choice is not overwritten. Move translation-update realtime publication ahead of optional AI title generation. This fixes the confirmed display path and a publication delay, not a guarantee against external translation-provider failure.
+- Entry scrolling: Remove the initial server-response gate for cached transcripts. After local hydration and viewport mount, anchor to the latest message synchronously in a layout effect, before the transcript's visible paint, once per visible room entry. Reset the entry anchor only on leaving/changing the room. Cold rooms wait for the first message snapshot before anchoring. Remove the 180-ms/120-ms forced-follow timers and repeated entry animation-frame jumps.
+- Reading protection: After the entry anchor, keep the existing 100-pixel near-bottom new-message policy and older-history prepend anchoring unchanged. Neither a new server snapshot nor translation arrival resets the entry flag. Reading above the near-bottom range must not be overridden by the removed entry-follow timer.
+- Verification: Added signed-receipt tampering/scope/expiry/configuration tests, permission-denied reservation tests, no-placeholder/no-backdated-creation assertions, scoped reservation deduplication and timeout tests, durable receipt checkpoint/source/translation propagation, long-voice-versus-earlier-persisted-reply ordering, automatic/manual language reconciliation, and one-shot cached/cold entry regressions alongside the existing near-bottom tests. Full non-live suite: 157 files / 1,460 tests; TypeScript and targeted ESLint passed. The local Cloudflare web endpoint and installed iOS namespace are reachable; an unauthenticated room probe returns 401 as expected. No physical-device or microphone test was performed in this change.
+- Delivery: Web/server changes only on the client-SOT branch. No Prisma migration, new environment variable, native rebuild, installation, service-branch merge, or production deployment. Existing `MINGLE_REALTIME_SECRET` enables start receipts; absence gracefully retains persistence ordering. Reopen both test apps to load the new WebView and verify long voice/reply ordering, counterpart translation arrival/manual language override, immediate bottom entry, and preservation of an intentionally scrolled-up viewport.
+
+## 2026-09-08 - Diagnose long-turn positioning, counterpart translation display, and bottom entry
+
+- User observations: A long voice turn starts its local bubble much earlier than its eventual finalized message insertion, counterpart messages appear as original text without translation, and room entry shows older messages instead of opening directly at the bottom. This entry records diagnosis and proposed work, not implemented fixes or new physical-device tests.
+- Long-turn limitation: The shared timestamp/ID ordering fix makes acknowledged messages converge but uses database insertion time after finalization. It therefore cannot preserve a long utterance's starting position. The recommended protocol reserves a stable message identity and server-authoritative ordering position when a shared utterance starts (or its first recognized fragment arrives), then updates that same message on finalization/translation. Do not substitute unvalidated local device timestamps for global order. Define offline provisional behavior and cancellation/recovery before implementing a reservation protocol; transient drafting indicators are distinct from publishing partial speech content.
+- Translation display defect: Source-first hydration derives targetLanguages only from persisted final translations. A newly mounted source-only ChatBubble therefore initializes its displayLanguage to the original. Later translation hydration adds available languages, but the component has no reconciliation effect for that automatic initial selection; setDisplayLanguage is only called by user interactions after initialization. The fix should follow the viewer's preferred language as translations arrive unless the user explicitly selected a language. This establishes a display failure path, not proof that every reported translation reached the database/device. Separately, durable delivery waits for source acknowledgement before uploading translation results, and translation-update handling awaits automatic title generation before realtime publication; both can add delivery delay. Recent finalize HTTP 200 logs alone do not prove complete translation delivery for the affected message.
+- Bottom-entry defect: LivePhoneDemo still returns a full loading frame while initial server hydration is pending, even with locally cached messages. The chat scroll element is absent then. Initial-bottom effects can run while its ref is null and do not directly depend on the server-pending gate opening. Subsequent timer-based height correction starts at 180 ms and repeats every 120 ms; cached data being available does not by itself guarantee a bottom-aligned first visible frame.
+- Proposed entry behavior: Render cached room content without waiting for unrelated server notices, anchor the mounted chat viewport to the bottom before its first visible paint, and preserve that anchor through initial layout changes without smooth scrolling. Stop automatic following on intentional upward scrolling; preserve older-history prepend position. Keep permission/revocation checks server-authoritative and scope cached notices to the correct room/account. A no-cache first visit still requires fetching messages, but should reveal the resulting transcript already at the bottom.
+- Verification scope: Read current source and existing local Devbox request logs only. No product code, native installation, production data, or runtime configuration was changed for this diagnosis.
+
+## 2026-09-08 - Converge shared-message order and reduce hydration round trips
+
+- Surfaces: Shared-room messages on iOS/Android, persisted local message caches, history pagination, and realtime-triggered room hydration.
+- Ordering fix: Add optional `serverCreatedAtMs` and `serverMessageId` to shared-message hydration. Reconcile these fields into already-cached utterances and use the same timestamp/ID comparator in store insertion, merged display messages, and the final room timeline. Each sender retains its original capture timestamp for existing display/draft behavior, but acknowledged shared messages no longer use a mixture of local capture time and counterpart persistence time as their ordering authority. Equal database timestamps resolve by database message ID, matching history pagination. Pending messages remain immediately visible with provisional local ordering until acknowledged; this does not claim a global order for unsent messages.
+- Scope/compatibility: Emit canonical fields for currently shared rooms or messages marked shared at creation. Keep solo speech capture ordering, existing source text/translation reconciliation, the existing database cursor, membership authorization, block filtering, usage values, total message count, invitation notices, and member profiles. Optional response fields do not require an API namespace or native version change.
+- Latency fix: Replace the sequential transaction of independent hydration reads with concurrent reads and start member/pending-invite profile reads in the same group. Do not remove aggregate values from push refreshes. An experimental reduced response path skipped usage/count reads but did not materially improve warm latency and could leave counters stale; it was removed before commit. Realtime delivery still invalidates and fetches a full authorized room snapshot, rather than transporting message content or introducing a new delta protocol.
+- Read-only performance verification: Alternated the previous committed hydration helper and the updated helper against the same production test room via the prod Vault database URL. Baseline durations were 3622, 2625, and 2614 ms; updated durations were 2384, 1653, and 1640 ms. Both returned 55 messages with a total count of 55. The last two warm samples averaged 2619.5 versus 1646.5 ms, approximately 37% lower. These are local-to-production hydration-function timings, not phone send-to-display latency or production-server benchmarks. Initial connection/pool setup affected the first pair. No database rows were modified; temporary probes were removed.
+- Regression verification: All 155 non-live test files / 1,450 tests passed, along with TypeScript. New tests cover opposite sender caches, repeated snapshots without state churn, cache serialization/reload, identical timestamps with deterministic ID ties, reversed legacy caches, older-page arrival, device clock skew, malformed cached timestamps, retained aggregate reads, and membership denial before message reads. Targeted ESLint and whitespace validation were also run.
+- Local delivery: The existing prod-Vault Devbox web server and Cloudflare tunnel are reachable. Both installed mobile API namespace routes compile and reject unauthenticated probes with 401 as expected. These checks do not substitute for a new physical-device authenticated end-to-end run; no voice test was performed.
+- Deployment: Commit only on `codex/messenger-client-sot-2.0.1`. No service-branch update, production deployment, new secret, Prisma migration, native rebuild, or reinstall is needed for this change. Reopen both test apps to load the updated WebView, then compare message order after acknowledgments, re-entry, and history loading. Remaining local network/persistence delay is not eliminated by this optimization.
+
+## 2026-09-08 - Diagnose cross-device message latency and divergent ordering
+
+- User observation: In a shared room between the connected iOS 18.6 and Android phones, counterpart messages appear several seconds late and the two phones show different message orders. Diagnosis performed against client-SOT commit `9937c3cf` and the running prod-Vault Devbox; no product fix or device automation was performed for this investigation.
+- Ordering cause: `mergeServerHydrationUtteranceIntoStoreState` keeps an existing local `createdAtMs` indefinitely. New remote utterances receive `AppMessage.createdAt` from server hydration. The timeline sorts by these mixed timestamps. Each sender therefore retains its own capture time and sees the other sender's later persistence time. The same preservation logic also exists in `codex/messenger-tabs-device-test` at `4e8df995`.
+- Reproduction: A temporary Vitest fixture invoked the actual merge helper with synchronized clocks, A locally created at T, B at T+500 ms, and an identical server snapshot placing A at T+2000 ms and B at T+2500 ms. A's store resolved to A,B; B's store resolved to B,A and remained different after three identical hydration passes. The diagnosis test passed and was removed afterward to avoid enshrining incorrect behavior as a desired contract. This demonstrates the code defect, not extraction of the phones' exact displayed message pair.
+- Latency evidence: The current Devbox log repeatedly shows shared-room GET requests around 3.1–4.8 seconds, with compilation generally only a few milliseconds. Some client-event POSTs take 6–10 seconds, but those also include work after realtime publication, so their total duration is not a direct send-to-display measurement. A separate read-only Prisma connection using the prod Vault DATABASE_URL measured SELECT 1 at 1228 ms initially, then 453, 593, 363, and 448 ms. No production rows were changed by the diagnostic probe.
+- Delivery path: Source persistence and membership resolution precede realtime publication. The realtime event contains invalidation keys, not message content. The receiver then fetches full room hydration (identity/membership, messages, usage, counts, invites, and member profiles). Ongoing hydration coalesces pushes into a subsequent fetch. Remote database round trips amplify this path in the local environment; the exact production latency and the precise contribution of Cloudflare were not measured.
+- Proposed correction: Keep local-first pending display, but assign acknowledged shared-room messages a common canonical order with a deterministic ID tie-breaker. Separate display/capture time from canonical ordering and pagination identity; reconcile already-cached records on hydration, while preserving live-draft stability. For latency, measure persistence-to-publish and push-to-apply, reduce sequential DB work, and introduce an authorized message-delta or lightweight refresh path instead of fetching the full room for every message. Preserve current access revocation checks and compatibility with installed clients.
+
+## 2026-09-07 - Reduce pending-write retry and synchronous storage overhead
+
+- Surfaces: Offline conversation settings and durable message recovery, particularly WebView main-thread work on iOS.
+- Queue issue: A transient room failure ended the current flush, deferring unrelated rooms. Existing later flushes already skipped backoff-blocked rooms; this was not an indefinite global queue lock. Repeated failures could still retry every minute throughout the 30-day retention window.
+- Queue resolution: Preserve ordering within each failed room while continuing other rooms in the bounded 50-request batch. Stop the batch on network, authentication, or rate-limit failure. After ten failures, retain the pending edit with a 15-minute retry interval that focus/forced flushes cannot bypass. A newly coalesced user edit resets the interval. Keep automatic recovery and the existing retention policy rather than silently dropping edits at an attempt limit. A dependent edit within the same room still waits for its predecessor.
+- Storage resolution: Coalesce replay-safe source-delivery checkpoints over 50 ms; immediate persistence cancels any pending checkpoint timer. Flush pending checkpoints when the last owner consumer releases. Original message intent, translation results, deletion, and ownership transitions remain synchronous. Skip warm-cache writes when the serialized content is unchanged, including repeated retry notifications. A WebView termination before a checkpoint may replay an acknowledged source using its existing idempotent client message ID.
+- Verification: All 154 non-live test files / 1,445 tests passed, including six new regressions covering independent rooms, offline request fan-out, cooldown reload/recovery, new edits, checkpoint batching, and unchanged retry caches. TypeScript and targeted ESLint passed. The broad test invocation also attempted five live API tests, which failed because no server was listening on localhost:3000; eight live files were skipped. No physical-device performance or voice test was performed.
+- Limits: This reduces selected redundant synchronous writes; it does not replace localStorage, add a storage quota policy, or establish measured iOS frame-time improvement. Pending source intent is not evicted to satisfy a new count limit.
+- Deployment: Web code only; no new server environment variables, Prisma migration, native rebuild, or version/API namespace change.
+
+## 2026-09-05 - Preserve installed-client behavior while integrating service updates
+
+- **Scope:** Merge service commit `4e8df995` from `codex/messenger-tabs-device-test` into `codex/messenger-client-sot-2.0.1`, whose prior tip was `2fc127eb`. The service branch is not a merge destination.
+- **Compatibility issue:** The incoming shared WebView showed the Picture in Picture button on every native iOS runtime. Installed iOS 2.0.0 and 2.0.1 shells do not implement its native commands, so users could press an inert button after a server-only deployment. This was established from the native bridge and WebView code, not by reinstalling old production binaries.
+- **Resolution:** Gate PiP availability, event effects, and the start callback on an iOS API namespace of at least 2.0.2. Preserve PiP for the 2.0.2 native release and already-installed 2.0.3 beta. Ordinary conversation, preference, translation, navigation, and recovery behavior does not require PiP. Both native-runtime detection and the installed namespace must qualify; Android and browser-only runtimes remain excluded.
+- **Existing clients:** Keep iOS 2.0.0/2.0.1/2.0.2 and Android 2.0.0/2.0.1 API contracts, plus the iOS 2.0.3 beta alias. The installed shell's URL namespace takes priority over the server build's default. Existing authenticated sessions retain their user ID; no existing users are merged or bulk-reassigned. An old finalized-message payload without `translationPending` or `translationUpdate` still persists the original and translations, refreshes realtime subscribers, and sends its normal single push. New recoverable two-stage delivery remains supported alongside it.
+- **Merge preservation:** Retain both complete UI/UX history blocks, all incoming native PiP/STT coordination and dashboard platform-cache changes, and the local-first account writer, conversation mutation queue, cached profiles, durable message finalization, account-owner cancellation, and QA debugging safeguards. The overlapping room and event-handler changes were reviewed against both parents, including the removal of console-only hydration diagnostics while retaining their persisted events.
+- **Device-tooling conflict:** Combine exact physical-UDID-to-CoreDevice lookup with generic builds for explicitly selected phones. Auto-selected build destinations must resolve that same physical phone, not an independent first connected device, and keep Xcode's `id=` destination syntax. A stale device list may fall back only to the selected hardware UDID. Verify reachability before uninstalling, building, or installing; an unreachable target never redirects installation to another phone.
+- **Verification:** 154 web unit/contract files with 1,416 passing tests; 13 React Native suites with 67 passing tests; 6 app script tests; 23 Devbox/tunnel parser tests. Web and native TypeScript no-emit checks, targeted web ESLint, shell syntax, Swift parsing, and Xcode project syntax also passed. The native test runner emitted an open-handle warning after all tests passed and then exited successfully. See `docs/qa/pr-211-service-integration-2026-09-05.md` for the compatibility matrix and evidence boundaries.
+- **Data and release boundaries:** Incorporate the service branch's existing dashboard-platform migration and regenerate only the local Prisma client. The user reports the migration is already applied; do not rerun it against production. No new migration, server environment variable, mandatory native bridge, production deployment, phone reinstall, or voice test is introduced by this integration fix.
+
+## 2026-09-05 - Stop queued message recovery when account ownership ends
+
+- **Surface:** The durable original-message/translation recovery queue used by conversation lists and rooms in PR 211.
+- **Issue:** Review found that releasing the last account consumer aborted only currently active requests. Each two-worker flush still held a snapshot of up to 20 pending jobs and could start its next job after logout/account-switch cleanup. A delayed replacement delivery could also restart after cancellation. In a deterministic three-message reproduction, requests for messages one and two were canceled but message three still started. This was reproduced with mocked fetches, not by changing a production user's account.
+- **Cause:** The flush and deferred-delivery continuations had no account-lifecycle token, and direct delivery did not require a retained account consumer. Flush cleanup unconditionally removed the shared flush slot, potentially interfering with a newly mounted same-account recovery run. Repeated cleanup could decrement another consumer's reference count.
+- **Resolution:** Require an active account/API-namespace owner for all delivery entry points. Capture the owner instance and cancellation generation for every run; check them before starting each queued message, before each request, and before applying asynchronous results or removing the journal record. Cancellation invalidates the entire generation and detaches its flush before aborting active requests. Tracking-to-account adoption cancels the source batch before moving its jobs. Cleanup releases each consumer only once, and an old flush can remove only its own shared slot.
+- **Recovery behavior:** Cancellation preserves unsent originals, translation intent, and acknowledged stages. Retaining the original account again can immediately resume them without joining the canceled flush or reviving its callbacks. Closing a room while a same-account list remains mounted keeps recovery alive. Other retained accounts and API namespaces are not canceled.
+- **Verification:** Eight newly added reproduction checks failed against the old implementation and passed after the change. Eleven additional regression cases now cover queued source-only/translated messages, inactive-owner entry points, account return, independent account/API scopes, explicit cancellation, immediate remount, repeated cleanup, deferred replacement, and tracking adoption. The final run passed 151 unit-test files / 1,342 tests and 6 script tests, plus TypeScript no-emit checking, targeted ESLint, and diff whitespace checks. See `docs/qa/pr-211-message-recovery-2026-09-05.md` for the separate device-test boundaries.
+- **Boundaries:** This change prevents new client requests and late client-state updates after owner release/cancellation; it cannot undo a request already accepted by the server. No actual logout/account-switch device test, voice input, production DB write, native rebuild, API namespace/version change, migration, or service-branch modification was performed for this follow-up.
+
+## 2026-09-05 - Recover interrupted message delivery and translation
+
+- **Surface:** Finalized text/utterance persistence, collapsed translated bubbles, cold-start conversation lists, and optimistic room removal in PR 211.
+- **Issues addressed:** The two device-QA failures below allowed an unresolved translation to strand a local message, and an offline translation failure to remain untranslated after the original eventually reached the server.
+- **Resolution:** Write the complete original, stable message/session identity, and translation request into one synchronous local journal before clearing the text composer. Deliver the original and request translation independently; persist each completion separately. The same server message is enriched only after source acknowledgement, and the job is removed only after the final acknowledgement. Failed or malformed responses retain the job with bounded retries and request/body timeouts. Stored successful translations are reused after an acknowledgement failure rather than requesting AI again.
+- **Restart and ownership:** Resume from either the conversation list or a room on mount, reconnect, visibility restoration, and periodic retry. Scope recovery by account and API namespace. Multiple mounted rooms/list consumers share ownership; closing one room does not cancel another room's work, but removing the last account consumer aborts old-account requests. Tracking-to-account adoption retains the completed stages.
+- **Presentation:** A selected translation with no text shows the original and a localized pending label instead of an empty bubble. Late source-only server snapshots preserve already-completed local translations. Foreground translation rendering/playback scheduling does not wait for the following persistence request; background recovery does not autoplay historical speech.
+- **Removal safety:** Pending removal pauses delivery. An optimistic room clear preserves the journal until server acknowledgement, so rejected removal can restore both the room and its unsent message. Confirmed removal discards the job; explicit history clearing also discards it. This is separate from hiding/removing the room's warm cache.
+- **Server behavior:** Initial source delivery does not wait for title-generation AI. Translation enrichment still updates message content, tracked DB metadata, and realtime subscribers, but does not emit a second push notification or another message-sent analytics event.
+- **Verification:** Automated journal, UI callback, bubble, server, and hydration regression tests; iOS 18.6 and Android text recovery tests using the existing authenticated apps. Voice recording/TTS device testing remains with the user. See `docs/qa/pr-211-message-recovery-2026-09-05.md`.
+- **Boundaries:** This is a recoverable finalization queue, not an offline translation model or a full-history database migration. The journal uses browser storage with a 30-day recovery window; browser storage unavailability, explicit app-data clearing, and uninstalling before synchronization remain durability limits. It does not infer ownership and resend arbitrary pre-existing orphaned cache entries. No native rebuild, API namespace change, Prisma migration, production deployment, or service-branch mutation is included.
+
+## 2026-09-05 - Device QA exposes translation/delivery recovery gaps
+
+- **Scope:** Non-voice PR 211 verification on iPhone 11 Pro / iOS 18.6 and Galaxy S9 / Android 10, using Devbox, Cloudflare, and the production Vault environment. Temporary solo rooms isolated test writes. No service-branch modification.
+- **P1, interrupted translation:** Holding `/translate/finalize` unresolved, sending text, then terminating/relaunching the app leaves three local messages but only two server messages and an empty outbox on both devices. The interrupted message's original text survives in the bounded cache, but its translated-language bubble is blank and no delivery job is reconstructed. The outbox insertion currently occurs after translation resolves, leaving a durability gap before that point.
+- **P2, offline translation failure:** Rejecting API calls and sending text produces a durable original-message job. Reconnect delivers the original exactly once, but the server retains `unknown` source language and no translations. The outbox retries event persistence, not translation, and there is no durable translation recovery state.
+- **Recommended resolution:** Persist original-message delivery intent before the translation request, use stable idempotent message IDs, queue translation separately, resume both on restart, and show original text with an explicit pending/retry state whenever a translation is unavailable. These findings are documented, not fixed in this testing task.
+- **Passed paths:** Warm list/room display, language/slider stability under failed API calls, account preference propagation between rooms, queued rename/read preservation, rejected-rename rollback, pending-edit/delete ordering, draft/title restoration after process restart, cached avatar presentation, and native back navigation. Android older-history pagination reached 142 messages while its local cache remained capped at 100.
+- **Limitations:** Physical offline networking, voice paths, same-account concurrent devices, account switching, and full-history storage were not certified. One warmed iOS edge-swipe sample avoided hydration reentry; a process-restored room's return path performed a separate document navigation and is not a general flicker-free guarantee.
+- **Detailed report:** `docs/qa/pr-211-device-local-first-2026-09-05.md` includes evidence, ownership boundaries, scenario results, and cleanup scope.
+
+## 2026-09-05 - Preserve explicit iOS installation targets in Devbox
+
+- **Surface:** USB device build/install workflow with multiple iPhones connected.
+- **Issue:** `run_ios_mobile_install` honored `--ios-udid` for Xcode compilation but independently selected the first CoreDevice for uninstall/install/launch. This could overwrite an unrelated phone even when an explicit target was provided; the issue occurred during the local test setup.
+- **Resolution:** Use the same selected hardware UDID for every device operation. `devicectl` accepts that UDID directly, so there is no need for an independent first-device lookup. Verify the requested phone's model/OS before installation; do not reinstall or restore an unintended phone without the user's direction.
+- **Regression coverage:** Execute the installation function with mocked Xcode/device commands and an intentionally different auto-detected phone. Assert both normal and clean-install workflows use the explicit target for build, uninstall, install, and launch.
+- **Data and release impact:** Developer tooling only; no app/API version or database change.
+
+## 2026-09-05 - Resolve PR 211 local-first synchronization races
+
+- **Scope:** Changes are confined to `codex/messenger-client-sot-2.0.1`, reviewed against `codex/messenger-tabs-device-test`. The service branch is not modified.
+- **Account settings:** A background STT room and a visible room previously had independent full-snapshot PATCH/retry loops. An old room's retry could overwrite a newer successful text-size, silence-slider, model, or banner setting. Use one account/API-namespace-scoped writer and merge only fields changed by the user into the latest shared cache. Mounted rooms subscribe to preference updates; retries consume shared intent rather than a stale room ref. Slow server GETs cannot overwrite a newer edit, including one that was already acknowledged while the GET was in flight. Keyboard focus/composer visibility remain room-local.
+- **False pending settings:** The old 200ms room-local cache timer could run after PATCH success and mark a saved value pending again. Remove that timer; persist actual edits immediately, and acknowledge only the exact shared revision sent. A no-op from a stale room does not create a new pending write. This also preserves edits when a room unmounts immediately after interaction.
+- **Display language:** Patch normalization incorrectly inserted `defaultDisplayLanguage: undefined` into unrelated mutations. Reading a room, renaming it, or changing recording status could clear its visible display language until the next server refresh. Preserve omitted fields while still allowing an explicit `null` reset, both in memory and after restoring the queue from storage.
+- **Language selection:** The selected-language handler still sent a direct PATCH while speech/link/display settings used the durable queue. Late responses could undo subsequent edits. Route selected-language edits and the user's default languages through the queue; preserve per-member attribution and the full room union, including unions larger than one member's five-language limit. Coalesced changes retain the original rollback snapshot but take their latest user-action position relative to other setting kinds.
+- **Removal and retries:** A transient failure could be overtaken by deletion, leaving title/settings writes retrying 404 responses against a removed room. Preserve ordering within a room during backoff. Pending deletion supersedes room edits; confirmed deletion (including already-absent 404) discards them, while rejected deletion retains them. Other rooms can still progress during one room's backoff.
+- **Regression coverage:** Exercise account-scoped concurrent writers, stale-room retries, stale GETs, persistence/reload after acknowledgment, account isolation/subscriber cleanup, display-language preservation, explicit resets, coalesced language/link ordering, full shared-language unions, deletion success/404/rejection, and the actual conversation-list selection callback's queue wiring.
+- **Manual follow-up:** Keep STT running in room A, open room B, change settings with an interrupted connection, reconnect, and re-enter both rooms. Also check rapid language/link changes, read/rename without changing display language, and offline rename followed by deletion. No production DB or device actions are part of this fix.
+- **Data and release impact:** No Prisma migration, native-code change, mobile version change, or API namespace change is required.
+
+## 2026-09-05 - Cache platform-filtered dashboard metrics
+
+- **Surface:** Service dashboard OS filters, daily charts, cumulative charts, metrics table, and cache refresh action.
+- **Issue:** The newly added Android/iOS filters bypassed the daily cache because the cache key had no OS dimension. Every filtered request therefore recalculated the entire selected date range, making the dashboard slow even when historical data was already cached.
+- **Resolution:** Extend the daily cache key from `day` to `day + platform`, preserving existing rows as the `all` platform. All three views now follow the same policy: always calculate today and yesterday, load existing historical rows, and calculate only historical dates whose selected-platform cache row is missing. Missing dates are grouped into contiguous ranges so unrelated cached dates are not recalculated. The refresh action clears only the selected platform's historical rows.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** Add a Prisma migration for the composite daily-metric key and platform index. No API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify repeated requests for each platform recalculate only today and yesterday, a first request fills missing historical rows, existing rows are reused, `전체` does not mix with Android/iOS rows, the cache refresh action is scoped to the selected platform, and invalid `platform` query values still fall back to `전체`.
+
+## 2026-09-04 - Normalize language flags in iOS Picture in Picture
+
+- **Surface:** The language badge rendered beside every original or translated row in the native iOS Picture in Picture conversation preview.
+- **Issue:** PiP used a small native-only switch over raw language strings. Regional BCP-47 tags such as `en-US`, `ko-KR`, `ja-JP`, and `fr-FR` did not match its base-language entries and therefore appeared as the generic globe despite having a valid flag in the normal conversation UI.
+- **Resolution:** Port the normal conversation UI's language canonicalization rules and complete STT flag catalog to the PiP renderer. The native preview now normalizes separators, aliases (`fil`, `iw`, `nb`, `zh-Hant`, and similar tags), partial script/region tags, and base-language fallbacks before choosing a flag. Unsupported or missing language data still uses the globe intentionally.
+- **Cross-surface diagnosis:** The ordinary WebView conversation screen already uses the shared `canonicalizeTranslationLanguageCode` and `getSttLanguageFlag` path, which resolves the regional tags above. Its globe is therefore not this PiP mapping bug; it represents missing or unsupported source-language values such as `unknown` arriving during an interim/fallback STT path or from an older hydrated message. Capture an affected language value before changing that intentional fallback behavior.
+- **Interaction:** PiP continues to be read-only. Flags match the normal conversation catalog while the compact native preview keeps its single-emoji presentation.
+- **Data change:** Re-version the current iOS release to `2.0.2` and its required namespace to `ios/v2.0.2`. The server rewrites that namespace to the existing `ios/v2.0.0` contract and retains `ios/v2.0.3` only for already-installed beta device builds. No Prisma migration is required.
+- **Testing notes:** Verify PiP rows for `en-US`, `ko-KR`, `ja-JP`, `fr-FR`, `zh-Hant`, `fil-PH`, and an unsupported value. Confirm the first six show their catalog flags and the unsupported value remains a globe. Verify the native app and WebView both use `ios/v2.0.2`.
+
+## 2026-09-04 - Preserve iOS STT when closing Picture in Picture
+
+- **Surface:** The iOS system Picture in Picture close action for a live conversation preview.
+- **Issue:** The PiP playback delegate could send `setPlaying(false)` while the user dismissed the PiP window with its system close action. The app treated every false value as an explicit pause and force-stopped native STT, even though closing the read-only preview should leave the room's live recognition session intact.
+- **Resolution:** Track the native PiP stopping lifecycle and defer a false playback-control event briefly. If `willStopPictureInPicture` or the completed stop lifecycle arrives, cancel the deferred pause event; only a PiP window that remains active after that confirmation interval forwards pause to STT. Keep play events immediate, and reset the guard for a newly started controller.
+- **Interaction:** The PiP play/pause control still starts and gracefully stops STT. The system X close action dismisses only the PiP preview; the microphone, transcript stream, and conversation continue running. The preview remains read-only and non-scrollable.
+- **Data contract:** No Prisma migration, mobile version, API namespace, or server change is required.
+- **Testing notes:** On a physical iOS device, start STT, open PiP, then close it with X while continuing to speak. Confirm transcripts continue. Separately press PiP pause and confirm graceful STT stop, then press play and confirm a new STT session starts.
+
+## 2026-09-03 - Connect iOS PiP playback controls to the STT lifecycle
+
+- **Surface:** The iOS system Picture in Picture controls for the live conversation preview.
+- **Issue:** PiP exposed play and pause controls even though the preview was a live snapshot stream, so pressing them did not affect the room's microphone session and could leave the control state misleading.
+- **Diagnosis:** The native sample-buffer playback delegate intentionally treated the preview as always playing. The WebView had no lifecycle event channel for native PiP callbacks and could not route a system playback request through the existing STT start/stop pipeline.
+- **Resolution:** Use the native playback delegate to emit scoped `started`, `stopped`, `failed`, and `playback_control` events through React Native. Forward the latest event into the WebView with a cached replay path for WebView reloads. Route PiP pause to the existing graceful STT stop (including pending-turn finalization) and PiP play to the existing STT start flow. Sync the native PiP playback state after successful starts, graceful stops, microphone permission failures, transport/audio errors, and other STT state changes.
+- **Interaction:** Pausing PiP stops recognition gracefully while leaving the last preview frame visible. Playing PiP starts a new STT session; it does not resume a partially captured audio buffer. The PiP window stays open and remains read-only/non-scrollable. Stale native callbacks and queued playback requests are ignored when the controller or conversation has changed.
+- **Data change:** None. No API, database, migration, or version change is required; the iOS app remains version `2.0.2` with namespace `ios/v2.0.2`.
+- **Testing notes:** Verify play/pause from PiP on a physical iOS 26 device with an idle room, an active STT session, an in-progress utterance, a denied microphone permission, and an audio/transport failure. Confirm the last frame remains after pause, a new session starts after play, and a stale callback cannot affect a replacement PiP controller.
+
+## 2026-09-03 - Keep iOS PiP text size stable and show live utterance progress
+
+- **Surface:** The native iOS Picture in Picture preview during a long in-progress speech turn.
+- **Issue:** The preview changed font size as the number and height of bubbles changed, which made the reading scale unstable. An interim translation also added a trailing `...` or showed only a placeholder while the live utterance continued, even though the current source text was already available.
+- **Diagnosis:** The native packer used font reduction as its first response to a growing bubble stack. Interim translation markers were appended to any non-empty partial translation, and a missing target translation in collapsed mode had no useful live-text fallback.
+- **Resolution:** Use a fixed 42pt preview font for the normal layout. Re-evaluate recent suffixes at that size and drop the oldest bubble before changing text size; only one unusually long latest bubble may use an emergency smaller floor to avoid clipping. Render non-empty interim text exactly as received, and fall back to the growing original text in collapsed mode until a target translation has content. Keep that fallback in the bridge payload as well, so the native layer never receives a placeholder for an available live source.
+- **Interaction:** The latest in-progress message remains visible and updates without waiting for finalization. Expanded mode continues to expose an empty pending translation as `...`, while ordinary partial text is not decorated with an extra suffix. The PiP surface remains read-only and non-scrollable.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this stable-density policy.
+- **Testing notes:** Verify stable 42pt text with four short messages, removal of the oldest bubble as the latest message grows, collapsed-mode original fallback while translation is pending, partial translation updates without an added ellipsis, expanded pending rows, and a very long single message on iPhone 14.
+
+## 2026-09-03 - Drop older iOS PiP bubbles before shrinking text too far
+
+- **Surface:** The live native iOS Picture in Picture preview while a new speech turn is still being recognized.
+- **Issue:** As the active message grew, older bubbles could remain visible until the turn was finalized or until the layout had already reduced the preview text to an unnecessarily small size. The fixed 16:9 surface should prioritize a complete, readable current bubble over retaining historical bubbles.
+- **Diagnosis:** The previous packing pass accepted any complete suffix that fit down to the renderer's absolute font floor. That allowed a multi-bubble stack to consume the available height while the in-progress turn was still changing. The selection rule did not express a separate readability threshold.
+- **Resolution:** Evaluate the recent suffix from largest to smallest on every state update, using a 30pt readable-font floor. When the full suffix would cross that floor, remove the oldest bubble and retry (`4 → 3 → 2 → 1`). The final render still uses the largest font that fits, and only a single unusually long latest message may use the smaller absolute floor to keep its wrapped content complete.
+- **Interaction:** Interim transcript growth and interim translation rows participate in the same measurement, so the preview can shed older bubbles before finalization. The latest message remains visible, ordinary text continues to wrap without truncation, and the surface remains read-only and non-scrollable.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this density policy.
+- **Testing notes:** Verify a long in-progress utterance while three or four prior bubbles are visible, confirm older bubbles disappear before the text becomes too small, check that the latest bubble stays complete, and cover collapsed/expanded rows and interim translation updates on iPhone 14.
+
+## 2026-09-03 - Prioritize complete iOS PiP bubbles over message count
+
+- **Surface:** The native iOS Picture in Picture conversation preview after the bubble-style rendering update.
+- **Issue:** A message could wrap to a third line in the source content, but the PiP preview reserved space for at most two lines whenever more than one message was visible. The result was a clipped bubble rather than a complete message. Short own messages were also right-aligned even though the compact PiP layout is easier to scan with one consistent left edge.
+- **Diagnosis:** The native layout measured each language row with a fixed line-count cap before calculating the bubble height. The drawing pass then used that capped height, so additional wrapped lines had no drawable space. Message ownership was also still used for horizontal placement.
+- **Resolution:** Measure every rendered row at its full wrapped height using the same character-wrapping paragraph style used by the drawing pass. Select recent messages by the complete measured stack, dropping older bubbles when the stack cannot fit before rendering. Preserve the largest font size that fits the selected complete bubbles. Anchor every bubble to the left content edge while retaining the existing own-message color treatment.
+- **Interaction:** A long message receives all of its visible wrapped lines; the preview does not replace ordinary overflow with an ellipsis. The PiP surface remains read-only and non-scrollable, and collapsed/expanded language-row behavior is unchanged.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances for this layout fix.
+- **Testing notes:** Verify one message with three or more wrapped lines, two messages with mixed short/long text, explicit newlines, collapsed and expanded language rows, interim translation dots, own/other bubble colors, and consistent left alignment on iPhone 14.
+
+## 2026-09-03 - Match iOS Picture in Picture preview to conversation bubbles
+
+- **Surface:** The native iOS Picture in Picture conversation preview after the density and orientation update.
+- **Issue:** The preview still carried speaker identity data even though PiP should be content-only. It could keep only one message when two short messages fit, used trailing truncation instead of visible line wrapping, and did not preserve the room bubble language treatment: flags, the original-language marker, per-language translation rows, interim translation feedback, bubble colors, and left/right alignment.
+- **Diagnosis:** The bridge sent one flattened text string per utterance, so Swift could not reproduce the expanded bubble structure. Message selection classified each candidate with a fixed line limit rather than measuring the complete bubble stack, and the native text renderer used `byTruncatingTail`, which produced ellipses at the edge of the available rectangle.
+- **Resolution:** Remove speaker/handle data from the PiP bridge. Send original text, original/display language, translation entries with interim state, and own-message alignment. Render each preview item as a compact bubble with the existing white/amber background treatment, the counterpart sharp top-left corner, a language flag, an original-language quote badge, and stacked translation rows without internal dividers or extra per-language margins. Use a height-based recent-message packing pass so the preview keeps two short messages when they fit and drops older messages only when the complete bubble stack does not fit. Switch native text drawing to character/word wrapping without trailing truncation; an in-progress translation shows `...` explicitly, while ordinary long text wraps onto additional lines.
+- **Interaction:** Collapsed mode keeps the selected display language in one bubble row. Expanded mode shows the original row followed by available translation rows, including a compact `...` row for translations that are still pending. The preview remains read-only and non-scrollable; message count and font size continue to adapt to the selected mode and the actual rendered content.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; the device verification build advances to `100`.
+- **Testing notes:** Verify iPhone 14 with one to four short messages, two messages that previously collapsed to one, long Korean/Latin/CJK text, explicit newlines, collapsed and expanded modes, original and translated flags, missing/interim/partial translations, own-message amber alignment, counterpart white alignment, and no visible speaker handle or trailing truncation.
+
+## 2026-09-03 - Correct iOS Picture in Picture orientation and message density
+
+- **Surface:** The native iOS conversation Picture in Picture preview shown after the startup fix.
+- **Issue:** The preview rendered vertically inverted. It also reserved too much space for a four-card layout, which made the latest conversation text very small and left large empty areas when fewer messages were available.
+- **Diagnosis:** The `CGImage` produced by `UIGraphicsImageRenderer` was flipped again while copying it into the sample-buffer pixel buffer. The fixed card height and four-message loop did not adapt to the actual text length or the available 16:9 canvas.
+- **Resolution:** Remove the extra pixel-buffer flip. The preview now uses the full 16:9 canvas for recent messages only, aligns the newest message at the bottom, and selects up to four compact messages or up to two expanded messages. If recent text needs additional wrapping, older messages are removed before reducing the font; the largest fitting font is then used with compact bubble padding.
+- **Display state:** The native preview follows the selected bubble display mode. Collapsed mode shows the selected display language only; expanded mode includes the available translation lines in each message and uses a smaller message-count cap.
+- **Interaction:** PiP remains a read-only, non-scrollable preview. Short recent messages can appear together, while long or wrapped content receives the space of one large message bubble.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; only the build number advances for device verification.
+- **Testing notes:** Verify the physical iOS 26 device with zero, one, two, three, and four short messages; collapsed and expanded display modes; a selected translated language; long wrapped text; interim text; long speaker names; and repeated preview updates.
+
+## 2026-09-03 - Make iOS Picture in Picture startup reliable after repeated taps
+
+- **Surface:** iOS conversation-room Picture in Picture action and its native start feedback.
+- **Issue:** The button could appear unresponsive while iOS was evaluating the sample-buffer source. Repeated taps replaced the pending native request, and the final request could show the same generic unavailable alert after a delay.
+- **Diagnosis:** The custom sample-buffer source did not explicitly keep an active playback audio session while no STT/TTS session was running. The native bridge also had no in-flight start guard, it only supplied a single snapshot frame, and its `AVSampleBufferDisplayLayer` was not attached to the active UIKit view hierarchy. The iOS 26 device log then showed the source becoming supported and `isPictureInPicturePossible=YES`, but `startPictureInPicture()` was called while the controller status was still transiently prohibited (`status=0`), so the request failed before the delegate callback.
+- **Resolution:** Acquire a coordinated PiP audio-session lease, keep the latest preview alive with a low-rate frame refresh timer, coalesce duplicate taps for the same conversation instead of cancelling and replacing the pending start, host the sample-buffer layer in an offscreen native view attached to the active root view, and require three consecutive possible checks before starting PiP. Add diagnostic logs for app state, audio session, renderer readiness, and `isPictureInPicturePossible` without logging conversation text.
+- **Interaction:** The PiP window remains a read-only, non-scrollable 16:9 snapshot. Repeated taps during startup no longer create duplicate native attempts or duplicate unavailable alerts.
+- **Data change:** None. The iOS app remains version `2.0.2` with namespace `ios/v2.0.2`; only the build number advances for device/TestFlight verification.
+- **Testing notes:** Unlock the physical iOS 26 device, open Mingle (not another installed app), tap PiP once, and confirm the window appears. Also test an empty room, an active STT/TTS session, repeated taps, explicit stop, background/foreground transitions, and PiP close.
+
+## 2026-09-03 - iOS conversation Picture in Picture preview
+
+- **Surface:** Live conversation-room header and the iOS system Picture in Picture window.
+- **Issue:** A conversation room could not remain visible while the user used another app. The room is rendered in a WebView, while iOS does not allow an arbitrary transparent or interactive app window over other apps. System Picture in Picture accepts video/sample-buffer content, but its floating surface is not a scrollable chat UI.
+- **Resolution:** Add an iOS-only Picture in Picture action to the room header. The WebView remains the normal room surface and sends the current room title, status, and latest four original utterances to React Native. Swift draws a compact read-only 16:9 preview and feeds it as `CMSampleBuffer` frames to `AVSampleBufferDisplayLayer` and `AVPictureInPictureController`.
+- **Interaction:** An explicit in-app button starts Picture in Picture. New final or interim transcript changes update the preview. Picture in Picture does not support scrolling, chat controls, translation selection, or composing; closing it leaves the WebView room intact. The action is shown only in the native iOS runtime.
+- **Data change:** None. The iOS app release is version `2.0.2` with namespace `ios/v2.0.2`; existing `UIBackgroundModes=audio` remains the background capability declaration.
+- **Testing notes:** Verify on a physical iOS device because Picture in Picture is unsupported or limited in the simulator. Cover a signed-in room, an empty room, final and interim messages, room switching and cleanup, Picture in Picture close, background/foreground transitions, long localized text, and App Store review eligibility for a read-only live snapshot preview rather than conventional media playback.
+
+## 2026-09-03 - Wait for the iOS Picture in Picture preview to become renderable
+
+- **Surface:** The iOS conversation-room Picture in Picture button and its native start failure state.
+- **Issue:** The first implementation enqueued the preview frame and checked `isPictureInPicturePossible` in the same main-queue turn. On a physical iOS 26 device, the sample-buffer renderer had not finished accepting the first frame yet, so the app showed its own `Picture in Picture unavailable` alert even though the device supported Picture in Picture.
+- **User impact:** Tapping the visible Picture in Picture button appeared to fail every time, making the new floating conversation preview unusable.
+- **Resolution:** Mark snapshot frames for immediate display, wait briefly and retry until the controller reports that Picture in Picture is possible, and resolve or reject the bridge promise from the native start/failed delegate callbacks. Cancel pending retries cleanly when the room closes or Picture in Picture stops.
+- **Data change:** None. No database migration or conversation data change is required. The iOS app is version `2.0.2` with namespace `ios/v2.0.2`.
+- **Testing notes:** Build and install a signed Release build on a physical iOS 26 device, tap Picture in Picture from a room with and without messages, and confirm that the preview opens without the unavailable alert. Also verify explicit stop, room cleanup, and the existing no-scroll/read-only interaction boundary.
+
+## 2026-09-04 - Hide anonymous tracking rows from user search
+
+- **Surface:** Connect user search, search-result history restoration, and the session search cache.
+- **Issue:** Anonymous tracking rows used an automatically generated `anon_...` handle and the fallback name `Mingle 사용자`. A broad query such as `a` could therefore consume result slots and make real users harder to find; an older cached search could also briefly restore those rows after the server-side fix.
+- **Resolution:** Exclude the reserved `anon_` handle prefix in the shared user-search API, which covers the versioned Android/iOS search routes. Sanitize both newly written and previously stored Connect search snapshots, including the browser history snapshot, so anonymous rows are not rendered while a fresh response is pending. Existing follower/following relationship lists are unchanged.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Search for a broad value such as `a` and a name-like value such as `Mingle`, verify anonymous rows never appear and real users still fill the available result slots, then return to Connect or recreate the tab with an old cached snapshot and verify the anonymous row is removed.
+
+## 2026-09-04 - Add OS filters to the admin dashboard
+
+- **Surface:** Service dashboard date controls, daily charts, cumulative charts, and the metrics table.
+- **Issue:** The dashboard could be filtered only by date range, so Android and iOS usage could not be compared without manually querying the underlying data.
+- **Resolution:** Add an OS segmented filter with `전체` as the default and `Android`/`iOS` options. Date-range changes preserve the selected OS, and selecting an OS preserves the selected date range. The existing all-platform cache remains in use for the default view; filtered views calculate from source rows because the daily cache has no OS dimension.
+- **Data semantics:** Android and iOS classification uses each user's most recently recorded normalized client platform (`latest_client_platform`). Users without a recognized platform remain included in `전체` but are not included in either OS-specific view.
+- **Data change:** None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- **Testing notes:** Verify the default dashboard is `전체`, switching OS preserves the date range, charts/table values change consistently, invalid `platform` query values fall back to `전체`, filtered views do not show the all-platform cache refresh action, and long date ranges remain usable on narrow admin screens.
+
+## 2026-09-01 - Render language-selector member avatars local-first
+
+- **Surface:** The shared-room language selector, its per-language attribution avatar stacks, and the conversation-list-to-room handoff.
+- **Issue:** The selector loaded every member profile from `GET /conversations/{id}/members` with `cache: "no-store"` each time it opened. The room/list snapshot already had the counterpart avatar metadata, but the selector did not consume it, and the full member response was not persisted locally. Slow or unavailable server reads therefore left the attribution avatars blank or delayed even though the conversation itself was already visible.
+- **User impact:** Opening the language selector could show the language rows before the user's and counterpart's photos appeared. A temporary network failure removed the avatars instead of preserving the last known identity, making the selector feel like it was still loading and adding another visible server dependency to an otherwise local-first room.
+- **Resolution:** Add an API-namespace, account/tracking-identity, and conversation-scoped member-profile cache with a seven-day bounded snapshot. Seed the selector immediately from cached profiles plus the already-hydrated counterpart profiles and signed-in viewer profile, then revalidate the member endpoint in the background. A failed revalidation now keeps the local snapshot; a successful response replaces and persists the authoritative member profile set.
+- **Boundary:** Profile image URLs remain remote assets and may still be fetched by the browser when its image cache is cold. This change removes the blocking member/DB request from the first render and preserves the last known URL/crop metadata; it does not copy image bytes into IndexedDB or alter membership/privacy rules.
+- **Data change:** None. No Prisma migration, API namespace change, native-code change, or mobile rebuild is required.
+
+## 2026-09-02 - Clarify new conversation-room creation labels
+
+- **Surface:** Conversation-list create action and the modal that chooses between a solo conversation room and inviting friends.
+- **Issue:** The Korean create action said `새 대화 시작`, which described starting a conversation but not creating the persistent conversation room. The solo option `혼자서 시작하기` also did not explain what would be created. The English `Start Conversation!` had the same ambiguity and retained an unnecessary exclamation mark.
+- **Resolution:** Rename the Korean create action to `새 대화방 만들기` and the English action to `Create a new chat`. Rename the solo option to `혼자 쓰는 대화방` and `Your own room`. Localize both labels for all 15 primary UI locales, using concise, natural chat/room terminology where a literal translation would be too long or unnatural.
+- **Interaction:** Keep `Invite friends`, `Cancel`, the invite-screen title, and the invite-screen submit action unchanged. The modal continues to present the solo and friend-invite choices without adding a visible title.
+- **Data change:** None. This is a presentation-only i18n change.
+- **Testing notes:** Verify both labels in all 15 primary UI locales, with special attention to Spanish and Vietnamese button widths, RTL Arabic layout, CJK rendering, and fallback locales that resolve supplemental copy through English.
+
 ## 2026-08-25 - Persist default display language and preserve keyboard mode
 
 - **Surface:** Conversation hamburger menu, default display-language selection, text-size defaults, and the live conversation composer controls.
@@ -1507,9 +1860,9 @@
   - Keep WebSocket push and fallback polling so other members' messages still arrive in already-open rooms.
   - When hydration returns a message ID already present on the client, accept the server's text, translations, speaker data, and other authoritative fields while preserving the client's established `createdAtMs` display-order timestamp.
   - Continue using the server timestamp for messages that are genuinely new to this client.
-- Diagnostics: Before applying the protected merge, compare the incoming server timestamp with the existing local timestamp and all committed/live timeline anchors. If the server timestamp would cross another visible utterance, emit `conversation_hydration_order_preserved` through the existing client-event API. The event is stored in `AppEventLog` and emits the backend log marker `[conversation-order] hydration timestamp drift preserved`, including the hydration trigger (`mount`, `push`, or `poll`), both timestamps, delta, and crossed message IDs. Diagnostic events are deduplicated client-side and contain no transcript text, so a TestFlight or internal-test build can validate the hypothesis without Metro.
+- Diagnostics: Before applying the protected merge, compare the incoming server timestamp with the existing local timestamp and all committed/live timeline anchors. If the server timestamp would cross another visible utterance, emit `conversation_hydration_order_preserved` through the existing client-event API. The event is stored in `AppEventLog` with the hydration trigger (`mount`, `push`, or `poll`), both timestamps, delta, and crossed message IDs. Diagnostic events are deduplicated client-side and contain no transcript text, so a TestFlight or internal-test build can validate the hypothesis without Metro. The temporary backend console marker was removed after validation to avoid noisy production logs.
 - Data contract: No Prisma migration or API namespace change is required. The existing client-event endpoint accepts one additional additive event type.
-- Testing notes: Added a regression case where server persistence time would move finalized turn 4 below live turn 5; the merge keeps `4, 5` while still applying server-confirmed content. Added diagnostics coverage confirming the event is stored and logged without creating or notifying another conversation message. Targeted tests, TypeScript, and ESLint pass.
+- Testing notes: Added a regression case where server persistence time would move finalized turn 4 below live turn 5; the merge keeps `4, 5` while still applying server-confirmed content. Added diagnostics coverage confirming the event is stored without creating or notifying another conversation message. Targeted tests, TypeScript, and ESLint pass.
 
 ## 2026-08-24 — Profile location reliability and edge-swipe navigation
 
@@ -1600,6 +1953,84 @@
 - Data contract: None. No Prisma migration, API namespace, or native rebuild is required.
 - Testing notes: Verify that entering Explore leaves the keyboard hidden and the search field unfocused on iOS and Android WebViews. Tapping the field must still open the keyboard, and clearing a query must still return focus to the field.
 
+## 2026-08-26 — Local-first conversation continuity for the 2.0.0 WebView
+
+- Surface: The 2.0.0 iOS and Android conversation list, conversation-room transitions, room transcript hydration, live settings controls, and finalized-message persistence.
+- Issue: Several independently correct server-authoritative paths combined into a poor mobile experience. Account preference GET responses could replace a slider value after the user moved it, rapid preference PATCH requests could complete out of order, a background live room could briefly render above a newly selected room, every WebSocket event and fallback poll could start another full refresh, and structurally identical responses still replaced React arrays and stores. Conversation-list cache survived only the current WebView session, finalized STT messages had no durable browser outbox, usage counters caused parent updates every second, and an ordinary React remount re-entered the full-screen Mingle wordmark bootstrap gate.
+- User impact: Controls appeared to snap backward, opening one room could briefly show another room's content, lists and transcripts visibly stuttered despite having no new data, the Mingle loading screen appeared more often than expected, and a transient network failure could leave a locally visible finalized message without a later persistence retry. These costs were especially visible in iOS WKWebView rendering and compositing.
+- State ownership decision: Keep the server authoritative for durable account history, membership, permissions, unread state, and cross-device reconciliation. Make the client the working source of truth for the currently rendered list, room, settings edit, and pending message delivery. Server hydration now reconciles into that local state and cannot replace a newer local intent. This is a bounded local-first sync model rather than a risky full transfer of permanent data ownership to browser storage.
+- Resolution:
+  - Seed account controls from an account- and API-namespace-scoped local snapshot, persist edits immediately with a pending-sync marker, and reject a GET hydration result when a newer local revision exists. When the server already matches the local snapshot, clear the pending marker without an unnecessary PATCH.
+  - Serialize account preference PATCH operations with one trailing latest-value write. Rapid slider and menu changes therefore cannot let an older response overwrite a newer preference on the server or mark stale state as synchronized.
+  - Move the identity-scoped conversation-list warm snapshot to durable `localStorage`, retain the existing seven-day freshness boundary, migrate legacy session snapshots, and throttle large snapshot serialization to one trailing write per second.
+  - Mount a background recording room below the explicitly selected room, make the background transition instant during a room switch, and reserve the top layer for the active user intent. The old live room can keep its capture lifecycle without appearing above the selected room.
+  - Coalesce list and room hydration into one in-flight request plus at most one trailing refresh. Keep the 20-second poll only while the corresponding WebSocket is unavailable instead of polling alongside a healthy socket, do not retry realtime-token setup when push is intentionally unconfigured, and do not start list refresh or realtime transport before authentication resolves.
+  - Preserve existing list and transcript store references when hydrated content is structurally unchanged. Also preserve an unchanged leave-notice array and report running usage statistics to the parent at most every five seconds while still reporting message-count and stop changes immediately.
+  - Queue finalized STT message payloads in an identity-scoped durable browser outbox before delivery. Reuse the existing `(sessionKey, clientMessageId)` idempotency contract, retry on launch, foreground, network recovery, and a visible 15-second interval, adopt a pre-session tracking-scoped record into the authenticated owner when session identity arrives, and remove a record only after an HTTP success response.
+  - Resolve the persisted language-onboarding marker in a pre-paint layout pass and reuse the resolved phase across ordinary component remounts in the same WebView process. Session restoration now leaves the locally rendered list or its compact content spinner visible behind a temporary interaction guard instead of replaying the full-screen wordmark gate.
+- Data contract: No Prisma migration, new endpoint, native-code change, mobile version bump, or API namespace change is required. The installed app remains `2.0.0`, with `ios/v2.0.0` and `android/v2.0.0`; the improvements can ship through the remotely loaded web application and its existing 2.0.0 API routes.
+- Testing notes: Verify rapid manual-finalization slider drags during a deliberately slow account-preference GET/PATCH, rapid changes across multiple settings, A-to-B room switching while A continues recording, repeated identical WebSocket pushes, socket loss and poll recovery, process/WebView recreation with a cached list, offline finalized speech followed by network restoration, account switching, and first-launch onboarding. Confirm no stale room is visible, local controls never move backward, each finalized message persists once, and server-confirmed cross-device changes still hydrate when there is no newer local edit.
+
+## 2026-08-27 — Diagnose the pre-hydration canvas shift and blocked interaction window
+
+- Surface: Initial iOS and Android WebView load of the conversation list, especially returning users opening the 2.0.0 host for the first time.
+- Issue: The server-rendered mobile canvas always starts at scale `1` and a fixed width of 400px because the server cannot read `window.innerWidth`. `MobileCanvasShell` calculates the real device scale only in a client `useEffect`, after JavaScript loads and React hydration begins. At the same time, `ConversationList` initially renders its language bootstrap phase as `resolving` and places a transparent full-screen layer at z-index 199 over the already visible list. That layer is removed only by the client layout effect. The native startup splash is a separate opaque layer and is not the cause when the web UI is already visible.
+- User impact: A static conversation screen can appear before it is correctly fitted or interactive. On a 390px iPhone viewport, the 400px server canvas visibly settles to a 0.975 scale; narrower Android viewports shift more. Scroll and button input appear dead until hydration installs handlers, recalculates the canvas, and removes the transparent interaction guard, so all three changes seem to happen at once. Slow script download, parsing, or main-thread hydration extends this window even after the server HTML is visible.
+- Contributing architecture: The root layout and conversation entry perform authenticated server work before sending the complete route, while the conversation list remains a large client component. Returning 1.1.4 users also move from the `mingle-1-1-4-production` origin to the `mingle-2-0-0-production` origin, so the new WebView cannot read the old origin's browser cache. These factors can lengthen cold startup, but they are distinct from the deterministic 400px-to-device-width layout shift.
+- Data-bootstrap assessment: Do not block the app while downloading every message from every room into `localStorage`. A room hydration currently reads up to 100 messages plus message contents, member metadata, usage, and a full message count. Warming 32 rooms would fetch up to 3,200 message payloads before pagination, multiply database work, risk synchronous localStorage serialization/parsing on the iOS main thread, and make the hydration delay worse for the users with the largest histories.
+- Recommended direction:
+  - Make the initial canvas fit independent of React hydration, using native/server-provided viewport data or a pre-hydration CSS/inline bootstrap, and remove the transparent interaction guard for already rendered returning-user content.
+  - Treat the first 2.0.0 load as a resumable, non-blocking cache seed: fetch and persist the conversation manifest first, then warm only the active/recent rooms with bounded concurrency and a bounded recent-message window.
+  - Prioritize a room immediately when the user opens it, lazy-load older history on upward scroll, and keep the UI usable while background warming continues. A small progress banner may explain the first upgrade, but it should not require the user to wait.
+  - Use IndexedDB or a native database if broad transcript caching becomes a product requirement; retain the server as the durable authority and continue incremental synchronization after the initial seed.
+- Status: Diagnosis and architecture recommendation only. No behavior change has been implemented in this entry.
+
+## 2026-08-27 — Fit the mobile canvas before hydration and preserve native scrolling
+
+- Surface: Initial render of every non-admin mobile WebView route, with the most visible impact on the conversation list.
+- Issue: The server emitted a 400px canvas at scale `1`, then `MobileCanvasShell` measured `window.innerWidth` in a React effect and replaced the DOM after hydration. `ConversationList` also rendered a transparent full-screen interaction layer while its persisted language marker was resolving. Users could therefore see a misfitted static list that neither scrolled nor accepted actions, followed by a visible fit correction and interaction unlock.
+- Resolution:
+  - Run a small synchronous canvas bootstrap before the application markup is parsed. It calculates the fixed-canvas scale from the already-applied device viewport and publishes scaled width, inverse frame height, transform, and compositing values through CSS custom properties.
+  - Keep one stable mobile-canvas DOM shape on the server and client. React no longer owns initial scale state or replaces the unscaled tree after hydration, while resize and orientation changes continue to update the same CSS properties.
+  - Do not render the transparent language-resolution interaction layer over server-rendered content. Native CSS scrolling remains available before React hydration; the interaction guard is reserved for a real client-side session check, and the existing opaque locale-switch shell remains unchanged.
+- Data contract: No Prisma migration, API namespace change, native-code change, or mobile rebuild is required. This is a remotely delivered WebView fix for the installed 2.0.0 application.
+- Testing notes: On narrow iPhone and Android viewports, cold-load the conversation list with a throttled network and confirm the first visible frame is already fitted, the list can scroll before full hydration, and no later width snap occurs. Repeat at widths below, equal to, and above 400px, rotate the device, verify admin routes remain unscaled, and confirm authenticated, unauthenticated, first-language-onboarding, and locale-switch states retain their intended gates.
+
+## 2026-08-27 — Diagnose legacy WebView-origin identity discontinuity after the 2.0.0 upgrade
+
+- Surface: Users who created conversations on the 1.1.4 Railway origin and then updated the same installed app to 2.0.0, whose WebView loads a different Railway origin and asks them to sign in again.
+- Issue: The browser tracking identity is stored in the host-scoped, HTTP-only `mingle_uid` and `mingle_sid` cookies. An application update preserves the WebView data store but does not make the old host's cookies available to the new host. The 2.0.0 origin therefore creates a new tracking identity, while a newly authenticated account has no automatic claim over conversations owned by the old anonymous user. The data appears deleted even though its rows remain in the production database.
+- Production evidence: A read-only Railway configuration comparison confirmed that the 1.1.4 and 2.0.0 services use the same `DATABASE_URL`, `AUTH_SECRET`, Google client ID, and Apple client ID. A privacy-safe aggregate query found 1,029 active conversation channels used by 1.1.x clients and owned by anonymous users, no matching legacy channels owned by registered users, and no channel with both legacy and 2.0.0 activity. No production records were changed during the diagnosis.
+- Fast recovery direction:
+  - Tell the affected user not to delete or reinstall the app; the legacy-origin cookies are the strongest deterministic recovery proof and should still exist on the upgraded installation.
+  - Add a top-level legacy-host recovery hop. The legacy host reads its own HTTP-only cookies, creates a short-lived single-use opaque claim, and redirects to the authenticated 2.0.0 host. The current host verifies and consumes the claim, shows a dry-run summary, and transactionally moves the legacy conversations and message ownership to the signed-in account.
+  - For an urgent one-off recovery before the self-service flow ships, identify the current account by its login email, identify the legacy owner from the old cookie or a tightly reviewed device/session match, verify room count and recent room titles with the user, then run the same merge transaction in dry-run and commit modes. Never merge solely by IP address, display name, or approximate timing.
+- Recurrence prevention:
+  - Use one stable first-party WebView domain across app versions and keep versioning in the API namespace rather than the browser origin.
+  - Claim the current anonymous identity into the authenticated account during every first login, with an idempotent audited merge record and conflict-safe handling for channel sequence numbers, memberships, messages, preferences, and social relations.
+  - Persist a native installation identity in Keychain/Keystore and inject it into WebView requests as a future recovery signal; it must supplement authenticated identity rather than authorize a merge on its own.
+  - Monitor upgraded accounts that suddenly have only the signup room while a recoverable legacy identity exists, and offer recovery instead of presenting an empty list.
+- Status: Diagnosis and recovery architecture only. No identity merge, production data mutation, or Prisma migration has been implemented in this entry.
+
+## 2026-08-28 — Make the authenticated account the sole 2.x data owner
+
+- Surface: 2.x conversation lists and rooms, finalized messages, account preferences, translation-model selection, TTS event logging, feedback history, and message-history clearing.
+- Issue: Device/browser analytics identity and account identity shared the same `User` table. The client-event handler first upserted a `User` by the `mingle_uid`/`x-mingle-user-id` tracking value and only afterward resolved the authenticated NextAuth session for the actual message or event. Other routes built one composite identity containing both session fields and tracking fields, then fell through from a missing session record to the tracking user. A read-only production review confirmed that a single signed-in 2.0.0 device had created multiple empty anonymous `User` rows with the same version, screen, locale, and IP fingerprint. Code review also found that native Apple exchange initially stored the stable Apple subject in `externalUserId`, but the following credentials-bridge sign-in could overwrite it with the internal User ID; a later Apple login without an email claim could then miss the original account.
+- User impact: A signed-in person could have one visible account record while usage metadata or other state was written to additional anonymous records. Preference hydration could therefore read a different row and appear to move a slider back. During session restoration, a tracking-owned conversation lookup could briefly expose the wrong room list before the authenticated list replaced it. The split also made support investigation and legacy-account recovery substantially harder.
+- Ownership decision:
+  - A verified NextAuth account is the only data owner for current unversioned and 2.x routes, regardless of OAuth provider or email/password sign-in.
+  - Device/browser tracking IDs remain analytics correlation keys and may enrich the canonical account, but they cannot select, create, or replace the data owner after authentication.
+  - Anonymous `User` ownership remains available only through an explicit versioned 1.x route for backward compatibility with installed pre-account clients.
+- Resolution:
+  - Resolve the authenticated session before any tracked-user upsert. Update telemetry fields on the canonical account by its database ID without copying the device tracking ID into `externalUserId`.
+  - Return `401` from current conversation, message-persistence, preference, feedback, and history-clear writes when the authenticated account is not yet available. The durable finalized-message outbox retains non-successful writes and retries them after session restoration instead of allowing the server to redirect ownership.
+  - Remove tracking identity fallback from current conversation-list fast paths, account preferences, feedback history, message deletion, and translation-model lookup. Authenticated reads now use only the account ID/email resolved from the session.
+  - Keep TTS delivery independent from analytics logging. If a current TTS request has no canonical account, audio can still return while its optional event log is skipped; legacy 1.x requests retain anonymous logging.
+  - Link native Apple identities through the existing NextAuth `Account(provider, providerAccountId)` relation, backfill that link when an older native account signs in, and stop credentials/sign-in callbacks from overwriting an existing provider identity.
+  - Fail closed when a session claims an account that no longer exists instead of silently storing data on a tracking user.
+- Existing split records: This prevention change does not automatically merge or delete existing anonymous rows. A browser tracking header or cookie is not strong enough proof to transfer message history, so existing recovery must use the separately planned audited claim/merge flow or a reviewed operator migration.
+- Data contract: No Prisma migration, API namespace change, native-code change, or mobile rebuild is required. The fix can ship in the remotely loaded web application for installed 2.0.0 clients and also applies to a future 2.0.1 namespace.
+- Testing notes: Added regressions for session-over-tracking precedence, missing-session rejection on current routes, stale-session fail-closed behavior, authenticated history clearing without tracking-session fallback, canonical telemetry updates without `externalUserId` mutation, concurrent native Apple account-link ownership, authenticated feedback/message isolation, and explicit 1.x anonymous compatibility. TypeScript, targeted ESLint, and the complete unit suite pass.
 ## 2026-08-26 — Show account status in admin conversation review
 
 - Surface: The admin conversation lookup header shared by the conversation list and message detail views.
@@ -1623,3 +2054,808 @@
   - Stop a native session during conversation close even when the room's React state missed the latest native status, provided the cached owner matches the closing room.
 - Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
 - Testing notes: Verify first-start `connecting → ready`, Android transcript delivery, rapid stop/start, close/re-entry while connecting and ready, WebView remount, stale stop isolation between rooms, audio-route recovery, and iOS/Android native log continuity.
+
+## 2026-08-31 — Make Android native STT start and room re-entry recoverable
+
+- Surface: Android native STT capture, the React Native-to-WebView command bridge, conversation-room switching, and the room microphone buttons.
+- Issue: Intermittent Android failures could leave the control in `connecting` until the timeout, silently ignore a start while the previous room was still stopping, or leave a stale process-wide native session after returning to the conversation list. Android WebView compatibility clicks could also be lost when `pointerdown` prevented textarea focus changes.
+- User impact: Tapping Start sometimes did nothing, a later tap could repeat the same failed state, and reopening a room could show a non-actionable microphone control even though the native recorder was still running.
+- Resolution:
+  - Serialize native STT start and stop commands in the React Native bridge so a new room never starts before the previous native stop has completed.
+  - Keep the native conversation cache owned by native lifecycle events, recover an `already_running` stale singleton by stopping it before retrying the requested room, and stop the previous room explicitly during room switching and close.
+  - Let the microphone cancel an unresolved `connecting` session and use pointer-up activation as a fallback when Android suppresses the compatibility click. Duplicate pointer/click activation is deduplicated.
+  - Do not let terminal `stopped`, `closed`, or error status events claim an otherwise unowned room's native STT owner, preventing stale terminal events from blocking later starts.
+  - Resolve native stop completion from the terminal bridge status as well as close/error events, while retaining a bounded timeout fallback.
+- Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `ios/v2.0.0` and `android/v2.0.0`.
+- Testing notes: Verify repeated Android start/stop taps, start while a prior stop is pending, room switch during `connecting`, close and re-entry with missed status events, stale `already_running` recovery, and both pointer and keyboard activation paths. Confirm iOS behavior remains unchanged.
+
+## 2026-09-01 — Scope Android native STT callbacks to a session generation
+
+- Surface: Android native STT WebSocket/audio startup, the React Native status replay bridge, and room re-entry after a WebView reload or list navigation.
+- Issue: Android could lose the first WebSocket callback when the native running guard or socket reference was not initialized before OkHttp delivered `onOpen`. A previous room's callback could also arrive while a new room was requesting capture. A graceful stop already in progress could make a recovery stop return before the native singleton was actually released.
+- User impact: The microphone could remain in `connecting`, appear to switch between Start and Stop after returning to the room list, or accept a tap without delivering speech recognition. The same symptoms could recur nondeterministically because they depended on callback timing.
+- Resolution:
+  - Assign a unique session generation ID to every WebView/native STT start and carry it through Android lifecycle events and the WebView message buffer.
+  - Initialize Android's running guard before opening the WebSocket and validate callbacks by session generation, avoiding the pre-assignment race on the WebSocket reference.
+  - Require same-room reuse to also match the session generation; otherwise recover the process-wide native singleton before starting the requested room.
+  - Allow a forced recovery stop to supersede an already-pending graceful stop and wait for the native cleanup path before the next start.
+  - Replay native status on WebView load only to the room in the URL, and send an idle replay to a different room instead of inheriting the previous room's status.
+  - Drop session-tagged queued messages from an old generation while retaining untagged messages for older native shells.
+  - Keep the connecting watchdog at 20 seconds to accommodate cold Android audio/WebSocket startup while still recovering a lost handshake.
+- Data contract: No Prisma migration or API namespace change is required. The mobile app remains `2.0.0` using `android/v2.0.0`; session IDs are opaque lifecycle metadata and contain no access token or transcript text.
+- Testing notes: Verify cold start, rapid stop/start, room switch during `connecting`, graceful-stop overlap, WebView reload, list-to-room re-entry, stale callback rejection, queued-message filtering, and repeated Android runs. Confirm iOS behavior remains unchanged and install a newly built Android artifact before device validation.
+
+## 2026-09-01 — Keep live STT running on the conversation list
+
+- Surface: Conversation room back navigation, the conversation list, hidden live-room rendering, and Android room re-entry.
+- Issue: Closing a room explicitly forced native STT to stop and then removed the live room from the mounted set. The list became visible before `history.back()` had settled, so an immediate Android row tap could reopen the room and then be closed by the delayed popstate. Repeated taps could also issue multiple native Start commands before React rendered the first `connecting` state.
+- User impact: iOS and Android stopped recognition when returning to the list, the list action area flickered while the room changed from active to paused, Android sometimes required two taps to reopen a room, and repeated navigation could leave a phantom Stop control or an unresponsive Start control.
+- Resolution:
+  - Treat room close as visual navigation only. Keep the live room mounted and its STT, translations, and message persistence active while the conversation list is visible.
+  - Preserve explicit Stop, room switching, deletion/leave, sign-out, and app teardown as the operations that actually end a session.
+  - Queue a row tap that arrives before the room-to-list history transition settles, then open that room immediately after popstate completes.
+  - Mirror connection status into the synchronous ref before React renders and suppress duplicate starts while the session is already connecting or ready.
+  - Ignore Android's initial audio-route enumeration callback and scope delayed audio recovery to the session that requested it, preventing a stopped generation from recreating capture.
+- Data contract: No Prisma migration or API namespace change is required.
+- Testing notes: Start STT, return to the list, speak while the list is visible, and confirm the room preview updates without the session stopping. Reopen with one tap, continue speaking, repeat the cycle several times, then explicitly Stop. Repeat on iOS and Android; also verify starting STT in a different room cleanly transfers the singleton session.
+
+## 2026-09-01 — Resynchronize Android STT after returning to a room
+
+- Surface: Android native STT status, the React Native-to-WebView bridge, hidden live-room rendering, and conversation-room re-entry.
+- Issue: The native recorder could continue capturing while the room was hidden on the conversation list, but a visible room hook could retain an old or missing session generation. The control then showed Stop while the visible room no longer consumed new transcript events; leaving the room made the hidden live room appear to recover, and repeated navigation could leave a phantom running state.
+- User impact: Android users could see new speech appear only after returning from the list, repeatedly re-enter a room with no live transcription, or see Stop after the native session had actually stopped. App restart cleared the mismatch because it recreated the React Native and WebView state together.
+- Resolution:
+  - Pass room visibility into the STT hook and request an authoritative native status snapshot whenever a room becomes visible.
+  - Add a room-scoped `native_stt_status_request` bridge command. Android answers it from the native singleton's actual running/server-ready state and session generation, then sends an explicit replay to the requested room.
+  - Replace a remounted visible hook's stale session generation from the replay before draining queued transcripts, and defer session-tagged queued messages until that generation is known instead of deleting them.
+  - Add an owner lease to distinguish a newly mounted same-room hook from the old hook's cleanup, so stale cleanup cannot release the new visible room's native ownership.
+  - Keep a live session owned by another room untouched when a different room requests a status snapshot; that room receives an idle replay rather than inheriting a phantom Stop state.
+- Data contract: No Prisma migration or server data change is required. The Android native bundle uses the existing `android/v2.0.1` namespace; iOS behavior and namespace are unchanged.
+- Testing notes: Install a newly rebuilt Android native artifact before testing. Start STT, return to the list, speak, re-enter the same room, continue speaking, explicitly Stop, and repeat the cycle. Confirm the visible control matches the native session, queued messages are not lost, and an actually stopped session returns to Start. Device testing was not performed during this change.
+
+## 2026-09-01 — Adopt the visible Android STT session after room re-entry
+
+- Surface: The visible conversation room's STT hook, hidden live-room listeners on the conversation list, the React Native status bridge, and the Android native STT singleton.
+- Issue: A room could remain mounted while hidden on the conversation list, then mount or become visible again with a different WebView lease. The hidden and visible hooks could compete for the same native message queue, while the visible hook still treated a cached session ID or a missing `ready` event as authoritative. This made Android show Stop without delivering new transcripts in the room, or show Connecting until a later navigation or app restart repaired the state.
+- User impact: After one successful run and a list-to-room transition, new speech could appear only in the list and arrive in the room in a batch on the next navigation. A stopped session could also look active until the app was restarted. The issue was Android-specific in observed testing; iOS uses the same bridge safeguards but does not receive the Android native capture changes.
+- Resolution:
+  - Make the visible room request a native status snapshot only after its native event listener is installed, so the response cannot be lost during effect setup.
+  - Treat a session ID supplied by a WebView request or cached status as provisional until a native status or transcript event confirms it. Do not discard session-tagged queued messages while that identity is provisional.
+  - Keep hidden room consumers from draining native transcript events. The visible room can take over the same-conversation owner lease, while a different conversation cannot steal the process-wide native session.
+  - Add monotonic Android status event sequence metadata and reject an older status from overwriting a newer session state.
+  - Expose Android `running`, `serverReady`, `stopping`, and event sequence data through `getStatus()` and status events. Report `stopping` during graceful teardown and an explicit `idle` after native cleanup, so the WebView can distinguish an in-progress stop from a completed stop.
+  - Make the 20-second connecting watchdog probe the authoritative native status once, then force-recover only if the probe does not reconcile the visible room within a short grace period.
+- Data contract: No Prisma migration or server data change is required. The session metadata is internal lifecycle information only. The Android build remains on `2.0.1`; because the App Store Connect `2.0.0` pre-release train is closed, the iOS TestFlight build uses `2.0.1` with the matching `ios/v2.0.1` namespace.
+- Testing notes: No device test or automated test suite was run during this change by request. Install the newly built Android artifact before validating cold start, permission grant, list navigation, same-room re-entry, repeated start/stop, graceful stop, and app restart. Confirm Start/Stop matches actual capture, room transcripts remain live after re-entry, and queued messages are neither lost nor duplicated.
+
+## 2026-09-01 — Reconcile Android STT status in the visible room
+
+- Surface: The visible conversation room's STT hook and the React Native status snapshot/replay bridge.
+- Issue: After a text-message interaction and a room/list transition, the visible room could receive the native status event while a hidden same-room consumer still held a different owner lease. The visible hook then ignored the status even though the event was explicitly scoped to that room. React Native could also accept an older Android status event sequence and replay the stale `connecting` or terminal state back into the room.
+- User impact: The conversation list could show active recognition while the room remained on Connecting or Start, and transcripts could appear only after leaving or re-entering the room.
+- Resolution:
+  - Allow a visible hook to take over same-conversation status ownership when the event carries the matching conversation ID, even if an older same-room lease uses a different owner key.
+  - Reject older Android status sequences in the React Native event listener, status polling path, and cached native snapshot. Preserve the latest sequence when synthetic bridge statuses are emitted without sequence metadata.
+- Data contract: No Prisma migration, API namespace change, or server change is required. The Android app remains on `2.0.1` with `android/v2.0.1`.
+- Testing notes: No device test or automated test suite was run by request. Install a fresh Android artifact and repeat two text messages, start STT, remain in the room through `connecting`, visit the conversation list before and after the state settles, and confirm that the room and list show the same live state and receive transcripts.
+
+## 2026-09-01 — Align Android counterpart bubble metadata with iOS proportions
+
+- Surface: Shared-room counterpart names, language flags, and collapsed/expanded message bubble padding in `ChatBubble`.
+- Issue: The speaker-name row was correctly given the same 20px height as the flag hit area, but the label was also increased to `text-base`. Android WebView font metrics made the name look noticeably larger than the iOS presentation. Counterpart bubbles also appeared to have excess top whitespace, especially around the inline language flag.
+- Resolution:
+  - Keep the speaker-name wrapper at `h-5` with `leading-5` so its layout height remains aligned with the flag control, while reducing the label to `text-sm`.
+  - Keep the sender's bubble padding unchanged and reduce only counterpart collapsed and expanded bubble top padding to `pt-0.5`, retaining `pb-1` for the existing bottom rhythm.
+- Data contract: No Prisma migration, API namespace change, native app version change, or server change is required.
+- Testing notes: Updated the ChatBubble rendering contract, ran the focused 22-test rendering suite, and passed ESLint plus whitespace validation. Device testing was not performed by request; validate the Android WebView presentation against iOS after the web change is deployed.
+
+## 2026-09-01 — Recover Android STT delivery from stale WebView readiness
+
+- Surface: Android cold-start conversation rooms, React Native WebView lifecycle readiness, and native STT status/transcript delivery.
+- Issue: Android WebView could leave the React Native `pageReady` flag false after the room was already interactive. The room could send the native Start command, native audio capture and the STT WebSocket could reach `ready`, and transcript messages could arrive, while the outbound bridge still discarded every status event and held transcript messages behind a queue. The visible room therefore remained on Connecting until its 20-second watchdog stopped the otherwise healthy native session. A legacy native listener-count guard added a second delivery-loss window under React Native's bridgeless architecture.
+- User impact: Pressing Start immediately after opening the Android app could remain on Connecting and then return to Start without showing recognized speech. Leaving for the conversation list before the timeout could make the background session appear active even though the room itself had not consumed the native events.
+- Resolution:
+  - Treat any valid WebView-to-React-Native command as authoritative evidence that the current document is interactive, restore `pageReady`, and immediately flush queued native transcript messages.
+  - Restore outbound delivery before handling the Start or status-request command so all subsequent native `connecting`, `ready`, and transcript events reach the initiating room.
+  - Always emit Android native STT events through `DeviceEventEmitter`; it safely ignores missing JavaScript listeners, while gating on the legacy listener counter can incorrectly discard the only lifecycle event.
+- Data contract: No Prisma migration, server change, API namespace change, or iOS behavior change is required. A new Android native build is required because the delivery fix changes the React Native shell and Kotlin module.
+- Testing notes: Verify Android cold start followed by an immediate Start tap, remain in the room beyond 20 seconds, speak before and after `ready`, return to the list while recording, re-enter the room, explicitly Stop, and repeat. Confirm Connecting transitions to Stop/ready, transcripts stay visible in the room, and no watchdog-triggered stop occurs while native capture is healthy.
+## 2026-09-06 — Recover queued work across app updates and protect account changes
+
+- Surfaces: Pending conversation messages, conversation language/title/status/read/removal changes, profile language defaults, and account preference writes.
+- Upgrade issue: A user could load the Local-first WebView in an installed 2.0.0 app, leave a message unsent, then update the native app. Recovery selected only the new API namespace, leaving the old message journal unreachable. Conversation mutations had the same per-version storage gap.
+- Upgrade resolution: Transfer the same authenticated account's pending message and conversation-mutation work between explicitly compatible namespaces on the same platform. The allowlist follows the existing v2.0.0 handler aliases: iOS 2.0.0–2.0.3 and Android 2.0.0–2.0.1. Requests use the current namespace; source message IDs, acknowledged source delivery, completed translations, and pending removals survive. Legacy 1.x, unknown contracts, other platforms/accounts, and tracking-only ownership are not automatically migrated. Conversation records now include the namespace in memory as well as in storage. Persist the target mutation journal before deleting the prior journal, and retain the latest intent when settings overlap.
+- Account-change issue: A slow settings request could finish after another tab replaced the login session. Its worker then submitted the next old-account edit with the new account's cookies; late response bodies could also update the new view.
+- Account-change resolution: Tie the conversation mutation worker to an abortable authenticated component scope, check scope again after asynchronous response parsing, and retain unfinished work after cancellation. An aborted worker cannot start another request or clear a replacement worker's promise. Add an optional expected-account precondition to queued conversation, profile-default, account-preference, and message writes, plus durable translation recovery. The server compares it with the authenticated session and rejects a mismatch with 401 before persistence or AI work. The precondition does not grant authentication or replace room permission checks. Existing clients that omit it retain their API contract.
+- Verification: All 154 web test files / 1,439 tests passed, along with TypeScript and targeted ESLint. Regressions exercise cold namespace updates, already completed translations, account/platform/legacy exclusions, account mismatch and retry, cancellation of a never-resolving request, delayed UI response bodies, legacy journal shape, and a real removal queue pausing its migrated message. These are automated code/handler tests with fake network/storage/DB providers, not a new physical-device run.
+- Deployment: No new environment variable, Prisma migration, or native rebuild is required for these fixes. Deploy the WebView code and server account-precondition checks together. No production data or existing accounts were merged or edited during verification.
+
+## 2026-09-08 — Review and verify chat date markers on Android (PR #215)
+
+- Surface: Conversation timeline date dividers and the date label beside the scrolling indicator.
+- Issue: Leave/invite timeline wrappers moved timestamp-bearing message rows below the scroll container's direct children. The old direct-child scan therefore returned no message anchors, hiding the floating date label. The timeline also lacked persistent calendar-day dividers.
+- Resolution in PR #215: Query timestamp-bearing descendants for scroll anchors and insert one absolute-date divider at each local calendar-day transition, including timelines containing leave/invite notices. Missing or nonpositive message timestamps do not create an epoch divider.
+- Reviewed implementation: `cc5bccf19b02935cd268570843add0585007c8d7`, based on `codex/messenger-tabs-device-test`. No actionable correctness issue was found in the reviewed change.
+- Automated verification: All 384 LivePhoneDemo tests passed and TypeScript checking passed. An additional temporary harness evaluated the PR's actual date functions and timeline construction in Asia/Seoul and America/New_York: 16 checks passed for same-day grouping, midnight, missing timestamps, notice interleaving, same-day history prepending, year boundaries, DST, and locale fallback.
+- Device verification: Rebuilt the Android release app with the QA bridge, uninstalled the existing package, and installed version `2.0.1` on a Samsung Galaxy S9 (SM-G960N, Android 10). The final server setup used this PR worktree, `secret/mingle/prod`, and ngrok for web, STT, and messaging; all 73 Vault runtime keys loaded successfully. The app used the matching `android/v2.0.1` API namespace.
+- Observed on device: The opened conversation contained 77 message anchors, zero timestamp-bearing direct children, and two correctly rendered date dividers (August 26 and September 8). At eight scroll positions spanning the date boundary, the floating label matched the top visible message's date in every sample, changing from `Wed, 8/26` to `today`. The original scroll position was restored after checking. Existing message history was not replaced with synthetic QA data.
+- Environment notes: Initial development Vault access and client-policy settings were unavailable; the final run explicitly used the reachable local HTTP Vault address and the requested production Vault path. Accepted ngrok's first-visit notice in the app WebView so subresource requests could load scripts and styles. These were test-environment setup issues, not changes required by this PR.
+- Deployment contract: No new environment variable, Prisma migration, mobile/API version bump, or data backfill is required for this UI change. Verification covers the changed timeline behavior; voice recognition and other unrelated flows were not exercised as part of this review.
+
+## 2026-09-05 — Eliminate dashboard usage baseline full-history scans
+
+- Surface: `/admin/dashboard`, including the All, Android, and iOS filters and the `불러오는 중...` transition state.
+- Issue: Historical daily cache rows were correctly reused, but the usage calculation for today/yesterday still used `DISTINCT ON` over all earlier event logs to recover each active user's starting counter. PostgreSQL chose a full-table scan and disk sort despite an existing partial user/timestamp/id index. The UI waited for this slow metric before displaying the dashboard.
+- Evidence: The production request that populated Android's 28 historical cache rows took 93.741 seconds. Separate read-only `EXPLAIN ANALYZE` measurements of just the two-day usage query scanned 1,441,101 earlier events and took 24.316 seconds for All and 16.346 seconds for Android; this was not a recomputation of all historical daily metrics.
+- Resolution: Use a correlated `CROSS JOIN LATERAL` with descending timestamp/id order and `LIMIT 1` for each user active in the requested interval. The existing `app_event_logs_user_usage_created_desc_idx` now supplies only that user's last non-null pre-range snapshot. Preserve range boundaries, counter reset handling, timestamp tie-breaking, platform filtering, and missing-baseline behavior.
+- Cache contract: Keep the metric version unchanged so historical caches remain valid. Always calculate today/yesterday; calculate and persist only missing historical days; never recalculate cached days between noncontiguous gaps.
+- Verification: Updated production-query measurements were 1.017 seconds for All, 0.081 seconds for Android, and 0.027 seconds for iOS. These are DB execution times, not end-to-end page times, and later runs benefited from warm database buffers. Plans confirm the full-history scan is gone and indexed baseline lookups run once per active user. Read-only PostgreSQL fixtures produced identical old/new daily totals for all three platforms across timestamp ties, null counters/users, resets, users without baselines, inactive users, and start/end boundaries. All 50 focused dashboard tests passed, including new 30-day cache-reuse and noncontiguous cache-hole regressions; targeted ESLint and whitespace validation passed.
+- Deployment: No new Prisma migration, cache deletion, mobile rebuild, version change, or API namespace change is required. The existing platform-cache migration must already be applied.
+
+## 2026-09-08 — Preserve concurrent voice-message order through finalization
+
+- Surface: Two members speaking at the same time in a shared conversation. Their bubbles repeatedly exchanged positions as partial speech became locally finalized text, persisted source, and translated content.
+- Root cause: A live preview received a server start timestamp, but local finalization rebuilt the row with only its device capture timestamp. Disposing the preview also disposed its order. Persistence restored the server timestamp, moving the bubble again. Equal-time comparisons additionally switched from client message IDs to database IDs. Independent HTTP and WebSocket reservations could assign different times, and a later metadata update could erase or replace the persisted order.
+- Client resolution: Keep a bounded account/room-scoped order cache separate from ephemeral previews. Carry the order into local finalization and into a locally finalized row receiving a late first echo. Retain ordering fields through pre-DB cache hydration and incomplete server snapshots. Use the stable client message ID for ties throughout the lifecycle. Preserve the first cached receipt and send it on preview retries so messaging can restore order after a restart.
+- Server resolution: Route HTTP reservations through the same messaging-service authority used by WebSocket previews. A finalization missing its receipt resolves that same reservation rather than inventing a separate time. A bounded service timeout preserves the existing persistence fallback when messaging is unavailable. Serialize same-message source/translation/retry upserts with a transaction-scoped advisory lock, preserving the first persisted order (or the existing DB creation time for legacy rows). The DB ID, persistence timestamp, history cursor, and unread-count timestamps are unchanged.
+- Verification: All 160 web test files / 1,489 tests and all 23 messaging tests passed. Web and messaging TypeScript checks and targeted web ESLint passed. Regressions cover two viewer states with skewed device clocks, equal and unequal server timestamps, opposite finalization/DB arrival order, translations, cached hydration, missing ordering fields, late echoes, HTTP/WS arrival races, signed receipt replay after restart, forged/cross-account receipts, authenticated reservation requests, and immutable persisted order across retries. Existing real-socket delivery coverage also passed. No microphone or physical-device test was performed in this change, and production user data was not modified.
+- Scope boundary: This fixes repeated reordering after a shared order has been received. Optimistic device-local messages can still reconcile once when they first receive server order, including after an offline interval. Guaranteeing zero movement before any server acknowledgement while also guaranteeing identical order on both devices would require delaying initial shared-message placement; this change does not introduce that delay.
+- Deployment: Deploy the updated web app and messaging service together. No native rebuild, app/API version change, environment variable, Prisma migration, or historical-data rewrite is required. PR #211 was already merged; this follow-up is committed to `codex/messenger-client-sot-2.0.1` and is not automatically included in that prior merge. No service-branch merge or production deployment was performed for this follow-up.
+- Subsequent user-directed integration: Applied only this fix from `6a48c1be` directly to `codex/messenger-tabs-device-test`, after fast-forwarding its clean local worktree to the already-merged PR #211. The cherry-pick was conflict-free and its resulting code tree matched the tested source tree. Pushing the service branch requests its normal automatic deployment; deployment completion is a separate runtime status.
+
+## 2026-09-11 — 번역 대기 영역 재발
+
+- 요청: 발화 버블 첫 표시부터 번역 대상별 국기와 대기 표시가 자리를 차지하고, 발화 종료/최종 번역 전환 중에도 사라지지 않아야 한다.
+- 작업 위치: `codex/messenger-tabs-device-test`의 `92413c9a`에서 새 브랜치 `codex/translation-placeholder-session-stop`과 별도 워크트리 `/Users/nam/mingle-translation-session-fix`를 생성했다.
+- 번역 초기 표시 원인: `60f13766`에서 추가된 공유 대화 실시간 전송은 원문/번역 텍스트만 보내고 `targetLanguages`를 보내지 않았다. 받는 기기는 첫 번역이 도착하기 전까지 표시할 번역 언어를 알 수 없었다. 로컬 발화 생성기와 펼친 버블 자체에는 이미 대상 언어/대기 표시 지원이 있었다.
+- 번역 확정 전환 원인: `66a5010d`에서 도입된 `pruneUnresolvedTranslationTargets`가 일부 중간 번역을 확정 발화에 옮길 때도 아직 텍스트가 없는 대상을 삭제했다. 공유 미리보기를 원문만 저장된 서버 메시지로 교체할 때는 미리보기의 번역 대상/중간 번역도 함께 사라질 수 있었다.
+- 수정: 실시간 송신/메시징 중계에 검증된 번역 대상 목록을 추가했다. 대상 정규화는 빈 번역 텍스트만 정리하고 대상 언어 행은 유지한다. 공유 미리보기에서 저장 메시지로 전환할 때 번역 대상과 중간 번역을 이어받고, 최종 번역이 도착하면 해당 텍스트로 교체한다. 원문을 먼저 저장하는 API에도 그 발화의 대상 목록을 함께 보내고 메시지 메타데이터에 보존해, 실시간 미리보기를 놓쳤거나 만료된 수신자와 재접속/새로고침 hydration에도 대기 행을 복원한다. 후속 원문 전용 서버 응답도 기존 대상 목록을 지우지 않는다. 과거 메시지에 현재 방의 언어 설정을 소급 적용하지 않는다.
+- 자동 Stop 조사 및 수정은 사용자 지시로 되돌렸다. 현재 브랜치에는 이 문제를 위한 네이티브 앱 변경이 포함되지 않는다.
+- 검증: 전체 웹 단위 테스트 160개 파일/1,494개와 스크립트 테스트 6개를 통과했다. 번역 대상의 웹 송신·내구성 전송·서버 저장·재접속 hydration을 포함한 집중 266개, 메시징 24개, 웹/메시징 TypeScript 및 변경 파일 ESLint 검사도 통과했다.
+- 회귀 검증 범위: 실제 송신기 → 메시징 중계 → 다른 사용자 미리보기 → 원문 저장 → 최종 번역의 경로에서 렌더링된 행 수/국기/대기 표시를 검사했다. 로컬 발화 확정도 미완료 언어를 유지한다.
+- 한계: 물리 기기 마이크 테스트는 수행하지 않았다. 번역 텍스트가 여러 줄로 늘어날 때의 정상적인 높이 증가는 남는다.
+- 반영 범위: 새 작업 브랜치에 커밋/푸시한다. 번역 수정은 웹 앱과 메시징 서비스를 함께 배포해야 한다. 이 작업에서 네이티브 앱 변경, 운영 배포, 앱/API 버전 변경, 스키마 변경과 마이그레이션은 없다.
+
+## 2026-09-08 — Search tab scroll boundaries and keyboard handling
+
+- Report: [Search tab scroll area and keyboard issue](https://app.notion.com/p/roycenam/3d122e3ed20a80ceb402fa52755319d9). Long search results moved the search header and bottom tabs along with the results.
+- Branch: `codex/search-scroll-keyboard`, based on `origin/codex/messenger-tabs-device-test` at `9c94e666`.
+- Root causes:
+  - The 400px mobile canvas scales down on narrow screens, leaving a layout box taller than its visible shell. `overflow: hidden` still permits programmatic/focus scrolling. A result button receiving focus scrolled the outer shell by 19px at 360px width, moving the header above the viewport and the tabs away from the bottom.
+  - The search page did not track the visual viewport when the keyboard covered part of the screen.
+  - The native iOS layout route list omitted `/connect`, leaving whole-WebView scrolling, bouncing, and the keyboard accessory enabled on search.
+- Resolution:
+  - Use `overflow: clip` for the search page and its canvas ancestors, scoped to search, while retaining the result list as the scroll container with contained overscroll.
+  - Observe visual viewport resize/scroll and parent resize, convert visible pixels to canvas coordinates, and cap page height to the parent. Android WebView resizing does not cause a second keyboard-height subtraction. Clean up listeners, the observer, and scheduled frames on unmount.
+  - Submit the search form to dismiss the keyboard without navigating or clearing the query. Dismiss on result-list dragging, result selection, and bottom-tab selection. Keep clear-and-refocus behavior and reset the result scroll offset when editing the query.
+  - Apply the existing iOS fixed-screen scroll and keyboard-accessory policy to localized search routes.
+- Validation:
+  - 34 Vitest checks passed for viewport geometry/lifecycle, native layout routes, mobile canvas scaling, search cache, and tab navigation. ESLint and the full web TypeScript check passed.
+  - Browser verification used the actual search component, viewport observer, bottom tabs, and generated application CSS with 20 synthetic users and mocked authentication/network responses, served through this worktree's local devbox.
+  - At 390x844, the results reached scroll offset 635.5px while the header stayed at 0 and tabs stayed at 844px. At 360x740, focusing a bottom result kept the outer shell at scroll offset 0 and the header at 0, fixing the reproduced 19px displacement.
+  - A simulated 300px keyboard reduction moved the tabs to 440px on the 740px screen; closing restored their position. Search submission blurred the input, changing the query reset the result offset to 0, and a follow action completed with one click while the input had focus.
+- Limits: Browser keyboard geometry was simulated; physical iOS/Android keyboards and touch dragging were not exercised. The iOS WebView policy change requires a rebuilt native app. No release or production deployment was performed; app/API namespaces remain at 2.0.3.
+
+## 2026-09-08 — Hide search tabs while the keyboard is open on both platforms
+
+- User clarification: The keyboard should cover the bottom tabs on both iOS and Android. The search header must remain fixed. This supersedes the earlier behavior that raised the bottom tabs above the keyboard.
+- Change: Hide the search tab bar while a focused search field reduces the available viewport by more than 100px. The result list fills the space above the keyboard. Restore tabs after viewport recovery, including when Android Back closes the keyboard without blurring the input. Keep tabs hidden if blur precedes the keyboard-closing resize.
+- Platform handling: Remember the unobscured viewport height so Android `adjustResize` is detected even when `innerHeight` and `visualViewport.height` both shrink. iOS overlay keyboards use the same observer. Small toolbar changes and hardware-keyboard focus do not hide tabs. Width changes reset the height reference.
+- Validation: 35 targeted tests passed, including separate iOS-overlay and Android-resize lifecycles, plus ESLint and the full web TypeScript check. In the devbox browser fixture at 390x844, a simulated 300px keyboard hid the tabs and let results extend to 544px; closing restored tabs at 844px. The header remained at y=0 in both states, and tabs restored while the input remained focused.
+- Limits: Physical-device keyboards were not tested. No additional native code or app/API version change is introduced by this follow-up.
+
+### Device installation follow-up
+
+- Installed and launched this branch on the wired iPhone 11 Pro and Galaxy S9 on 2026-09-08. Both devices received clean installs; Android required uninstalling the previous package because its signing certificate differed.
+- The devbox web, STT, and messaging servers run from the search-scroll-keyboard worktree using 73 runtime values read from `secret/mingle/prod`. Cloudflare named-tunnel bridges route to local ports 5538, 7538, and 9538. Servers and the connector remain running for user testing.
+- Verified the installed iOS app is 2.0.3 (105) with `ios/v2.0.3`, and Android is 2.0.3 (97) with `android/v2.0.3`. Both built apps point to `mingle-app-devbox.photo-for-passport.com` and `mingle-stt-devbox.photo-for-passport.com`.
+- Confirmed both native app processes are running, the web tunnel returns HTTP 200, the STT tunnel accepts a WebSocket handshake, and messaging health reports realtime configuration active. Physical keyboard behavior has not yet been exercised after login; the clean installs require signing in again.
+
+## 2026-09-08 — Preserve native Google login attempts through auth-screen recreation
+
+- Report: Google login did not complete in the freshly installed Android app.
+- Evidence: The devbox server recorded a successful Google OAuth callback and native-auth completion for the original Android request, while subsequent pending-result polls used different request IDs. This supports a lost/replaced client attempt; the exact device-side trigger was not captured. The custom callback scheme resolves to the installed Mingle activity, and the server completed Google authentication, so an OAuth client/signature rejection was not the observed failure.
+- Code defects addressed: The auth-session reset effect stopped polling and cleared the loading state even when an external native login was still active. A login-screen remount lost its request/provider refs, and another Continue action could replace the request before the native browser completed it.
+- Resolution: Preserve active attempts across unauthenticated session refreshes, reject duplicate starts synchronously, and retain only request ID/provider/start time in sessionStorage so a recreated screen resumes polling without reopening OAuth. Retire the saved attempt on completion/error; expire abandoned saved requests after the native browser's three-minute timeout. No bridge token or account credentials are persisted by this recovery mechanism.
+- Validation: 15 targeted auth tests passed. In a browser fixture using the actual MingleHome component under React StrictMode and mocked OAuth, one start retained the same request across remount and loading-to-unauthenticated transitions; the completion event invoked signIn exactly once. Targeted ESLint and source TypeScript checks passed. The full generated Next route check is blocked by the pre-existing exported `upsertNativeAppleUser` helper in the Apple exchange route, outside this change.
+- Device handoff: The existing prod-Vault devbox server serves the fix. Android was restarted without deleting app data; a real Google account retry is still needed to confirm the end-to-end outcome. No native rebuild or production deployment was performed for this auth follow-up.
+
+## 2026-09-08 — Keep search tabs hidden through keyboard rotation
+
+- PR review issue: Android `adjustResize` reports keyboard-reduced heights after rotation. Resetting the unobscured reference to that height incorrectly restored the bottom tabs above the open keyboard.
+- Resolution: Preserve keyboard detection through width changes and remember unobscured heights by viewport width. For a previously unseen orientation while the keyboard is open, use the previous width as an estimated unobscured height, allowing the existing 100px system-bar tolerance. Do not retain the old portrait height in landscape, which would prevent tab restoration on keyboard dismissal.
+- Validation: 22 viewport/native-layout tests passed, and targeted ESLint passed. The viewport lifecycle checks now cover rotation with an open keyboard, dismissal without blur in landscape, reopening, and rotation back to portrait for both iOS overlay and Android resize models.
+- Limits: Rotation was simulated in unit tests, not exercised on physical devices. First-time orientation detection still estimates geometry; unusual multi-window sizes are not covered. This web-only correction is served by the existing devbox without a native rebuild.
+
+## 2026-09-08 — Persistent message reactions in conversation rooms
+
+- Request: After merging PR #218, add thumbs-up, heart, check, sad, and laugh reactions to messages, starting from `codex/messenger-tabs-device-test`.
+- Workspace: `codex/message-reactions` at `/Users/nam/.codex/worktrees/mingle/message-reactions`, based on merge commit `8e96841c`. PR #218 merged successfully and its Railway deployment reported success.
+- Interaction: Long-press or right-click a completed message to reveal five reactions above the existing copy/listen actions. Keyboard users can focus a bubble and press Enter or the context-menu shortcut; Escape closes the menu. Reactions apply to the entire message, including its translated bubbles. Draft speech has no reaction controls.
+- Selection: Each user has one reaction per message. Choosing another replaces it; choosing the current reaction again removes it. Badges under the message show counts and highlight the viewer's selection. Tapping a badge adds, switches, or removes the viewer's reaction. Failed requests display a localized retry message without inventing a successful count; duplicate taps are guarded while a request is pending.
+- Persistence/security: Add `AppMessageReaction` with a composite message/user primary key and cascading foreign keys. API requests require a signed-in conversation member; writes also use the existing block/left-member policy. Lookups are scoped to the room's session key and exclude soft-deleted messages. Clients cannot choose another user's identity. Explicit PUT set/remove operations are idempotent. Responses expose counts and the viewer's selection, not other users' IDs.
+- Synchronization: Reuse the existing room event bus for invalidation, plus a five-second visible-room polling fallback and refresh on reconnect/visibility. Batch reads by the currently mounted message IDs (100 per request). Hidden rooms/tabs skip reads, overlapping refreshes are suppressed, and stale reads cannot overwrite a local mutation. Room state is isolated without remounting the live conversation when visibility changes.
+- Compatibility: Shared web, iOS, and Android endpoints cover current `v2.0.3` namespaces through the existing `v2.0.0` rewrite contract. App and API versions remain 2.0.3. No new environment variables or native rebuild are required.
+- Migration: `20260908135150_add_message_reactions` was generated and applied using `prisma migrate dev`. The existing migration `20260803150000_add_app_event_log_message_event_type_unique` fails on an empty database because it executes `CREATE INDEX CONCURRENTLY` in a transaction. For this isolated local test database only, the unchanged base schema was baselined in a temporary migration directory, then Prisma generated and applied the new table migration. Only the generated incremental migration is committed. Production data and migration history were not modified. Apply this new migration before deploying this feature's web code.
+- Validation: 56 targeted tests passed across reaction authorization/validation/aggregation and existing message, menu, timestamp, and auth behavior. Full TypeScript validation passed. Live devbox checks on the dedicated `mingle_message_reactions` database verified both v2.0.3 API namespaces, anonymous/nonmember denial, two-user counts, repeated-write idempotency, switching, and cancellation preserving the other user's reaction. A real messaging WebSocket received a notification after mutation.
+- Browser validation: Actual ChatBubble and reaction components under React StrictMode used real local API/DB calls with disposable test accounts. Verified selection, a second user's count update, cancellation, refresh persistence, visible error feedback after an authentication failure, keyboard menu access, and the five-option menu at 360px width. Physical iOS/Android long-press gestures were not exercised. Temporary QA assets and local test session tokens are excluded from the PR.
+
+### Reaction placement and participant-list follow-up
+
+- User decision: Keep reaction results directly below their message, right-aligned for the viewer's messages and left-aligned for received messages; reserve space only when a reaction exists. The own-message column now stacks vertically, preventing badges from taking text width beside the bubble.
+- New interaction: Short taps still select/switch/remove the viewer's reaction. Holding a result badge for 450ms opens a bottom sheet showing who reacted. Moving more than 10px or canceling the pointer cancels the hold, and the click following a completed hold is suppressed so inspecting a list never removes a reaction. Desktop right-click and keyboard context-menu/Shift+Enter shortcuts also open the sheet.
+- Participant sheet: Switch among all five reaction kinds; display each person's name and handle with a marker for the viewer. Support loading, empty and retry states, 50-person cursor pages, a scrollable list, safe-area padding, focus containment/restoration, Escape, backdrop/close button, and native Back. Closing or switching kinds cancels the previous list request; hidden conversation rooms close the sheet.
+- Access: Participant reads reuse the authenticated room-membership and visible-message checks. The list endpoint selects only name/handle/ID and the viewer marker; no email or private account fields. Cursor pagination uses user-ID ordering and continues even if the previous cursor user's reaction was removed. Existing summary responses remain unchanged.
+- Review recovery fix: All reaction reads/writes have a ten-second deadline covering response body parsing. Aborted/stalled requests release pending state so future polls and user retries can proceed. Participant requests also abort on close/switch. Reaction notification publishing has a three-second server deadline, so a stalled messaging service cannot indefinitely hold a successfully saved reaction response.
+- Validation: 75 targeted tests passed, covering participant authorization/pagination, request timeouts/cancellation, notification timeout, and existing message/menu/timestamp behavior. Browser checks using actual components and local API/DB confirmed the own-message badge starts below the message, both participant names appear, switching to an empty kind works, Escape restores focus, and short taps still remove only the viewer's reaction. Simulated touch-pointer holds opened the list without changing the count; pointer movement canceled the hold without changing the count. Physical phone long-press was not exercised.
+- Deployment: No additional migration, environment variable, or native rebuild. The previously generated `20260908135150_add_message_reactions` remains the only migration required by PR #219.
+
+## 2026-09-17 — Re-review PR #219 interaction and storage edge cases
+
+- Review findings: A keyboard context-menu action on a reaction badge opened the participant list but left the following synthetic click able to toggle that reaction. The copy/reaction menu also always chose below the message when the upper space was short, which could place a bottom-of-viewport menu outside the visible area. A partially configured private R2 credential pair could be combined with the public profile pair and produce an invalid mixed credential.
+- Resolution: Mark keyboard participant actions as click-suppressed, choose the menu side with the greater available viewport space, constrain the menu height to the viewport, and fail closed when only one private credential is configured. No schema or migration change was needed.
+- Validation: Added focused side-selection and credential-pair tests; the complete unit suite (1,636 tests), TypeScript validation, and targeted ESLint checks passed. User-owned uncommitted composer UI changes remain untouched.
+
+## 2026-09-08 — Send conversation photos from the existing composer
+
+- Request and decision: Add photo/image messages on the same `codex/message-reactions` branch. The user selected replacing the keyboard-close icon inside the text field with a plus menu containing Choose photo and Hide keyboard. Keep the microphone, input width, and send control. Voice mode exposes the same plus beside its keyboard button.
+- Interaction: Choose one JPG, PNG, or WebP image up to 10MB, inspect its preview, then explicitly send it. Canceling the picker/menu does not send a message or clear the text draft. While sending, disable repeat submission and bound the request to 45 seconds. A failed request retains the selected image and client message ID for retry. Hide keyboard returns to the existing voice mode.
+- Display: Render a photo thumbnail on the sender's usual side, with the existing timestamp and reaction badges. Tap/Enter opens a larger viewer; close, backdrop, Escape, and native Back dismiss it. Long-press/context menu offers reactions and Copy photo link. Image activation does not invoke the text bubble's double-tap copy/listen behavior. Failed image loads offer retry. Dialogs contain keyboard focus and restore it on dismissal.
+- Persistence: Store image references and dimensions in existing AppMessage JSON metadata, with a Photo text fallback for lists and older clients. Hydration and local-cache reconciliation retain image data; images are excluded from speech translation context. Image uploads bypass translation requests. The server validates actual raster bytes, rotates EXIF orientation, scales within 2048px, removes metadata, and encodes JPEG before storing through the existing R2 configuration. Clients receive authenticated room/image paths rather than object keys. Reads require room membership and a visible message; writes also enforce the existing block/departure policy. Recheck membership after upload and clean up failed/concurrent losing uploads. Identical retries reuse the saved message. Room/list invalidation uses the existing messaging service.
+- Validation: 156 targeted tests passed, including real image decoding, EXIF removal, spoofed format rejection, access checks, post-upload membership revocation, storage failures, concurrent retries, and upgrading cached text fallbacks to image messages. Full TypeScript and targeted ESLint checks passed. Real devbox requests against an isolated local PostgreSQL database and the existing R2 service verified upload, JPEG retrieval by another member, nonmember/anonymous rejection, sanitized hydration, and idempotent retries through both iOS/Android v2.0.3 routes. Only generated test images were uploaded; test objects and their isolated database messages were removed afterward.
+- Browser validation: Actual composer, ChatBubble, image viewer, and reaction components under StrictMode at 360x740 verified file selection, preview, explicit send, thumbnail load, enlargement, Escape/focus restoration, a heart reaction surviving reload, and Hide keyboard. The test wrapper used simplified surrounding controls; the complete live screen and native photo pickers were not exercised on phones.
+- Deployment: No additional database migration or environment variable. PR #219 still requires the previously generated reaction migration. Add sharp as an explicit server dependency and the iOS photo-library usage description. The permission description requires an iOS rebuild; native apps were not rebuilt/reinstalled for this follow-up. App/API versions remain 2.0.3. HEIC/GIF/multiple-image selection are outside this implementation.
+
+## 2026-09-08 — Translate profile biographies with versioned publication
+
+- Request: Apply the agreed content-translation policy to every profile biography display, while keeping the existing authoring screen and account-ID ownership. Continue on `codex/message-reactions` / PR #219.
+- Display: The shared ProfileBio component reads the viewer's saved default display language, the same account preference updated by collapsed-message language selection. It falls back to the viewer's primary/default conversation languages and then UI locale. Display a cached translation automatically, otherwise the published original with a Languages icon and See translation in a single minimum-44px button. Identical source/target codes suppress the button. During a requested translation keep the original and show Translating; support original/translation toggling and explicit retries after failure. Reset the toggle when version or display language changes. Profile, public profile, and image-preview captions use the component. The image preview now scrolls long captions within its viewport.
+- Editor/navigation: The textarea always receives the owner's saved original through the owner-only bioDraft field, while the profile display receives the published original. Show processing/ready/partial-failure status beneath the textarea. Saving does not disable Back. A save completing after its editor was closed/reopened cannot close the new editor session. Profile requests carry the initiating account ID and ignore results after an account change; server ownership continues to come exclusively from the authenticated account.
+- Save policy: Persist the new original and its immutable version before returning the profile response. Next after() runs bounded translation work after the response, independently of the initiating screen. First-time biographies become public immediately. Generate English, Simplified Chinese, Japanese and Korean except the detected source language. On subsequent text changes, include every additional language with a previously successful saved translation. Unchanged text and name/photo-only edits do not create a version or translation batch.
+- Publication/failures: ProfileBioState tracks draft and published version IDs separately. Existing public text/translations remain on the published version until the replacement batch settles. Publish the latest matching version atomically after all attempts finish or its 55-second deadline expires. Each provider call has a 15-second deadline; four workers bound concurrency. Expired interrupted jobs settle on the next read without restarting translation. Failures store no translated text and never automatically retry. Clearing a biography clears both pointers immediately. Late results cannot publish over a newer version or restore a cleared biography.
+- Shared requests: DB rows are keyed by biography version and target language, with per-attempt IDs/deadlines. Short per-user row locks serialize claims across server processes; no transaction remains open while calling the provider. Eight concurrent requests were verified to yield one job. Reuse successful translations across viewers. On-demand jobs can wait for an initial batch and have a bounded lease; expired attempts cannot overwrite a retry. Legacy biographies are not bulk translated. Viewing one may cache source-language detection only, so same-language buttons can be suppressed; translation generation waits for an edit or explicit request.
+- Language/support: Provide button, pending, retry and editor-status copy in all 15 primary UI locales. Preserve line breaks, wrap long words, support automatic text direction, and retain native navigation. Translation polling reads status only: every two seconds while processing and every fifteen seconds otherwise, skipping hidden documents. Successful display-language mutations emit an invalidation event; focus/visibility changes also refresh.
+- Schema/deployment: Prisma generated and locally applied `20260908144017_add_profile_bio_translations`, adding state/version/translation tables. The same isolated base-schema migration workspace used for the earlier reaction migration avoids the pre-existing historical concurrent-index replay failure. This is PR #219's second migration; apply it before deploying the new web code. No new production environment variables; use the existing GEMINI_API_KEY and Gemini Flash Lite provider. No native code/version change in this biography follow-up; app/API namespaces remain 2.0.3.
+- Automated validation: 197 targeted regression tests and 10 real-PostgreSQL lifecycle tests passed. The lifecycle suite uses an explicitly supplied isolated test DB and disposable users; it covers the four-language/source-skip rule, unchanged saves, concurrent shared requests, additional-language regeneration, partial failures/manual retries, stale edits, abandoned jobs, a never-resolving provider, late manual results, deletion, and legacy publication. Full TypeScript validation passed. Real devbox HTTP tests exercised iOS v2.0.3 save and Android v2.0.3 snapshot routes. The save returned in 342ms while the previous public text remained; real provider translation subsequently succeeded for all applicable defaults. A German request from the actual component showed original + Translating, then a real German translation, then toggled back to the English original.
+- Provider-format correction (2026-09-09): Real Japanese/Korean responses sometimes echoed the input JSON wrapper despite a plain-text instruction. Require structured JSON output with one text field, validate its type/length, and expose only the field value. Six provider-response tests cover extraction and malformed/empty/oversized responses. A subsequent real save produced clean Japanese, Korean, Chinese, and previously requested German translations with no wrapper text.
+- Final UI validation (2026-09-09): Actual ProfileBio components were exercised in Android Chrome on the connected Galaxy S9 (360px viewport) and Safari on an iPhone 17 / iOS 26.5 simulator (402px viewport). Both passed original/translation activation, a 44px button height, scrolling a generated long translation, and no horizontal overflow; text heights were 1183px and 968px respectively. These were scrollable component fixtures, not a rebuilt Mingle native app or a physical iPhone test. A browser fixture also changed the real conversation display-language preference and observed the saved Japanese biography translation. An authenticated owner deletion returned HTTP 200 and immediately removed the displayed biography; changing saved-original props invalidates stale polls. Temporary fixtures, generated QA users, and test-driver processes were cleaned up. Full TypeScript and targeted ESLint checks passed.
+
+## 2026-09-09 — Resolve PR 219 photo storage and push review findings
+
+- Review findings: Conversation images used the public profile R2 bucket, allowing
+  anonymous reads when the object URL was known. Image sends also omitted the
+  APNs/FCM conversation-message notification, so backgrounded recipients received
+  no photo-arrival notification.
+- Storage correction: Require the dedicated `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME`
+  (or `R2_CONVERSATION_BUCKET_NAME`) and reuse the existing R2 account credentials.
+  Refuse missing credentials/bucket and either configured public profile bucket.
+  Every put/get/delete targets only the dedicated bucket; missing objects never
+  trigger a public fallback. Profile-image storage remains unchanged. Provisioning
+  must disable r2.dev, custom domains, and any public Worker access to this bucket.
+- Credential correction (2026-09-09): Prefer the separately scoped
+  `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` and
+  `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` when present. Fall back to the
+  profile credential variables only for deployments whose single token can access
+  both buckets. This prevents a profile-only token from causing photo uploads to
+  fail with R2 `AccessDenied`.
+- Image viewing (2026-09-09): Tapping a sent photo opens a dark, full-size viewer.
+  The viewer uses pointer gestures with `touch-action: none` so iOS and Android
+  WebViews can pinch to zoom up to 4x and pan the enlarged image without scrolling
+  the conversation. A double tap toggles 2x zoom, and the close control remains a
+  44px touch target above the image.
+- Notification correction: The successful database insert schedules the existing
+  conversation push helper through Next after(). Resolve recipients after pending
+  invitation materialization and use the stored message ID, authenticated sender,
+  and a Photo preview. Matching retries and concurrent insert losers do not queue
+  another push. Provider errors are caught after the response and do not turn a
+  saved image into a failed send. Delivery retains the existing best-effort policy.
+- Validation: 62 targeted tests passed, covering private-bucket-only reads/writes/
+  deletes, unsafe or missing configuration, missing private objects, image access
+  rules, JPEG processing, successful push scheduling, retries/concurrent losers,
+  newly materialized recipients, push failure, and existing text/realtime behavior.
+  A real request to the existing isolated devbox returned HTTP 503 without the new
+  bucket setting, confirming public storage is not used as a fallback. Full TypeScript
+  and targeted ESLint checks passed.
+- Deployment: Add the dedicated private bucket setting and grant the existing R2
+  credential access before enabling photo sends. This follow-up does not provision
+  or change production Cloudflare/Vault resources. Private-bucket live access and
+  native APNs/FCM delivery still require deployment/device verification. The two
+  existing PR migrations remain the only database changes; no new migration or
+  native/version change is introduced here. Updated the Railway deployment guide
+  with the bucket, migration, existing-object cleanup, and device test sequence.
+
+## 2026-09-09 — Install PR 219 on connected iOS 18 and Android phones
+
+- Request: Rebuild/install the current branch on the connected iOS 18 and Android
+  phones and restart all devbox services using prod Vault and Cloudflare tunneling.
+- Runtime: Restarted this worktree's devbox supervisor with `--profile device`,
+  `--tunnel-provider cloudflare`, and `--vault-path secret/mingle/prod`. Do not use
+  `--device-app-env prod` for this setup: that option skips local servers/tunnels
+  and points the native apps at the production service. The three local services
+  run on ports 15558 (web), 17558 (STT), and 19558 (messaging).
+- Connectivity: The web tunnel returns HTTP 200 after its locale redirect; the STT
+  tunnel completes a WebSocket handshake; messaging health reports realtime
+  configured. Both apps point to `mingle-app-devbox.photo-for-passport.com` and
+  `mingle-stt-devbox.photo-for-passport.com`. Servers and the named tunnel remain up.
+- Devices: Installed and launched Release builds on the connected iPhone 11 Pro
+  running iOS 18.6 and Galaxy S9 (SM-G960N). iOS is 2.0.3 (105) with `ios/v2.0.3`
+  and the photo-library usage description; Android is 2.0.3 (97) with
+  `android/v2.0.3`. Native app processes were verified running on both phones.
+- Android install issue: The existing installation had a different signing
+  certificate, so in-place installation failed with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+  Uninstalled it and installed the successfully built APK, then launched it.
+  Android requires signing in again. iOS installation preserved its app data.
+  Local CocoaPods checksum/formatting churn was removed from the tracked diff.
+- Pending prerequisites: Read-only inspection found none of the four new feature
+  tables in the prod Vault database and no Prisma migration-history table. Asked
+  the user before applying the two migrations to that production database; no DDL
+  has been executed. The dedicated private bucket setting is missing from prod
+  Vault, and the existing R2 object credential cannot list/manage buckets (403).
+  The Mac is locked, preventing Cloudflare dashboard access, so requested unlock
+  to provision private storage. No production Cloudflare/Vault changes were made.
+  Installation and service connectivity are complete, but reaction/biography and
+  photo feature acceptance must wait for these database/storage prerequisites.
+
+## 2026-09-09 — Align conversation photo controls and anchor attachment menu
+
+- Report: Voice mode showed a plus button at a different height from the keyboard control; keyboard attachments opened an unnecessarily large modal.
+- Change: Voice mode now opens the photo picker directly through a photo icon with the same button dimensions, icon size, stroke, and vertical alignment as the keyboard control. Keyboard mode keeps the photo trigger beside the independent keyboard-close control and shows a compact photo-only tooltip immediately above the trigger. The preview remains a confirmation dialog.
+- Follow-up: The first tooltip implementation was clipped by the input shell's `overflow-hidden`; changing that shell to `overflow-visible` kept the tooltip anchored to the button while preserving the input layout.
+- Validation: TypeScript check and targeted ESLint passed. Android physical-device verification confirmed the voice-mode alignment, keyboard-mode side-by-side controls, and visible anchored tooltip. iOS was relaunched against the same tunnel; physical screenshot verification remains pending.
+
+## 2026-09-09 — Avoid the generic Mingle user label in Explore search
+
+- Surface: Explore search result names and handles, including cached results restored after tab navigation.
+- Issue: A valid user with a handle but no profile name was rendered as the localized fallback `Mingle 사용자`, even though the row already contained the account's real handle. This made an incomplete profile look like a synthetic system account and caused the generic label to reappear after returning to the search tab.
+- Resolution: Use the trimmed handle as the display name when a profile name is absent, and render the secondary handle line only when it adds information beyond the profile name. The existing fallback remains only for malformed records with neither a name nor a handle, while cached and fresh search payloads now follow the same rendering rule.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search for a broad query that returns a name-less account, verify the real handle is shown once instead of `Mingle 사용자`, then leave and return to Explore to confirm the cached row uses the same display rule.
+
+## 2026-09-09 — Localize Explore pagination controls
+
+- Surface: Explore user search pagination, including the `Load more`, loading, and retry-error states.
+- Verification: The app exposes 15 primary UI languages. Pagination copy is defined beside the existing Explore/search copy in `primary-ui-copy.ts`, merged through `getSupplementalDictionary()` and `getDictionary()`, and consumed by `connect-page.tsx` instead of owning a separate translation path.
+- Resolution: Require all three pagination strings in every primary UI dictionary and add an exact 15-locale contract test. Supported locales outside the 15 primary UI languages continue to use the established English supplemental fallback.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: The i18n test covers all 15 localized values and the English fallback for a non-primary supported locale.
+
+## 2026-09-09 — Preserve restored Explore search pages
+
+- Surface: Explore search when returning from a user profile or remounting the search tab after loading multiple result pages.
+- Issue: The history snapshot restoration effect populated the query, results, and next cursor, but the initial search effect then ran with its first-render empty query and cleared those values. The restored list could disappear or trigger an unnecessary first-page request, losing the loaded-page state.
+- Resolution: Track the pending restored query separately. Skip the initial empty-query search effect, preserve the matching restored query state once it arrives, and consume the restore marker when the user changes the query so normal search behavior remains unchanged. Normalize restored history queries before comparing them.
+- Data change: None. No Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Validation: Added restore-state regression tests for the initial effect, repeated mount-effect replay, restored query, and changed-query paths. The full web unit suite passed with 164 files and 1,521 tests; targeted lint and TypeScript checks also passed.
+
+## 2026-09-09 — Hide the reserved admin handle from Explore search
+
+- Surface: Explore user search API responses, fresh result rendering, and cached result restoration.
+- Issue: The reserved `admin` account was still eligible for user search and could appear as a normal followable result. This was especially visible in broad searches that were being used to validate pagination and cache restoration.
+- Resolution: Treat `admin` case-insensitively as a search-excluded handle alongside anonymous tracking handles. The database query excludes it before pagination, while the client and session cache remove any stale `admin` row that was already received.
+- Data change: None. No user record, Prisma migration, API namespace, native bridge, or server configuration change is required.
+- Testing notes: Search with a broad query and an `@admin`-like query, verify no case variant of the reserved handle appears, then return to Explore from a cached result set and confirm it remains absent.
+## 2026-09-02 — Short XR presentation goal split
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation needed an additional third page to explain the two competing motivations behind the language-exchange problem. The existing centered slide treatment did not provide enough visual separation or emphasis for the two goals.
+- User impact: Viewers could not immediately distinguish between wanting to make foreign friends and wanting to learn a foreign language, which weakened the problem framing in the short presentation.
+- Resolution: Added a centered third slide with the `문제` kicker and `닭 vs 달걀 문제` title. Added a responsive two-column goal layout with larger type, separate accent treatments, gradient key-color bars, soft tinted panels, and mobile sizing that preserves the side-by-side comparison. Updated the static page counter to six slides; the existing slide navigation continues to derive the final count from the slide elements.
+- Tests: Verified six top-level `.slide` elements, confirmed the requested page order and text, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR goal slide kicker alignment follow-up
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new third slide used centered content, but the absolutely positioned `문제` kicker still inherited the default left anchor from the generic slide-copy style.
+- User impact: The kicker appeared on the left while the title and two goal cards were centered, creating a visible alignment inconsistency at the top of the slide.
+- Resolution: Centered the goal slide kicker independently with a 50% anchor and horizontal translation. The rule applies across desktop and mobile layouts.
+- Tests: Rechecked the third-slide DOM layout and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market comparison slide
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a market-context page showing that multiple product categories already address parts of the foreign-friend and language-learning problem. A plain competitor list would not communicate the breadth of the market or keep the slide visually scannable.
+- User impact: Without a compact market map, viewers could miss the distinction between language exchange, sincere voice conversation, global dating, and offline meetups, as well as the competitive context for Mingle.
+- Resolution: Added a fourth slide with a left-aligned `시장` message and a right-side 2x2 category grid. Each category uses a distinct key color, soft tinted panel, and irregularly scattered local service icons without divider lines. Grouped K Friends, HelloTalk, Tandem, Hilokal, and Yeetalk under `언어교환`; Maum, Connecting, and Wakie under `진솔한 음성 대화`; Meeff, Azar, Tinder, and Yubo under `글로벌 데이팅`; and Timeleft and Meetup under `오프라인 모임`. Added local app artwork assets and updated the presentation count to seven slides.
+- Tests: Verified the page-four text, category counts, local image loading, and `04 / 07` counter in the local browser at desktop and mobile sizes. Confirmed no viewport overflow and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category simplification
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The category panels on the market slide added visual weight that competed with the service icons and made the market map feel more like four separate cards than one comparison field.
+- User impact: Viewers could focus on the panel decoration instead of quickly scanning the category names and the services grouped beneath them.
+- Resolution: Removed category backgrounds, rounded-card treatment, shadows, glow ornaments, and corner dots. Kept the 2x2 placement, category names, per-category title colors, and irregular icon clouds as the only visual structure.
+- Tests: Rechecked the market slide at desktop and mobile sizes, confirmed all 14 local icons load, and ran `git diff --check`.
+
+## 2026-09-02 — Short XR market category spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After simplifying the market slide to names and icons, category labels were left-aligned, the overall grid sat too close to the viewport edge, and the icon clouds left too much unused space inside each 2x2 area.
+- User impact: The category groups felt visually unbalanced and the service icons had less emphasis than the market comparison needed.
+- Resolution: Centered every category title, added balanced outer padding around the market grid, reduced the internal category and icon-cloud insets, and increased the title and icon scale while preserving the irregular positions and responsive 2x2 layout.
+- Tests: Verified all four titles use centered alignment, all 14 local icons load, the `04 / 07` counter remains correct, page three remains centered, and the layout has no body overflow at desktop and mobile sizes.
+
+## 2026-09-02 — Short XR language-exchange market proof page
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/logo-market-kfriends-blue.jpg`
+- Issue: The market comparison needed to show the scale of the language-exchange category before the broader four-category map. The existing Kfriends artwork represented a separate service from the provided KFriends app, so the competitor set also needed both apps without conflating their download sizes.
+- User impact: Viewers could not immediately see how many large language-exchange services compete in this space or distinguish the two similarly named KFriends products.
+- Resolution: Added a centered fourth slide stating that many language-exchange services still do not solve the chicken-and-egg problem. Added a single horizontal row of six apps ordered by estimated Android downloads—HelloTalk, Tandem, Yeetalk, K-Friends, Hilokal, and Kfriends—with each app name and estimate on two lines. Added the provided blue KFriends artwork as a separate local asset and added it to the language-exchange group on the following market map slide. Removed residual logo shadows so the category areas remain visually flat.
+- Tests: Verified the new page as `04 / 08`, the moved market map as `05 / 08`, six horizontal overview items, six language-category icons, local image loading, centered page-four content, no body overflow on desktop/mobile, and no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The language-exchange proof page made the language-exchange group redundant on the following market map, while the remaining categories were still shown as a 2x2 side panel beside left-aligned copy.
+- User impact: The market page did not read as a single centered comparison, and the three remaining competitive spaces were harder to scan as a sequence.
+- Resolution: Removed the language-exchange category from the market map, centered the market kicker and title, and changed the remaining sincere voice conversation, global dating, and offline meetup groups to one horizontal row. Preserved the irregular icon scattering within each category and added responsive sizing for the three-column layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the three category titles and icon counts of 3/4/2, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR download estimate refresh
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/logo-market-kof.png`
+- Issue: The language-exchange proof page presented Android-only figures without making the platform scope clear. The final Kfriends entry also represented the smaller Bibimbap Story app, while KOF had a larger publicly visible Android footprint and was a better market comparison.
+- User impact: The scale comparison understated several competitors and made the source scope of the figures ambiguous. The similarly named Kfriends entry could also distract from the more relevant KOF competitor.
+- Resolution: Recalculated the rounded figures using public Android and iOS indicators where available: HelloTalk `약 7,000만+`, Tandem `약 3,500만+`, Yeetalk `약 1,100만`, K-Friends `약 450만`, Hilokal `약 170만`, and KOF `약 60만`. Replaced the Bibimbap Story Kfriends artwork with a local KOF icon, added a platform-scope caption, and increased the app-name and estimate type sizes while preserving the six-item horizontal row. KOF is marked as Google Play-based because no matching Apple App Store listing was found.
+- Tests: Verified page `04 / 08` at desktop and mobile sizes, confirmed the six apps remain in descending order, confirmed all local images load, checked the page-five 3/4/2 category layout for regression, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-02 — Short XR market title and spacing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The market page title needed to explain the broader connection-market problem, while the scattered competitor icons sat too far below their category labels.
+- User impact: The message was less specific than intended, and the large vertical gaps weakened the visual relationship between each category and its services.
+- Resolution: Replaced the market title with the requested two-line statement about abundant services and recurring language barriers. Reduced the category logo-cloud inset for the three-column market row on desktop and mobile, preserving the irregular icon positions and centered layout.
+- Tests: Verified page `05 / 08` at desktop and mobile sizes, confirmed the exact title text and three category titles, confirmed local image loading and no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR goal resolution and flow cue
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new solution pages needed a clearer visual distinction between the language-learning goal that translation removes and the resulting conversation flow from that solved state.
+- User impact: The original second goal looked equally active on the first solution page, and the relationship between the updated right-side message and the left-side social goal was not immediately apparent on the following page.
+- Resolution: Added the existing `xr.html`-style red cross treatment to the first solution page's language-learning goal, reduced that goal's text opacity, and overlaid a large `통번역 제공` badge at its right edge. Added a large curved right-to-left arrow across the second solution page while preserving the two-column goal content and responsive layout.
+- Tests: Verified pages `06 / 10` and `07 / 10` at desktop and mobile sizes, confirmed the cross, badge, and arrow render without viewport overflow, confirmed the updated right-side message remains visible, and checked for browser console warnings or errors.
+
+## 2026-09-03 — Short XR cause and four-category market page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened presentation needed a centered cause page after the two goal slides, with the language-exchange category restored as the first part of the broader service landscape. The existing three-category market page also left more separation between categories and scattered icons than necessary.
+- User impact: The reason social-linking services have not provided translation was not stated before the presentation moved on, and the market comparison was less compact than the intended visual rhythm.
+- Resolution: Added a new eighth slide with the requested centered cause title and a four-column market row ordered as language exchange, sincere voice conversation, global dating, and offline meetups. Reused the six language-exchange app icons from the download proof page, reduced the fifth-page category gap, and tightened its irregular icon distribution while preserving the flat category treatment and key colors. The four-column row becomes a responsive 2x2 layout on mobile.
+- Tests: Verified pages `05 / 11` and `08 / 11` at desktop and mobile sizes, confirmed all category titles and 15 local icons load, confirmed the requested title and page order, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI requirement problem page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened presentation needed to explain why existing AI could not satisfy the demanding requirements of a social-linking conversation before presenting the solution.
+- User impact: The transition from the market and cause slides to the proposed translation service lacked a concrete explanation of the technical and cost barriers.
+- Resolution: Added a centered ninth slide with the requested problem kicker and title, followed by seven compact requirement cards covering continuous translation, speech recognition, multilingual ability, real-time translation, language switching, speaker separation, and price. The cards use a responsive three-column layout on desktop and a readable single-column layout on mobile.
+- Tests: Verified page `09 / 12` at desktop and mobile sizes, confirmed all seven labels and descriptions, confirmed the title is centered, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI cost and performance page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The new AI requirement page needed a follow-up explanation of why existing translation services still fall short on price and practical conversation performance.
+- User impact: The presentation moved directly from the seven requirement gaps to the solution without showing concrete examples of the current service limitations.
+- Resolution: Added a new tenth slide based on page nine of `xr.html`, preserving its original cause kicker, title, and four service cards for Felo Translator, Google Translator, Apple Translator, and Papago. The existing responsive tool-card styles are reused, and the page counter now reflects 13 total slides.
+- Tests: Verified page `10 / 13` at desktop and mobile sizes, confirmed all four service logos and descriptions load, confirmed the title and card stack remain within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 8 icon scale refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The four-category service landscape page still felt sparse because its scattered app icons were too small for the available category areas.
+- User impact: The service clusters read as disconnected points, weakening the comparison between each category and the apps inside it.
+- Resolution: Increased the page-eight category icons to approximately 1.5 times their previous size while preserving their irregular positions, so the existing centers naturally produce tighter spacing. Applied the same scale increase to the responsive mobile layout while keeping the four-category page as a 2x2 grid.
+- Tests: Verified page `08 / 13` at desktop and mobile sizes, confirmed all 15 local icons load, checked that the enlarged clusters stay within their category areas and the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 9 compact requirement cards
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The eight AI requirement details became too wide and left excessive empty space after the speaker-separation item was split into separate speech and speaker separation gaps.
+- User impact: The requirement comparison felt sparse, and the distinction between sentence segmentation and multi-speaker separation was not visible.
+- Resolution: Reworked the ninth slide into a compact four-column desktop grid with narrower cards, kept a single readable column on mobile, and split the former `발화 분리` item into `발화 분리 — 문장 단위로 끊어주질 않음` and `발화자 분리 — 여럿이 말해도 분리가 안됨`.
+- Tests: Verified page `09 / 13` at desktop and mobile sizes, confirmed all eight labels and descriptions in order, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven flow arrow was drawn across most of both goal cards, used a gradient, and did not visually stay within the space between the two goals.
+- User impact: The arrow competed with the goal copy and made the intended right-to-left transition feel imprecise.
+- Resolution: Changed the arrow to a solid red stroke and recalculated its path from the right card's inner-left 10% point to the left card's inner-right 10% point. The geometry is recalculated on load and viewport changes so the relationship remains correct across desktop and mobile layouts.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the solid red stroke and endpoint alignment against both goal boxes, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR AI capability comparison pages
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The AI requirement problem page needed a ninth capability to explain the text-only limitation of existing voice interpretation, and the following page needed to present the corresponding AI-enabled solution capabilities in the same visual language.
+- User impact: Voice interpretation was missing from the requirement comparison, the price item used a negative label after the comparison shifted toward value, and the solution transition did not directly map the nine problem requirements to nine achievable capabilities.
+- Resolution: Added `음성 통역 — 텍스트밖에 출력 안됨` to page nine and renamed `비싼 가격` to `가성비`. Changed the shared requirement grid to three columns, producing a 3x3 layout for the nine desktop cards while retaining a single readable column on mobile. Replaced the former page-ten service-cost list with a copied requirement-card layout using the `해결책` kicker, the requested AI title, and the nine solution pairs for continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value.
+- Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed all nine labels and descriptions on both pages, confirmed the desktop cards form three equal columns and three rows, confirmed the exact solution title and kicker, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement card width refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: Changing the requirement grid from four columns to three left the full 1080px media width in place, so each card became substantially wider than the preceding requirement cards.
+- User impact: The 3x3 comparison lost the compact card rhythm established on the earlier page, and the larger cards made the requirement groups feel too spread out.
+- Resolution: Constrained the shared requirement grid to a centered maximum width of 810px. This keeps the three-column desktop cards at approximately their previous 260px width while preserving the 3x3 structure and letting the mobile layout continue to use the full responsive content width.
+- Tests: Verified pages `09 / 13` and `10 / 13` at desktop and mobile sizes, confirmed centered desktop cards at approximately 261px each, confirmed three rows and three columns on desktop, confirmed all nine cards remain full-width and readable on mobile, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrow vertical alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: After the arrow endpoints were shortened to the inner edges of the two goal cards, the arrow remained anchored near the cards' top edge instead of sitting at the visual center of the lower content.
+- User impact: The arrow looked disconnected from the two messages and made the intended right-to-left flow cue feel top-heavy.
+- Resolution: Centered the arrow element vertically against the goal-card row with a 50% anchor and vertical translation. Updated the SVG path baseline and control points so the red arrow stroke itself, including its head, sits at the cards' vertical midpoint across responsive sizes.
+- Tests: Verified page `07 / 13` at desktop and mobile sizes, confirmed the arrow center matches the goal-card center, confirmed the short red path and inner-edge endpoints remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 5 market icon density
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The three-category market page used smaller app icons and wider visual gaps than the later four-category market page, making the earlier comparison feel sparse and inconsistent.
+- User impact: The voice conversation, global dating, and offline meetup groups received less visual emphasis, and the relationship between each category and its services was weaker than on page eight.
+- Resolution: Reused page eight's enlarged icon scale, irregular positions, tighter cloud inset, and reduced category gap for page five while retaining its three-column layout and removing the language-exchange category from that copied structure. Synchronized the static page counter with the user's removal of the redundant former solution-proof page, bringing the current deck fallback count to 12.
+- Tests: Verified pages `05 / 12` and `08 / 12` at desktop and mobile sizes, confirmed page five contains only the three requested categories and nine local icons, confirmed page-five icon dimensions match page eight's corresponding groups, confirmed the three-category row remains centered and within the viewport, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement order alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The ninth-page problem cards used a different order from the corresponding solution cards on page ten, so related capabilities did not line up when the two pages were compared.
+- User impact: Viewers had to mentally remap the requirement pairs instead of scanning the problem and solution pages in the same sequence.
+- Resolution: Reordered page nine to match page ten exactly: continuous translation, real-time translation, voice interpretation, speech recognition, multilingual ability, language switching, speech separation, speaker separation, and value. Preserved the page-nine title and descriptions already customized by the user.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed the nine title sequences match exactly, confirmed the desktop 3x3 grids and mobile single-column layout remain intact, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR page 7 arrowhead visibility
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seven arrow was correctly positioned at the goal-card center, but its arrowhead wings were too narrow and one wing visually blended into the curved stem.
+- User impact: The direction cue could be read as an incomplete or uneven arrow, reducing the clarity of the right-to-left flow between the two messages.
+- Resolution: Expanded the arrowhead rise and drop to approximately twice their previous angles while keeping the arrow's position, solid red color, curved stem, and inner-edge endpoints unchanged. Updated the static SVG fallback to match the responsive JavaScript-generated geometry.
+- Tests: Verified page `07 / 12` at desktop and mobile sizes, confirmed both arrowhead wings are visibly separated from the stem, confirmed the arrow remains centered between the goal cards, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR requirement bar color separation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The requirement cards on pages nine and ten shared an orange-to-red gradient bar, so the problem and solution pages did not have distinct visual states.
+- User impact: The problem/solution contrast was weaker, and the gradient added unnecessary visual noise to each card's left edge.
+- Resolution: Removed the gradient from the shared bar style. Page nine now uses a solid red bar (`#dc2626`), while page ten uses the solid primary brand accent (`var(--accent)`) so the two pages remain visually related but clearly differentiated.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed all nine bars on each page use solid colors with no background image, confirmed the expected red and accent RGB values, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR solution bar blue refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The solution page's yellow requirement bars felt too close to the warm page palette and did not provide enough contrast with the problem page's red bars.
+- User impact: The problem/solution distinction felt less crisp, and the solution cards did not convey a calm, reliable finish.
+- Resolution: Replaced the solution-page bars with a solid blue solution accent (`#2563eb`) while keeping the problem-page bars solid red and removing gradients from both states.
+- Tests: Verified pages `09 / 12` and `10 / 12` at desktop and mobile sizes, confirmed page nine uses solid `rgb(220, 38, 38)` bars and page ten uses solid `rgb(37, 99, 235)` bars, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR video start position
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve Mingle video needed to open at the relevant moment from the shared YouTube link, but the watch-page `t=43s` syntax is not the correct parameter for an embedded player.
+- User impact: Viewers would begin at the default video position instead of the intended 43-second context.
+- Resolution: Added YouTube's embed-compatible `start=43` parameter to the existing `/embed/Esq6htnQj98` source while preserving the inline-playback and related-video settings.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe keeps video ID `Esq6htnQj98` and resolves `start=43`, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR default video playback rate
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve video needed to begin at the requested 43-second point and play at a faster default speed for the presentation flow.
+- User impact: Viewers would otherwise need to manually change the YouTube playback speed every time they started the video.
+- Resolution: Enabled the YouTube IFrame Player API for the short-video iframe, set the page origin dynamically for both local HTTP previews and production, and apply a `1.5x` playback rate in the player's ready callback. The existing `start=43` position remains unchanged.
+- Tests: Verified page `12 / 12` through the local HTTP preview, confirmed the iframe retains video ID `Esq6htnQj98`, resolves `start=43`, includes `enablejsapi=1` and the current HTTP origin, confirmed the YouTube API initializes, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR voice conversation bridge page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to show the initial workaround of keeping a voice-conversation service open alongside Mingle before presenting the final integrated experience.
+- User impact: The story moved from the requirement solution directly to the final video, leaving the practical two-service usage step unexplained.
+- Resolution: Added a new thirteenth slide after the video slide with the `밍글` kicker and the requested title, reusing the original page-fourteen HelloTalk Voiceroom and Mingle image stack from `xr.html`. The runtime counter derives its total from the slide count.
+- Tests: Verified page `13 / 13` at desktop and mobile sizes, confirmed both local images load and the stacked layout stays within the slide, confirmed the page counter and total slide count, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The short presentation needed to follow the two-service workaround with direct customer evidence from people who had tried Mingle.
+- User impact: The presentation lacked a concise proof point showing why the experience was positively received after the workaround and feature comparison.
+- Resolution: Added a new fourteenth slide after the voice-conversation bridge page with the `고객 반응` kicker, the requested title, and three right-side reaction cards based on the original page-fifteen response layout from `xr.html`. Replaced the source reactions with the requested continuous-translation, cross-language comprehension, and speech-recognition statements, and updated the static page counter to `01 / 14`.
+- Tests: Verified page `14 / 14` at desktop and mobile sizes, confirmed all three reaction cards and their exact text render in the right-side stack, confirmed the card stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR customer dependence page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed a follow-up page showing that some users had begun relying on Mingle during their regular HelloTalk conversations.
+- User impact: Positive reactions were presented without a concrete usage signal showing repeated, habitual behavior.
+- Resolution: Added a new fifteenth slide after the reaction-card page using the original page-seventeen layout from `xr.html`. Changed its kicker to `고객 반응`, preserved the original title and usage evidence, and reused the HelloTalk Voiceroom and Mingle image stack. Updated the static page counter to `01 / 15`.
+- Tests: Verified page `15 / 15` at desktop and mobile sizes, confirmed the requested kicker, title, usage copy, and both local images render, confirmed the image stack stays within the slide, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle demand page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/xiaohongshu-pip-mingle.png`
+- Issue: The short presentation needed to show demand for using Mingle as an add-on subtitle layer over an unrelated live-streaming service.
+- User impact: The customer-proof sequence did not show that Mingle can accompany picture-in-picture viewing outside a dedicated socialing service.
+- Resolution: Added a sixteenth left-aligned slide with the `고객 반응` kicker, the requested title, the attached Xiaohongshu PIP screenshot on the right, and a centered two-line explanation below it. Updated the static page counter to `01 / 16`.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed the attached image loads, confirmed the caption remains below the image, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR add-on subtitle use-case collage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/roblox-mobile-home.jpg`, `mingle-app/public/legal/assets/discord-mobile-chat.png`
+- Issue: The add-on subtitle demand page needed to show that the use case extends beyond Xiaohongshu to other mobile-first services, including an active Roblox use case and interest in Discord.
+- User impact: The single screenshot communicated one example but did not make the broader cross-service demand visually concrete.
+- Resolution: Added Roblox and Discord mobile UI screens behind the Xiaohongshu PIP screenshot, keeping Xiaohongshu visually on top. Added the requested left-bottom body copy, including the statement that a user is already using Mingle with Roblox and that users sometimes want Mingle for content without subtitles.
+- Tests: Verified page `16 / 16` at desktop and mobile sizes, confirmed all three images load with the intended z-order, confirmed the body copy remains under the left title, confirmed the caption remains under the image collage, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline and work translation reaction page
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The customer-reaction sequence needed to acknowledge translation demand beyond social and content use cases, including offline and work contexts.
+- User impact: The presentation ended the add-on subtitle examples without signaling that Mingle is also being considered for practical offline and workplace interpretation.
+- Resolution: Extended page sixteen's left body copy with Discord interest and the broader no-subtitle-content demand, added `로블록스, 디스코드와도 함께 사용` to the right-side caption, and added a seventeenth left-aligned slide with the `고객 반응` kicker and requested title. Updated the static page counter to `01 / 17`.
+- Tests: Verified pages `16 / 17` and `17 / 17` at desktop and mobile sizes, confirmed page sixteen's three-line caption remains below the collage, confirmed page seventeen's left alignment and exact title, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work media proof page
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/offline-work-mingle.png`
+- Issue: The offline and workplace translation reaction page needed a concrete visual proof point alongside its left-aligned message.
+- User impact: Page seventeen communicated the claim only as text, so the practical use case had less visual weight than the preceding add-on subtitle examples.
+- Resolution: Added the attached mobile screenshot as a right-side media element on page seventeen, using the same left-copy/right-visual composition as page sixteen while preserving the requested kicker and title.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the attached image loads, confirmed the title remains left-aligned and the image stays on the right on desktop, confirmed the mobile layout stacks without clipping, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work visual treatment refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-seventeen screenshot was styled as a large rounded card and lacked the requested contextual caption.
+- User impact: The visual felt heavier than page sixteen, and the salon and foreign-tourist use case was not explained below the screenshot.
+- Resolution: Removed the decorative border radius and shadow, reduced the screenshot scale, and added the caption `미용실 사장님들이 외국인 관광객 대면할 때 많이 사용` below the image while keeping the image as a plain right-side visual.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the image and caption stay within the slide, confirmed the caption remains below the image, confirmed no horizontal overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline/work customer evidence copy
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The offline and workplace translation page needed concrete examples to support its customer-reaction claim.
+- User impact: The slide showed the use-case heading and screenshot, but did not explain the kinds of people already finding practical value in Mingle.
+- Resolution: Added the requested lower-left body copy describing an African young man who found interpreter work with Mingle despite limited English and a person who appears to guide Japanese tourists around Seoul.
+- Tests: Verified page `17 / 17` at desktop and mobile sizes, confirmed the body copy sits below the left-aligned title, confirmed the image and caption remain visible, confirmed no viewport overflow, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR offline meetup competitor coverage
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/logo-market-couchsurfing.jpg`
+- Issue: The offline-meetup category on the market pages represented the space with only Timeleft and Meetup.
+- User impact: The category understated the breadth of established services used to connect travelers and locals in person.
+- Resolution: Added the Couchsurfing app icon to the offline-meetup logo cloud on pages five and nine, using the same scattered presentation and a slightly larger scale for the prominent competitor.
+- Tests: Verified pages `05 / 17` and `09 / 17` at desktop and mobile sizes, confirmed all three offline-meetup icons load on both pages, confirmed the icons stay within the viewport, and found no browser console warnings or errors.
+
+## 2026-09-03 — Short XR seven customer experience categories
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/`
+- Issue: The shortened XR presentation needed a single summary page showing the seven concrete user experiences Mingle plans to address individually.
+- User impact: The preceding customer-reaction pages demonstrated demand through examples, but did not make the full set of target experiences easy to scan in one view.
+- Resolution: Added an eighteenth centered slide with the `고객` kicker and requested two-line title. Added seven transparent category areas with one to three irregularly scattered service icons each: online cultural exchange, voice-call services, add-on subtitles, offline meetups, tourist-facing offline response, tourist information/consultation/reservations, and multilingual meetings. Added local App Store artwork for Immersive Translate, Caplo, Konest, Fresha, and Gangnam Unni, and reused the existing HelloTalk, K-Friends, Discord, Couchsurfing, Google Translate, and Cuckoo assets.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed all seven category titles and 11 icons load, confirmed the title and category labels are centered, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR vision and business model continuation
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation stopped after the seven customer experience categories and did not carry the source deck's vision and business model conclusion.
+- User impact: Viewers could not continue from the customer summary into the stated AI-native SNS goal and the two business model diagrams.
+- Resolution: Added the source deck's ultimate-goal slide followed by the business Venn diagram and business matrix as pages nineteen through twenty-one. Reused the existing local business diagram assets and updated the static page counter to `01 / 21`.
+- Tests: Verified pages `19 / 21`, `20 / 21`, and `21 / 21` at desktop and mobile sizes, confirmed the vision text and both diagram images render, confirmed the images stay within the slide, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR team and closing pages
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The shortened XR presentation ended after the business model diagrams and omitted the source deck's team-recruitment and closing Q&A pages.
+- User impact: The deck had no closing invitation for prospective team members and no final contact, repository, social, or app-download links.
+- Resolution: Added the source deck's `팀원 구합니다` page and `감사합니다. Q & A` page as pages twenty-two and twenty-three, including the original closing links and store badges. Updated the static page counter to `01 / 23`.
+- Tests: Verified pages `22 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the recruitment copy and all closing links/badges render, confirmed local assets load, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR download QR placement
+
+- Surface: `mingle-app/public/legal/xr-short.html` and `mingle-app/public/legal/assets/qr-mingle-download.svg`
+- Issue: The opening and closing slides centered their content and did not provide a scannable path to the app download page.
+- User impact: People viewing the deck on a second screen had no direct visual route to open the Mingle download page on their phone.
+- Resolution: Added a local QR code for `https://mingle-landing.vercel.app/` to the right side of pages one and twenty-three, shifted both slide compositions toward left-aligned copy, and preserved the existing closing links below the Q&A title. Kept a stacked left-copy/QR arrangement for narrow mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed both QR images load, confirmed both QR links point to the Mingle landing page, confirmed page-one and Q&A copy are left aligned, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR customer experience category row refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The seven-category customer summary used one desktop row, which made each category narrow and reduced the readability of its label and app icons.
+- User impact: The category map felt too spread across the page while the individual services appeared too small.
+- Resolution: Changed the page-eighteen desktop summary to a centered four-plus-three flex layout, enlarged category titles and app icons, and kept each category's icons in a compact horizontal row. Preserved a responsive two-column/four-row mobile layout with the final category centered.
+- Tests: Verified page `18 / 18` at 1280x720 desktop and 390x844 mobile sizes, confirmed four categories in the first desktop row and three in the second, confirmed seven categories and 11 local icons load, confirmed all per-category icon rows are horizontal, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — XR Venn diagram asset correction
+
+- Surface: `mingle-app/public/legal/xr.html`, `mingle-app/public/legal/xr-short.html`, and `mingle-app/public/legal/assets/business-venndiagram.png`
+- Issue: The Venn diagram used an earlier image containing a typo.
+- User impact: The same incorrect diagram appeared on the corresponding Venn page in both the full and shortened XR decks.
+- Resolution: Replaced the shared Venn diagram asset with the corrected attached image, so both decks update through their existing single-image page without changing the business matrix page or any other slide.
+- Tests: Verified the corrected asset matches the attached PNG byte-for-byte, confirmed it loads on the Venn page in both decks, confirmed the matrix asset remains unchanged, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends acquisition goal slide
+
+- Surface: `mingle-app/public/legal/xr-short.html` and the two new K-Friends screenshot assets under `mingle-app/public/legal/assets/`
+- Issue: The deck needed a concrete first-goal slide explaining the plan to absorb K-Friends users, supported by evidence from the competing app's product screens.
+- User impact: The strategic goal lacked a visual anchor and the age of K-Friends' product updates was not immediately visible.
+- Resolution: Added page nineteen with left-aligned goal copy, two slightly overlapping K-Friends mobile screenshots, and a compact caption pairing the K-Friends logo with `Kfriends 앱 화면. 2년에 한 번씩 업데이트.`. Shifted the existing business, vision, recruitment, and Q&A pages to follow it and updated the initial page counter to twenty-four.
+- Tests: Verified the new screenshots and logo load locally, confirmed the two images overlap slightly in the right-side media area, checked the caption at desktop and mobile sizes, confirmed the page counter and total slide count are twenty-four, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends screenshot sizing refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The two K-Friends screenshots on page nineteen were smaller than the neighboring mobile-screen examples and their decorative rotations made the composition feel unstable.
+- User impact: The evidence screens were harder to inspect and the right-side visual did not match the deck's established phone-screen treatment.
+- Resolution: Matched the screenshot height to the page-seventeen mobile-screen scale, removed the rotations, and retained only a slight horizontal overlap between the two images on desktop and mobile.
+- Tests: Rechecked page `19 / 24` at desktop and mobile sizes, confirmed the images remain fully visible with a small overlap, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR K-Friends screenshot order refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The K-Friends version-history screen was on the left, while the user wanted the app screen to lead the composition from the left.
+- User impact: The visual emphasis did not follow the intended reading order for the competing app evidence.
+- Resolution: Moved the version-history screen to the right and kept the story app screen on the left with the foreground z-index, preserving the slight overlap and existing scale at desktop and mobile sizes.
+- Tests: Verified page `19 / 24` at desktop and mobile sizes, confirmed the story screen is left and in front of the version-history screen, and confirmed no horizontal viewport overflow.
+
+## 2026-09-03 — Short XR video start time and caption default
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The page-twelve YouTube demonstration needed to begin later in the source video, without showing YouTube captions by default.
+- User impact: Viewers could see the demonstration begin before the intended moment and could get duplicate captions alongside Mingle's translated output.
+- Resolution: Changed the embedded video start time to 57 seconds and added YouTube's `cc_load_policy=0` parameter so captions remain off on initial playback.
+- Tests: Confirmed the page-twelve iframe source contains `start=57` and `cc_load_policy=0`, and confirmed the embed retains inline playback and the existing playback-rate initialization.
+
+## 2026-09-03 — Short XR smart download QR and closing alignment
+
+- Surface: `mingle-app/public/legal/xr-short.html`, `mingle-app/public/legal/assets/qr-mingle-download.svg`, and `mingle-landing/app/download/route.ts`
+- Issue: The opening and closing QR codes led to the general landing page, requiring an extra tap before a viewer could install Mingle.
+- User impact: Scanning the QR code did not take iOS and Android viewers directly to their respective app stores, and the closing slide did not visually center its Q&A title within the left content area.
+- Resolution: Added a QR-only smart-link route that detects iOS or Android from request headers and redirects directly to the matching store, with the normal landing page as the unknown-platform fallback. Repointed the QR asset and both QR anchors to that route, placed the Mingle app icon above each QR code, and centered the page-twenty-three Q&A composition within its left column.
+- Tests: Verified iOS, Android, client-hint, and fallback redirect destinations with route tests; confirmed the QR asset encodes the smart-link route; and verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes with the icon, QR, title alignment, and no viewport overflow.
+
+## 2026-09-03 — Short XR QR label refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The Mingle app icon above the QR code appeared by itself without explaining what it represented.
+- User impact: The download visual on pages one and twenty-three felt disconnected, and the relationship between the icon and QR code was not immediately clear.
+- Resolution: Grouped the smaller Mingle app icon with the label `Mingle 다운로드 링크` above both QR codes and added a centered downward-pointing finger emoji between the label and QR code. Kept the compact treatment responsive for mobile viewports.
+- Tests: Verified pages `01 / 23` and `23 / 23` at desktop and mobile sizes, confirmed the label, icon, and pointer appear in the requested order, confirmed the Q&A title remains centered within the left column, and confirmed no viewport overflow.
+
+## 2026-09-03 — Short XR QR label typography refinement
+
+- Surface: `mingle-app/public/legal/xr-short.html`
+- Issue: The QR label `Mingle 다운로드 링크` was too small and visually heavier than the adjacent app icon and QR treatment.
+- User impact: The download callout was less readable at a glance and felt overly bold on both desktop and mobile layouts.
+- Resolution: Increased the label size and reduced its font weight for pages one and twenty-three, with a responsive mobile size that remains within the existing QR media column.
+- Tests: Verified the label typography at desktop and mobile viewport sizes and confirmed no horizontal overflow or QR layout shift.
+
+## 2026-09-18 — Correct dashboard usage for concurrent conversation sessions
+
+- Surface: `/admin/dashboard` usage-time chart and its All, Android, and iOS filters.
+- Issue: The dashboard interpreted `app_event_logs.usage_sec` as one monotonically increasing counter for each user. Current clients persist that cumulative counter per conversation session, so a person using two rooms could interleave a small counter from one room with a large counter from another. The old raw-event delta query then counted the counter gap as new use time repeatedly. Out-of-order asynchronous event retries could add further false deltas.
+- User impact: The September 17 usage chart showed 1,419,645 seconds, obscuring the actual daily trend with an implausibly large spike.
+- Evidence: A read-only production check found 7,317 usage events across 15 session counters that day. One interleaved user's two room-scoped counters accounted for 1,395,406 of the reported seconds. Re-running the corrected calculation for September 17 returned 29,219 seconds. A preliminary 2,206-second result exposed an additional first-observation case and was deliberately not shipped.
+- Resolution: Collapse events to one daily high-water mark per `(user_id, session_key)`, then difference adjacent daily snapshots only within that same session. Carry each session's final pre-range snapshot forward so the first requested day remains comparable. If a session has no prior record, use its first in-range observation as the baseline, preserving its measured intra-day increase without inventing time before its first event. Treat a decreasing counter as a reset that contributes zero. The query retains a separate legacy null-session branch, allowing the normal and legacy baseline lookups to use equality predicates.
+- Cache and performance: Bump the usage metric cache version from 1 to 2, so cached historical days are recomputed with the corrected rule without a manual cache-clear action. Add the partial `(user_id, session_key, created_at DESC, id DESC)` usage-baseline index. Production has no Prisma migration-history table, so the idempotent concurrent index was installed directly without changing event data; the checked-in migration preserves the same index for tracked environments.
+- Verification: The production baseline lookup plan uses `app_event_logs_user_session_usage_created_desc_idx` and completed in 54.562 ms in the measured plan. The exact corrected September 17 aggregation returned 29,219 seconds after the index was added. Focused automated dashboard tests cover the daily high-water/session partition rule, first-observation baseline, legacy null-session handling, and cache-version invalidation.
+
+## 2026-09-18 — Virtually deck mobile viewport fit correction
+
+- Surface: `mingle-app/public/legal/xr-virtually.html`
+- Issue: The Virtually presentation was visually acceptable on desktop but had several mobile-only layout failures. The first slide's copy retained a desktop left margin and created a hidden horizontal overflow; the IRIAM video on slide ten became too small on a 320px viewport; the strategy slide fourteen clipped its title at the top on short screens; and the opportunity slide nineteen exceeded the mobile slide height, hiding its title and overlapping the bottom navigation. The same title clipping also appeared on slides eleven and thirteen for Japanese and Simplified/Traditional Chinese at the smallest tested viewport.
+- User impact: On narrow phones, viewers could miss the opening title, inspect the vertical demo only as a tiny thumbnail, lose the beginning of strategy/market titles, or see the opportunity sequence cut off behind the navigation controls.
+- Resolution: Added mobile-only overrides under `max-width: 900px`. Removed the opening copy's leftover desktop margin, enlarged the vertical IRIAM video to a bounded `48vh`/`360px` mobile size, compressed the small-screen strategy spacing, changed the opportunity steps to a compact two-column mobile grid with a full-width highlight card and smaller logo cloud, and added small-screen compression for the CJK cost and market slides. No desktop selector or base desktop value was changed.
+- Verification: Traversed all 20 slides at `390×844` and `320×568` for `ko`, `en`, `ja`, `cn-ZH`, and `cn-TW`. All 50 viewport/locale runs had zero external viewport-boundary overflows. Representative captures confirmed the opening image, slide-ten video, slide-fourteen title, slide-nineteen opportunity card, and CJK slide-eleven/slide-thirteen titles remain visible. A `1440×900` PC check confirmed the mobile class and mobile media query are inactive and the desktop opening composition remains intact. `git diff --check` passed.
+
+## 2026-09-18 — Virtually short-mobile dense slide fit correction
+
+- Surface: `mingle-app/public/legal/xr-virtually.html`
+- Issue: The previous mobile rules did not cover a `375×568` viewport. Slides 8, 11, 13, and 17 centered content taller than the available screen, which clipped titles or put content behind the bottom navigation. Slide 12 kept its long English prompt on one line, and slide 18 left too little width for the final ecosystem label. The same short-height centering issue was also reproduced on slides 9 and 14.
+- User impact: On short mobile captures, viewers could lose the beginning of a slide title, see the prompt cut off horizontally, or see data continue underneath the navigation controls.
+- Resolution: Added a mobile-height-aware media block for the affected slides. Slides 8, 11, 12, 14, 17, and 18 use top-aligned compact layouts with reduced spacing and media typography up to an `820px` mobile viewport height; slide 12 wraps the prompt and constrains the reference image at every mobile height; slide 13 retains the domestic/global headings and first two representative categories per region while hiding the lower-priority rows on compact mobile screens; slide 18 uses smaller, width-safe ecosystem columns at every mobile height. Desktop rules remain unchanged.
+- Verification: Checked all 20 slides at `375×568`, `375×812`, and `390×844` for `ko`, `en`, `ja`, `cn-ZH`, and `cn-TW`; all 75 runs had no title clipping, external viewport overflow, or direct slide-content boundary overflow. Confirmed the PC layout at `1440×900` keeps the mobile class/media query inactive and all eight slide-thirteen data blocks visible. `git diff --check` passed.

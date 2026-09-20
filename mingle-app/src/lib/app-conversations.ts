@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -82,6 +83,9 @@ export type ConversationChannelSummary = {
 };
 
 export type ConversationHydrationUtterance = {
+  image?: ConversationMessageImage;
+  serverCreatedAtMs?: number;
+  serverMessageId?: string;
   id: string;
   originalText: string;
   originalLang: string;
@@ -899,6 +903,17 @@ function readStringValue(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
   return normalized || null;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const values: string[] = [];
+  for (const rawValue of value) {
+    const normalized = readStringValue(rawValue);
+    if (!normalized || values.includes(normalized)) continue;
+    values.push(normalized);
+  }
+  return values;
 }
 
 function readIntegerValue(value: unknown): number | null {
@@ -2616,7 +2631,9 @@ async function getConversationHydrationStateForRecord(args: {
       : {}),
   };
 
-  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords] = await prisma.$transaction([
+  // Independent read queries do not need a sequential transaction. Especially
+  // with a remote DB, each serialized round trip delays counterpart messages.
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById] = await Promise.all([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -2661,6 +2678,8 @@ async function getConversationHydrationStateForRecord(args: {
       where: { channelId: conversationRecord.id },
       select: { inviteeUserId: true, invitedByUserId: true, createdAt: true },
     }),
+    listChannelMembersByChannelId([conversationRecord.id]),
+    listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
   ]);
 
   const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
@@ -2668,10 +2687,6 @@ async function getConversationHydrationStateForRecord(args: {
   const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
 
-  const [membersByChannelId, pendingInviteeProfileById] = await Promise.all([
-    listChannelMembersByChannelId([conversationRecord.id]),
-    listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
-  ]);
   const members = membersByChannelId.get(conversationRecord.id);
   const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
     .map((userId) => pendingInviteeProfileById.get(userId))
@@ -2716,8 +2731,13 @@ async function getConversationHydrationStateForRecord(args: {
       translationFinalized[language] = true;
     }
 
-    const targetLanguages = Object.keys(translations);
     const metadata = readJsonObject(message.metadata);
+    const targetLanguages = [...new Set([
+      ...readStringArray(metadata?.translationTargetLanguages),
+      ...Object.keys(translations),
+    ])];
+    const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
+    const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
@@ -2730,18 +2750,25 @@ async function getConversationHydrationStateForRecord(args: {
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
+      ...(image ? { image } : {}),
       originalText: sourceContent?.text?.trim() || "",
       originalLang: (message.sourceLanguage || "").trim() || "unknown",
       targetLanguages,
       translations,
       translationFinalized,
       createdAtMs: message.createdAt.getTime(),
+      ...(isMultiMember || isMultiMemberAtMessage ? {
+        serverCreatedAtMs: typeof metadata?.orderStartedAtMs === 'number'
+          && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
+          ? metadata.orderStartedAtMs : message.createdAt.getTime(),
+        serverMessageId: message.id,
+      } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: isMultiMemberAtMessage && message.userId
+      speakerName: (isMultiMemberAtMessage || image) && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -2750,13 +2777,13 @@ async function getConversationHydrationStateForRecord(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: isMultiMemberAtMessage ? message.userId : null,
+      speakerUserId: (isMultiMemberAtMessage || image) ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: isMultiMemberAtMessage && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
     };

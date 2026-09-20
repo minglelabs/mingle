@@ -1,5 +1,6 @@
 "use client";
 
+import ProfileBio from "@/components/profile-bio";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -541,6 +542,8 @@ export default function PublicUserProfileScreen({
               name={name}
               handle={profile.handle}
               bio={bio}
+              bioUserId={profile.id}
+              locale={locale}
               languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "주 사용 언어" : "Primary language")}
               languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
@@ -583,7 +586,7 @@ export default function PublicUserProfileScreen({
                     isOwnProfile={false}
                   />
                 ) : null}
-                {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
+                <ProfileBio userId={profile.id} initialBio={bio} locale={locale} />
               </div>
 
               <div className="mt-4 flex gap-2">

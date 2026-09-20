@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
+import { getPublishedBioText } from "@/server/profile-bio";
 import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -125,7 +126,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropScale: user.imageCropScale,
     imageCropX: user.imageCropX,
     imageCropY: user.imageCropY,
-    bio: user.bio,
+    bio: await getPublishedBioText(user.id, user.bio),
     nationality: user.nationality,
     primaryLanguages: sanitizeSttLanguageSelection(
       user.primaryLanguages,

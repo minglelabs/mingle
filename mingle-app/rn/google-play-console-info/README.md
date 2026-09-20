@@ -47,4 +47,5 @@ scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-a
   - ads declaration
   - account deletion
   - foreground service disclosure form
-- For this app, API commits default to a `draft` release without `changesNotSentForReview`; pass `--changes-not-sent-for-review` only if the Play Console requires deferring review submission for that edit.
+- The checked-in internal-track release defaults to `completed` so internal testers can receive it without a second console edit. Use `draft` explicitly when preparing an edit without publishing it.
+- API commits default to `changesNotSentForReview=false`; pass `--changes-not-sent-for-review` only if the Play Console requires deferring review submission for that edit.

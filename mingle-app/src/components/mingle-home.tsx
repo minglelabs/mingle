@@ -11,7 +11,14 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { signIn, signOut, useSession } from "next-auth/react";
+import {
+  clearNativeAuthAttempt,
+  readNativeAuthAttempt,
+  saveNativeAuthAttempt,
+  NATIVE_AUTH_ATTEMPT_TTL_MS,
+} from "@/lib/native-auth-attempt";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo, {
@@ -44,6 +51,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -53,12 +61,15 @@ type MingleHomeProps = {
   headerMode?: "default" | "conversation";
   onBack?: () => void;
   onConversationDeleted?: () => void;
+  onConversationTitleChange?: (title: string) => void | Promise<void>;
+  onConversationRemoveRequested?: () => boolean | void | Promise<boolean | void>;
   conversationTitle?: string;
   conversationId?: string;
   preferredDisplayLanguage?: string | null;
   preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialOtherMembers?: ConversationChannelOtherMember[];
   initialSelectedLanguages?: string[];
   initialOwnSelectedLanguages?: string[];
   selectedLanguagesAttribution?: Record<string, string[]>;
@@ -94,7 +105,11 @@ type MingleHomeProps = {
 
 export type MingleHomeRef = {
   startRecording: () => Promise<void>;
-  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  stopRecording: (options?: {
+    deferRunningStateChange?: boolean;
+    discardPendingFinalization?: boolean;
+    forceNativeStop?: boolean;
+  }) => Promise<void>;
   prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
   requestCloseTopmostOverlay: () => boolean;
@@ -533,6 +548,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       clearNativeAuthPoller();
       clearNativeAuthTimeout();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
 
@@ -612,6 +628,27 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   );
 
   useEffect(() => {
+    if (!isNativeAuthBridgeEnabled() || status === "authenticated") return;
+    if (pendingNativeProviderRef.current) return;
+    const attempt = readNativeAuthAttempt();
+    if (!attempt) return;
+    pendingNativeRequestIdRef.current = attempt.requestId;
+    pendingNativeProviderRef.current = attempt.provider;
+    setIsSigningIn(true);
+    setSigningInProvider(attempt.provider);
+    startNativeAuthPoller(attempt.requestId, attempt.provider);
+    nativeAuthTimeoutRef.current = setTimeout(() => {
+      if (pendingNativeRequestIdRef.current !== attempt.requestId) return;
+      clearNativeAuthPoller();
+      clearNativeAuthAttempt();
+      pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
+      setIsSigningIn(false);
+      setSigningInProvider(null);
+    }, Math.max(0, attempt.startedAt + NATIVE_AUTH_ATTEMPT_TTL_MS - Date.now()));
+  }, [clearNativeAuthPoller, startNativeAuthPoller, status]);
+
+  useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = props.locale;
     }
@@ -624,6 +661,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       // Clearing them too early can cause the ASWebAuthSession callback to be ignored,
       // which prevents signIn from running and leaves the UI stuck on the login screen.
       const hasActiveFlow = pendingNativeProviderRef.current !== null;
+      // An unauthenticated session refresh is expected while the external
+      // browser is signing in. Keep the request, spinner and poller alive.
+      if (hasActiveFlow && status !== "authenticated") return;
 
       clearNativeAuthTimeout();
       clearNativeAuthPoller();
@@ -650,8 +690,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       resetSignupSetup();
       setForgotPasswordEmail("");
 
-      if (!hasActiveFlow) {
-        // Reset refs only when no flow is active. Active flows reset them after completion.
+      if (!hasActiveFlow || status === "authenticated") {
+        // Retire the request when the session is established or no flow is active.
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
       }
@@ -703,6 +744,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
       if (detail.type === "error") {
         clearNativeAuthPoller();
+        clearNativeAuthAttempt();
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
         setIsSigningIn(false);
@@ -716,6 +758,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }
 
       clearNativeAuthPoller();
+      clearNativeAuthAttempt();
       pendingNativeRequestIdRef.current = null;
       pendingNativeProviderRef.current = null;
       const bridgeToken = (detail.bridgeToken || "").trim();
@@ -773,6 +816,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
   const handleSocialSignIn = useCallback(
     (provider: "apple" | "google") => {
+      // Guard synchronously: a second tap must not replace the request that
+      // the native browser is already completing.
+      if (pendingNativeProviderRef.current) return;
       setIsSigningIn(true);
       setSigningInProvider(provider);
       const nativeBridgeEnabled =
@@ -804,6 +850,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               startUrl: startUrl.toString(),
             },
           };
+          saveNativeAuthAttempt({ requestId, provider, startedAt: Date.now() });
           pendingNativeRequestIdRef.current = requestId;
           pendingNativeProviderRef.current = provider;
           clearNativeAuthTimeout();
@@ -811,6 +858,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           nativeAuthTimeoutRef.current = setTimeout(() => {
             if (pendingNativeProviderRef.current !== provider) return;
             clearNativeAuthPoller();
+            clearNativeAuthAttempt();
             pendingNativeRequestIdRef.current = null;
             pendingNativeProviderRef.current = null;
             setIsSigningIn(false);
@@ -822,6 +870,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         } catch {
           clearNativeAuthPoller();
           clearNativeAuthTimeout();
+          clearNativeAuthAttempt();
           pendingNativeRequestIdRef.current = null;
           pendingNativeProviderRef.current = null;
           setIsSigningIn(false);
@@ -1214,6 +1263,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       clearLegalSheetCloseTimer();
       clearEmailSheetCloseTimer();
       pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
     };
   }, [
     clearEmailSheetCloseTimer,
@@ -1910,6 +1960,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   return (
     <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
       {isLiveDemoMounted ? (
+        <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
@@ -1955,12 +2006,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          onConversationTitleChange={props.onConversationTitleChange}
+          onConversationRemoveRequested={props.onConversationRemoveRequested}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           preferredDisplayLanguage={props.preferredDisplayLanguage}
           preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialOtherMembers={props.initialOtherMembers}
           initialSelectedLanguages={props.initialSelectedLanguages}
           initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
           selectedLanguagesAttribution={props.selectedLanguagesAttribution}
@@ -1982,6 +2036,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           isBlockedCounterpart={props.isBlockedCounterpart}
           isMultiMember={props.isMultiMember}
         />
+        </MessageReactionsProvider>
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
           <Loader2 size={24} className="animate-spin" aria-hidden />

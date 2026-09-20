@@ -12,6 +12,7 @@ import {
   formatSecondsAsDuration,
   formatShortDay,
   niceCeil,
+  normalizeDashboardPlatform,
   normalizeDashboardDays,
   resolveTodayKey,
   resolveUncacheableDayKeys,
@@ -90,6 +91,15 @@ describe("range + timezone", () => {
     expect(keys.has("2026-08-17")).toBe(true);
     expect(keys.has("2026-08-16")).toBe(true);
     expect(keys.size).toBe(3);
+  });
+});
+
+describe("platform filter", () => {
+  it("accepts Android and iOS and defaults invalid values to all", () => {
+    expect(normalizeDashboardPlatform("android")).toBe("android");
+    expect(normalizeDashboardPlatform("ios")).toBe("ios");
+    expect(normalizeDashboardPlatform(undefined)).toBe("all");
+    expect(normalizeDashboardPlatform("web")).toBe("all");
   });
 });
 

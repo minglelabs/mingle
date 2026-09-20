@@ -9,6 +9,8 @@ export type RealtimeTokenPayload = {
     sessionKey: string;
     userId: string;
     exp: number;
+  liveWriter?: { name: string | null };
+  liveReader?: true;
 };
 
 function isRealtimeTokenPayload(value: unknown): value is RealtimeTokenPayload {

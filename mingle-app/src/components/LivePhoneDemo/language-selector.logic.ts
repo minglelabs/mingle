@@ -48,6 +48,7 @@ type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 
 const FALLBACK_LOCALE = "en";
 export const LANGUAGE_SELECTOR_HISTORY_STATE_KEY = "__mingle_live_phone_demo_lang_selector";
+const LANGUAGE_SELECTOR_HISTORY_OWNER_KEY = "__mingle_live_phone_demo_lang_selector_owner";
 export const LANGUAGE_SELECTOR_RECENT_CODES_LIMIT = 12;
 const LANGUAGE_SELECTOR_HIDE_SORT_TOGGLE_LOCALES = new Set<LegalDocumentLocale>([
   "en",
@@ -326,16 +327,20 @@ export function buildLanguageSelectorFeaturedItems(
     .filter((item): item is LanguageSelectorItem => Boolean(item));
 }
 
-export function isLanguageSelectorHistoryOpen(state: unknown): boolean {
+export function isLanguageSelectorHistoryOpen(state: unknown, owner?: string): boolean {
   return Boolean(
     state
     && typeof state === "object"
     && (state as Record<string, unknown>)[LANGUAGE_SELECTOR_HISTORY_STATE_KEY] === true,
+  ) && (
+    owner === undefined
+    || (state as Record<string, unknown>)[LANGUAGE_SELECTOR_HISTORY_OWNER_KEY] === owner
   );
 }
 
 export function buildLanguageSelectorHistoryState(
   currentState: unknown,
+  owner?: string,
 ): Record<string, unknown> {
   const nextState = (
     currentState && typeof currentState === "object"
@@ -343,6 +348,7 @@ export function buildLanguageSelectorHistoryState(
       : {}
   );
   nextState[LANGUAGE_SELECTOR_HISTORY_STATE_KEY] = true;
+  if (owner !== undefined) nextState[LANGUAGE_SELECTOR_HISTORY_OWNER_KEY] = owner;
   return nextState;
 }
 
@@ -355,6 +361,7 @@ export function clearLanguageSelectorHistoryState(
       : {}
   );
   delete nextState[LANGUAGE_SELECTOR_HISTORY_STATE_KEY];
+  delete nextState[LANGUAGE_SELECTOR_HISTORY_OWNER_KEY];
   return nextState;
 }
 

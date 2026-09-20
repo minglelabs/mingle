@@ -4,6 +4,8 @@ import {
   buildDefaultHandle,
   buildDefaultHandleCandidates,
   formatHandle,
+  isAnonymousTrackingHandle,
+  isSearchExcludedHandle,
   normalizeHandle,
 } from "@/lib/handles";
 
@@ -29,6 +31,20 @@ describe("handles", () => {
   it("formats a stored handle with a public at-sign", () => {
     expect(formatHandle("mina.song")).toBe("@mina.song");
     expect(formatHandle(null)).toBe("");
+  });
+
+  it("recognizes anonymous tracking handles without matching regular handles", () => {
+    expect(isAnonymousTrackingHandle("anon_mtb662yd_3j2l0q283")).toBe(true);
+    expect(isAnonymousTrackingHandle(" ANON_device_user ")).toBe(true);
+    expect(isAnonymousTrackingHandle("mina_anon_friend")).toBe(false);
+    expect(isAnonymousTrackingHandle(null)).toBe(false);
+  });
+
+  it("recognizes reserved handles that should not appear in user search", () => {
+    expect(isSearchExcludedHandle("admin")).toBe(true);
+    expect(isSearchExcludedHandle(" ADMIN ")).toBe(true);
+    expect(isSearchExcludedHandle("anon_device_user")).toBe(true);
+    expect(isSearchExcludedHandle("administrator")).toBe(false);
   });
 
   it("builds a readable default handle from the display name", () => {

@@ -1,6 +1,8 @@
 "use client";
 
-const CONNECT_SEARCH_CACHE_KEY_PREFIX = "mingle:connect-search-cache:v1";
+import { isSearchExcludedHandle } from "@/lib/handles";
+
+const CONNECT_SEARCH_CACHE_KEY_PREFIX = "mingle:connect-search-cache:v2";
 const CONNECT_SEARCH_CACHE_MAX_STALE_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type ConnectSearchResult = {
@@ -24,6 +26,7 @@ export type ConnectSearchCacheSnapshot = {
   query: string;
   results: ConnectSearchResult[];
   resultsReady: boolean;
+  nextCursor: string | null;
 };
 
 const connectSearchMemoryCache = new Map<string, ConnectSearchCacheSnapshot>();
@@ -73,15 +76,23 @@ function normalizeCacheSnapshot(
     || !Array.isArray(candidate.results)
     || !candidate.results.every(isConnectSearchResult)
     || typeof candidate.resultsReady !== "boolean"
+    || (typeof candidate.nextCursor !== "undefined"
+      && candidate.nextCursor !== null
+      && typeof candidate.nextCursor !== "string")
   ) {
     return null;
   }
 
+  const searchableResults = candidate.results.filter(
+    (result) => !isSearchExcludedHandle(result.handle),
+  );
+
   return {
     savedAt: candidate.savedAt,
     query: candidate.query.trim(),
-    results: candidate.results,
+    results: searchableResults,
     resultsReady: candidate.resultsReady,
+    nextCursor: typeof candidate.nextCursor === "string" ? candidate.nextCursor : null,
   };
 }
 
@@ -130,7 +141,7 @@ export function readConnectSearchCache(
 
 export function writeConnectSearchCache(
   identity: ConnectSearchCacheIdentity,
-  snapshot: Pick<ConnectSearchCacheSnapshot, "query" | "results" | "resultsReady">,
+  snapshot: Pick<ConnectSearchCacheSnapshot, "query" | "results" | "resultsReady" | "nextCursor">,
 ): void {
   if (typeof window === "undefined") return;
 
@@ -141,8 +152,11 @@ export function writeConnectSearchCache(
   const cached: ConnectSearchCacheSnapshot = {
     savedAt: Date.now(),
     query,
-    results: snapshot.resultsReady ? snapshot.results : [],
+    results: snapshot.resultsReady
+      ? snapshot.results.filter((result) => !isSearchExcludedHandle(result.handle))
+      : [],
     resultsReady: snapshot.resultsReady,
+    nextCursor: snapshot.resultsReady ? snapshot.nextCursor : null,
   };
   connectSearchMemoryCache.set(storageKey, cached);
 

@@ -2,6 +2,7 @@ export type NativeSttQueuedMessage = {
   queueId?: string;
   raw: string;
   conversationId?: string;
+  sessionId?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -18,11 +19,15 @@ export function normalizeNativeSttQueuedMessage(value: unknown): NativeSttQueued
   const conversationId = typeof value.conversationId === "string" && value.conversationId.trim()
     ? value.conversationId.trim()
     : undefined;
+  const sessionId = typeof value.sessionId === "string" && value.sessionId.trim()
+    ? value.sessionId.trim()
+    : undefined;
 
   return {
     ...(queueId ? { queueId } : {}),
     raw: value.raw,
     ...(conversationId ? { conversationId } : {}),
+    ...(sessionId ? { sessionId } : {}),
   };
 }
 
@@ -62,6 +67,30 @@ export function splitNativeSttMessagesForConversation(
   }
 
   return { matching, remaining };
+}
+
+export function filterNativeSttMessagesForSession(
+  messages: NativeSttQueuedMessage[],
+  sessionId: string | null | undefined,
+): {
+  matching: NativeSttQueuedMessage[];
+  stale: NativeSttQueuedMessage[];
+} {
+  const normalizedSessionId = typeof sessionId === "string" ? sessionId.trim() : "";
+  const matching: NativeSttQueuedMessage[] = [];
+  const stale: NativeSttQueuedMessage[] = [];
+
+  for (const message of messages) {
+    // Untagged messages are retained for compatibility with older native
+    // shells. Tagged messages must belong to the current native generation.
+    if (!message.sessionId || (normalizedSessionId && message.sessionId === normalizedSessionId)) {
+      matching.push(message);
+    } else {
+      stale.push(message);
+    }
+  }
+
+  return { matching, stale };
 }
 
 export function removeNativeSttQueuedMessage(

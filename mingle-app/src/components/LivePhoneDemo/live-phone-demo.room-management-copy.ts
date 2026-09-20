@@ -44,6 +44,10 @@ export type LivePhoneDemoRoomManagementCopy = {
   shareLinkCopyButtonLabel: string
   shareLinkCopiedToastLabel: string
   shareErrorToastLabel: string
+  pictureInPictureButtonLabel: string
+  pictureInPictureLiveLabel: string
+  pictureInPicturePausedLabel: string
+  pictureInPictureEmptyLabel: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
@@ -86,6 +90,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: '링크 복사',
     shareLinkCopiedToastLabel: '링크가 복사되었습니다.',
     shareErrorToastLabel: '공유 설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    pictureInPictureButtonLabel: '작은 창으로 보기',
+    pictureInPictureLiveLabel: '실시간',
+    pictureInPicturePausedLabel: '일시 정지',
+    pictureInPictureEmptyLabel: '아직 메시지가 없습니다.',
   },
   en: {
     menuItemLabel: 'Conversation management',
@@ -126,6 +134,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Copy link',
     shareLinkCopiedToastLabel: 'Link copied.',
     shareErrorToastLabel: 'Could not update sharing. Please try again.',
+    pictureInPictureButtonLabel: 'Open Picture in Picture',
+    pictureInPictureLiveLabel: 'Live',
+    pictureInPicturePausedLabel: 'Paused',
+    pictureInPictureEmptyLabel: 'No messages yet.',
   },
   ja: {
     menuItemLabel: '会話ルーム管理',
@@ -166,6 +178,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'リンクをコピー',
     shareLinkCopiedToastLabel: 'リンクをコピーしました。',
     shareErrorToastLabel: '共有設定を変更できませんでした。しばらくしてからもう一度お試しください。',
+    pictureInPictureButtonLabel: 'ピクチャ・イン・ピクチャで表示',
+    pictureInPictureLiveLabel: 'ライブ',
+    pictureInPicturePausedLabel: '一時停止',
+    pictureInPictureEmptyLabel: 'メッセージはまだありません。',
   },
   'zh-CN': {
     menuItemLabel: '会话房间管理',
@@ -206,6 +222,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: '复制链接',
     shareLinkCopiedToastLabel: '链接已复制。',
     shareErrorToastLabel: '无法更新共享设置。请稍后再试。',
+    pictureInPictureButtonLabel: '以画中画显示',
+    pictureInPictureLiveLabel: '实时',
+    pictureInPicturePausedLabel: '已暂停',
+    pictureInPictureEmptyLabel: '还没有消息。',
   },
   'zh-TW': {
     menuItemLabel: '對話房間管理',
@@ -246,6 +266,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: '複製連結',
     shareLinkCopiedToastLabel: '連結已複製。',
     shareErrorToastLabel: '無法更新共享設定。請稍後再試。',
+    pictureInPictureButtonLabel: '以子母畫面顯示',
+    pictureInPictureLiveLabel: '即時',
+    pictureInPicturePausedLabel: '已暫停',
+    pictureInPictureEmptyLabel: '尚無訊息。',
   },
   fr: {
     menuItemLabel: 'Gestion de la conversation',
@@ -286,6 +310,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Copier le lien',
     shareLinkCopiedToastLabel: 'Lien copié.',
     shareErrorToastLabel: 'Impossible de mettre à jour le partage. Veuillez réessayer.',
+    pictureInPictureButtonLabel: 'Ouvrir en image dans l’image',
+    pictureInPictureLiveLabel: 'En direct',
+    pictureInPicturePausedLabel: 'En pause',
+    pictureInPictureEmptyLabel: 'Aucun message pour le moment.',
   },
   de: {
     menuItemLabel: 'Verwaltung des Gesprächs',
@@ -326,6 +354,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Link kopieren',
     shareLinkCopiedToastLabel: 'Link kopiert.',
     shareErrorToastLabel: 'Teilen konnte nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
+    pictureInPictureButtonLabel: 'Bild-in-Bild öffnen',
+    pictureInPictureLiveLabel: 'Live',
+    pictureInPicturePausedLabel: 'Pausiert',
+    pictureInPictureEmptyLabel: 'Noch keine Nachrichten.',
   },
   es: {
     menuItemLabel: 'Gestion de la conversacion',
@@ -366,6 +398,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Copiar enlace',
     shareLinkCopiedToastLabel: 'Enlace copiado.',
     shareErrorToastLabel: 'No se pudo actualizar el uso compartido. Intentalo de nuevo.',
+    pictureInPictureButtonLabel: 'Abrir en imagen dentro de imagen',
+    pictureInPictureLiveLabel: 'En directo',
+    pictureInPicturePausedLabel: 'En pausa',
+    pictureInPictureEmptyLabel: 'Aún no hay mensajes.',
   },
   pt: {
     menuItemLabel: 'Gerenciamento da conversa',
@@ -406,6 +442,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Copiar link',
     shareLinkCopiedToastLabel: 'Link copiado.',
     shareErrorToastLabel: 'Não foi possível atualizar o compartilhamento. Tente novamente.',
+    pictureInPictureButtonLabel: 'Abrir em Picture in Picture',
+    pictureInPictureLiveLabel: 'Ao vivo',
+    pictureInPicturePausedLabel: 'Pausado',
+    pictureInPictureEmptyLabel: 'Ainda não há mensagens.',
   },
   it: {
     menuItemLabel: 'Gestione della conversazione',
@@ -446,6 +486,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Copia link',
     shareLinkCopiedToastLabel: 'Link copiato.',
     shareErrorToastLabel: 'Impossibile aggiornare la condivisione. Riprova.',
+    pictureInPictureButtonLabel: 'Apri in Picture in Picture',
+    pictureInPictureLiveLabel: 'In diretta',
+    pictureInPicturePausedLabel: 'In pausa',
+    pictureInPictureEmptyLabel: 'Nessun messaggio ancora.',
   },
   ru: {
     menuItemLabel: 'Управление разговором',
@@ -486,6 +530,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Скопировать ссылку',
     shareLinkCopiedToastLabel: 'Ссылка скопирована.',
     shareErrorToastLabel: 'Не удалось изменить настройки доступа. Повторите попытку позже.',
+    pictureInPictureButtonLabel: 'Открыть в режиме «Картинка в картинке»',
+    pictureInPictureLiveLabel: 'В эфире',
+    pictureInPicturePausedLabel: 'Пауза',
+    pictureInPictureEmptyLabel: 'Сообщений пока нет.',
   },
   ar: {
     menuItemLabel: 'إدارة المحادثة',
@@ -526,6 +574,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'نسخ الرابط',
     shareLinkCopiedToastLabel: 'تم نسخ الرابط.',
     shareErrorToastLabel: 'تعذر تحديث إعدادات المشاركة. يرجى المحاولة مرة أخرى لاحقًا.',
+    pictureInPictureButtonLabel: 'فتح في صورة داخل صورة',
+    pictureInPictureLiveLabel: 'مباشر',
+    pictureInPicturePausedLabel: 'متوقف مؤقتًا',
+    pictureInPictureEmptyLabel: 'لا توجد رسائل بعد.',
   },
   hi: {
     menuItemLabel: 'बातचीत प्रबंधन',
@@ -566,6 +618,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'लिंक कॉपी करें',
     shareLinkCopiedToastLabel: 'लिंक कॉपी हो गया।',
     shareErrorToastLabel: 'शेयरिंग सेटिंग अपडेट नहीं हो सकी। कृपया फिर से प्रयास करें।',
+    pictureInPictureButtonLabel: 'पिक्चर इन पिक्चर में खोलें',
+    pictureInPictureLiveLabel: 'लाइव',
+    pictureInPicturePausedLabel: 'रुका हुआ',
+    pictureInPictureEmptyLabel: 'अभी कोई संदेश नहीं है।',
   },
   th: {
     menuItemLabel: 'จัดการห้องสนทนา',
@@ -606,6 +662,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'คัดลอกลิงก์',
     shareLinkCopiedToastLabel: 'คัดลอกลิงก์แล้ว',
     shareErrorToastLabel: 'ไม่สามารถอัปเดตการแชร์ได้ โปรดลองอีกครั้ง',
+    pictureInPictureButtonLabel: 'เปิดในโหมดภาพซ้อนภาพ',
+    pictureInPictureLiveLabel: 'ถ่ายทอดสด',
+    pictureInPicturePausedLabel: 'หยุดชั่วคราว',
+    pictureInPictureEmptyLabel: 'ยังไม่มีข้อความ',
   },
   vi: {
     menuItemLabel: 'Quan ly cuoc tro chuyen',
@@ -646,6 +706,10 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     shareLinkCopyButtonLabel: 'Sao chép liên kết',
     shareLinkCopiedToastLabel: 'Đã sao chép liên kết.',
     shareErrorToastLabel: 'Không thể cập nhật chia sẻ. Vui lòng thử lại.',
+    pictureInPictureButtonLabel: 'Mở ở chế độ hình trong hình',
+    pictureInPictureLiveLabel: 'Trực tiếp',
+    pictureInPicturePausedLabel: 'Đã tạm dừng',
+    pictureInPictureEmptyLabel: 'Chưa có tin nhắn.',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoRoomManagementCopy>
 

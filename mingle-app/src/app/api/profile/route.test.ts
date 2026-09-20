@@ -34,6 +34,12 @@ vi.mock("@/lib/signup-welcome-onboarding", () => ({
   ensureSignupWelcomeOnboarding: mockEnsureSignupWelcomeOnboarding,
 }));
 
+vi.mock("@/server/profile-bio", () => ({
+  getPublishedBioText: async (_id: string, bio: string | null) => bio,
+  updateProfileWithBio: async (_id: string, _bio: unknown, update: (tx: unknown) => Promise<unknown>) => ({ profile: await update({ user: { update: mockUserUpdate } }), versionId: null }),
+  runBioVersion: vi.fn(),
+}));
+
 import { GET, PATCH } from "@/app/api/profile/route";
 
 describe("/api/profile route", () => {
@@ -61,6 +67,16 @@ describe("/api/profile route", () => {
     expect(mockUserFindUnique).not.toHaveBeenCalled();
   });
 
+  it("rejects a pending language edit from the previous account before touching the new profile", async () => {
+    const response = await PATCH(new NextRequest("https://mingle.example/api/profile", {
+      method: "PATCH", headers: { "Content-Type": "application/json", "x-mingle-expected-account-id": "previous_user" },
+      body: JSON.stringify({ defaultConversationLanguages: ["ko"] }),
+    }));
+    expect(response.status).toBe(401);
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
   it("returns the authenticated user's profile", async () => {
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
@@ -83,6 +99,7 @@ describe("/api/profile route", () => {
       image: null,
       handle: "original.name",
       bio: "Hello",
+      bioDraft: "Hello",
       nationality: "ko",
       primaryLanguages: ["ko"],
       defaultConversationLanguages: [],

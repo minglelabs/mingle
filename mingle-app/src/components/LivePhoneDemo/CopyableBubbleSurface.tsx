@@ -10,6 +10,7 @@ import {
   type TouchEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { MessageReactionPicker } from './MessageReactions'
 import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
@@ -28,6 +29,7 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   copyAllBubblesLabel?: string
   playPronunciationLabel?: string
   onPlayPronunciation?: () => void
+  onActivate?: () => void
 }
 
 export function didLongPressQualify(
@@ -41,6 +43,14 @@ type TooltipPos =
   | { side: 'above'; bottom: number; left: number }
   | { side: 'below'; top: number; left: number }
 
+export function chooseTooltipSide(aboveSpace: number, belowSpace: number): 'above' | 'below' {
+  const availableAbove = Math.max(0, aboveSpace)
+  const availableBelow = Math.max(0, belowSpace)
+  return availableAbove >= TOOLTIP_ESTIMATED_MAX_HEIGHT_PX || availableAbove >= availableBelow
+    ? 'above'
+    : 'below'
+}
+
 export default function CopyableBubbleSurface({
   text,
   allText,
@@ -48,10 +58,12 @@ export default function CopyableBubbleSurface({
   copyAllBubblesLabel,
   playPronunciationLabel,
   onPlayPronunciation,
+  onActivate,
   children,
   className,
   style,
   onContextMenu,
+  onKeyDown,
   onDoubleClick,
   onTouchCancel,
   onTouchEnd,
@@ -82,9 +94,9 @@ export default function CopyableBubbleSurface({
   const calcTooltipPos = useCallback((): TooltipPos | null => {
     const rect = surfaceRef.current?.getBoundingClientRect()
     if (!rect) return null
-    const left = rect.left + rect.width / 2
-    // 위쪽 공간이 충분하면 버블 위에, 부족하면 버블 아래에 표시
-    if (rect.top - TOOLTIP_GAP_PX >= TOOLTIP_ESTIMATED_MAX_HEIGHT_PX) {
+    const left = Math.max(120, Math.min(window.innerWidth - 120, rect.left + rect.width / 2))
+    const side = chooseTooltipSide(rect.top - TOOLTIP_GAP_PX, window.innerHeight - rect.bottom - TOOLTIP_GAP_PX)
+    if (side === 'above') {
       return {
         side: 'above',
         bottom: window.innerHeight - rect.top + TOOLTIP_GAP_PX,
@@ -124,11 +136,14 @@ export default function CopyableBubbleSurface({
       }
     }
 
+    const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeMenu() }
+    document.addEventListener('keydown', handleEscape)
     document.addEventListener('pointerdown', handlePointerDown, true)
     window.addEventListener('scroll', closeMenu, true)
     window.addEventListener('resize', closeMenu)
 
     return () => {
+      document.removeEventListener('keydown', handleEscape)
       document.removeEventListener('pointerdown', handlePointerDown, true)
       window.removeEventListener('scroll', closeMenu, true)
       window.removeEventListener('resize', closeMenu)
@@ -168,7 +183,8 @@ export default function CopyableBubbleSurface({
       onTouchCancel={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="w-44 rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+      <div className="max-h-[calc(100dvh-16px)] w-[230px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+        <MessageReactionPicker onSelect={closeMenu} />
         <button
           type="button"
           data-copyable-bubble-menu-button
@@ -230,6 +246,22 @@ export default function CopyableBubbleSurface({
       {...props}
       data-copyable-bubble
       data-copyable-bubble-double-tap-action={showPlayPronunciationButton ? 'play-pronunciation' : 'copy'}
+      tabIndex={0}
+      onClick={(event) => {
+        props.onClick?.(event)
+        if (!event.defaultPrevented && !isCopyMenuOpen) onActivate?.()
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented || event.target !== event.currentTarget) return
+        if (event.key === 'Enter' && onActivate) {
+          event.preventDefault(); onActivate(); return
+        }
+        if (event.key === 'Enter' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          event.preventDefault()
+          openMenu()
+        } else if (event.key === 'Escape') closeMenu()
+      }}
       onContextMenu={(event) => {
         onContextMenu?.(event)
         if (event.defaultPrevented) return
@@ -238,6 +270,7 @@ export default function CopyableBubbleSurface({
       }}
       onDoubleClick={(event) => {
         onDoubleClick?.(event)
+        if (onActivate) return
         if (event.defaultPrevented) return
         // 터치 더블탭으로 이미 처리된 경우 dblclick 중복 발동 방지
         if (touchDoubleTapFiredRef.current) {
@@ -259,7 +292,7 @@ export default function CopyableBubbleSurface({
         // 터치 기반 더블탭 감지 (모바일 웹뷰에서 dblclick 미발생 대응)
         const now = Date.now()
         const last = lastTapRef.current
-        if (last !== null) {
+        if (last !== null && !onActivate) {
           const timeDiff = now - last.time
           const distX = Math.abs(touchPoint.clientX - last.x)
           const distY = Math.abs(touchPoint.clientY - last.y)

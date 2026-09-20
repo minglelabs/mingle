@@ -48,6 +48,7 @@ const SURFACE_TRANSITION = {
 };
 const SURFACE_SWIPE_THRESHOLD_PX = 72;
 const SURFACE_SWIPE_VELOCITY_PX_PER_SECOND = 650;
+const EDGE_SWIPE_SCROLL_CLAIM_PX = 4;
 
 const nativeSuppressedSurfaceTokens = new Set<string>();
 let nativeSuppressionTokenSequence = 0;
@@ -107,6 +108,10 @@ export default function SlideSurface({
   const dragControls = useDragControls();
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
+  const surfaceRef = useRef<HTMLElement | null>(null);
+  const edgeSwipeTouchActionRef = useRef<string | null>(null);
+  const edgeSwipeStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [edgeSwipeActive, setEdgeSwipeActive] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
 
   useEffect(() => {
@@ -163,20 +168,76 @@ export default function SlideSurface({
     return true;
   }, nativeBackPriority), [canClose, nativeBackPriority, open, requestClose]);
 
+  const prepareEdgeSwipeTouchAction = useCallback((
+    surfaceNode: HTMLElement,
+    clientX: number,
+    clientY: number,
+  ) => {
+    if (!open || !canClose || !isLeftEdgeSwipeStart(clientX)) return false;
+    surfaceRef.current = surfaceNode;
+    edgeSwipeStartPointRef.current = { x: clientX, y: clientY };
+    if (edgeSwipeTouchActionRef.current === null) {
+      edgeSwipeTouchActionRef.current = surfaceNode.style.touchAction;
+    }
+    // Reserve the edge gesture for the slide surface before the browser can
+    // classify a diagonal touch as a vertical scroll. The rest of the surface
+    // keeps its configured pan-y behavior.
+    surfaceNode.style.touchAction = "none";
+    setEdgeSwipeActive(true);
+    return true;
+  }, [canClose, open]);
+
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (!open || !canClose || !isLeftEdgeSwipeStart(event.clientX)) return;
+    if (!prepareEdgeSwipeTouchAction(event.currentTarget, event.clientX, event.clientY)) return;
     dragControls.start(event);
-  }, [canClose, dragControls, open]);
+  }, [dragControls, prepareEdgeSwipeTouchAction]);
+
+  const restoreEdgeSwipeTouchAction = useCallback(() => {
+    const surfaceNode = surfaceRef.current;
+    if (surfaceNode && edgeSwipeTouchActionRef.current !== null) {
+      surfaceNode.style.touchAction = edgeSwipeTouchActionRef.current;
+    }
+    edgeSwipeTouchActionRef.current = null;
+    surfaceRef.current = null;
+    edgeSwipeStartPointRef.current = null;
+    setEdgeSwipeActive(false);
+  }, []);
+
+  const shouldPreventEdgeScroll = useCallback((clientX: number, clientY: number) => {
+    if (!edgeSwipeActive) return false;
+    const startPoint = edgeSwipeStartPointRef.current;
+    if (!startPoint) return false;
+    return Math.max(
+      Math.abs(clientX - startPoint.x),
+      Math.abs(clientY - startPoint.y),
+    ) >= EDGE_SWIPE_SCROLL_CLAIM_PX;
+  }, [edgeSwipeActive]);
+
+  useEffect(() => {
+    if (!edgeSwipeActive || !surfaceRef.current) return;
+    const surfaceNode = surfaceRef.current;
+    const handleNativeTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch && shouldPreventEdgeScroll(touch.clientX, touch.clientY)) {
+        event.preventDefault();
+      }
+    };
+    surfaceNode.addEventListener("touchmove", handleNativeTouchMove, { passive: false });
+    return () => {
+      surfaceNode.removeEventListener("touchmove", handleNativeTouchMove);
+    };
+  }, [edgeSwipeActive, shouldPreventEdgeScroll]);
 
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (!open || !canClose || !isMountedRef.current || isLeavingRef.current) return;
+    restoreEdgeSwipeTouchAction();
     const threshold = Math.max(SURFACE_SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
     if (info.offset.x >= threshold || info.velocity.x >= SURFACE_SWIPE_VELOCITY_PX_PER_SECOND) {
       void requestClose();
       return;
     }
     void motionControls.start({ x: 0, transition: SURFACE_TRANSITION });
-  }, [canClose, motionControls, open, requestClose, viewportWidth]);
+  }, [canClose, motionControls, open, requestClose, restoreEdgeSwipeTouchAction, viewportWidth]);
 
   const surface = (
     <motion.main
@@ -184,7 +245,6 @@ export default function SlideSurface({
       animate={motionControls}
       drag="x"
       dragControls={dragControls}
-      dragDirectionLock
       dragListener={false}
       dragConstraints={{ left: 0, right: viewportWidth }}
       dragElastic={0.08}
@@ -193,22 +253,39 @@ export default function SlideSurface({
         if (stopPropagation) event.stopPropagation();
         handlePointerDown(event);
       }}
+      onPointerMove={(event) => {
+        if (shouldPreventEdgeScroll(event.clientX, event.clientY)) event.preventDefault();
+      }}
+      onPointerUp={restoreEdgeSwipeTouchAction}
+      onPointerCancel={restoreEdgeSwipeTouchAction}
       onDragEnd={handleDragEnd}
       onTouchStart={(event) => {
         if (stopPropagation) event.stopPropagation();
+        const touch = event.touches[0];
+        if (touch) prepareEdgeSwipeTouchAction(event.currentTarget, touch.clientX, touch.clientY);
         onTouchStart?.(event);
+      }}
+      onTouchMove={(event) => {
+        const touch = event.touches[0];
+        if (touch && shouldPreventEdgeScroll(touch.clientX, touch.clientY)) event.preventDefault();
       }}
       onTouchEnd={(event) => {
         if (stopPropagation) event.stopPropagation();
+        restoreEdgeSwipeTouchAction();
         onTouchEnd?.(event);
       }}
       onTouchCancel={(event) => {
         if (stopPropagation) event.stopPropagation();
+        restoreEdgeSwipeTouchAction();
         onTouchCancel?.(event);
       }}
       onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
       className={className}
-      style={{ ...style, ...(zIndex === undefined ? {} : { zIndex }) }}
+      style={{
+        ...style,
+        ...(edgeSwipeActive ? { touchAction: "none" } : {}),
+        ...(zIndex === undefined ? {} : { zIndex }),
+      }}
       role={role}
       aria-modal={role === "dialog" ? true : undefined}
       aria-label={ariaLabel}

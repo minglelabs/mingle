@@ -12,7 +12,7 @@ const CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT = 1.05
 interface ChatBubbleTimestampProps {
   createdAtMs?: number
   uiLocale: string
-  align?: 'right' | 'center'
+  align?: 'right' | 'left' | 'center'
   minWidth?: string
   className?: string
 }
@@ -51,7 +51,9 @@ function ChatBubbleTimestamp({
         'flex shrink-0 flex-col text-[10px] text-black/[0.34] tabular-nums',
         align === 'center'
           ? 'items-center text-center'
-          : 'items-end self-end text-right',
+          : align === 'left'
+            ? 'items-start self-start text-left'
+            : 'items-end self-end text-right',
         className,
       )}
     >

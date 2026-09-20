@@ -8,9 +8,8 @@ import {
   ensureTrackingContext,
   parseClientContext,
   sanitizeNonNegativeInt,
-  upsertTrackedUser,
 } from '@/lib/app-analytics'
-import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
+import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -18,11 +17,13 @@ import {
 import {
   normalizeLang,
   sanitizeJsonObject,
+  sanitizeTargetLanguages,
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
-import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
+import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import {
   isMessageSenderBlockedInConversation,
@@ -181,6 +182,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const translationCompletionTokens = sanitizeNonNegativeInt(body.translationCompletionTokens)
   const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
   const translations = sanitizeTranslations(body.translations)
+  const requestedTargetLanguages = sanitizeTargetLanguages(body.targetLanguages)
   const clientMetadata = sanitizeJsonObject(body.metadata)
   const clientContext = parseClientContext(body.clientContext)
   const usageSecFromBody = sanitizeNonNegativeInt(body.usageSec)
@@ -199,10 +201,34 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
     const session = await getServerSession(getAuthOptions())
-    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
+    const userId = await resolveUserIdForTrackedWrite({
+      request,
+      session,
+      tracking,
+      clientContext,
+    })
+    if (!userId) {
+      const unauthorizedResponse = NextResponse.json(
+        { error: 'authenticated_user_required' },
+        { status: 401 },
+      )
+      ensureTrackingContext(request, unauthorizedResponse, {
+        externalUserIdHint: tracking.externalUserId,
+        sessionKeyHint: tracking.sessionKey,
+      })
+      return unauthorizedResponse
+    }
     let messageId: string | null = null
+
+    if (eventType === 'stt_turn_started' && body.reserveOrder === true && clientMessageId) {
+      if (await isMessageSenderBlockedInConversation({ sessionKey: tracking.sessionKey, userId })) {
+        return NextResponse.json({ error: 'conversation_unavailable' }, { status: 403 })
+      }
+      return NextResponse.json({ ok: true, orderReceipt: await reserveConversationVoiceOrder({
+        userId, sessionKey: tracking.sessionKey, clientMessageId,
+      }) })
+    }
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
       const [shouldIgnoreDueToConversationClear, isSenderBlocked] = await Promise.all([
@@ -226,10 +252,22 @@ export async function handleLogClientEventV1(request: NextRequest) {
         infrastructureProvider: infrastructureProvider ?? null,
         model: model ?? null,
         translationLanguages: Object.keys(translations),
+        translationTargetLanguages: sanitizeTargetLanguages([
+          ...requestedTargetLanguages,
+          ...Object.keys(translations),
+        ]),
       }
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      const orderScope = { userId, sessionKey: tracking.sessionKey, clientMessageId }
+      let orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, orderScope)
+      if (orderStartedAtMs === null && !shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+        // Finalization can beat the first socket echo. Resolve the SAME live
+        // reservation instead of falling back to the later DB creation time.
+        orderStartedAtMs = verifyVoiceOrderReceipt(await reserveConversationVoiceOrder(orderScope), orderScope)
+      }
+      if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
 
       if (
@@ -249,8 +287,29 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // mid-write with only the source text visible and no translation
         // yet, which is what makes the list flash original-language text
         // before "later" flipping to the translated preview.
-        const message = await prisma.$transaction(async (tx) => {
-          const message = await tx.appMessage.upsert({
+        const message = await prisma.$transaction(async tx => {
+          // Serialize source/translation/retry writes even before the row exists.
+          // Never erase or replace a persisted display-order key on an update.
+          const lockKey = JSON.stringify([tracking.sessionKey, clientMessageId])
+          await tx.$queryRaw`SELECT true AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+          const existing = await tx.appMessage.findUnique({
+            where: { sessionKey_clientMessageId: { sessionKey: tracking.sessionKey, clientMessageId } },
+            select: { metadata: true, createdAt: true },
+          })
+          if (existing) {
+            const metadata = sanitizeJsonObject(existing.metadata)
+            const previousTargetLanguages = sanitizeTargetLanguages(metadata?.translationTargetLanguages)
+            if (requestedTargetLanguages.length === 0 && previousTargetLanguages.length > 0) {
+              messageMetadata.translationTargetLanguages = sanitizeTargetLanguages([
+                ...previousTargetLanguages,
+                ...Object.keys(translations),
+              ])
+            }
+            const savedOrder = metadata?.orderStartedAtMs
+            messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
+              ? savedOrder : existing.createdAt.getTime()
+          }
+          return tx.appMessage.upsert({
             where: {
               sessionKey_clientMessageId: {
                 sessionKey: tracking.sessionKey,
@@ -292,71 +351,74 @@ export async function handleLogClientEventV1(request: NextRequest) {
             select: {
               id: true,
               createdAt: true,
+              metadata: true,
+              user: { select: { name: true, image: true } },
             },
           })
+        })
+        const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
+        orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
+          ? persistedOrder : message.createdAt.getTime()
+        const persistedMetadata = sanitizeJsonObject(message.metadata)
+        const persistedTargetLanguages = sanitizeTargetLanguages(
+          persistedMetadata?.translationTargetLanguages ?? messageMetadata.translationTargetLanguages,
+        )
+        const committedTargetLanguages = sanitizeTargetLanguages([
+          ...persistedTargetLanguages,
+          ...Object.keys(translations),
+        ])
+        messageId = message.id
 
-          await tx.appMessageContent.upsert({
+        await prisma.appMessageContent.upsert({
+          where: {
+            messageId_contentType_language: {
+              messageId: message.id,
+              contentType: 'SOURCE',
+              language: sourceLanguage,
+            },
+          },
+          create: {
+            messageId: message.id,
+            contentType: 'SOURCE',
+            language: sourceLanguage,
+            isDeleted: false,
+            text: sourceText,
+            provider: infrastructureProvider ?? provider ?? undefined,
+            model: model ?? undefined,
+          },
+          update: {
+            isDeleted: false,
+            text: sourceText,
+            provider: infrastructureProvider ?? provider ?? undefined,
+            model: model ?? undefined,
+          },
+        })
+
+        for (const [language, translatedText] of Object.entries(translations)) {
+          await prisma.appMessageContent.upsert({
             where: {
               messageId_contentType_language: {
                 messageId: message.id,
-                contentType: 'SOURCE',
-                language: sourceLanguage,
+                contentType: 'TRANSLATION_FINAL',
+                language,
               },
             },
             create: {
               messageId: message.id,
-              contentType: 'SOURCE',
-              language: sourceLanguage,
+              contentType: 'TRANSLATION_FINAL',
+              language,
               isDeleted: false,
-              text: sourceText,
+              text: translatedText,
               provider: infrastructureProvider ?? provider ?? undefined,
               model: model ?? undefined,
             },
             update: {
               isDeleted: false,
-              text: sourceText,
+              text: translatedText,
               provider: infrastructureProvider ?? provider ?? undefined,
               model: model ?? undefined,
             },
           })
-
-          for (const [language, translatedText] of Object.entries(translations)) {
-            await tx.appMessageContent.upsert({
-              where: {
-                messageId_contentType_language: {
-                  messageId: message.id,
-                  contentType: 'TRANSLATION_FINAL',
-                  language,
-                },
-              },
-              create: {
-                messageId: message.id,
-                contentType: 'TRANSLATION_FINAL',
-                language,
-                isDeleted: false,
-                text: translatedText,
-                provider: infrastructureProvider ?? provider ?? undefined,
-                model: model ?? undefined,
-              },
-              update: {
-                isDeleted: false,
-                text: translatedText,
-                provider: infrastructureProvider ?? provider ?? undefined,
-                model: model ?? undefined,
-              },
-            })
-          }
-
-          return message
-        })
-        messageId = message.id
-
-        try {
-          await maybeGenerateConversationTitleForSession({
-            sessionKey: tracking.sessionKey,
-          })
-        } catch (error) {
-          console.error('Conversation auto title generation failed:', error)
         }
 
         // An invitee gets no DB record and can't see the room at all until
@@ -368,7 +430,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
         // materializePendingConversationInvitees's joinedAt doc comment.
         let committedMemberUserIds: string[] | null = null
         try {
-          committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          if (body.translationUpdate !== true) {
+            committedMemberUserIds = await materializePendingConversationInvitees(tracking.sessionKey, message.createdAt)
+          }
           if (Array.isArray(committedMemberUserIds)) {
             console.info('[conversation-message] membership-ready', {
               messageId,
@@ -391,11 +455,37 @@ export async function handleLogClientEventV1(request: NextRequest) {
           // The publish helper absorbs transport failures, but awaiting it here
           // keeps the request alive long enough for the messaging service to
           // receive the event instead of dropping it after the response ends.
-          await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          // Retained membership rows include departed users. Match history's
+          // point-in-time attribution; a solo turn retried after an invitation
+          // must not suddenly become an account-attributed shared-room bubble.
+          const sharedAtMessage = memberUserIds.length >= 2 && await prisma.appConversationChannelMember.count({
+            where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
+              OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
+          }).then(count => count >= 2).catch(() => false)
+          if (sharedAtMessage) {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
+              id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
+              translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
+              targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
+              serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
+              speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+            })
+          } else {
+            await notifyConversationMessage(tracking.sessionKey, memberUserIds)
+          }
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
-        if (messageId) {
+        // Translation availability must be published before optional AI title
+        // generation, which can stall independently of message delivery.
+        if (body.translationPending !== true) {
+          try {
+            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+          } catch (error) {
+            console.error('Conversation auto title generation failed:', error)
+          }
+        }
+        if (messageId && body.translationUpdate !== true) {
           try {
             await sendPushNotificationForConversationMessage({
               messageId,
@@ -434,16 +524,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
       sessionKey: tracking.sessionKey,
       messageId,
       eventType,
+      ...(body.translationUpdate === true ? { skipAnalyticsCapture: true } : {}),
       metadata: Object.keys(eventMetadata).length > 0 ? eventMetadata : undefined,
     })
-
-    if (eventType === 'conversation_hydration_order_preserved') {
-      // The event is already persisted in AppEventLog. Keep this diagnostic
-      // out of the warning stream and never print session keys or user ids.
-      console.info('[conversation-order] hydration timestamp drift preserved', {
-        metadata: clientMetadata,
-      })
-    }
 
     return response
   } catch (error) {

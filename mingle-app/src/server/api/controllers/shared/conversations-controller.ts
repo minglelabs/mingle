@@ -14,6 +14,7 @@ import { ensureTrackingContext } from "@/lib/app-analytics";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import {
   normalizeSessionUserIdentity,
+  requestAllowsLegacyAnonymousUser,
   resolveTrackingExternalUserId,
   resolveTrackingSessionKey,
   resolveOrCreateUserIdForRequest,
@@ -94,7 +95,7 @@ export async function getConversationsResponse(request: NextRequest) {
     const sessionKey = resolveTrackingSessionKey(request);
     const conversations = sessionIdentity.id
       ? await listConversationChannelsForUser(sessionIdentity.id)
-      : externalUserId
+      : requestAllowsLegacyAnonymousUser(request) && externalUserId
         ? await listConversationChannelsForExternalUserId(externalUserId)
         : null;
 

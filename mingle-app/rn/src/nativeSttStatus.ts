@@ -2,6 +2,12 @@ export function resolveNativeSttStatusAfterStart(currentStatus: string): 'ready'
   return currentStatus.trim().toLowerCase() === 'ready' ? 'ready' : 'running';
 }
 
+export function resolveNativeSttStatusAfterStopAccepted(currentStatus: string): string {
+  const normalized = currentStatus.trim().toLowerCase();
+  return ['idle', 'stopped', 'closed', 'error', 'failed'].includes(normalized)
+    ? normalized : 'stopping';
+}
+
 export function isNativeSttServerReadyMessage(raw: string): boolean {
   try {
     const parsed = JSON.parse(raw) as unknown;

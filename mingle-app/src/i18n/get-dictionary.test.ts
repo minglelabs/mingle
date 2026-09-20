@@ -16,6 +16,154 @@ const LIVE_DEMO_PREFERENCE_LABEL_KEYS = [
   "sttSegmentationModeFinLabel",
 ] as const;
 
+const NEW_CONVERSATION_LABELS: Record<(typeof PRIMARY_UI_LOCALES)[number], {
+  newConversationButtonLabel: string;
+  startAloneOptionLabel: string;
+}> = {
+  ko: {
+    newConversationButtonLabel: "새 대화방 만들기",
+    startAloneOptionLabel: "혼자 쓰는 대화방",
+  },
+  en: {
+    newConversationButtonLabel: "Create a new chat",
+    startAloneOptionLabel: "Your own room",
+  },
+  ja: {
+    newConversationButtonLabel: "新しいチャットを作成",
+    startAloneOptionLabel: "自分用チャット",
+  },
+  "zh-CN": {
+    newConversationButtonLabel: "新建聊天",
+    startAloneOptionLabel: "专属房间",
+  },
+  "zh-TW": {
+    newConversationButtonLabel: "新增聊天",
+    startAloneOptionLabel: "專屬房間",
+  },
+  fr: {
+    newConversationButtonLabel: "Nouvelle discussion",
+    startAloneOptionLabel: "Espace personnel",
+  },
+  de: {
+    newConversationButtonLabel: "Neuer Chat",
+    startAloneOptionLabel: "Eigener Chat",
+  },
+  es: {
+    newConversationButtonLabel: "Nuevo chat",
+    startAloneOptionLabel: "Chat personal",
+  },
+  pt: {
+    newConversationButtonLabel: "Novo chat",
+    startAloneOptionLabel: "Chat pessoal",
+  },
+  it: {
+    newConversationButtonLabel: "Nuova chat",
+    startAloneOptionLabel: "Chat personale",
+  },
+  ru: {
+    newConversationButtonLabel: "Новый чат",
+    startAloneOptionLabel: "Личный чат",
+  },
+  ar: {
+    newConversationButtonLabel: "محادثة جديدة",
+    startAloneOptionLabel: "غرفتك الخاصة",
+  },
+  hi: {
+    newConversationButtonLabel: "नई चैट",
+    startAloneOptionLabel: "निजी चैट",
+  },
+  th: {
+    newConversationButtonLabel: "แชทใหม่",
+    startAloneOptionLabel: "ห้องส่วนตัว",
+  },
+  vi: {
+    newConversationButtonLabel: "Chat mới",
+    startAloneOptionLabel: "Chat riêng",
+  },
+};
+
+const SEARCH_PAGINATION_COPY: Record<(typeof PRIMARY_UI_LOCALES)[number], {
+  loadMoreLabel: string;
+  loadingMoreLabel: string;
+  loadMoreError: string;
+}> = {
+  ko: {
+    loadMoreLabel: "더 보기",
+    loadingMoreLabel: "불러오는 중...",
+    loadMoreError: "추가 결과를 불러오지 못했습니다. 다시 시도해 주세요.",
+  },
+  en: {
+    loadMoreLabel: "Load more",
+    loadingMoreLabel: "Loading more...",
+    loadMoreError: "Could not load more results. Please try again.",
+  },
+  ja: {
+    loadMoreLabel: "もっと見る",
+    loadingMoreLabel: "追加読み込み中...",
+    loadMoreError: "追加の結果を読み込めませんでした。もう一度お試しください。",
+  },
+  "zh-CN": {
+    loadMoreLabel: "加载更多",
+    loadingMoreLabel: "正在加载更多...",
+    loadMoreError: "无法加载更多结果，请重试。",
+  },
+  "zh-TW": {
+    loadMoreLabel: "載入更多",
+    loadingMoreLabel: "正在載入更多...",
+    loadMoreError: "無法載入更多結果，請再試一次。",
+  },
+  fr: {
+    loadMoreLabel: "Voir plus",
+    loadingMoreLabel: "Chargement...",
+    loadMoreError: "Impossible de charger plus de résultats. Réessayez.",
+  },
+  de: {
+    loadMoreLabel: "Mehr laden",
+    loadingMoreLabel: "Weitere Ergebnisse werden geladen...",
+    loadMoreError: "Weitere Ergebnisse konnten nicht geladen werden. Bitte erneut versuchen.",
+  },
+  es: {
+    loadMoreLabel: "Cargar más",
+    loadingMoreLabel: "Cargando más...",
+    loadMoreError: "No se pudieron cargar más resultados. Inténtalo de nuevo.",
+  },
+  pt: {
+    loadMoreLabel: "Carregar mais",
+    loadingMoreLabel: "Carregando mais...",
+    loadMoreError: "Não foi possível carregar mais resultados. Tente novamente.",
+  },
+  it: {
+    loadMoreLabel: "Carica altro",
+    loadingMoreLabel: "Caricamento...",
+    loadMoreError: "Impossibile caricare altri risultati. Riprova.",
+  },
+  ru: {
+    loadMoreLabel: "Загрузить ещё",
+    loadingMoreLabel: "Загрузка...",
+    loadMoreError: "Не удалось загрузить другие результаты. Попробуйте ещё раз.",
+  },
+  ar: {
+    loadMoreLabel: "تحميل المزيد",
+    loadingMoreLabel: "جارٍ تحميل المزيد...",
+    loadMoreError: "تعذر تحميل المزيد من النتائج. يرجى المحاولة مرة أخرى.",
+  },
+  hi: {
+    loadMoreLabel: "और लोड करें",
+    loadingMoreLabel: "और लोड हो रहा है...",
+    loadMoreError: "और परिणाम लोड नहीं हो सके। फिर कोशिश करें।",
+  },
+  th: {
+    loadMoreLabel: "โหลดเพิ่มเติม",
+    loadingMoreLabel: "กำลังโหลดเพิ่มเติม...",
+    loadMoreError: "โหลดผลลัพธ์เพิ่มเติมไม่สำเร็จ โปรดลองอีกครั้ง",
+  },
+  vi: {
+    loadMoreLabel: "Tải thêm",
+    loadingMoreLabel: "Đang tải thêm...",
+    loadMoreError: "Không thể tải thêm kết quả. Vui lòng thử lại.",
+  },
+};
+
 describe("getDictionary", () => {
   it("returns dedicated dictionaries for the expanded locale catalog", () => {
     expect(getDictionary("pl").account.title).toBe("Konto");
@@ -86,12 +234,39 @@ describe("getDictionary", () => {
     }
   });
 
+  it("localizes new conversation creation labels for every primary UI locale", () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const conversations = getDictionary(locale).conversations;
+      const expected = NEW_CONVERSATION_LABELS[locale];
+
+      expect(conversations?.newConversationButtonLabel, `${locale}.newConversationButtonLabel`)
+        .toBe(expected.newConversationButtonLabel);
+      expect(conversations?.startAloneOptionLabel, `${locale}.startAloneOptionLabel`)
+        .toBe(expected.startAloneOptionLabel);
+    }
+  });
+
+  it("localizes Explore pagination copy for every primary UI locale", () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const connect = getDictionary(locale).connect;
+      const expected = SEARCH_PAGINATION_COPY[locale];
+
+      expect(connect.loadMoreLabel, `${locale}.loadMoreLabel`).toBe(expected.loadMoreLabel);
+      expect(connect.loadingMoreLabel, `${locale}.loadingMoreLabel`)
+        .toBe(expected.loadingMoreLabel);
+      expect(connect.loadMoreError, `${locale}.loadMoreError`).toBe(expected.loadMoreError);
+    }
+  });
+
   it("uses English for new supplemental copy outside the 15 primary UI locales", () => {
     const dictionary = getDictionary("pl");
 
-    expect(dictionary.conversations?.startAloneOptionLabel).toBe("Start alone");
+    expect(dictionary.conversations?.startAloneOptionLabel).toBe("Your own room");
     expect(dictionary.livePhoneDemo.composer.blockedComposerMessage).toBe("This user is blocked.");
     expect(dictionary.profile.messageAction).toBe("Message");
     expect(dictionary.profile.profileShareQrInstruction).toBe("Place the profile QR code inside the frame.");
+    expect(dictionary.connect.loadMoreLabel).toBe("Load more");
+    expect(dictionary.connect.loadingMoreLabel).toBe("Loading more...");
+    expect(dictionary.connect.loadMoreError).toBe("Could not load more results. Please try again.");
   });
 });

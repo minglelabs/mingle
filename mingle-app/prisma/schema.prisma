@@ -75,6 +75,9 @@ model User {
   createdAt                    DateTime  @default(now()) @map("created_at")
   updatedAt                    DateTime  @updatedAt @map("updated_at")
 
+  bioState                ProfileBioState?
+  bioVersions             ProfileBioVersion[]
+  reactions               AppMessageReaction[]
   messages                AppMessage[]
   eventLogs               AppEventLog[]
   feedbackEntries         AppFeedback[]
@@ -217,6 +220,7 @@ model AppMessage {
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
   user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reactions AppMessageReaction[]
   contents  AppMessageContent[]
   eventLogs AppEventLog[]
 
@@ -280,6 +284,7 @@ model AppEventLog {
   @@index([messageId], map: "app_event_logs_message_id_idx")
   @@index([eventType, ipAddress, createdAt, messageId], map: "app_event_logs_event_ip_created_message_idx")
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)], map: "app_event_logs_user_usage_created_desc_idx")
+  @@index([userId, sessionKey, createdAt(sort: Desc), id(sort: Desc)], map: "app_event_logs_user_session_usage_created_desc_idx")
   @@map("app_event_logs")
 }
 
@@ -561,7 +566,8 @@ model AppClientVersionPolicy {
 }
 
 model AdminDashboardDailyMetric {
-  day                DateTime @id @db.Date
+  day                DateTime @db.Date
+  platform           String   @default("all")
   signupCount        Int      @map("signup_count")
   dauCount           Int      @map("dau_count")
   messageCount       Int      @map("message_count")
@@ -574,5 +580,61 @@ model AdminDashboardDailyMetric {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
+  @@id([day, platform])
+  @@index([platform, day], map: "admin_dashboard_daily_metrics_platform_day_idx")
   @@map("admin_dashboard_daily_metrics")
+}
+
+model AppMessageReaction {
+  messageId String @map("message_id")
+  userId String @map("user_id")
+  kind String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  message AppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId])
+  @@map("app_message_reactions")
+}
+
+// Pointers separate the author's saved draft from the atomically published bio.
+model ProfileBioState {
+  userId             String @id @map("user_id")
+  currentVersionId   String? @map("current_version_id")
+  publishedVersionId String? @map("published_version_id")
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile_bio_states")
+}
+
+model ProfileBioVersion {
+  id             String @id @default(cuid())
+  userId         String @map("user_id")
+  sourceText     String @map("source_text") @db.Text
+  sourceLanguage String? @map("source_language")
+  targetLanguages String[] @map("target_languages")
+  status         String @default("queued")
+  deadlineAt     DateTime @map("deadline_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translations   ProfileBioTranslation[]
+
+  @@index([userId, createdAt])
+  @@map("profile_bio_versions")
+}
+
+model ProfileBioTranslation {
+  versionId      String @map("version_id")
+  language       String
+  status         String @default("running")
+  text           String? @db.Text
+  attemptId      String @map("attempt_id")
+  deadlineAt     DateTime @map("deadline_at")
+  version        ProfileBioVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([versionId, language])
+  @@map("profile_bio_translations")
 }

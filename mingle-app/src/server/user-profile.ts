@@ -1,3 +1,4 @@
+import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 
@@ -64,6 +65,7 @@ type SelectedUserProfile = {
 };
 
 export type UserProfile = {
+  bioDraft?: string | null;
   id: string;
   name: string | null;
   image: string | null;
@@ -146,5 +148,5 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     select: userProfileSelect,
   });
 
-  return profile ? serializeUserProfile(profile) : null;
+  return profile ? { ...serializeUserProfile(profile), bio: await getPublishedBioText(userId, profile.bio), bioDraft: profile.bio } : null;
 }

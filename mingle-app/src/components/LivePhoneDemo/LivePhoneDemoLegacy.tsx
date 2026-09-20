@@ -4763,7 +4763,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <motion.button
                         type="button"
                         onClick={handleToggleComposer}
-                        aria-label={composerCopy.closeKeyboardLabel}
+                        aria-label={composerCopy.switchToVoiceModeLabel}
                         className="inline-flex h-[2.3rem] w-[2.3rem] shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
                       >
                         <Keyboard size={18} strokeWidth={2.2} />
@@ -4883,7 +4883,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <motion.button
                       type="button"
                       onClick={handleToggleComposer}
-                      aria-label={composerCopy.openKeyboardLabel}
+                      aria-label={composerCopy.switchToKeyboardModeLabel}
                       className="inline-flex h-11 w-11 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
                     >
                       <Keyboard size={19} strokeWidth={2.15} />

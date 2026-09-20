@@ -1,0 +1,4885 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <script>
+      (function () {
+        var MOBILE_BREAKPOINT = 900;
+        var meta = document.getElementById("viewport-meta");
+
+        function applyViewport() {
+          var viewportWidth = window.innerWidth || (window.screen ? window.screen.width : 0);
+          var isMobile = viewportWidth <= MOBILE_BREAKPOINT;
+
+          if (isMobile) {
+            meta.setAttribute(
+              "content",
+              "width=device-width" +
+                ", initial-scale=1.0" +
+                ", minimum-scale=1.0" +
+                ", maximum-scale=1.0" +
+                ", user-scalable=no"
+            );
+            document.documentElement.classList.add("is-mobile-viewport");
+          } else {
+            meta.setAttribute("content", "width=device-width, initial-scale=1.0");
+            document.documentElement.classList.remove("is-mobile-viewport");
+          }
+        }
+
+        applyViewport();
+        window.addEventListener("resize", applyViewport);
+        window.addEventListener("orientationchange", applyViewport);
+      })();
+    </script>
+    <title>언어 장벽 없는 음성 메신저 밍글</title>
+    <meta name="description" content="헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다." />
+    <meta property="og:title" content="언어 장벽 없는 음성 메신저 밍글" />
+    <meta property="og:description" content="헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://translator.minglelabs.xyz/xr" />
+    <meta property="og:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta property="og:image:alt" content="언어 장벽 없는 음성 메신저 밍글" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="언어 장벽 없는 음성 메신저 밍글" />
+    <meta name="twitter:description" content="헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다." />
+    <meta name="twitter:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #fffdf7;
+        --title: #2d2a1e;
+        --body: rgba(45, 42, 30, 0.72);
+        --accent: #fbbc32;
+        --accent-strong: #f97316;
+        --solution-accent: #2563eb;
+        --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --deck-width: 100vw;
+        --deck-height: 100vh;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background:
+          radial-gradient(140% 100% at 0% 0%, rgba(251, 188, 50, 0.09), transparent 52%),
+          radial-gradient(120% 110% at 100% 100%, rgba(249, 115, 22, 0.05), transparent 50%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 44%, #fffdf7 100%),
+          var(--page);
+        color: var(--title);
+        font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
+      }
+
+      .deck {
+        position: relative;
+        width: var(--deck-width);
+        height: var(--deck-height);
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+
+      .track {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: row;
+        will-change: transform;
+        transition: transform 260ms var(--slide-ease);
+      }
+
+      .slide {
+        flex: 0 0 var(--deck-width);
+        width: var(--deck-width);
+        height: var(--deck-height);
+        padding: 0;
+      }
+
+      .slide-shell {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: flex-start;
+        position: relative;
+        padding: clamp(24px, 3.4vw, 56px) clamp(40px, 7vw, 96px) clamp(40px, 7vw, 96px);
+        background: transparent;
+      }
+
+      .slide-shell--image-only {
+        align-items: center;
+        justify-content: center;
+        padding: clamp(18px, 2.2vw, 34px);
+      }
+
+      .slide-full-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      .slide-short-video {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 9 / 16;
+        display: block;
+        border: 0;
+        background: #000;
+      }
+
+      .slide-copy {
+        display: grid;
+        gap: clamp(18px, 2vw, 28px);
+        max-width: min(980px, 100%);
+        justify-items: start;
+        position: relative;
+        --kicker-slot: clamp(36px, 3vw, 44px);
+        padding-top: var(--kicker-slot);
+        margin-top: clamp(124px, calc(30vh - 112px), 196px);
+        text-align: left;
+      }
+
+      .slide-copy--center {
+        justify-items: center;
+        margin-inline: auto;
+        text-align: center;
+      }
+
+      .slide-copy--goal-split {
+        width: min(1120px, 100%);
+        max-width: min(1120px, 100%);
+        margin-inline: auto;
+        justify-items: center;
+        gap: clamp(28px, 4vh, 52px);
+        text-align: center;
+      }
+
+      .slide-copy--goal-split .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--goal-split .slide-title {
+        font-size: clamp(2.8rem, 5.2vw, 5.8rem);
+        line-height: 1.12;
+      }
+
+      .slide-copy--market {
+        width: min(42vw, 560px);
+        max-width: min(42vw, 560px);
+        margin-top: clamp(124px, calc(30vh - 112px), 196px);
+        justify-items: start;
+        text-align: left;
+      }
+
+      .slide-copy--market .slide-title {
+        font-size: clamp(2.8rem, 5vw, 5.6rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-shell--market-categories {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: clamp(18px, 3.4vh, 34px);
+        padding-inline: clamp(40px, 6vw, 96px);
+      }
+
+      .slide-copy--market-categories {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(62px, calc(15vh - 28px), 106px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-copy--market-categories .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--market-categories .slide-title {
+        font-size: clamp(2.1rem, 3.9vw, 4rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-copy--market-categories.slide-copy--customer-experiences {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        gap: clamp(14px, 2.4vh, 24px);
+      }
+
+      .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
+        font-size: clamp(2.4rem, 4.2vw, 4.4rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-shell--market-overview {
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(30px, 5vh, 54px);
+      }
+
+      .slide-copy--market-overview {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(62px, calc(15vh - 28px), 106px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-copy--market-overview .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--market-overview .slide-title {
+        font-size: clamp(2.35rem, 4.2vw, 4.6rem);
+        line-height: 1.15;
+        white-space: nowrap;
+      }
+
+      .slide-goal-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(18px, 4vw, 64px);
+        width: min(100%, 1040px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-goal {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: clamp(190px, 22vh, 280px);
+        padding: clamp(28px, 3vw, 48px) clamp(22px, 3vw, 44px);
+        overflow: hidden;
+        border: 1px solid rgba(45, 42, 30, 0.1);
+        border-radius: 28px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.56)),
+          var(--goal-tint);
+        box-shadow: 0 24px 54px rgba(52, 43, 16, 0.12);
+      }
+
+      .slide-goal::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 8px;
+        content: "";
+        background: var(--goal-accent);
+      }
+
+      .slide-goal--left {
+        --goal-accent: linear-gradient(90deg, var(--accent), #ffd978);
+        --goal-text-accent: #c98200;
+        --goal-tint: rgba(251, 188, 50, 0.2);
+      }
+
+      .slide-goal--right {
+        --goal-accent: linear-gradient(90deg, var(--accent-strong), var(--accent));
+        --goal-text-accent: var(--accent-strong);
+        --goal-tint: rgba(249, 115, 22, 0.14);
+      }
+
+      .slide-goal-text {
+        margin: 0;
+        font-size: clamp(2.2rem, 4.1vw, 4.8rem);
+        font-weight: 750;
+        line-height: 1.14;
+        letter-spacing: -0.06em;
+        text-wrap: balance;
+      }
+
+      .slide-goal-emphasis {
+        color: var(--goal-text-accent);
+      }
+
+      .slide-goal--crossed .slide-goal-text {
+        opacity: 0.5;
+      }
+
+      .slide-goal-badge {
+        position: absolute;
+        top: 50%;
+        right: clamp(10px, 1.5vw, 20px);
+        z-index: 12;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(10px, 1vw, 16px) clamp(14px, 1.4vw, 24px);
+        border: 3px solid rgba(255, 255, 255, 0.78);
+        border-radius: 999px;
+        color: #fff;
+        font-size: clamp(1.35rem, 2.2vw, 2.4rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
+        white-space: nowrap;
+        background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+        box-shadow: 0 12px 24px rgba(185, 28, 28, 0.26);
+        transform: translateY(-50%) rotate(-5deg);
+      }
+
+      .slide-goal-columns--flow .slide-goal {
+        z-index: 1;
+      }
+
+      .slide-goal-columns--flow {
+        position: relative;
+      }
+
+      .slide-goal-arrow {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        z-index: 3;
+        width: 100%;
+        height: clamp(68px, 8vw, 92px);
+        overflow: visible;
+        pointer-events: none;
+        transform: translateY(-50%);
+      }
+
+      .slide-goal-arrow path {
+        fill: none;
+        stroke: #dc2626;
+        stroke-width: 11;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 8px 12px rgba(220, 38, 38, 0.2));
+      }
+
+      .slide-copy--center .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+        justify-items: center;
+      }
+
+      .slide-copy--center .slide-body {
+        margin-inline: auto;
+      }
+
+      .slide-copy--toc {
+        gap: clamp(42px, 4vw, 60px);
+        margin-top: clamp(84px, calc(22vh - 80px), 136px);
+      }
+
+      .slide-copy--toc .slide-kicker {
+        gap: 6px;
+        font-size: clamp(2.15rem, 3vw, 2.9rem);
+        font-weight: 850;
+      }
+
+      .slide-copy--toc .slide-title {
+        display: grid;
+        gap: 10px;
+        justify-items: start;
+        margin-top: clamp(28px, 2.6vw, 42px);
+        font-size: clamp(2rem, 2.8vw, 3rem);
+        font-weight: 560;
+      }
+
+      .slide-toc-item {
+        display: grid;
+        grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
+        column-gap: clamp(16px, 1.4vw, 24px);
+        align-items: baseline;
+        width: fit-content;
+        color: inherit;
+        text-decoration: none;
+        border-radius: 14px;
+        cursor: pointer;
+        transition:
+          color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .slide-toc-item:hover,
+      .slide-toc-item:focus-visible {
+        color: var(--accent-strong);
+        outline: none;
+        transform: translateX(0.3rem);
+      }
+
+      .slide-toc-index {
+        text-align: left;
+      }
+
+      .slide-toc-text {
+        text-align: left;
+      }
+
+      .slide-copy--with-side-media {
+        max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
+      }
+
+      .slide-copy--kfriends-goal {
+        max-width: min(48rem, calc(100% - clamp(360px, 36vw, 500px)));
+        margin-top: clamp(140px, calc(30vh - 112px), 196px);
+      }
+
+      .slide-copy--kfriends-goal .slide-title {
+        font-size: clamp(2.8rem, 4.8vw, 5.4rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-copy--addon-subtitles {
+        max-width: min(52rem, calc(100% - clamp(260px, 23vw, 340px)));
+      }
+
+      .slide-copy--addon-subtitles .slide-title {
+        font-size: clamp(2.2rem, 3.8vw, 4.4rem);
+        line-height: 1.16;
+      }
+
+      .slide-copy--with-reason-media {
+        max-width: min(56rem, calc(100% - clamp(420px, 42vw, 660px)));
+      }
+
+      .slide-copy--with-wide-side-media {
+        max-width: min(980px, calc(100% - clamp(160px, 16vw, 240px)));
+      }
+
+      .slide-copy--with-hurdles {
+        max-width: min(48rem, calc(100% - clamp(340px, 32vw, 460px)));
+      }
+
+      .slide-copy--with-solution-stack {
+        max-width: min(40rem, calc(100% - clamp(520px, 42vw, 640px)));
+      }
+
+      .slide-copy--with-brand-collage {
+        max-width: min(44rem, calc(100% - clamp(360px, 34vw, 520px)));
+      }
+
+      .slide-copy--with-competitor-cloud {
+        max-width: min(44rem, calc(100% - clamp(520px, 47vw, 720px)));
+      }
+
+      .slide-copy--with-competitor-tool-cloud {
+        max-width: min(62rem, calc(100% - clamp(360px, 31vw, 500px)));
+      }
+
+      .slide-copy--with-social-cloud {
+        max-width: min(64rem, calc(100% - clamp(300px, 26vw, 420px)));
+      }
+
+      .slide-copy--with-ai-native-stack {
+        max-width: min(50rem, calc(100% - clamp(380px, 34vw, 500px)));
+      }
+
+      .slide-copy--with-musk-exception {
+        max-width: min(50rem, calc(100% - clamp(400px, 35vw, 520px)));
+      }
+
+      .slide-copy--with-cursor-logo {
+        max-width: min(62rem, calc(100% - clamp(260px, 22vw, 360px)));
+      }
+
+      .slide-copy--with-tool-list {
+        max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
+      }
+
+      .slide-copy--with-experience-list {
+        max-width: min(46rem, calc(100% - clamp(360px, 31vw, 470px)));
+      }
+
+      .slide-copy--with-experience-list-proof {
+        max-width: min(58rem, calc(100% - clamp(280px, 23vw, 360px)));
+      }
+
+      .slide-side-media {
+        position: absolute;
+        top: clamp(48px, 8vh, 108px);
+        right: clamp(76px, 10vw, 156px);
+        display: block;
+      }
+
+      .slide-side-media--market {
+        top: clamp(84px, 11vh, 132px);
+        right: clamp(38px, 5vw, 88px);
+        width: clamp(590px, 55vw, 920px);
+        height: clamp(510px, 65vh, 700px);
+        padding: 0 clamp(18px, 2vw, 32px);
+      }
+
+      .slide-market-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: clamp(14px, 1.4vw, 22px);
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-side-media--market-categories {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: min(1180px, 100%);
+        height: clamp(300px, 42vh, 400px);
+        padding: 0;
+      }
+
+      .slide-side-media--market-categories--seven {
+        height: clamp(300px, 44vh, 350px);
+      }
+
+      .slide-market-grid--categories {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: clamp(10px, 1.5vw, 18px);
+      }
+
+      .slide-market-grid--categories-four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: clamp(8px, 1.1vw, 14px);
+      }
+
+      .slide-market-grid--categories-four .slide-market-category-title {
+        font-size: clamp(1.3rem, 1.8vw, 2rem);
+      }
+
+      .slide-market-grid--categories-four .slide-market-logo-cloud {
+        inset: 0 1% 0;
+      }
+
+      .slide-market-grid--categories-compact {
+        gap: clamp(8px, 1.1vw, 14px);
+      }
+
+      .slide-market-grid--categories-compact .slide-market-category-title {
+        font-size: clamp(1.3rem, 1.8vw, 2rem);
+      }
+
+      .slide-market-grid--categories-compact .slide-market-logo-cloud {
+        inset: 0 1% 0;
+      }
+
+      .slide-market-grid--categories-seven {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: stretch;
+        justify-content: center;
+        gap: clamp(8px, 1vw, 14px);
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category-title {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 2.3em;
+        font-size: clamp(1.15rem, 1.65vw, 1.8rem);
+        line-height: 1.12;
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category {
+        flex: 0 0 calc(25% - 12px);
+        align-self: stretch;
+      }
+
+      .slide-market-grid--categories.slide-market-grid--categories-seven .slide-market-logo-cloud {
+        position: static;
+        inset: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(3px, 0.45vw, 7px);
+        min-height: 0;
+        margin-top: clamp(4px, 0.7vw, 9px);
+      }
+
+      .slide-market-grid--categories-seven .slide-market-logo {
+        position: static;
+        left: auto;
+        top: auto;
+        flex: 0 0 auto;
+        width: clamp(52px, 5.6vw, 82px);
+        height: clamp(52px, 5.6vw, 82px);
+        transform: rotate(var(--r)) scale(1.08);
+      }
+
+      .slide-market-grid--categories-seven .slide-market-category--triple .slide-market-logo {
+        width: clamp(42px, 4.2vw, 62px);
+        height: clamp(42px, 4.2vw, 62px);
+      }
+
+      .slide-shell--ai-requirements {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: clamp(18px, 3.2vh, 30px);
+        padding-inline: clamp(40px, 6vw, 96px);
+      }
+
+      .slide-copy--ai-requirements {
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(62px, calc(15vh - 28px), 106px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-copy--ai-requirements .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .slide-copy--ai-requirements .slide-title {
+        font-size: clamp(2.1rem, 3.9vw, 4rem);
+        line-height: 1.12;
+        white-space: nowrap;
+      }
+
+      .slide-side-media--ai-requirements {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: min(1080px, 100%);
+        height: auto;
+        padding: 0;
+      }
+
+      .slide-ai-requirements-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(10px, 1.1vw, 14px);
+        width: min(810px, 100%);
+        margin-inline: auto;
+      }
+
+      .slide-ai-requirement {
+        position: relative;
+        min-height: clamp(88px, 7.8vw, 108px);
+        padding: clamp(14px, 1.2vw, 18px) clamp(12px, 1vw, 16px) clamp(14px, 1.2vw, 18px)
+          clamp(34px, 2.5vw, 42px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 252, 246, 0.58) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-ai-requirement::before {
+        content: "";
+        position: absolute;
+        top: clamp(14px, 1.1vw, 18px);
+        bottom: clamp(14px, 1.1vw, 18px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: #dc2626;
+      }
+
+      .slide-shell--ai-requirements-solution .slide-ai-requirement::before {
+        background: var(--solution-accent);
+      }
+
+      .slide-ai-requirement:nth-child(7) {
+        grid-column: auto;
+      }
+
+      .slide-ai-requirement-title,
+      .slide-ai-requirement-description {
+        margin: 0;
+      }
+
+      .slide-ai-requirement-title {
+        font-size: clamp(1.12rem, 1.45vw, 1.42rem);
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-ai-requirement-description {
+        margin-top: clamp(6px, 0.65vw, 9px);
+        font-size: clamp(1rem, 1.28vw, 1.22rem);
+        font-weight: 600;
+        line-height: 1.34;
+        letter-spacing: -0.035em;
+        color: rgba(45, 42, 30, 0.72);
+      }
+
+      .slide-market-category {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        padding: clamp(14px, 1.6vw, 22px) clamp(6px, 0.8vw, 12px) 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .slide-market-category--language {
+        --market-accent: #6366f1;
+      }
+
+      .slide-market-category--voice {
+        --market-accent: #ef765e;
+      }
+
+      .slide-market-category--dating {
+        --market-accent: #db2777;
+      }
+
+      .slide-market-category--offline {
+        --market-accent: #159570;
+      }
+
+      .slide-market-category--addon {
+        --market-accent: #a855f7;
+      }
+
+      .slide-market-category--tourist {
+        --market-accent: #f59e0b;
+      }
+
+      .slide-market-category--travel {
+        --market-accent: #0f8a83;
+      }
+
+      .slide-market-category--meeting {
+        --market-accent: #2563eb;
+      }
+
+      .slide-market-category-title {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        margin: 0;
+        color: var(--market-accent);
+        font-size: clamp(1.55rem, 2.15vw, 2.35rem);
+        font-weight: 850;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+        text-align: center;
+      }
+
+      .slide-market-logo-cloud {
+        position: absolute;
+        inset: 20% 2% 0;
+      }
+
+      .slide-market-grid--categories .slide-market-logo-cloud {
+        inset: 0 2% 0;
+      }
+
+      .slide-market-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(5px, 0.45vw, 8px);
+        border-radius: clamp(14px, 1.35vw, 21px);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: none;
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r)) scale(1.15);
+      }
+
+      .slide-market-overview-row {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        align-items: start;
+        gap: clamp(10px, 2vw, 28px);
+        width: min(1180px, 100%);
+        max-width: min(1180px, 100%);
+        margin-top: clamp(4px, 1vh, 14px);
+      }
+
+      .slide-market-overview-item {
+        display: grid;
+        min-width: 0;
+        justify-items: center;
+        gap: clamp(9px, 1vw, 14px);
+        text-align: center;
+      }
+
+      .slide-market-overview-logo {
+        display: block;
+        width: clamp(82px, 8vw, 116px);
+        aspect-ratio: 1;
+        padding: clamp(4px, 0.4vw, 7px);
+        border-radius: clamp(16px, 1.4vw, 22px);
+        background: rgba(255, 255, 255, 0.9);
+        object-fit: contain;
+      }
+
+      .slide-market-overview-name,
+      .slide-market-overview-downloads {
+        margin: 0;
+        white-space: nowrap;
+      }
+
+      .slide-market-overview-name {
+        color: var(--title);
+        font-size: clamp(1.12rem, 1.5vw, 1.42rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-market-overview-downloads {
+        margin-top: -5px;
+        color: rgba(45, 42, 30, 0.58);
+        font-size: clamp(0.9rem, 1.15vw, 1.1rem);
+        font-weight: 650;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+
+      .slide-market-overview-caption {
+        margin: clamp(8px, 1.2vh, 14px) 0 0;
+        color: rgba(45, 42, 30, 0.48);
+        font-size: clamp(0.72rem, 0.88vw, 0.88rem);
+        font-weight: 650;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        text-align: center;
+      }
+
+      .slide-side-media--hellotalk-primary {
+        top: clamp(48px, 8vh, 108px);
+        right: clamp(0px, 0vw, 0px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--hellotalk-secondary {
+        top: clamp(48px, 10vh, 108px);
+        right: clamp(50px, 7vw, 128px);
+        width: clamp(300px, 38vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--gaming {
+        top: clamp(48px, 12vh, 108px);
+        right: clamp(30px, 5vw, 0px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--gaming-stack {
+        top: clamp(44px, 9vh, 100px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(320px, 32vw, 470px);
+      }
+
+      .slide-side-media--reddittalk {
+        top: clamp(44px, 9vh, 100px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(320px, 32vw, 470px);
+      }
+
+      .slide-side-media--community-stack {
+        top: clamp(32px, 7vh, 88px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(360px, 36vw, 540px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
+      .slide-side-media--offline-conversation {
+        top: clamp(54px, 8vh, 104px);
+        right: clamp(72px, 8vw, 132px);
+        width: clamp(280px, 28vw, 400px);
+      }
+
+      .slide-side-media--travel-post-stack {
+        top: clamp(76px, 11vh, 136px);
+        right: clamp(56px, 7vw, 112px);
+        width: clamp(360px, 31vw, 468px);
+        height: clamp(420px, 39vw, 560px);
+      }
+
+      .slide-side-media--networking-collage {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(24px, 3vw, 68px);
+        width: clamp(360px, 34vw, 500px);
+        height: clamp(340px, 31vw, 460px);
+      }
+
+      .slide-side-media--customer-hurdles {
+        top: clamp(150px, 18vh, 224px);
+        right: clamp(100px, 15vw, 200px);
+        width: clamp(290px, 26vw, 380px);
+      }
+
+      .slide-side-media--solution-stack {
+        top: clamp(154px, 18vh, 238px);
+        right: clamp(72px, 7vw, 118px);
+        width: clamp(420px, 34vw, 520px);
+      }
+
+      .slide-side-media--social-requirements {
+        width: clamp(300px, 27vw, 680px);
+        top: clamp(154px, 18vh, 238px);
+        right: clamp(72px, 10vw, 118px);
+      }
+
+      .slide-side-media--user-reactions {
+        width: clamp(300px, 30vw, 680px);
+        top: clamp(180px, 20vh, 300px);
+        right: clamp(100px, 12vw, 150px);
+      }
+
+      .slide-side-media--addon-subtitles {
+        top: clamp(30px, 4vh, 56px);
+        right: clamp(30px, 4vw, 72px);
+        width: clamp(410px, 38vw, 540px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(10px, 1.2vw, 18px);
+      }
+
+      .slide-addon-subtitle-gallery {
+        position: relative;
+        width: 100%;
+        height: min(65vh, 520px);
+      }
+
+      .slide-addon-subtitle-gallery-image {
+        position: absolute;
+        display: block;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: clamp(18px, 1.7vw, 26px);
+        box-shadow: 0 22px 48px rgba(45, 42, 30, 0.16);
+      }
+
+      .slide-addon-subtitle-gallery-image--roblox {
+        left: 0;
+        bottom: clamp(8px, 1.4vw, 18px);
+        height: min(52vh, 420px);
+        transform: rotate(-7deg);
+        z-index: 1;
+      }
+
+      .slide-addon-subtitle-gallery-image--discord {
+        right: 0;
+        bottom: clamp(4px, 1vw, 14px);
+        height: min(52vh, 420px);
+        transform: rotate(7deg);
+        z-index: 2;
+      }
+
+      .slide-addon-subtitle-gallery-image--xiaohongshu {
+        top: 0;
+        left: 50%;
+        height: min(65vh, 520px);
+        transform: translateX(-50%);
+        z-index: 3;
+      }
+
+      .slide-addon-subtitle-caption {
+        width: 100%;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(1rem, 1.35vw, 1.24rem);
+        font-weight: 650;
+        line-height: 1.38;
+        letter-spacing: -0.03em;
+        text-align: center;
+      }
+
+      .slide-copy--addon-subtitles .slide-addon-subtitle-body {
+        max-width: min(100%, 600px);
+      }
+
+      .slide-copy--offline-work {
+        max-width: min(54rem, calc(100% - clamp(360px, 28vw, 420px)));
+      }
+
+      .slide-side-media--offline-work {
+        top: clamp(30px, 4vh, 48px);
+        right: clamp(40px, 5vw, 80px);
+        width: clamp(300px, 32vw, 420px);
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(10px, 1.2vw, 18px);
+      }
+
+      .slide-preview-image--offline-work {
+        width: auto;
+        height: min(70vh, 520px);
+        max-width: 100%;
+        object-fit: contain;
+      }
+
+      .slide-offline-work-caption {
+        width: 100%;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(1rem, 1.35vw, 1.24rem);
+        font-weight: 650;
+        line-height: 1.38;
+        letter-spacing: -0.03em;
+        text-align: center;
+      }
+
+      .slide-side-media--kfriends-goal {
+        top: clamp(30px, 4vh, 48px);
+        right: clamp(40px, 5vw, 80px);
+        width: clamp(460px, 40vw, 560px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(12px, 1.4vw, 18px);
+      }
+
+      .slide-kfriends-goal-gallery {
+        position: relative;
+        width: 100%;
+        height: min(70vh, 520px);
+      }
+
+      .slide-kfriends-goal-image {
+        position: absolute;
+        display: block;
+        height: min(70vh, 520px);
+        width: auto;
+        max-width: none;
+        object-fit: contain;
+        border-radius: clamp(18px, 1.8vw, 28px);
+        background: #fff;
+        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.18);
+      }
+
+      .slide-kfriends-goal-image--version-history {
+        right: 7%;
+        top: 0;
+        transform: none;
+        z-index: 1;
+      }
+
+      .slide-kfriends-goal-image--story {
+        left: 7%;
+        top: 18px;
+        transform: none;
+        z-index: 2;
+      }
+
+      .slide-kfriends-goal-caption {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(10px, 1vw, 14px);
+        width: 100%;
+        margin: 0;
+        color: rgba(45, 42, 30, 0.72);
+        font-size: clamp(0.95rem, 1.2vw, 1.16rem);
+        font-weight: 650;
+        line-height: 1.35;
+        letter-spacing: -0.03em;
+        text-align: left;
+      }
+
+      .slide-kfriends-goal-caption-logo {
+        display: block;
+        flex: 0 0 auto;
+        width: clamp(42px, 4vw, 58px);
+        height: clamp(42px, 4vw, 58px);
+        border-radius: 14px;
+        box-shadow: 0 10px 22px rgba(45, 42, 30, 0.14);
+      }
+
+      .slide-side-media--user-reactions .slide-solution-points {
+        grid-auto-rows: minmax(clamp(94px, 8.6vw, 118px), auto);
+      }
+
+      .slide-side-media--post-launch-sources {
+        top: clamp(184px, 22vh, 238px);
+        right: clamp(140px, 15vw, 140px);
+        width: clamp(420px, 34vw, 520px);
+      }
+
+      .slide-side-media--brand-collage {
+        top: clamp(118px, 14vh, 186px);
+        right: clamp(42px, 4.8vw, 84px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(300px, 30vw, 420px);
+      }
+
+      .slide-side-media--competitor-cloud {
+        top: clamp(76px, 10vh, 134px);
+        right: clamp(34px, 4vw, 72px);
+        width: clamp(520px, 48vw, 740px);
+        height: clamp(440px, 43vw, 620px);
+      }
+
+      .slide-side-media--competitor-tool-cloud {
+        top: clamp(112px, 14vh, 176px);
+        right: clamp(22px, 3vw, 54px);
+        width: clamp(390px, 33vw, 520px);
+        height: clamp(340px, 34vw, 470px);
+      }
+
+      .slide-side-media--social-cloud {
+        top: clamp(78px, 11vh, 142px);
+        right: clamp(80px, 10vw, 110px);
+        width: clamp(300px, 26vw, 410px);
+        height: clamp(430px, 42vw, 590px);
+      }
+
+      .slide-side-media--network-effect-cloud {
+        top: clamp(56px, 8vh, 112px);
+        right: clamp(8px, 2vw, 32px);
+        width: clamp(500px, 46vw, 720px);
+        height: clamp(430px, 42vw, 590px);
+      }
+
+      .slide-side-media--blitz-cloud .slide-competitor-cloud {
+        isolation: isolate;
+      }
+
+      .slide-mingle-flight {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: clamp(170px, 13vw, 228px);
+        height: clamp(170px, 13vw, 228px);
+        transform: translate(-50%, -50%) rotate(-8deg);
+        z-index: 6;
+        pointer-events: none;
+      }
+
+      .slide-mingle-flight-logo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: clamp(36px, 3.2vw, 52px);
+        object-fit: contain;
+        filter: drop-shadow(0 26px 38px rgba(12, 12, 12, 0.22));
+      }
+
+      .slide-side-media--ai-native-stack {
+        top: clamp(138px, 17vh, 218px);
+        right: clamp(96px, 10vw, 156px);
+        width: clamp(310px, 28vw, 420px);
+      }
+
+      .slide-side-media--musk-exception {
+        top: clamp(72px, 9vh, 124px);
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
+      }
+
+      .slide-side-media--cursor-logo {
+        top: 50%;
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
+        display: grid;
+        place-items: center;
+        transform: translateY(-50%);
+      }
+
+      .slide-side-media--tool-list {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(156px, 14vw, 236px);
+        width: clamp(292px, 25vw, 348px);
+      }
+
+      .slide-side-media--experience-list {
+        top: clamp(118px, 14vh, 182px);
+        right: clamp(96px, 9vw, 156px);
+        width: clamp(292px, 25vw, 348px);
+      }
+
+      .slide-side-media--experience-list-proof {
+        top: clamp(152px, 18vh, 226px);
+        right: clamp(88px, 10vw, 96px);
+        width: clamp(268px, 22vw, 324px);
+      }
+
+      .slide-side-media--ai-solution-proof {
+        top: clamp(152px, 18vh, 226px);
+        right: clamp(190px, 26vw, 96px);
+        width: clamp(268px, 22vw, 324px);
+      }
+
+      .slide-side-media--mingle-solution-proof {
+        top: clamp(80px, 10vh, 20px);
+        right: clamp(150px, 20vw, 96px);
+        width: clamp(300px, 25vw, 380px);
+      }
+
+      .slide-side-media--goal-steps {
+        width: clamp(360px, 31vw, 460px);
+      }
+
+      .slide-side-media--strategy-steps {
+        width: clamp(410px, 27vw, 420px);
+      }
+
+      .slide-side-media--strategy-steps .slide-tool-item--numbered {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .slide-side-media--strategy-steps .slide-tool-item--numbered .slide-tool-heading {
+        grid-column: 1;
+      }
+
+      .slide-side-media--strategy-steps .slide-tool-title {
+        font-size: clamp(1.52rem, 2vw, 2.08rem);
+        font-weight: 650;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+
+      .slide-tool-items--viral-loop {
+        position: relative;
+      }
+
+      .slide-tool-item--numbered {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: clamp(14px, 1.25vw, 20px);
+        align-items: center;
+        padding: clamp(18px, 1.55vw, 22px) clamp(16px, 1.35vw, 20px) clamp(18px, 1.55vw, 22px)
+          clamp(30px, 2.45vw, 38px);
+      }
+
+      .slide-tool-step-number {
+        position: relative;
+        grid-column: 1;
+        grid-row: 1;
+        min-width: clamp(72px, 5.7vw, 92px);
+        min-height: clamp(38px, 3vw, 46px);
+        display: inline-grid;
+        place-items: center;
+        padding: 0 0.62em;
+        border: 1px solid rgba(245, 158, 11, 0.24);
+        border-radius: 15px;
+        font-size: clamp(1.22rem, 1.52vw, 1.56rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.88);
+        background: linear-gradient(135deg, rgba(255, 247, 225, 0.98) 0%, rgba(255, 230, 171, 0.78) 100%);
+        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.16);
+      }
+
+      .slide-tool-item--numbered .slide-tool-heading {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        align-self: center;
+      }
+
+      .slide-tool-item--numbered .slide-tool-description {
+        grid-column: 1 / -1;
+      }
+
+      .slide-step-transition {
+        position: absolute;
+        left: clamp(-196px, -12.8vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(128px, 12vh, 150px);
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .slide-step-transition--conversion {
+        left: clamp(-196px, -10vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(100px, 10vh, 150px);
+      }
+
+      .slide-step-transition--first {
+        top: clamp(42px, 4vw, 52px);
+      }
+
+      .slide-step-transition--second {
+        top: clamp(200px, 20vw, 176px);
+      }
+
+      .slide-step-transition svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .slide-step-transition path,
+      .slide-step-transition polyline {
+        fill: none;
+        stroke: rgba(245, 158, 11, 0.82);
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
+      }
+
+      .slide-step-transition--conversion path,
+      .slide-step-transition--conversion polyline {
+        stroke-width: 10;
+      }
+
+      .slide-step-transition-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: clamp(136px, 10vw, 170px);
+        padding: 8px 12px 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.08);
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(1rem, 1vw, 1rem);
+        font-weight: 800;
+        line-height: 1.25;
+        letter-spacing: -0.045em;
+        text-align: center;
+        transform: translate(-50%, -50%) rotate(-3deg);
+      }
+
+      .slide-step-transition--conversion .slide-step-transition-label {
+        width: clamp(136px, 10vw, 170px);
+      }
+
+      .slide-step-transition--disabled,
+      .slide-tool-item--disabled {
+        opacity: 0.32;
+        filter: grayscale(0.55);
+      }
+
+      .slide-side-media--customer-hurdles .slide-hurdle-description {
+        color: rgba(45, 42, 30, 0.62);
+      }
+
+      .slide-side-media--tool-list .slide-tool-description,
+      .slide-side-media--experience-list .slide-tool-description {
+        color: rgba(45, 42, 30, 0.62);
+      }
+
+      .slide-travel-post-stack {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-travel-post-card {
+        position: absolute;
+        overflow: hidden;
+        border-radius: 24px;
+        box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
+      }
+
+      .slide-travel-post-card--top {
+        top: 0;
+        right: 0;
+        width: 68%;
+        z-index: 1;
+        transform: rotate(-4deg);
+      }
+
+      .slide-travel-post-card--bottom {
+        left: 0;
+        bottom: 8%;
+        width: 98%;
+        z-index: 2;
+        transform: rotate(3deg);
+      }
+
+      .slide-travel-post-image {
+        display: block;
+        width: 100%;
+      }
+
+      .slide-travel-post-mask {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 16%;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+
+      .slide-travel-post-card--top .slide-travel-post-mask:not(.slide-travel-post-mask--middle) {
+        height: 11%;
+      }
+
+      .slide-travel-post-mask--middle {
+        top: 21%;
+        left: 3%;
+        right: auto;
+        width: 52%;
+        height: 42%;
+        border-radius: 18px;
+      }
+
+      .slide-networking-collage {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-networking-card {
+        position: absolute;
+        overflow: hidden;
+        border-radius: 28px;
+        box-shadow: 0 28px 56px rgba(72, 57, 18, 0.16);
+      }
+
+      .slide-networking-card--top {
+        top: 0;
+        left: 2%;
+        width: 54%;
+        z-index: 2;
+        transform: rotate(-6deg);
+      }
+
+      .slide-networking-card--bottom {
+        right: 0;
+        bottom: 0;
+        width: 90%;
+        z-index: 1;
+        transform: rotate(4deg);
+      }
+
+      .slide-networking-image {
+        display: block;
+        width: 100%;
+        filter: blur(4px);
+        transform: scale(1.02);
+      }
+
+      .slide-hurdles-stack {
+        display: grid;
+        gap: clamp(24px, 2.8vh, 38px);
+      }
+
+      .slide-hurdle-item {
+        position: relative;
+        padding: clamp(18px, 1.8vw, 28px) clamp(18px, 1.9vw, 28px) clamp(18px, 1.8vw, 26px) clamp(28px, 2.4vw, 40px);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 252, 246, 0.48) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-hurdle-item::before {
+        content: "";
+        position: absolute;
+        top: clamp(16px, 1.6vw, 22px);
+        bottom: clamp(16px, 1.6vw, 22px);
+        left: clamp(12px, 1.2vw, 18px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-hurdle-item--muted {
+        background: linear-gradient(180deg, rgba(247, 245, 241, 0.78) 0%, rgba(239, 236, 229, 0.52) 100%);
+        box-shadow: 0 12px 26px rgba(72, 57, 18, 0.04);
+      }
+
+      .slide-hurdle-item--muted::before {
+        background: rgba(88, 82, 69, 0.22);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-title {
+        color: rgba(27, 24, 17, 0.52);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-description {
+        color: rgba(45, 42, 30, 0.46);
+      }
+
+      .slide-hurdle-item--focused {
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.92) 0%, rgba(255, 233, 181, 0.72) 100%);
+        box-shadow: 0 24px 48px rgba(245, 158, 11, 0.18);
+      }
+
+      .slide-hurdle-item--focused::before {
+        width: 5px;
+        background: linear-gradient(180deg, #f59e0b 0%, #f97316 100%);
+      }
+
+      .slide-hurdle-title {
+        margin: 0;
+        font-size: clamp(1.52rem, 2vw, 2.08rem);
+        font-weight: 650;
+        line-height: 1.3;
+        letter-spacing: -0.03em;
+        color: rgba(27, 24, 17, 0.96);
+      }
+
+      .slide-hurdle-description {
+        margin: clamp(10px, 1.1vw, 14px) 0 0;
+        font-size: clamp(1.18rem, 1.55vw, 1.42rem);
+        font-weight: 500;
+        line-height: 1.45;
+        color: rgba(45, 42, 30, 0.74);
+      }
+
+      .slide-hurdle-line--muted {
+        color: rgba(45, 42, 30, 0.42);
+      }
+
+      .slide-solution-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: clamp(12px, 1.4vw, 20px);
+        align-items: start;
+      }
+
+      .slide-side-media--social-requirements .slide-solution-columns {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .slide-solution-points {
+        display: grid;
+        gap: clamp(10px, 1.2vh, 14px);
+        grid-auto-rows: minmax(clamp(78px, 7.2vw, 98px), auto);
+      }
+
+      .slide-solution-points--tail {
+        align-content: start;
+      }
+
+      .slide-solution-point {
+        position: relative;
+        display: flex;
+        align-items: center;
+        padding: clamp(14px, 1.35vw, 18px) clamp(4px, 0.5vw, 8px) clamp(14px, 1.35vw, 18px)
+          clamp(28px, 2.2vw, 36px);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 252, 246, 0.42) 100%);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.06);
+        font-size: clamp(1.18rem, 1.6vw, 1.42rem);
+        font-weight: 600;
+        line-height: 1.42;
+        letter-spacing: -0.02em;
+        color: rgba(27, 24, 17, 0.94);
+      }
+
+      .slide-solution-point::before {
+        content: "";
+        position: absolute;
+        top: clamp(12px, 1.1vw, 16px);
+        bottom: clamp(12px, 1.1vw, 16px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-solution-more {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: clamp(1rem, 1.08vw, 1.1rem);
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.56);
+        text-align: center;
+      }
+
+      .slide-brand-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-brand-chip {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: clamp(14px, 1.2vw, 18px);
+        padding: clamp(16px, 1.55vw, 22px) clamp(22px, 2vw, 30px);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-brand-chip::before {
+        display: none;
+      }
+
+      .slide-brand-logo {
+        width: clamp(42px, 3.2vw, 54px);
+        height: clamp(42px, 3.2vw, 54px);
+        border-radius: 12px;
+        flex: 0 0 auto;
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-brand-label {
+        font-size: clamp(1.1rem, 1.34vw, 1.5rem);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+        white-space: nowrap;
+      }
+
+      .slide-brand-chip--chatgpt {
+        top: 6%;
+        left: 16%;
+        transform: rotate(-10deg);
+        z-index: 4;
+      }
+
+      .slide-brand-chip--google {
+        top: 18%;
+        right: 10%;
+        transform: rotate(7deg);
+        z-index: 3;
+      }
+
+      .slide-brand-chip--apple {
+        top: 34%;
+        left: 8%;
+        transform: rotate(-6deg);
+        z-index: 1;
+      }
+
+      .slide-brand-chip--transync {
+        bottom: 18%;
+        right: 14%;
+        transform: rotate(11deg);
+        z-index: 4;
+      }
+
+      .slide-brand-chip--felo {
+        bottom: 6%;
+        left: 18%;
+        transform: rotate(-8deg);
+        z-index: 2;
+      }
+
+      .slide-brand-chip--papago {
+        top: 39%;
+        left: 34%;
+        transform: rotate(3deg);
+        z-index: 4;
+      }
+
+      .slide-competitor-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-competitor-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(8px, 0.72vw, 12px);
+        border-radius: clamp(16px, 1.55vw, 24px);
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 20px 40px rgba(66, 49, 15, 0.13);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r));
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-competitor-logo--translation {
+        box-shadow: 0 20px 42px rgba(249, 115, 22, 0.15);
+      }
+
+      .slide-competitor-logo--note {
+        box-shadow: 0 20px 42px rgba(45, 42, 30, 0.13);
+      }
+
+      .slide-network-effect-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-network-effect-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(8px, 0.72vw, 12px);
+        border-radius: clamp(18px, 1.7vw, 26px);
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        box-shadow: 0 22px 44px rgba(45, 42, 30, 0.12);
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r));
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-network-effect-label {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        margin: 0;
+        transform: translate(-50%, -50%);
+        font-size: clamp(2rem, 3vw, 3.5rem);
+        line-height: 1.05;
+        font-weight: 900;
+        color: rgba(45, 42, 30, 0.84);
+        white-space: nowrap;
+      }
+
+      .slide-ai-native-stack {
+        display: grid;
+        gap: clamp(18px, 2vh, 26px);
+      }
+
+      .slide-ai-native-item {
+        display: flex;
+        align-items: center;
+        gap: clamp(18px, 1.6vw, 24px);
+        padding: clamp(20px, 1.8vw, 28px) clamp(22px, 2vw, 32px);
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 252, 246, 0.62) 100%);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.11);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-ai-native-logo {
+        width: clamp(56px, 4.8vw, 78px);
+        height: clamp(56px, 4.8vw, 78px);
+        border-radius: 18px;
+        object-fit: contain;
+        flex: 0 0 auto;
+        box-shadow: 0 14px 28px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-ai-native-name {
+        margin: 0;
+        font-size: clamp(1.46rem, 1.85vw, 2rem);
+        font-weight: 760;
+        line-height: 1;
+        letter-spacing: -0.035em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-musk-stack {
+        display: grid;
+        gap: clamp(16px, 1.8vh, 24px);
+      }
+
+      .slide-musk-photo {
+        width: 100%;
+        height: clamp(230px, 23vw, 330px);
+        border-radius: 32px;
+        object-fit: cover;
+        object-position: center 18%;
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-musk-service-list {
+        display: grid;
+        gap: clamp(12px, 1.4vh, 18px);
+      }
+
+      .slide-musk-service-item {
+        padding: clamp(18px, 1.55vw, 24px) clamp(20px, 1.8vw, 28px);
+      }
+
+      .slide-musk-service-item .slide-ai-native-logo {
+        background: #ffffff;
+        padding: clamp(10px, 0.9vw, 14px);
+      }
+
+      .slide-musk-service-item .slide-ai-native-logo--xchat {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+      }
+
+      .slide-cursor-logo {
+        display: block;
+        width: clamp(175px, 15.5vw, 235px);
+        height: auto;
+        border-radius: 22px;
+        box-shadow: 0 24px 52px rgba(66, 49, 15, 0.15);
+      }
+
+      .slide-copy--final-cta {
+        gap: clamp(22px, 2.2vw, 34px);
+        margin-top: clamp(86px, calc(24vh - 84px), 148px);
+      }
+
+      .slide-title--final-qa {
+        font-size: clamp(3.2rem, 5.2vw, 6.5rem);
+      }
+
+      .slide-final-links {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 24px);
+        width: min(100%, 1180px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-final-link-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 22px);
+        width: 100%;
+      }
+
+      .slide-final-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: clamp(56px, 5vw, 74px);
+        padding: 0 clamp(22px, 2vw, 32px);
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.12);
+        text-decoration: none;
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-final-link--brand {
+        min-width: clamp(170px, 15vw, 220px);
+      }
+
+      .slide-final-link--github {
+        min-width: clamp(150px, 13vw, 190px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-final-link--linkedin {
+        min-width: clamp(164px, 14vw, 206px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-final-link--store {
+        height: auto;
+        padding: 0;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        box-shadow: 0 20px 40px rgba(66, 49, 15, 0.14);
+        overflow: hidden;
+      }
+
+      .slide-final-logo--mingle {
+        width: clamp(120px, 11vw, 158px);
+        height: auto;
+        display: block;
+      }
+
+      .slide-final-logo--github {
+        width: clamp(26px, 2.2vw, 34px);
+        height: clamp(26px, 2.2vw, 34px);
+        display: block;
+      }
+
+      .slide-final-logo--linkedin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: clamp(28px, 2.3vw, 36px);
+        height: clamp(28px, 2.3vw, 36px);
+        border-radius: 8px;
+        background: #0a66c2;
+        color: #fff;
+        font-size: clamp(1.05rem, 1.1vw, 1.35rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .slide-final-store-badge {
+        height: clamp(48px, 4.4vw, 66px);
+        width: auto;
+        display: block;
+      }
+
+      .slide-cross-mark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(96%, clamp(320px, 31vw, 430px));
+        height: min(100%, clamp(400px, 40vw, 500px));
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .slide-cross-mark::before,
+      .slide-cross-mark::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 118%;
+        height: clamp(10px, 0.9vw, 14px);
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(220, 38, 38, 0.9) 0%, rgba(239, 68, 68, 0.96) 100%);
+        box-shadow: 0 10px 26px rgba(220, 38, 38, 0.22);
+        transform-origin: center;
+      }
+
+      .slide-cross-mark::before {
+        transform: translate(-50%, -50%) rotate(43deg);
+      }
+
+      .slide-cross-mark::after {
+        transform: translate(-50%, -50%) rotate(-43deg);
+      }
+
+      .slide-tool-items {
+        display: grid;
+        gap: clamp(14px, 1.6vh, 18px);
+      }
+
+      .slide-tool-item {
+        position: relative;
+        padding: clamp(16px, 1.45vw, 20px) clamp(14px, 1.2vw, 18px) clamp(16px, 1.45vw, 20px)
+          clamp(34px, 2.7vw, 40px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 252, 246, 0.58) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-tool-item::before {
+        content: "";
+        position: absolute;
+        top: clamp(14px, 1.1vw, 18px);
+        bottom: clamp(14px, 1.1vw, 18px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-tool-heading {
+        display: flex;
+        align-items: center;
+        gap: clamp(12px, 1vw, 14px);
+      }
+
+      .slide-tool-badge {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        font-size: clamp(0.92rem, 1vw, 1.02rem);
+        font-weight: 750;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.82);
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.94) 0%, rgba(255, 233, 181, 0.7) 100%);
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-tool-logo {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        flex: 0 0 auto;
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-tool-title {
+        margin: 0;
+        font-size: clamp(1.22rem, 1.52vw, 1.56rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-tool-description {
+        margin: clamp(10px, 0.9vw, 12px) 0 0;
+        font-size: clamp(1.18rem, 1.55vw, 1.42rem);
+        font-weight: 600;
+        line-height: 1.4;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.76);
+      }
+
+      .slide-preview-image {
+        width: clamp(340px, 33vw, 520px);
+        display: block;
+      }
+
+      .slide-preview-image--hellotalk-primary {
+        width: clamp(300px, 24vw, 400px);
+      }
+
+      .slide-preview-image--hellotalk-secondary {
+        width: clamp(400px, 37vw, 600px);
+      }
+
+      .slide-preview-image--gaming {
+        width: clamp(300px, 32vw, 400px);
+      }
+
+      .slide-preview-image--offline-conversation {
+        width: 100%;
+        border-radius: clamp(26px, 2.4vw, 36px);
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-preview-image--reddittalk {
+        width: clamp(300px, 32vw, 420px);
+      }
+
+      .slide-preview-image--reddittalk-top {
+        position: absolute;
+        top: 10vh;
+        right: 3vw;
+        width: clamp(320px, 44vw, 440px);
+      }
+
+      .slide-preview-image--clubhouse-bottom {
+        position: absolute;
+        bottom: 0vh;
+        right: 3vw;
+        width: clamp(320px, 44vw, 440px);
+      }
+
+      .slide-preview-image--gaming-back {
+        position: absolute;
+        left: 0;
+        top: clamp(34px, 4vw, 58px);
+        width: clamp(220px, 21vw, 320px);
+        z-index: 1;
+      }
+
+      .slide-phone-frame {
+        position: absolute;
+        padding: clamp(10px, 0.8vw, 12px);
+        border-radius: clamp(28px, 2.6vw, 38px);
+        background: linear-gradient(180deg, #1f2937 0%, #0f172a 100%);
+        box-shadow: 0 26px 52px rgba(15, 23, 42, 0.28);
+      }
+
+      .slide-phone-frame::before {
+        content: "";
+        position: absolute;
+        top: clamp(8px, 0.8vw, 12px);
+        left: 50%;
+        width: 32%;
+        height: clamp(12px, 1vw, 16px);
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.96);
+      }
+
+      .slide-phone-frame--gaming-front {
+        right: 3vw;
+        top: 0;
+        width: clamp(220px, 21vw, 320px);
+        z-index: 2;
+      }
+
+      .slide-side-media--conversation-stack {
+        top: clamp(46px, 8vh, 92px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-back {
+        left: clamp(8px, 1.2vw, 22px);
+        top: clamp(74px, 7.5vw, 116px);
+        width: clamp(188px, 18vw, 270px);
+        z-index: 1;
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-front {
+        right: clamp(12px, 1.8vw, 30px);
+        top: 0;
+        width: clamp(226px, 22vw, 330px);
+        z-index: 2;
+      }
+
+      .slide-side-media--conversation-stack .slide-preview-image--gaming-back {
+        position: static;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
+      }
+
+      .slide-preview-image--gaming-front {
+        display: block;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
+      }
+
+      .slide-preview-image--hellotalk1 {
+        position: absolute;
+        top: 7vh;
+        left: 1vw;
+        width: clamp(240px, 28vw, 320px);
+        z-index: 2;
+      }
+
+      .slide-preview-image--hellotalk2 {
+        position: absolute;
+        top: clamp(200px, 20vh, 46px);
+        right: 0;
+        width: clamp(220px, 24vw, 320px);
+        z-index: 1;
+      }
+
+      .slide-side-media--collage {
+        top: clamp(72px, 10vh, 128px);
+        right: clamp(36px, 4vw, 76px);
+        width: clamp(430px, 42vw, 640px);
+        height: clamp(300px, 34vw, 470px);
+      }
+
+      .slide-side-media--reason {
+        top: clamp(128px, 16vh, 188px);
+        right: clamp(28px, 4vw, 76px);
+        width: clamp(500px, 46vw, 720px);
+        height: clamp(280px, 32vw, 420px);
+      }
+
+      .slide-collage-image {
+        position: absolute;
+        display: block;
+        border-radius: 26px;
+        box-shadow: 0 24px 50px rgba(52, 43, 16, 0.16);
+      }
+
+      .slide-collage-image--jotme {
+        top: 5vw;
+        right: calc(clamp(214px, 21vw, 318px) - 7vw);
+        width: clamp(220px, 25vw, 330px);
+        transform: rotate(-6deg);
+        z-index: 1;
+      }
+
+      .slide-collage-image--guild {
+        top: calc(clamp(174px, 18vw, 236px) + 5vw);
+        right: 5vw;
+        width: clamp(300px, 30vw, 446px);
+        transform: rotate(4deg);
+        z-index: 3;
+      }
+
+      .slide-collage-image--utell {
+        top: clamp(42px, 5vw, 78px);
+        right: calc(clamp(116px, 11vw, 176px) - 8vw);
+        width: clamp(212px, 20vw, 296px);
+        transform: rotate(8deg);
+        z-index: 2;
+      }
+
+      .slide-reason-image {
+        position: absolute;
+        display: block;
+        height: clamp(260px, 28vw, 380px);
+        width: auto;
+        border-radius: 28px;
+        box-shadow: 0 24px 56px rgba(52, 43, 16, 0.18);
+      }
+
+      .slide-reason-image--left {
+        top: 0;
+        left: 5vw;
+        z-index: 3;
+        transform: rotate(-3deg);
+      }
+
+      .slide-reason-image--middle {
+        top: clamp(18px, 2vw, 34px);
+        left: 55%;
+        z-index: 2;
+        transform: translateX(-50%) rotate(1.5deg);
+      }
+
+      .slide-reason-image--right {
+        top: 0;
+        right: 0;
+        z-index: 1;
+        transform: rotate(3deg);
+      }
+
+      .slide-kicker {
+        position: absolute;
+        top: calc(var(--kicker-slot) * -0.32);
+        left: 0;
+        margin: 0;
+        display: inline-grid;
+        gap: 10px;
+        width: fit-content;
+        font-size: clamp(1.18rem, 1.6vw, 1.42rem);
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: rgba(45, 42, 30, 0.62);
+        text-transform: uppercase;
+      }
+
+      .slide-kicker::after {
+        content: "";
+        width: 100%;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-title {
+        margin: 0;
+        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        font-weight: 650;
+        line-height: 1.22;
+        letter-spacing: -0.05em;
+        text-wrap: balance;
+      }
+
+      .slide-title--quoted {
+        display: inline-grid;
+        justify-items: center;
+        gap: 0;
+        padding-inline: 0;
+      }
+
+      .slide-title-quote {
+        display: block;
+        font-family: "Cormorant Garamond", "Baskerville", "Times New Roman", Georgia, serif;
+        font-size: clamp(4.2rem, 6vw, 6.8rem);
+        font-weight: 500;
+        line-height: 0.55;
+        color: rgba(45, 42, 30, 0.9);
+        text-align: center;
+      }
+
+      .slide-title-quote--open {
+        margin-top: clamp(30px, 1.2vw, 8px);
+      }
+
+      .slide-title-quote--close {
+        margin-top: clamp(30px, 1.4vw, 10px);
+      }
+
+      .slide-title-text {
+        display: block;
+      }
+
+      .slide--hero .slide-title {
+        font-size: clamp(4.2rem, 8vw, 8.6rem);
+        font-weight: 650;
+        line-height: 1.12;
+      }
+
+      .slide--hero h3.slide-title {
+        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        line-height: 1.22;
+      }
+
+      .slide-body {
+        margin: 0;
+        max-width: 44rem;
+        font-size: clamp(1.12rem, 1.8vw, 1.7rem);
+        line-height: 1.65;
+        color: var(--body);
+        text-wrap: pretty;
+      }
+
+      .slide-shell--download-qr {
+        align-items: center;
+        justify-content: space-between;
+        gap: clamp(44px, 6vw, 96px);
+        padding-inline: clamp(56px, 8vw, 132px);
+      }
+
+      .slide-copy--download-qr {
+        width: min(57vw, 700px);
+        max-width: min(57vw, 700px);
+        align-content: center;
+        justify-items: start;
+        margin-top: 0;
+        padding-top: 0;
+        text-align: left;
+      }
+
+      .slide-copy--download-qr .slide-title {
+        font-size: clamp(3.7rem, 6.6vw, 7.2rem);
+        line-height: 1.08;
+        white-space: normal;
+        text-wrap: balance;
+      }
+
+      .slide-copy--download-qr .slide-body {
+        max-width: 42rem;
+      }
+
+      .slide-copy--download-qr.slide-copy--final-cta {
+        gap: clamp(22px, 2.2vw, 34px);
+        margin-top: 0;
+        justify-items: center;
+        text-align: center;
+      }
+
+      .slide-side-media--download-qr {
+        position: relative;
+        top: auto;
+        right: auto;
+        display: grid;
+        flex: 0 0 clamp(250px, 24vw, 340px);
+        justify-items: center;
+        width: clamp(250px, 24vw, 340px);
+        margin-right: clamp(0px, 2vw, 24px);
+        gap: clamp(10px, 1vw, 16px);
+      }
+
+      .slide-download-app-icon {
+        display: block;
+        width: clamp(48px, 4.8vw, 64px);
+        height: auto;
+        aspect-ratio: 1;
+        object-fit: cover;
+        border-radius: 24%;
+        box-shadow: 0 18px 38px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-download-qr-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(8px, 0.8vw, 12px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.55vw, 1.4rem);
+        font-weight: 560;
+        letter-spacing: -0.04em;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .slide-download-qr-pointer {
+        margin: -2px 0 0;
+        color: var(--title);
+        font-size: clamp(1.25rem, 1.9vw, 1.7rem);
+        line-height: 1;
+      }
+
+      .slide-download-qr-link {
+        display: block;
+        width: 100%;
+        padding: clamp(16px, 1.4vw, 24px);
+        border: 1px solid rgba(45, 42, 30, 0.08);
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 24px 52px rgba(66, 49, 15, 0.16);
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .slide-download-qr-link:hover,
+      .slide-download-qr-link:focus-visible {
+        outline: none;
+        transform: translateY(-4px);
+        box-shadow: 0 30px 58px rgba(66, 49, 15, 0.2);
+      }
+
+      .slide-download-qr {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+      }
+
+      .slide-download-qr-caption {
+        margin: 0;
+        color: var(--body);
+        font-size: clamp(0.95rem, 1.2vw, 1.2rem);
+        font-weight: 760;
+        line-height: 1.3;
+        text-align: center;
+      }
+
+      .page-controls {
+        position: absolute;
+        right: clamp(24px, 4vw, 44px);
+        bottom: clamp(20px, 3vw, 36px);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        z-index: 2;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: rgba(45, 42, 30, 0.52);
+        text-transform: uppercase;
+        user-select: none;
+      }
+
+      .page-counter {
+        min-width: 4.8em;
+        text-align: right;
+      }
+
+      .page-home-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .page-home-button:hover,
+      .page-home-button:focus-visible {
+        color: inherit;
+      }
+
+      .page-home-button:focus-visible {
+        outline: 2px solid rgba(249, 115, 22, 0.48);
+        outline-offset: 5px;
+        border-radius: 999px;
+      }
+
+      .page-home-icon {
+        width: 1.05em;
+        height: 1.05em;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+
+      html.is-mobile-viewport {
+        --deck-width: 100vw;
+        --deck-height: 100dvh;
+        --mobile-content-width: min(100%, 680px);
+        --mobile-slide-x: clamp(18px, 5.2vw, 28px);
+      }
+
+      html.is-mobile-viewport,
+      html.is-mobile-viewport body {
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow: hidden;
+      }
+
+      html.is-mobile-viewport body {
+        display: block;
+        background:
+          radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
+          var(--page);
+      }
+
+      html.is-mobile-viewport .deck {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        box-shadow: none;
+      }
+
+      html.is-mobile-viewport .track {
+        transition: transform 360ms var(--slide-ease);
+      }
+
+      html.is-mobile-viewport .slide {
+        flex-basis: 100vw;
+        width: 100vw;
+        min-width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      html.is-mobile-viewport .slide-shell {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(14px, 2.4vh, 24px);
+        padding:
+          calc(env(safe-area-inset-top) + clamp(18px, 4vh, 32px))
+          var(--mobile-slide-x)
+          calc(env(safe-area-inset-bottom) + clamp(54px, 7vh, 72px));
+        overflow: hidden;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media {
+        justify-content: flex-start;
+        gap: clamp(34px, 5.2vh, 54px);
+        padding-top: calc(env(safe-area-inset-top) + clamp(34px, 5vh, 52px));
+      }
+
+      html.is-mobile-viewport .slide-shell--image-only {
+        justify-content: center;
+        padding:
+          calc(env(safe-area-inset-top) + clamp(14px, 3vh, 24px))
+          var(--mobile-slide-x)
+          calc(env(safe-area-inset-bottom) + clamp(42px, 5vh, 56px));
+      }
+
+      html.is-mobile-viewport .slide-full-image {
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      html.is-mobile-viewport .slide-copy {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        gap: clamp(10px, 1.7vh, 16px);
+        justify-items: start;
+        --kicker-slot: clamp(24px, 4vh, 34px);
+        padding-top: var(--kicker-slot);
+        margin-top: 0;
+        text-align: left;
+      }
+
+      html.is-mobile-viewport .slide-copy--addon-subtitles {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-copy--kfriends-goal {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-copy--kfriends-goal .slide-title {
+        font-size: clamp(1.82rem, 8vw, 3.08rem);
+        line-height: 1.16;
+        white-space: normal;
+      }
+
+      html.is-mobile-viewport .slide-copy--addon-subtitles .slide-title {
+        font-size: clamp(1.5rem, 6.25vw, 2.25rem);
+        line-height: 1.18;
+      }
+
+      html.is-mobile-viewport .slide-copy--center {
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--goal-split {
+        gap: clamp(20px, 3vh, 30px);
+      }
+
+      html.is-mobile-viewport .slide-shell--market {
+        gap: clamp(18px, 2.8vh, 28px);
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories {
+        justify-content: flex-start;
+        gap: clamp(20px, 3.4vh, 30px);
+      }
+
+      html.is-mobile-viewport .slide-copy--market {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        justify-items: start;
+        text-align: left;
+      }
+
+      html.is-mobile-viewport .slide-copy--market .slide-title {
+        font-size: clamp(2.35rem, 10.1vw, 3.7rem);
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-copy--market-categories {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--market-categories.slide-copy--customer-experiences {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        gap: clamp(10px, 1.7vh, 16px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--market {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        padding: 0 6px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--market-categories {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: clamp(260px, 43vh, 360px);
+        padding: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid {
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+        gap: 6px;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--language {
+        height: clamp(360px, 48vh, 420px);
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-side-media--market-categories--seven {
+        height: clamp(390px, 50vh, 430px);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 8px 12px;
+      }
+
+      html.is-mobile-viewport .slide-market-category {
+        padding: 8px 4px 0;
+      }
+
+      html.is-mobile-viewport .slide-market-category-title {
+        font-size: clamp(1.15rem, 4.4vw, 1.5rem);
+        line-height: 1.15;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-category {
+        padding: 8px 0 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-category-title {
+        font-size: clamp(0.8rem, 3.55vw, 1.15rem);
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-category-title {
+        font-size: clamp(0.78rem, 3.4vw, 1rem);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-category-title {
+        font-size: clamp(0.78rem, 3.4vw, 1rem);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(4, minmax(0, 1fr));
+        gap: 8px 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category {
+        padding: 8px 0 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category-title {
+        min-height: 2.3em;
+        font-size: clamp(0.82rem, 3.7vw, 1.1rem);
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories.slide-market-grid--categories-seven .slide-market-logo-cloud {
+        inset: 18% 1% 0;
+      }
+
+      html.is-mobile-viewport .slide-market-logo-cloud {
+        inset: 24% 1% 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo-cloud {
+        inset: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo-cloud {
+        inset: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-logo-cloud {
+        inset: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-logo {
+        width: clamp(36px, 10.8vw, 58px);
+        height: clamp(36px, 10.8vw, 58px);
+        padding: 5px;
+        border-radius: 12px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories .slide-market-logo {
+        width: clamp(32px, 10.8vw, 50px);
+        height: clamp(32px, 10.8vw, 50px);
+        padding: 4px;
+        border-radius: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-four .slide-market-logo {
+        width: clamp(50px, 14.1vw, 66px);
+        height: clamp(50px, 14.1vw, 66px);
+        padding: 3px;
+        border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-logo {
+        width: clamp(50px, 14.1vw, 66px);
+        height: clamp(50px, 14.1vw, 66px);
+        padding: 3px;
+        border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-logo {
+        position: static;
+        left: auto;
+        top: auto;
+        flex: 0 0 auto;
+        width: clamp(42px, 12.2vw, 52px);
+        height: clamp(42px, 12.2vw, 52px);
+        padding: 3px;
+        border-radius: 8px;
+        transform: rotate(var(--r)) scale(1.08);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category--triple .slide-market-logo {
+        width: clamp(30px, 9.6vw, 40px);
+        height: clamp(30px, 9.6vw, 40px);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--categories-seven .slide-market-category:last-child {
+        grid-column: 1 / -1;
+        width: 50%;
+        justify-self: center;
+      }
+
+      html.is-mobile-viewport .slide-shell--ai-requirements {
+        gap: clamp(16px, 2.8vh, 24px);
+        padding-inline: var(--mobile-slide-x);
+      }
+
+      html.is-mobile-viewport .slide-copy--ai-requirements {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title {
+        font-size: clamp(1.05rem, 4.45vw, 1.8rem);
+        line-height: 1.1;
+        letter-spacing: -0.055em;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-side-media--ai-requirements {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+      }
+
+      html.is-mobile-viewport .slide-ai-requirements-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement {
+        min-height: 0;
+        padding: 10px 10px 10px 24px;
+        border-radius: 14px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement::before {
+        top: 10px;
+        bottom: 10px;
+        left: 9px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement:nth-child(7) {
+        grid-column: auto;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement-title {
+        font-size: clamp(0.95rem, 3.35vw, 1.08rem);
+        line-height: 1.22;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-ai-requirement-description {
+        margin-top: 4px;
+        font-size: clamp(0.9rem, 3vw, 1.02rem);
+        line-height: 1.28;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-overview {
+        justify-content: flex-start;
+        gap: clamp(22px, 3.2vh, 30px);
+      }
+
+      html.is-mobile-viewport .slide-copy--market-overview {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--market-overview .slide-title {
+        font-size: clamp(1.05rem, 5.05vw, 2rem);
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-market-overview-row {
+        gap: 4px;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .slide-market-overview-item {
+        gap: 6px;
+      }
+
+      html.is-mobile-viewport .slide-market-overview-logo {
+        width: clamp(36px, 12vw, 58px);
+        padding: 3px;
+        border-radius: 10px;
+      }
+
+      html.is-mobile-viewport .slide-market-overview-name {
+        font-size: clamp(0.54rem, 2.45vw, 0.82rem);
+      }
+
+      html.is-mobile-viewport .slide-market-overview-downloads {
+        margin-top: -4px;
+        font-size: clamp(0.46rem, 2.2vw, 0.7rem);
+      }
+
+      html.is-mobile-viewport .slide-market-overview-caption {
+        margin-top: 8px;
+        font-size: clamp(0.5rem, 2.15vw, 0.68rem);
+      }
+
+      html.is-mobile-viewport .slide-copy--goal-split .slide-title {
+        font-size: clamp(2.16rem, 9.2vw, 3.35rem);
+      }
+
+      html.is-mobile-viewport .slide-goal-columns {
+        gap: clamp(10px, 2vw, 16px);
+        margin-top: 0;
+      }
+
+      html.is-mobile-viewport .slide-goal {
+        min-height: clamp(164px, 23vh, 220px);
+        padding: clamp(24px, 3vh, 32px) 10px;
+        border-radius: 22px;
+      }
+
+      html.is-mobile-viewport .slide-goal::before {
+        height: 6px;
+      }
+
+      html.is-mobile-viewport .slide-goal-text {
+        font-size: clamp(1.32rem, 5.2vw, 1.9rem);
+        line-height: 1.16;
+        letter-spacing: -0.04em;
+        word-break: keep-all;
+      }
+
+      html.is-mobile-viewport .slide-goal-badge {
+        right: 8px;
+        padding: 8px 10px;
+        border-width: 2px;
+        border-radius: 13px;
+        font-size: clamp(0.9rem, 3.8vw, 1.2rem);
+      }
+
+      html.is-mobile-viewport .slide-goal-arrow {
+        top: 50%;
+        height: 68px;
+      }
+
+      html.is-mobile-viewport .slide-copy--toc {
+        gap: clamp(20px, 4vh, 34px);
+      }
+
+      html.is-mobile-viewport .slide-copy--toc .slide-title {
+        gap: 8px;
+        margin-top: 8px;
+        font-size: clamp(1.72rem, 7.2vw, 2.58rem);
+      }
+
+      html.is-mobile-viewport .slide-copy--toc .slide-kicker {
+        font-size: clamp(1.4rem, 6vw, 2.1rem);
+      }
+
+      html.is-mobile-viewport .slide-kicker {
+        gap: 6px;
+        font-size: clamp(0.9rem, 2.9vw, 0.98rem);
+        letter-spacing: 0.08em;
+      }
+
+      html.is-mobile-viewport .slide-title {
+        font-size: clamp(1.82rem, 8vw, 3.08rem);
+        line-height: 1.16;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
+      html.is-mobile-viewport .slide--hero .slide-title {
+        font-size: clamp(2.9rem, 12vw, 4.6rem);
+        line-height: 1.08;
+      }
+
+      html.is-mobile-viewport .slide--hero h3.slide-title {
+        font-size: clamp(1.82rem, 8vw, 3.08rem);
+        line-height: 1.16;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media .slide-title {
+        font-size: clamp(1.5rem, 6.25vw, 2.25rem);
+        line-height: 1.18;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-copy--market-categories .slide-title {
+        font-size: clamp(1.15rem, 5.1vw, 2rem);
+        line-height: 1.1;
+        letter-spacing: -0.05em;
+        white-space: nowrap;
+      }
+
+      html.is-mobile-viewport .slide-shell--market-categories .slide-copy--market-categories.slide-copy--customer-experiences .slide-title {
+        font-size: clamp(1.55rem, 7.2vw, 2.4rem);
+        line-height: 1.16;
+        letter-spacing: -0.05em;
+        white-space: normal;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media .slide-body {
+        font-size: clamp(0.98rem, 3.05vw, 1.06rem);
+        line-height: 1.46;
+      }
+
+      html.is-mobile-viewport .slide-title-quote {
+        font-size: clamp(3.4rem, 13vw, 5.1rem);
+      }
+
+      html.is-mobile-viewport .slide-body {
+        max-width: 100%;
+        font-size: clamp(1.06rem, 3.45vw, 1.14rem);
+        line-height: 1.5;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-side-media {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: block;
+        flex: 0 1 auto;
+        transform: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--market {
+        height: clamp(340px, 49vh, 460px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--market-categories {
+        height: clamp(260px, 43vh, 360px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--brand-collage,
+      html.is-mobile-viewport .slide-side-media--competitor-cloud,
+      html.is-mobile-viewport .slide-side-media--network-effect-cloud,
+      html.is-mobile-viewport .slide-side-media--gaming-stack,
+      html.is-mobile-viewport .slide-side-media--hellotalk-secondary,
+      html.is-mobile-viewport .slide-side-media--reddittalk,
+      html.is-mobile-viewport .slide-side-media--community-stack,
+      html.is-mobile-viewport .slide-side-media--travel-post-stack,
+      html.is-mobile-viewport .slide-side-media--networking-collage,
+      html.is-mobile-viewport .slide-side-media--collage,
+      html.is-mobile-viewport .slide-side-media--reason {
+        height: clamp(244px, 45vh, 392px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--social-cloud {
+        height: clamp(266px, 46vh, 410px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--mingle-solution-proof {
+        display: grid;
+        place-items: center;
+        height: clamp(266px, 46vh, 410px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--addon-subtitles {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: flex;
+        align-items: center;
+        gap: clamp(8px, 1.3vh, 12px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--offline-work {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(8px, 1.3vh, 12px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--kfriends-goal {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-gallery {
+        height: min(46vh, 390px);
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-image {
+        height: min(46vh, 390px);
+        max-width: none;
+        border-radius: 18px;
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-image--version-history {
+        right: 3%;
+        top: 0;
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-image--story {
+        left: 3%;
+        top: 18px;
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-caption {
+        justify-content: flex-start;
+        gap: 8px;
+        font-size: clamp(0.88rem, 3.2vw, 1.02rem);
+        line-height: 1.3;
+      }
+
+      html.is-mobile-viewport .slide-kfriends-goal-caption-logo {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--offline-work .slide-preview-image--offline-work {
+        width: auto;
+        height: min(46vh, 390px);
+        max-width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-offline-work-caption {
+        font-size: clamp(0.94rem, 3.4vw, 1.08rem);
+        line-height: 1.35;
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery {
+        height: min(48vh, 430px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--roblox {
+        left: 0;
+        bottom: 8px;
+        height: min(40vh, 340px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--discord {
+        right: 0;
+        bottom: 4px;
+        height: min(40vh, 340px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image--xiaohongshu {
+        height: min(48vh, 430px);
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-gallery-image {
+        max-width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-addon-subtitle-caption {
+        font-size: clamp(0.94rem, 3.4vw, 1.08rem);
+        line-height: 1.35;
+      }
+
+      html.is-mobile-viewport .slide-short-video {
+        width: min(58vw, 25.875vh, 230px);
+        height: min(103.111vw, 46vh, 408.889px);
+        max-width: 100%;
+        max-height: none;
+      }
+
+      html.is-mobile-viewport .slide-preview-image {
+        max-width: 100%;
+        height: auto;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk-primary,
+      html.is-mobile-viewport .slide-preview-image--hellotalk-secondary,
+      html.is-mobile-viewport .slide-preview-image--gaming,
+      html.is-mobile-viewport .slide-preview-image--offline-conversation,
+      html.is-mobile-viewport .slide-preview-image--reddittalk {
+        width: min(100%, 340px);
+        margin-inline: auto;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk-primary {
+        width: min(62vw, 245px);
+      }
+
+      html.is-mobile-viewport .slide-preview-image--gaming-back {
+        position: absolute;
+        left: 2%;
+        top: 16%;
+        width: 44%;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame {
+        padding: 8px;
+        border-radius: 24px;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame::before {
+        top: 7px;
+        height: 10px;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame--gaming-front {
+        position: absolute;
+        right: 2%;
+        top: 0;
+        width: 48%;
+      }
+
+      html.is-mobile-viewport .slide-side-media--conversation-stack .slide-phone-frame--gaming-back {
+        left: 2%;
+        top: 18%;
+        width: 40%;
+      }
+
+      html.is-mobile-viewport .slide-side-media--conversation-stack .slide-phone-frame--gaming-front {
+        right: 2%;
+        width: 50%;
+      }
+
+      html.is-mobile-viewport .slide-side-media--conversation-stack .slide-preview-image--gaming-back {
+        position: static;
+        left: auto;
+        top: auto;
+        width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--reddittalk-top {
+        top: 3%;
+        right: 2%;
+        width: 68%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--clubhouse-bottom {
+        right: 2%;
+        bottom: 2%;
+        width: 74%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk1 {
+        top: 3%;
+        left: 2%;
+        width: 48%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk2 {
+        top: 34%;
+        right: 2%;
+        width: 48%;
+      }
+
+      html.is-mobile-viewport .slide-tool-items,
+      html.is-mobile-viewport .slide-hurdles-stack,
+      html.is-mobile-viewport .slide-ai-native-stack,
+      html.is-mobile-viewport .slide-musk-stack,
+      html.is-mobile-viewport .slide-musk-service-list {
+        gap: clamp(8px, 1.2vh, 12px);
+      }
+
+      html.is-mobile-viewport .slide-tool-item,
+      html.is-mobile-viewport .slide-hurdle-item,
+      html.is-mobile-viewport .slide-ai-native-item {
+        border-radius: 16px;
+        padding: 12px 12px 12px 24px;
+      }
+
+      html.is-mobile-viewport .slide-ai-native-item {
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+      }
+
+      html.is-mobile-viewport .slide-tool-item::before,
+      html.is-mobile-viewport .slide-hurdle-item::before {
+        left: 10px;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-tool-heading {
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-tool-logo,
+      html.is-mobile-viewport .slide-tool-badge,
+      html.is-mobile-viewport .slide-ai-native-logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-tool-title,
+      html.is-mobile-viewport .slide-hurdle-title,
+      html.is-mobile-viewport .slide-ai-native-name {
+        font-size: clamp(1.06rem, 3.6vw, 1.22rem);
+        line-height: 1.25;
+        letter-spacing: 0;
+        white-space: normal;
+      }
+
+      html.is-mobile-viewport .slide-tool-description,
+      html.is-mobile-viewport .slide-hurdle-description {
+        margin-top: 6px;
+        font-size: clamp(0.98rem, 3.05vw, 1.06rem);
+        line-height: 1.38;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-tool-item--numbered {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 13px 14px 13px 24px;
+      }
+
+      html.is-mobile-viewport .slide-tool-item--numbered .slide-tool-heading,
+      html.is-mobile-viewport .slide-tool-item--numbered .slide-tool-description {
+        grid-column: 1;
+      }
+
+      html.is-mobile-viewport .slide-tool-step-number {
+        min-width: 0;
+        min-height: 0;
+        padding: 5px 8px;
+        font-size: 0.9rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-step-transition {
+        display: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-tool-items--viral-loop {
+        gap: 0;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition {
+        position: relative;
+        left: auto;
+        top: auto;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: clamp(72px, 9.6vh, 92px);
+        margin: 8px 0 10px;
+        padding-left: 42px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition svg {
+        display: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition::before {
+        content: "";
+        position: absolute;
+        top: 7px;
+        bottom: 9px;
+        left: 18px;
+        width: 3px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(251, 188, 50, 0.95) 0%, rgba(249, 115, 22, 0.9) 100%);
+        box-shadow: 0 8px 16px rgba(245, 158, 11, 0.14);
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition::after {
+        content: "";
+        position: absolute;
+        bottom: 8px;
+        left: 13px;
+        width: 10px;
+        height: 10px;
+        border-right: 3px solid rgba(249, 115, 22, 0.9);
+        border-bottom: 3px solid rgba(249, 115, 22, 0.9);
+        transform: rotate(45deg);
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition-label {
+        position: static;
+        width: auto;
+        max-width: calc(100% - 8px);
+        padding: 6px 10px 7px;
+        font-size: clamp(0.88rem, 2.65vw, 0.94rem);
+        line-height: 1.24;
+        letter-spacing: 0;
+        text-align: left;
+        transform: none;
+      }
+
+      html.is-mobile-viewport .slide-solution-columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--social-requirements .slide-solution-columns {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      html.is-mobile-viewport .slide-solution-points {
+        gap: 8px;
+        grid-auto-rows: minmax(48px, auto);
+      }
+
+      html.is-mobile-viewport .slide-solution-point {
+        min-height: 48px;
+        padding: 10px 8px 10px 22px;
+        border-radius: 14px;
+        font-size: clamp(1rem, 3.05vw, 1.08rem);
+        line-height: 1.34;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-solution-point::before {
+        top: 10px;
+        bottom: 10px;
+        left: 9px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-solution-more {
+        font-size: 0.94rem;
+        line-height: 1.3;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-brand-chip {
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      html.is-mobile-viewport .slide-brand-logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+      }
+
+      html.is-mobile-viewport .slide-brand-label {
+        font-size: 1rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-cross-mark {
+        width: min(90%, 270px);
+        height: min(90%, 300px);
+      }
+
+      html.is-mobile-viewport .slide-cross-mark::before,
+      html.is-mobile-viewport .slide-cross-mark::after {
+        height: 8px;
+      }
+
+      html.is-mobile-viewport .slide-competitor-logo,
+      html.is-mobile-viewport .slide-network-effect-logo {
+        width: clamp(38px, 12vw, 56px);
+        height: clamp(38px, 12vw, 56px);
+        padding: 6px;
+        border-radius: 13px;
+      }
+
+      html.is-mobile-viewport .slide-network-effect-label {
+        font-size: clamp(1.42rem, 7vw, 2.3rem);
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-mingle-flight {
+        width: clamp(82px, 24vw, 118px);
+        height: clamp(82px, 24vw, 118px);
+      }
+
+      html.is-mobile-viewport .slide-mingle-flight-logo {
+        border-radius: 20px;
+      }
+
+      html.is-mobile-viewport .slide-musk-photo {
+        height: clamp(118px, 22vh, 178px);
+        border-radius: 18px;
+      }
+
+      html.is-mobile-viewport .slide-cursor-logo {
+        width: min(48vw, 190px);
+        border-radius: 18px;
+      }
+
+      html.is-mobile-viewport .slide-collage-image,
+      html.is-mobile-viewport .slide-reason-image,
+      html.is-mobile-viewport .slide-networking-card,
+      html.is-mobile-viewport .slide-travel-post-card {
+        border-radius: 16px;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--jotme {
+        top: 9%;
+        right: 35%;
+        width: 48%;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--guild {
+        top: 38%;
+        right: 4%;
+        width: 66%;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--utell {
+        top: 5%;
+        right: 8%;
+        width: 36%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image {
+        height: auto;
+        width: 32%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--left {
+        left: 3%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--middle {
+        left: 50%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--right {
+        right: 3%;
+      }
+
+      html.is-mobile-viewport .slide-travel-post-card--top {
+        width: 56%;
+      }
+
+      html.is-mobile-viewport .slide-travel-post-card--bottom {
+        width: 84%;
+      }
+
+      html.is-mobile-viewport .slide-final-links {
+        width: var(--mobile-content-width);
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-final-link-row {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-final-link {
+        height: 44px;
+        min-width: 0;
+        padding: 0 14px;
+      }
+
+      html.is-mobile-viewport .slide-final-logo--mingle {
+        width: 106px;
+      }
+
+      html.is-mobile-viewport .slide-final-link--github,
+      html.is-mobile-viewport .slide-final-link--linkedin {
+        font-size: 0.94rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-final-store-badge {
+        height: 40px;
+      }
+
+      html.is-mobile-viewport .slide-shell--download-qr {
+        align-items: flex-start;
+        justify-content: center;
+        gap: clamp(20px, 3vh, 28px);
+        padding-inline: var(--mobile-slide-x);
+      }
+
+      html.is-mobile-viewport .slide-copy--download-qr {
+        width: 100%;
+        max-width: 100%;
+        align-content: start;
+        justify-items: start;
+        margin-top: 0;
+        padding-top: 0;
+        text-align: left;
+      }
+
+      html.is-mobile-viewport .slide-copy--download-qr .slide-title {
+        font-size: clamp(2.5rem, 10vw, 3.8rem);
+        line-height: 1.08;
+        white-space: normal;
+        text-wrap: balance;
+      }
+
+      html.is-mobile-viewport .slide-copy--download-qr .slide-body {
+        max-width: 100%;
+      }
+
+      html.is-mobile-viewport .slide-copy--download-qr.slide-copy--final-cta {
+        gap: clamp(14px, 2vh, 20px);
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--download-qr.slide-copy--final-cta .slide-title {
+        font-size: clamp(2.65rem, 11.2vw, 4.2rem);
+      }
+
+      html.is-mobile-viewport .slide-side-media--download-qr {
+        align-self: flex-end;
+        flex: 0 0 auto;
+        width: clamp(132px, 38vw, 170px);
+        max-width: clamp(132px, 38vw, 170px);
+        margin: 0 clamp(4px, 3vw, 14px) 34px 0;
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .slide-download-app-icon {
+        width: 40px;
+      }
+
+      html.is-mobile-viewport .slide-download-qr-label {
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 560;
+        letter-spacing: -0.05em;
+      }
+
+      html.is-mobile-viewport .slide-download-qr-pointer {
+        font-size: 1.35rem;
+      }
+
+      html.is-mobile-viewport .slide-download-qr-link {
+        padding: 10px;
+        border-radius: 16px;
+      }
+
+      html.is-mobile-viewport .slide-download-qr-caption {
+        font-size: 0.78rem;
+      }
+
+      html.is-mobile-viewport .page-controls {
+        right: auto;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + 16px);
+        transform: translateX(-50%);
+        flex-direction: row-reverse;
+        gap: 12px;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+      }
+
+      html.is-mobile-viewport .page-home-button {
+        position: static;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .track {
+          transition: none;
+        }
+      }
+
+      @media print {
+        @page {
+          size: 16in 9in;
+          margin: 0;
+        }
+
+        html,
+        body {
+          width: 16in;
+          height: max-content !important;
+          min-height: 0 !important;
+          overflow: visible;
+          background: #fffdf7;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .deck {
+          width: 16in;
+          height: max-content !important;
+          min-height: 0 !important;
+          overflow: visible;
+        }
+
+        .track {
+          position: static;
+          display: block;
+          width: 100%;
+          height: max-content !important;
+          min-height: 0 !important;
+          will-change: auto;
+          transform: none !important;
+          transition: none !important;
+        }
+
+        .slide {
+          position: relative;
+          flex: none !important;
+          display: block;
+          width: 16in;
+          height: 9in;
+          min-height: 9in;
+          overflow: visible;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          break-after: page;
+          page-break-after: always;
+        }
+
+        .track > .slide:nth-of-type(n + 3) {
+          break-before: page;
+          page-break-before: always;
+        }
+
+        .slide:last-of-type {
+          break-after: auto;
+          page-break-after: auto;
+        }
+
+        .slide[data-clone],
+        .page-controls {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck" aria-label="External relations presentation deck">
+      <div class="track" id="deck-track">
+        <section class="slide slide--hero">
+          <article class="slide-shell slide-shell--download-qr">
+            <div class="slide-copy slide-copy--download-qr">
+              <h1 class="slide-title">언어 장벽 없는<br/>음성 메신저 밍글</h1>
+              <p class="slide-body">헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.<br/>최종 업데이트 - 2026-09-01</p>
+            </div>
+            <div class="slide-side-media slide-side-media--download-qr">
+              <div class="slide-download-qr-label">
+                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="Mingle 앱 아이콘" />
+                <span>Mingle 다운로드 링크 👇</span>
+              </div>
+              <a
+                class="slide-download-qr-link"
+                href="https://mingle-landing.vercel.app/download"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Mingle 앱 설치 페이지 열기"
+              >
+                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="Mingle 앱 설치용 QR 코드" />
+              </a>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
+                <span class="slide-title-text">외국인과 친해지고 싶은데<br/>
+                언어 장벽을 넘기 힘들다</span>
+                <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">닭 vs 달걀 문제</h1>
+              <div class="slide-goal-columns">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market-overview">
+            <div class="slide-copy slide-copy--market-overview">
+              <p class="slide-kicker">시장</p>
+              <h1 class="slide-title"><span>언어교환 서비스가 정말 많지만</span><br/><span>닭과 달걀 문제를 해결하지 못합니다</span></h1>
+            </div>
+            <div class="slide-market-overview-row">
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-hellotalk.png" alt="" />
+                <p class="slide-market-overview-name">HelloTalk</p>
+                <p class="slide-market-overview-downloads">약 7,000만+</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-tandem.jpg" alt="" />
+                <p class="slide-market-overview-name">Tandem</p>
+                <p class="slide-market-overview-downloads">약 3,500만+</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-yeetalk.jpg" alt="" />
+                <p class="slide-market-overview-name">Yeetalk</p>
+                <p class="slide-market-overview-downloads">약 1,100만</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                <p class="slide-market-overview-name">K-Friends</p>
+                <p class="slide-market-overview-downloads">약 450만</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-hilokal.jpg" alt="" />
+                <p class="slide-market-overview-name">Hilokal</p>
+                <p class="slide-market-overview-downloads">약 170만</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-kof.png" alt="" />
+                <p class="slide-market-overview-name">KOF</p>
+                <p class="slide-market-overview-downloads">약 60만</p>
+              </article>
+            </div>
+            <p class="slide-market-overview-caption">iOS·Android 합산 누적 다운로드 추정치 · KOF는 Google Play 기준</p>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories">
+              <p class="slide-kicker">시장</p>
+              <h1 class="slide-title"><span>외국인과의 연결을 제공하는 다른 서비스들도</span><br/><span>언어 장벽에 막히는 경우가 대부분입니다</span></h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact">
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(72px, 5.7vw, 90px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(69px, 5.5vw, 86px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(72px, 5.7vw, 90px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--dating">
+                  <h2 class="slide-market-category-title">글로벌 데이팅</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(69px, 5.5vw, 86px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 모임</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 34%; --y: 46%; --s: clamp(72px, 5.9vw, 92px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 76%; --s: clamp(78px, 6.3vw, 100px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 66%; --y: 54%; --s: clamp(72px, 5.9vw, 92px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">하나를 아예 해소시켜 버리면 어떨까?!</h1>
+              <div class="slide-goal-columns">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right slide-goal--crossed">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
+                  <div class="slide-cross-mark" aria-hidden="true"></div>
+                  <span class="slide-goal-badge">통번역 제공</span>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">편하게 대화에만 집중할 수 있지 않을까?!</h1>
+              <div class="slide-goal-columns slide-goal-columns--flow">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를 못해도</span><br/>대화가 통한다!</h2>
+                </article>
+                <svg class="slide-goal-arrow" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                  <path d="M 570 50 C 530 20 470 20 430 50" />
+                  <path d="M 430 50 L 478 7 M 430 50 L 486 76" />
+                </svg>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
+                <span class="slide-title-text">
+                  실시간 통번역을 제공하는<br/>외국인과의 대화 서비스
+                <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title"><span>그렇다면 소셜링 서비스들이 지금까지</span><br/><span>통번역을 제공하지 못했던 이유는 뭘까?</span></h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--language" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-four">
+                <section class="slide-market-category slide-market-category--language">
+                  <h2 class="slide-market-category-title">언어교환</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 16%; --y: 35%; --s: clamp(72px, 5.7vw, 90px); --r: -7deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 48%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 6deg" src="./assets/logo-market-tandem.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 82%; --y: 32%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-yeetalk.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 25%; --y: 66%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 58%; --y: 71%; --s: clamp(66px, 5.3vw, 82px); --r: -6deg" src="./assets/logo-market-hilokal.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 84%; --y: 62%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-kof.png" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(72px, 5.7vw, 90px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(69px, 5.5vw, 86px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(72px, 5.7vw, 90px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--dating">
+                  <h2 class="slide-market-category-title">글로벌 데이팅</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(69px, 5.5vw, 86px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 모임</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--x: 34%; --y: 46%; --s: clamp(72px, 5.9vw, 92px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 76%; --s: clamp(78px, 6.3vw, 100px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 66%; --y: 54%; --s: clamp(72px, 5.9vw, 92px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--ai-requirements">
+            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">소셜링 상황의 빡센 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-requirements">
+              <div class="slide-ai-requirements-grid">
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">지속 번역</h2>
+                  <p class="slide-ai-requirement-description">버튼 누르느라 대화 자꾸 끊김</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">실시간 번역</h2>
+                  <p class="slide-ai-requirement-description">배치 처리밖에 못함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">음성 통역</h2>
+                  <p class="slide-ai-requirement-description">텍스트밖에 출력 안됨</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">음성 인식 성능</h2>
+                  <p class="slide-ai-requirement-description">기본적인 말도 못알아들음</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">다국어 능력</h2>
+                  <p class="slide-ai-requirement-description">한국어 등 지원 안함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">언어 스위칭</h2>
+                  <p class="slide-ai-requirement-description">언어 설정을 자꾸 바꿔줘야함</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화 분리</h2>
+                  <p class="slide-ai-requirement-description">문장 단위로 끊어주질 않음</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화자 분리</h2>
+                  <p class="slide-ai-requirement-description">여럿이 말해도 분리가 안됨</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">가성비</h2>
+                  <p class="slide-ai-requirement-description">시간당 3000원</p>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--ai-requirements slide-shell--ai-requirements-solution">
+            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">현재는 이 모든 요구사항이<br/>AI 발전 덕분에 해결 가능합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-requirements">
+              <div class="slide-ai-requirements-grid">
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">지속 번역</h2>
+                  <p class="slide-ai-requirement-description">자동 자막처럼 쭉 번역</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">실시간 번역</h2>
+                  <p class="slide-ai-requirement-description">발화와 동시에 0.5초 이내</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">음성 통역</h2>
+                  <p class="slide-ai-requirement-description">음성으로 동시 통역</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">음성 인식 성능</h2>
+                  <p class="slide-ai-requirement-description">사람보다 잘 알아들음</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">다국어 능력</h2>
+                  <p class="slide-ai-requirement-description">60개 국어 가능</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">언어 스위칭</h2>
+                  <p class="slide-ai-requirement-description">5개 언어도 동시에 처리</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화 분리</h2>
+                  <p class="slide-ai-requirement-description">문장 단위로 적절히 분리</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">발화자 분리</h2>
+                  <p class="slide-ai-requirement-description">실시간으로 목소리 분리</p>
+                </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">가성비</h2>
+                  <p class="slide-ai-requirement-description">시간당 300원 이하</p>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">밍글</p>
+              <h1 class="slide-title">그래서 먼저 이를 모두 해결한<br/>통번역 앱부터 만들어봤습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--ai-solution-proof slide-side-media--mingle-solution-proof">
+              <iframe
+                class="slide-short-video"
+                src="https://www.youtube.com/embed/Esq6htnQj98?playsinline=1&rel=0&start=57&enablejsapi=1&cc_load_policy=0"
+                title="Mingle short video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
+              ></iframe>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">밍글</p>
+              <h1 class="slide-title">그리고 음성 대화서비스와<br/>
+                함께 사용하도록 해봤습니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">밍글을 접해본 유저들의<br/>
+                반응은 긍정적입니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--social-requirements slide-side-media--user-reactions">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">"번역할 때마다 끊기지 않고<br/>자막처럼 자동 재생되니까 너무 편하다."</div>
+                  <div class="slide-solution-point">"난 러시아어로, 넌 한국어로 말하는데도<br/>서로 알아들으니까 너무 좋다."</div>
+                  <div class="slide-solution-point">"애플 번역기보다 훨씬 잘 알아듣는다."</div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">유저 중 일부는<br/>
+                벌써 밍글에 의존합니다
+              </h1>
+              <p class="slide-body">
+                한 일본인 유저는 2주간 밍글을 매일 2.5시간씩 사용했습니다.<br/>
+                이외에도 몇몇 유저가 헬로톡을 사용할 때 항상 밍글을 대동합니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media slide-copy--addon-subtitles">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">이외에도 애드온 자막 수요를<br/>
+                정말 많이 발견했습니다
+              </h1>
+              <p class="slide-body slide-addon-subtitle-body">
+                샤오홍슈, 로블록스, 디스코드와 함께 밍글을 사용하는 유저들이 있습니다.<br/>
+                이외에도 자막이 없는 콘텐츠를 볼 때 밍글을 활용하고 싶어하는 수요가 종종 있었습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--addon-subtitles">
+              <div class="slide-addon-subtitle-gallery">
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--roblox"
+                  src="./assets/roblox-mobile-home.jpg"
+                  alt="Roblox 모바일 홈 화면"
+                />
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--discord"
+                  src="./assets/discord-mobile-chat.png"
+                  alt="Discord 모바일 채팅 화면"
+                />
+                <img
+                  class="slide-addon-subtitle-gallery-image slide-addon-subtitle-gallery-image--xiaohongshu"
+                  src="./assets/xiaohongshu-pip-mingle.png"
+                  alt="샤오홍슈 라이브 스트리밍을 PIP로 실행한 화면과 밍글 자막"
+                />
+              </div>
+              <p class="slide-addon-subtitle-caption">
+                샤오홍슈 라이브 스트리밍을<br/>
+                PIP로 실행해서 밍글 자막과 함께 시청<br/>
+                로블록스, 디스코드와도 함께 사용
+              </p>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media slide-copy--offline-work">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">오프라인/업무용 통번역으로<br/>
+                사용하시는 분들도 많습니다
+              </h1>
+              <p class="slide-body slide-offline-work-body">
+                영어를 잘 못하는데 밍글 덕분에 통역가로 취업한 아프리카 청년 한 분<br/>
+                일본인 관광객 대상 서울 여행 가이드로 보이는 분 한 분 등이 계십니다
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--offline-work">
+              <img
+                class="slide-preview-image slide-preview-image--offline-work"
+                src="./assets/offline-work-mingle.png"
+                alt="오프라인 및 업무용 통번역 수요를 보여주는 모바일 화면"
+              />
+              <p class="slide-offline-work-caption">
+                미용실 사장님들이 외국인 관광객 대면할 때 많이 사용
+              </p>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories slide-shell--customer-experiences">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories slide-copy--customer-experiences">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">정리하면 7 가지의 UX가 존재합니다<br/>
+                이를 하나씩 각개격파 할 생각입니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--seven" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-seven">
+                <section class="slide-market-category slide-market-category--language slide-market-category--pair">
+                  <h2 class="slide-market-category-title">온라인 문화교류</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--r: 7deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">보이스톡 서비스</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-discord.png" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--addon slide-market-category--pair">
+                  <h2 class="slide-market-category-title">애드온 자막</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -7deg" src="./assets/logo-market-immersive-translate.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 8deg" src="./assets/logo-market-caplo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 만남</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -6deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--tourist">
+                  <h2 class="slide-market-category-title">오프라인 관광객 응대</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: 6deg" src="./assets/logo-google-translate.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--travel slide-market-category--triple">
+                  <h2 class="slide-market-category-title">관광지 정보/상담/예약</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-market-konest.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 5deg" src="./assets/logo-market-fresha.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 9deg" src="./assets/logo-market-gangnam-unnie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--meeting">
+                  <h2 class="slide-market-category-title">다국어 회의</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-cuckoo.png" alt="" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--kfriends-goal">
+              <p class="slide-kicker">목표</p>
+              <h1 class="slide-title">첫 번째 목표는<br/>K프렌즈 유저 흡수입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--kfriends-goal">
+              <div class="slide-kfriends-goal-gallery">
+                <img
+                  class="slide-kfriends-goal-image slide-kfriends-goal-image--story"
+                  src="./assets/kfriends-story.png"
+                  alt="Kfriends 스토리 화면"
+                />
+                <img
+                  class="slide-kfriends-goal-image slide-kfriends-goal-image--version-history"
+                  src="./assets/kfriends-version-history.png"
+                  alt="Kfriends 버전 기록 화면"
+                />
+              </div>
+              <p class="slide-kfriends-goal-caption">
+                <img
+                  class="slide-kfriends-goal-caption-logo"
+                  src="./assets/logo-market-kfriends-blue.jpg"
+                  alt="Kfriends 앱 로고"
+                />
+                <span>Kfriends 앱 화면. 2년에 한 번씩 업데이트.</span>
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-venndiagram.png"
+              alt="Business venn diagram"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-matrix.png"
+              alt="Business matrix"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title"><br/>통번역으로 시작해서<br/>AI 네이티브 메신저/SNS로!
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--hero">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">팀원 구합니다</h1>
+              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--download-qr">
+            <div class="slide-copy slide--hero slide-copy--download-qr slide-copy--final-cta">
+              <h1 class="slide-title">감사합니다.<br/>Q &amp; A</h1>
+              <nav class="slide-final-links" aria-label="Mingle links">
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
+                  </a>
+                  <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
+                    <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
+                    <span>GitHub</span>
+                  </a>
+                  <a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/">
+                    <span class="slide-final-logo--linkedin" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                </div>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
+                    <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
+                  </a>
+                  <a
+                    class="slide-final-link slide-final-link--store"
+                    href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+                  >
+                    <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
+                  </a>
+                </div>
+              </nav>
+            </div>
+            <div class="slide-side-media slide-side-media--download-qr">
+              <div class="slide-download-qr-label">
+                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="Mingle 앱 아이콘" />
+                <span>Mingle 다운로드 링크 👇</span>
+              </div>
+              <a
+                class="slide-download-qr-link"
+                href="https://mingle-landing.vercel.app/download"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Mingle 앱 설치 페이지 열기"
+              >
+                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="Mingle 앱 설치용 QR 코드" />
+              </a>
+            </div>
+          </article>
+        </section>
+      </div>
+      <div class="page-controls" aria-label="페이지 이동">
+        <button class="page-home-button" id="page-home-button" type="button" aria-label="처음으로 이동">
+          <svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M10.5 3.5 6 8l4.5 4.5" />
+          </svg>
+          <span>처음으로</span>
+        </button>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 24</div>
+      </div>
+    </main>
+
+    <script>
+      const track = document.getElementById("deck-track");
+      const pageCounter = document.getElementById("page-counter");
+      const homeButton = document.getElementById("page-home-button");
+
+      track.querySelectorAll(".slide-shell").forEach((shell) => {
+        if (shell.querySelector(".slide-side-media")) {
+          shell.classList.add("slide-shell--has-side-media");
+        }
+      });
+
+      const baseSlides = Array.from(track.querySelectorAll(".slide"));
+      const slideCount = baseSlides.length;
+
+      const firstClone = baseSlides[0].cloneNode(true);
+      const lastClone = baseSlides[slideCount - 1].cloneNode(true);
+      firstClone.setAttribute("data-clone", "first");
+      lastClone.setAttribute("data-clone", "last");
+
+      track.innerHTML = "";
+      track.append(lastClone, ...baseSlides, firstClone);
+
+      const shortVideos = Array.from(track.querySelectorAll(".slide-short-video"));
+      const DEFAULT_VIDEO_PLAYBACK_RATE = 1.5;
+      let youtubePlayersInitialized = false;
+
+      function initializeShortVideoPlayers() {
+        if (!window.YT?.Player || youtubePlayersInitialized) {
+          return;
+        }
+
+        youtubePlayersInitialized = true;
+
+        shortVideos.forEach((videoFrame) => {
+          new window.YT.Player(videoFrame, {
+            events: {
+              onReady(event) {
+                event.target.setPlaybackRate(DEFAULT_VIDEO_PLAYBACK_RATE);
+              }
+            }
+          });
+        });
+      }
+
+      if (shortVideos.length > 0) {
+        shortVideos.forEach((videoFrame) => {
+          const videoSource = new URL(videoFrame.src, window.location.href);
+
+          if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+            videoSource.searchParams.set("origin", window.location.origin);
+          }
+
+          videoFrame.src = videoSource.toString();
+        });
+
+        window.onYouTubeIframeAPIReady = initializeShortVideoPlayers;
+
+        if (window.YT?.Player) {
+          initializeShortVideoPlayers();
+        } else {
+          const youtubeApiScript = document.createElement("script");
+          youtubeApiScript.src = "https://www.youtube.com/iframe_api";
+          document.head.append(youtubeApiScript);
+        }
+      }
+
+      const allSlides = Array.from(track.querySelectorAll(".slide"));
+      const DESKTOP_TAP_DURATION_MS = 260;
+      const MOBILE_TAP_DURATION_MS = 360;
+      const HOLD_DURATION_MS = 110;
+      let activeIndex = 1;
+      let isAnimating = false;
+      let wheelLock = false;
+      let restoreTransitionFrame = null;
+      let holdStep = null;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchMoved = false;
+      let touchNavigationTriggered = false;
+      const TOUCH_INTENT_THRESHOLD = 12;
+      const TOUCH_NAVIGATION_THRESHOLD = 52;
+
+      function parseSlideNumber(rawValue) {
+        const parsedValue = Number.parseInt(rawValue ?? "", 10);
+
+        if (!Number.isFinite(parsedValue) || parsedValue < 1 || parsedValue > slideCount) {
+          return null;
+        }
+
+        return parsedValue;
+      }
+
+      function requestedSlideNumber() {
+        const hashSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (hashSlideNumber !== null) {
+          return hashSlideNumber;
+        }
+
+        const pageParam = new URLSearchParams(window.location.search).get("page");
+        return parseSlideNumber(pageParam) ?? 1;
+      }
+
+      function syncUrl() {
+        const slideNumber = realSlideNumber(activeIndex);
+        const nextHash = `#${slideNumber}`;
+
+        if (window.location.hash === nextHash) {
+          return;
+        }
+
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${window.location.search}${nextHash}`
+        );
+      }
+
+      function realSlideNumber(index) {
+        if (index === 0) {
+          return slideCount;
+        }
+
+        if (index === slideCount + 1) {
+          return 1;
+        }
+
+        return index;
+      }
+
+      function syncGoalArrows() {
+        track.querySelectorAll(".slide-goal-columns--flow").forEach((columns) => {
+          const leftGoal = columns.querySelector(".slide-goal--left");
+          const rightGoal = columns.querySelector(".slide-goal--right");
+          const arrow = columns.querySelector(".slide-goal-arrow");
+          const paths = arrow?.querySelectorAll("path");
+
+          if (!leftGoal || !rightGoal || !arrow || !paths || paths.length < 2) {
+            return;
+          }
+
+          const columnsRect = columns.getBoundingClientRect();
+          const leftRect = leftGoal.getBoundingClientRect();
+          const rightRect = rightGoal.getBoundingClientRect();
+
+          if (columnsRect.width <= 0) {
+            return;
+          }
+
+          const toViewBoxX = (x) => ((x - columnsRect.left) / columnsRect.width) * 1000;
+          const endX = toViewBoxX(leftRect.right - leftRect.width * 0.1);
+          const startX = toViewBoxX(rightRect.left + rightRect.width * 0.1);
+          const span = Math.max(startX - endX, 1);
+          const baseY = 50;
+          const controlY = 20;
+          const controlOffset = span * 0.28;
+          const format = (value) => value.toFixed(2);
+
+          paths[0].setAttribute(
+            "d",
+            `M ${format(startX)} ${baseY} C ${format(startX - controlOffset)} ${controlY} ${format(endX + controlOffset)} ${controlY} ${format(endX)} ${baseY}`
+          );
+
+          const headLength = Math.min(58, Math.max(32, span * 0.32));
+          const headRise = Math.min(48, Math.max(34, span * 0.3));
+          const headDrop = Math.min(28, Math.max(20, span * 0.18));
+          const tailExtension = Math.min(8, Math.max(4, span * 0.05));
+
+          paths[1].setAttribute(
+            "d",
+            `M ${format(endX)} ${baseY} L ${format(endX + headLength)} ${format(baseY - headRise)} M ${format(endX)} ${baseY} L ${format(endX + headLength + tailExtension)} ${format(baseY + headDrop)}`
+          );
+        });
+      }
+
+      function currentTransitionValue(durationMs) {
+        return `transform ${durationMs}ms var(--slide-ease)`;
+      }
+
+      function isMobileViewport() {
+        return document.documentElement.classList.contains("is-mobile-viewport");
+      }
+
+      function tapDurationMs() {
+        return isMobileViewport() ? MOBILE_TAP_DURATION_MS : DESKTOP_TAP_DURATION_MS;
+      }
+
+      function touchStepForDelta(deltaX, deltaY) {
+        const isHorizontalIntent = Math.abs(deltaX) >= Math.abs(deltaY);
+        const primaryDelta = isHorizontalIntent ? deltaX : deltaY;
+
+        if (isMobileViewport()) {
+          return primaryDelta > 0 ? -1 : 1;
+        }
+
+        return primaryDelta < 0 ? -1 : 1;
+      }
+
+      function wheelStepForDelta(deltaX, deltaY) {
+        const isHorizontalIntent = Math.abs(deltaX) >= Math.abs(deltaY);
+
+        if (isHorizontalIntent) {
+          return deltaX > 0 ? -1 : 1;
+        }
+
+        return deltaY < 0 ? -1 : 1;
+      }
+
+      function deckWidth() {
+        return track.clientWidth || track.getBoundingClientRect().width;
+      }
+
+      function syncPosition(useTransition, durationMs = tapDurationMs()) {
+        track.style.transition = useTransition
+          ? currentTransitionValue(durationMs)
+          : "none";
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
+      }
+
+      function jumpToIndex(index) {
+        if (restoreTransitionFrame !== null) {
+          window.cancelAnimationFrame(restoreTransitionFrame);
+          restoreTransitionFrame = null;
+        }
+
+        activeIndex = index;
+        track.style.transition = "none";
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
+
+        // Force layout so the browser commits the jump before transition is restored.
+        void track.offsetWidth;
+
+        restoreTransitionFrame = window.requestAnimationFrame(() => {
+          track.style.transition = currentTransitionValue(
+            holdStep === null ? tapDurationMs() : HOLD_DURATION_MS
+          );
+          restoreTransitionFrame = null;
+
+          if (holdStep !== null && !isAnimating) {
+            move(holdStep, true);
+          }
+        });
+      }
+
+      function updateUi() {
+        allSlides.forEach((slide, index) => {
+          const isActive = index === activeIndex;
+          slide.classList.toggle("is-active", isActive);
+          slide.setAttribute("aria-hidden", String(!isActive));
+        });
+
+        const currentNumber = String(realSlideNumber(activeIndex)).padStart(2, "0");
+        const totalNumber = String(slideCount).padStart(2, "0");
+        pageCounter.textContent = `${currentNumber} / ${totalNumber}`;
+        syncUrl();
+      }
+
+      function finishAnimation() {
+        let jumped = false;
+
+        if (activeIndex === 0) {
+          jumped = true;
+          jumpToIndex(slideCount);
+        } else if (activeIndex === slideCount + 1) {
+          jumped = true;
+          jumpToIndex(1);
+        }
+
+        updateUi();
+        isAnimating = false;
+
+        if (!jumped && holdStep !== null) {
+          move(holdStep, true);
+        }
+      }
+
+      function move(step, isContinuous = false) {
+        if (isAnimating) {
+          return;
+        }
+
+        isAnimating = true;
+        activeIndex += step;
+        syncPosition(true, isContinuous ? HOLD_DURATION_MS : tapDurationMs());
+        updateUi();
+      }
+
+      function next() {
+        move(1);
+      }
+
+      function previous() {
+        move(-1);
+      }
+
+      function goToFirstSlide() {
+        holdStep = null;
+        isAnimating = false;
+        jumpToIndex(1);
+        updateUi();
+      }
+
+      homeButton.addEventListener("click", goToFirstSlide);
+
+      track.addEventListener("transitionend", (event) => {
+        if (event.target !== track || event.propertyName !== "transform") {
+          return;
+        }
+
+        finishAnimation();
+      });
+
+      window.addEventListener("resize", () => {
+        syncPosition(false);
+        syncGoalArrows();
+      });
+
+      window.visualViewport?.addEventListener("resize", () => {
+        syncPosition(false);
+        syncGoalArrows();
+      });
+
+      window.addEventListener("hashchange", () => {
+        const targetSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (targetSlideNumber === null || targetSlideNumber === realSlideNumber(activeIndex)) {
+          return;
+        }
+
+        holdStep = null;
+        isAnimating = false;
+        jumpToIndex(targetSlideNumber);
+        updateUi();
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const isForwardKey =
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " ";
+        const isBackwardKey =
+          event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "PageUp";
+
+        if (!isForwardKey && !isBackwardKey) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const step = isForwardKey ? 1 : -1;
+        holdStep = step;
+
+        if (event.repeat) {
+          return;
+        }
+
+        if (!isAnimating) {
+          move(step, false);
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " "
+          || event.key === "ArrowLeft"
+          || event.key === "ArrowUp"
+          || event.key === "PageUp"
+        ) {
+          event.preventDefault();
+          holdStep = null;
+        }
+      });
+
+      window.addEventListener(
+        "wheel",
+        (event) => {
+          const primaryDelta =
+            Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+          if (wheelLock || Math.abs(primaryDelta) < 12) {
+            return;
+          }
+
+          wheelLock = true;
+          window.setTimeout(() => {
+            wheelLock = false;
+          }, 700);
+
+          move(wheelStepForDelta(event.deltaX, event.deltaY));
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          touchMoved = false;
+          touchNavigationTriggered = false;
+          holdStep = null;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches.length !== 1 || touchNavigationTriggered) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDistance = Math.max(absX, absY);
+
+          if (primaryDistance < TOUCH_INTENT_THRESHOLD) {
+            return;
+          }
+
+          touchMoved = true;
+          event.preventDefault();
+
+          if (primaryDistance < TOUCH_NAVIGATION_THRESHOLD) {
+            return;
+          }
+
+          touchNavigationTriggered = true;
+
+          move(touchStepForDelta(deltaX, deltaY));
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchend",
+        (event) => {
+          if (!touchMoved || touchNavigationTriggered || event.changedTouches.length !== 1) {
+            touchMoved = false;
+            touchNavigationTriggered = false;
+            return;
+          }
+
+          const touch = event.changedTouches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+
+          if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
+            move(touchStepForDelta(deltaX, deltaY));
+          }
+
+          touchMoved = false;
+          touchNavigationTriggered = false;
+        },
+        { passive: true }
+      );
+
+      activeIndex = requestedSlideNumber();
+      syncPosition(false);
+      updateUi();
+      syncGoalArrows();
+    </script>
+  </body>
+</html>

@@ -183,21 +183,34 @@ export function readConversationListCache(
   const memoryCached = readConversationListMemoryCache(identity);
   if (memoryCached) return memoryCached;
 
-  try {
-    const rawValue = window.sessionStorage.getItem(storageKey);
-    if (!rawValue) return null;
+  const storageNames = ["localStorage", "sessionStorage"] as const;
+  for (const storageName of storageNames) {
+    try {
+      const storage = window[storageName];
+      const rawValue = storage.getItem(storageKey);
+      if (!rawValue) continue;
 
-    const cached = normalizeCacheRecord(JSON.parse(rawValue));
-    if (!cached) {
-      window.sessionStorage.removeItem(storageKey);
-      return null;
+      const cached = normalizeCacheRecord(JSON.parse(rawValue));
+      if (!cached) {
+        storage.removeItem(storageKey);
+        continue;
+      }
+
+      conversationListMemoryCache.set(storageKey, cached);
+      if (storageName === "sessionStorage") {
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(cached));
+        } catch {
+          // Keep using the valid session snapshot when durable storage is restricted.
+        }
+      }
+      return cached;
+    } catch {
+      // Try the next browser storage tier.
     }
-
-    conversationListMemoryCache.set(storageKey, cached);
-    return cached;
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 export function writeConversationListCache(
@@ -215,9 +228,17 @@ export function writeConversationListCache(
   };
   conversationListMemoryCache.set(storageKey, cached);
 
+  const serialized = JSON.stringify(cached);
   try {
-    window.sessionStorage.setItem(storageKey, JSON.stringify(cached));
+    window.localStorage.setItem(storageKey, serialized);
+    return;
   } catch {
-    // The in-memory snapshot still keeps tab re-entry warm when storage is restricted.
+    // Fall back to session storage when durable WebView storage is restricted.
+  }
+
+  try {
+    window.sessionStorage.setItem(storageKey, serialized);
+  } catch {
+    // The in-memory snapshot still keeps tab re-entry warm when browser storage is restricted.
   }
 }

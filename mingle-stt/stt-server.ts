@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
+import { SonioxAudioRelay, type SonioxRelayTiming, type SonioxStreamFailure } from './soniox-audio-relay';
 import {
     buildSonioxEndpointDetectionConfig,
     evaluateManualFinalizeDecision,
@@ -75,10 +76,24 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
-const server = createServer();
-const wss = new WebSocketServer({ server });
+type SttServerOptions = {
+    sonioxUrl?: string;
+    sonioxApiKey?: string;
+    sonioxHandshakeTimeoutMs?: number;
+    sonioxRelayTiming?: SonioxRelayTiming;
+};
 
-let connectionCounter = 0;
+// Injectable provider transport lets regression tests use a local WebSocket
+// peer without credentials or requests to the paid transcription service.
+export function createSttServer(options: SttServerOptions = {}) {
+    const server = createServer();
+    const wss = new WebSocketServer({ server });
+    let connectionCounter = 0;
+    wss.on('connection', (clientWs) => {
+        handleSttConnection(clientWs, ++connectionCounter, options);
+    });
+    return { server, wss };
+}
 
 function classifySonioxUpstreamError(errorCode: unknown, errorMessage: unknown): string {
     const code = String(errorCode || '').trim();
@@ -97,8 +112,7 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
     );
 }
 
-wss.on('connection', (clientWs, request) => {
-    const connId = ++connectionCounter;
+function handleSttConnection(clientWs: WebSocket, connId: number, options: SttServerOptions) {
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);
 
@@ -112,20 +126,26 @@ wss.on('connection', (clientWs, request) => {
     let apiNamespace = '';
     let selectedLanguages: string[] = [];
     let lastSonioxUpstreamError: { code: string; category: string } | null = null;
+    let sonioxAudioRelay: SonioxAudioRelay | null = null;
+    let sonioxTerminalFailure = false;
+    let configReceived = false;
+    let clientCloseTimer: ReturnType<typeof setTimeout> | null = null;
     let finalizePendingTurnFromProvider: ((
         fallbackSource?: MingleSttFinalizeSource,
     ) => Promise<MingleSttFinalTurnPayload>) | null = null;
     let sonioxStopRequested = false;
-    let hasForwardedAudioToSoniox = false;
     let stopRecordingLifecycleStarted = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
-    const sonioxApiKey = process.env.SONIOX_API_KEY;
+    const sonioxApiKey = options.sonioxApiKey ?? process.env.SONIOX_API_KEY;
 
     const cleanup = () => {
         isClientConnected = false;
+        sonioxAudioRelay?.stop();
+        if (clientCloseTimer) clearTimeout(clientCloseTimer);
+        clientCloseTimer = null;
 
         if (abortController) {
             abortController.abort();
@@ -583,7 +603,10 @@ wss.on('connection', (clientWs, request) => {
         }
 
         try {
-            sttWs = new WebSocket(SONIOX_WS_URL);
+            const sonioxWs = new WebSocket(options.sonioxUrl ?? SONIOX_WS_URL, {
+                handshakeTimeout: options.sonioxHandshakeTimeoutMs ?? 10_000,
+            });
+            sttWs = sonioxWs;
             const sonioxManualFinalizeSilenceMs = (() => {
                 const raw = Number(config.soniox_manual_finalize_silence_ms);
                 if (!Number.isFinite(raw)) return SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT;
@@ -871,7 +894,7 @@ wss.on('connection', (clientWs, request) => {
                     return await activeStopFinalizePromise;
                 }
                 const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
-                if (cohort.length === 0 && !hasForwardedAudioToSoniox) return null;
+                if (cohort.length === 0 && !sonioxAudioRelay?.snapshot().forwardedChunks) return null;
                 if (!sttWs || sttWs.readyState !== WebSocket.OPEN) {
                     return flushAllSpeakerTurns(fallbackSource);
                 }
@@ -1158,7 +1181,48 @@ wss.on('connection', (clientWs, request) => {
                 return flushedPayload || payload;
             };
 
+            const failSonioxConnection = (failure: SonioxStreamFailure) => {
+                if (sonioxTerminalFailure || !isClientConnected) return;
+                sonioxTerminalFailure = true;
+                lastSonioxUpstreamError = { code: failure.code, category: failure.category };
+                console.error(
+                    `[conn:${connId}] soniox_upstream_error code=${failure.code} category=${failure.category}`
+                    + ` duration=${((Date.now() - connectedAt) / 1000).toFixed(1)}s namespace=${apiNamespace || '-'}`
+                    + ` error_type=${JSON.stringify(failure.errorType || '')} request_id=${JSON.stringify(failure.requestId || '')}`
+                    + ` audio=${JSON.stringify(sonioxAudioRelay?.snapshot())} message=${JSON.stringify(failure.message)}`,
+                );
+                sonioxAudioRelay?.stop();
+                // Preserve the last partial transcript before sending a terminal
+                // error. Do not request another finalize from a failed provider.
+                const payload = flushAllSpeakerTurns('server_provider_close_fallback');
+                completeActiveFinalizeRequest(payload);
+                disposeSonioxSpeakerStates?.();
+                disposeSonioxSpeakerStates = null;
+                if (!sonioxStopRequested && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({
+                        type: 'error',
+                        provider: 'soniox',
+                        error_code: failure.code,
+                        error_type: failure.errorType || failure.category,
+                        error_message: failure.message,
+                        ...(failure.requestId ? { request_id: failure.requestId } : {}),
+                    }));
+                    clientWs.close(1011, failure.category);
+                    clientCloseTimer = setTimeout(() => clientWs.terminate(), 5_000);
+                    clientCloseTimer.unref();
+                }
+                sonioxWs.terminate();
+            };
+            sonioxAudioRelay = new SonioxAudioRelay(
+                sonioxWs, config.sample_rate, failSonioxConnection, options.sonioxRelayTiming,
+            );
+
             sttWs.onopen = () => {
+                if (!isClientConnected || sonioxStopRequested || sonioxTerminalFailure) {
+                    sonioxAudioRelay?.stop();
+                    sonioxWs.close();
+                    return;
+                }
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
                     model: 'stt-rt-v5',
@@ -1177,7 +1241,8 @@ wss.on('connection', (clientWs, request) => {
                         })}`,
                     );
                 }
-                sttWs!.send(JSON.stringify(sonioxConfig));
+                sonioxWs.send(JSON.stringify(sonioxConfig));
+                if (!sonioxAudioRelay?.start()) return;
 
                 if (isClientConnected) {
                     sendReadyStatus({
@@ -1521,17 +1586,19 @@ wss.on('connection', (clientWs, request) => {
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
                     // Uncomment the next line for one-response Soniox token diagnostics.
                     // logSonioxTokenBatch(tokens);
-                    if (!isClientConnected) return;
+                    if (!isClientConnected || sonioxTerminalFailure) return;
 
                     if (msg.error_code) {
                         const errorCode = String(msg.error_code || '').trim();
                         const errorMessage = String(msg.error_message || '').trim();
                         const errorCategory = classifySonioxUpstreamError(errorCode, errorMessage);
-                        lastSonioxUpstreamError = { code: errorCode, category: errorCategory };
-                        const durationSec = ((Date.now() - connectedAt) / 1000).toFixed(1);
-                        console.error(
-                            `[conn:${connId}] soniox_upstream_error code=${errorCode || '-'} category=${errorCategory} duration=${durationSec}s namespace=${apiNamespace || '-'} message=${JSON.stringify(errorMessage)}`,
-                        );
+                        failSonioxConnection({
+                            code: errorCode,
+                            category: errorCategory,
+                            message: errorMessage,
+                            errorType: typeof msg.error_type === 'string' ? msg.error_type : undefined,
+                            requestId: typeof msg.request_id === 'string' ? msg.request_id : undefined,
+                        });
                         return;
                     }
 
@@ -1557,21 +1624,23 @@ wss.on('connection', (clientWs, request) => {
             };
 
             sttWs.onerror = (error) => {
-                console.error('Soniox WebSocket error:', error);
-                if (isClientConnected) {
-                    clientWs.close();
-                }
+                if (sonioxStopRequested || !isClientConnected) return;
+                failSonioxConnection({ code: '502', category: 'upstream_connection_error', message: error.message });
             };
 
-            sttWs.onclose = () => {
+            sttWs.onclose = (event) => {
+                console.log(
+                    `[conn:${connId}] soniox_upstream_close code=${event.code} at=${Date.now()}`
+                    + ` stop_requested=${sonioxStopRequested} audio=${JSON.stringify(sonioxAudioRelay?.snapshot())}`,
+                );
+                sonioxAudioRelay?.stop();
+                if (sonioxTerminalFailure) return;
                 // stop_recording 경로가 아니면 남은 텍스트를 마지막 발화로 플러시
                 if (isClientConnected && !sonioxStopRequested) {
-                    void (async () => {
-                        await finalizePendingTurnFromProvider?.('server_provider_close_fallback');
-                        if (clientWs.readyState === WebSocket.OPEN) {
-                            clientWs.close();
-                        }
-                    })();
+                    failSonioxConnection({
+                        code: '502', category: 'upstream_closed',
+                        message: 'The speech provider closed before recording stopped.',
+                    });
                 } else if (isClientConnected && sonioxStopRequested && activeFinalizeRequest) {
                     const payload = flushAllSpeakerTurns('server_stop_fallback');
                     completeActiveFinalizeRequest(payload);
@@ -1636,6 +1705,7 @@ wss.on('connection', (clientWs, request) => {
     const buildStopRecordingLifecycle = (): MingleSttStopRecordingLifecycle => ({
         setSonioxStopRequested: (nextValue) => {
             sonioxStopRequested = nextValue;
+            if (nextValue) sonioxAudioRelay?.stop();
         },
         finalizePendingTurnFromProvider,
         sendForcedFinalTurn,
@@ -1690,6 +1760,10 @@ wss.on('connection', (clientWs, request) => {
         }
 
         if (data.sample_rate) {
+            // One configuration owns one provider socket. A duplicate must not
+            // orphan the first connection or revive a session after Stop.
+            if (configReceived || stopRecordingLifecycleStarted) return;
+            configReceived = true;
             const normalizedLanguages = Array.isArray(data.languages)
                 ? data.languages
                     .filter((language): language is string => typeof language === 'string')
@@ -1725,24 +1799,25 @@ wss.on('connection', (clientWs, request) => {
             lastSonioxUpstreamError = null;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
-            hasForwardedAudioToSoniox = false;
             console.log(
-                `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
+                `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')} soniox_hints=${JSON.stringify(clientConfig.soniox_language_hints || [])} hints_enabled=false`,
             );
 
             releaseRuntime.startConnectionForModel({
                 config: clientConfig,
                 starters: connectionStarters,
             });
+        } else if (currentModel === 'soniox') {
+            if (data.type === 'audio_chunk' && typeof data.data?.chunk === 'string'
+                && !stopRecordingLifecycleStarted && !sonioxTerminalFailure) {
+                sonioxAudioRelay?.receive(Buffer.from(data.data.chunk, 'base64'));
+            }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
-            if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {
-                // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
+            if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks') {
+                // Deepgram and Fireworks receive binary PCM; Gladia receives JSON.
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
                     const pcmData = Buffer.from(data.data.chunk, 'base64');
-                    if (currentModel === 'soniox' && pcmData.length > 0) {
-                        hasForwardedAudioToSoniox = true;
-                    }
                     sttWs.send(pcmData);
                 }
             } else {
@@ -1760,8 +1835,11 @@ wss.on('connection', (clientWs, request) => {
         console.log(`[conn:${connId}] client disconnected code=${event.code} duration=${durationSec}s model=${currentModel} namespace=${apiNamespace || '-'} langs=${selectedLanguages.join(',')}${sonioxErrorFields}`);
         cleanup();
     };
-});
+}
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
-});
+if (require.main === module) {
+    const { server } = createSttServer();
+    server.listen(PORT, '0.0.0.0', () => {
+        console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
+    });
+}

@@ -12,6 +12,8 @@ export type RealtimeTokenPayload = {
   sessionKey: string;
   userId: string;
   exp: number;
+  liveWriter?: { name: string | null };
+  liveReader?: true;
 };
 
 const REALTIME_TOKEN_TTL_MS = 60 * 60 * 1000;

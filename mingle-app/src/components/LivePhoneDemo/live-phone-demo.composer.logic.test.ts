@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { LEGAL_DOCUMENT_LOCALES } from '@/i18n'
 import {
   resolveKeyboardViewportInsetPx,
   resolveHydratedComposerOpenState,
@@ -18,8 +19,8 @@ describe('live phone demo composer logic', () => {
   it('returns localized composer copy for Korean locale', () => {
     expect(resolveLivePhoneDemoComposerCopy('ko')).toEqual({
       manualSpeakerLabel: '나',
-      openKeyboardLabel: '텍스트 입력 열기',
-      closeKeyboardLabel: '텍스트 입력 닫기',
+      switchToKeyboardModeLabel: '키보드 모드로 전환',
+      switchToVoiceModeLabel: '음성 모드로 전환',
       composerPlaceholder: '메시지를 입력하세요',
       sendMessageLabel: '메시지 보내기',
       blockedComposerMessage: '차단된 사용자입니다',
@@ -29,12 +30,22 @@ describe('live phone demo composer logic', () => {
   it('falls back to English composer copy for locales outside the primary UI set', () => {
     expect(resolveLivePhoneDemoComposerCopy('pl')).toEqual({
       manualSpeakerLabel: 'You',
-      openKeyboardLabel: 'Open text input',
-      closeKeyboardLabel: 'Close text input',
+      switchToKeyboardModeLabel: 'Switch to keyboard mode',
+      switchToVoiceModeLabel: 'Switch to voice mode',
       composerPlaceholder: 'Type a message',
       sendMessageLabel: 'Send message',
       blockedComposerMessage: 'This user is blocked.',
     })
+  })
+
+  it('provides explicit mode labels for all 15 primary UI locales', () => {
+    expect(LEGAL_DOCUMENT_LOCALES).toHaveLength(15)
+
+    for (const locale of LEGAL_DOCUMENT_LOCALES) {
+      const copy = resolveLivePhoneDemoComposerCopy(locale)
+      expect(copy.switchToKeyboardModeLabel.trim().length).toBeGreaterThan(0)
+      expect(copy.switchToVoiceModeLabel.trim().length).toBeGreaterThan(0)
+    }
   })
 
   it('derives keyboard inset from visual viewport shrink', () => {
