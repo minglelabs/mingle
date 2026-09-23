@@ -30,7 +30,6 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {
     value: 'gemini-2.5-flash-lite',
     label: 'gemini-2.5-flash-lite',
-    badge: 'Best',
   },
   {
     value: 'gemma-4-31b-it',
@@ -45,6 +44,7 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {
     value: 'gpt-6-luna',
     label: 'gpt-6-luna',
+    badge: 'Best',
   },
 ]
 

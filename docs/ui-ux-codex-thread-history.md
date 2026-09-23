@@ -2859,3 +2859,11 @@
 - User impact: On short mobile captures, viewers could lose the beginning of a slide title, see the prompt cut off horizontally, or see data continue underneath the navigation controls.
 - Resolution: Added a mobile-height-aware media block for the affected slides. Slides 8, 11, 12, 14, 17, and 18 use top-aligned compact layouts with reduced spacing and media typography up to an `820px` mobile viewport height; slide 12 wraps the prompt and constrains the reference image at every mobile height; slide 13 retains the domestic/global headings and first two representative categories per region while hiding the lower-priority rows on compact mobile screens; slide 18 uses smaller, width-safe ecosystem columns at every mobile height. Desktop rules remain unchanged.
 - Verification: Checked all 20 slides at `375×568`, `375×812`, and `390×844` for `ko`, `en`, `ja`, `cn-ZH`, and `cn-TW`; all 75 runs had no title clipping, external viewport overflow, or direct slide-content boundary overflow. Confirmed the PC layout at `1440×900` keeps the mobile class/media query inactive and all eight slide-thirteen data blocks visible. `git diff --check` passed.
+
+## 2026-09-23 — Translation model Best badge correction
+
+- Surface: Translation model selector in the live conversation settings.
+- Issue: The `Best` badge still identified Gemini 2.5 Flash Lite after GPT-6 Luna became the preferred translation model.
+- User impact: The badge could steer users toward a model other than the current recommendation.
+- Resolution: Moved the `Best` badge to GPT-6 Luna and removed the badge from Gemini 2.5 Flash Lite. The default selected model and other model badges remain unchanged.
+- Verification: Updated the translation model catalog test to assert the displayed badge metadata.
