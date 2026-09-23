@@ -11,7 +11,6 @@ describe('translation model catalog', () => {
       {
         value: 'gemini-2.5-flash-lite',
         label: 'gemini-2.5-flash-lite',
-        badge: 'Best',
       },
       {
         value: 'gemma-4-31b-it',
@@ -26,6 +25,7 @@ describe('translation model catalog', () => {
       {
         value: 'gpt-6-luna',
         label: 'gpt-6-luna',
+        badge: 'Best',
       },
     ]))
   })
