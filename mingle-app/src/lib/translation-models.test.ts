@@ -23,6 +23,10 @@ describe('translation model catalog', () => {
         label: 'qwen3.5-9b',
         badge: 'Slow',
       },
+      {
+        value: 'gpt-6-luna',
+        label: 'gpt-6-luna',
+      },
     ]))
   })
 
@@ -45,6 +49,12 @@ describe('translation model catalog', () => {
       engineProvider: 'gemma',
       infrastructureProvider: 'google',
       runtimeModel: 'gemma-4-31b-it',
+    })
+    expect(normalizeSelectableTranslationModel('GPT-6-LUNA')).toBe('gpt-6-luna')
+    expect(resolveTranslationRuntimeSelection('gpt-6-luna')).toMatchObject({
+      engineProvider: 'openai',
+      infrastructureProvider: 'openai',
+      runtimeModel: 'gpt-6-luna',
     })
   })
 })

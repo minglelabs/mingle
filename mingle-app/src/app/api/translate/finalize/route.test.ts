@@ -1173,6 +1173,78 @@ describe('/api/translate/finalize route', () => {
     })
   })
 
+  it('uses the OpenAI API with no reasoning and a strict JSON schema for GPT-6 Luna', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{
+        message: { content: '{"ko":"안녕하세요"}' },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.TRANSLATE_API_KEY = 'test-other-provider-key'
+    process.env.TRANSLATE_EXTRA_BODY = JSON.stringify({ enable_thinking: false })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(json.provider).toBe('openai')
+    expect(json.infrastructureProvider).toBe('openai')
+    expect(json.model).toBe('gpt-6-luna')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.openai.com/v1/chat/completions')
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect((requestInit.headers as Record<string, string>).Authorization).toBe('Bearer test-openai-key')
+    const body = JSON.parse(String(requestInit.body)) as Record<string, unknown>
+    expect(body.model).toBe('gpt-6-luna')
+    expect(body.reasoning_effort).toBe('none')
+    expect(body.extra_body).toBeUndefined()
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'translate_interim_response',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: { ko: { type: 'string', description: 'Translated text for ko.' } },
+          required: ['ko'],
+          additionalProperties: false,
+        },
+      },
+    })
+  })
+
+  it('rejects GPT-6 Luna when the OpenAI key is missing', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.TRANSLATE_API_KEY = 'test-other-provider-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+    }) as never)
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'No translation API key configured' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('uses a redetect json schema for qwen OpenRouter requests on versioned routes', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()

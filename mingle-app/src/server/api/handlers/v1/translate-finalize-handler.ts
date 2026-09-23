@@ -54,10 +54,11 @@ const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+const OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
-type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai-compatible'
+type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'openai-compatible'
 
 type TranslationUsage = {
   promptTokens?: number
@@ -86,7 +87,7 @@ type GeminiTranslationProviderConfig = {
 }
 
 type OpenAICompatibleTranslationProviderConfig = {
-  provider: 'qwen' | 'openai-compatible'
+  provider: 'qwen' | 'openai' | 'openai-compatible'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -184,6 +185,7 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   if (normalized === 'gemini') return normalized
   if (normalized === 'gemma') return normalized
   if (normalized === 'qwen') return normalized
+  if (normalized === 'openai') return normalized
   if (normalized === 'openai-compatible') return normalized
   if (normalized === 'openai_compatible') return 'openai-compatible'
   return null
@@ -232,10 +234,15 @@ function isTogetherBaseUrl(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('together.xyz')
 }
 
+function isOpenAIBaseUrl(baseUrl: string): boolean {
+  return baseUrl.toLowerCase().includes('api.openai.com')
+}
+
 function resolveOpenAICompatibleInfrastructureProvider(baseUrl: string): string {
   if (isOpenRouterBaseUrl(baseUrl)) return 'openrouter'
   if (isTogetherBaseUrl(baseUrl)) return 'together'
   if (isDashScopeBaseUrl(baseUrl)) return 'dashscope'
+  if (isOpenAIBaseUrl(baseUrl)) return 'openai'
   return 'openai-compatible'
 }
 
@@ -415,6 +422,7 @@ async function resolveSelectedTranslationModel(
 function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
   const explicitBaseUrl = readTranslateEnv('TRANSLATE_BASE_URL').trim()
   if (explicitBaseUrl) return explicitBaseUrl
+  if (provider === 'openai') return (process.env.OPENAI_BASE_URL || OPENAI_API_BASE_URL).trim()
   if ((process.env.OPENROUTER_API_KEY || '').trim()) return OPENROUTER_BASE_URL
   if ((process.env.TOGETHER_API_KEY || '').trim()) return TOGETHER_BASE_URL
   if ((process.env.DASHSCOPE_API_KEY || '').trim()) return DASHSCOPE_BASE_URL
@@ -439,6 +447,7 @@ function resolveTranslationModel(config: {
   if (explicitModel) return explicitModel
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
   if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
+  if (config.provider === 'openai') return 'gpt-6-luna'
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
     return DEFAULT_DASHSCOPE_QWEN_MODEL
   }
@@ -467,7 +476,7 @@ function parseJsonObjectEnv(name: string): {
   }
 }
 
-function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
+function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
   if (provider !== 'qwen') return null
   if (isDashScopeBaseUrl(baseUrl)) return { enable_thinking: false }
   if (isOpenRouterBaseUrl(baseUrl)) return null
@@ -505,6 +514,33 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
           infrastructureProvider: requestedModelSelection.infrastructureProvider,
           model: requestedModelSelection.runtimeModel,
           apiKey,
+        },
+      }
+    }
+
+    if (
+      requestedModelSelection.infrastructureProvider === 'openai'
+      || requestedModelSelection.engineProvider === 'openai'
+    ) {
+      const baseUrl = requestedModelSelection.baseUrl || (process.env.OPENAI_BASE_URL || '').trim() || OPENAI_API_BASE_URL
+      const apiKey = (process.env.OPENAI_API_KEY || '').trim()
+      if (!apiKey) {
+        return {
+          ok: false,
+          error: 'missing_api_key',
+          details: 'OPENAI_API_KEY is missing.',
+        }
+      }
+
+      return {
+        ok: true,
+        config: {
+          provider: 'openai',
+          infrastructureProvider: requestedModelSelection.infrastructureProvider,
+          model: requestedModelSelection.runtimeModel,
+          apiKey,
+          baseUrl,
+          extraBody: null,
         },
       }
     }
@@ -568,6 +604,30 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
         infrastructureProvider: 'google',
         model: resolveTranslationModel({ provider }),
         apiKey,
+      },
+    }
+  }
+
+  if (provider === 'openai') {
+    const baseUrl = (process.env.OPENAI_BASE_URL || '').trim() || OPENAI_API_BASE_URL
+    const apiKey = (process.env.OPENAI_API_KEY || '').trim()
+    if (!apiKey) {
+      return {
+        ok: false,
+        error: 'missing_api_key',
+        details: 'OPENAI_API_KEY is missing.',
+      }
+    }
+
+    return {
+      ok: true,
+      config: {
+        provider: 'openai',
+        infrastructureProvider: 'openai',
+        model: resolveTranslationModel({ provider, baseUrl }),
+        apiKey,
+        baseUrl,
+        extraBody: null,
       },
     }
   }
@@ -1319,6 +1379,11 @@ async function createOpenAICompatibleCompletion(
       effort: 'none',
       exclude: true,
     }
+  }
+
+  if (config.provider === 'openai') {
+    payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
+    payload.reasoning_effort = 'none'
   }
 
   if (config.extraBody) {
