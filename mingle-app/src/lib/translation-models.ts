@@ -1,11 +1,12 @@
-export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen'
+export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen' | 'openai'
 
-export type TranslationInfrastructureProvider = 'google' | 'openrouter'
+export type TranslationInfrastructureProvider = 'google' | 'openrouter' | 'openai'
 
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
+  | 'gpt-6-luna'
 
 export type TranslationModelBadge = 'Best' | 'Slow'
 
@@ -41,6 +42,10 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'qwen3.5-9b',
     badge: 'Slow',
   },
+  {
+    value: 'gpt-6-luna',
+    label: 'gpt-6-luna',
+  },
 ]
 
 const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, TranslationRuntimeSelection> = {
@@ -62,6 +67,13 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     infrastructureProvider: 'openrouter',
     runtimeModel: 'qwen/qwen3.5-9b',
     baseUrl: 'https://openrouter.ai/api/v1',
+  },
+  'gpt-6-luna': {
+    value: 'gpt-6-luna',
+    engineProvider: 'openai',
+    infrastructureProvider: 'openai',
+    runtimeModel: 'gpt-6-luna',
+    baseUrl: 'https://api.openai.com/v1',
   },
 }
 
@@ -97,6 +109,15 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   }
 
   if (normalized === 'qwen/qwen3.5-9b') return 'qwen/qwen3.5-9b'
+
+  if (
+    normalized === 'gpt-6-luna'
+    || normalized === 'gpt 6 luna'
+    || normalized === 'models/gpt-6-luna'
+    || normalized === 'openai/gpt-6-luna'
+  ) {
+    return 'gpt-6-luna'
+  }
 
   return null
 }
