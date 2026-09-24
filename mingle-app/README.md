@@ -162,8 +162,10 @@ Default configuration:
 
 GPT-6 Luna is also available in the translation model selector. Set
 `OPENAI_API_KEY` on the server to enable it. Requests use the OpenAI API with
-`reasoning_effort=none` and a strict JSON schema response format. Gemini remains
-the default model.
+`reasoning_effort=none` and a strict JSON schema response format. Newly
+registered accounts start with GPT-6 Luna. Existing saved selections stay as
+they are, while existing accounts with no saved model and anonymous users still
+fall back to Gemini.
 
 Qwen 3.5 9B via OpenRouter:
 

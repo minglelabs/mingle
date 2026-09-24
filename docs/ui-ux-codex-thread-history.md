@@ -2867,3 +2867,11 @@
 - User impact: The badge could steer users toward a model other than the current recommendation.
 - Resolution: Moved the `Best` badge to GPT-6 Luna and removed the badge from Gemini 2.5 Flash Lite. The default selected model and other model badges remain unchanged.
 - Verification: Updated the translation model catalog test to assert the displayed badge metadata.
+
+## 2026-09-24 — Translation model selection for new accounts
+
+- Surface: Translation model selector and account preferences after registration.
+- Issue: GPT-6 Luna carried the `Best` badge, but a newly registered account inherited the Gemini fallback until it selected a model manually. An unrelated setting edit before the first server preference fetch could also sync the temporary Gemini UI value and overwrite a new account's GPT selection.
+- User impact: New members could start with Gemini despite the new-account policy, while changing the shared fallback would unexpectedly switch existing accounts whose preference is unset.
+- Resolution: Seed GPT-6 Luna only when a registered account row is first created across email, OAuth, and native Apple registration. Preserve all existing preference values and the Gemini fallback for existing unset and anonymous accounts. For a fresh account without cached preferences, omit the temporary model from pre-hydration preference patches and merge the server model into unrelated local edits; keep an explicit user model selection.
+- Verification: Focused auth, account-preference, cache, and translation tests passed (130 tests), along with TypeScript, focused ESLint, and `git diff --check`.

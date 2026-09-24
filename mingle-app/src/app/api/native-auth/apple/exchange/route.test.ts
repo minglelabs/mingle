@@ -92,6 +92,8 @@ describe("upsertNativeAppleUser", () => {
     });
     expect(mockUserFindUnique).not.toHaveBeenCalled();
     expect(mockAccountUpsert).not.toHaveBeenCalled();
+    expect(mockUserCreate).not.toHaveBeenCalled();
+    expect(mockUserUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty("translationModel");
   });
 
   it("backfills an Account link for an existing native Apple user", async () => {
@@ -151,6 +153,7 @@ describe("upsertNativeAppleUser", () => {
       data: expect.objectContaining({
         externalUserId: "apple:apple_subject_3",
         handle: "apple-user",
+        translationModel: "gpt-6-luna",
       }),
       select: {
         id: true,
