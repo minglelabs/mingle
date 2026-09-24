@@ -7,11 +7,11 @@ import {
   parseBirthDate,
 } from "@/lib/birth-date";
 import {
-  MAX_STT_LANGUAGE_SELECTION,
   deriveDefaultConversationLanguages,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
+import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
 
 type SignupPayload = {
   email?: unknown;
@@ -99,6 +99,7 @@ export async function POST(request: Request) {
         name,
         handle,
         passwordHash,
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
         defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),

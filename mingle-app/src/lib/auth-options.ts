@@ -10,6 +10,7 @@ import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
+import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -86,6 +87,7 @@ async function upsertUserForCredentialsSignIn(args: {
           externalUserId: normalizedExternalUserId ?? idHint,
           firstSeenAt: now,
           lastSeenAt: now,
+          translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         },
         update: {
           email: normalizedEmail ?? undefined,
@@ -108,6 +110,7 @@ async function upsertUserForCredentialsSignIn(args: {
           externalUserId: normalizedExternalUserId ?? undefined,
           firstSeenAt: now,
           lastSeenAt: now,
+          translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         },
         update: {
           lastSeenAt: now,
@@ -126,6 +129,7 @@ async function upsertUserForCredentialsSignIn(args: {
         externalUserId: normalizedExternalUserId ?? undefined,
         firstSeenAt: now,
         lastSeenAt: now,
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
       },
       select,
     }),
@@ -387,6 +391,7 @@ function createNextAuthAdapter(): Adapter {
           data: {
             ...data,
             handle,
+            translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
           },
         }),
       );
@@ -452,6 +457,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
             externalUserId: userId,
             firstSeenAt: now,
             lastSeenAt: now,
+            translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
           },
           update: {
             email: email ?? undefined,

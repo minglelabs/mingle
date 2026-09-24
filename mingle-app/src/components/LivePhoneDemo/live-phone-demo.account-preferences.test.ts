@@ -311,6 +311,13 @@ describe('shouldSendTranslationModelPreference', () => {
 })
 
 describe('buildAccountPreferencesPatchBody', () => {
+  it('omits an unhydrated default model while syncing another setting', () => {
+    const preferences = buildHydratedAccountPreferences({ translationModel: 'gemini-2.5-flash-lite' }, false)
+    const body = buildAccountPreferencesPatchBody(preferences, { includeTranslationModel: false })
+    expect(body).not.toHaveProperty('translationModel')
+    expect(body.textSizeLevel).toBe(preferences.textSizeLevel)
+  })
+
   it('includes audio flags alongside the rest of the persisted preferences', () => {
     expect(buildAccountPreferencesPatchBody({
       textSizeLevel: 4,

@@ -4,12 +4,14 @@ const {
   mockCreateWithDefaultHandle,
   mockCredentialsProvider,
   mockEnsureSignupWelcomeOnboarding,
+  mockUserCreate,
   mockUserUpsert,
   mockVerifyNativeAuthBridgeToken,
 } = vi.hoisted(() => ({
   mockCreateWithDefaultHandle: vi.fn(),
   mockCredentialsProvider: vi.fn(),
   mockEnsureSignupWelcomeOnboarding: vi.fn(),
+  mockUserCreate: vi.fn(),
   mockUserUpsert: vi.fn(),
   mockVerifyNativeAuthBridgeToken: vi.fn(),
 }));
@@ -53,12 +55,14 @@ vi.mock("@/lib/native-auth-bridge", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
+      create: mockUserCreate,
       upsert: mockUserUpsert,
     },
   },
 }));
 
 import { getAuthOptions } from "@/lib/auth-options";
+import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
 
 const transientCookieKeys = ["callbackUrl", "pkceCodeVerifier", "state", "nonce"] as const;
 
@@ -72,6 +76,7 @@ describe("getAuthOptions", () => {
       ...config,
       type: "credentials",
     }));
+    mockUserCreate.mockResolvedValue({});
     mockUserUpsert.mockResolvedValue({});
   });
 
@@ -152,4 +157,77 @@ describe("getAuthOptions", () => {
       }),
     }));
   });
+
+  it("assigns GPT-6 Luna to newly registered user via adapter.createUser", async () => {
+    const options = getAuthOptions();
+    await options.adapter?.createUser?.({
+      name: "New OAuth User",
+      email: "new-oauth@example.com",
+      emailVerified: null,
+    });
+
+    expect(mockUserCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
+      }),
+    }));
+  });
+
+  it("sets GPT-6 Luna on create but preserves existing user model on update during OAuth sign-in event", async () => {
+    const options = getAuthOptions("google");
+
+    await options.events?.signIn?.({
+      user: {
+        id: "oauth_user_123",
+        name: "OAuth User",
+        email: "oauth@example.com",
+      },
+      account: null,
+      isNewUser: false,
+    } as never);
+
+    expect(mockUserUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "oauth_user_123" },
+      create: expect.objectContaining({
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
+      }),
+      update: expect.not.objectContaining({
+        translationModel: expect.anything(),
+      }),
+    }));
+  });
+
+  it("sets GPT-6 Luna on create but preserves existing user model on update during native credentials bridge", async () => {
+    mockVerifyNativeAuthBridgeToken.mockReturnValue({
+      sub: "native_user_456",
+      email: "native@example.com",
+      name: "Native User",
+      provider: "apple",
+    });
+    mockUserUpsert.mockResolvedValue({
+      id: "native_user_456",
+      name: "Native User",
+      email: "native@example.com",
+      externalUserId: "native_user_456",
+    });
+
+    const options = getAuthOptions();
+    const nativeBridgeProvider = options.providers.find((provider) => provider.id === "native-bridge");
+    const authorize = (nativeBridgeProvider as {
+      authorize?: (credentials: { token: string }) => Promise<unknown>;
+    } | undefined)?.authorize;
+
+    await authorize?.({ token: "valid-bridge-token" });
+
+    expect(mockUserUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "native_user_456" },
+      create: expect.objectContaining({
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
+      }),
+      update: expect.not.objectContaining({
+        translationModel: expect.anything(),
+      }),
+    }));
+  });
+
 });

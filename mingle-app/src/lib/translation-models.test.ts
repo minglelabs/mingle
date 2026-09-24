@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  NEW_REGISTERED_USER_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
   normalizeSelectableTranslationModel,
   resolveTranslationRuntimeSelection,
 } from './translation-models'
 
 describe('translation model catalog', () => {
+  it('keeps legacy unset accounts on Gemini while seeding new registered accounts with GPT-6 Luna', () => {
+    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('gemini-2.5-flash-lite')
+    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('gpt-6-luna')
+  })
+
   it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {
     expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
       {

@@ -5,6 +5,7 @@ import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
 import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
+import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
 
 export const runtime = "nodejs";
 
@@ -403,6 +404,7 @@ export async function upsertNativeAppleUser(args: {
         handle,
         email: args.email || undefined,
         externalUserId,
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         firstSeenAt: now,
         lastSeenAt: now,
       },

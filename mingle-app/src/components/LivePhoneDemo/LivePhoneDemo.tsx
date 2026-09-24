@@ -89,6 +89,7 @@ import {
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
   readCachedAccountPreferencesSnapshot,
+  writeCachedAccountPreferences,
   resolveAccountPreferencesSyncRetryDelayMs,
   serializeAccountPreferencesSyncState,
   shouldRetryAccountPreferencesSync,
@@ -2161,6 +2162,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
+  const initialAccountHydrationWithoutCacheRef = useRef(false)
+  const accountPreferencesHydratedFromServerRef = useRef(false)
+  const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2760,6 +2764,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     clearAccountPreferencesSyncRetryTimer({ resetAttempt: true })
 
     if (!enableAccountPreferencesSync) {
+      initialAccountHydrationWithoutCacheRef.current = false
+      accountPreferencesHydratedFromServerRef.current = false
+      translationModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
@@ -2775,6 +2782,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       accountPreferencesCacheIdentity,
       isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
     )?.savedAt ?? null
+    initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
+    accountPreferencesHydratedFromServerRef.current = false
+    translationModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
@@ -2806,12 +2816,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           preferences: hydratedPreferences,
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
+          preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
           ? null
           : serializeAccountPreferencesSyncState(snapshot.preferences)
         applySharedAccountPreferences(snapshot.preferences)
+        accountPreferencesHydratedFromServerRef.current = true
         if (persistedInputModeRef.current === null) {
           composerFocusRequestedRef.current = false
           setIsComposerOpen(snapshot.preferences.inputMode === 'text')
@@ -2893,7 +2905,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               nativeAppUpdate,
             }),
           },
-          body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
+          body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences, {
+            includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
+              || accountPreferencesHydratedFromServerRef.current
+              || translationModelUserSelectedSinceHydrationStartRef.current,
+          })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
       },
@@ -3369,14 +3385,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
     setTranslationModelUserSelectedSinceHydrationStart(true)
+    translationModelUserSelectedSinceHydrationStartRef.current = true
+    const wasAlreadySelected = latestAccountPreferencesRef.current.translationModel === nextTranslationModel
     const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       translationModel: nextTranslationModel,
     })
+    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
+      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
+      accountPreferencesPendingSyncRef.current = true
+    }
     setTranslationModel(nextTranslationModel)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
-  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
     setBubbleDisplayModeMenuOpen(false)

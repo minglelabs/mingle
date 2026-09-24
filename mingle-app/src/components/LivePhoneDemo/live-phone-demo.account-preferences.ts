@@ -70,7 +70,7 @@ export interface AccountPreferencesPatchBody {
   sonioxManualFinalizeSilenceMs: number
   sonioxEndpointMaxDelayMs: number
   sonioxEndpointTuningStep: number
-  translationModel: UserSelectableTranslationModel
+  translationModel?: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
@@ -162,9 +162,20 @@ export function reconcileAccountPreferencesHydration(input: {
   preferences: LivePhoneDemoAccountPreferences
   startedSavedAt: number | null
   isLegacyNamespace: boolean
+  preserveLocalTranslationModel?: boolean
 }): AccountPreferencesCacheSnapshot {
   const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
-  if (current && (current.pendingSync || current.savedAt !== input.startedSavedAt)) return current
+  if (current && (current.pendingSync || current.savedAt !== input.startedSavedAt)) {
+    if (input.startedSavedAt === null && !input.preserveLocalTranslationModel) {
+      const merged = {
+        ...current.preferences,
+        translationModel: input.preferences.translationModel,
+      }
+      writeCachedAccountPreferences(input.identity, merged, { pendingSync: current.pendingSync })
+      return readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)!
+    }
+    return current
+  }
   writeCachedAccountPreferences(input.identity, input.preferences, { pendingSync: false })
   return readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)!
 }
@@ -378,13 +389,14 @@ export function shouldApplyAccountPreferencesHydration(args: {
 
 export function buildAccountPreferencesPatchBody(
   preferences: LivePhoneDemoAccountPreferences,
+  options?: { includeTranslationModel?: boolean },
 ): AccountPreferencesPatchBody {
   return {
     textSizeLevel: preferences.textSizeLevel,
     sonioxManualFinalizeSilenceMs: preferences.sonioxManualFinalizeSilenceMs,
     sonioxEndpointMaxDelayMs: preferences.sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep: preferences.sonioxEndpointTuningStep,
-    translationModel: preferences.translationModel,
+    ...(options?.includeTranslationModel === false ? {} : { translationModel: preferences.translationModel }),
     adBannerPosition: preferences.adBannerPosition,
     inputMode: preferences.inputMode,
     speakerEnabled: preferences.speakerEnabled,

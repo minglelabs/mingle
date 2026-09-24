@@ -181,6 +181,34 @@ describe('account preferences client cache', () => {
     })).toMatchObject({ pendingSync: false, preferences: { textSizeLevel: 2 } })
   })
 
+  it('keeps an early settings edit without replacing a new account model seeded by the server', () => {
+    const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
+    const server = { ...local, translationModel: 'gpt-6-luna' as const }
+    edit(local, { ...local, textSizeLevel: 3 })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: false,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { textSizeLevel: 3, translationModel: 'gpt-6-luna' },
+    })
+  })
+
+  it('preserves a model explicitly chosen during a new account hydration', () => {
+    const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
+    const server = { ...local, translationModel: 'gpt-6-luna' as const }
+    edit(local, { ...local, translationModel: 'gemma-4-31b-it' })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: true,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { translationModel: 'gemma-4-31b-it' },
+    })
+  })
+
   it('does not share an active writer across accounts', async () => {
     const otherIdentity = { ...identity, userId: 'other-account' }
     preferencesModule.writeCachedAccountPreferences(identity, buildPreferences(), { pendingSync: true })
