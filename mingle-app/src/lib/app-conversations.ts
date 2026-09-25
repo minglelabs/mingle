@@ -2533,25 +2533,36 @@ export async function joinConversationChannelViaShareToken(args: {
     select: { ...conversationChannelSelect, ownerUserId: true },
   });
   if (!conversationRecord) return null;
-  if (conversationRecord.ownerUserId === args.userId) {
+
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+  const channelMembers = membersByChannelId.get(conversationRecord.id) ?? [];
+  const callerExistingMember = channelMembers.find((member) => member.userId === args.userId);
+
+  // Active idempotence: if the caller is already an active member, no-op immediately.
+  if (callerExistingMember && !callerExistingMember.leftAt) {
     return serializeConversationChannelWithPreview(conversationRecord, args.userId);
   }
 
-  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
-  const activeMembers = filterActiveMembers(membersByChannelId.get(conversationRecord.id));
-  if (activeMembers.some((member) => member.userId === args.userId)) {
-    // Already a member (e.g. reopening the same share link) — no-op, just
-    // hand back the channel so the caller can navigate straight in.
-    return serializeConversationChannelWithPreview(conversationRecord, args.userId);
-  }
-  if (activeMembers.length + 1 > MAX_CONVERSATION_MEMBERS) {
+  const activeMembers = filterActiveMembers(channelMembers);
+  const initialOccupiedUserIds = new Set([
+    ...activeMembers.map((member) => member.userId),
+    ...conversationRecord.pendingInviteeUserIds,
+  ]);
+  const isInitiallyOccupied = initialOccupiedUserIds.has(args.userId);
+  const initialEffectiveCount = isInitiallyOccupied
+    ? initialOccupiedUserIds.size
+    : initialOccupiedUserIds.size + 1;
+  if (initialEffectiveCount > MAX_CONVERSATION_MEMBERS) {
     throw new Error("room_full");
   }
 
-  await assertNoBlockAmong(args.userId, [
+  const otherUserIdsToCheck = [
     conversationRecord.ownerUserId,
     ...activeMembers.map((member) => member.userId),
-  ]);
+  ].filter((id) => id !== args.userId);
+  if (otherUserIdsToCheck.length > 0) {
+    await assertNoBlockAmong(args.userId, otherUserIdsToCheck);
+  }
 
   const joiningUser = await prisma.user.findUnique({
     where: { id: args.userId },
@@ -2563,30 +2574,121 @@ export async function joinConversationChannelViaShareToken(args: {
   const defaultDisplayLanguage = resolvePersistedDisplayLanguage(joiningUser.defaultDisplayLanguage);
 
   const record = await prisma.$transaction(async (tx) => {
-    // createMany + skipDuplicates (same shape as
-    // materializePendingConversationInvitees) instead of a plain create, so
-    // a race with a second concurrent join/materialization for this same
-    // user can't throw a unique-constraint error here.
-    await tx.appConversationChannelMember.createMany({
-      data: [{
-        channelId: conversationRecord.id,
-        userId: args.userId,
-        role: "member",
-        status: conversationRecord.status,
-        pausedAt: conversationRecord.pausedAt,
-        selectedLanguages,
-        ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
-          ? { displayLanguage: defaultDisplayLanguage }
-          : {}),
-      }],
-      skipDuplicates: true,
+    // Acquire row-level lock on the conversation channel to serialize concurrent joins against capacity and pending invitee updates
+    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
+
+    const freshChannel = await tx.appConversationChannel.findFirst({
+      where: {
+        id: conversationRecord.id,
+        shareToken: args.shareToken,
+        shareEnabled: true,
+        ...buildVisibleConversationWhere(),
+      },
+      select: {
+        ...conversationChannelSelect,
+        ownerUserId: true,
+      },
     });
+    if (!freshChannel) return null;
+
+    const freshMembers = await tx.appConversationChannelMember.findMany({
+      where: { channelId: freshChannel.id },
+      select: {
+        userId: true,
+        role: true,
+        leftAt: true,
+        joinedAt: true,
+        selectedLanguages: true,
+        displayLanguage: true,
+      },
+    });
+
+    const currentCallerMember = freshMembers.find((member) => member.userId === args.userId);
+    if (currentCallerMember && !currentCallerMember.leftAt) {
+      return freshChannel;
+    }
+
+    const freshActiveMembers = freshMembers.filter((member) => !member.leftAt);
+    const freshActiveMemberUserIds = freshActiveMembers.map((member) => member.userId);
+    const occupiedUserIds = new Set([
+      ...freshActiveMemberUserIds,
+      ...freshChannel.pendingInviteeUserIds,
+    ]);
+
+    const isAlreadyOccupied = occupiedUserIds.has(args.userId);
+    const effectiveCount = isAlreadyOccupied ? occupiedUserIds.size : occupiedUserIds.size + 1;
+    if (effectiveCount > MAX_CONVERSATION_MEMBERS) {
+      throw new Error("room_full");
+    }
+
+    // Verify blocks against fresh active members under lock so concurrent joins cannot bypass blocks
+    const freshOtherUserIds = [
+      freshChannel.ownerUserId,
+      ...freshActiveMemberUserIds,
+    ].filter((id) => id !== args.userId);
+    if (freshOtherUserIds.length > 0) {
+      const block = await tx.userBlock.findFirst({
+        where: {
+          OR: freshOtherUserIds.flatMap((otherUserId) => [
+            { blockerId: args.userId, blockedId: otherUserId },
+            { blockerId: otherUserId, blockedId: args.userId },
+          ]),
+        },
+        select: { blockerId: true },
+      });
+      if (block) {
+        throw new Error("target_user_blocked");
+      }
+    }
+
+    if (freshChannel.pendingInviteeUserIds.includes(args.userId)) {
+      await tx.appConversationChannel.update({
+        where: { id: freshChannel.id },
+        data: {
+          pendingInviteeUserIds: freshChannel.pendingInviteeUserIds.filter((id) => id !== args.userId),
+        },
+      });
+    }
+
+    const isOwner = freshChannel.ownerUserId === args.userId;
+    if (currentCallerMember) {
+      // Departed member / owner rejoining: restore active membership and preserve owner role & history
+      await tx.appConversationChannelMember.update({
+        where: {
+          channelId_userId: {
+            channelId: freshChannel.id,
+            userId: args.userId,
+          },
+        },
+        data: {
+          leftAt: null,
+          role: isOwner || currentCallerMember.role === "owner" ? "owner" : "member",
+        },
+      });
+    } else {
+      await tx.appConversationChannelMember.createMany({
+        data: [{
+          channelId: freshChannel.id,
+          userId: args.userId,
+          role: isOwner ? "owner" : "member",
+          status: freshChannel.status,
+          pausedAt: freshChannel.pausedAt,
+          selectedLanguages,
+          ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
+            ? { displayLanguage: defaultDisplayLanguage }
+            : {}),
+        }],
+        skipDuplicates: true,
+      });
+    }
+
     return tx.appConversationChannel.findUniqueOrThrow({
-      where: { id: conversationRecord.id },
+      where: { id: freshChannel.id },
       select: conversationChannelSelect,
     });
   });
 
+  if (!record) return null;
   return serializeConversationChannelWithPreview(record, args.userId);
 }
 

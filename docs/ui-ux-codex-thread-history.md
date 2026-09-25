@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-09-26 - Restore room membership when joining a conversation share link
+
+- Surface: The conversation-share overlay's Join action on web and native WebViews.
+- Issue: A departed member, including a departed room owner, could receive a successful join response while their retained membership still had `leftAt` set. Opening the room then failed. The share join also ignored reserved pending invitees when checking the ten-person limit.
+- Resolution: Restore departed memberships, preserve owner identity, and count distinct active members plus pending invitees before admitting a viewer. Convert a pending invitation into real membership without counting that account twice.
+- Permission: Active room members may manage sharing; this follows the existing feature's permission model.
+- Compatibility: iOS and Android v2.0.4 already route these endpoints through their existing namespace rewrites. No native version change or database migration is needed.
+- Concurrency: Share joins lock the channel row and re-read availability, membership, reserved capacity, and blocks before writing. Existing invite/materialization concurrency behavior is outside this bounded change.
+- Verification: All 181 web unit-test files passed (1,681 tests), followed by the expanded 108-test conversation suite including the additional capacity re-read regression. Web TypeScript passed. Tests cover departed owner/member restoration, active-member idempotence, pending capacity and removal, and changed capacity/block/share state before the locked read. These are mocked database regressions; real PostgreSQL concurrency and physical-device validation were not performed.
+
 ## 2026-09-17 — Bound Soniox startup and propagate terminal STT failures
 
 - Surface: Shared STT server and the conversation WebView STT hook on iOS, Android, and web.

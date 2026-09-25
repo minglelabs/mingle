@@ -2014,6 +2014,9 @@ describe("app-conversations", () => {
 
     it("no-ops and hands back the channel when the caller is the owner", async () => {
       mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+      ]);
 
       const result = await joinConversationChannelViaShareToken({
         shareToken: "token-abc",
@@ -2024,13 +2027,14 @@ describe("app-conversations", () => {
       // lookup for viewer-facing rendering — only the write path is skipped.
       expect(result).not.toBeNull();
       expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
     });
 
     it("no-ops and hands back the channel when the caller is already an active member", async () => {
       mockFindConversationFirst.mockResolvedValue(sharedRecord);
       mockChannelMemberFindMany.mockResolvedValue([
-        { channelId: "conv-shared", userId: "user-1", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
-        { channelId: "conv-shared", userId: "user-2", selectedLanguages: ["en"], user: { name: "Bob", handle: "bob" } },
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-shared", userId: "user-2", leftAt: null, role: "member", selectedLanguages: ["en"], user: { name: "Bob", handle: "bob" } },
       ]);
 
       const result = await joinConversationChannelViaShareToken({
@@ -2040,12 +2044,13 @@ describe("app-conversations", () => {
 
       expect(result).not.toBeNull();
       expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
     });
 
     it("creates a new member row for a first-time joiner and returns the updated channel", async () => {
       mockFindConversationFirst.mockResolvedValue(sharedRecord);
       mockChannelMemberFindMany.mockResolvedValue([
-        { channelId: "conv-shared", userId: "user-1", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
       ]);
       mockUserFindUnique.mockResolvedValue({
         defaultConversationLanguages: ["ko"],
@@ -2071,12 +2076,100 @@ describe("app-conversations", () => {
       expect(result).not.toBeNull();
     });
 
+    it("restores a departed owner by clearing leftAt and preserving owner role", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      const departedOwner = {
+        channelId: "conv-shared",
+        userId: "user-1",
+        role: "owner",
+        joinedAt: new Date("2026-04-12T08:00:00.000Z"),
+        leftAt: new Date("2026-04-12T09:00:00.000Z"),
+        selectedLanguages: ["en"],
+        user: { name: "Alice", handle: "alice" },
+      };
+      mockChannelMemberFindMany.mockResolvedValue([departedOwner]);
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["en"],
+        defaultDisplayLanguage: "en",
+      });
+      mockFindConversationUniqueOrThrow.mockResolvedValue(sharedRecord);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-1",
+      });
+
+      expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+        where: {
+          channelId_userId: {
+            channelId: "conv-shared",
+            userId: "user-1",
+          },
+        },
+        data: {
+          leftAt: null,
+          role: "owner",
+        },
+      });
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(result).not.toBeNull();
+    });
+
+    it("restores a departed member by clearing leftAt and preserving member role", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      const activeOwner = {
+        channelId: "conv-shared",
+        userId: "user-1",
+        role: "owner",
+        joinedAt: new Date("2026-04-12T08:00:00.000Z"),
+        leftAt: null,
+        selectedLanguages: ["en"],
+        user: { name: "Alice", handle: "alice" },
+      };
+      const departedMember = {
+        channelId: "conv-shared",
+        userId: "user-2",
+        role: "member",
+        joinedAt: new Date("2026-04-12T08:10:00.000Z"),
+        leftAt: new Date("2026-04-12T09:00:00.000Z"),
+        selectedLanguages: ["en"],
+        user: { name: "Bob", handle: "bob" },
+      };
+      mockChannelMemberFindMany.mockResolvedValue([activeOwner, departedMember]);
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["en"],
+        defaultDisplayLanguage: "en",
+      });
+      mockFindConversationUniqueOrThrow.mockResolvedValue(sharedRecord);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      });
+
+      expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+        where: {
+          channelId_userId: {
+            channelId: "conv-shared",
+            userId: "user-2",
+          },
+        },
+        data: {
+          leftAt: null,
+          role: "member",
+        },
+      });
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(result).not.toBeNull();
+    });
+
     it("throws room_full once the room is already at MAX_CONVERSATION_MEMBERS", async () => {
       mockFindConversationFirst.mockResolvedValue(sharedRecord);
       mockChannelMemberFindMany.mockResolvedValue(
         Array.from({ length: 10 }, (_, index) => ({
           channelId: "conv-shared",
           userId: `user-${index + 1}`,
+          leftAt: null,
           selectedLanguages: ["en"],
           user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
         })),
@@ -2089,6 +2182,115 @@ describe("app-conversations", () => {
       expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
     });
 
+    it("rejects an outsider with room_full when active plus pending invitees reach MAX_CONVERSATION_MEMBERS", async () => {
+      const pendingRecord = {
+        ...sharedRecord,
+        pendingInviteeUserIds: ["user-10"],
+      };
+      mockFindConversationFirst.mockResolvedValue(pendingRecord);
+      // 9 active members + 1 pending invitee = 10 (full room)
+      mockChannelMemberFindMany.mockResolvedValue(
+        Array.from({ length: 9 }, (_, index) => ({
+          channelId: "conv-shared",
+          userId: `user-${index + 1}`,
+          leftAt: null,
+          selectedLanguages: ["en"],
+          user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
+        })),
+      );
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-99",
+      })).rejects.toThrow("room_full");
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+      expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
+    });
+
+    it("allows a pending invitee to join at capacity and removes them from pendingInviteeUserIds", async () => {
+      const pendingRecord = {
+        ...sharedRecord,
+        pendingInviteeUserIds: ["user-10"],
+      };
+      mockFindConversationFirst.mockResolvedValue(pendingRecord);
+      // 9 active members + 1 pending invitee (user-10) = 10 total
+      mockChannelMemberFindMany.mockResolvedValue(
+        Array.from({ length: 9 }, (_, index) => ({
+          channelId: "conv-shared",
+          userId: `user-${index + 1}`,
+          leftAt: null,
+          selectedLanguages: ["en"],
+          user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
+        })),
+      );
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["ja"],
+        defaultDisplayLanguage: "ja",
+      });
+      mockFindConversationUniqueOrThrow.mockResolvedValue({
+        ...pendingRecord,
+        pendingInviteeUserIds: [],
+      });
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-10",
+      });
+
+      expect(mockUpdateConversation).toHaveBeenCalledWith({
+        where: { id: "conv-shared" },
+        data: {
+          pendingInviteeUserIds: [],
+        },
+      });
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          channelId: "conv-shared",
+          userId: "user-10",
+          role: "member",
+          selectedLanguages: ["ja"],
+          displayLanguage: "ja",
+        })],
+        skipDuplicates: true,
+      });
+      expect(result).not.toBeNull();
+    });
+
+    it("rejects with room_full when concurrent join reaches capacity before lock acquisition", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      // Outer read sees only 9 active members (capacity looks available)
+      mockChannelMemberFindMany.mockResolvedValueOnce(
+        Array.from({ length: 9 }, (_, index) => ({
+          channelId: "conv-shared",
+          userId: `user-${index + 1}`,
+          leftAt: null,
+          selectedLanguages: ["en"],
+          user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
+        })),
+      );
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["ko"],
+        defaultDisplayLanguage: "ko",
+      });
+      // Inside transaction under lock, concurrent join pushed active count to 10
+      mockChannelMemberFindMany.mockResolvedValueOnce(
+        Array.from({ length: 10 }, (_, index) => ({
+          channelId: "conv-shared",
+          userId: `user-${index + 1}`,
+          leftAt: null,
+          selectedLanguages: ["en"],
+          user: { name: `Member ${index + 1}`, handle: `member${index + 1}` },
+        })),
+      );
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-99",
+      })).rejects.toThrow("room_full");
+      expect(mockQueryRaw).toHaveBeenCalled();
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
     it("throws target_user_blocked when a block exists between the joiner and the owner", async () => {
       mockFindConversationFirst.mockResolvedValue(sharedRecord);
       mockChannelMemberFindMany.mockResolvedValue([]);
@@ -2098,6 +2300,62 @@ describe("app-conversations", () => {
         shareToken: "token-abc",
         userId: "user-2",
       })).rejects.toThrow("target_user_blocked");
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("throws target_user_blocked when a block exists with a member admitted during the transaction", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      // Outer read sees only user-1
+      mockChannelMemberFindMany.mockResolvedValueOnce([
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+      ]);
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["ko"],
+        defaultDisplayLanguage: "ko",
+      });
+      // Inside transaction, a concurrent join added user-3
+      mockChannelMemberFindMany.mockResolvedValueOnce([
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+        { channelId: "conv-shared", userId: "user-3", leftAt: null, role: "member", selectedLanguages: ["en"], user: { name: "Charlie", handle: "charlie" } },
+      ]);
+      mockUserBlockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ blockerId: "user-3" });
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      })).rejects.toThrow("target_user_blocked");
+      expect(mockQueryRaw).toHaveBeenCalled();
+      expect(mockUserBlockFindFirst).toHaveBeenCalledTimes(2);
+      expect(mockUserBlockFindFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            { blockerId: "user-2", blockedId: "user-3" },
+            { blockerId: "user-3", blockedId: "user-2" },
+          ]),
+        }),
+      }));
+      expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
+    });
+
+    it("returns null when the channel is disabled or deleted before the transaction lock", async () => {
+      // First read finds the channel
+      mockFindConversationFirst.mockResolvedValueOnce(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-shared", userId: "user-1", leftAt: null, role: "owner", selectedLanguages: ["en"], user: { name: "Alice", handle: "alice" } },
+      ]);
+      mockUserFindUnique.mockResolvedValue({
+        defaultConversationLanguages: ["ko"],
+        defaultDisplayLanguage: "ko",
+      });
+      // Inside tx, freshChannel lookup returns null because channel was deleted/disabled
+      mockFindConversationFirst.mockResolvedValueOnce(null);
+
+      const result = await joinConversationChannelViaShareToken({
+        shareToken: "token-abc",
+        userId: "user-2",
+      });
+
+      expect(result).toBeNull();
       expect(mockChannelMemberCreateMany).not.toHaveBeenCalled();
     });
   });
