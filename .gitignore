@@ -25,6 +25,9 @@ dist/
 .DS_Store
 *.pem
 
+# agent tooling
+.kiro/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
