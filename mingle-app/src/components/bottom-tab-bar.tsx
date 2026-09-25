@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { MessageCircle, Search, UserCircle } from "lucide-react";
+import { Home, MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ import {
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
 
 type BottomTabBarProps = {
-  activeRoute: "conversations" | "connect" | "mypage";
+  activeRoute: "feed" | "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
   unreadConversationMessageCount?: number;
@@ -93,6 +93,7 @@ export default function BottomTabBar({
   const conversationsPath = `/${locale}/conversations`;
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
+  const feedPath = `/${locale}/feed`;
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
     // list. A live STT room must not be restored as a side effect of mounting
@@ -102,6 +103,10 @@ export default function BottomTabBar({
   });
   const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
+  const feedHref = buildNativeAwareTabPath(feedPath, searchParams, { tabRoot: true });
+  const isFeedActive = activeRoute === "feed"
+    || pathname === feedPath
+    || pathname.startsWith(`${feedPath}/`);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
@@ -201,6 +206,24 @@ export default function BottomTabBar({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
+      <button
+        type="button"
+        onClick={() => {
+          if (isFeedActive) return;
+          router.replace(feedHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.feed?.tabLabel ?? dictionary.tabs.feed ?? "Feed"}
+        aria-current={isFeedActive ? "page" : undefined}
+      >
+        <Home
+          size={26}
+          fill={isFeedActive ? "#f59e0b" : "none"}
+          stroke={isFeedActive ? "#f59e0b" : "#9ca3af"}
+          strokeWidth={1.9}
+          aria-hidden="true"
+        />
+      </button>
       <button
         type="button"
         onClick={() => {

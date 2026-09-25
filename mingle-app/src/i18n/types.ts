@@ -71,12 +71,14 @@ export type BaseAppDictionarySource = {
     connect: string;
     moments: string;
     my: string;
+    feed?: string;
   };
   titles: {
     chats: string;
     connect: string;
     moments: string;
     my: string;
+    feed?: string;
   };
   chat: {
     searchPlaceholder: string;
@@ -129,6 +131,14 @@ export type BaseAppDictionarySource = {
     unknownUser: string;
     noEmail: string;
     backHome: string;
+  };
+  feed?: {
+    tabLabel?: string;
+    composeButton?: string;
+    translateButton?: string;
+    swipeHint?: string;
+    followingTab?: string;
+    forYouTab?: string;
   };
   profile: {
     postsLabel: string;

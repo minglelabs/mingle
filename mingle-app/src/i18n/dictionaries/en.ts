@@ -27,12 +27,14 @@ export const enDictionary: BaseAppDictionarySource = {
     connect: "Explore",
     moments: "Moments",
     my: "My",
+    feed: "Feed",
   },
   titles: {
     chats: "Chats",
     connect: "Explore",
     moments: "Moments",
     my: "My",
+    feed: "Feed",
   },
   chat: {
     searchPlaceholder: "Search",
@@ -81,6 +83,14 @@ export const enDictionary: BaseAppDictionarySource = {
     unknownUser: "Unknown user",
     noEmail: "No email",
     backHome: "Back to home",
+  },
+  feed: {
+    tabLabel: "Feed",
+    composeButton: "Write",
+    translateButton: "Translate",
+    swipeHint: "Swipe up to see more",
+    followingTab: "Following",
+    forYouTab: "For You",
   },
   profile: {
     postsLabel: "posts",

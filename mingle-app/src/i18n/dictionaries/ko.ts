@@ -27,12 +27,14 @@ export const koDictionary: BaseAppDictionarySource = {
     connect: "탐색",
     moments: "모먼츠",
     my: "마이",
+    feed: "피드",
   },
   titles: {
     chats: "대화목록",
     connect: "탐색",
     moments: "모먼츠",
     my: "마이",
+    feed: "피드",
   },
   chat: {
     searchPlaceholder: "검색",
@@ -81,6 +83,14 @@ export const koDictionary: BaseAppDictionarySource = {
     unknownUser: "알 수 없는 사용자",
     noEmail: "이메일 없음",
     backHome: "홈으로 돌아가기",
+  },
+  feed: {
+    tabLabel: "피드",
+    composeButton: "글쓰기",
+    translateButton: "번역",
+    swipeHint: "위로 밀어 더 보기",
+    followingTab: "팔로잉",
+    forYouTab: "추천",
   },
   profile: {
     postsLabel: "게시물",
