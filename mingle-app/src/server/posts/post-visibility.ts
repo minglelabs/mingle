@@ -8,6 +8,8 @@
 
 import type { Prisma } from '@prisma/client'
 
+import { notMutuallyBlockedWhere } from './block-visibility'
+
 /**
  * Returns a Prisma `where` clause that excludes posts the viewer must not see:
  *
@@ -22,13 +24,7 @@ export function visiblePostWhere(viewerId: string): Prisma.PostWhereInput {
     visibility: 'public',
     OR: [{ isDeleted: null }, { isDeleted: false }],
     moderationHiddenAt: null,
-    // Exclude posts from mutually blocked users (either direction)
-    author: {
-      AND: [
-        { blockedByRelations: { none: { blockerId: viewerId } } },
-        { blockingRelations: { none: { blockedId: viewerId } } },
-      ],
-    },
+    author: notMutuallyBlockedWhere(viewerId),
     // Exclude posts the viewer explicitly hid
     hides: { none: { userId: viewerId } },
   }

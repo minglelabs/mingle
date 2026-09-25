@@ -139,6 +139,14 @@ export type BaseAppDictionarySource = {
     swipeHint?: string;
     followingTab?: string;
     forYouTab?: string;
+    expandButton?: string;
+    collapseButton?: string;
+    translateShow?: string;
+    translateHide?: string;
+    translating?: string;
+    likeAdded?: string;
+    likeFailed?: string;
+    translateFailed?: string;
   };
   profile: {
     postsLabel: string;

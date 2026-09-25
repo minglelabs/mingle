@@ -19,10 +19,18 @@ type FeedShellProps = {
  */
 const CARD_HEIGHT = `calc(100dvh - ${BOTTOM_TAB_BAR_HEIGHT_PX}px - env(safe-area-inset-bottom, 0px))`;
 
+type ExpandState = {
+  expanded: boolean;
+  scrollTop: number;
+};
+
 export default function FeedShell({ dictionary, locale }: FeedShellProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [swipeHintVisible, setSwipeHintVisible] = useState(true);
   const hasScrolledRef = useRef(false);
+
+  // Per-post expand state keyed by post id
+  const expandStateRef = useRef<Map<string, ExpandState>>(new Map());
 
   const feedLabels = {
     likeLabel: dictionary.moments.likesLabel,
@@ -30,6 +38,11 @@ export default function FeedShell({ dictionary, locale }: FeedShellProps) {
     moreLabel: dictionary.profile.menuLabel,
     followLabel: dictionary.connect?.followAction ?? "Follow",
     translateLabel: dictionary.feed?.translateButton ?? "Translate",
+    expandLabel: dictionary.feed?.expandButton ?? "See more",
+    collapseLabel: dictionary.feed?.collapseButton ?? "Show less",
+    translateShowLabel: dictionary.feed?.translateShow ?? "See translation",
+    translateHideLabel: dictionary.feed?.translateHide ?? "Show original",
+    translatingLabel: dictionary.feed?.translating ?? "Translating...",
   };
 
   const handleScroll = useCallback(() => {
@@ -38,6 +51,27 @@ export default function FeedShell({ dictionary, locale }: FeedShellProps) {
     markSwipeHintDone();
     setSwipeHintVisible(false);
   }, []);
+
+  // When the feed snaps to a new post, reset the new card's expand state.
+  // The scroll snap position tells us which post index is visible.
+  const prevIndexRef = useRef(0);
+  const handleSnapChange = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const cardH = container.firstElementChild?.getBoundingClientRect().height ?? 1;
+    const idx = Math.round(container.scrollTop / cardH);
+    if (idx !== prevIndexRef.current) {
+      // Navigated to a new post — it starts collapsed (no restore)
+      prevIndexRef.current = idx;
+    }
+  }, []);
+
+  const handleExpandChange = useCallback(
+    (postId: string, expanded: boolean, scrollTop: number) => {
+      expandStateRef.current.set(postId, { expanded, scrollTop });
+    },
+    [],
+  );
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
@@ -53,21 +87,30 @@ export default function FeedShell({ dictionary, locale }: FeedShellProps) {
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto"
-        onScroll={handleScroll}
+        onScroll={() => {
+          handleScroll();
+          handleSnapChange();
+        }}
         style={{
           scrollSnapType: "y mandatory",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
         }}
       >
-        {MOCK_FEED_POSTS.map((post) => (
-          <FeedPostCard
-            key={post.id}
-            post={post}
-            cardHeight={CARD_HEIGHT}
-            labels={feedLabels}
-          />
-        ))}
+        {MOCK_FEED_POSTS.map((post) => {
+          const saved = expandStateRef.current.get(post.id);
+          return (
+            <FeedPostCard
+              key={post.id}
+              post={post}
+              cardHeight={CARD_HEIGHT}
+              labels={feedLabels}
+              restoreExpanded={saved?.expanded ?? false}
+              restoreScrollTop={saved?.scrollTop ?? 0}
+              onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
+            />
+          );
+        })}
       </div>
 
       {/* First-time swipe hint */}
