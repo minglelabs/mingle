@@ -353,3 +353,29 @@ scripts/devbox bootstrap
 - `--vault-push`는 이전 호환성을 위한 no-op입니다.
 - Homebrew 로컬 Vault를 다시 올릴 때는 `scripts/devbox vault-up` 또는
   `brew services start hashicorp/tap/vault`를 사용할 수 있습니다.
+
+## 대화 사진 (Conversation Photos) — 별도 PRIVATE R2 버킷 필요
+
+대화 내 사진 전송/수신 기능은 프로필 이미지와 **별도의 비공개(PRIVATE) R2 버킷**을 사용합니다.
+프로필 버킷을 재사용하면 `readConversationImageStorageConfig()`가 의도적으로 거부하며,
+해당 기능은 자동으로 비활성화됩니다.
+
+### 필요 환경변수
+
+| 변수명 | 설명 |
+|---|---|
+| `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME` | 대화 사진 전용 PRIVATE 버킷 이름 (필수) |
+| `CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID` | 해당 버킷 전용 R2 토큰 키 (선택 — 미설정 시 프로필 버킷 자격 증명 재사용) |
+| `CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY` | 해당 버킷 전용 R2 토큰 시크릿 (선택 — 위와 함께 설정해야 함) |
+
+### 버킷 설정 요구사항
+
+- Cloudflare R2 콘솔에서 **r2.dev 퍼블릭 액세스를 반드시 OFF**로 설정
+- **커스텀 도메인도 연결하지 않아야** 합니다
+- 프로필 버킷(`CLOUDFLARE_R2_BUCKET_NAME`)과 동일한 이름을 사용할 수 없습니다
+
+### 설정 위치
+
+메인 워크트리의 `mingle-app/.env.local` 또는 Vault에 위 변수를 추가합니다.
+devbox 기동 시 `CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME`이 감지되지 않으면
+`[devbox] warning` 메시지가 출력되며, 대화 사진 기능만 비활성화됩니다 (다른 기능에는 영향 없음).

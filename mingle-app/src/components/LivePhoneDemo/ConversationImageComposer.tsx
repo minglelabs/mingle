@@ -298,7 +298,11 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     try {
       const body = new FormData(); body.set('file', chosen.file); body.set('clientMessageId', chosen.id)
       const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/images`), { method: 'POST', body, signal: controller.signal })
-      if (!response.ok) throw new Error('image_send_failed')
+      if (!response.ok) {
+        const serverError = await response.json().catch(() => ({}))
+        console.error('[conversation-image] send failed:', serverError.error ?? response.status)
+        throw new Error('image_send_failed')
+      }
       await response.json()
       if (mounted.current) { setChosen(null); setOpen(false); onSent() }
     } catch { if (mounted.current) setError(copy.error) }

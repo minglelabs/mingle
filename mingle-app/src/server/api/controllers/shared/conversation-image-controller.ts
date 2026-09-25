@@ -50,7 +50,12 @@ export async function postConversationImage(request: NextRequest, conversationId
     } catch { return NextResponse.json({ error: 'invalid_image' }, { status: 400 }) }
     const objectKey = `conversation-images/${randomUUID()}.jpg`
     try { await putConversationImage(objectKey, image.data) }
-    catch { return NextResponse.json({ error: 'image_upload_failed' }, { status: 503 }) }
+    catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown'
+      console.error('[conversation-image] upload failed:', message)
+      if (message === 'image_storage_not_configured') return NextResponse.json({ error: 'image_storage_not_configured' }, { status: 503 })
+      return NextResponse.json({ error: 'image_upload_failed' }, { status: 503 })
+    }
     try {
       if (!await getConversationSessionKeyForMember({ conversationId, userId: scope.userId }) || await isMessageSenderBlockedInConversation(scope)) {
         await deleteConversationImage(objectKey).catch(() => {})
@@ -103,5 +108,10 @@ export async function readConversationImage(_request: NextRequest, conversationI
   try {
     const bytes = await getConversationImage(image.objectKey)
     return new NextResponse(new Uint8Array(bytes), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
-  } catch { return NextResponse.json({ error: 'image_unavailable' }, { status: 503 }) }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown'
+    console.error('[conversation-image] read failed:', message)
+    if (message === 'image_storage_not_configured') return NextResponse.json({ error: 'image_storage_not_configured' }, { status: 503 })
+    return NextResponse.json({ error: 'image_unavailable' }, { status: 503 })
+  }
 }

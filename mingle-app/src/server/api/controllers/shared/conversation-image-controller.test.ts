@@ -99,10 +99,33 @@ describe('conversation images', () => {
     expect(m.remove).toHaveBeenCalledWith(m.put.mock.calls[0][0]); expect(m.create).not.toHaveBeenCalled()
   })
   it('does not create a message when object storage fails', async () => {
-    m.put.mockRejectedValue(new Error('unavailable'))
-    expect((await postConversationImage(upload(await png()), 'room')).status).toBe(503)
-    expect(m.create).not.toHaveBeenCalled()
-    expect(m.after).not.toHaveBeenCalled()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      m.put.mockRejectedValue(new Error('unavailable'))
+      expect((await postConversationImage(upload(await png()), 'room')).status).toBe(503)
+      expect(m.create).not.toHaveBeenCalled()
+      expect(m.after).not.toHaveBeenCalled()
+    } finally { error.mockRestore() }
+  })
+  it('returns image_storage_not_configured when private bucket is not provisioned', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      m.put.mockRejectedValue(new Error('image_storage_not_configured'))
+      const response = await postConversationImage(upload(await png()), 'room')
+      expect(response.status).toBe(503)
+      expect(await response.json()).toMatchObject({ error: 'image_storage_not_configured' })
+      expect(m.create).not.toHaveBeenCalled()
+    } finally { error.mockRestore() }
+  })
+  it('returns image_storage_not_configured on read when private bucket is not provisioned', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      m.findFirst.mockResolvedValue({ metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: 'hash', width: 32, height: 64 } } })
+      m.get.mockRejectedValue(new Error('image_storage_not_configured'))
+      const response = await readConversationImage(new NextRequest(url), 'room', 'db-image')
+      expect(response.status).toBe(503)
+      expect(await response.json()).toMatchObject({ error: 'image_storage_not_configured' })
+    } finally { error.mockRestore() }
   })
   it('only serves images belonging to visible messages in the authorized room', async () => {
     m.findFirst.mockResolvedValue({ metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: 'hash', width: 32, height: 64 } } })

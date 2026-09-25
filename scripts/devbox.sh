@@ -5148,6 +5148,21 @@ cmd_up() {
   runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
   ensure_workspace_dependencies
 
+  # Preflight: warn when conversation photo storage is not configured.
+  # CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME must name a separate PRIVATE R2
+  # bucket (never the public profile bucket). The value may arrive via the
+  # Vault-backed runtime env file or Next.js auto-loading mingle-app/.env.local.
+  local _r2_conv_bucket=""
+  _r2_conv_bucket="$(read_env_value_from_file CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME "$runtime_env_file" 2>/dev/null || true)"
+  if [[ -z "$_r2_conv_bucket" ]]; then
+    _r2_conv_bucket="$(read_env_value_from_file CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME "$APP_ENV_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -z "$_r2_conv_bucket" ]]; then
+    warn "conversation photo send/receive is DISABLED — CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME is not set."
+    warn "This feature requires a separate PRIVATE R2 bucket (r2.dev public access and custom domains OFF)."
+    warn "Set CLOUDFLARE_R2_CONVERSATION_BUCKET_NAME (and optionally CLOUDFLARE_R2_CONVERSATION_ACCESS_KEY_ID / CLOUDFLARE_R2_CONVERSATION_SECRET_ACCESS_KEY) in the main worktree .env.local or Vault."
+  fi
+
   local -a pids=()
   local exit_code=0
   local started_tunnel_mode="none"
