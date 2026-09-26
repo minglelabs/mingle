@@ -1,92 +1,141 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { buildClientApiPath } from "@/lib/api-contract";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { optimisticLike, reconcileLike, type LikeState } from "./like-state";
 
-export type LikeState = {
-  likedByMe: boolean;
-  likeCount: number;
+export type { LikeState } from "./like-state";
+
+/** Reported to the caller so it can show a toast and update the DTO. */
+export type LikeError =
+  | { kind: "rate_limited"; retryAfterSeconds: number }
+  | { kind: "generic" };
+
+type UseFeedLikeOptions = {
+  postId: string;
+  initial: LikeState;
+  /** Signed-out taps go to login instead of the API. */
+  isSignedIn: boolean;
+  onRequireLogin: () => void;
+  /** Persist confirmed state up to the feed list so it survives re-render. */
+  onChange?: (state: LikeState) => void;
+  onError?: (error: LikeError) => void;
 };
 
 type UseFeedLikeReturn = {
   state: LikeState;
-  /** Toggle like via button (unlike if already liked). */
+  /** Toggle via the heart button (unlike if already liked). */
   toggleLike: () => void;
-  /** Apply like via double-tap (no-op if already liked). */
+  /** Double-tap: like only, never unlikes, no duplicate count. */
   addLike: () => void;
-  /** Whether the heart burst animation should play. */
   showBurst: boolean;
   clearBurst: () => void;
 };
 
 /**
- * Manages optimistic like state for a single post.
- * API integration is a stub — it always succeeds for now (mock mode).
+ * Optimistic like state for one post, wired to
+ * `POST` / `DELETE /posts/{id}/like`.
+ *
+ * - Optimistic flip, rolled back to the prior count/flag on failure.
+ * - A 429 (`{ error: 'rate_limited', retryAfterSeconds }`) rolls back and
+ *   surfaces the retry hint.
+ * - Concurrent taps are coalesced (`pendingRef`) so a double click cannot send
+ *   two conflicting writes.
+ * - Double-tap adds a like but never removes one, and shows the burst even when
+ *   the post is already liked.
  */
-export function useFeedLike(
-  postId: string,
-  initial: LikeState,
-): UseFeedLikeReturn {
+export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
+  const { postId, initial, isSignedIn, onRequireLogin, onChange, onError } = options;
+
   const [state, setState] = useState<LikeState>(initial);
   const [showBurst, setShowBurst] = useState(false);
   const pendingRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  const doLike = useCallback(async () => {
-    if (pendingRef.current) return;
-    pendingRef.current = true;
-    const prev = state;
-    const next: LikeState = {
-      likedByMe: true,
-      likeCount: prev.likedByMe ? prev.likeCount : prev.likeCount + 1,
-    };
-    setState(next);
-    setShowBurst(true);
+  // Keep in sync if the underlying post is replaced (e.g. after refresh).
+  useEffect(() => {
+    setState(initial);
+    // Only when the identity of the post's like data actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
 
-    try {
-      // TODO: POST /api/posts/{postId}/like
-      void postId;
-    } catch {
-      setState(prev);
-    } finally {
-      pendingRef.current = false;
-    }
-  }, [postId, state]);
+  const send = useCallback(
+    async (nextLiked: boolean) => {
+      if (pendingRef.current) return;
+      if (!isSignedIn) {
+        onRequireLogin();
+        return;
+      }
+      pendingRef.current = true;
 
-  const doUnlike = useCallback(async () => {
-    if (pendingRef.current) return;
-    pendingRef.current = true;
-    const prev = state;
-    const next: LikeState = {
-      likedByMe: false,
-      likeCount: Math.max(0, prev.likeCount - 1),
-    };
-    setState(next);
+      const prev = stateRef.current;
+      const optimistic: LikeState = optimisticLike(prev, nextLiked);
+      setState(optimistic);
+      onChange?.(optimistic);
 
-    try {
-      // TODO: DELETE /api/posts/{postId}/like
-      void postId;
-    } catch {
-      setState(prev);
-    } finally {
-      pendingRef.current = false;
-    }
-  }, [postId, state]);
+      const path = buildClientApiPath(`/posts/${encodeURIComponent(postId)}/like`);
+      try {
+        const res = await fetch(path, {
+          method: nextLiked ? "POST" : "DELETE",
+          cache: "no-store",
+        });
+
+        if (res.status === 429) {
+          const body = (await res.json().catch(() => ({}))) as { retryAfterSeconds?: number };
+          setState(prev);
+          onChange?.(prev);
+          onError?.({
+            kind: "rate_limited",
+            retryAfterSeconds: typeof body.retryAfterSeconds === "number" ? body.retryAfterSeconds : 5,
+          });
+          return;
+        }
+        if (!res.ok) {
+          setState(prev);
+          onChange?.(prev);
+          onError?.({ kind: "generic" });
+          return;
+        }
+
+        // Adopt the server's authoritative counts when returned.
+        const body = (await res.json().catch(() => null)) as
+          | { likeCount?: number; likedByMe?: boolean }
+          | null;
+        const confirmed = reconcileLike(optimistic, body);
+        if (body && typeof body.likeCount === "number") {
+          setState(confirmed);
+          onChange?.(confirmed);
+        }
+      } catch {
+        setState(prev);
+        onChange?.(prev);
+        onError?.({ kind: "generic" });
+      } finally {
+        pendingRef.current = false;
+      }
+    },
+    [postId, isSignedIn, onRequireLogin, onChange, onError],
+  );
 
   const toggleLike = useCallback(() => {
-    if (state.likedByMe) {
-      void doUnlike();
-    } else {
-      void doLike();
+    if (!isSignedIn) {
+      onRequireLogin();
+      return;
     }
-  }, [state.likedByMe, doLike, doUnlike]);
+    void send(!stateRef.current.likedByMe);
+  }, [isSignedIn, onRequireLogin, send]);
 
   const addLike = useCallback(() => {
-    if (!state.likedByMe) {
-      void doLike();
-    } else {
-      // Already liked — still show burst for feedback
-      setShowBurst(true);
+    if (!isSignedIn) {
+      onRequireLogin();
+      return;
     }
-  }, [state.likedByMe, doLike]);
+    setShowBurst(true);
+    if (!stateRef.current.likedByMe) {
+      void send(true);
+    }
+  }, [isSignedIn, onRequireLogin, send]);
 
   const clearBurst = useCallback(() => setShowBurst(false), []);
 
