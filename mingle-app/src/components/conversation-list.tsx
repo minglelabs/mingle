@@ -5400,6 +5400,7 @@ export default function ConversationList({
           variant="surface"
           composeLabel={postingHeaderCopy.compose}
           notificationsLabel={postingHeaderCopy.notifications}
+          unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
           hasUnread={postingUnread.hasUnread}
           onCompose={() => router.push(composeHref(locale))}
           onNotifications={() => router.push(notificationsHref(locale))}

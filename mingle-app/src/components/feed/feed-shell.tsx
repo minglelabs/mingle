@@ -323,6 +323,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       variant="transparent"
       composeLabel={copy.compose}
       notificationsLabel={copy.notifications}
+      unreadNotificationsLabel={copy.notificationsUnread}
       hasUnread={notifications.hasUnread}
       onCompose={openCompose}
       onNotifications={openNotifications}
@@ -412,6 +413,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               reducedMotion={reducedMotion}
               restoreExpanded={saved?.expanded ?? false}
               restoreScrollTop={saved?.scrollTop ?? 0}
+              eagerImage={idx <= activeIndex + 1}
               onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
               onRequireLogin={goToLogin}
               onOpenComments={(id) => {
@@ -462,7 +464,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         <SwipeHintOverlay
           hasNextPost={posts.length > 1}
           onDismiss={() => setSwipeHintVisible(false)}
-          label={copy.nextPost}
+          label={copy.swipeHint}
+          closeLabel={copy.swipeHintClose}
         />
       ) : null}
 
