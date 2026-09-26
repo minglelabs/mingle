@@ -90,3 +90,28 @@ export function feedSourceEndpoint(
       return withQuery('/search/posts', { q: source.query, ...shared }) as `/${string}`
   }
 }
+
+/**
+ * The author's archive and trash, and the viewer's hidden posts. Returns
+ * FeedPostListResponse; in the trash list each post carries `deletedAt`.
+ */
+export function myPostsEndpoint(
+  section: MyPostsSection,
+  page: { cursor?: string | null; limit?: number | null; displayLanguage?: string | null },
+): `/${string}` {
+  const shared = {
+    cursor: page.cursor,
+    limit: page.limit ? String(page.limit) : null,
+    displayLanguage: page.displayLanguage,
+  }
+  return section === 'hidden'
+    ? (withQuery('/account/hidden-posts', shared) as `/${string}`)
+    : (withQuery('/posts/mine', { section, ...shared }) as `/${string}`)
+}
+
+/** One post. Returns FeedPostResponse from @/lib/feed-post-dto. */
+export function postEndpoint(postId: string, options?: { displayLanguage?: string | null }): `/${string}` {
+  return withQuery(`/posts/${encodeURIComponent(postId)}`, {
+    displayLanguage: options?.displayLanguage,
+  }) as `/${string}`
+}

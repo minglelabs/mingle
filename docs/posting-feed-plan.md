@@ -13,7 +13,8 @@
 | 2 번역 서비스 추출 | 완료 | `70735f40` |
 | 3 게시물 CRUD API · 5a 피드 셸 | 완료 | `0e552236` |
 | 4 랭킹 · 5b 피드 상호작용 · 6 반응 API | 완료 | `beaf51ee` |
-| W0 계약·스키마(모더레이션·알림 토글) | 완료 | 이 문서와 같은 커밋 |
+| W0 계약·스키마(모더레이션·알림 토글) | 완료 | `07fb0cbe` |
+| W0.1 계약 보강(단건·내 게시물 endpoint, 그리드 타일) | 완료 | 이 문서와 같은 커밋 |
 | W3 병렬 8건 (아래 표) | 진행 | |
 
 Phase 1 주의: 마이그레이션 `20260925170000_add_posting_feed`는 기존 drift 2건
@@ -28,8 +29,9 @@ Phase 1 주의: 마이그레이션 `20260925170000_add_posting_feed`는 기존 d
 
 | 계약 파일 | 내용 | 구현 담당 |
 |---|---|---|
-| `src/lib/feed-post-dto.ts` | 피드·프로필·검색 공통 게시물 wire shape | S1(서버가 이 모양으로 응답) |
-| `src/lib/feed-routes.ts` | 모든 화면 경로·목록 endpoint 빌더 (경로 문자열 직접 작성 금지) | 완성본 |
+| `src/lib/feed-post-dto.ts` | 피드·프로필·검색·보관함·휴지통·숨긴 글·단건 조회 공통 게시물 wire shape (`FeedPostListResponse`, `FeedPostResponse`) | S1(서버가 이 모양으로 응답) |
+| `src/lib/feed-routes.ts` | 모든 화면 경로·목록 endpoint 빌더 + `myPostsEndpoint`·`postEndpoint` (경로 문자열 직접 작성 금지) | 완성본 |
+| `components/posts/post-grid-tile.tsx` | 3열 그리드 타일(사진 우선, 없으면 배경+첫 약 20자). 프로필·검색·보관함·휴지통·숨긴 글 공용 | P |
 | `components/comments/comment-sheet.tsx` | 댓글 시트 props | C3 |
 | `components/posts/post-action-sheet.tsx` · `components/reports/report-sheet.tsx` | ⋯ 메뉴·신고 시트 props | R |
 | `components/compose/publish-status-banner.tsx` | 백그라운드 게시 상태 배너 | C2 |
@@ -40,7 +42,7 @@ Phase 1 주의: 마이그레이션 `20260925170000_add_posting_feed`는 기존 d
 
 | 담당 | 범위 |
 |---|---|
-| S1 서버 피드 | DTO 직렬화기, 비로그인 피드, `GET /users/{id}/posts`, `GET /search/posts` |
+| S1 서버 피드 | DTO 직렬화기(단일), 비로그인 피드, `GET /users/{id}/posts`, `GET /search/posts`, `GET /posts/mine`(보관함·휴지통), `GET /account/hidden-posts`·`GET /posts/{id}`를 DTO로 전환 |
 | C1 피드 UI | 목 데이터 제거·API 연결, 뷰어 라우트, 딥링크, 로그인 유도·복귀, 오류·로딩, 접근성 |
 | C2 글쓰기 | 작성·초안·첨부·미리보기·게시·수정·보관함·휴지통·숨긴 글 화면 |
 | C3 댓글 | 댓글 시트 UI 전체 |

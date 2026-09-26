@@ -54,9 +54,23 @@ export type FeedPostDto = {
   publishedAt: string
   /** Only the author ever receives `archived` (own archive list). */
   visibility: 'public' | 'archived'
+  /**
+   * ISO 8601. Non-null only in the author's own trash list; the post can be
+   * restored until 30 days after this moment. Every other list sends null.
+   */
+  deletedAt: string | null
 }
 
 export type FeedPostListResponse = {
   posts: FeedPostDto[]
   nextCursor: string | null
+}
+
+/**
+ * `GET /posts/{postId}` (see `postEndpoint` in `@/lib/feed-routes`): one post in
+ * the same shape, for deep links, the edit screen and the publish hand-off.
+ * A signed-out viewer may read a public post.
+ */
+export type FeedPostResponse = {
+  post: FeedPostDto
 }

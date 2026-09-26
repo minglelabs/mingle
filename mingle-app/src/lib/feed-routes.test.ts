@@ -5,8 +5,10 @@ import {
   editPostHref,
   feedHref,
   feedSourceEndpoint,
+  myPostsEndpoint,
   myPostsHref,
   notificationsHref,
+  postEndpoint,
   postViewerHref,
   searchPeopleHref,
 } from './feed-routes'
@@ -45,5 +47,16 @@ describe('feed list endpoints', () => {
     )
     expect(feedSourceEndpoint({ kind: 'author', authorId: 'u1' }, { cursor: null })).toBe('/users/u1/posts')
     expect(feedSourceEndpoint({ kind: 'search', query: 'nail' }, { limit: 30 })).toBe('/search/posts?q=nail&limit=30')
+  })
+
+  it('maps my-posts sections: archive and trash under /posts/mine, hidden under the account', () => {
+    expect(myPostsEndpoint('archived', {})).toBe('/posts/mine?section=archived')
+    expect(myPostsEndpoint('trash', { cursor: 'c1', limit: 30 })).toBe('/posts/mine?section=trash&cursor=c1&limit=30')
+    expect(myPostsEndpoint('hidden', { displayLanguage: 'ja' })).toBe('/account/hidden-posts?displayLanguage=ja')
+  })
+
+  it('builds the single-post endpoint', () => {
+    expect(postEndpoint('p/1')).toBe('/posts/p%2F1')
+    expect(postEndpoint('p1', { displayLanguage: 'ko' })).toBe('/posts/p1?displayLanguage=ko')
   })
 })
