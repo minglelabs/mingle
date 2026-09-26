@@ -1,2 +1,2 @@
 export const runtime = "nodejs";
-export { POST } from "@/app/api/conversations/[conversationId]/images/route";
+export { POST } from "@/app/api/ios/v2.0.0/conversations/[conversationId]/images/route";

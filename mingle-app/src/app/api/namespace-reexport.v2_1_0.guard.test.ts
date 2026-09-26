@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,14 @@ const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
 const NAMESPACE_TARGET_VERSION = "2.1.0";
+// The previous minor namespace whose handlers 2.1.0 inherits unchanged.
+const INHERITED_VERSION_DIR = "v2.0.0";
+
+// Module specifiers a re-export file pulls from (`export { … } from "<spec>"`).
+function reexportSpecifiers(filePath: string): string[] {
+  const source = readFileSync(filePath, "utf8");
+  return [...source.matchAll(/export\s*\{[^}]*\}\s*from\s*["']([^"']+)["']/g)].map((match) => match[1]);
+}
 
 // Route families that are NOT mirrored into a mobile namespace. This mirrors the
 // long-standing convention (v2.0.0 never re-exported these) and is asserted
@@ -94,7 +102,6 @@ describe(`mingle-app v${NAMESPACE_TARGET_VERSION} namespace re-export guard`, ()
   for (const platform of ["ios", "android"] as const) {
     describe(`${platform}/v${NAMESPACE_TARGET_VERSION}`, () => {
       it.each(targets)("re-exports %s", (routePath) => {
-        const bare = join(API_ROOT, routePath, "route.ts");
         const reexport = join(API_ROOT, platform, `v${NAMESPACE_TARGET_VERSION}`, routePath, "route.ts");
 
         // Presence guard: a namespace-target route with no re-export fails here.
@@ -108,13 +115,27 @@ describe(`mingle-app v${NAMESPACE_TARGET_VERSION} namespace re-export guard`, ()
           );
         }
 
+        // Source guard: a route the same platform's v2.0.0 namespace already serves
+        // is inherited from there (v2.0.0 pins several routes to platform
+        // controllers that differ from the unversioned handler); a route new in
+        // 2.1.0 comes from the unversioned handler.
+        const inheritedFile = join(API_ROOT, platform, INHERITED_VERSION_DIR, routePath, "route.ts");
+        const isInherited = existsSync(inheritedFile);
+        const sourceFile = isInherited ? inheritedFile : join(API_ROOT, routePath, "route.ts");
+        const sourceSpecifier = isInherited
+          ? `@/app/api/${platform}/${INHERITED_VERSION_DIR}/${routePath}/route`
+          : `@/app/api/${routePath}/route`;
+        expect(
+          reexportSpecifiers(reexport),
+          `${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must re-export from ${sourceSpecifier}`,
+        ).toEqual([sourceSpecifier]);
+
         // Method-match guard: the re-export must expose exactly the source's
         // HTTP methods — no missing method, no stale extra method.
-        const bareMethods = exportedHttpMethods(bare);
         expect(
           [...reexportMethods].sort(),
-          `HTTP methods for ${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must match the unversioned route`,
-        ).toEqual([...bareMethods].sort());
+          `HTTP methods for ${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must match ${sourceSpecifier}`,
+        ).toEqual([...exportedHttpMethods(sourceFile)].sort());
       });
     });
   }

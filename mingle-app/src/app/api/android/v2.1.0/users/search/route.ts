@@ -1,2 +1,2 @@
 export const runtime = "nodejs";
-export { GET } from "@/app/api/users/search/route";
+export { GET } from "@/app/api/android/v2.0.0/users/search/route";
