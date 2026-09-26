@@ -7,12 +7,18 @@ const {
   mockPostUpdate,
   mockUserFindUnique,
   mockRetranslatePostOnEdit,
+  mockPostLikeFindMany,
+  mockUserFollowFindMany,
+  mockPostTranslationFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockPostFindFirst: vi.fn(),
   mockPostUpdate: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockRetranslatePostOnEdit: vi.fn(),
+  mockPostLikeFindMany: vi.fn(),
+  mockUserFollowFindMany: vi.fn(),
+  mockPostTranslationFindMany: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
@@ -21,6 +27,9 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     post: { findFirst: mockPostFindFirst, update: mockPostUpdate },
     user: { findUnique: mockUserFindUnique },
+    postLike: { findMany: mockPostLikeFindMany },
+    userFollow: { findMany: mockUserFollowFindMany },
+    postTranslation: { findMany: mockPostTranslationFindMany },
   },
 }))
 vi.mock('next/server', async (importOriginal) => {
@@ -43,13 +52,25 @@ describe('GET /api/posts/[postId]', () => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'viewer-1' } })
     mockUserFindUnique.mockResolvedValue({ defaultDisplayLanguage: 'ko' })
+    mockPostLikeFindMany.mockResolvedValue([])
+    mockUserFollowFindMany.mockResolvedValue([])
+    mockPostTranslationFindMany.mockResolvedValue([])
   })
 
-  it('returns 401 if not authenticated', async () => {
-    mockGetServerSession.mockResolvedValue(null)
-    const req = new NextRequest('http://localhost/api/posts/p1')
-    const res = await GET(req, makeParams('p1'))
-    expect(res.status).toBe(401)
+  const visiblePost = () => ({
+    id: 'p1',
+    authorId: 'u1',
+    bodyVersion: 1,
+    sourceText: 'Hello',
+    sourceLanguage: 'en',
+    backgroundKey: 'warm-cream',
+    imageObjectKey: null,
+    visibility: 'public',
+    deletedAt: null,
+    likeCount: 5,
+    commentCount: 2,
+    publishedAt: new Date('2026-01-01T00:00:00.000Z'),
+    author: { id: 'u1', handle: 'alice', name: 'Alice', image: null },
   })
 
   it('returns 404 if post not visible', async () => {
@@ -59,31 +80,31 @@ describe('GET /api/posts/[postId]', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns post with translated text when available', async () => {
-    mockPostFindFirst.mockResolvedValue({
-      id: 'p1',
-      sourceText: 'Hello',
-      sourceLanguage: 'en',
-      bodyVersion: 1,
-      backgroundKey: 'solid-white',
-      imageObjectKey: null,
-      visibility: 'public',
-      likeCount: 5,
-      commentCount: 2,
-      publishedAt: new Date(),
-      author: { id: 'u1', handle: 'alice', name: 'Alice', image: null },
-      translations: [
-        { language: 'ko', bodyVersion: 1, text: '안녕하세요' },
-        { language: 'ja', bodyVersion: 1, text: 'こんにちは' },
-      ],
-    })
+  it('allows a signed-out viewer to read a public post', async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    mockPostFindFirst.mockResolvedValue(visiblePost())
+    const req = new NextRequest('http://localhost/api/posts/p1')
+    const res = await GET(req, makeParams('p1'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.post.id).toBe('p1')
+    expect(json.post.followingAuthor).toBeNull()
+    expect(json.post.likedByMe).toBe(false)
+  })
+
+  it('returns FeedPostResponse with translated text when available', async () => {
+    mockPostFindFirst.mockResolvedValue(visiblePost())
+    mockPostTranslationFindMany.mockResolvedValue([
+      { postId: 'p1', bodyVersion: 1, language: 'ko', status: 'ready', text: '안녕하세요' },
+    ])
 
     const req = new NextRequest('http://localhost/api/posts/p1')
     const res = await GET(req, makeParams('p1'))
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(json.displayText).toBe('안녕하세요')
-    expect(json.displayLanguage).toBe('ko')
+    expect(json.post.translationState).toBe('ready')
+    expect(json.post.displayText).toBe('안녕하세요')
+    expect(json.post.displayLanguage).toBe('ko')
   })
 })
 

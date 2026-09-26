@@ -7,6 +7,7 @@ import { visibleSinglePostWhere, ownPostWhere } from '@/server/posts/post-visibi
 import { randomBackgroundKey } from '@/lib/post-backgrounds'
 import { retranslatePostOnEdit } from '@/server/translation/post-translation-service'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { serializePostsPage } from '@/server/feed/feed-post-loader'
 
 export const runtime = 'nodejs'
 
@@ -21,50 +22,35 @@ function json(payload: object, init?: ResponseInit): NextResponse {
 
 type RouteContext = { params: Promise<{ postId: string }> }
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   const { postId } = await context.params
   const session = await getServerSession(getAuthOptions())
-  const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
-  if (!viewerId) return json({ error: 'unauthorized' }, { status: 401 })
+  const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() || null : null
 
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, viewerId),
-    include: {
+    select: {
+      id: true,
+      authorId: true,
+      bodyVersion: true,
+      sourceText: true,
+      sourceLanguage: true,
+      backgroundKey: true,
+      imageObjectKey: true,
+      visibility: true,
+      deletedAt: true,
+      likeCount: true,
+      commentCount: true,
+      publishedAt: true,
       author: { select: { id: true, handle: true, name: true, image: true } },
-      translations: {
-        where: { status: 'ready' },
-        select: { language: true, bodyVersion: true, text: true },
-      },
     },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
-  // Resolve display language
-  const viewer = await prisma.user.findUnique({
-    where: { id: viewerId },
-    select: { defaultDisplayLanguage: true },
-  })
-  const displayLang = viewer?.defaultDisplayLanguage
-  const translation = displayLang
-    ? post.translations.find((t) => t.language === displayLang && t.bodyVersion === post.bodyVersion)
-    : null
+  const displayLanguage = request.nextUrl.searchParams.get('displayLanguage') || null
+  const [serialized] = await serializePostsPage([post], { viewerId, rawDisplayLanguage: displayLanguage })
 
-  return json({
-    id: post.id,
-    author: post.author,
-    sourceText: post.sourceText,
-    sourceLanguage: post.sourceLanguage,
-    displayText: translation?.text ?? post.sourceText,
-    displayLanguage: translation ? displayLang : post.sourceLanguage,
-    backgroundKey: post.backgroundKey,
-    imageObjectKey: post.imageObjectKey,
-    visibility: post.visibility,
-    likeCount: post.likeCount,
-    commentCount: post.commentCount,
-    publishedAt: post.publishedAt,
-    bodyVersion: post.bodyVersion,
-    translations: post.translations.filter((t) => t.bodyVersion === post.bodyVersion),
-  })
+  return json({ post: serialized })
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {

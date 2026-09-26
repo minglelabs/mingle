@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
-import { visibleAuthorWhere } from '@/server/posts/block-visibility'
+import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { feedPostRowSelect, serializePostsPage } from '@/server/feed/feed-post-loader'
 import {
   decodeTimeCursor,
@@ -13,6 +13,8 @@ import {
 
 export const runtime = 'nodejs'
 
+type RouteContext = { params: Promise<{ userId: string }> }
+
 function json(payload: object, init?: ResponseInit): NextResponse {
   return NextResponse.json(payload, {
     ...init,
@@ -21,20 +23,19 @@ function json(payload: object, init?: ResponseInit): NextResponse {
 }
 
 /**
- * The viewer's hidden posts, for un-hiding. Shows posts the viewer explicitly
- * hid that are STILL otherwise viewable — public, not deleted, not
- * moderation-hidden, author not operator-hidden or blocked. A post that became
- * invisible for one of those reasons drops off the list. Returns
- * FeedPostListResponse. Signed-in only.
- *
- * We cannot use `visiblePostWhere` here because it excludes hidden posts by
- * definition; instead we require the PostHide row and re-apply the remaining
- * visibility rules directly.
+ * An author's public posts, newest first (grid order), cursor-paginated.
+ * Applies the shared visibility rules (archived / deleted / moderation-hidden /
+ * mutual block / viewer-hidden excluded) via `visiblePostWhere`. A signed-out
+ * reader may browse; the author's own profile still shows only public posts.
+ * Returns FeedPostListResponse.
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest, context: RouteContext) {
+  const { userId: rawUserId } = await context.params
+  const authorId = rawUserId.trim()
+  if (!authorId) return json({ error: 'invalid_user_id' }, { status: 400 })
+
   const session = await getServerSession(getAuthOptions())
-  const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
-  if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() || null : null
 
   const { searchParams } = request.nextUrl
   const limit = parseListLimit(searchParams.get('limit'))
@@ -43,11 +44,8 @@ export async function GET(request: NextRequest) {
 
   const rows = await prisma.post.findMany({
     where: {
-      visibility: 'public',
-      OR: [{ isDeleted: null }, { isDeleted: false }],
-      moderationHiddenAt: null,
-      author: visibleAuthorWhere(userId),
-      hides: { some: { userId } },
+      ...visiblePostWhere(viewerId),
+      authorId,
       ...timeCursorWhere(cursor),
     },
     select: feedPostRowSelect,
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const hasMore = rows.length > limit
   const pageRows = hasMore ? rows.slice(0, limit) : rows
-  const posts = await serializePostsPage(pageRows, { viewerId: userId, rawDisplayLanguage: displayLanguage })
+  const posts = await serializePostsPage(pageRows, { viewerId, rawDisplayLanguage: displayLanguage })
 
   const last = pageRows[pageRows.length - 1]
   const nextCursor = hasMore && last
