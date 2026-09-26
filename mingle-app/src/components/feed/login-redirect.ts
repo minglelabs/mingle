@@ -1,4 +1,9 @@
-import { feedHref } from "@/lib/feed-routes";
+import { composeHref, feedHref } from "@/lib/feed-routes";
+
+function signInHref(locale: string, callbackUrl: string): string {
+  const params = new URLSearchParams({ callbackUrl });
+  return `/${locale}/auth/signin?${params.toString()}`;
+}
 
 /**
  * Build the sign-in URL that returns the viewer to the same post after login.
@@ -9,6 +14,10 @@ import { feedHref } from "@/lib/feed-routes";
  */
 export function loginHref(locale: string, returnToPostId?: string | null): string {
   const callbackUrl = returnToPostId ? feedHref(locale, { postId: returnToPostId }) : feedHref(locale);
-  const params = new URLSearchParams({ callbackUrl });
-  return `/${locale}/auth/signin?${params.toString()}`;
+  return signInHref(locale, callbackUrl);
+}
+
+/** Sign-in URL for the compose button: after login the viewer lands on compose. */
+export function composeLoginHref(locale: string): string {
+  return signInHref(locale, composeHref(locale));
 }

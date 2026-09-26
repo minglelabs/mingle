@@ -29,6 +29,25 @@ type UseFeedFollowReturn = {
 /** How long the success check stays before the button hides. */
 const SUCCESS_HOLD_MS = 900;
 
+/** This card's own follow interaction, independent of the DTO flag. */
+export type LocalFollowState = "idle" | "pending" | "success" | "done";
+
+/**
+ * The visible button state. The DTO flag (`followingAuthor`, patched on every
+ * card by the same author when any one of them follows) hides the button; a
+ * card's own in-flight request or success check still shows until it settles.
+ */
+export function resolveFollowButtonState(
+  local: LocalFollowState,
+  props: { followingAuthor: boolean | null; isMine: boolean },
+): FollowButtonState {
+  if (local === "pending") return "pending";
+  if (local === "success") return "success";
+  if (local === "done") return "hidden";
+  if (props.isMine || props.followingAuthor !== false) return "hidden";
+  return "idle";
+}
+
 /**
  * Drives the inline "+ Follow" button on the author row, wired to
  * `POST /users/{id}/follow`.
@@ -41,10 +60,15 @@ const SUCCESS_HOLD_MS = 900;
 export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowReturn {
   const { authorId, followingAuthor, isMine, isSignedIn, onRequireLogin, onFollowed, onError } = options;
 
-  const initiallyHidden = isMine || followingAuthor === true || followingAuthor === null;
-  const [buttonState, setButtonState] = useState<FollowButtonState>(
-    initiallyHidden ? "hidden" : "idle",
-  );
+  const [local, setLocal] = useState<LocalFollowState>("idle");
+  // Follow the DTO flag: when it flips back to "not following" (e.g. the list
+  // re-fetched after an unfollow on the profile), this card offers it again.
+  const [prevFollowing, setPrevFollowing] = useState(followingAuthor);
+  if (prevFollowing !== followingAuthor) {
+    setPrevFollowing(followingAuthor);
+    if (followingAuthor === false && local === "done") setLocal("idle");
+  }
+  const buttonState = resolveFollowButtonState(local, { followingAuthor, isMine });
   const pendingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,7 +87,7 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
     }
 
     pendingRef.current = true;
-    setButtonState("pending");
+    setLocal("pending");
 
     void (async () => {
       try {
@@ -72,15 +96,15 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
           cache: "no-store",
         });
         if (!res.ok) {
-          setButtonState("idle");
+          setLocal("idle");
           onError?.();
           return;
         }
-        setButtonState("success");
+        setLocal("success");
         onFollowed?.(authorId);
-        timerRef.current = setTimeout(() => setButtonState("hidden"), SUCCESS_HOLD_MS);
+        timerRef.current = setTimeout(() => setLocal("done"), SUCCESS_HOLD_MS);
       } catch {
-        setButtonState("idle");
+        setLocal("idle");
         onError?.();
       } finally {
         pendingRef.current = false;

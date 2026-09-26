@@ -70,3 +70,112 @@ export function clearFeedRestoreState(source: FeedSource): void {
     // Ignore.
   }
 }
+
+// ---------------------------------------------------------------------------
+// Restore session: read once, synchronously, before any card mounts; write
+// only after the list has been restored, so the empty first render can never
+// overwrite the remembered position.
+// ---------------------------------------------------------------------------
+
+type RestoreStorage = Pick<Storage, "getItem" | "setItem">;
+
+function defaultStorage(): RestoreStorage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function parseRestoreState(raw: string | null): FeedRestoreState | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as FeedRestoreState;
+    if (!parsed || typeof parsed !== "object" || typeof parsed.posts !== "object" || !parsed.posts) return null;
+    return {
+      activePostId: typeof parsed.activePostId === "string" ? parsed.activePostId : null,
+      posts: parsed.posts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type FeedRestoreSession = {
+  /** What was saved when this shell mounted (read synchronously). */
+  readonly initial: FeedRestoreState | null;
+  /** Allow writes. Call once the list is on screen and the start is applied. */
+  markReady(): void;
+  readonly ready: boolean;
+  /** Save the current position. A no-op before `markReady()`. */
+  persist(state: FeedRestoreState): void;
+};
+
+export function createFeedRestoreSession(
+  source: FeedSource,
+  storage: RestoreStorage | null = defaultStorage(),
+): FeedRestoreSession {
+  const key = storageKey(source);
+  let initial: FeedRestoreState | null = null;
+  try {
+    initial = storage ? parseRestoreState(storage.getItem(key)) : null;
+  } catch {
+    initial = null;
+  }
+  let ready = false;
+  return {
+    initial,
+    get ready() {
+      return ready;
+    },
+    markReady() {
+      ready = true;
+    },
+    persist(state) {
+      if (!ready || !storage) return;
+      try {
+        storage.setItem(key, JSON.stringify(state));
+      } catch {
+        // Storage full / disabled — restore is best-effort.
+      }
+    },
+  };
+}
+
+/**
+ * Which post the shell opens on. Precedence: a home deep link (`?postId=`),
+ * then a viewer start post, then the remembered active post. Only the
+ * remembered post needs the list to fetch it (`restorePostId`).
+ */
+export function planFeedStart(options: {
+  deepLinkPostId: string | null;
+  startPostId: string | null;
+  saved: FeedRestoreState | null;
+}): { kind: "deep-link" | "viewer" | "restore" | "top"; postId: string | null; restorePostId: string | null } {
+  if (options.deepLinkPostId) return { kind: "deep-link", postId: options.deepLinkPostId, restorePostId: null };
+  if (options.startPostId) return { kind: "viewer", postId: options.startPostId, restorePostId: null };
+  const remembered = options.saved?.activePostId ?? null;
+  if (remembered) return { kind: "restore", postId: remembered, restorePostId: remembered };
+  return { kind: "top", postId: null, restorePostId: null };
+}
+
+/**
+ * Opens a deep-linked comment sheet (`?commentId=`) exactly once: the first
+ * time its post is on screen. Later list changes (load more, patches) and a
+ * closed sheet never reopen it.
+ */
+export function createDeepLinkCommentLatch(postId: string | null, commentId: string | null) {
+  let consumed = !postId || !commentId;
+  return {
+    take(hasPost: (id: string) => boolean): { postId: string; commentId: string } | null {
+      if (consumed || !postId || !commentId) return null;
+      if (!hasPost(postId)) return null;
+      consumed = true;
+      return { postId, commentId };
+    },
+    get consumed() {
+      return consumed;
+    },
+  };
+}
