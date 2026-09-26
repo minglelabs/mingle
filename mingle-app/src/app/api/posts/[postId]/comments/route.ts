@@ -4,12 +4,13 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
-import { visibleCommentsWhere, notMutuallyBlockedWhere } from '@/server/posts/comment-visibility'
+import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { createComment } from '@/server/posts/comment-service'
 import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
 import { resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 
 export const runtime = 'nodejs'
 
@@ -27,22 +28,33 @@ type Ctx = { params: Promise<{ postId: string }> }
 /**
  * GET — list comments on a post.
  * Oldest-first, replies grouped under their parent in chronological order.
+ *
+ * A signed-out viewer (no session) may read the list of a visible post: the
+ * feed is public-readable, so the comment sheet is too. Writing and liking
+ * still require a session (enforced by POST / like / translate handlers).
+ * For a signed-out viewer no block filtering applies and nothing is "liked".
+ *
+ * Each comment carries the same translation display fields as a feed post
+ * (`displayText` / `displayLanguage` / `translationState`) so the sheet can
+ * show the viewer's default display language by default and offer a
+ * "See translation" / "See original" toggle with identical semantics.
  */
 export async function GET(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
-  const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
-  if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const rawUserId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
+  const userId = rawUserId || null
 
   const { postId } = await context.params
 
-  // Verify post is visible
+  // Verify post is visible (null viewerId => public visibility rules apply).
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, userId),
-    select: { id: true },
+    select: { id: true, commentCount: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
-  // Fetch all comments (including soft-deleted parents with replies)
+  // Fetch all comments (including soft-deleted parents with replies).
+  // `translations` (ready only) lets us resolve the display language per comment.
   const comments = await prisma.postComment.findMany({
     where: visibleCommentsWhere(postId, userId),
     orderBy: { createdAt: 'asc' },
@@ -50,19 +62,36 @@ export async function GET(request: NextRequest, context: Ctx) {
       author: { select: { id: true, handle: true, name: true, image: true } },
       replyToUser: { select: { id: true, handle: true, name: true } },
       _count: { select: { replies: true } },
+      translations: {
+        where: { status: 'ready' },
+        select: { language: true, bodyVersion: true, text: true },
+      },
     },
   })
 
-  // Check which comments the viewer has liked
+  // Check which comments the viewer has liked (none when signed out).
   const commentIds = comments.map((c) => c.id)
-  const likedSet = new Set(
-    (
-      await prisma.postCommentLike.findMany({
-        where: { commentId: { in: commentIds }, userId },
-        select: { commentId: true },
-      })
-    ).map((l) => l.commentId),
+  const likedSet = new Set<string>(
+    userId
+      ? (
+          await prisma.postCommentLike.findMany({
+            where: { commentId: { in: commentIds }, userId },
+            select: { commentId: true },
+          })
+        ).map((l) => l.commentId)
+      : [],
   )
+
+  // Resolve the viewer's default display language (drives translationState).
+  const displayLanguage = userId
+    ? (
+        await prisma.user.findUnique({
+          where: { id: userId },
+          select: { defaultDisplayLanguage: true },
+        })
+      )?.defaultDisplayLanguage ?? null
+    : null
+  const canonicalDisplay = displayLanguage ? canonicalizeTranslationLanguageCode(displayLanguage) : ''
 
   // Build threaded response: top-level first, replies grouped under parent.
   //
@@ -88,6 +117,39 @@ export async function GET(request: NextRequest, context: Ctx) {
 
   function formatComment(c: (typeof comments)[number]) {
     const isDeleted = c.isDeleted === true
+
+    // Translation display, mirroring feed posts:
+    // - deleted body: no translation, state 'none'
+    // - no display language, or same language as source: 'same_language'
+    // - a ready translation for the current body version exists: 'ready'
+    // - otherwise: 'none' (the client requests it on demand; 'pending'/'failed'
+    //   are surfaced by the on-demand translate response, not the list read)
+    let displayText: string | null = null
+    let displayLang: string | null = null
+    let translationState: 'same_language' | 'ready' | 'none' = 'none'
+
+    if (!isDeleted) {
+      const canonicalSource = c.sourceLanguage ? canonicalizeTranslationLanguageCode(c.sourceLanguage) : ''
+      if (!canonicalDisplay || (canonicalSource && canonicalSource === canonicalDisplay)) {
+        translationState = 'same_language'
+        displayText = c.sourceText
+        displayLang = c.sourceLanguage
+      } else {
+        const ready = c.translations.find(
+          (t) => t.bodyVersion === c.bodyVersion && canonicalizeTranslationLanguageCode(t.language) === canonicalDisplay,
+        )
+        if (ready?.text) {
+          translationState = 'ready'
+          displayText = ready.text
+          displayLang = displayLanguage
+        } else {
+          translationState = 'none'
+          displayText = c.sourceText
+          displayLang = c.sourceLanguage
+        }
+      }
+    }
+
     return {
       id: c.id,
       postId: c.postId,
@@ -97,8 +159,15 @@ export async function GET(request: NextRequest, context: Ctx) {
       bodyVersion: c.bodyVersion,
       sourceText: isDeleted ? null : c.sourceText,
       sourceLanguage: isDeleted ? null : c.sourceLanguage,
+      // Body in the viewer's display language when a ready translation exists,
+      // else the original. Null only for a deleted (redacted) comment.
+      displayText,
+      displayLanguage: displayLang,
+      translationState,
       likeCount: c.likeCount,
       isDeleted,
+      // Whether this comment's body was edited after creation (bodyVersion > 1).
+      edited: !isDeleted && c.bodyVersion > 1,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       author: { id: c.author.id, handle: c.author.handle, name: c.author.name, image: c.author.image },
@@ -115,7 +184,10 @@ export async function GET(request: NextRequest, context: Ctx) {
     replies: (liveReplyMap.get(parent.id) ?? []).map(formatComment),
   }))
 
-  return json({ comments: result })
+  // `commentCount` is the post's own counter, so the sheet can report the
+  // authoritative count to the feed card (onCommentCountChange) even when a
+  // create/delete response does not carry it.
+  return json({ comments: result, commentCount: post.commentCount })
 }
 
 /**
