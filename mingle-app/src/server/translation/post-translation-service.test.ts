@@ -72,6 +72,20 @@ function createMockPostRepo(): PostTranslationRepository & { records: Map<string
     async findByPostVersion(postId, bodyVersion) {
       return Array.from(records.values()).filter((r) => r.postId === postId && r.bodyVersion === bodyVersion)
     },
+    async replaceVersionTranslations({ postId, bodyVersion, rows }) {
+      for (const [k, v] of Array.from(records.entries())) {
+        if (v.postId === postId && v.bodyVersion === bodyVersion) records.delete(k)
+      }
+      for (const r of rows) {
+        records.set(key(postId, bodyVersion, r.language), {
+          postId,
+          bodyVersion,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })
+      }
+    },
   }
 }
 
@@ -97,6 +111,23 @@ function createMockCommentRepo(): CommentTranslationRepository & { records: Map<
     },
     async findByCommentVersion(commentId, bodyVersion) {
       return Array.from(records.values()).filter((r) => r.commentId === commentId && r.bodyVersion === bodyVersion)
+    },
+    async findByComment(commentId) {
+      return Array.from(records.values()).filter((r) => r.commentId === commentId)
+    },
+    async replaceVersionTranslations({ commentId, bodyVersion, rows }) {
+      for (const [k, v] of Array.from(records.entries())) {
+        if (v.commentId === commentId && v.bodyVersion === bodyVersion) records.delete(k)
+      }
+      for (const r of rows) {
+        records.set(key(commentId, bodyVersion, r.language), {
+          commentId,
+          bodyVersion,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })
+      }
     },
   }
 }
@@ -398,6 +429,74 @@ describe('post-translation-service', () => {
       expect(result2).toBe('Hello')
       // Provider should only be called once due to dedup
       expect(callCount).toBe(1)
+    })
+  })
+
+  describe('settle-then-commit helpers', () => {
+    describe('resolveEditTargetLanguages()', () => {
+      it('unions defaults with prior languages and drops the source', async () => {
+        const { resolveEditTargetLanguages } = await import('./post-translation-service')
+        // source ko => defaults en/zh-CN/ja; prior had fr + ko(source, dropped)
+        const targets = resolveEditTargetLanguages('ko', ['fr', 'ko', 'en'])
+        expect(targets).toContain('en')
+        expect(targets).toContain('zh-CN')
+        expect(targets).toContain('ja')
+        expect(targets).toContain('fr')
+        expect(targets).not.toContain('ko')
+        // en appears once despite being in both defaults and prior
+        expect(targets.filter((l) => l === 'en')).toHaveLength(1)
+      })
+    })
+
+    describe('translatePostBodySettled()', () => {
+      it('returns ready rows for successes and never throws on a failing language', async () => {
+        mockGenerateContent.mockImplementation(async (prompt: string) => {
+          // Fail only the zh-CN call; succeed otherwise.
+          if (typeof prompt === 'string' && prompt.includes('zh-CN')) throw new Error('boom')
+          return { response: { text: () => JSON.stringify({ en: 'Hi', ja: 'やあ', ko: '안녕' }), usageMetadata: {}, candidates: [] } }
+        })
+
+        const { translatePostBodySettled } = await import('./post-translation-service')
+        const rows = await translatePostBodySettled({
+          sourceText: 'Hello',
+          sourceLanguage: 'fr',
+          targetLanguages: ['en', 'zh-CN', 'ja', 'ko'],
+          budgetMs: 5_000,
+        })
+
+        const byLang = Object.fromEntries(rows.map((r) => [r.language, r]))
+        expect(byLang['zh-CN'].status).toBe('failed')
+        expect(byLang['zh-CN'].text).toBeNull()
+        expect(byLang.en.status).toBe('ready')
+        expect(byLang.en.text).toBe('Hi')
+      })
+
+      it('marks a language failed when it does not settle within the budget', async () => {
+        mockGenerateContent.mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 200))
+          return { response: { text: () => JSON.stringify({ en: 'Hi' }), usageMetadata: {}, candidates: [] } }
+        })
+
+        const { translatePostBodySettled } = await import('./post-translation-service')
+        const rows = await translatePostBodySettled({
+          sourceText: 'Hello',
+          sourceLanguage: 'fr',
+          targetLanguages: ['en'],
+          budgetMs: 10, // far shorter than the 200ms provider latency
+        })
+        expect(rows).toEqual([{ language: 'en', status: 'failed', text: null }])
+      })
+
+      it('returns [] when there are no target languages', async () => {
+        const { translatePostBodySettled } = await import('./post-translation-service')
+        const rows = await translatePostBodySettled({
+          sourceText: 'Hello',
+          sourceLanguage: 'fr',
+          targetLanguages: [],
+        })
+        expect(rows).toEqual([])
+        expect(mockGenerateContent).not.toHaveBeenCalled()
+      })
     })
   })
 })

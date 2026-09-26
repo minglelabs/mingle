@@ -9,7 +9,8 @@ const {
   mockUserFindUnique,
   mockCreateComment,
   mockDeleteComment,
-  mockTranslateCommentOnDemand,
+  mockDetectSourceLanguage,
+  mockTranslateCommentBodySettled,
   mockResolveDefaultPostTranslationLanguages,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
@@ -19,7 +20,8 @@ const {
   mockUserFindUnique: vi.fn(),
   mockCreateComment: vi.fn(),
   mockDeleteComment: vi.fn(),
-  mockTranslateCommentOnDemand: vi.fn(),
+  mockDetectSourceLanguage: vi.fn(),
+  mockTranslateCommentBodySettled: vi.fn(),
   mockResolveDefaultPostTranslationLanguages: vi.fn(),
 }))
 
@@ -41,8 +43,11 @@ vi.mock('@/server/posts/comment-service', () => ({
   createComment: mockCreateComment,
   deleteComment: mockDeleteComment,
 }))
+vi.mock('@/server/translation/detect-source-language', () => ({
+  detectSourceLanguage: mockDetectSourceLanguage,
+}))
 vi.mock('@/server/translation/post-translation-service', () => ({
-  translateCommentOnDemand: mockTranslateCommentOnDemand,
+  translateCommentBodySettled: mockTranslateCommentBodySettled,
   resolveDefaultPostTranslationLanguages: mockResolveDefaultPostTranslationLanguages,
 }))
 vi.mock('@/server/posts/post-translation-repository', () => ({
@@ -288,7 +293,11 @@ describe('POST /api/posts/{postId}/comments', () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
     mockPostFindFirst.mockResolvedValue({ id: 'post-1' })
     mockResolveDefaultPostTranslationLanguages.mockReturnValue(['en', 'ja', 'ko'])
-    mockTranslateCommentOnDemand.mockResolvedValue('translated')
+    mockDetectSourceLanguage.mockResolvedValue('en')
+    mockTranslateCommentBodySettled.mockResolvedValue([
+      { language: 'ja', status: 'ready', text: 'いいね' },
+      { language: 'ko', status: 'ready', text: '좋아요' },
+    ])
   })
 
   it('returns 400 when no text', async () => {
@@ -303,7 +312,7 @@ describe('POST /api/posts/{postId}/comments', () => {
     expect(body.error).toBe('text_too_long')
   })
 
-  it('creates comment successfully', async () => {
+  it('creates comment successfully with server-detected language + settled translations', async () => {
     mockCreateComment.mockResolvedValue({
       id: 'c1', postId: 'post-1', parentId: null,
       replyToUserId: null, bodyVersion: 1, createdAt: new Date(),
@@ -316,6 +325,17 @@ describe('POST /api/posts/{postId}/comments', () => {
     expect(res.status).toBe(201)
     const body = await res.json()
     expect(body.id).toBe('c1')
+    // Server detection is authoritative and passed to createComment.
+    expect(mockDetectSourceLanguage).toHaveBeenCalledWith({ text: 'Nice post!', clientHint: 'en' })
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceLanguage: 'en',
+        translationRows: [
+          { language: 'ja', status: 'ready', text: 'いいね' },
+          { language: 'ko', status: 'ready', text: '좋아요' },
+        ],
+      }),
+    )
   })
 
   it('returns 400 for invalid parentId', async () => {

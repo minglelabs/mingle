@@ -5,31 +5,57 @@ const {
   mockGetServerSession,
   mockPostCreate,
   mockPostFindFirst,
-  mockTranslatePostOnPublish,
+  mockTransaction,
+  mockPostTranslationCreateMany,
+  mockDetectSourceLanguage,
+  mockTranslatePostBodySettled,
+  mockResolveDefaultPostTranslationLanguages,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockPostCreate: vi.fn(),
   mockPostFindFirst: vi.fn(),
-  mockTranslatePostOnPublish: vi.fn(),
+  mockTransaction: vi.fn(),
+  mockPostTranslationCreateMany: vi.fn(),
+  mockDetectSourceLanguage: vi.fn(),
+  mockTranslatePostBodySettled: vi.fn(),
+  mockResolveDefaultPostTranslationLanguages: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
+    $transaction: mockTransaction,
     post: { create: mockPostCreate, findFirst: mockPostFindFirst },
+    postTranslation: { createMany: mockPostTranslationCreateMany },
   },
 }))
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>()
   return { ...actual, after: (fn: () => Promise<void>) => { fn().catch(() => {}) } }
 })
+vi.mock('@/server/translation/detect-source-language', () => ({
+  detectSourceLanguage: mockDetectSourceLanguage,
+}))
 vi.mock('@/server/translation/post-translation-service', () => ({
-  translatePostOnPublish: mockTranslatePostOnPublish,
+  translatePostBodySettled: mockTranslatePostBodySettled,
+  resolveDefaultPostTranslationLanguages: mockResolveDefaultPostTranslationLanguages,
 }))
 vi.mock('@/server/posts/post-translation-repository', () => ({
   prismaTranslationDeps: {},
 }))
+
+// $transaction runs its callback with a tx whose post.create / translation
+// writes reuse the same mocks the route asserts on.
+function setupTransaction() {
+  mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+    const tx = {
+      post: { create: mockPostCreate },
+      postTranslation: { createMany: mockPostTranslationCreateMany },
+    }
+    return cb(tx)
+  })
+}
 
 import { POST } from './route'
 
@@ -46,7 +72,14 @@ describe('POST /api/posts', () => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
     mockPostFindFirst.mockResolvedValue(null)
-    mockTranslatePostOnPublish.mockResolvedValue({})
+    mockDetectSourceLanguage.mockResolvedValue('en')
+    mockResolveDefaultPostTranslationLanguages.mockReturnValue(['zh-CN', 'ja', 'ko'])
+    mockTranslatePostBodySettled.mockResolvedValue([
+      { language: 'zh-CN', status: 'ready', text: '你好' },
+      { language: 'ja', status: 'ready', text: 'こんにちは' },
+      { language: 'ko', status: 'failed', text: null },
+    ])
+    setupTransaction()
   })
 
   it('returns 401 when not authenticated', async () => {
@@ -74,7 +107,7 @@ describe('POST /api/posts', () => {
     expect(json.error).toBe('text_too_long')
   })
 
-  it('creates a post and returns 201', async () => {
+  it('detects language, settles translations, then creates post + translations atomically (201)', async () => {
     mockPostCreate.mockResolvedValue({
       id: 'post-1',
       backgroundKey: 'solid-white',
@@ -88,11 +121,40 @@ describe('POST /api/posts', () => {
     expect(res.status).toBe(201)
     const json = await res.json()
     expect(json.postId).toBe('post-1')
+    expect(mockDetectSourceLanguage).toHaveBeenCalledWith({ text: 'Hello world', clientHint: 'en' })
+    // Created inside the transaction with the detected language.
     expect(mockPostCreate).toHaveBeenCalledOnce()
+    expect(mockPostCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ sourceLanguage: 'en', bodyVersion: 1, visibility: 'public' }),
+    })
+    // Settled rows (ready AND failed) are written together with the post.
+    expect(mockPostTranslationCreateMany).toHaveBeenCalledWith({
+      data: [
+        { postId: 'post-1', bodyVersion: 1, language: 'zh-CN', status: 'ready', text: '你好' },
+        { postId: 'post-1', bodyVersion: 1, language: 'ja', status: 'ready', text: 'こんにちは' },
+        { postId: 'post-1', bodyVersion: 1, language: 'ko', status: 'failed', text: null },
+      ],
+    })
+  })
+
+  it('publishes an undetectable (emoji-only) post untranslated', async () => {
+    mockDetectSourceLanguage.mockResolvedValue(null)
+    mockPostCreate.mockResolvedValue({
+      id: 'post-emoji', backgroundKey: 'solid-white', publishedAt: new Date(),
+    })
+
+    const res = await POST(makeRequest({ sourceText: '🎉🎉🎉' }))
+    expect(res.status).toBe(201)
+    // Null source language stored; no translation attempted / written.
+    expect(mockTranslatePostBodySettled).not.toHaveBeenCalled()
+    expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
+    expect(mockPostCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ sourceLanguage: null }),
+    })
   })
 
   it('returns existing post for duplicate clientPostId', async () => {
-    mockPostFindFirst.mockResolvedValue({ id: 'post-dup' })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-dup', backgroundKey: 'solid-white', publishedAt: new Date() })
 
     const res = await POST(makeRequest({
       sourceText: 'Hello',
@@ -103,9 +165,11 @@ describe('POST /api/posts', () => {
     const json = await res.json()
     expect(json.duplicate).toBe(true)
     expect(mockPostCreate).not.toHaveBeenCalled()
+    // Idempotent: no translation work done on a duplicate.
+    expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
   })
 
-  it('allows image-only posts without text', async () => {
+  it('allows image-only posts without text (no translation, immediate publish)', async () => {
     mockPostCreate.mockResolvedValue({
       id: 'post-img',
       backgroundKey: 'solid-coral',
@@ -116,5 +180,7 @@ describe('POST /api/posts', () => {
       imageObjectKey: 'post-images/abc.jpg',
     }))
     expect(res.status).toBe(201)
+    expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
+    expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
   })
 })

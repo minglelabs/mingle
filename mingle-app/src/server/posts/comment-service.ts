@@ -16,6 +16,12 @@ export type CreateCommentArgs = {
   sourceLanguage: string | null
   parentId?: string | null
   replyToUserId?: string | null
+  /**
+   * Settled default-language translations to persist atomically with the
+   * comment (settle-then-commit). The comment and its translations become
+   * visible together. Omit for an untranslated comment.
+   */
+  translationRows?: Array<{ language: string; status: string; text: string | null }>
 }
 
 export type UpdateCommentArgs = {
@@ -23,6 +29,11 @@ export type UpdateCommentArgs = {
   actorId: string
   sourceText: string
   sourceLanguage: string | null
+  /**
+   * Settled translations for the NEW body version, written atomically with the
+   * body swap. The previous body + translations stay visible until commit.
+   */
+  translationRows?: Array<{ language: string; status: string; text: string | null }>
 }
 
 export type DeleteCommentResult = {
@@ -65,6 +76,19 @@ export async function createComment(args: CreateCommentArgs) {
       },
     })
 
+    // Persist settled translations atomically with the comment (settle-then-commit).
+    if (args.translationRows && args.translationRows.length > 0) {
+      await tx.postCommentTranslation.createMany({
+        data: args.translationRows.map((r) => ({
+          commentId: comment.id,
+          bodyVersion: 1,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })),
+      })
+    }
+
     // Increment commentCount on the post
     await tx.post.update({
       where: { id: args.postId },
@@ -87,13 +111,38 @@ export async function updateComment(args: UpdateCommentArgs) {
   if (comment.authorId !== args.actorId) throw new Error('forbidden')
   if (comment.isDeleted) throw new Error('already_deleted')
 
-  return prisma.postComment.update({
-    where: { id: args.commentId },
-    data: {
-      sourceText: args.sourceText,
-      sourceLanguage: args.sourceLanguage,
-      bodyVersion: { increment: 1 },
-    },
+  const newBodyVersion = comment.bodyVersion + 1
+
+  // Atomic swap: bump the body to a new version and replace that version's
+  // translations together, so the previous body + translations remain visible
+  // until commit and a late result from an earlier version cannot overwrite
+  // the new ones (they live under a different bodyVersion).
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.postComment.update({
+      where: { id: args.commentId },
+      data: {
+        sourceText: args.sourceText,
+        sourceLanguage: args.sourceLanguage,
+        bodyVersion: newBodyVersion,
+      },
+    })
+
+    await tx.postCommentTranslation.deleteMany({
+      where: { commentId: args.commentId, bodyVersion: newBodyVersion },
+    })
+    if (args.translationRows && args.translationRows.length > 0) {
+      await tx.postCommentTranslation.createMany({
+        data: args.translationRows.map((r) => ({
+          commentId: args.commentId,
+          bodyVersion: newBodyVersion,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })),
+      })
+    }
+
+    return updated
   })
 }
 

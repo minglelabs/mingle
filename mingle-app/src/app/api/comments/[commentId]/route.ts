@@ -1,10 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
+import { prisma } from '@/lib/prisma'
 import { updateComment, deleteComment } from '@/server/posts/comment-service'
-import { translateCommentOnDemand, resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
-import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import {
+  resolveEditTargetLanguages,
+  translateCommentBodySettled,
+} from '@/server/translation/post-translation-service'
 
 export const runtime = 'nodejs'
 
@@ -44,11 +47,43 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   if (!text || text.trim().length === 0) return json({ error: 'text_required' }, { status: 400 })
   if (text.length > MAX_COMMENT_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
 
-  const lang = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
+  const clientHint = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
+
+  // Server detection is authoritative. Detect the new body's language, then
+  // re-translate the default 4 languages + every language this comment already
+  // had, letting them settle BEFORE the atomic body-version swap so the
+  // previous body + translations stay visible until commit.
+  const detected = await detectSourceLanguage({ text, clientHint })
+
+  let translationRows: Array<{ language: string; status: string; text: string | null }> = []
+  if (detected) {
+    const priorLanguages = (
+      await prisma.postCommentTranslation.findMany({
+        where: { commentId },
+        select: { language: true },
+      })
+    ).map((r) => r.language)
+    const targets = resolveEditTargetLanguages(detected, priorLanguages)
+    if (targets.length > 0) {
+      translationRows = (
+        await translateCommentBodySettled({
+          sourceText: text,
+          sourceLanguage: detected,
+          targetLanguages: targets,
+        })
+      ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
+    }
+  }
 
   let updated
   try {
-    updated = await updateComment({ commentId, actorId: userId, sourceText: text, sourceLanguage: lang })
+    updated = await updateComment({
+      commentId,
+      actorId: userId,
+      sourceText: text,
+      sourceLanguage: detected,
+      translationRows,
+    })
   } catch (err: unknown) {
     if (err instanceof Error) {
       if (err.message === 'not_found') return json({ error: 'not_found' }, { status: 404 })
@@ -56,28 +91,6 @@ export async function PATCH(request: NextRequest, context: Ctx) {
       if (err.message === 'already_deleted') return json({ error: 'already_deleted' }, { status: 410 })
     }
     throw err
-  }
-
-  // Fire-and-forget re-translation
-  if (lang) {
-    after(async () => {
-      try {
-        const targets = resolveDefaultPostTranslationLanguages(lang)
-        await Promise.allSettled(
-          targets.map((targetLang) =>
-            translateCommentOnDemand(prismaTranslationDeps, {
-              commentId: updated.id,
-              bodyVersion: updated.bodyVersion,
-              sourceText: text,
-              sourceLanguage: lang,
-              language: targetLang,
-            }),
-          ),
-        )
-      } catch (err) {
-        console.error('[comment-update] translation failed', err instanceof Error ? err.message : 'unknown')
-      }
-    })
   }
 
   return json({

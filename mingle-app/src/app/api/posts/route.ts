@@ -1,11 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { randomBackgroundKey } from '@/lib/post-backgrounds'
-import { translatePostOnPublish } from '@/server/translation/post-translation-service'
-import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import {
+  resolveDefaultPostTranslationLanguages,
+  translatePostBodySettled,
+} from '@/server/translation/post-translation-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
@@ -41,54 +43,97 @@ export async function POST(request: NextRequest) {
   if (!hasText && !hasImage) return json({ error: 'text_or_image_required' }, { status: 400 })
   if (text !== null && text.length > MAX_BODY_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
 
-  const lang = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
+  // Client-supplied language is only a fallback hint; the server detects.
+  const clientHint = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
 
-  // Idempotency via clientPostId
+  // Idempotency via clientPostId — a retry of the same request must not create
+  // a second post or a second set of translations.
+  const idempotentId = typeof clientPostId === 'string' && /^[\w-]{12,128}$/.test(clientPostId)
+    ? clientPostId
+    : undefined
   if (typeof clientPostId === 'string' && clientPostId.trim()) {
     const existing = await prisma.post.findFirst({
       where: { authorId: userId, id: clientPostId },
-      select: { id: true },
+      select: { id: true, backgroundKey: true, publishedAt: true },
     })
     if (existing) {
-      return json({ postId: existing.id, duplicate: true }, { status: 200 })
+      return json(
+        { postId: existing.id, backgroundKey: existing.backgroundKey, publishedAt: existing.publishedAt, duplicate: true },
+        { status: 200 },
+      )
     }
   }
 
   const backgroundKey = randomBackgroundKey()
-  const postId = typeof clientPostId === 'string' && /^[\w-]{12,128}$/.test(clientPostId) ? clientPostId : undefined
+  const postId = idempotentId
 
-  const post = await prisma.post.create({
-    data: {
-      ...(postId ? { id: postId } : {}),
-      authorId: userId,
-      sourceText: text,
-      sourceLanguage: lang,
-      backgroundKey,
-      imageObjectKey: hasImage ? (imageObjectKey as string) : null,
-      visibility: 'public',
-      bodyVersion: 1,
-    },
-  })
-
-  // Fire-and-forget translation — do not block the response
-  if (hasText && lang) {
-    after(async () => {
-      try {
-        await translatePostOnPublish(prismaTranslationDeps, {
-          postId: post.id,
-          bodyVersion: 1,
-          sourceText: text!,
-          sourceLanguage: lang,
-        })
-      } catch (err) {
-        console.error('[post-create] translation failed', err instanceof Error ? err.message : 'unknown')
-      }
+  // ── Image-only post: nothing to translate, publish immediately. ──
+  if (!hasText) {
+    const post = await prisma.post.create({
+      data: {
+        ...(postId ? { id: postId } : {}),
+        authorId: userId,
+        sourceText: null,
+        sourceLanguage: null,
+        backgroundKey,
+        imageObjectKey: imageObjectKey as string,
+        visibility: 'public',
+        bodyVersion: 1,
+      },
     })
+    return json(
+      { postId: post.id, backgroundKey: post.backgroundKey, publishedAt: post.publishedAt },
+      { status: 201 },
+    )
   }
 
-  return json({
-    postId: post.id,
-    backgroundKey: post.backgroundKey,
-    publishedAt: post.publishedAt,
-  }, { status: 201 })
+  // ── Text post: detect → translate (settle within budget) → publish. ──
+  // Server detection is authoritative; the client value is only a fallback.
+  const detected = await detectSourceLanguage({ text: text!, clientHint })
+
+  const targetLanguages = detected ? resolveDefaultPostTranslationLanguages(detected) : []
+  const settledRows =
+    detected && targetLanguages.length > 0
+      ? await translatePostBodySettled({
+          sourceText: text!,
+          sourceLanguage: detected,
+          targetLanguages,
+        })
+      : []
+
+  // Atomic publish: the post row and its settled translations become visible
+  // together — the post does not exist (and so is invisible) until now.
+  const post = await prisma.$transaction(async (tx) => {
+    const created = await tx.post.create({
+      data: {
+        ...(postId ? { id: postId } : {}),
+        authorId: userId,
+        sourceText: text,
+        sourceLanguage: detected,
+        backgroundKey,
+        imageObjectKey: hasImage ? (imageObjectKey as string) : null,
+        visibility: 'public',
+        bodyVersion: 1,
+      },
+    })
+
+    if (settledRows.length > 0) {
+      await tx.postTranslation.createMany({
+        data: settledRows.map((r) => ({
+          postId: created.id,
+          bodyVersion: 1,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })),
+      })
+    }
+
+    return created
+  })
+
+  return json(
+    { postId: post.id, backgroundKey: post.backgroundKey, publishedAt: post.publishedAt },
+    { status: 201 },
+  )
 }

@@ -5,29 +5,37 @@ const {
   mockGetServerSession,
   mockUpdateComment,
   mockDeleteComment,
-  mockTranslateCommentOnDemand,
-  mockResolveDefaultPostTranslationLanguages,
+  mockDetectSourceLanguage,
+  mockTranslateCommentBodySettled,
+  mockResolveEditTargetLanguages,
+  mockCommentTranslationFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUpdateComment: vi.fn(),
   mockDeleteComment: vi.fn(),
-  mockTranslateCommentOnDemand: vi.fn(),
-  mockResolveDefaultPostTranslationLanguages: vi.fn(),
+  mockDetectSourceLanguage: vi.fn(),
+  mockTranslateCommentBodySettled: vi.fn(),
+  mockResolveEditTargetLanguages: vi.fn(),
+  mockCommentTranslationFindMany: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
-vi.mock('next/server', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('next/server')>()
-  return { ...actual, after: (fn: () => Promise<void>) => { fn().catch(() => {}) } }
-})
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    postCommentTranslation: { findMany: mockCommentTranslationFindMany },
+  },
+}))
 vi.mock('@/server/posts/comment-service', () => ({
   updateComment: mockUpdateComment,
   deleteComment: mockDeleteComment,
 }))
+vi.mock('@/server/translation/detect-source-language', () => ({
+  detectSourceLanguage: mockDetectSourceLanguage,
+}))
 vi.mock('@/server/translation/post-translation-service', () => ({
-  translateCommentOnDemand: mockTranslateCommentOnDemand,
-  resolveDefaultPostTranslationLanguages: mockResolveDefaultPostTranslationLanguages,
+  translateCommentBodySettled: mockTranslateCommentBodySettled,
+  resolveEditTargetLanguages: mockResolveEditTargetLanguages,
 }))
 vi.mock('@/server/posts/post-translation-repository', () => ({
   prismaTranslationDeps: {},
@@ -51,7 +59,13 @@ describe('PATCH /api/comments/{commentId}', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
-    mockResolveDefaultPostTranslationLanguages.mockReturnValue(['en', 'ja', 'ko'])
+    mockDetectSourceLanguage.mockResolvedValue('en')
+    mockCommentTranslationFindMany.mockResolvedValue([])
+    mockResolveEditTargetLanguages.mockReturnValue(['ja', 'ko'])
+    mockTranslateCommentBodySettled.mockResolvedValue([
+      { language: 'ja', status: 'ready', text: '編集済み' },
+      { language: 'ko', status: 'ready', text: '수정됨' },
+    ])
   })
 
   it('returns 401 when not authenticated', async () => {
@@ -71,14 +85,13 @@ describe('PATCH /api/comments/{commentId}', () => {
     expect(res.status).toBe(403)
   })
 
-  it('updates and increments bodyVersion', async () => {
+  it('updates and increments bodyVersion, passing settled translations', async () => {
     mockUpdateComment.mockResolvedValue({
       id: 'c1',
       bodyVersion: 2,
       sourceText: 'edited',
       updatedAt: new Date(),
     })
-    mockTranslateCommentOnDemand.mockResolvedValue('translated')
 
     const res = await PATCH(
       makePatchRequest({ sourceText: 'edited', sourceLanguage: 'en' }),
@@ -87,6 +100,16 @@ describe('PATCH /api/comments/{commentId}', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.bodyVersion).toBe(2)
+    expect(mockUpdateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commentId: 'c1',
+        sourceLanguage: 'en',
+        translationRows: [
+          { language: 'ja', status: 'ready', text: '編集済み' },
+          { language: 'ko', status: 'ready', text: '수정됨' },
+        ],
+      }),
+    )
   })
 })
 

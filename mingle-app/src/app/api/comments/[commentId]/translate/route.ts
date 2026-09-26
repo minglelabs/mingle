@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
 import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
 
 export const runtime = 'nodejs'
@@ -50,13 +51,30 @@ export async function POST(request: NextRequest, context: Ctx) {
     select: { id: true, bodyVersion: true, sourceText: true, sourceLanguage: true },
   })
   if (!comment) return json({ error: 'not_found' }, { status: 404 })
-  if (!comment.sourceLanguage) return json({ error: 'no_source_language' }, { status: 400 })
+  if (!comment.sourceText || !comment.sourceText.trim()) {
+    return json({ error: 'no_text_to_translate' }, { status: 400 })
+  }
+
+  // Legacy rows with a null source language: detect and persist it now, then
+  // translate — instead of returning 400 no_source_language. Detection wins.
+  let sourceLanguage = comment.sourceLanguage
+  if (!sourceLanguage) {
+    const detected = await detectSourceLanguage({ text: comment.sourceText })
+    if (!detected) {
+      return json({ error: 'no_text_to_translate' }, { status: 400 })
+    }
+    await prisma.postComment.update({
+      where: { id: comment.id },
+      data: { sourceLanguage: detected },
+    })
+    sourceLanguage = detected
+  }
 
   const translatedText = await translateCommentOnDemand(prismaTranslationDeps, {
     commentId: comment.id,
     bodyVersion: comment.bodyVersion,
     sourceText: comment.sourceText,
-    sourceLanguage: comment.sourceLanguage,
+    sourceLanguage,
     language: language.trim(),
   })
 

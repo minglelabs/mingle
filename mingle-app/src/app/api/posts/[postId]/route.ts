@@ -1,12 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere, ownPostWhere } from '@/server/posts/post-visibility'
 import { randomBackgroundKey } from '@/lib/post-backgrounds'
-import { retranslatePostOnEdit } from '@/server/translation/post-translation-service'
-import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import {
+  resolveEditTargetLanguages,
+  translatePostBodySettled,
+} from '@/server/translation/post-translation-service'
 import { serializePostsPage } from '@/server/feed/feed-post-loader'
 
 export const runtime = 'nodejs'
@@ -63,40 +65,109 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }
   if (!body || typeof body !== 'object') return json({ error: 'invalid_body' }, { status: 400 })
 
-  const input = body as Record<string, unknown>
-
   const existing = await prisma.post.findFirst({
     where: ownPostWhere(postId, userId),
   })
   if (!existing) return json({ error: 'not_found' }, { status: 404 })
 
-  const data: Record<string, unknown> = {}
-  let needsRetranslation = false
+  const input = body as Record<string, unknown>
 
-  // Source text update
-  if ('sourceText' in input) {
-    const newText = typeof input.sourceText === 'string' ? input.sourceText : null
-    if (newText !== null && newText.length > MAX_BODY_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
-    if (newText !== null && newText.trim().length === 0 && !existing.imageObjectKey) {
+  // Detect whether the body text is actually changing.
+  const hasNewText = 'sourceText' in input
+  const newText = hasNewText ? (typeof input.sourceText === 'string' ? input.sourceText : null) : undefined
+  if (hasNewText) {
+    if (newText !== null && newText!.length > MAX_BODY_LENGTH) {
+      return json({ error: 'text_too_long' }, { status: 400 })
+    }
+    if (newText !== null && newText!.trim().length === 0 && !existing.imageObjectKey) {
       return json({ error: 'text_or_image_required' }, { status: 400 })
     }
-    data.sourceText = newText
-    data.bodyVersion = existing.bodyVersion + 1
-    needsRetranslation = true
+  }
+  const bodyChanged = hasNewText && (newText ?? null) !== (existing.sourceText ?? null)
+
+  // Non-body fields (image, background). These never trigger re-translation.
+  const sideData: Record<string, unknown> = {}
+  if ('imageObjectKey' in input) {
+    sideData.imageObjectKey = typeof input.imageObjectKey === 'string' && input.imageObjectKey ? input.imageObjectKey : null
+  }
+  if (input.changeBackground === true) {
+    sideData.backgroundKey = randomBackgroundKey()
   }
 
+  // ── Body changed: detect → settle translations → atomic swap. ──
+  // Until the transaction commits, the previous body + translations stay
+  // visible. The new bodyVersion namespaces the new translation rows, so a
+  // late result from an earlier version can never overwrite the new ones.
+  if (bodyChanged) {
+    const nextText = newText ?? null
+    const newBodyVersion = existing.bodyVersion + 1
+
+    let detected: string | null = null
+    let settledRows: Awaited<ReturnType<typeof translatePostBodySettled>> = []
+
+    if (nextText !== null && nextText.trim().length > 0) {
+      const clientHint = typeof input.sourceLanguage === 'string' && input.sourceLanguage.trim()
+        ? input.sourceLanguage.trim()
+        : null
+      detected = await detectSourceLanguage({ text: nextText, clientHint })
+
+      if (detected) {
+        // Default 4 + every language this post already had a translation for.
+        const priorLanguages = (
+          await prisma.postTranslation.findMany({
+            where: { postId },
+            select: { language: true },
+          })
+        ).map((r) => r.language)
+        const targets = resolveEditTargetLanguages(detected, priorLanguages)
+        if (targets.length > 0) {
+          settledRows = await translatePostBodySettled({
+            sourceText: nextText,
+            sourceLanguage: detected,
+            targetLanguages: targets,
+          })
+        }
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.post.update({
+        where: { id: postId },
+        data: {
+          sourceText: nextText,
+          sourceLanguage: detected,
+          bodyVersion: newBodyVersion,
+          ...sideData,
+        },
+      })
+      // Replace this version's translations (idempotent on retry).
+      await tx.postTranslation.deleteMany({ where: { postId, bodyVersion: newBodyVersion } })
+      if (settledRows.length > 0) {
+        await tx.postTranslation.createMany({
+          data: settledRows.map((r) => ({
+            postId,
+            bodyVersion: newBodyVersion,
+            language: r.language,
+            status: r.status,
+            text: r.text,
+          })),
+        })
+      }
+      return row
+    })
+
+    return json({
+      id: updated.id,
+      bodyVersion: updated.bodyVersion,
+      backgroundKey: updated.backgroundKey,
+      updatedAt: updated.updatedAt,
+    })
+  }
+
+  // ── No body change: apply source-language / image / background edits only. ──
+  const data: Record<string, unknown> = { ...sideData }
   if ('sourceLanguage' in input && typeof input.sourceLanguage === 'string') {
     data.sourceLanguage = input.sourceLanguage.trim() || null
-  }
-
-  // Image update
-  if ('imageObjectKey' in input) {
-    data.imageObjectKey = typeof input.imageObjectKey === 'string' && input.imageObjectKey ? input.imageObjectKey : null
-  }
-
-  // Background: only re-randomise when explicitly requested
-  if (input.changeBackground === true) {
-    data.backgroundKey = randomBackgroundKey()
   }
 
   if (Object.keys(data).length === 0) return json({ error: 'no_changes' }, { status: 400 })
@@ -105,25 +176,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     where: { id: postId },
     data,
   })
-
-  // Fire-and-forget re-translation on body change
-  if (needsRetranslation && updated.sourceText && updated.sourceLanguage) {
-    const sourceText = updated.sourceText
-    const sourceLanguage = updated.sourceLanguage
-    const newBodyVersion = updated.bodyVersion
-    after(async () => {
-      try {
-        await retranslatePostOnEdit(prismaTranslationDeps, {
-          postId,
-          newBodyVersion,
-          sourceText,
-          sourceLanguage,
-        })
-      } catch (err) {
-        console.error('[post-patch] retranslation failed', err instanceof Error ? err.message : 'unknown')
-      }
-    })
-  }
 
   return json({
     id: updated.id,
