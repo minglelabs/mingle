@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
-import { updateComment, deleteComment } from '@/server/posts/comment-service'
+import { authorizeCommentEdit, updateComment, deleteComment } from '@/server/posts/comment-service'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import {
   resolveEditTargetLanguages,
@@ -35,6 +36,10 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   const restricted = await accountRestrictionGuard(userId)
   if (restricted) return restricted
 
+  // Edits re-translate the body (LLM cost): rate-limited like creates.
+  const limited = rateLimitGuard('update_comment', userId)
+  if (limited) return limited
+
   const { commentId } = await context.params
 
   let body: unknown
@@ -51,6 +56,17 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   if (text.length > MAX_COMMENT_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
 
   const clientHint = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
+
+  // Permission first: only the live comment's author may edit, and nothing
+  // is detected or translated (LLM cost) until that is established.
+  let baseVersion: number
+  try {
+    baseVersion = (await authorizeCommentEdit(commentId, userId)).bodyVersion
+  } catch (err: unknown) {
+    const mapped = mapEditError(err)
+    if (mapped) return mapped
+    throw err
+  }
 
   // Server detection is authoritative. Detect the new body's language, then
   // re-translate the default 4 languages + every language this comment already
@@ -86,13 +102,11 @@ export async function PATCH(request: NextRequest, context: Ctx) {
       sourceText: text,
       sourceLanguage: detected,
       translationRows,
+      expectedBodyVersion: baseVersion,
     })
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      if (err.message === 'not_found') return json({ error: 'not_found' }, { status: 404 })
-      if (err.message === 'forbidden') return json({ error: 'forbidden' }, { status: 403 })
-      if (err.message === 'already_deleted') return json({ error: 'already_deleted' }, { status: 410 })
-    }
+    const mapped = mapEditError(err)
+    if (mapped) return mapped
     throw err
   }
 
@@ -102,6 +116,16 @@ export async function PATCH(request: NextRequest, context: Ctx) {
     sourceText: updated.sourceText,
     updatedAt: updated.updatedAt,
   })
+}
+
+function mapEditError(err: unknown): NextResponse | null {
+  if (!(err instanceof Error)) return null
+  if (err.message === 'not_found') return json({ error: 'not_found' }, { status: 404 })
+  if (err.message === 'forbidden') return json({ error: 'forbidden' }, { status: 403 })
+  if (err.message === 'already_deleted') return json({ error: 'already_deleted' }, { status: 410 })
+  // Another edit of this comment committed first (optimistic lock).
+  if (err.message === 'conflict') return json({ error: 'conflict' }, { status: 409 })
+  return null
 }
 
 /**

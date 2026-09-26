@@ -6,7 +6,10 @@
  *   2. Within each group: followed authors before non-followed
  *   3. Within each sub-group: time tier (more recent tier first)
  *   4. Within same tier: reaction score descending
- *   5. Post-sort: avoid consecutive posts by the same author (when alternatives exist)
+ *   5. Tiebreak: publishedAt desc, then id desc (deterministic — the feed pages
+ *      the ranked list by offset, so the order must not vary between requests)
+ *   6. Post-sort: avoid consecutive posts by the same author, only by moving a
+ *      post inside its own (unseen/seen × followed/not) group
  *
  * All functions are free of side effects and DB calls so they can be unit-tested trivially.
  */
@@ -76,7 +79,7 @@ export interface FeedCandidate {
   viewed: boolean
 }
 
-interface ScoredPost {
+export interface ScoredPost {
   id: string
   authorId: string
   viewed: boolean
@@ -85,8 +88,18 @@ interface ScoredPost {
   score: number
 }
 
+export interface RankFeedOptions {
+  /**
+   * Author of the card shown right before this list (the last card of the
+   * previous cycle). The first slot avoids this author when its group has an
+   * alternative, so a cycle boundary does not show one author twice in a row.
+   */
+  avoidFirstAuthorId?: string | null
+}
+
 /**
  * Rank an array of feed candidates and return their IDs in display order.
+ * The same inputs always produce the same order (see tiebreak above).
  *
  * @param candidates       All visible post candidates.
  * @param followedAuthorIds IDs of authors the viewer follows.
@@ -96,20 +109,21 @@ export function rankFeed(
   candidates: FeedCandidate[],
   followedAuthorIds: Set<string>,
   now: Date,
+  options: RankFeedOptions = {},
 ): string[] {
   if (candidates.length === 0) return []
 
   // Score every candidate
-  const scored: ScoredPost[] = candidates.map((c) => ({
+  const scored = candidates.map((c) => ({
     id: c.id,
     authorId: c.authorId,
     viewed: c.viewed,
     isFollowed: followedAuthorIds.has(c.authorId),
     tier: timeTier(c.publishedAt, now),
     score: reactionScore(c.likeCount, c.uniqueCommenterIds),
+    publishedAtMs: c.publishedAt.getTime(),
   }))
 
-  // Sort: unseen first → followed first → lower tier first → higher score first
   scored.sort((a, b) => {
     // 1. Unseen before seen
     if (a.viewed !== b.viewed) return a.viewed ? 1 : -1
@@ -118,46 +132,69 @@ export function rankFeed(
     // 3. More recent tier first (lower number = more recent)
     if (a.tier !== b.tier) return a.tier - b.tier
     // 4. Higher reaction score first
-    return b.score - a.score
+    if (a.score !== b.score) return b.score - a.score
+    // 5. Deterministic tiebreak: publishedAt DESC, then id DESC
+    if (a.publishedAtMs !== b.publishedAtMs) return b.publishedAtMs - a.publishedAtMs
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0
   })
 
   // Post-sort: avoid consecutive same-author posts when alternatives exist
-  return avoidConsecutiveAuthors(scored)
+  return avoidConsecutiveAuthors(scored, options.avoidFirstAuthorId ?? null)
 }
 
 // ---------------------------------------------------------------------------
 // Consecutive-author avoidance
 // ---------------------------------------------------------------------------
 
-/**
- * Reorder to avoid consecutive posts from the same author, only when there
- * is an alternative candidate within a small look-ahead window that would
- * not break the ordering significantly.
- *
- * Algorithm: greedy swap within a look-ahead of 5. For each position, if
- * the candidate has the same authorId as the previous post, scan ahead for
- * the first candidate with a different author and swap them.
- */
-export function avoidConsecutiveAuthors(sorted: ScoredPost[]): string[] {
-  const result = [...sorted]
-  const LOOKAHEAD = 5
+/** Ranking group. A post never moves out of its group to break an author run. */
+function groupOf(p: ScoredPost): number {
+  return (p.viewed ? 2 : 0) + (p.isFollowed ? 0 : 1)
+}
 
-  for (let i = 1; i < result.length; i++) {
-    if (result[i].authorId === result[i - 1].authorId) {
-      // Find the nearest swap candidate within lookahead
-      let swapIdx = -1
-      for (let j = i + 1; j < Math.min(i + LOOKAHEAD, result.length); j++) {
-        if (result[j].authorId !== result[i - 1].authorId) {
-          swapIdx = j
-          break
-        }
+/**
+ * Reorder to avoid consecutive posts from the same author across the WHOLE
+ * list, without moving any post out of its ranking group
+ * (unseen/seen × followed/not-followed): a seen or non-followed post is never
+ * pulled in front of an unseen or followed one.
+ *
+ * For each slot whose author equals the previous card's author (for slot 0:
+ * `avoidFirstAuthorId`), the NEAREST later post of the same group by another
+ * author moves into that slot; the posts in between shift back by one and
+ * keep their relative order. When the rest of the group is all that author,
+ * the run is unavoidable and the scan jumps to the next group.
+ */
+export function avoidConsecutiveAuthors(
+  sorted: ScoredPost[],
+  avoidFirstAuthorId: string | null = null,
+): string[] {
+  const result = [...sorted]
+
+  for (let i = 0; i < result.length; i++) {
+    const prevAuthor = i === 0 ? avoidFirstAuthorId : result[i - 1].authorId
+    if (prevAuthor === null || result[i].authorId !== prevAuthor) continue
+
+    const group = groupOf(result[i])
+    let pick = -1
+    let groupEnd = result.length
+    for (let j = i + 1; j < result.length; j++) {
+      if (groupOf(result[j]) !== group) {
+        groupEnd = j
+        break
       }
-      if (swapIdx !== -1) {
-        const tmp = result[i]
-        result[i] = result[swapIdx]
-        result[swapIdx] = tmp
+      if (result[j].authorId !== prevAuthor) {
+        pick = j
+        break
       }
     }
+
+    if (pick === -1) {
+      // The rest of this group is all prevAuthor: nothing to swap in.
+      i = groupEnd - 1
+      continue
+    }
+
+    const [moved] = result.splice(pick, 1)
+    result.splice(i, 0, moved)
   }
 
   return result.map((p) => p.id)
@@ -170,10 +207,20 @@ export function avoidConsecutiveAuthors(sorted: ScoredPost[]): string[] {
 export interface FeedCursor {
   /** Snapshot reference time – posts published after this are excluded. */
   snapshotAt: string
-  /** Offset into the ranked list. */
+  /** Offset into the snapshot's ranked list. */
   offset: number
-  /** Whether we have exhausted unseen posts and moved into seen-post phase. */
+  /** Legacy field, kept so older cursors still decode. Not used for ranking. */
   viewedPhase: boolean
+  /**
+   * Author of the last card of the previous cycle. A ranking input for the
+   * whole cycle, so a recompute (cache miss) yields the same order.
+   */
+  avoidFirstAuthorId?: string | null
+  /**
+   * The previous cycle ended. The server opens a NEW snapshot at the moment
+   * this cursor is used (so views of the last page are reflected), offset 0.
+   */
+  restart?: boolean
 }
 
 export function encodeCursor(cursor: FeedCursor): string {
@@ -184,13 +231,24 @@ export function decodeCursor(raw: string): FeedCursor | null {
   try {
     const json = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8'))
     if (
+      !json ||
       typeof json.snapshotAt !== 'string' ||
+      Number.isNaN(Date.parse(json.snapshotAt)) ||
       typeof json.offset !== 'number' ||
+      !Number.isInteger(json.offset) ||
+      json.offset < 0 ||
       typeof json.viewedPhase !== 'boolean'
     ) {
       return null
     }
-    return json as FeedCursor
+    const cursor: FeedCursor = {
+      snapshotAt: json.snapshotAt,
+      offset: json.offset,
+      viewedPhase: json.viewedPhase,
+    }
+    if (typeof json.avoidFirstAuthorId === 'string') cursor.avoidFirstAuthorId = json.avoidFirstAuthorId
+    if (json.restart === true) cursor.restart = true
+    return cursor
   } catch {
     return null
   }

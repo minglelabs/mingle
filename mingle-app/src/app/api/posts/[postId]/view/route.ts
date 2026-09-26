@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
+import { markPostViewed } from '@/server/feed/post-view'
 
 export const runtime = 'nodejs'
 
@@ -36,20 +37,8 @@ export async function POST(
     return json({ error: 'post_not_found' }, { status: 404 })
   }
 
-  // Upsert: create or update viewedAt (absorbs duplicate calls)
-  await prisma.postView.upsert({
-    where: {
-      postId_userId: { postId, userId },
-    },
-    create: {
-      postId,
-      userId,
-      viewedAt: new Date(),
-    },
-    update: {
-      viewedAt: new Date(),
-    },
-  })
+  // Idempotent: keeps the first-view time so a feed snapshot stays stable.
+  await markPostViewed(userId, postId)
 
   return json({ ok: true })
 }

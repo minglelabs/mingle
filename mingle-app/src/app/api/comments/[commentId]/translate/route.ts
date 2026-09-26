@@ -3,9 +3,13 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
-import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
+import {
+  normalizeRequestedTranslationLanguage,
+  translateCommentOnDemand,
+} from '@/server/translation/post-translation-service'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
-import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { onDemandTranslationDeps } from '@/server/translation/on-demand-translation-deps'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -20,12 +24,17 @@ type Ctx = { params: Promise<{ commentId: string }> }
 
 /**
  * POST — translate a comment on demand.
- * Body: { language }
+ * Body: { language } — a supported translation language, canonicalized
+ * before lookup/storage. The response always carries the original text.
  */
 export async function POST(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+
+  // Each miss is an LLM call: cap scripted cost abuse.
+  const limited = rateLimitGuard('translate_comment', userId)
+  if (limited) return limited
 
   const { commentId } = await context.params
 
@@ -37,10 +46,12 @@ export async function POST(request: NextRequest, context: Ctx) {
   }
   if (!body || typeof body !== 'object') return json({ error: 'invalid_body' }, { status: 400 })
 
-  const { language } = body as Record<string, unknown>
-  if (typeof language !== 'string' || !language.trim()) {
+  const { language: rawLanguage } = body as Record<string, unknown>
+  if (typeof rawLanguage !== 'string' || !rawLanguage.trim()) {
     return json({ error: 'language_required' }, { status: 400 })
   }
+  const language = normalizeRequestedTranslationLanguage(rawLanguage)
+  if (!language) return json({ error: 'unsupported_language' }, { status: 400 })
 
   // Verify comment is visible
   const comment = await prisma.postComment.findFirst({
@@ -70,18 +81,29 @@ export async function POST(request: NextRequest, context: Ctx) {
     sourceLanguage = detected
   }
 
-  const translatedText = await translateCommentOnDemand(prismaTranslationDeps, {
+  const base = {
+    commentId: comment.id,
+    bodyVersion: comment.bodyVersion,
+    language,
+    sourceText: comment.sourceText,
+    sourceLanguage,
+  }
+
+  // Already in the requested language: the original is the answer, no LLM.
+  if (normalizeRequestedTranslationLanguage(sourceLanguage) === language) {
+    return json({ ...base, text: comment.sourceText, status: 'ready' })
+  }
+
+  const translatedText = await translateCommentOnDemand(onDemandTranslationDeps, {
     commentId: comment.id,
     bodyVersion: comment.bodyVersion,
     sourceText: comment.sourceText,
     sourceLanguage,
-    language: language.trim(),
+    language,
   })
 
   return json({
-    commentId: comment.id,
-    bodyVersion: comment.bodyVersion,
-    language: language.trim(),
+    ...base,
     text: translatedText,
     status: translatedText ? 'ready' : 'failed',
   })

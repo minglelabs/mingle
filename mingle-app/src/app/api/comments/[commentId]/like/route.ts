@@ -89,17 +89,32 @@ export async function DELETE(_request: NextRequest, context: Ctx) {
   const existing = await prisma.postCommentLike.findUnique({
     where: { commentId_userId: { commentId, userId } },
   })
-  if (!existing) return json({ liked: false })
+  if (!existing) return json({ liked: false, likeCount: await currentLikeCount(commentId) })
 
-  await prisma.$transaction(async (tx) => {
-    await tx.postCommentLike.delete({
-      where: { id: existing.id },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.postCommentLike.delete({
+        where: { id: existing.id },
+      })
+      await tx.postComment.update({
+        where: { id: commentId },
+        data: { likeCount: { decrement: 1 } },
+      })
     })
-    await tx.postComment.update({
-      where: { id: commentId },
-      data: { likeCount: { decrement: 1 } },
-    })
-  })
+  } catch (err: unknown) {
+    // Concurrent unlike already removed the row (P2025): the like is gone
+    // and the counter was decremented by the other request — success.
+    if (!isPrismaCode(err, 'P2025')) throw err
+  }
 
-  return json({ liked: false })
+  return json({ liked: false, likeCount: await currentLikeCount(commentId) })
+}
+
+function isPrismaCode(err: unknown, code: string): boolean {
+  return !!err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === code
+}
+
+async function currentLikeCount(commentId: string): Promise<number | null> {
+  const row = await prisma.postComment.findUnique({ where: { id: commentId }, select: { likeCount: true } })
+  return row ? Math.max(0, row.likeCount) : null
 }

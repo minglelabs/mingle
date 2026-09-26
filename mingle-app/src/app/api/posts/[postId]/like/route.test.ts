@@ -9,7 +9,11 @@ const {
   mockPostLikeFindUnique,
   mockPostLikeDelete,
   mockTransaction,
+  mockPostFindUnique,
+  mockMarkPostViewed,
 } = vi.hoisted(() => ({
+  mockPostFindUnique: vi.fn(),
+  mockMarkPostViewed: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockPostFindFirst: vi.fn(),
   mockPostLikeCreate: vi.fn(),
@@ -28,9 +32,10 @@ vi.mock('next/server', async (importOriginal) => {
 vi.mock('@/server/notifications/create-post-notification', () => ({
   createPostNotification: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('@/server/feed/post-view', () => ({ markPostViewedQuietly: mockMarkPostViewed }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    post: { findFirst: mockPostFindFirst, update: mockPostUpdate },
+    post: { findFirst: mockPostFindFirst, update: mockPostUpdate, findUnique: mockPostFindUnique },
     postLike: { create: mockPostLikeCreate, findUnique: mockPostLikeFindUnique, delete: mockPostLikeDelete },
     $transaction: mockTransaction,
   },
@@ -112,6 +117,21 @@ describe('POST /api/posts/{postId}/like', () => {
     const body = await res.json()
     expect(body.liked).toBe(true)
     expect(body.duplicate).toBe(true)
+    expect(mockMarkPostViewed).toHaveBeenCalledWith('user-1', 'post-1')
+  })
+
+  it('marks the post as seen immediately on a new like', async () => {
+    mockPostLikeCreate.mockResolvedValue({})
+    mockPostUpdate.mockResolvedValue({})
+    const res = await POST(new NextRequest('http://localhost'), makeContext('post-1'))
+    expect(res.status).toBe(201)
+    expect(mockMarkPostViewed).toHaveBeenCalledWith('user-1', 'post-1')
+  })
+
+  it('does not mark a post seen when the like is refused (404)', async () => {
+    mockPostFindFirst.mockResolvedValue(null)
+    await POST(new NextRequest('http://localhost'), makeContext('post-1'))
+    expect(mockMarkPostViewed).not.toHaveBeenCalled()
   })
 })
 
@@ -143,5 +163,28 @@ describe('DELETE /api/posts/{postId}/like', () => {
     const res = await DELETE(new NextRequest('http://localhost'), makeContext('post-1'))
     const body = await res.json()
     expect(body.liked).toBe(false)
+  })
+
+  it('treats a concurrent unlike (P2025) as success and returns the current count', async () => {
+    mockPostLikeFindUnique.mockResolvedValue({ id: 'like-1' })
+    mockPostFindUnique.mockResolvedValue({ likeCount: 4 })
+    mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        postLike: { delete: () => { throw Object.assign(new Error('gone'), { code: 'P2025' }) } },
+        post: { update: mockPostUpdate },
+      }
+      return cb(tx)
+    })
+
+    const res = await DELETE(new NextRequest('http://localhost'), makeContext('post-1'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ liked: false, likeCount: 4 })
+    expect(mockPostUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows other delete errors', async () => {
+    mockPostLikeFindUnique.mockResolvedValue({ id: 'like-1' })
+    mockTransaction.mockRejectedValue(Object.assign(new Error('boom'), { code: 'P1001' }))
+    await expect(DELETE(new NextRequest('http://localhost'), makeContext('post-1'))).rejects.toThrow('boom')
   })
 })

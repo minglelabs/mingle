@@ -41,6 +41,8 @@ vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>()
   return { ...actual, after: (fn: () => Promise<void>) => { fn().catch(() => {}) } }
 })
+const { mockMarkPostViewed } = vi.hoisted(() => ({ mockMarkPostViewed: vi.fn() }))
+vi.mock('@/server/feed/post-view', () => ({ markPostViewedQuietly: mockMarkPostViewed }))
 vi.mock('@/server/posts/comment-service', () => ({
   createComment: mockCreateComment,
   deleteComment: mockDeleteComment,
@@ -359,6 +361,17 @@ describe('POST /api/posts/{postId}/comments', () => {
       makeCtx('post-1'),
     )
     expect(res.status).toBe(400)
+    expect(mockMarkPostViewed).not.toHaveBeenCalled()
+  })
+
+  it('marks the post as seen immediately when a comment is created', async () => {
+    mockCreateComment.mockResolvedValue({
+      id: 'c1', postId: 'post-1', parentId: null,
+      replyToUserId: null, bodyVersion: 1, createdAt: new Date(), replyRecipientId: null,
+    })
+    const res = await POST(makeRequest({ sourceText: 'hi' }), makeCtx('post-1'))
+    expect(res.status).toBe(201)
+    expect(mockMarkPostViewed).toHaveBeenCalledWith('user-1', 'post-1')
   })
 
   it('notifies the reply recipient derived by the service, not the client replyToUserId', async () => {

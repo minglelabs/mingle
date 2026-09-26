@@ -16,6 +16,7 @@ import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { resolveDisplayLanguage } from '@/server/posts/feed-post-serializer'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { markPostViewedQuietly } from '@/server/feed/post-view'
 
 export const runtime = 'nodejs'
 
@@ -277,6 +278,9 @@ export async function POST(request: NextRequest, context: Ctx) {
     }
     throw err
   }
+
+  // Commenting on a post means the viewer saw it: mark it seen now (73).
+  await markPostViewedQuietly(userId, postId)
 
   // Notify the right recipient. A reply notifies the person being replied to,
   // which createComment derives from server state (never the client's
