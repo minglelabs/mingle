@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { translatePostOnDemand } from '@/server/translation/post-translation-service'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
 
 export const runtime = 'nodejs'
@@ -37,15 +38,31 @@ export async function POST(request: NextRequest, context: RouteContext) {
     select: { sourceText: true, sourceLanguage: true, bodyVersion: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
-  if (!post.sourceText || !post.sourceLanguage) {
+  if (!post.sourceText || !post.sourceText.trim()) {
     return json({ error: 'no_text_to_translate' }, { status: 400 })
+  }
+
+  // Legacy rows stored with a null source language: detect it now and persist,
+  // then translate — instead of rejecting. Detection is authoritative.
+  let sourceLanguage = post.sourceLanguage
+  if (!sourceLanguage) {
+    const detected = await detectSourceLanguage({ text: post.sourceText })
+    if (!detected) {
+      // Genuinely undetectable (e.g. emoji-only) — nothing to translate.
+      return json({ error: 'no_text_to_translate' }, { status: 400 })
+    }
+    await prisma.post.update({
+      where: { id: postId },
+      data: { sourceLanguage: detected },
+    })
+    sourceLanguage = detected
   }
 
   const translated = await translatePostOnDemand(prismaTranslationDeps, {
     postId,
     bodyVersion: post.bodyVersion,
     sourceText: post.sourceText,
-    sourceLanguage: post.sourceLanguage,
+    sourceLanguage,
     language: language.trim(),
   })
 

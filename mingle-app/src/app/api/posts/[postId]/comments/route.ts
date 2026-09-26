@@ -7,9 +7,11 @@ import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { createComment } from '@/server/posts/comment-service'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
-import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
-import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
-import { resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
+import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import {
+  resolveDefaultPostTranslationLanguages,
+  translateCommentBodySettled,
+} from '@/server/translation/post-translation-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 
@@ -231,15 +233,32 @@ export async function POST(request: NextRequest, context: Ctx) {
   const pId = typeof parentId === 'string' && parentId.trim() ? parentId.trim() : null
   const rUserId = typeof replyToUserId === 'string' && replyToUserId.trim() ? replyToUserId.trim() : null
 
+  // Server detection is authoritative; the client language is only a fallback
+  // hint. Detect, then translate the default languages (minus source) and let
+  // them settle BEFORE the comment is committed (settle-then-commit) so the
+  // comment and its translations become visible together.
+  const detected = await detectSourceLanguage({ text, clientHint: lang })
+  const settledRows =
+    detected && detected.trim().length > 0
+      ? (
+          await translateCommentBodySettled({
+            sourceText: text,
+            sourceLanguage: detected,
+            targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+          })
+        ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
+      : []
+
   let comment
   try {
     comment = await createComment({
       postId,
       authorId: userId,
       sourceText: text,
-      sourceLanguage: lang,
+      sourceLanguage: detected,
       parentId: pId,
       replyToUserId: rUserId,
+      translationRows: settledRows,
     })
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'parent_not_found') {
@@ -252,8 +271,8 @@ export async function POST(request: NextRequest, context: Ctx) {
   // (the target comment's author); a top-level comment notifies the post
   // author. createComment resolves replyToUserId for reply-to-a-reply, but a
   // direct reply to a top-level comment may arrive without it, so fall back to
-  // the parent comment's author. Fire-and-forget so the response is not
-  // delayed; comment/reply also push.
+  // the parent comment's author. Fire-and-forget AFTER the commit so the
+  // notification never fires for a comment that failed to persist.
   const notifyParentId = comment.parentId ?? pId
   after(async () => {
     let replyRecipientId = comment.replyToUserId ?? null
@@ -283,28 +302,6 @@ export async function POST(request: NextRequest, context: Ctx) {
       })
     }
   })
-
-  // Fire-and-forget translation for default languages (like post creation)
-  if (lang) {
-    after(async () => {
-      try {
-        const targets = resolveDefaultPostTranslationLanguages(lang)
-        await Promise.allSettled(
-          targets.map((targetLang) =>
-            translateCommentOnDemand(prismaTranslationDeps, {
-              commentId: comment.id,
-              bodyVersion: comment.bodyVersion,
-              sourceText: text,
-              sourceLanguage: lang,
-              language: targetLang,
-            }),
-          ),
-        )
-      } catch (err) {
-        console.error('[comment-create] translation failed', err instanceof Error ? err.message : 'unknown')
-      }
-    })
-  }
 
   return json(
     {
