@@ -17,10 +17,10 @@
 -- indexes) that a live-DB diff would otherwise include.
 
 -- AlterTable
-ALTER TABLE "app_conversation_channels" ADD COLUMN "shared_title" TEXT;
+ALTER TABLE "app"."app_conversation_channels" ADD COLUMN "shared_title" TEXT;
 
 -- Backfill: existing shared rooms get their current title frozen as the
 -- snapshot so their live share links keep showing a title instead of NULL.
-UPDATE "app_conversation_channels"
+UPDATE "app"."app_conversation_channels"
 SET "shared_title" = "title"
 WHERE "shared_at" IS NOT NULL;
