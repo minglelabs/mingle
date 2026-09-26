@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +21,9 @@ export async function POST(_request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+
+  const limited = rateLimitGuard('like_post', userId)
+  if (limited) return limited
 
   const { postId } = await context.params
 

@@ -9,6 +9,7 @@ import { createComment } from '@/server/posts/comment-service'
 import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
 import { resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -125,6 +126,9 @@ export async function POST(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+
+  const limited = rateLimitGuard('create_comment', userId)
+  if (limited) return limited
 
   const { postId } = await context.params
 

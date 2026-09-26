@@ -2,17 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import {
+  createReport,
+  normalizeReportMessage,
+  normalizeReportReason,
+} from "@/server/reports/report-service";
 
 export const runtime = "nodejs";
-
-const REPORT_REASONS = new Set([
-  "spam",
-  "harassment",
-  "inappropriate",
-  "impersonation",
-  "other",
-]);
-const MIN_REPORT_MESSAGE_LENGTH = 2;
 
 type ReportRouteProps = {
   params: Promise<{
@@ -29,19 +25,16 @@ function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
 }
 
-function normalizeReason(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const reason = value.trim().toLowerCase();
-  return REPORT_REASONS.has(reason) ? reason : null;
-}
-
-function normalizeMessage(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const message = value.trim();
-  if (!message) return null;
-  return message.slice(0, 4000);
-}
-
+/**
+ * Report a user.
+ *
+ * Extended in W3/R to run through the shared report service: the same fixed
+ * reason list, an optional note capped at 500 characters, and per-reporter
+ * dedup via `targetKey`. A repeat report of the same user is not an error — it
+ * returns `{ status: 'already_reported' }` with 200 so the UI shows "already
+ * reported". The 201 create response `{ reportId, status }` is unchanged, so
+ * the existing profile-screen caller keeps working.
+ */
 export async function POST(request: NextRequest, { params }: ReportRouteProps) {
   const reporterId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!reporterId) {
@@ -64,18 +57,14 @@ export async function POST(request: NextRequest, { params }: ReportRouteProps) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const reason = normalizeReason(body.reason);
+  const reason = normalizeReportReason(body.reason);
   if (!reason) {
     return NextResponse.json({ error: "invalid_reason" }, { status: 400 });
   }
 
-  if (body.message !== undefined && body.message !== null && typeof body.message !== "string") {
+  const messageResult = normalizeReportMessage(body.message);
+  if (!messageResult.ok) {
     return NextResponse.json({ error: "invalid_message" }, { status: 400 });
-  }
-
-  const message = normalizeMessage(body.message);
-  if (message && message.length < MIN_REPORT_MESSAGE_LENGTH) {
-    return NextResponse.json({ error: "message_too_short" }, { status: 400 });
   }
 
   const target = await prisma.user.findUnique({
@@ -86,21 +75,23 @@ export async function POST(request: NextRequest, { params }: ReportRouteProps) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
 
-  const report = await prisma.userReport.create({
-    data: {
-      reporterId,
-      reportedUserId,
-      reason,
-      message: message || undefined,
-    },
-    select: { id: true, status: true },
+  const result = await createReport(prisma, {
+    reporterId,
+    reportedUserId,
+    targetType: "user",
+    reason,
+    message: messageResult.message,
   });
 
-  return NextResponse.json({
-    reportId: report.id,
-    status: report.status,
-  }, {
-    status: 201,
-    headers: { "Cache-Control": "private, no-store" },
-  });
+  if (result.status === "duplicate") {
+    return NextResponse.json(
+      { status: "already_reported", duplicate: true },
+      { status: 200, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
+  return NextResponse.json(
+    { reportId: result.reportId, status: result.reportStatus },
+    { status: 201, headers: { "Cache-Control": "private, no-store" } },
+  );
 }
