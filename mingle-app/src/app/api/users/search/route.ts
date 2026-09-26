@@ -1,8 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
-import { ANONYMOUS_HANDLE_PREFIX, RESERVED_SEARCH_HANDLE } from "@/lib/handles";
 import { prisma } from "@/lib/prisma";
+import {
+  buildPeopleSearchSql,
+  decodePeopleSearchCursor,
+  encodePeopleSearchCursor,
+  type PeopleSearchRow,
+} from "./people-search-query";
 import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
 import { captureMingleEvent } from "@/lib/posthog-server";
@@ -11,7 +16,6 @@ export const runtime = "nodejs";
 
 const MAX_SEARCH_LENGTH = 80;
 const SEARCH_PAGE_SIZE = 20;
-const MAX_CURSOR_LENGTH = 512;
 
 const userSearchSelect = {
   id: true,
@@ -21,44 +25,11 @@ const userSearchSelect = {
   imageCropScale: true,
   imageCropX: true,
   imageCropY: true,
+  isOfficial: true,
 } as const;
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
-}
-
-type SearchCursor = {
-  updatedAt: Date;
-  id: string;
-};
-
-function encodeSearchCursor(updatedAt: Date, id: string): string {
-  return Buffer.from(JSON.stringify({
-    updatedAt: updatedAt.toISOString(),
-    id,
-  }), "utf8").toString("base64url");
-}
-
-function decodeSearchCursor(rawCursor: string | null): SearchCursor | null | "invalid" {
-  if (!rawCursor) return null;
-  if (rawCursor.length > MAX_CURSOR_LENGTH) return "invalid";
-
-  try {
-    const parsed = JSON.parse(Buffer.from(rawCursor, "base64url").toString("utf8")) as {
-      updatedAt?: unknown;
-      id?: unknown;
-    };
-    if (typeof parsed.updatedAt !== "string" || typeof parsed.id !== "string" || !parsed.id.trim()) {
-      return "invalid";
-    }
-
-    const updatedAt = new Date(parsed.updatedAt);
-    if (Number.isNaN(updatedAt.getTime())) return "invalid";
-
-    return { updatedAt, id: parsed.id };
-  } catch {
-    return "invalid";
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -85,69 +56,47 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const cursor = decodeSearchCursor(request.nextUrl.searchParams.get("cursor"));
+  const cursor = decodePeopleSearchCursor(request.nextUrl.searchParams.get("cursor"));
   if (cursor === "invalid") {
     return NextResponse.json({ error: "invalid_cursor" }, { status: 400 });
   }
 
-  const users = await prisma.user.findMany({
-    where: {
-      isActive: true,
-      AND: [
-        { id: { not: userId } },
-        {
-          NOT: {
-            handle: { startsWith: ANONYMOUS_HANDLE_PREFIX, mode: "insensitive" },
-          },
-        },
-        {
-          NOT: {
-            handle: { equals: RESERVED_SEARCH_HANDLE, mode: "insensitive" },
-          },
-        },
-        {
-          blockingRelations: {
-            none: { blockedId: userId },
-          },
-        },
-        {
-          blockedByRelations: {
-            none: { blockerId: userId },
-          },
-        },
-        {
-          OR: [
-            { handle: { contains: handleQuery, mode: "insensitive" } },
-            { name: { contains: query, mode: "insensitive" } },
-          ],
-        },
-        ...(cursor ? [{
-          OR: [
-            { updatedAt: { lt: cursor.updatedAt } },
-            { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
-          ],
-        }] : []),
-      ],
-    },
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+  // Ranking (exact → prefix → contains) and pagination run in SQL over the
+  // whole match set, so page order is consistent across pages.
+  const rankedRows = await prisma.$queryRaw<PeopleSearchRow[]>(buildPeopleSearchSql({
+    viewerId: userId,
+    query,
+    handleQuery,
+    cursor,
     take: SEARCH_PAGE_SIZE + 1,
-    select: {
-      ...userSearchSelect,
-      updatedAt: true,
-      followerRelations: {
-        where: { followerId: userId },
-        select: { followerId: true },
-        take: 1,
-      },
-    },
-  });
+  }));
 
-  const hasMore = users.length > SEARCH_PAGE_SIZE;
-  const pageUsers = hasMore ? users.slice(0, SEARCH_PAGE_SIZE) : users;
-  const lastUser = pageUsers[pageUsers.length - 1];
-  const nextCursor = hasMore && lastUser
-    ? encodeSearchCursor(lastUser.updatedAt, lastUser.id)
+  const hasMore = rankedRows.length > SEARCH_PAGE_SIZE;
+  const pageRows = hasMore ? rankedRows.slice(0, SEARCH_PAGE_SIZE) : rankedRows;
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? encodePeopleSearchCursor({ tier: Number(lastRow.tier), updatedAt: new Date(lastRow.updatedAt), id: lastRow.id })
     : null;
+
+  const pageIds = pageRows.map((row) => row.id);
+  const details = pageIds.length > 0
+    ? await prisma.user.findMany({
+      where: { id: { in: pageIds } },
+      select: {
+        ...userSearchSelect,
+        followerRelations: {
+          where: { followerId: userId },
+          select: { followerId: true },
+          take: 1,
+        },
+      },
+    })
+    : [];
+  const detailById = new Map(details.map((user) => [user.id, user]));
+  // Keep the SQL order; a row that vanished between the two reads is skipped.
+  const pageUsers = pageIds
+    .map((id) => detailById.get(id))
+    .filter((user): user is NonNullable<typeof user> => Boolean(user));
 
   try {
     const [requestContext, searchProperties] = await Promise.all([
@@ -184,6 +133,8 @@ export async function GET(request: NextRequest) {
       imageCropX: user.imageCropX,
       imageCropY: user.imageCropY,
       isFollowing: user.followerRelations.length > 0,
+      // Official (operator) accounts only; absent means false.
+      ...(user.isOfficial === true ? { isOfficial: true } : {}),
     })),
     nextCursor,
   }, {

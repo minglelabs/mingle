@@ -24,6 +24,14 @@ const DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET = {
     android: 'android/v2.0.0',
     ios: 'ios/v2.0.0',
   },
+  v2_1_0: {
+    android: 'android/v2.1.0',
+    ios: 'ios/v2.1.0',
+  },
+  v2_2_0: {
+    android: 'android/v2.2.0',
+    ios: 'ios/v2.2.0',
+  },
 } as const
 type ReleaseTargetWithDefaultApiNamespace = keyof typeof DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET
 const VERSIONED_API_NAMESPACE_RULES = [
@@ -49,6 +57,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.0.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.0.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.2.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -71,6 +80,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.0.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.0.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.2.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -162,6 +172,41 @@ export function buildClientApiPath(endpoint: `/${string}`): string {
   const namespacePrefix = clientApiNamespace ? `/${clientApiNamespace}` : ''
   return `/api${namespacePrefix}${endpoint}`
 }
+
+/** First app release whose API namespace serves the posting feature. */
+const POSTING_FEED_MIN_VERSION = [2, 2, 0] as const
+
+/**
+ * Whether a client on this API namespace can use the posting feature (feed,
+ * compose, comments, unified notifications, post search, profile grid).
+ *
+ * The web UI is shared by every installed app version, but only namespaces from
+ * 2.2.0 on serve the posting routes: an older app (e.g. `ios/v2.1.0`, rewritten
+ * to v2.0.0) would get 404s from every posting call. The plain web client (the
+ * '' namespace) calls the unversioned routes, which always exist. Every posting
+ * entry point gates on this one rule.
+ */
+export function namespaceSupportsPostingFeed(namespace: string): boolean {
+  const normalized = normalizeApiNamespace(namespace)
+  if (!normalized) return true
+  const match = normalized.match(/^(?:android|ios)\/v(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return false
+  const version = [Number(match[1]), Number(match[2]), Number(match[3])]
+  for (let index = 0; index < POSTING_FEED_MIN_VERSION.length; index += 1) {
+    if (version[index] !== POSTING_FEED_MIN_VERSION[index]) {
+      return version[index] > POSTING_FEED_MIN_VERSION[index]
+    }
+  }
+  return true
+}
+
+/**
+ * The rule applied to this client's namespace. Resolved at module load like
+ * `clientApiNamespace`: on the server it reflects build-time env only, so a
+ * server render must not trust it for a specific app — gate on the client, or
+ * read the namespace from the request.
+ */
+export const clientSupportsPostingFeed = namespaceSupportsPostingFeed(clientApiNamespace)
 
 export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)

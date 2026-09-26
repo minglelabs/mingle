@@ -2,6 +2,7 @@
 
 import posthog, { type Properties } from "posthog-js";
 import { clientApiNamespace } from "@/lib/api-contract";
+import type { FeedEventName } from "@/lib/feed-analytics";
 import { getOrCreateTrackingUserId, resetTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
   sanitizePostHogCaptureResult,
@@ -15,7 +16,9 @@ export type MingleClientEvent =
   | "mingle_connect_search_requested"
   | "mingle_connect_search_completed"
   | "mingle_connect_follow_clicked"
-  | "mingle_connect_follow_completed";
+  | "mingle_connect_follow_completed"
+  // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
+  | FeedEventName;
 
 type SafeEventProperty = string | number | boolean | null | undefined;
 

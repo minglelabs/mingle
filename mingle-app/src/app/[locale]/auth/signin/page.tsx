@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { resolveNativeOAuthProvider, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
+import { resolveNativeOAuthProvider } from "@/lib/native-auth-bridge";
+import { resolveSignInCallbackUrl } from "./callback-url";
 
 type LocaleSignInPageProps = {
   searchParams: Promise<{
@@ -14,26 +15,10 @@ function takeFirst(value: string | string[] | undefined): string {
   return "";
 }
 
-function resolveCallbackUrl(rawValue: string): string {
-  const trimmed = rawValue.trim();
-  if (!trimmed) return "/";
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
-    }
-  } catch {
-    // Fallback below for relative callback paths.
-  }
-
-  return resolveSafeCallbackPath(trimmed, "/");
-}
-
 export default async function LocaleSignInPage({ searchParams }: LocaleSignInPageProps) {
   const query = await searchParams;
   const provider = resolveNativeOAuthProvider(takeFirst(query.provider)) ?? "google";
-  const callbackUrl = resolveCallbackUrl(takeFirst(query.callbackUrl));
+  const callbackUrl = resolveSignInCallbackUrl(takeFirst(query.callbackUrl));
 
   const signInUrl = new URL(`/api/auth/signin/${provider}`, "https://mingle.local");
   signInUrl.searchParams.set("callbackUrl", callbackUrl);

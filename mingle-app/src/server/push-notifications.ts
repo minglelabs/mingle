@@ -1,6 +1,9 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { connect } from "node:http2";
 import { prisma } from "@/lib/prisma";
+import { feedHref } from "@/lib/feed-routes";
+import { resolveSupportedLocaleTag } from "@/i18n/config";
+import { resolvePushNotificationCopy } from "@/i18n/notification-copy";
 
 type PushPlatform = "ios" | "android";
 
@@ -20,6 +23,8 @@ type PushMessage = {
   messagePreview?: string;
   sessionKey?: string;
   conversationId?: string;
+  /** In-app destination the tap should open (e.g. feedHref with post/comment). */
+  navigationUrl?: string;
 };
 
 type PushSendResult = {
@@ -129,16 +134,9 @@ function resolvePushCopy(message: PushMessage): { title: string; body: string } 
     if (language === "pt") return { title: "Nova mensagem", body: `${label}: ${preview}` };
     return { title: "New message", body: `${label}: ${preview}` };
   }
-  if (message.type === "follow") {
-    if (language === "ko") return { title: "새 팔로워", body: `${label}님이 회원님을 팔로우했습니다.` };
-    if (language === "ja") return { title: "新しいフォロワー", body: `${label}さんがあなたをフォローしました。` };
-    if (language === "zh-cn") return { title: "新的关注者", body: `${label}关注了你。` };
-    if (language === "zh-tw") return { title: "新的追蹤者", body: `${label}追蹤了你。` };
-    if (language === "es") return { title: "Nuevo seguidor", body: `${label} empezó a seguirte.` };
-    if (language === "fr") return { title: "Nouveau follower", body: `${label} vous suit maintenant.` };
-    if (language === "de") return { title: "Neuer Follower", body: `${label} folgt Ihnen jetzt.` };
-    if (language === "pt") return { title: "Novo seguidor", body: `${label} começou a seguir você.` };
-    return { title: "New follower", body: `${label} followed you.` };
+  if (message.type === "follow" || message.type === "comment" || message.type === "comment_reply") {
+    // All 15 primary UI languages; an unknown language falls back to English.
+    return resolvePushNotificationCopy(message.recipientLanguage, message.type, label);
   }
 
   return { title: "Mingle", body: "You have a new notification." };
@@ -152,6 +150,7 @@ function createPushData(message: PushMessage): Record<string, string> {
   };
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
+  if (message.navigationUrl) data.url = message.navigationUrl;
   return data;
 }
 
@@ -185,6 +184,7 @@ async function sendApnsNotification(
     messageId: message.notificationId,
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),
+    ...(message.navigationUrl ? { url: message.navigationUrl } : {}),
   });
 
   return new Promise((resolve) => {
@@ -350,6 +350,8 @@ export async function sendPushNotificationForUserNotification(notificationId: st
     select: {
       id: true,
       type: true,
+      postId: true,
+      commentId: true,
       recipient: {
         select: {
           language: true,
@@ -375,14 +377,28 @@ export async function sendPushNotificationForUserNotification(notificationId: st
   });
   if (!notification) return;
 
+  const recipientLanguage = notification.recipient.pageLanguage?.trim()
+    || notification.recipient.language?.trim()
+    || "en";
+  const recipientLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
+  const navigationUrl = notification.postId
+    ? feedHref(recipientLocale, {
+        postId: notification.postId,
+        commentId: notification.commentId,
+      })
+    : notification.type === "follow"
+      // Follow taps open the new follower's profile (same path the web push-tap
+      // receiver resolves for `/{locale}/users/{id}`).
+      ? `/${recipientLocale}/users/${encodeURIComponent(notification.actor.id)}`
+      : undefined;
+
   const message: PushMessage = {
     notificationId: notification.id,
     type: notification.type,
     actorId: notification.actor.id,
     actorLabel: notification.actor.name?.trim() || `@${notification.actor.handle}`,
-    recipientLanguage: notification.recipient.pageLanguage?.trim()
-      || notification.recipient.language?.trim()
-      || "en",
+    recipientLanguage,
+    ...(navigationUrl ? { navigationUrl } : {}),
   };
   const targets = notification.recipient.pushTokens as PushTarget[];
   const results = await Promise.allSettled(
@@ -418,6 +434,16 @@ export async function sendPushNotificationForConversationMessage(args: {
   )];
   if (recipientUserIds.length === 0) return;
 
+  // The web conversation room is `/{locale}/conversations?conversation={channelId}`.
+  // Message pushes only know the session key, so resolve the channel id once here
+  // and let each recipient's locale build its own room URL below. Without this
+  // the native tap handler has no room to open (a message push carries no url).
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey: args.sessionKey },
+    select: { id: true },
+  });
+  const channelId = channel?.id ?? "";
+
   const users = await prisma.user.findMany({
     where: { id: { in: [...new Set([args.senderUserId, ...recipientUserIds])] } },
     select: {
@@ -445,14 +471,24 @@ export async function sendPushNotificationForConversationMessage(args: {
   for (const recipientUserId of recipientUserIds) {
     const recipient = users.find((user) => user.id === recipientUserId);
     if (!recipient) continue;
+    const recipientLanguage = recipient.pageLanguage?.trim() || recipient.language?.trim() || "en";
+    // Build the room URL in the recipient's own locale, matching the web route
+    // `/{locale}/conversations?conversation={channelId}`. Falls back to the raw
+    // conversationId (the native tap handler rebuilds the room path from it).
+    const roomLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
+    const navigationUrl = channelId
+      ? `/${roomLocale}/conversations?conversation=${encodeURIComponent(channelId)}`
+      : undefined;
     const message: PushMessage = {
       notificationId: args.messageId,
       type: "conversation_message",
       actorId: args.senderUserId,
       actorLabel,
-      recipientLanguage: recipient.pageLanguage?.trim() || recipient.language?.trim() || "en",
+      recipientLanguage,
       messagePreview,
       sessionKey: args.sessionKey,
+      ...(channelId ? { conversationId: channelId } : {}),
+      ...(navigationUrl ? { navigationUrl } : {}),
     };
     for (const target of recipient.pushTokens as PushTarget[]) {
       targetEntries.push({

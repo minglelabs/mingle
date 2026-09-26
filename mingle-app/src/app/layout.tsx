@@ -9,6 +9,7 @@ import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
 import NativeConversationShareOverlay from "@/components/native-conversation-share-overlay";
+import NativePushTapReceiver from "@/components/native-push-tap-receiver";
 import RouteTransitionCurtain from "@/components/route-transition-curtain";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { TtsSettingsProvider } from "@/context/tts-settings";
@@ -100,6 +101,7 @@ export default async function RootLayout({
                 {children}
                 <NativeProfileLinkOverlay />
                 <NativeConversationShareOverlay />
+                <NativePushTapReceiver />
                 <RouteTransitionCurtain />
               </MobileCanvasShell>
               <Toaster

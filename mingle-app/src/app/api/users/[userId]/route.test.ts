@@ -96,6 +96,29 @@ describe("/api/users/[userId] route", () => {
     });
   });
 
+  it("marks an official account's public profile and asks the DB for the flag", async () => {
+    mockUserFindUnique.mockReset();
+    mockUserFindUnique.mockResolvedValueOnce({
+      id: "user_456",
+      handle: "mingle",
+      image: null,
+      name: "Mingle",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      isOfficial: true,
+      _count: { followerRelations: 0, followingRelations: 0 },
+      followerRelations: [],
+    });
+
+    const response = await GET(new NextRequest("https://example.com/ko/users/user_456"), {
+      params: Promise.resolve({ userId: "user_456" }),
+    });
+
+    expect((await response.json()).isOfficial).toBe(true);
+    expect(mockUserFindUnique.mock.calls[0][0].select.isOfficial).toBe(true);
+  });
+
   it("continues to resolve legacy internal user IDs", async () => {
     const response = await GET(new NextRequest("https://example.com/ko/users/user_456"), {
       params: Promise.resolve({ userId: "user_456" }),

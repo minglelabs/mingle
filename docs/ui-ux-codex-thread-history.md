@@ -2911,3 +2911,207 @@
 - User impact: New members could start with Gemini despite the new-account policy, while changing the shared fallback would unexpectedly switch existing accounts whose preference is unset.
 - Resolution: Seed GPT-6 Luna only when a registered account row is first created across email, OAuth, and native Apple registration. Preserve all existing preference values and the Gemini fallback for existing unset and anonymous accounts. For a fresh account without cached preferences, omit the temporary model from pre-hydration preference patches and merge the server model into unrelated local edits; keep an explicit user model selection.
 - Verification: Focused auth, account-preference, cache, and translation tests passed (130 tests), along with TypeScript, focused ESLint, and `git diff --check`.
+
+## 2026-09-26 — Posting feed: post images broken for signed-out readers
+
+- Surface: Home feed, post viewer, profile grid and search tiles (`GET /api/posts/{postId}/image`).
+- Issue: The feed was made readable without signing in, but the image route still returned `401` when there was no session. The post wire shape (`FeedPostDto.image.url`) also built its URL with a client-side helper on the server, which could emit a namespace with no image route (e.g. `ios/v2.0.0`) depending on build-time env.
+- User impact: A signed-out reader would see every photo post as a broken image, and a signed-in reader could hit the same failure in production depending on server env.
+- Resolution: The image GET resolves visibility with a null viewer, so public posts serve to everyone while blocks, hides, archive, trash and moderation still apply. The serializer emits the unversioned `/api/posts/{id}/image` path directly.
+- Verification: New route tests (signed-out public 200, signed-in viewer passed to the visibility rule, invisible 404) and an exact-URL serializer assertion; TypeScript and the full unit suite passed.
+
+## 2026-09-26 — Posting feed: first screen switched for every installed app version
+
+- Surface: App launch landing (`src/web/shared/v1.1.0/home-entry.tsx`), bottom tab bar.
+- Issue: The web UI is shared by every installed app version, but the posting routes exist only in the `v2.1.0` API namespace. Switching the landing to the feed applied to 2.0.x apps too, whose namespace answers every posting call with `404`.
+- User impact: After a web deploy, a user still on a 2.0.x app would open the app straight into a failing feed.
+- Resolution: In progress. One capability rule (`namespaceSupportsPostingFeed`, 2.1.0+ or the plain web) now exists, and every posting entry point is being gated on it so older apps keep the previous conversation-first behaviour.
+- Verification: Rule covered by unit tests; entry-point gating pending.
+
+## 2026-09-26 — Posting feed: unknown post background drawn three different ways
+
+- Surface: Feed card, 3-column grid tile, compose preview.
+- Issue: Each surface had its own fallback for a background key missing from the catalog (dark slate in the feed, light gray in the grid, warm cream in compose).
+- User impact: A post with a retired or malformed background key would look different in the feed, on the profile grid and in the editor preview.
+- Resolution: The catalog owns one fallback (`resolveBackgroundPreset`, the first preset), and all three surfaces use it.
+- Verification: Feed, grid and compose tests passed; TypeScript clean.
+
+## 2026-09-26 — Posting feed: comment sheet showed a blank identity for the author's own new comment
+
+- Surface: Comment sheet, optimistic rendering of a comment or reply the viewer just sent.
+- Issue: The sheet read the viewer's name, avatar and language from a `window.__MINGLE_VIEWER__` global that nothing injects, and sent the viewer's display language as the comment's source language.
+- User impact: A just-sent comment appeared with a neutral avatar and no name until the list reloaded, and comments were stored with no usable source language, so they were never translated.
+- Resolution: In progress. The sheet will read the signed-in user from the app's real session source and send no source language, and the server will detect the language from the text.
+- Verification: Pending.
+
+## 2026-09-26 — Posting feed: "See all" people list does not restore its exact scroll position
+
+- Surface: Explore tab → "See all" people list and post grids hosted inside the sliding surface.
+- Issue: Scroll restoration is keyed to the window, but these lists scroll inside the sliding surface's own container.
+- User impact: Returning from a profile to a long "See all" list can land at a different position than the one the user left.
+- Resolution: Open; queued with the explore-tab cleanup.
+- Verification: Pending.
+
+## 2026-09-26 — Conversation list: search entry moved from the header to the top of the list
+
+- Surface: Conversation list header and list (posting-capable clients: app 2.1.0+ and the plain web).
+- Issue: The planning spec requires the conversation-list header to match the feed header exactly (Mingle on the left; compose and the notification bell on the right). Adopting the shared header removed the header's conversation-search button.
+- User impact: On 2.1.0+ the only entry point to conversation search would have disappeared.
+- Resolution: By the user's decision, a search bar is now the first row inside the conversation list's scroll area and scrolls with the list. It calls the same `handleOpenSearch` the old header button called, so it opens the existing search overlay with the same filtering, results, empty state, clear/IME handling and analytics. The header keeps the shared `AppTopHeader`. Clients before 2.1.0 keep the previous header and search button unchanged.
+- Verification: Label resolver unit test; conversation-list, header and posting-guard tests (69) passed; TypeScript clean. On-device check pending in the device test.
+
+## 2026-09-26 — Posting feed gap audit: fixes merged into `feat/posting-feed`
+
+A four-part audit of the posting feed against the numbered spec (`docs/posting-feed-checklist.md`) found the UI/UX issues below. All of them were fixed on `feat/posting-feed` (not `main`). Across the merged branch: web unit tests 276 files / 2,817 passed, RN 20 suites / 111 passed, TypeScript clean. On-device checks listed per entry are still pending (no connected device).
+
+### Feed: a requested translation never reached the body
+- Surface: Feed card (center large text, photo-post caption, expanded body).
+- Issue: After "See translation" the button switched to "See original", but the photo caption and the expanded body kept the original. The text resolver only trusted the server's `ready` state, not a translation the viewer had just fetched.
+- User impact: Viewers outside the four default languages effectively could not read posts in their language, and the three places showed different languages.
+- Resolution: One resolver (`resolveCardTexts`) derives all three texts from the text currently shown. Loading a post whose stored translation failed no longer shows an unrequested failure toast, and photo-only posts no longer show a translate button.
+- Verification: `feed-card-format` and `use-feed-translate` tests (failed before the fix).
+
+### Feed: position and expanded state reset after every tab switch
+- Surface: Home feed after returning from a profile, the comment sheet or another tab.
+- Issue: On the first render (no posts yet) the persist effect overwrote the saved state with an empty one, and the default `source` object was recreated on every render.
+- User impact: Returning to the feed always landed on the first post, collapsed.
+- Resolution: The saved state is read synchronously before cards mount, and writes start only after the start position is applied. A notification deep link (`?postId`) takes precedence. A saved post that is no longer visible shows the existing "no longer available" toast.
+- Verification: `feed-restore-state` tests. On device: restore after a profile round trip.
+
+### Feed: unseen posts skipped while paging; feed stopped at the end
+- Surface: Home feed scrolling.
+- Issue: The server re-ranked on every page request using the latest seen set and cut by offset, so posts seen on page 1 pulled other unseen posts forward and they were skipped. At the end the server wrapped to offset 0, but the client discarded the repeated ids, so nothing was appended.
+- User impact: Some posts were never shown, and with few posts the feed simply ended.
+- Resolution: Each snapshot ranks from views before its `snapshotAt`, with a deterministic tiebreak. A cached ranked list keeps pages stable within the snapshot. The end cursor starts a fresh snapshot, and the client appends repeated ids as a new cycle with per-occurrence keys. A like or a comment marks the post seen at once. One visit must show the post for 1 continuous second to count as seen.
+- Verification: `feed-service`, `feed-ranking`, `view-dwell`, `feed-list` tests.
+
+### Feed: white controls invisible on light backgrounds; some gradients below 3:1
+- Surface: Author row, time, follow, expand, translate and like/comment/⋯ icons, plus the transparent header over the active post.
+- Issue: All glyphs were hard-coded white. Five light presets made them nearly invisible. White text on golden-hour, ocean-blue, sunset-orange and aurora-green measured below 3:1.
+- User impact: Unreadable controls on about half of the text posts.
+- Resolution: `postForegroundTone()` in `post-backgrounds.ts` is the single rule, and the card and the header both follow it. Light backgrounds get dark glyphs without shadow; photos and dark backgrounds get white glyphs with shadow. The four gradients were darkened (golden-hour now uses dark text). "Pattern" presets now render real patterns.
+- Verification: A per-preset contrast test over every color stop (failed before the fix).
+
+### Feed: photos cropped; broken images and load-more errors unreachable
+- Surface: Photo posts, the end of the feed.
+- Issue: Photos used `object-cover`. The image-error props were not wired. The load-more spinner and the retry sat outside the mandatory snap, and requests had no timeout.
+- User impact: Faces or text in photos were cut off, broken images showed as blank, and a stalled network produced an endless, unretryable wait at the bottom.
+- Resolution: `object-contain` over the post background. Original dimensions are now stored (`imageWidth`/`imageHeight`, migration `20260926150000_add_post_image_dimensions`) and used for layout. A failed image shows a message and a retry. The end of the feed is a snapping full-height status card (loading / failed + retry). Feed requests time out after 15 s.
+- Verification: `fetchWithTimeout` and `imageAspectRatio` tests. On device: letterboxing, status card.
+
+### Feed: publish banner pushed cards; swipe hint blocked swipes; a11y chevrons visible
+- Surface: Feed overlays.
+- Issues:
+  - The publish banner sat in the layout flow, so the fixed-height cards overflowed and the bottom row clipped. The banner was also missing in the loading, error and empty states.
+  - The first-run hint covered the whole feed and swallowed swipes, and a programmatic restore scroll marked it complete.
+  - The `sr-only-focusable` class was undefined, so the keyboard previous/next chevrons showed on every card.
+- Resolution:
+  - The banner is an overlay under the header in every state.
+  - Card height is measured from the real container.
+  - The hint passes touches through (only its close button is interactive), completes only on a real gesture, and uses localized copy ("swipe up for the next post").
+  - The utility class is defined.
+  - The follow button is a small "+", the compose icon is a note-and-pencil (`SquarePen`), and times are locale-formatted.
+- Verification: Unit tests where pure. On device: banner position under the notch, hint pass-through.
+
+### Comments: auto-translated comments could not show the original
+- Surface: Comment sheet.
+- Issue: The server's translated `displayText` was used as the "original".
+- User impact: Users of the four default languages could never read a foreign comment's original.
+- Resolution:
+  - A translated comment opens in translation with "See original" and toggles to `sourceText`. It uses the same Globe icon as the feed.
+  - On touch keyboards Enter inserts a newline, and sending uses the button. On desktop an Enter pressed during IME composition no longer sends.
+  - A failed reply retries to its original target.
+  - The @name is inline with the body, and "View N replies" uses plural rules.
+  - The sheet traps and restores focus.
+- Verification: `comment-state`, composer and API tests.
+
+### Notifications: dot could persist, follow alerts ignored the toggle, labels untranslated
+- Surface: Bell dot (feed and conversation list), notification list, My page toggle, feed tab.
+- Issues:
+  - The dot query and the list used different visibility filters, so an unread alert from a blocked author kept the dot on forever.
+  - Opening the list skipped the read PATCH when nothing unread was visible.
+  - Follow alerts and pushes ignored "app notifications off", and a re-follow re-notified.
+  - The toggle title and description and the feed tab label fell back to English or Korean in 13 languages, and comment, reply and follow pushes were missing in 6 languages.
+- Resolution:
+  - One visibility filter for both queries.
+  - The list marks everything read up to its load time and clears the dot optimistically.
+  - Follow alerts respect the toggle and are not duplicated.
+  - All strings exist in 15 languages.
+  - Rows wrap to two lines.
+  - The list pages and merges like-groups across pages.
+- Verification: Notification route tests (7 failed before the fix), follow route and copy-completeness tests.
+
+### Compose: previewed background not saved; second publish lost; failures discarded
+- Surface: Compose, edit, publish banner, drafts, archive/trash/hidden lists.
+- Issues:
+  - The server re-randomized the background on publish and on "change background", so the result differed from the preview.
+  - Publishing while another publish ran was silently dropped.
+  - Dismissing a failed banner discarded the text and photo, and autosave was not flushed when leaving.
+  - An image-only edit was reported as a failure.
+  - Archive and trash thumbnails returned 404 for the author.
+  - Restoring a post deleted from the archive made it public.
+- Resolution:
+  - The previewed key is saved.
+  - A second publish is blocked with a notice while the content goes to drafts.
+  - A failed publish is saved as a draft, and discarding asks first if that save failed.
+  - Autosave is serialized and flushed on pagehide and hide.
+  - A no-op or image-only edit succeeds, and concurrent edits get a conflict notice with reload.
+  - The author (and the person who hid a post) can see its image.
+  - Restore keeps the archived state.
+  - Lists page with "More".
+  - Large photos (up to 50 MB) are downsized instead of rejected, and HEIC or decode failures have clear messages.
+- Verification: Route and publish-store tests (failed before the fix). On device: keepalive flush on app switch, HEIC.
+
+### Search and profile: IME, state loss on back, "See all" screen, grid scroll
+- Surface: Explore unified search, "See all" people, profile grids.
+- Issues:
+  - A Korean composition could end without triggering the people search, and the post grid bypassed the debounce.
+  - Results cleared on every new query.
+  - Going back lost the query, results and scroll.
+  - "See all" was a bare page, and the people ranking held only within each page.
+  - Profile grids restored the window scroll instead of the real container's.
+- Resolution:
+  - One composition-aware dispatch drives people and posts.
+  - Previous results stay while loading, with a small spinner.
+  - The query lives in `?q=` with a session cache for results and scroll.
+  - "See all" is a right-sliding surface with a header and a back button.
+  - Tiering (exact → prefix → contains) and post scoring run in SQL across all rows.
+  - Grids bind to their scroll container and load pages until the saved position is reachable.
+  - This supersedes the earlier open entry about the "See all" scroll position.
+- Verification: Search controller and route tests. SQL parity checked against the old in-memory algorithm on temp tables. On device: IME order on Gboard, Samsung and iOS keyboards.
+
+### Restricted accounts saw generic failures and endless retries
+- Surface: Every posting write path (publish, drafts, edit, image upload, post and comment likes, comments).
+- Issue: The server's 403 `account_restricted` was never recognised by the client.
+- Resolution: A shared detector (`lib/account-restriction.ts`) and one 15-language notice (`i18n/moderation-copy.ts`). Every write path shows the notice, offers no retry and keeps the user's input.
+- Verification: `moderation-copy`, `like-state`, `publish-store`, `draft-autosave` and comment API tests.
+
+## 2026-09-26 — Posting feed: official badge, read-only archived posts, measurement (wave 2)
+
+Merged into `feat/posting-feed` (not `main`). Web 286 files / 2,930 tests, RN 111 tests, TypeScript clean. On-device checks pending.
+
+### Operator content was indistinguishable from member posts
+- Surface: Feed card author row, comments and replies, other-user profile, My page, people search rows.
+- Issue: The initial content is posted by the Mingle team account, but nothing marked it (spec item 84).
+- User impact: Readers could take operator-written posts for other members' experiences.
+- Resolution:
+  - A new `User.isOfficial` column (migration `20260926170000_add_user_official_flag`) marks the account, and one shared `<OfficialBadge>` renders it everywhere in 15 languages.
+  - On feed cards the badge follows the card glyph tone (white on photos and dark backgrounds, sky pill on light ones).
+  - Long names truncate and the badge stays visible.
+  - The badge never changes counts or ranking.
+  - Operators mark the account with the seed script (`--mark-official`); `--create-author` creates it as official.
+- Verification: Serializer, list, comment and search response tests (failed before the fix). On device: narrow screens, RTL (ar).
+
+### Authors opening an archived or trashed post could try to like or comment
+- Surface: Full-screen viewer opened from the archive or trash list.
+- Issue: The author can now load their own archived and trashed posts, but likes and comments on them return 404.
+- Resolution:
+  - A pill under the header reads "Archived post" or "Post in trash" (15 languages).
+  - Like and comment are dimmed and disabled, and double-tap like and the heart effect are off.
+  - The ⋯ menu (restore, delete) is unchanged.
+- Verification: `read-only-post` tests. On device: pill position under the notch.
+
+### Following from a restricted account showed a generic failure
+- Surface: Feed card "+" follow button.
+- Resolution: A 403 `account_restricted` shows the shared restricted-account notice with no retry, and "+" stays.
+- Verification: `use-feed-follow` tests.

@@ -5,6 +5,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
@@ -15,6 +16,10 @@ import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
+import ProfilePostGrid from "@/components/search/profile-post-grid";
+import OfficialBadge from "@/components/posts/official-badge";
+import { isDuplicateReportBody } from "@/components/reports/report-response";
+import { reportCopy } from "@/i18n/report-copy";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
@@ -37,6 +42,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -73,6 +79,8 @@ type PublicUserProfile = {
   followingCount: number;
   isFollowing: boolean;
   isBlocked: boolean;
+  /** Operator / official account; absent means false. */
+  isOfficial?: boolean;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
@@ -192,7 +200,11 @@ export default function PublicUserProfileScreen({
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Rollout gate (W4): hide another user's post grid for a pre-2.2.0 client.
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
+  // The profile's real scroller; the post grid restores its offset on return.
+  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
@@ -204,6 +216,7 @@ export default function PublicUserProfileScreen({
   const [reportMessage, setReportMessage] = useState("");
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reportDuplicate, setReportDuplicate] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const [showProfileShare, setShowProfileShare] = useState(false);
   const [existingConversation, setExistingConversation] = useState<ConversationChannelSummary | null>(null);
@@ -333,12 +346,8 @@ export default function PublicUserProfileScreen({
 
   const handleToggleBlock = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending) return;
+    // Block / unblock applies at once, without a confirmation dialog (plan 80).
     const nextIsBlocked = !profile.isBlocked;
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm(nextIsBlocked ? copy.blockConfirm : copy.unblockConfirm);
-      if (!confirmed) return;
-    }
-
     setIsActionPending(true);
     setActionError(false);
     try {
@@ -357,7 +366,7 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
+  }, [isActionPending, isOwnProfile, profile]);
 
   const requestDirectConversation = useCallback(async (force: boolean) => {
     if (!profile) throw new Error("direct_conversation_failed");
@@ -441,6 +450,7 @@ export default function PublicUserProfileScreen({
     if (isOwnProfile || !profile || reportPending) return;
     setReportPending(true);
     setReportSubmitted(false);
+    setReportDuplicate(false);
     setActionError(false);
     try {
       const response = await fetch(
@@ -455,9 +465,12 @@ export default function PublicUserProfileScreen({
         },
       );
       if (!response.ok) throw new Error("report_failed");
-      setReportSubmitted(true);
+      // A repeat report of this person says "already reported", not "received".
+      const payload: unknown = await response.json().catch(() => ({}));
+      if (isDuplicateReportBody(payload)) setReportDuplicate(true);
+      else setReportSubmitted(true);
       setReportMessage("");
-      window.setTimeout(() => setReportOpen(false), 700);
+      window.setTimeout(() => setReportOpen(false), 1400);
     } catch {
       setActionError(true);
     } finally {
@@ -520,7 +533,7 @@ export default function PublicUserProfileScreen({
         <div aria-hidden="true" />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />
@@ -577,7 +590,10 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 pl-2">
-                <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+                <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
+                  <span className="truncate">{name}</span>
+                  {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+                </p>
                 {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
                 {!isOwnProfile ? (
                   <ProfileLocation
@@ -641,6 +657,7 @@ export default function PublicUserProfileScreen({
                     type="button"
                     onClick={() => {
                       setReportSubmitted(false);
+                      setReportDuplicate(false);
                       setActionError(false);
                       setReportOpen(true);
                     }}
@@ -658,6 +675,11 @@ export default function PublicUserProfileScreen({
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.messageError}</p>
               ) : null}
             </section>
+            {!profile.isBlocked && postingFeedSupported !== false ? (
+              <section className="border-t border-gray-100 pt-0.5">
+                <ProfilePostGrid locale={locale} authorId={profile.id} scrollContainerRef={profileScrollRef} />
+              </section>
+            ) : null}
           </>
         )}
       </div>
@@ -700,7 +722,7 @@ export default function PublicUserProfileScreen({
                 <textarea
                   value={reportMessage}
                   onChange={(event) => setReportMessage(event.target.value)}
-                  maxLength={4000}
+                  maxLength={500}
                   rows={4}
                   placeholder={copy.reportMessagePlaceholder}
                   className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-[14px] leading-relaxed outline-none focus:border-gray-400"
@@ -710,6 +732,11 @@ export default function PublicUserProfileScreen({
               {reportSubmitted ? (
                 <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-600" role="status">
                   <Check size={16} aria-hidden="true" /> {copy.reportSubmitted}
+                </p>
+              ) : null}
+              {reportDuplicate ? (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600" role="status">
+                  <Check size={16} aria-hidden="true" /> {reportCopy(locale).alreadyReported}
                 </p>
               ) : null}
               <div className="grid grid-cols-2 gap-3">
@@ -722,7 +749,7 @@ export default function PublicUserProfileScreen({
                 </button>
                 <button
                   type="submit"
-                  disabled={reportPending || reportSubmitted}
+                  disabled={reportPending || reportSubmitted || reportDuplicate}
                   className="h-11 rounded-xl bg-rose-500 text-[14px] font-semibold text-white transition active:bg-rose-600 disabled:opacity-50"
                 >
                   {reportPending ? "…" : copy.reportSubmit}

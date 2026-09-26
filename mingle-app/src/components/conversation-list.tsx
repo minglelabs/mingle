@@ -176,7 +176,12 @@ import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
-import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+import AppTopHeader from "@/components/app-top-header";
+import ConversationSearchBar from "@/components/conversation-search-bar";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
+import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
+import { composeHref, notificationsHref } from "@/lib/feed-routes";
+import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
@@ -1838,6 +1843,15 @@ export default function ConversationList({
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
+  // Rollout gate (W4): a supported client (v2.2.0+) shows the shared posting
+  // header (compose + bell → notification center) so the conversation list and
+  // the feed line up; a pre-2.2.0 client keeps the existing search + in-app
+  // notification-panel header unchanged. `null` before mount → existing header,
+  // matching the server render.
+  const postingFeedSupported = useIsPostingFeedSupported();
+  const showPostingHeader = postingFeedSupported === true;
+  const postingHeaderCopy = useMemo(() => feedCopy(locale), [locale]);
+  const postingUnread = useUnreadNotifications(showPostingHeader ? (authenticatedUserId || null) : null);
   const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     authenticatedUserId,
@@ -5381,6 +5395,17 @@ export default function ConversationList({
         />
       ) : null}
 
+      {showPostingHeader ? (
+        <AppTopHeader
+          variant="surface"
+          composeLabel={postingHeaderCopy.compose}
+          notificationsLabel={postingHeaderCopy.notifications}
+          unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
+          hasUnread={postingUnread.hasUnread}
+          onCompose={() => router.push(composeHref(locale))}
+          onNotifications={() => router.push(notificationsHref(locale))}
+        />
+      ) : (
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -5417,6 +5442,7 @@ export default function ConversationList({
           </button>
         </div>
       </header>
+      )}
 
       <div
         ref={conversationListScrollRef}
@@ -5499,6 +5525,9 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
+          {showPostingHeader ? (
+            <ConversationSearchBar copy={copy} onOpen={handleOpenSearch} />
+          ) : null}
           {isHydratingConversations ? (
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />

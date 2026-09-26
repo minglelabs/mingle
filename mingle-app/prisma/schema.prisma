@@ -70,6 +70,11 @@ model User {
   scheduledDeleteAt            DateTime? @map("scheduled_delete_at")
   isDeleted                    Boolean   @default(false) @map("is_deleted")
   deletedAt                    DateTime? @map("deleted_at")
+  inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
+  moderationHiddenAt           DateTime? @map("moderation_hidden_at")
+  moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
+  /// Operator / official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts.
+  isOfficial                   Boolean   @default(false) @map("is_official")
   firstSeenAt                  DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt                   DateTime  @default(now()) @map("last_seen_at")
   createdAt                    DateTime  @default(now()) @map("created_at")
@@ -96,6 +101,15 @@ model User {
   blockedByRelations      UserBlock[]                    @relation("UserBlockedBy")
   sentUserReports         UserReport[]                   @relation("UserReportsSent")
   receivedUserReports     UserReport[]                   @relation("UserReportsReceived")
+  posts                   Post[]
+  postComments            PostComment[]
+  postLikes               PostLike[]
+  postCommentLikes        PostCommentLike[]
+  postViews               PostView[]
+  postHides               PostHide[]
+  postDrafts              PostDraft[]
+  recentSearches          RecentSearch[]
+  repliedToComments       PostComment[]                  @relation("PostCommentReplyToUser")
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
@@ -122,14 +136,24 @@ model UserNotification {
   recipientId String    @map("recipient_id")
   actorId     String    @map("actor_id")
   type        String    @default("follow")
+  postId      String?   @map("post_id")
+  commentId   String?   @map("comment_id")
+  /// Set only on report_resolved: the report whose closing this row announces.
+  reportId    String?   @map("report_id")
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  recipient User @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+  recipient User         @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User         @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+  post      Post?        @relation(fields: [postId], references: [id], onDelete: SetNull)
+  comment   PostComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  report    UserReport?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
   @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")
+  @@index([postId], map: "app_user_notifications_post_id_idx")
+  @@index([commentId], map: "app_user_notifications_comment_id_idx")
+  @@index([reportId], map: "app_user_notifications_report_id_idx")
   @@map("app_user_notifications")
 }
 
@@ -168,22 +192,34 @@ model UserBlock {
 }
 
 model UserReport {
-  id             String   @id @default(cuid())
-  reporterId     String   @map("reporter_id")
-  reportedUserId String   @map("reported_user_id")
-  reason         String
-  message        String?  @db.Text
-  status         String   @default("open")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(cuid())
+  reporterId       String   @map("reporter_id")
+  reportedUserId   String   @map("reported_user_id")
+  targetType       String   @default("user") @map("target_type")
+  targetPostId     String?  @map("target_post_id")
+  targetCommentId  String?  @map("target_comment_id")
+  targetKey        String   @default("") @map("target_key")
+  reason           String
+  message          String?  @db.Text
+  status           String   @default("open")
+  adminNote        String?  @map("admin_note") @db.Text
+  moderationAction String?  @map("moderation_action")
+  resolvedAt       DateTime? @map("resolved_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  reporter     User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedUser User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
-  replies      UserReportReply[]
+  reporter      User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser  User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  targetPost    Post?             @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
+  targetComment PostComment?      @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
+  replies       UserReportReply[]
+  notifications UserNotification[]
 
+  @@unique([reporterId, targetKey], map: "app_user_reports_reporter_target_key_uidx")
   @@index([reporterId, createdAt], map: "app_user_reports_reporter_created_at_idx")
   @@index([reportedUserId, createdAt], map: "app_user_reports_reported_created_at_idx")
   @@index([status, createdAt], map: "app_user_reports_status_created_at_idx")
+  @@index([targetType, status, createdAt], map: "app_user_reports_target_type_status_created_at_idx")
   @@map("app_user_reports")
 }
 
@@ -643,4 +679,195 @@ model ProfileBioTranslation {
 
   @@id([versionId, language])
   @@map("profile_bio_translations")
+}
+
+// ---------------------------------------------------------------------------
+// Posting / Feed models (Phase 1)
+// ---------------------------------------------------------------------------
+
+model Post {
+  id                  String    @id @default(cuid())
+  authorId            String    @map("author_id")
+  bodyVersion         Int       @default(1) @map("body_version")
+  sourceText          String?   @map("source_text") @db.Text
+  sourceLanguage      String?   @map("source_language")
+  backgroundKey       String?   @map("background_key")
+  imageObjectKey      String?   @map("image_object_key")
+  imageWidth          Int?      @map("image_width")
+  imageHeight         Int?      @map("image_height")
+  visibility          String    @default("public")
+  archivedAt          DateTime? @map("archived_at")
+  isDeleted           Boolean?  @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at")
+  moderationHiddenAt  DateTime? @map("moderation_hidden_at")
+  likeCount           Int       @default(0) @map("like_count")
+  commentCount        Int       @default(0) @map("comment_count")
+  publishedAt         DateTime  @default(now()) @map("published_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  translations  PostTranslation[]
+  comments      PostComment[]
+  likes         PostLike[]
+  views         PostView[]
+  hides         PostHide[]
+  notifications UserNotification[]
+  reports       UserReport[]
+
+  @@index([publishedAt], map: "app_posts_published_at_idx")
+  @@index([authorId, publishedAt], map: "app_posts_author_published_at_idx")
+  @@index([authorId, createdAt], map: "app_posts_author_created_at_idx")
+  @@index([visibility, isDeleted, moderationHiddenAt, publishedAt], map: "app_posts_feed_filter_idx")
+  @@map("app_posts")
+}
+
+model PostTranslation {
+  postId      String @map("post_id")
+  bodyVersion Int    @map("body_version")
+  language    String
+  status      String @default("pending")
+  text        String? @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([postId, bodyVersion, language])
+  @@map("app_post_translations")
+}
+
+model PostComment {
+  id              String    @id @default(cuid())
+  postId          String    @map("post_id")
+  authorId        String    @map("author_id")
+  parentId        String?   @map("parent_id")
+  replyToUserId   String?   @map("reply_to_user_id")
+  bodyVersion     Int       @default(1) @map("body_version")
+  sourceText      String    @map("source_text") @db.Text
+  sourceLanguage  String?   @map("source_language")
+  likeCount       Int       @default(0) @map("like_count")
+  isDeleted       Boolean?  @map("is_deleted")
+  deletedAt       DateTime? @map("deleted_at")
+  moderationHiddenAt DateTime? @map("moderation_hidden_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  post          Post                       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User                       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        PostComment?               @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       PostComment[]              @relation("PostCommentReplies")
+  replyToUser   User?                      @relation("PostCommentReplyToUser", fields: [replyToUserId], references: [id], onDelete: SetNull)
+  translations  PostCommentTranslation[]
+  likes         PostCommentLike[]
+  notifications UserNotification[]
+  reports       UserReport[]
+
+  @@index([postId, createdAt], map: "app_post_comments_post_created_at_idx")
+  @@index([authorId, createdAt], map: "app_post_comments_author_created_at_idx")
+  @@index([parentId], map: "app_post_comments_parent_id_idx")
+  @@map("app_post_comments")
+}
+
+model PostCommentTranslation {
+  commentId   String @map("comment_id")
+  bodyVersion Int    @map("body_version")
+  language    String
+  status      String @default("pending")
+  text        String? @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  comment PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, bodyVersion, language])
+  @@map("app_post_comment_translations")
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId], map: "app_post_likes_post_user_uidx")
+  @@index([postId], map: "app_post_likes_post_id_idx")
+  @@index([userId, createdAt], map: "app_post_likes_user_created_at_idx")
+  @@map("app_post_likes")
+}
+
+model PostCommentLike {
+  id        String   @id @default(cuid())
+  commentId String   @map("comment_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId], map: "app_post_comment_likes_comment_user_uidx")
+  @@index([commentId], map: "app_post_comment_likes_comment_id_idx")
+  @@index([userId, createdAt], map: "app_post_comment_likes_user_created_at_idx")
+  @@map("app_post_comment_likes")
+}
+
+model PostView {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId], map: "app_post_views_post_user_uidx")
+  @@index([userId, postId], map: "app_post_views_user_post_idx")
+  @@index([userId, viewedAt], map: "app_post_views_user_viewed_at_idx")
+  @@map("app_post_views")
+}
+
+model PostHide {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId], map: "app_post_hides_post_user_uidx")
+  @@map("app_post_hides")
+}
+
+model PostDraft {
+  id              String   @id @default(cuid())
+  authorId        String   @map("author_id")
+  sourceText      String?  @map("source_text") @db.Text
+  backgroundKey   String?  @map("background_key")
+  imageObjectKey  String?  @map("image_object_key")
+  imageWidth      Int?     @map("image_width")
+  imageHeight     Int?     @map("image_height")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId, updatedAt], map: "app_post_drafts_author_updated_at_idx")
+  @@map("app_post_drafts")
+}
+
+model RecentSearch {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  query      String
+  searchedAt DateTime @default(now()) @map("searched_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, query], map: "app_recent_searches_user_query_uidx")
+  @@index([userId, searchedAt], map: "app_recent_searches_user_searched_at_idx")
+  @@map("app_recent_searches")
 }

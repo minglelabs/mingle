@@ -15,6 +15,8 @@ import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileLocation from "@/components/profile-location";
+import ProfilePostGrid from "@/components/search/profile-post-grid";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
@@ -73,6 +75,7 @@ import {
 } from "@/lib/birth-date";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
 import { resolveProfileManagementCopy } from "@/i18n/profile-management-copy";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { checkProfileLocationPermission } from "@/components/profile-location";
 import {
   normalizeProfileLocation,
@@ -85,7 +88,10 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { myPostsHref } from "@/lib/feed-routes";
+import { composeCopy } from "@/i18n/compose-copy";
+import OfficialBadge from "@/components/posts/official-badge";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -112,6 +118,8 @@ type ProfileRecord = {
   birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
+  /** Operator / official account; absent means false. */
+  isOfficial?: boolean;
 };
 
 type ProfileDraft = {
@@ -420,6 +428,7 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -443,6 +452,8 @@ function ProfileSettingsPanel({
   ));
   const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
+  const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
@@ -450,6 +461,15 @@ function ProfileSettingsPanel({
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
+  const postsRouter = useRouter();
+  const postsMenu = useMemo(() => composeCopy(locale), [locale]);
+  const goToMyPosts = useCallback(
+    (section: "archived" | "trash" | "hidden") => {
+      onClose();
+      postsRouter.push(myPostsHref(locale, section));
+    },
+    [locale, onClose, postsRouter],
+  );
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -486,6 +506,8 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
+    notifications: resolveNotificationCopy(locale).inAppToggleTitle,
+    notificationsDescription: resolveNotificationCopy(locale).inAppToggleDescription,
     deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
     deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
     deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
@@ -690,6 +712,44 @@ function ProfileSettingsPanel({
     }
   }, [copy.unblockError, unblockingId]);
 
+  useEffect(() => {
+    if (!open || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/account/preferences"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { inAppNotificationsEnabled?: unknown } | null) => {
+        if (cancelled || !payload) return;
+        setInAppNotificationsEnabled(payload.inAppNotificationsEnabled !== false);
+      })
+      .catch(() => {
+        // Leave the toggle in its unknown state; it stays interactive.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
+
+  const handleToggleInAppNotifications = useCallback(async () => {
+    if (isSavingNotificationsPreference) return;
+    const current = inAppNotificationsEnabled ?? true;
+    const next = !current;
+    setInAppNotificationsEnabled(next);
+    setIsSavingNotificationsPreference(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/preferences"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inAppNotificationsEnabled: next }),
+      });
+      if (!response.ok) throw new Error("preference_save_failed");
+    } catch {
+      // Roll the optimistic toggle back on failure.
+      setInAppNotificationsEnabled(current);
+    } finally {
+      setIsSavingNotificationsPreference(false);
+    }
+  }, [inAppNotificationsEnabled, isSavingNotificationsPreference]);
+
   const handleSelectAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
     if (nextLocale === locale) return;
     storeAppLocale(nextLocale);
@@ -889,6 +949,37 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {postingFeedSupported !== false ? (
+            <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <button
+                type="button"
+                onClick={() => goToMyPosts("archived")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Archive size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.archiveTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("trash")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Trash2 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.trashTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("hidden")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <EyeOff size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.hiddenTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
+            ) : null}
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -953,6 +1044,33 @@ function ProfileSettingsPanel({
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.appLanguage}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Bell size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold">{copy.notifications}</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-gray-500">{copy.notificationsDescription}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={inAppNotificationsEnabled ?? true}
+                  aria-label={copy.notifications}
+                  disabled={isSavingNotificationsPreference || sessionStatus !== "authenticated"}
+                  onClick={() => void handleToggleInAppNotifications()}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                    (inAppNotificationsEnabled ?? true) ? "bg-amber-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      (inAppNotificationsEnabled ?? true) ? "translate-x-6" : "translate-x-1"
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             </div>
             {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
@@ -1620,6 +1738,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Rollout gate (W4): hide the post grid for a pre-2.2.0 client (its posts
+  // endpoints 404). `null` before mount → shown, matching the server render;
+  // hidden once a client is known to be unsupported.
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
     image: null,
     imageCropScale: null,
@@ -1676,6 +1798,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const sessionUserId = session?.user?.id ?? "";
   const currentAccountRef = useRef(sessionUserId);
   currentAccountRef.current = sessionUserId;
+  // The profile's real scroller; the post grid restores its offset on return.
+  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
@@ -1898,6 +2022,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
+          isOfficial: data.isOfficial === true,
         });
       })
       .catch(() => {
@@ -2259,7 +2384,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
           <div className="flex items-center gap-6 pl-2">
             <div className="flex shrink-0 flex-col items-center">
@@ -2298,7 +2423,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+            <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
+              <span className="truncate">{name}</span>
+              {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+            </p>
             {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}
@@ -2328,6 +2456,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             </button>
           </div>
         </section>
+
+        {sessionUserId && postingFeedSupported !== false ? (
+          <section className="border-t border-gray-100 pt-0.5">
+            <ProfilePostGrid locale={locale} authorId={sessionUserId} scrollContainerRef={profileScrollRef} />
+          </section>
+        ) : null}
 
       </div>
 
