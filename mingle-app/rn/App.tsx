@@ -111,6 +111,7 @@ import {
   resolvePushTapPath,
   type PushTapPayload,
 } from './src/pushNavigation';
+import { resolveInitialWebRoute } from './src/initialWebRoute';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -1547,10 +1548,14 @@ function AppInner(): React.JSX.Element {
     const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    // Start directly at the conversation-list route. Loading the locale root
-    // first creates a redirect history entry, which would let a tab-root
-    // screen swipe back into an older room after a tab switch.
-    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/conversations?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    // Plain launch lands on the feed when this build's namespace supports the
+    // posting feed (v2.1.0+); otherwise on the conversation list. A live
+    // conversation/STT restore target or a pending push tap override this base
+    // route (see webUrl memo and the push-tap handlers). The same query params
+    // are kept regardless of route. Loading the locale root first would create
+    // a redirect history entry, so target the concrete route directly.
+    const initialRoute = resolveInitialWebRoute(VALIDATED_API_NAMESPACE);
+    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/${initialRoute}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
     return appendNativeRuntimeWebViewParams(rawWebUrl, {
       nativeListTopInsetPx: nativeInitialBannerInsetPx,
       nativeConversationBannerPosition: defaultNativeBannerPosition,
