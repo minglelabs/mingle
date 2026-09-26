@@ -2,6 +2,9 @@
 
 import type { ReactNode } from "react";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
+import { getBackgroundPreset } from "@/lib/post-backgrounds";
+import { searchCopy } from "@/i18n/search-copy";
+import { resolveGridTilePreview } from "./post-grid-tile-text";
 
 /**
  * CONTRACT STUB — the profile/search UI replaces the body; the props are frozen.
@@ -25,7 +28,70 @@ export type PostGridTileProps = {
   badge?: ReactNode;
 };
 
-export default function PostGridTile(props: PostGridTileProps) {
-  void props;
-  return null;
+const FALLBACK_BACKGROUND = {
+  background: "#f1f5f9",
+  textColor: "#0f172a",
+  textShadow: "none",
+} as const;
+
+export default function PostGridTile({ post, locale, onSelect, badge }: PostGridTileProps) {
+  const preview = resolveGridTilePreview(post);
+  const previewText = preview.text.trim();
+  const accessibleName = previewText || searchCopy(locale).postTileLabel;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(post.id)}
+      aria-label={accessibleName}
+      className="post-grid-tile relative block aspect-square w-full overflow-hidden bg-gray-100 transition active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
+    >
+      {post.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={post.image.url}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <TextTile
+          backgroundKey={post.backgroundKey}
+          text={preview.text}
+        />
+      )}
+      {badge != null ? (
+        <span className="pointer-events-none absolute right-1.5 top-1.5 z-10">{badge}</span>
+      ) : null}
+    </button>
+  );
+}
+
+function TextTile({ backgroundKey, text }: { backgroundKey: string; text: string }) {
+  const preset = getBackgroundPreset(backgroundKey) ?? FALLBACK_BACKGROUND;
+  // Shrink type as the snippet grows so even a ~40-char body stays inside the
+  // tile without clipping; short bodies read large. `line-clamp` is the final
+  // guard against overflow on very narrow tiles.
+  const length = [...text].length;
+  const sizeClass = length <= 8
+    ? "text-lg leading-snug"
+    : length <= 18
+      ? "text-[15px] leading-snug"
+      : length <= 30
+        ? "text-[13px] leading-snug"
+        : "text-[11px] leading-tight";
+
+  return (
+    <span
+      className="flex h-full w-full items-center justify-center p-2.5"
+      style={{ background: preset.background }}
+    >
+      <span
+        className={`line-clamp-4 break-words text-center font-semibold [overflow-wrap:anywhere] ${sizeClass}`}
+        style={{ color: preset.textColor, textShadow: preset.textShadow }}
+      >
+        {text}
+      </span>
+    </span>
+  );
 }
