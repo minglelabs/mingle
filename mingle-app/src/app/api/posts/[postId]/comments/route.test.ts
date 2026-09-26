@@ -6,6 +6,7 @@ const {
   mockPostFindFirst,
   mockCommentFindMany,
   mockCommentLikeFindMany,
+  mockUserFindUnique,
   mockCreateComment,
   mockDeleteComment,
   mockTranslateCommentOnDemand,
@@ -15,6 +16,7 @@ const {
   mockPostFindFirst: vi.fn(),
   mockCommentFindMany: vi.fn(),
   mockCommentLikeFindMany: vi.fn(),
+  mockUserFindUnique: vi.fn(),
   mockCreateComment: vi.fn(),
   mockDeleteComment: vi.fn(),
   mockTranslateCommentOnDemand: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('@/lib/prisma', () => ({
     post: { findFirst: mockPostFindFirst },
     postComment: { findMany: mockCommentFindMany },
     postCommentLike: { findMany: mockCommentLikeFindMany },
+    user: { findUnique: mockUserFindUnique },
   },
 }))
 vi.mock('next/server', async (importOriginal) => {
@@ -63,14 +66,28 @@ describe('GET /api/posts/{postId}/comments', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
-    mockPostFindFirst.mockResolvedValue({ id: 'post-1' })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 0 })
     mockCommentLikeFindMany.mockResolvedValue([])
+    mockUserFindUnique.mockResolvedValue({ defaultDisplayLanguage: null })
   })
 
-  it('returns 401 when unauthenticated', async () => {
-    mockGetServerSession.mockResolvedValue(null)
+  it('returns 200 with an empty list when there are no comments', async () => {
+    mockCommentFindMany.mockResolvedValue([])
     const res = await GET(makeRequest(), makeCtx('post-1'))
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.comments).toEqual([])
+    expect(body.commentCount).toBe(0)
+  })
+
+  it('lets a signed-out viewer read the list', async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    mockCommentFindMany.mockResolvedValue([])
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    expect(res.status).toBe(200)
+    // No block filtering / no likes lookup when signed out.
+    expect(mockCommentLikeFindMany).not.toHaveBeenCalled()
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
   })
 
   it('returns 404 when post not visible', async () => {
@@ -79,21 +96,29 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(res.status).toBe(404)
   })
 
+  it('exposes the post commentCount for onCommentCountChange', async () => {
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 7 })
+    mockCommentFindMany.mockResolvedValue([])
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    const body = await res.json()
+    expect(body.commentCount).toBe(7)
+  })
+
   it('returns threaded comments with deleted parent sourceText=null', async () => {
     mockCommentFindMany.mockResolvedValue([
       {
         id: 'c1', postId: 'post-1', authorId: 'u1', parentId: null,
         replyToUserId: null, bodyVersion: 1, sourceText: 'Original', sourceLanguage: 'en',
         likeCount: 0, isDeleted: true, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u1', handle: 'h1', displayName: 'd1', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 1 },
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 1 }, translations: [],
       },
       {
         id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
         replyToUserId: 'u1', bodyVersion: 1, sourceText: 'Reply', sourceLanguage: 'ko',
         likeCount: 2, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u2', handle: 'h2', displayName: 'd2', profileImageUrl: null },
-        replyToUser: { id: 'u1', handle: 'h1', displayName: 'd1' }, _count: { replies: 0 },
+        author: { id: 'u2', handle: 'h2', name: 'd2', image: null },
+        replyToUser: { id: 'u1', handle: 'h1', name: 'd1' }, _count: { replies: 0 }, translations: [],
       },
     ])
 
@@ -105,13 +130,14 @@ describe('GET /api/posts/{postId}/comments', () => {
     const parent = body.comments[0]
     expect(parent.isDeleted).toBe(true)
     expect(parent.sourceText).toBeNull()  // redacted
+    expect(parent.displayText).toBeNull()
     expect(parent.replies).toHaveLength(1)
     expect(parent.replies[0].sourceText).toBe('Reply')
   })
 
   it('drops a deleted comment once no live reply keeps it', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
-    mockPostFindFirst.mockResolvedValue({ id: 'post-1' })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 1 })
     mockCommentLikeFindMany.mockResolvedValue([])
     // A deleted parent whose only reply was also deleted, plus a live comment.
     // The parent is kept alive by replies alone, so it must disappear here.
@@ -120,22 +146,22 @@ describe('GET /api/posts/{postId}/comments', () => {
         id: 'c1', postId: 'post-1', authorId: 'u1', parentId: null,
         replyToUserId: null, bodyVersion: 1, sourceText: 'Gone', sourceLanguage: 'en',
         likeCount: 0, isDeleted: true, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u1', handle: 'h1', displayName: 'd1', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 1 },
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 1 }, translations: [],
       },
       {
         id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
         replyToUserId: 'u1', bodyVersion: 1, sourceText: 'Gone too', sourceLanguage: 'ko',
         likeCount: 0, isDeleted: true, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u2', handle: 'h2', displayName: 'd2', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 0 },
+        author: { id: 'u2', handle: 'h2', name: 'd2', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
       },
       {
         id: 'c3', postId: 'post-1', authorId: 'u3', parentId: null,
         replyToUserId: null, bodyVersion: 1, sourceText: 'Alive', sourceLanguage: 'en',
         likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u3', handle: 'h3', displayName: 'd3', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 0 },
+        author: { id: 'u3', handle: 'h3', name: 'd3', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
       },
     ])
 
@@ -147,7 +173,7 @@ describe('GET /api/posts/{postId}/comments', () => {
 
   it('counts only live replies in replyCount', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
-    mockPostFindFirst.mockResolvedValue({ id: 'post-1' })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 1 })
     mockCommentLikeFindMany.mockResolvedValue([])
     // _count.replies is 2 in the DB, but one reply is deleted. Reporting 2
     // would advertise a reply the client never receives.
@@ -156,22 +182,22 @@ describe('GET /api/posts/{postId}/comments', () => {
         id: 'c1', postId: 'post-1', authorId: 'u1', parentId: null,
         replyToUserId: null, bodyVersion: 1, sourceText: 'Parent', sourceLanguage: 'en',
         likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u1', handle: 'h1', displayName: 'd1', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 2 },
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 2 }, translations: [],
       },
       {
         id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
         replyToUserId: null, bodyVersion: 1, sourceText: 'Live', sourceLanguage: 'en',
         likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u2', handle: 'h2', displayName: 'd2', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 0 },
+        author: { id: 'u2', handle: 'h2', name: 'd2', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
       },
       {
         id: 'c3', postId: 'post-1', authorId: 'u3', parentId: 'c1',
         replyToUserId: null, bodyVersion: 1, sourceText: 'Deleted', sourceLanguage: 'en',
         likeCount: 0, isDeleted: true, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u3', handle: 'h3', displayName: 'd3', profileImageUrl: null },
-        replyToUser: null, _count: { replies: 0 },
+        author: { id: 'u3', handle: 'h3', name: 'd3', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
       },
     ])
 
@@ -180,6 +206,55 @@ describe('GET /api/posts/{postId}/comments', () => {
 
     expect(body.comments[0].replyCount).toBe(1)
     expect(body.comments[0].replies.map((r: { id: string }) => r.id)).toEqual(['c2'])
+  })
+
+  it('resolves translation display fields against the viewer display language', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 3 })
+    mockUserFindUnique.mockResolvedValue({ defaultDisplayLanguage: 'ko' })
+    mockCommentFindMany.mockResolvedValue([
+      // same language as display -> same_language, displayText = source
+      {
+        id: 'a', postId: 'post-1', authorId: 'u1', parentId: null, replyToUserId: null,
+        bodyVersion: 1, sourceText: '안녕', sourceLanguage: 'ko', likeCount: 0,
+        isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
+      },
+      // en source, ready ko translation for current version -> ready
+      {
+        id: 'b', postId: 'post-1', authorId: 'u2', parentId: null, replyToUserId: null,
+        bodyVersion: 2, sourceText: 'Hello', sourceLanguage: 'en', likeCount: 0,
+        isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u2', handle: 'h2', name: 'd2', image: null },
+        replyToUser: null, _count: { replies: 0 },
+        translations: [{ language: 'ko', bodyVersion: 2, text: '안녕하세요' }],
+      },
+      // en source, no ko translation -> none, displayText = source
+      {
+        id: 'c', postId: 'post-1', authorId: 'u3', parentId: null, replyToUserId: null,
+        bodyVersion: 1, sourceText: 'Bonjour', sourceLanguage: 'fr', likeCount: 0,
+        isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u3', handle: 'h3', name: 'd3', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
+      },
+    ])
+
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    const body = await res.json()
+    const byId = Object.fromEntries(body.comments.map((c: { id: string }) => [c.id, c]))
+
+    expect(byId.a.translationState).toBe('same_language')
+    expect(byId.a.displayText).toBe('안녕')
+    expect(byId.a.edited).toBe(false)
+
+    expect(byId.b.translationState).toBe('ready')
+    expect(byId.b.displayText).toBe('안녕하세요')
+    expect(byId.b.displayLanguage).toBe('ko')
+    expect(byId.b.edited).toBe(true) // bodyVersion > 1
+
+    expect(byId.c.translationState).toBe('none')
+    expect(byId.c.displayText).toBe('Bonjour')
   })
 })
 
