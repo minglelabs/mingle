@@ -1,5 +1,6 @@
 "use client";
 
+import { isAccountRestrictedResponse } from "@/lib/account-restriction";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -18,8 +19,16 @@ type UseFeedFollowOptions = {
   onRequireLogin: () => void;
   /** Persist the confirmed following flag up to the feed list. */
   onFollowed?: (authorId: string) => void;
-  onError?: () => void;
+  /** `account_restricted` = 403 restricted account (show the moderation notice, no retry). */
+  onError?: (error: FollowError) => void;
 };
+
+export type FollowError = "account_restricted" | "generic";
+
+/** Classify a failed follow response. */
+export async function followFailureFromResponse(res: Response): Promise<FollowError> {
+  return (await isAccountRestrictedResponse(res)) ? "account_restricted" : "generic";
+}
 
 type UseFeedFollowReturn = {
   buttonState: FollowButtonState;
@@ -54,7 +63,8 @@ export function resolveFollowButtonState(
  *
  * - Hidden for own posts, already-followed authors, and the self/null case.
  * - Optimistic: on success shows a check briefly, then hides.
- * - On failure keeps the "+", shows an error, and stays tappable.
+ * - On failure keeps the "+", shows an error, and stays tappable. A 403
+ *   restricted account reports `account_restricted` (moderation notice).
  * - Unfollow lives on the author's profile, not here.
  */
 export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowReturn {
@@ -96,8 +106,9 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
           cache: "no-store",
         });
         if (!res.ok) {
+          const error = await followFailureFromResponse(res);
           setLocal("idle");
-          onError?.();
+          onError?.(error);
           return;
         }
         setLocal("success");
@@ -105,7 +116,7 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
         timerRef.current = setTimeout(() => setLocal("done"), SUCCESS_HOLD_MS);
       } catch {
         setLocal("idle");
-        onError?.();
+        onError?.("generic");
       } finally {
         pendingRef.current = false;
       }

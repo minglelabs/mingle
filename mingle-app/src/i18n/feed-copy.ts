@@ -55,6 +55,9 @@ export type FeedCopy = {
   emptyAction: string
   // Deep-linked / restored post gone
   postUnavailable: string
+  // Author's own archived / trashed post opened full-screen (read-only)
+  archivedPostLabel: string
+  trashedPostLabel: string
 }
 
 const copy: Record<LegalDocumentLocale, FeedCopy> = {
@@ -92,6 +95,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: '아직 볼 수 있는 게시물이 없어요.',
     emptyAction: '첫 게시물을 작성해 보세요.',
     postUnavailable: '이 게시물은 더 이상 볼 수 없어요.',
+    archivedPostLabel: '보관된 게시물',
+    trashedPostLabel: '휴지통의 게시물',
   },
   en: {
     compose: 'Write',
@@ -127,6 +132,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'No posts to show yet.',
     emptyAction: 'Write the first post.',
     postUnavailable: 'This post is no longer available.',
+    archivedPostLabel: 'Archived post',
+    trashedPostLabel: 'Post in trash',
   },
   ja: {
     compose: '投稿',
@@ -162,6 +169,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'まだ表示できる投稿がありません。',
     emptyAction: '最初の投稿を書いてみましょう。',
     postUnavailable: 'この投稿は表示できなくなりました。',
+    archivedPostLabel: 'アーカイブした投稿',
+    trashedPostLabel: 'ゴミ箱の投稿',
   },
   'zh-CN': {
     compose: '写帖子',
@@ -197,6 +206,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: '暂时没有可显示的帖子。',
     emptyAction: '发布第一条帖子吧。',
     postUnavailable: '该帖子已不可查看。',
+    archivedPostLabel: '已归档的帖子',
+    trashedPostLabel: '回收站中的帖子',
   },
   'zh-TW': {
     compose: '寫貼文',
@@ -232,6 +243,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: '目前沒有可顯示的貼文。',
     emptyAction: '發佈第一則貼文吧。',
     postUnavailable: '此貼文已無法查看。',
+    archivedPostLabel: '已封存的貼文',
+    trashedPostLabel: '垃圾桶中的貼文',
   },
   fr: {
     compose: 'Écrire',
@@ -267,6 +280,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Aucun post à afficher pour l’instant.',
     emptyAction: 'Écrivez le premier post.',
     postUnavailable: 'Ce post n’est plus disponible.',
+    archivedPostLabel: 'Post archivé',
+    trashedPostLabel: 'Post dans la corbeille',
   },
   de: {
     compose: 'Schreiben',
@@ -302,6 +317,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Noch keine Beiträge vorhanden.',
     emptyAction: 'Schreibe den ersten Beitrag.',
     postUnavailable: 'Dieser Beitrag ist nicht mehr verfügbar.',
+    archivedPostLabel: 'Archivierter Beitrag',
+    trashedPostLabel: 'Beitrag im Papierkorb',
   },
   es: {
     compose: 'Escribir',
@@ -337,6 +354,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Aún no hay publicaciones para mostrar.',
     emptyAction: 'Escribe la primera publicación.',
     postUnavailable: 'Esta publicación ya no está disponible.',
+    archivedPostLabel: 'Publicación archivada',
+    trashedPostLabel: 'Publicación en la papelera',
   },
   pt: {
     compose: 'Escrever',
@@ -372,6 +391,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Ainda não há publicações para mostrar.',
     emptyAction: 'Escreva a primeira publicação.',
     postUnavailable: 'Esta publicação não está mais disponível.',
+    archivedPostLabel: 'Publicação arquivada',
+    trashedPostLabel: 'Publicação na lixeira',
   },
   it: {
     compose: 'Scrivi',
@@ -407,6 +428,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Ancora nessun post da mostrare.',
     emptyAction: 'Scrivi il primo post.',
     postUnavailable: 'Questo post non è più disponibile.',
+    archivedPostLabel: 'Post archiviato',
+    trashedPostLabel: 'Post nel cestino',
   },
   ru: {
     compose: 'Написать',
@@ -442,6 +465,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Пока нет постов для показа.',
     emptyAction: 'Напишите первый пост.',
     postUnavailable: 'Этот пост больше недоступен.',
+    archivedPostLabel: 'Архивный пост',
+    trashedPostLabel: 'Пост в корзине',
   },
   ar: {
     compose: 'كتابة',
@@ -477,6 +502,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'لا توجد منشورات لعرضها بعد.',
     emptyAction: 'اكتب أول منشور.',
     postUnavailable: 'لم يعد هذا المنشور متاحًا.',
+    archivedPostLabel: 'منشور مؤرشف',
+    trashedPostLabel: 'منشور في سلة المهملات',
   },
   hi: {
     compose: 'लिखें',
@@ -512,6 +539,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'दिखाने के लिए अभी कोई पोस्ट नहीं है।',
     emptyAction: 'पहली पोस्ट लिखें।',
     postUnavailable: 'यह पोस्ट अब उपलब्ध नहीं है।',
+    archivedPostLabel: 'संग्रहित पोस्ट',
+    trashedPostLabel: 'ट्रैश में पोस्ट',
   },
   th: {
     compose: 'เขียนโพสต์',
@@ -547,6 +576,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'ยังไม่มีโพสต์ให้แสดง',
     emptyAction: 'เขียนโพสต์แรกกันเลย',
     postUnavailable: 'โพสต์นี้ไม่พร้อมใช้งานอีกต่อไป',
+    archivedPostLabel: 'โพสต์ที่เก็บถาวร',
+    trashedPostLabel: 'โพสต์ในถังขยะ',
   },
   vi: {
     compose: 'Viết',
@@ -582,6 +613,8 @@ const copy: Record<LegalDocumentLocale, FeedCopy> = {
     emptyTitle: 'Chưa có bài viết nào để hiển thị.',
     emptyAction: 'Viết bài đầu tiên.',
     postUnavailable: 'Bài viết này không còn khả dụng.',
+    archivedPostLabel: 'Bài viết đã lưu trữ',
+    trashedPostLabel: 'Bài viết trong thùng rác',
   },
 }
 

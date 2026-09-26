@@ -2,6 +2,8 @@
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import type { FeedCopy } from "@/i18n/feed-copy";
+import OfficialBadge from "@/components/posts/official-badge";
+import { feedEvents, trackFeedEvent, type FeedPostContext } from "@/lib/feed-analytics";
 import { moderationCopy } from "@/i18n/moderation-copy";
 import {
   classifyHitZone,
@@ -20,8 +22,10 @@ import {
 } from "@/components/feed/feed-card-format";
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
-import { useFeedFollow } from "@/components/feed/use-feed-follow";
-import { useFeedLike, type LikeError, type LikeState } from "@/components/feed/use-feed-like";
+import { isScrolledToEnd, READ_DWELL_MS, readClockRunning, readVerdict } from "@/components/feed/feed-read";
+import { readOnlyPostKind } from "@/components/feed/read-only-post";
+import { useFeedFollow, type FollowError } from "@/components/feed/use-feed-follow";
+import { useFeedLike, type LikeError, type LikeMethod, type LikeState } from "@/components/feed/use-feed-like";
 import { shouldToastTranslateFailure, useFeedTranslate } from "@/components/feed/use-feed-translate";
 import {
   Check,
@@ -51,6 +55,13 @@ export type FeedPostCardProps = {
    * other card loads lazily. Defaults to lazy.
    */
   eagerImage?: boolean;
+  /**
+   * This card is the active, fully-visible card with no overlay open. Drives
+   * the "read" dwell clock only (the seen-view rule lives in the shell).
+   */
+  isActive?: boolean;
+  /** Content-free analytics context of this appearance; null = no events. */
+  analytics?: FeedPostContext | null;
   onExpandStateChange?: (expanded: boolean, scrollTop: number) => void;
   onRequireLogin: (postId: string) => void;
   onOpenComments: (postId: string) => void;
@@ -81,6 +92,8 @@ export default function FeedPostCard({
   restoreExpanded = false,
   restoreScrollTop = 0,
   eagerImage = false,
+  isActive = false,
+  analytics = null,
   onExpandStateChange,
   onRequireLogin,
   onOpenComments,
@@ -99,6 +112,19 @@ export default function FeedPostCard({
 
   const tone = postForegroundTone(post.backgroundKey, hasImage);
   const fg = foregroundTokens(tone);
+
+  // Author's own archived / trashed post: read-only (no like, no comments).
+  const readOnlyKind = readOnlyPostKind(post);
+  const readOnly = readOnlyKind !== null;
+
+  const analyticsRef = useRef(analytics);
+  useEffect(() => {
+    analyticsRef.current = analytics;
+  });
+  const track = useCallback((build: (ctx: FeedPostContext) => Parameters<typeof trackFeedEvent>[0]) => {
+    const ctx = analyticsRef.current;
+    if (ctx) trackFeedEvent(build(ctx));
+  }, []);
 
   const requireLogin = useCallback(() => onRequireLogin(post.id), [onRequireLogin, post.id]);
 
@@ -119,6 +145,11 @@ export default function FeedPostCard({
     (state: LikeState) => onLikeChange(post.id, state),
     [onLikeChange, post.id],
   );
+  const handleLikeCommitted = useCallback(
+    (liked: boolean, method: LikeMethod) =>
+      track((ctx) => (liked ? feedEvents.postLiked(ctx, method) : feedEvents.postUnliked(ctx))),
+    [track],
+  );
   const { state: likeState, toggleLike, addLike, showBurst, clearBurst } = useFeedLike({
     postId: post.id,
     initial: { likedByMe: post.likedByMe, likeCount: post.likeCount },
@@ -126,6 +157,7 @@ export default function FeedPostCard({
     onRequireLogin: requireLogin,
     onChange: handleLikeChange,
     onError: handleLikeError,
+    onCommitted: handleLikeCommitted,
   });
 
   // ── Translation ──
@@ -154,7 +186,11 @@ export default function FeedPostCard({
   );
 
   // ── Follow ──
-  const handleFollowError = useCallback(() => onToast(copy.followFailed), [copy, onToast]);
+  const handleFollowError = useCallback(
+    (error: FollowError) =>
+      onToast(error === "account_restricted" ? moderationCopy(locale).accountRestricted : copy.followFailed),
+    [copy, locale, onToast],
+  );
   const { buttonState: followState, follow } = useFeedFollow({
     authorId: post.author.id,
     followingAuthor: post.followingAuthor,
@@ -244,7 +280,44 @@ export default function FeedPostCard({
   const handleExpand = useCallback(() => {
     setExpanded(true);
     onExpandStateChange?.(true, 0);
-  }, [onExpandStateChange]);
+    track((ctx) => feedEvents.postExpanded(ctx));
+  }, [onExpandStateChange, track]);
+
+  // ── "Read the body" (analytics): scrolled to the end, or a short body
+  // expanded on the active foreground card for >= 3 s. Once per appearance.
+  const readReportedRef = useRef(false);
+  const reportRead = useCallback(
+    (trigger: "scrolled_to_end" | "dwell") => {
+      if (readReportedRef.current) return;
+      readReportedRef.current = true;
+      track((ctx) => feedEvents.postRead(ctx, trigger));
+    },
+    [track],
+  );
+  const [pageHidden, setPageHidden] = useState(false);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisibility = () => setPageHidden(document.hidden);
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+  const readDwellRef = useRef(0);
+  const readClock = readClockRunning({ expanded, bodyNeedsScroll, active: isActive, hidden: pageHidden });
+  useEffect(() => {
+    if (!expanded) readDwellRef.current = 0;
+    if (!readClock || readReportedRef.current) return;
+    const startedAt = Date.now();
+    const remaining = Math.max(0, READ_DWELL_MS - readDwellRef.current);
+    const timer = setTimeout(() => {
+      readDwellRef.current = READ_DWELL_MS;
+      reportRead("dwell");
+    }, remaining);
+    return () => {
+      clearTimeout(timer);
+      readDwellRef.current = Math.min(READ_DWELL_MS, readDwellRef.current + (Date.now() - startedAt));
+    };
+  }, [readClock, expanded, reportRead]);
 
   const handleCollapse = useCallback(() => {
     setExpanded(false);
@@ -325,7 +398,7 @@ export default function FeedPostCard({
           singleTapTimerRef.current = null;
         }
         lastTapRef.current = null;
-        addLike();
+        if (!readOnly) addLike();
         return;
       }
 
@@ -340,7 +413,7 @@ export default function FeedPostCard({
         }
       }, 320);
     },
-    [addLike, imageFailed, onOpenImage, post.image],
+    [addLike, readOnly, imageFailed, onOpenImage, post.image],
   );
 
   useEffect(() => {
@@ -362,6 +435,14 @@ export default function FeedPostCard({
         return copy.translateShow;
     }
   })();
+
+  const handleTranslateToggle = useCallback(() => {
+    if (isSignedIn && translate.mode !== "loading" && translate.mode !== "hidden") {
+      const to = translate.mode === "showOriginal" ? "original" : "translated";
+      track((ctx) => feedEvents.translationToggled(ctx, to));
+    }
+    translate.toggle();
+  }, [isSignedIn, translate, track]);
 
   const ariaLabel = `${displayName}: ${previewText}`;
 
@@ -394,6 +475,7 @@ export default function FeedPostCard({
         <span className={`max-w-[9rem] truncate text-sm font-semibold ${fg.textClass}`}>
           {displayName}
         </span>
+        {post.author.isOfficial ? <OfficialBadge locale={locale} tone={tone} /> : null}
       </button>
 
       <time className={`shrink-0 text-[11px] font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
@@ -454,7 +536,7 @@ export default function FeedPostCard({
           <button
             type="button"
             data-feed-action
-            onClick={translate.toggle}
+            onClick={handleTranslateToggle}
             className={`${HIT_44} flex items-center gap-1.5 text-xs font-medium transition ${fg.textClass}`}
             aria-busy={translate.mode === "loading"}
           >
@@ -471,8 +553,9 @@ export default function FeedPostCard({
         type="button"
         data-feed-action
         onClick={toggleLike}
+        disabled={readOnly}
         aria-pressed={likeState.likedByMe}
-        className="flex flex-col items-center gap-0.5 transition active:scale-95"
+        className="flex flex-col items-center gap-0.5 transition active:scale-95 disabled:opacity-40"
         // Fixed name; the pressed state alone announces liked/unliked.
         aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
       >
@@ -495,7 +578,8 @@ export default function FeedPostCard({
         type="button"
         data-feed-action
         onClick={() => onOpenComments(post.id)}
-        className="flex flex-col items-center gap-0.5 transition active:scale-95"
+        disabled={readOnly}
+        className="flex flex-col items-center gap-0.5 transition active:scale-95 disabled:opacity-40"
         aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
       >
         <MessageCircle size={26} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
@@ -564,7 +648,24 @@ export default function FeedPostCard({
         authorSlot={authorSlot}
         actionSlot={actionSlot}
         controlSlot={controlSlot}
-        overlaySlot={<HeartBurst visible={showBurst && !reducedMotion} onDone={clearBurst} />}
+        overlaySlot={
+          <>
+            <HeartBurst visible={showBurst && !reducedMotion} onDone={clearBurst} />
+            {readOnlyKind ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-4"
+                style={{ top: "calc(56px + env(safe-area-inset-top, 44px) + 8px)" }}
+              >
+                <span
+                  role="status"
+                  className="rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm"
+                >
+                  {readOnlyKind === "trashed" ? copy.trashedPostLabel : copy.archivedPostLabel}
+                </span>
+              </div>
+            ) : null}
+          </>
+        }
         onImageError={handleImageError}
         imageFailed={imageFailed}
         imageFailedLabel={copy.imageFailed}
@@ -578,8 +679,16 @@ export default function FeedPostCard({
         bodyScrollRef={bodyScrollRef}
         bodyTouchAction={bodyNeedsScroll ? "pan-y" : "none"}
         onBodyScroll={() => {
-          if (bodyScrollRef.current) {
-            onExpandStateChange?.(true, bodyScrollRef.current.scrollTop);
+          const el = bodyScrollRef.current;
+          if (el) {
+            onExpandStateChange?.(true, el.scrollTop);
+            const verdict = readVerdict({
+              expanded,
+              bodyNeedsScroll,
+              scrolledToEnd: isScrolledToEnd(el),
+              expandedDwellMs: 0,
+            });
+            if (verdict === "scrolled_to_end") reportRead(verdict);
           }
         }}
       />
