@@ -81,16 +81,35 @@ describe('GET /api/posts/{postId}/image', () => {
     )
   })
 
-  it('applies the signed-in viewer to the visibility rule', async () => {
+  it('applies the signed-in viewer to the visibility rule, plus author and hider access', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: ' u1 ' } })
     mockPostFindFirst.mockResolvedValue({ authorId: 'author-1', imageObjectKey: OWN_KEY })
 
     const response = await GET(request('p1'), context('p1'))
 
     expect(response.status).toBe(200)
-    expect(mockPostFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: visibleSinglePostWhere('p1', 'u1') }),
+    const where = mockPostFindFirst.mock.calls[0][0].where
+    expect(where.OR[0]).toEqual(visibleSinglePostWhere('p1', 'u1'))
+    // The author reads their own archived / trashed post image.
+    expect(where.OR[1]).toEqual({ id: 'p1', authorId: 'u1', moderationHiddenAt: null })
+    // A viewer who hid a still-viewable post reads it for the hidden-posts list.
+    expect(where.OR[2]).toMatchObject({
+      id: 'p1',
+      visibility: 'public',
+      moderationHiddenAt: null,
+      hides: { some: { userId: 'u1' } },
+    })
+    expect(where.OR[2]).not.toHaveProperty('authorId')
+  })
+
+  it('serves the author their archived post image (archive tile)', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'author-1' } })
+    mockPostFindFirst.mockImplementation(async ({ where }: { where: { OR?: Array<Record<string, unknown>> } }) =>
+      where.OR?.some((b) => b.authorId === 'author-1') ? { authorId: 'author-1', imageObjectKey: OWN_KEY } : null,
     )
+    const response = await GET(request('p1'), context('p1'))
+    expect(response.status).toBe(200)
+    expect(mockGetPostImage).toHaveBeenCalledWith(OWN_KEY)
   })
 
   it('returns 404 when the post is not visible to the viewer', async () => {
@@ -146,7 +165,10 @@ describe('POST /api/posts/{postId}/image', () => {
     await settle()
     expect(res.status).toBe(201)
     expect(mockStoreUploadedPostImage).toHaveBeenCalledWith(expect.any(FormData), 'author-1')
-    expect(mockPostUpdate).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { imageObjectKey: NEW_KEY } })
+    expect(mockPostUpdate).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { imageObjectKey: NEW_KEY, imageWidth: 1, imageHeight: 1 },
+    })
     expect(mockDeletePostImage).toHaveBeenCalledWith(OWN_KEY)
   })
 

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { ownPostWhere, visibleSinglePostWhere } from '@/server/posts/post-visibility'
+import { visibleAuthorWhere } from '@/server/posts/block-visibility'
 import { deletePostImage, getPostImage } from '@/server/posts/post-image-storage'
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
 import { contentLengthTooLarge, storeUploadedPostImage } from '@/server/posts/post-image-upload'
@@ -18,6 +19,32 @@ function json(payload: object, init?: ResponseInit): NextResponse {
 }
 
 type RouteContext = { params: Promise<{ postId: string }> }
+
+/**
+ * Who may load a post's image: anyone the visibility rule allows, plus
+ * - the author, for their own archived / trashed post (archive + trash tiles,
+ *   the author's full-screen view), and
+ * - a viewer who hid the post, while it is otherwise still viewable (the
+ *   hidden-posts list thumbnail, same rule as GET /account/hidden-posts).
+ * Operator-hidden posts stay hidden in every branch.
+ */
+function imageReadableWhere(postId: string, viewerId: string | null) {
+  if (!viewerId) return visibleSinglePostWhere(postId, null)
+  return {
+    OR: [
+      visibleSinglePostWhere(postId, viewerId),
+      { id: postId, authorId: viewerId, moderationHiddenAt: null },
+      {
+        id: postId,
+        visibility: 'public',
+        AND: [{ OR: [{ isDeleted: null }, { isDeleted: false }] }],
+        moderationHiddenAt: null,
+        author: visibleAuthorWhere(viewerId),
+        hides: { some: { userId: viewerId } },
+      },
+    ],
+  }
+}
 
 /**
  * Delete a replaced image only when it is this author's own post-image key and
@@ -59,7 +86,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     await prisma.post.update({
       where: { id: postId },
-      data: { imageObjectKey: objectKey },
+      // The processed size, so the card keeps the ratio before decoding.
+      data: { imageObjectKey: objectKey, imageWidth: width, imageHeight: height },
     })
   } catch (err) {
     await deletePostImage(objectKey).catch(() => {})
@@ -82,7 +110,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // The feed is readable signed out, so a public post's image is too; the
   // visibility rule (blocks, hides, archive, trash, moderation) still decides.
   const post = await prisma.post.findFirst({
-    where: visibleSinglePostWhere(postId, viewerId || null),
+    where: imageReadableWhere(postId, viewerId || null),
     select: { authorId: true, imageObjectKey: true },
   })
   // Only ever read a key the post's author was issued, never an arbitrary

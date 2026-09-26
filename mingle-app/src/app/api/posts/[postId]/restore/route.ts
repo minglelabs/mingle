@@ -18,7 +18,9 @@ type RouteContext = { params: Promise<{ postId: string }> }
 /**
  * Restore a post the author put away:
  * - from the archive → back to public, or
- * - from the trash (soft-deleted, within the 30-day window) → back to public.
+ * - from the trash (soft-deleted, within the 30-day window) → back to the
+ *   visibility it had when it was deleted: a post deleted from the archive
+ *   returns to the archive, a public one to the feed.
  *
  * Either way the row is only flipped back; likeCount, commentCount and the
  * original publishedAt are never touched, so restoring keeps the post's
@@ -53,9 +55,11 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
     await prisma.post.update({
       where: { id: postId },
-      data: { isDeleted: false, deletedAt: null, visibility: 'public' },
+      // Delete never touches `visibility`, so leaving it as-is restores the
+      // pre-delete state; forcing 'public' would publish an archived post.
+      data: { isDeleted: false, deletedAt: null },
     })
-    return json({ restored: true })
+    return json({ restored: true, visibility: post.visibility === 'archived' ? 'archived' : 'public' })
   }
 
   if (post.visibility !== 'archived') return json({ error: 'not_restorable' }, { status: 409 })
@@ -65,5 +69,5 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     data: { visibility: 'public', archivedAt: null },
   })
 
-  return json({ restored: true })
+  return json({ restored: true, visibility: 'public' })
 }

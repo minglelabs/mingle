@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
       hides: { some: { userId } },
       ...timeCursorWhere(cursor),
     },
-    select: feedPostRowSelect,
+    // Image size columns ride along (the shared select predates them).
+    select: { ...feedPostRowSelect, imageWidth: true, imageHeight: true },
     orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
   })

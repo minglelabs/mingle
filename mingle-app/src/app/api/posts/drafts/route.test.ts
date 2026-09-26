@@ -114,6 +114,43 @@ describe('GET /api/posts/drafts', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.drafts).toHaveLength(2)
+    expect(json.nextCursor).toBeNull()
+  })
+
+  it('pages with nextCursor instead of stopping at the first page', async () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 8, 26, 12, m))
+    mockDraftFindMany.mockResolvedValueOnce([
+      { id: 'd3', updatedAt: at(3) },
+      { id: 'd2', updatedAt: at(2) },
+      { id: 'd1', updatedAt: at(1) },
+    ])
+    const first = await (await GET(new NextRequest('http://localhost/api/posts/drafts?limit=2'))).json()
+    expect(first.drafts.map((d: { id: string }) => d.id)).toEqual(['d3', 'd2'])
+    expect(typeof first.nextCursor).toBe('string')
+    expect(mockDraftFindMany.mock.calls[0][0]).toMatchObject({ take: 3, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] })
+
+    mockDraftFindMany.mockResolvedValueOnce([{ id: 'd1', updatedAt: at(1) }])
+    const second = await (await GET(new NextRequest(`http://localhost/api/posts/drafts?limit=2&cursor=${first.nextCursor}`))).json()
+    expect(second.drafts.map((d: { id: string }) => d.id)).toEqual(['d1'])
+    expect(second.nextCursor).toBeNull()
+    expect(mockDraftFindMany.mock.calls[1][0].where).toEqual({
+      authorId: 'user-1',
+      OR: [{ updatedAt: { lt: at(2) } }, { updatedAt: at(2), id: { lt: 'd2' } }],
+    })
+  })
+
+  it('stores the uploaded image size with a draft photo', async () => {
+    mockDraftCreate.mockResolvedValue({ id: 'd9' })
+    await POST(new NextRequest('http://localhost/api/posts/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageObjectKey: 'post-images/user-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg',
+        imageWidth: 640,
+        imageHeight: 480,
+      }),
+    }))
+    expect(mockDraftCreate.mock.calls[0][0].data).toMatchObject({ imageWidth: 640, imageHeight: 480 })
   })
 })
 
@@ -146,7 +183,10 @@ describe('PATCH /api/posts/drafts', () => {
         body: JSON.stringify({ draftId: 'd1', imageObjectKey }),
       })
       expect((await PATCH(req)).status).toBe(200)
-      expect(mockDraftUpdate).toHaveBeenLastCalledWith({ where: { id: 'd1' }, data: { imageObjectKey } })
+      expect(mockDraftUpdate).toHaveBeenLastCalledWith({
+        where: { id: 'd1' },
+        data: { imageObjectKey, imageWidth: null, imageHeight: null },
+      })
     }
   })
 
