@@ -25,9 +25,35 @@ ADD COLUMN     "target_type" TEXT NOT NULL DEFAULT 'user';
 -- Backfill target_key BEFORE its unique index exists. Every pre-existing row is
 -- a user report, so its target is the reported user. Without this, all rows keep
 -- target_key = '' and a reporter with two reports violates the unique index.
-UPDATE "app_user_reports"
-SET "target_key" = 'user:' || "reported_user_id"
-WHERE "target_key" = '';
+--
+-- Legacy duplicates: before this migration nothing stopped one reporter from
+-- reporting the same user several times, so production can hold several rows
+-- for the same (reporter_id, reported_user_id). Deleting or merging them would
+-- lose reasons, messages, statuses and operator replies, so EVERY row is kept:
+--   * the earliest row per (reporter_id, reported_user_id) (created_at, then id
+--     as a deterministic tie-break) gets the canonical key 'user:<reported id>',
+--     so new-API dedup keeps colliding on it exactly as for a fresh report;
+--   * every later duplicate gets 'user:<reported id>#legacy-dup:<row id>'. The
+--     row id makes the key unique, and '#' can never appear in a key built by
+--     buildReportTargetKey (cuid ids), so no future report can collide with it.
+-- Duplicates stay visible to operators in /admin/reports like any other report.
+WITH ranked AS (
+  SELECT
+    "id",
+    ROW_NUMBER() OVER (
+      PARTITION BY "reporter_id", "reported_user_id"
+      ORDER BY "created_at" ASC, "id" ASC
+    ) AS rn
+  FROM "app_user_reports"
+  WHERE "target_key" = ''
+)
+UPDATE "app_user_reports" AS r
+SET "target_key" = CASE
+  WHEN ranked.rn = 1 THEN 'user:' || r."reported_user_id"
+  ELSE 'user:' || r."reported_user_id" || '#legacy-dup:' || r."id"
+END
+FROM ranked
+WHERE r."id" = ranked."id";
 
 -- CreateTable
 CREATE TABLE "app_posts" (

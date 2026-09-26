@@ -187,7 +187,7 @@ async function updateReportStatusAction(formData: FormData) {
 
   // Only notify on a fresh transition INTO a closed state.
   if (closing && !isClosingStatus(existing.status as ReportStatus)) {
-    await createPostNotification({ type: "report_resolved", recipientId: existing.reporterId, actorId: existing.reporterId });
+    await createPostNotification({ type: "report_resolved", recipientId: existing.reporterId, actorId: existing.reporterId, reportId: existing.id });
   }
 
   revalidatePath("/admin/reports");

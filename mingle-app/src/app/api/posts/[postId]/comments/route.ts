@@ -15,6 +15,7 @@ import {
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { resolveDisplayLanguage } from '@/server/posts/feed-post-serializer'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -207,6 +208,8 @@ export async function POST(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const limited = rateLimitGuard('create_comment', userId)
   if (limited) return limited

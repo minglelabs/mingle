@@ -8,6 +8,7 @@ import {
   resolveEditTargetLanguages,
   translateCommentBodySettled,
 } from '@/server/translation/post-translation-service'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -31,6 +32,8 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const { commentId } = await context.params
 

@@ -57,6 +57,14 @@ function setupTransaction() {
   })
 }
 
+// Posting writes are gated on the moderation restriction; unrestricted here.
+const { mockAccountRestrictionGuard } = vi.hoisted(() => ({
+  mockAccountRestrictionGuard: vi.fn<(userId: string) => Promise<Response | null>>(async () => null),
+}))
+vi.mock('@/server/reports/account-restriction', () => ({
+  accountRestrictionGuard: mockAccountRestrictionGuard,
+}))
+
 import { POST } from './route'
 
 function makeRequest(body: unknown): NextRequest {
@@ -86,6 +94,15 @@ describe('POST /api/posts', () => {
     mockGetServerSession.mockResolvedValue(null)
     const res = await POST(makeRequest({ sourceText: 'hi' }))
     expect(res.status).toBe(401)
+  })
+
+  it('returns 403 account_restricted for a moderator-restricted account, creating nothing', async () => {
+    mockAccountRestrictionGuard.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'account_restricted' }), { status: 403 }))
+    const res = await POST(makeRequest({ sourceText: 'hi' }))
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toBe('account_restricted')
+    expect(mockAccountRestrictionGuard).toHaveBeenCalledWith('user-1')
+    expect(mockPostCreate).not.toHaveBeenCalled()
   })
 
   it('returns 400 when no text and no image', async () => {

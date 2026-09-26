@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const userId = getViewerId(await getServerSession(getAuthOptions()))
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   let body: unknown
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }
@@ -61,6 +64,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const userId = getViewerId(await getServerSession(getAuthOptions()))
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   let body: unknown
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }
