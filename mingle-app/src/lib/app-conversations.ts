@@ -3219,9 +3219,12 @@ export async function setConversationShareEnabled(args: {
 
         // Re-read the on/off state and token UNDER the lock — this, not the
         // unlocked authorize read above, is what the decision is made on.
+        // Membership is re-checked here too, so a caller who left the room
+        // after the authorize read cannot still flip the switch.
         const locked = await tx.appConversationChannel.findFirst({
           where: {
             id: args.conversationId,
+            ...buildVisibleMembershipWhere(args.userId),
             ...buildVisibleConversationWhere(),
           },
           select: { id: true, shareToken: true, shareEnabled: true },
@@ -3331,6 +3334,7 @@ export async function refreshConversationShareSnapshot(args: {
     const locked = await tx.appConversationChannel.findFirst({
       where: {
         id: args.conversationId,
+        ...buildVisibleMembershipWhere(args.userId),
         ...buildVisibleConversationWhere(),
       },
       select: { id: true, title: true, shareToken: true, shareEnabled: true },
