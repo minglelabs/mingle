@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   NATIVE_TAB_ROOT_QUERY_KEY,
@@ -93,7 +94,7 @@ export default function BottomTabBar({
   const conversationsPath = `/${locale}/conversations`;
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
-  const feedPath = `/${locale}/feed`;
+  const feedPath = buildFeedHref(locale);
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
     // list. A live STT room must not be restored as a side effect of mounting

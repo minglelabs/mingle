@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import { ImageIcon, Trash2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { composeHref } from '@/lib/feed-routes'
+import { composeHref, feedHref } from '@/lib/feed-routes'
 import { randomBackgroundKey } from '@/lib/post-backgrounds'
 import { composeCopy } from '@/i18n/compose-copy'
 import ComposeEditor from './compose-editor'
@@ -234,7 +234,7 @@ export default function ComposeScreen({
       draftId,
     })
     // Return to the feed; the PublishStatusBanner shows progress there.
-    router.push(`/${locale}/feed`)
+    router.push(feedHref(locale))
   }
 
   // ── Sign-in gate ──────────────────────────────────────────────────────────

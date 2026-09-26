@@ -1,4 +1,5 @@
 import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
+import { feedHref } from "@/lib/feed-routes";
 import { redirect } from "next/navigation";
 
 type V110HomeEntryProps = {
@@ -11,5 +12,5 @@ export default function V110HomeEntry({ locale, searchParams }: V110HomeEntryPro
   // preserved so a push/deep-link that lands on "/" carries its target query
   // through to the feed (postId/commentId); message-push and invite links open
   // their own concrete routes directly and never reach this landing.
-  redirect(buildPathWithSearchParams(`/${locale}/feed`, searchParams));
+  redirect(buildPathWithSearchParams(feedHref(locale), searchParams));
 }

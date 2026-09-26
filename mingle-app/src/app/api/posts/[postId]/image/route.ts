@@ -101,10 +101,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { postId } = await context.params
   const session = await getServerSession(getAuthOptions())
   const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
-  if (!viewerId) return json({ error: 'unauthorized' }, { status: 401 })
 
+  // The feed is readable signed out, so a public post's image is too; the
+  // visibility rule (blocks, hides, archive, trash, moderation) still decides.
   const post = await prisma.post.findFirst({
-    where: visibleSinglePostWhere(postId, viewerId),
+    where: visibleSinglePostWhere(postId, viewerId || null),
     select: { imageObjectKey: true },
   })
   if (!post?.imageObjectKey) return json({ error: 'not_found' }, { status: 404 })
