@@ -65,6 +65,7 @@ export default function FeedShell({ locale, source = { kind: "home" }, startPost
     applyPatch,
     dropPost,
     dropAuthor,
+    startIndex,
   } = useFeedSource({
     source,
     displayLanguage: viewerLanguage,
@@ -98,21 +99,26 @@ export default function FeedShell({ locale, source = { kind: "home" }, startPost
     if (restoreAppliedRef.current || posts.length === 0) return;
     restoreAppliedRef.current = true;
     const saved = readFeedRestoreState(source);
-    if (!saved) return;
-    setRestoreForPost(saved.posts);
-    for (const [id, st] of Object.entries(saved.posts)) {
-      expandStateRef.current.set(id, st);
-    }
-    if (saved.activePostId) {
-      const idx = posts.findIndex((p) => p.id === saved.activePostId);
-      if (idx > 0 && scrollRef.current) {
-        const container = scrollRef.current;
-        requestAnimationFrame(() => {
-          const cardH = container.firstElementChild?.getBoundingClientRect().height ?? 1;
-          container.scrollTop = idx * cardH;
-          setActiveIndex(idx);
-        });
+    if (saved) {
+      setRestoreForPost(saved.posts);
+      for (const [id, st] of Object.entries(saved.posts)) {
+        expandStateRef.current.set(id, st);
       }
+    }
+    // A viewer opened from a profile grid / search result starts at the tapped
+    // post and keeps grid order; that start wins over a remembered position.
+    const targetIndex = startPostId
+      ? startIndex
+      : saved?.activePostId
+        ? posts.findIndex((p) => p.id === saved.activePostId)
+        : -1;
+    if (targetIndex > 0 && scrollRef.current) {
+      const container = scrollRef.current;
+      requestAnimationFrame(() => {
+        const cardH = container.firstElementChild?.getBoundingClientRect().height ?? 1;
+        container.scrollTop = targetIndex * cardH;
+        setActiveIndex(targetIndex);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts.length]);
