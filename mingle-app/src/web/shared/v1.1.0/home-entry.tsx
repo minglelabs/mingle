@@ -15,14 +15,14 @@ export default function V110HomeEntry({ locale, searchParams }: V110HomeEntryPro
   // their own concrete routes directly and never reach this landing.
   //
   // Rollout gate (W4): the web UI is shared by every installed app version, but
-  // the posting routes exist only from the v2.1.0 namespace on. A pre-2.1.0 app
+  // the posting routes exist only from the v2.2.0 namespace on. A pre-2.2.0 app
   // (e.g. 2.0.x) must keep its previous first screen — the conversation list —
   // or it would land on a feed that 404s. We must decide on the server, so we
   // read the namespace the app shell put on the request rather than the
   // module-load client flag; a plain web visit has no namespace ('' → supported)
   // and is unaffected. If it cannot be determined it reads as '' (supported),
   // which is the shared-web default, so only a namespace that is explicitly a
-  // pre-2.1.0 app is sent to the conversation list.
+  // pre-2.2.0 app is sent to the conversation list.
   if (!requestNamespaceSupportsPostingFeed(searchParams)) {
     redirect(buildPathWithSearchParams(conversationsHref(locale), searchParams));
   }

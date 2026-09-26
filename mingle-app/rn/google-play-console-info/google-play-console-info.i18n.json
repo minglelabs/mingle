@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "2.1.0",
+      "version": "2.2.0",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.1.0 (99)",
+      "releaseName": "2.2.0 (100)",
       "releaseNotes": {
         "en-US": "Version 2.1.0 improves conversation loading, streams shared speech as you talk, keeps message order consistent, and improves message delivery, translation updates, and navigation.",
         "ar": "Version 2.1.0 improves conversation loading, streams shared speech as you talk, keeps message order consistent, and improves message delivery, translation updates, and navigation.",

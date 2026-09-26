@@ -4,7 +4,7 @@ import { compareApiNamespaceVersions, parseApiNamespaceVersion } from './apiName
  * Which web route the native shell opens on a plain app launch.
  *
  * The plan: on a build whose API namespace supports the posting feed
- * (>= v2.1.0), the feed is the home screen; older namespaces have no posting
+ * (>= v2.2.0), the feed is the home screen; older namespaces have no posting
  * routes and stay on the conversation list. This is the DEFAULT only — a live
  * conversation/STT restore target or a pending push tap take precedence and are
  * resolved elsewhere (webViewRestore, pushNavigation), so this function is used
@@ -15,7 +15,7 @@ import { compareApiNamespaceVersions, parseApiNamespaceVersion } from './apiName
  */
 
 /** First namespace version that ships the posting feed. */
-const POSTING_FEED_MIN_VERSION = [2, 1, 0] as const;
+const POSTING_FEED_MIN_VERSION = [2, 2, 0] as const;
 
 export type InitialWebRoute = 'feed' | 'conversations';
 

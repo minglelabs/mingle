@@ -194,7 +194,7 @@ export default function PublicUserProfileScreen({
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Rollout gate (W4): hide another user's post grid for a pre-2.1.0 client.
+  // Rollout gate (W4): hide another user's post grid for a pre-2.2.0 client.
   const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);

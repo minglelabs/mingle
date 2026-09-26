@@ -28,6 +28,10 @@ const DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET = {
     android: 'android/v2.1.0',
     ios: 'ios/v2.1.0',
   },
+  v2_2_0: {
+    android: 'android/v2.2.0',
+    ios: 'ios/v2.2.0',
+  },
 } as const
 type ReleaseTargetWithDefaultApiNamespace = keyof typeof DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET
 const VERSIONED_API_NAMESPACE_RULES = [
@@ -53,6 +57,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.0.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.0.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.2.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -75,6 +80,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.0.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.0.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.2.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -168,14 +174,14 @@ export function buildClientApiPath(endpoint: `/${string}`): string {
 }
 
 /** First app release whose API namespace serves the posting feature. */
-const POSTING_FEED_MIN_VERSION = [2, 1, 0] as const
+const POSTING_FEED_MIN_VERSION = [2, 2, 0] as const
 
 /**
  * Whether a client on this API namespace can use the posting feature (feed,
  * compose, comments, unified notifications, post search, profile grid).
  *
  * The web UI is shared by every installed app version, but only namespaces from
- * 2.1.0 on serve the posting routes: an older app (e.g. `ios/v2.0.4`, rewritten
+ * 2.2.0 on serve the posting routes: an older app (e.g. `ios/v2.1.0`, rewritten
  * to v2.0.0) would get 404s from every posting call. The plain web client (the
  * '' namespace) calls the unversioned routes, which always exist. Every posting
  * entry point gates on this one rule.

@@ -18,7 +18,7 @@ export type UnreadNotificationsState = {
 
 const NOOP = () => {};
 
-// `/notifications/unread` exists only on the v2.1.0+ namespace. A pre-2.1.0
+// `/notifications/unread` exists only on the v2.2.0+ namespace. A pre-2.2.0
 // client must never call it (it would 404), so the hook short-circuits to
 // "no dot" for an unsupported namespace. Resolved at module load like
 // `clientApiNamespace`.

@@ -3,8 +3,8 @@ import { readRequestedApiNamespaceFromSearchParams } from "@/lib/client-behavior
 
 /**
  * Rollout gate (W4 / D). The web UI is shared by every installed app version,
- * but the posting routes exist only from the v2.1.0 namespace on. A 2.0.x app
- * (or any pre-2.1.0 namespace) that shows a posting entry point would get 404s,
+ * but the posting routes exist only from the v2.2.0 namespace on. An older app (2.1.x)
+ * (or any pre-2.2.0 namespace) that shows a posting entry point would get 404s,
  * so every posting entry point gates on the single frozen rule
  * `namespaceSupportsPostingFeed` — never on a hand-rolled version comparison.
  *
@@ -32,7 +32,7 @@ function readSearchParamValue(
  * The native app shell may keep its platform/version query even when the
  * `apiNamespace` query was dropped on a partial route transition. Recovering the
  * namespace from those (mirrors the conversations page's own recovery) means a
- * native pre-2.1.0 shell is still recognised as an app — and gated — rather than
+ * native pre-2.2.0 shell is still recognised as an app — and gated — rather than
  * mistaken for a plain web visitor. Returns '' when there is nothing app-shaped
  * to read.
  */
@@ -55,7 +55,7 @@ export function inferNativeApiNamespaceFromSearchParams(
  * namespace inferred from the native shell params, then '' (the plain-web
  * default). `namespaceSupportsPostingFeed('')` is true, so a plain web visit and
  * an undeterminable request stay on the shared-web behaviour (feed); only a
- * request that resolves to an explicit pre-2.1.0 namespace is gated out.
+ * request that resolves to an explicit pre-2.2.0 namespace is gated out.
  */
 export function requestNamespaceSupportsPostingFeed(
   searchParams: Record<string, string | string[] | undefined>,

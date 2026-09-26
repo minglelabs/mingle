@@ -10,7 +10,7 @@ type PostingFeedRouteGuardProps = {
 
 /**
  * Client wrapper that renders a posting screen only for a client whose
- * namespace serves the posting feature. An unsupported client (a pre-2.1.0
+ * namespace serves the posting feature. An unsupported client (a pre-2.2.0
  * app that deep-linked or navigated back into `/feed`, `/compose`, `/posts/*`,
  * `/mypage/posts/*`, `/notifications`) is redirected to the conversation list
  * by the guard hook, and nothing posting-related is rendered meanwhile — so no

@@ -8,14 +8,14 @@ describe('namespaceSupportsPostingFeed', () => {
     expect(namespaceSupportsPostingFeed('  ')).toBe(true)
   })
 
-  it('refuses every app namespace before 2.1.0', () => {
-    for (const namespace of ['ios/v2.0.4', 'android/v2.0.4', 'ios/v2.0.0', 'ios/v1.1.4', 'android/v1.0.0']) {
+  it('refuses every app namespace before 2.2.0', () => {
+    for (const namespace of ['ios/v2.1.0', 'android/v2.1.0', 'ios/v2.0.4', 'ios/v2.0.0', 'ios/v1.1.4', 'android/v1.0.0']) {
       expect(namespaceSupportsPostingFeed(namespace)).toBe(false)
     }
   })
 
-  it('allows 2.1.0 and every later release on both platforms', () => {
-    for (const namespace of ['ios/v2.1.0', 'android/v2.1.0', 'ios/v2.1.3', 'android/v2.2.0', 'ios/v3.0.0', '/ios/v2.1.0/']) {
+  it('allows 2.2.0 and every later release on both platforms', () => {
+    for (const namespace of ['ios/v2.2.0', 'android/v2.2.0', 'ios/v2.2.3', 'android/v3.0.0', 'ios/v3.0.0', '/ios/v2.2.0/']) {
       expect(namespaceSupportsPostingFeed(namespace)).toBe(true)
     }
   })

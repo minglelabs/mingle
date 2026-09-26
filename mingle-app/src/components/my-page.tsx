@@ -1736,7 +1736,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Rollout gate (W4): hide the post grid for a pre-2.1.0 client (its posts
+  // Rollout gate (W4): hide the post grid for a pre-2.2.0 client (its posts
   // endpoints 404). `null` before mount → shown, matching the server render;
   // hidden once a client is known to be unsupported.
   const postingFeedSupported = useIsPostingFeedSupported();
