@@ -33,4 +33,9 @@ describe("proxy locale redirect bypass", () => {
     expect(shouldBypassLocaleRedirect("/.well-known/apple-app-site-association")).toBe(true);
     expect(shouldBypassLocaleRedirect("/ko/p/cmg123abc")).toBe(false);
   });
+
+  it("keeps the conversation-spectate share link unlocalized", () => {
+    expect(shouldBypassLocaleRedirect("/s/3w5FkhXWQBNZTtOq_GNXJQ")).toBe(true);
+    expect(shouldBypassLocaleRedirect("/ko/s/3w5FkhXWQBNZTtOq_GNXJQ")).toBe(false);
+  });
 });

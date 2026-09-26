@@ -1,2 +1,2 @@
-export const runtime = "nodejs";
-export { GET, POST } from "@/app/api/ios/v2.0.0/feedback/route";
+export const dynamic = "force-dynamic";
+export { GET, POST } from "@/app/api/ios/v1.1.4/feedback/route";

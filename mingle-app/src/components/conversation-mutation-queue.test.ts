@@ -43,6 +43,8 @@ function buildConversation() {
     createdAt: "2026-08-26T00:00:00.000Z",
     updatedAt: "2026-08-26T00:00:00.000Z",
     pausedAt: null,
+    shareToken: null,
+    shareEnabled: false,
   };
 }
 
@@ -177,7 +179,7 @@ describe("conversation mutation queue", () => {
     mutations = await import("./conversation-mutation-queue");
     expect(mutations.readConversationMutationRecords({ ...identity, authenticatedUserId: "user-2", apiNamespace: "ios/v2.0.3" })).toEqual([]);
     expect(mutations.readConversationMutationRecords({ ...identity, apiNamespace: "android/v2.0.1" })).toEqual([]);
-    expect(mutations.readConversationMutationRecords({ ...identity, apiNamespace: "ios/v2.1.0" })).toEqual([]);
+    expect(mutations.readConversationMutationRecords({ ...identity, apiNamespace: "ios/v2.2.0" })).toEqual([]);
   });
 
   it("aborts a hung old-account batch, retains its intent, and permits an immediate new run", async () => {

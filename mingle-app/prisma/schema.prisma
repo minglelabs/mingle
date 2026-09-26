@@ -343,6 +343,23 @@ model AppConversationChannel {
   // literally zero DB footprint for the invitee before a message is sent, not
   // just zero visibility.
   pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
+  // Public "spectate" link: link holders can view the snapshot and join the
+  // room. Turning sharing off revokes the link, and the next enable mints a
+  // new shareToken, so links handed out earlier stay dead. shareEnabled is the on/off switch a
+  // member flips from the room settings screen; sharedAt is the snapshot
+  // cutoff, jumped forward to now() whenever sharing is turned on or
+  // refreshed — see setConversationShareEnabled and
+  // refreshConversationShareSnapshot in app-conversations.ts.
+  shareToken                 String?   @unique @map("share_token")
+  shareEnabled               Boolean   @default(false) @map("share_enabled")
+  sharedByUserId             String?   @map("shared_by_user_id")
+  sharedAt                   DateTime? @map("shared_at")
+  // Snapshot of the room title frozen at sharedAt, so the public "spectate"
+  // view keeps showing the title the room had when it was (re-)shared even
+  // after a member renames the room. Written in the same locked transaction
+  // that stamps sharedAt (enable, already-on re-stamp, refresh); null while
+  // the room was never shared. Member-facing views always use the live title.
+  sharedTitle                String?   @map("shared_title")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 

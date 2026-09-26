@@ -1,2 +1,2 @@
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/tts/inworld/route";
+export { POST } from "@/app/api/ios/v1.1.4/tts/inworld/route";

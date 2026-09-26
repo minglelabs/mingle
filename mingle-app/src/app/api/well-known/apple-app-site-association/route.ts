@@ -11,11 +11,19 @@ export function GET() {
           {
             appID: appId,
             appIDs: [appId],
-            paths: ["/p/*"],
+            // Every public link that must open the app instead of Safari
+            // belongs here: /p/ shared profiles and /s/ shared conversation
+            // snapshots. A path missing from this list still renders the web
+            // page, which is exactly the bug /s/ had.
+            paths: ["/p/*", "/s/*"],
             components: [
               {
                 "/": "/p/*",
                 comment: "Mingle shared profile links",
+              },
+              {
+                "/": "/s/*",
+                comment: "Mingle shared conversation links",
               },
             ],
           },

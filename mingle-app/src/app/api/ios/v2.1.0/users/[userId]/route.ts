@@ -1,2 +1,2 @@
 export const runtime = "nodejs";
-export { GET } from "@/app/api/ios/v2.0.0/users/[userId]/route";
+export { GET } from "@/app/api/users/[userId]/route";

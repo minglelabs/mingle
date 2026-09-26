@@ -112,6 +112,10 @@ import {
   type PushTapPayload,
 } from './src/pushNavigation';
 import { resolveInitialWebRoute } from './src/initialWebRoute';
+import {
+  buildNativeConversationShareEventScript,
+  parseNativeConversationShareLink,
+} from './src/conversationShareLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -476,6 +480,9 @@ const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
   normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
 );
 const PROFILE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+const PROFILE_LINK_REDISPATCH_DELAYS_MS = [300, 1_000, 2_500, 5_000];
+const CONVERSATION_SHARE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+const CONVERSATION_SHARE_REDISPATCH_DELAYS_MS = [300, 1_000, 2_500, 5_000];
 
 function getProfileLinkUserIdHint(userId: string): string {
   const normalizedUserId = userId.trim();
@@ -1216,6 +1223,30 @@ function isProfileSharePathname(pathname: string): boolean {
   return segments[1] === 'mypage' && segments[2] === 'share';
 }
 
+// The public conversation-spectate page (/s/[shareToken]) has no locale
+// prefix baked in — its route sits straight off the origin — so it's
+// normally 2 segments (['s', token]), though a locale-prefixed 3-segment
+// form is tolerated too in case that changes.
+function isConversationSpectatePathname(pathname: string): boolean {
+  const normalized = pathname.trim();
+  if (!normalized.startsWith('/')) return false;
+
+  const segments = normalized
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length === 2) {
+    return segments[0] === 's';
+  }
+  if (segments.length === 3) {
+    const locale = segments[0]?.toLowerCase() || '';
+    if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+    return segments[1] === 's';
+  }
+  return false;
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -1226,6 +1257,14 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
       return AUTH_LOGIN_SAFE_AREA_PALETTE;
     }
     if (isProfileSharePathname(parsed.pathname)) {
+      return PROFILE_SHARE_SAFE_AREA_PALETTE;
+    }
+    // conversation-spectate-screen.tsx reuses the exact same gradient shell
+    // as the /mypage/share card, so it reuses this palette too — without
+    // this branch the pathname falls through to DEFAULT_SAFE_AREA_PALETTE,
+    // whose white bottomColor fill shows as a white sliver under the
+    // gradient content at the bottom safe area.
+    if (isConversationSpectatePathname(parsed.pathname)) {
       return PROFILE_SHARE_SAFE_AREA_PALETTE;
     }
     if (isConversationsLikePathname(parsed.pathname)) {
@@ -1450,11 +1489,18 @@ function AppInner(): React.JSX.Element {
   const lastHandledProfileLinkAtRef = useRef(0);
   const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingProfileLinkFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileLinkNavigationSequenceRef = useRef(0);
   const pendingPushTapPathRef = useRef<string | null>(null);
   const pendingPushTapRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingPushTapRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pushTapNavigationSequenceRef = useRef(0);
+  const lastHandledConversationShareLinkRef = useRef('');
+  const lastHandledConversationShareLinkAtRef = useRef(0);
+  const pendingConversationShareTokenRef = useRef<string | null>(null);
+  const pendingConversationShareRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingConversationShareFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const conversationShareNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1812,6 +1858,136 @@ function AppInner(): React.JSX.Element {
     }
     return handled;
   }, [handleIncomingProfileLink]);
+  const clearPendingConversationShareRouteRetries = useCallback(() => {
+    pendingConversationShareRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingConversationShareRouteRetryTimersRef.current = [];
+  }, []);
+  // Mirrors dispatchProfileLinkToWebView: injects a CustomEvent into the
+  // currently-loaded page for NativeConversationShareOverlay to pick up,
+  // instead of navigating the WebView to the public /s/[shareToken] page —
+  // a viewer opening this natively is already using the app and shouldn't
+  // land on the browser-oriented install page.
+  const dispatchConversationShareToWebView = useCallback((shareToken: string, allowWhenPageNotReady = false) => {
+    const normalizedShareToken = shareToken.trim();
+    const webView = webViewRef.current;
+    if (
+      !normalizedShareToken
+      || !webView
+      || (!isPageReadyRef.current && !allowWhenPageNotReady)
+    ) {
+      return false;
+    }
+
+    conversationShareNavigationSequenceRef.current += 1;
+    const linkNonce = String(Date.now()) + '-' + String(conversationShareNavigationSequenceRef.current);
+    const eventScript = buildNativeConversationShareEventScript({
+      shareToken: normalizedShareToken,
+      linkNonce,
+      navigationSequence: conversationShareNavigationSequenceRef.current,
+    });
+    webView.injectJavaScript(eventScript);
+    return true;
+  }, []);
+  const schedulePendingConversationShareRouteFlush = useCallback((allowWhenPageNotReady = false) => {
+    clearPendingConversationShareRouteRetries();
+    [0, 150, 500, 1_200, 3_000].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        const pendingShareToken = pendingConversationShareTokenRef.current;
+        if (!pendingShareToken) return;
+
+        if (dispatchConversationShareToWebView(pendingShareToken, allowWhenPageNotReady)) {
+          pendingConversationShareTokenRef.current = null;
+          clearPendingConversationShareRouteRetries();
+        }
+      }, delayMs);
+      pendingConversationShareRouteRetryTimersRef.current.push(timer);
+    });
+  }, [clearPendingConversationShareRouteRetries, dispatchConversationShareToWebView]);
+  const navigateWebViewToConversationShare = useCallback((shareToken: string) => {
+    const normalizedShareToken = shareToken.trim();
+    if (!normalizedShareToken) return;
+
+    if (dispatchConversationShareToWebView(normalizedShareToken)) {
+      pendingConversationShareTokenRef.current = null;
+      clearPendingConversationShareRouteRetries();
+      return;
+    }
+
+    pendingConversationShareTokenRef.current = normalizedShareToken;
+    schedulePendingConversationShareRouteFlush();
+  }, [clearPendingConversationShareRouteRetries, dispatchConversationShareToWebView, schedulePendingConversationShareRouteFlush]);
+  // Same idea as flushPendingProfileLinkToWebImmediate: a "successful"
+  // injectJavaScript call only proves the script reached the WebView, not
+  // that NativeConversationShareOverlay's listener has mounted yet, so
+  // re-fire the dispatch a few more times before giving up.
+  const flushPendingConversationShareToWebImmediate = useCallback(() => {
+    const pendingShareToken = pendingConversationShareTokenRef.current;
+    if (!pendingShareToken || !isPageReadyRef.current) return;
+    if (!dispatchConversationShareToWebView(pendingShareToken)) return;
+    clearPendingConversationShareRouteRetries();
+    CONVERSATION_SHARE_REDISPATCH_DELAYS_MS.forEach((delayMs, index) => {
+      const timer = setTimeout(() => {
+        if (pendingConversationShareTokenRef.current !== pendingShareToken) return;
+        dispatchConversationShareToWebView(pendingShareToken, true);
+        if (index === CONVERSATION_SHARE_REDISPATCH_DELAYS_MS.length - 1) {
+          pendingConversationShareTokenRef.current = null;
+        }
+      }, delayMs);
+      pendingConversationShareRouteRetryTimersRef.current.push(timer);
+    });
+  }, [clearPendingConversationShareRouteRetries, dispatchConversationShareToWebView]);
+  const cancelPendingConversationShareFlush = useCallback(() => {
+    if (pendingConversationShareFlushTimerRef.current !== null) {
+      clearTimeout(pendingConversationShareFlushTimerRef.current);
+      pendingConversationShareFlushTimerRef.current = null;
+    }
+  }, []);
+  // Same debounce as flushPendingProfileLinkToWeb: waits for a quiet period
+  // with no further onLoadStart before flushing, so a cold-boot redirect
+  // chain doesn't fire the dispatch against a page that's about to be torn
+  // down by the next navigation.
+  const flushPendingConversationShareToWeb = useCallback(() => {
+    cancelPendingConversationShareFlush();
+    pendingConversationShareFlushTimerRef.current = setTimeout(() => {
+      pendingConversationShareFlushTimerRef.current = null;
+      flushPendingConversationShareToWebImmediate();
+    }, 500);
+  }, [cancelPendingConversationShareFlush, flushPendingConversationShareToWebImmediate]);
+  const handleIncomingConversationShareLink = useCallback((rawUrl: string) => {
+    const candidateOrigins = [
+      activeWebAppBaseUrl,
+      WEB_APP_BASE_URL,
+      FALLBACK_WEB_APP_BASE_URL,
+    ].filter(Boolean);
+    const parsed = candidateOrigins
+      .map((origin) => parseNativeConversationShareLink(rawUrl, origin))
+      .find((value) => value !== null);
+    if (!parsed) return false;
+
+    // Opens directly, no confirm step — same as profile links. The overlay
+    // itself (NativeConversationShareOverlay) is the read-only preview; the
+    // user only actually joins the room via its own explicit "join" button.
+    navigateWebViewToConversationShare(parsed.shareToken);
+    return true;
+  }, [activeWebAppBaseUrl, navigateWebViewToConversationShare]);
+  const handleIncomingConversationShareLinkOnce = useCallback((rawUrl: string) => {
+    const normalizedUrl = rawUrl.trim();
+    if (!normalizedUrl) return false;
+    const now = Date.now();
+    if (
+      lastHandledConversationShareLinkRef.current === normalizedUrl
+      && now - lastHandledConversationShareLinkAtRef.current < CONVERSATION_SHARE_LINK_DUPLICATE_WINDOW_MS
+    ) {
+      return true;
+    }
+
+    const handled = handleIncomingConversationShareLink(normalizedUrl);
+    if (handled) {
+      lastHandledConversationShareLinkRef.current = normalizedUrl;
+      lastHandledConversationShareLinkAtRef.current = now;
+    }
+    return handled;
+  }, [handleIncomingConversationShareLink]);
   const consumePendingProfileLink = useCallback(async () => {
     const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
     if (!getPendingProfileLink) return;
@@ -1854,23 +2030,65 @@ function AppInner(): React.JSX.Element {
       recordProfileLinkTrace('webview_profile_link_intercepted');
       return false;
     }
+    if (rawUrl && handleIncomingConversationShareLinkOnce(rawUrl)) {
+      return false;
+    }
     if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
       openNativeExternalUrl(rawUrl);
       return false;
     }
     return true;
-  }, [handleIncomingProfileLinkOnce]);
-  const flushPendingProfileLinkToWeb = useCallback(() => {
+  }, [handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce]);
+  // A "successful" injectJavaScript call only proves the script was handed
+  // to the WebView, not that the page's own JS has hydrated enough to have
+  // NativeProfileLinkOverlay's event listener (or even its window-global
+  // fallback) attached yet — cold boot in particular can still be mid
+  // hydration right at the moment onLoadEnd/isPageReadyRef flips. Instead of
+  // trusting the first "success" and clearing the pending link, re-fire the
+  // same (idempotent — NativeProfileLinkOverlay replaces, not re-pushes,
+  // once its history entry exists) injection a few more times over several
+  // seconds before finally giving up, so a late-hydrating page still gets it.
+  const flushPendingProfileLinkToWebImmediate = useCallback(() => {
     const pendingUserId = pendingProfileLinkUserIdRef.current;
     if (!pendingUserId || !isPageReadyRef.current) return;
     recordProfileLinkTrace('native_pending_profile_route_flushed', {
       userIdHint: getProfileLinkUserIdHint(pendingUserId),
     });
-    if (dispatchProfileLinkToWebView(pendingUserId)) {
-      pendingProfileLinkUserIdRef.current = null;
-      clearPendingProfileRouteRetries();
-    }
+    if (!dispatchProfileLinkToWebView(pendingUserId)) return;
+    clearPendingProfileRouteRetries();
+    PROFILE_LINK_REDISPATCH_DELAYS_MS.forEach((delayMs, index) => {
+      const timer = setTimeout(() => {
+        if (pendingProfileLinkUserIdRef.current !== pendingUserId) return;
+        dispatchProfileLinkToWebView(pendingUserId, true);
+        if (index === PROFILE_LINK_REDISPATCH_DELAYS_MS.length - 1) {
+          pendingProfileLinkUserIdRef.current = null;
+        }
+      }, delayMs);
+      pendingProfileRouteRetryTimersRef.current.push(timer);
+    });
   }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
+  const cancelPendingProfileLinkFlush = useCallback(() => {
+    if (pendingProfileLinkFlushTimerRef.current !== null) {
+      clearTimeout(pendingProfileLinkFlushTimerRef.current);
+      pendingProfileLinkFlushTimerRef.current = null;
+    }
+  }, []);
+  // A cold boot's very first onLoadEnd can fire for an intermediate page
+  // (e.g. a locale/auth redirect before landing on /conversations) — at
+  // that moment isPageReadyRef.current is already true, so an immediate
+  // flush "succeeds" (injectJavaScript runs) against a page that's about to
+  // be torn down by the next navigation, silently losing the pending link
+  // with no retry (dispatch already reported success). Debounce instead:
+  // wait for a short quiet period with no further onLoadStart before
+  // actually flushing, so a same-session redirect chain cancels and
+  // reschedules until the WebView truly settles.
+  const flushPendingProfileLinkToWeb = useCallback(() => {
+    cancelPendingProfileLinkFlush();
+    pendingProfileLinkFlushTimerRef.current = setTimeout(() => {
+      pendingProfileLinkFlushTimerRef.current = null;
+      flushPendingProfileLinkToWebImmediate();
+    }, 500);
+  }, [cancelPendingProfileLinkFlush, flushPendingProfileLinkToWebImmediate]);
   useEffect(() => {
     setDebugRemountWebUrl('');
   }, [baseWebUrl]);
@@ -1891,7 +2109,8 @@ function AppInner(): React.JSX.Element {
     const handleUrl = (rawUrl: string | null | undefined) => {
       if (!mounted || typeof rawUrl !== 'string') return;
       recordProfileLinkTrace('react_native_linking_event');
-      handleIncomingProfileLinkOnce(rawUrl);
+      if (handleIncomingProfileLinkOnce(rawUrl)) return;
+      handleIncomingConversationShareLinkOnce(rawUrl);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
@@ -1914,8 +2133,9 @@ function AppInner(): React.JSX.Element {
       pendingPushTapRetryTimersRef.current = [];
       pendingPushTapRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
       pendingPushTapRouteRetryTimersRef.current = [];
+      clearPendingConversationShareRouteRetries();
     };
-  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
+  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -4293,6 +4513,12 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
+    // A fresh navigation starting means whatever page the last onLoadEnd
+    // just settled on is about to be replaced — cancel any flush that was
+    // waiting out its quiet period against that soon-to-be-gone page so it
+    // reschedules against the page this navigation actually lands on.
+    cancelPendingProfileLinkFlush();
+    cancelPendingConversationShareFlush();
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -4300,7 +4526,7 @@ function AppInner(): React.JSX.Element {
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
-  }, [rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const replayNativeSttStatusToWeb = useCallback((nextUrl: string) => {
     const roomPayload = resolveConversationRestorePayloadFromUrl(nextUrl);
@@ -4371,6 +4597,7 @@ function AppInner(): React.JSX.Element {
     if (pendingPushTapPathRef.current) {
       schedulePendingPushTapFlush(true);
     }
+    flushPendingConversationShareToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
@@ -4433,7 +4660,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (!initialLoadSettledRef.current && activateWebFallback()) return;

@@ -37,6 +37,27 @@ export function buildNativeProfileLinkEventScript(
   return `(function () { const detail = ${serializedRequest}; window[${JSON.stringify(NATIVE_PROFILE_LINK_WINDOW_KEY)}] = detail; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PROFILE_LINK_EVENT)}, { detail })); })(); true;`;
 }
 
+// RN's built-in URL polyfill (react-native/Libraries/Blob/URL.js) only
+// parses hostname/pathname via regexes anchored on `https?://` — for any
+// other scheme (like `mingle:`), `.hostname` is always "" and `.pathname`
+// is always "/" no matter what the URL actually contains. Parse the
+// authority and path manually for the custom-scheme branch instead of
+// relying on those getters.
+function parseCustomSchemeAuthorityAndPath(
+  rawValue: string,
+  protocol: string,
+): { host: string; path: string } | null {
+  if (!rawValue.startsWith(protocol)) return null;
+  const afterScheme = rawValue.slice(protocol.length).replace(/^\/\//, "");
+  const withoutQueryOrHash = afterScheme.split(/[?#]/)[0];
+  const slashIndex = withoutQueryOrHash.indexOf("/");
+  if (slashIndex === -1) return { host: withoutQueryOrHash, path: "" };
+  return {
+    host: withoutQueryOrHash.slice(0, slashIndex),
+    path: withoutQueryOrHash.slice(slashIndex),
+  };
+}
+
 function normalizeUserId(rawValue: string): string | null {
   let decodedValue = rawValue.trim();
   try {
@@ -101,8 +122,9 @@ export function parseNativeProfileLink(rawValue: string, allowedHttpsOrigin: str
   }
 
   if (PROFILE_APP_SCHEMES.has(url.protocol)) {
-    if (url.hostname !== PROFILE_APP_SCHEME_HOST) return null;
-    const userId = normalizeUserId(url.pathname.replace(/^\//, ""));
+    const authority = parseCustomSchemeAuthorityAndPath(normalizedValue, url.protocol);
+    if (!authority || authority.host !== PROFILE_APP_SCHEME_HOST) return null;
+    const userId = normalizeUserId(authority.path.replace(/^\//, ""));
     return userId ? { userId, source: "mingle" } : null;
   }
 
