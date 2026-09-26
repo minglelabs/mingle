@@ -25,6 +25,7 @@ const userSearchSelect = {
   imageCropScale: true,
   imageCropX: true,
   imageCropY: true,
+  isOfficial: true,
 } as const;
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
@@ -132,6 +133,8 @@ export async function GET(request: NextRequest) {
       imageCropX: user.imageCropX,
       imageCropY: user.imageCropY,
       isFollowing: user.followerRelations.length > 0,
+      // Official (operator) accounts only; absent means false.
+      ...(user.isOfficial === true ? { isOfficial: true } : {}),
     })),
     nextCursor,
   }, {

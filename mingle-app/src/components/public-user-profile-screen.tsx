@@ -17,6 +17,7 @@ import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
+import OfficialBadge from "@/components/posts/official-badge";
 import { isDuplicateReportBody } from "@/components/reports/report-response";
 import { reportCopy } from "@/i18n/report-copy";
 import {
@@ -78,6 +79,8 @@ type PublicUserProfile = {
   followingCount: number;
   isFollowing: boolean;
   isBlocked: boolean;
+  /** Operator / official account; absent means false. */
+  isOfficial?: boolean;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
@@ -587,7 +590,10 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 pl-2">
-                <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+                <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
+                  <span className="truncate">{name}</span>
+                  {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+                </p>
                 {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
                 {!isOwnProfile ? (
                   <ProfileLocation

@@ -44,6 +44,7 @@ const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  isOfficial: true,
   _count: {
     select: {
       followerRelations: {
@@ -148,5 +149,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     followingCount: user._count.followingRelations,
     isFollowing: user.followerRelations.length > 0,
     isBlocked: block?.blockerId === viewerId,
+    // Official (operator) accounts only; absent means false.
+    ...(user.isOfficial === true ? { isOfficial: true } : {}),
   });
 }
