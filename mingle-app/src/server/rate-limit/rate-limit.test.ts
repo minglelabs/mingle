@@ -67,3 +67,17 @@ describe('rateLimitGuard', () => {
     expect(typeof body.retryAfterSeconds).toBe('number')
   })
 })
+
+describe('edit / translate actions (W4)', () => {
+  it.each([
+    ['update_comment', 30],
+    ['translate_post', 60],
+    ['translate_comment', 60],
+  ] as const)('%s allows %i per minute per user, then blocks', (action, limit) => {
+    const store = new Map<string, number[]>()
+    const now = 5_000_000
+    for (let i = 0; i < limit; i++) expect(checkRateLimit(action, 'u1', now, store).allowed).toBe(true)
+    expect(checkRateLimit(action, 'u1', now, store).allowed).toBe(false)
+    expect(checkRateLimit(action, 'u2', now, store).allowed).toBe(true)
+  })
+})

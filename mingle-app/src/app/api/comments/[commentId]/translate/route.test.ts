@@ -23,15 +23,17 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/posts/comment-visibility', () => ({
   visibleSingleCommentWhere: (commentId: string) => ({ id: commentId }),
 }))
-vi.mock('@/server/translation/post-translation-service', () => ({
-  translateCommentOnDemand: mockTranslateCommentOnDemand,
-}))
+vi.mock('@/server/translation/post-translation-service', async () => {
+  const { canonicalizeTranslationLanguageCode } = await import('@/lib/translation-languages')
+  return { translateCommentOnDemand: mockTranslateCommentOnDemand, normalizeRequestedTranslationLanguage: canonicalizeTranslationLanguageCode }
+})
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
 }))
-vi.mock('@/server/posts/post-translation-repository', () => ({ prismaTranslationDeps: {} }))
+vi.mock('@/server/translation/on-demand-translation-deps', () => ({ onDemandTranslationDeps: {} }))
 
 import { POST } from './route'
+import { __resetRateLimitStore } from '@/server/rate-limit/rate-limit'
 
 const makeCtx = (commentId: string) => ({ params: Promise.resolve({ commentId }) })
 function makeReq(body: unknown): NextRequest {
@@ -45,6 +47,7 @@ function makeReq(body: unknown): NextRequest {
 describe('POST /api/comments/{commentId}/translate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetRateLimitStore()
     mockGetServerSession.mockResolvedValue({ user: { id: 'viewer-1' } })
     mockTranslateCommentOnDemand.mockResolvedValue('translated')
   })
@@ -77,5 +80,32 @@ describe('POST /api/comments/{commentId}/translate', () => {
     expect(res.status).toBe(400)
     expect(mockCommentUpdate).not.toHaveBeenCalled()
     expect(mockTranslateCommentOnDemand).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unsupported language with 400 before any lookup', async () => {
+    const res = await POST(makeReq({ language: 'xx-nope' }), makeCtx('c1'))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('unsupported_language')
+    expect(mockCommentFindFirst).not.toHaveBeenCalled()
+  })
+
+  it('canonicalizes zh-cn to zh-CN and returns the original too', async () => {
+    mockCommentFindFirst.mockResolvedValue({ id: 'c1', bodyVersion: 3, sourceText: 'hi', sourceLanguage: 'en' })
+    const res = await POST(makeReq({ language: 'zh-cn' }), makeCtx('c1'))
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ language: 'zh-CN', bodyVersion: 3 }),
+    )
+    expect(await res.json()).toMatchObject({ language: 'zh-CN', text: 'translated', sourceText: 'hi', sourceLanguage: 'en' })
+  })
+
+  it('rate-limits with translate_comment', async () => {
+    mockCommentFindFirst.mockResolvedValue({ id: 'c1', bodyVersion: 1, sourceText: 'hi', sourceLanguage: 'en' })
+    for (let i = 0; i < 60; i++) {
+      expect((await POST(makeReq({ language: 'ko' }), makeCtx('c1'))).status).toBe(200)
+    }
+    const res = await POST(makeReq({ language: 'ko' }), makeCtx('c1'))
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBeTruthy()
   })
 })

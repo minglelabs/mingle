@@ -5,12 +5,14 @@
  * deliberately conservative so normal use is never blocked — they only catch
  * abnormal bursts (scripted spam, a stuck retry loop).
  *
- * ⚠️ In-memory: the counters live in this process only, so with multiple
+ * ⚠️ In-memory: the counters live in this process only. That is correct
+ * today because the app runs as ONE instance (railway.json
+ * `deploy.numReplicas: 1`); a restart resets every window. With multiple
  * server instances each instance enforces the limit independently and the
- * effective ceiling is (limit × instance count). See the report's "merge
- * notes". A shared store (Redis / a DB table) would make it exact; the
- * contract (`checkRateLimit` / `rateLimitGuard`) is written so that swap is
- * internal.
+ * effective ceiling becomes (limit × instance count). Before scaling out,
+ * move the store to a shared backend (Redis INCR+EXPIRE, or a DB table keyed
+ * by (action, userId, window)); the contract (`checkRateLimit` /
+ * `rateLimitGuard`) is written so that swap is internal.
  *
  * On the response shape, this matches the frozen contract from the common
  * rules: HTTP 429, body `{ error: 'rate_limited', retryAfterSeconds }`, and a
