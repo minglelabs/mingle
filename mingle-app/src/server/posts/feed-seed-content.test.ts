@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   SEED_LANGUAGES,
+  applySeedPlan,
   SEED_MAX_TEXT_LENGTH,
   findForbiddenPhrases,
   isLocalDatabaseUrl,
@@ -13,6 +14,9 @@ import {
   validateSeedContent,
   type SeedContent,
   type SeedItem,
+  type SeedApplyDeps,
+  type SeedPublishInput,
+  type SeedPublishResult,
 } from '../../../scripts/seed-feed-content.logic'
 
 const CONTENT_PATH = path.resolve(__dirname, '../../../content/feed-seed/posts.v1.json')
@@ -202,5 +206,70 @@ describe('planSeed (idempotency)', () => {
   it('publishes in reverse so the first file item ends up newest', () => {
     expect(publishOrder(items).map((i) => i.key)).toEqual(['c', 'b', 'a'])
     expect(items.map((i) => i.key)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('applySeedPlan (shared publish pipeline)', () => {
+  const a = item({ key: 'a', clientPostId: 'mingleseed-test-00a', language: 'ko' })
+  const b = item({ key: 'b', clientPostId: 'mingleseed-test-00b', language: 'en', text: 'Say hello.' })
+  const c = item({ key: 'c', clientPostId: 'mingleseed-test-00c', language: 'ja', text: 'こんにちは。' })
+
+  function deps(publish: (input: SeedPublishInput) => Promise<SeedPublishResult>, existing: string[] = []) {
+    const lines: string[] = []
+    const warnings: string[] = []
+    const d: SeedApplyDeps = {
+      authorId: 'author-1',
+      postExists: async (id) => existing.includes(id),
+      publish: vi.fn(publish),
+      log: (line) => lines.push(line),
+      warn: (line) => warnings.push(line),
+    }
+    return { d, lines, warnings }
+  }
+
+  const created = (input: SeedPublishInput, language: string | null = input.clientHint): SeedPublishResult => ({
+    kind: 'created',
+    post: { id: input.clientPostId },
+    sourceLanguage: language,
+    translations: [
+      { language: 'x1', status: 'ready' },
+      { language: 'x2', status: 'failed' },
+    ],
+  })
+
+  it('publishes only create entries, newest last, through the shared pipeline with the seed id', async () => {
+    const plan = planSeed([a, b, c], [{ id: b.clientPostId, authorId: 'author-1' }], 'author-1')
+    const { d } = deps(async (input) => created(input))
+    const summary = await applySeedPlan(plan, d)
+
+    expect(summary).toEqual({ created: 2, skipped: 0, failedTranslations: 2 })
+    expect(vi.mocked(d.publish).mock.calls.map(([input]) => input)).toEqual([
+      { authorId: 'author-1', text: c.text, imageObjectKey: null, clientHint: 'ja', clientPostId: c.clientPostId },
+      { authorId: 'author-1', text: a.text, imageObjectKey: null, clientHint: 'ko', clientPostId: a.clientPostId },
+    ])
+  })
+
+  it('skips ids that appeared meanwhile or that the pipeline reports as duplicate / conflict', async () => {
+    const plan = planSeed([a, b, c], [], 'author-1')
+    const { d, lines } = deps(
+      async (input) => (input.clientPostId === b.clientPostId ? { kind: 'duplicate' } : { kind: 'conflict' }),
+      [c.clientPostId],
+    )
+    const summary = await applySeedPlan(plan, d)
+
+    expect(summary).toEqual({ created: 0, skipped: 3, failedTranslations: 0 })
+    expect(d.publish).toHaveBeenCalledTimes(2)
+    expect(lines.some((line) => line.includes('already belongs to another user'))).toBe(true)
+  })
+
+  it('warns when the detected language differs from the declared one', async () => {
+    const { d, warnings } = deps(async (input) => created(input, 'en'))
+    await applySeedPlan(planSeed([a], [], 'author-1'), d)
+    expect(warnings).toEqual([`  ! ${a.clientPostId} declared=ko detected=en`])
+  })
+
+  it('stops when a post is created under an id other than the seed id', async () => {
+    const { d } = deps(async () => ({ kind: 'created', post: { id: 'server-id' }, sourceLanguage: 'ko', translations: [] }))
+    await expect(applySeedPlan(planSeed([a], [], 'author-1'), d)).rejects.toThrow('without its seed id')
   })
 })
