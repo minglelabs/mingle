@@ -106,6 +106,12 @@ import {
   buildNativeProfileLinkEventScript,
   parseNativeProfileLink,
 } from './src/profileLink';
+import {
+  buildNativePushTapEventScript,
+  resolvePushTapPath,
+  type PushTapPayload,
+} from './src/pushNavigation';
+import { resolveInitialWebRoute } from './src/initialWebRoute';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -159,6 +165,14 @@ type NativePushRegistrationInfo = {
 type NativePushNotificationModule = {
   registerForPushNotifications?: () => Promise<NativePushRegistrationInfo>;
   getRegistrationInfo?: () => Promise<NativePushRegistrationInfo>;
+  getPendingPushTap?: () => Promise<NativePendingPushTap | null>;
+  clearPendingPushTap?: (sequence: number) => Promise<unknown>;
+};
+type NativePendingPushTap = {
+  type?: unknown;
+  url?: unknown;
+  conversationId?: unknown;
+  sequence?: unknown;
 };
 type NativeLocationModule = {
   checkLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
@@ -1437,6 +1451,10 @@ function AppInner(): React.JSX.Element {
   const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const profileLinkNavigationSequenceRef = useRef(0);
+  const pendingPushTapPathRef = useRef<string | null>(null);
+  const pendingPushTapRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingPushTapRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pushTapNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1530,10 +1548,14 @@ function AppInner(): React.JSX.Element {
     const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    // Start directly at the conversation-list route. Loading the locale root
-    // first creates a redirect history entry, which would let a tab-root
-    // screen swipe back into an older room after a tab switch.
-    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/conversations?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    // Plain launch lands on the feed when this build's namespace supports the
+    // posting feed (v2.1.0+); otherwise on the conversation list. A live
+    // conversation/STT restore target or a pending push tap override this base
+    // route (see webUrl memo and the push-tap handlers). The same query params
+    // are kept regardless of route. Loading the locale root first would create
+    // a redirect history entry, so target the concrete route directly.
+    const initialRoute = resolveInitialWebRoute(VALIDATED_API_NAMESPACE);
+    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/${initialRoute}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
     return appendNativeRuntimeWebViewParams(rawWebUrl, {
       nativeListTopInsetPx: nativeInitialBannerInsetPx,
       nativeConversationBannerPosition: defaultNativeBannerPosition,
@@ -1650,6 +1672,87 @@ function AppInner(): React.JSX.Element {
       pendingProfileRouteRetryTimersRef.current.push(timer);
     });
   }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
+  const dispatchPushTapToWebView = useCallback((path: string, allowWhenPageNotReady = false) => {
+    const webView = webViewRef.current;
+    if (!path || !webView || (!isPageReadyRef.current && !allowWhenPageNotReady)) {
+      return false;
+    }
+    pushTapNavigationSequenceRef.current += 1;
+    const eventScript = buildNativePushTapEventScript({
+      path,
+      sequence: pushTapNavigationSequenceRef.current,
+    });
+    if (eventScript === 'true;') return false;
+    webView.injectJavaScript(eventScript);
+    return true;
+  }, []);
+  const schedulePendingPushTapFlush = useCallback((allowWhenPageNotReady = false) => {
+    pendingPushTapRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingPushTapRouteRetryTimersRef.current = [];
+    [0, 150, 500, 1_200, 3_000].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        const pendingPath = pendingPushTapPathRef.current;
+        if (!pendingPath) return;
+        if (dispatchPushTapToWebView(pendingPath, allowWhenPageNotReady)) {
+          pendingPushTapPathRef.current = null;
+          pendingPushTapRouteRetryTimersRef.current.forEach((t) => clearTimeout(t));
+          pendingPushTapRouteRetryTimersRef.current = [];
+        }
+      }, delayMs);
+      pendingPushTapRouteRetryTimersRef.current.push(timer);
+    });
+  }, [dispatchPushTapToWebView]);
+  const navigateWebViewToPushTap = useCallback((path: string) => {
+    const normalizedPath = path.trim();
+    if (!normalizedPath) return;
+    if (dispatchPushTapToWebView(normalizedPath)) {
+      pendingPushTapPathRef.current = null;
+      return;
+    }
+    pendingPushTapPathRef.current = normalizedPath;
+    schedulePendingPushTapFlush();
+  }, [dispatchPushTapToWebView, schedulePendingPushTapFlush]);
+  const consumePendingPushTap = useCallback(async () => {
+    const nativePushModule = (NativeModules as {
+      NativePushNotificationModule?: NativePushNotificationModule;
+    }).NativePushNotificationModule;
+    const getPendingPushTap = nativePushModule?.getPendingPushTap;
+    if (!getPendingPushTap) return;
+    try {
+      const pending = await getPendingPushTap();
+      if (!pending || typeof pending !== 'object') return;
+      const payload: PushTapPayload = {
+        type: pending.type,
+        url: pending.url,
+        conversationId: pending.conversationId,
+      };
+      const resolvedPath = resolvePushTapPath(payload, webLocale);
+      const sequence = typeof pending.sequence === 'number' && Number.isFinite(pending.sequence)
+        ? pending.sequence
+        : 0;
+      if (!resolvedPath) {
+        // Unsafe or empty target: still clear so a bad payload cannot pin the
+        // pending slot forever.
+        await nativePushModule?.clearPendingPushTap?.(sequence);
+        return;
+      }
+      navigateWebViewToPushTap(resolvedPath);
+      await nativePushModule?.clearPendingPushTap?.(sequence);
+    } catch {
+      // The pending tap remains for the next foreground/poll attempt.
+    }
+  }, [navigateWebViewToPushTap, webLocale]);
+  const schedulePendingPushTapConsumption = useCallback(() => {
+    pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingPushTapRetryTimersRef.current = [];
+    void consumePendingPushTap();
+    [150, 500, 1_200].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        void consumePendingPushTap();
+      }, delayMs);
+      pendingPushTapRetryTimersRef.current.push(timer);
+    });
+  }, [consumePendingPushTap]);
   const navigateWebViewToProfile = useCallback((userId: string) => {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
@@ -1795,6 +1898,7 @@ function AppInner(): React.JSX.Element {
       // Ignore malformed or unavailable initial URLs.
     });
     schedulePendingProfileLinkConsumption();
+    schedulePendingPushTapConsumption();
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleUrl(url);
       schedulePendingProfileLinkConsumption();
@@ -1806,8 +1910,12 @@ function AppInner(): React.JSX.Element {
       pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
       pendingProfileLinkRetryTimersRef.current = [];
       clearPendingProfileRouteRetries();
+      pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingPushTapRetryTimersRef.current = [];
+      pendingPushTapRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingPushTapRouteRetryTimersRef.current = [];
     };
-  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
+  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -1817,13 +1925,15 @@ function AppInner(): React.JSX.Element {
         recordProfileLinkTrace('app_state_active_for_profile_link');
         schedulePendingProfileLinkConsumption();
         schedulePendingProfileRouteFlush(true);
+        schedulePendingPushTapConsumption();
+        schedulePendingPushTapFlush(true);
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush]);
+  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush, schedulePendingPushTapConsumption, schedulePendingPushTapFlush]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],
@@ -4258,6 +4368,9 @@ function AppInner(): React.JSX.Element {
     flushPendingNativeLocationEventsToWeb();
     flushPendingNativePushRegistrationsToWeb();
     flushPendingProfileLinkToWeb();
+    if (pendingPushTapPathRef.current) {
+      schedulePendingPushTapFlush(true);
+    }
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
@@ -4320,7 +4433,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, flushPendingAuthToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (!initialLoadSettledRef.current && activateWebFallback()) return;

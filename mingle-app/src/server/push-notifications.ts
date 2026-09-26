@@ -459,6 +459,16 @@ export async function sendPushNotificationForConversationMessage(args: {
   )];
   if (recipientUserIds.length === 0) return;
 
+  // The web conversation room is `/{locale}/conversations?conversation={channelId}`.
+  // Message pushes only know the session key, so resolve the channel id once here
+  // and let each recipient's locale build its own room URL below. Without this
+  // the native tap handler has no room to open (a message push carries no url).
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey: args.sessionKey },
+    select: { id: true },
+  });
+  const channelId = channel?.id ?? "";
+
   const users = await prisma.user.findMany({
     where: { id: { in: [...new Set([args.senderUserId, ...recipientUserIds])] } },
     select: {
@@ -486,14 +496,24 @@ export async function sendPushNotificationForConversationMessage(args: {
   for (const recipientUserId of recipientUserIds) {
     const recipient = users.find((user) => user.id === recipientUserId);
     if (!recipient) continue;
+    const recipientLanguage = recipient.pageLanguage?.trim() || recipient.language?.trim() || "en";
+    // Build the room URL in the recipient's own locale, matching the web route
+    // `/{locale}/conversations?conversation={channelId}`. Falls back to the raw
+    // conversationId (the native tap handler rebuilds the room path from it).
+    const roomLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
+    const navigationUrl = channelId
+      ? `/${roomLocale}/conversations?conversation=${encodeURIComponent(channelId)}`
+      : undefined;
     const message: PushMessage = {
       notificationId: args.messageId,
       type: "conversation_message",
       actorId: args.senderUserId,
       actorLabel,
-      recipientLanguage: recipient.pageLanguage?.trim() || recipient.language?.trim() || "en",
+      recipientLanguage,
       messagePreview,
       sessionKey: args.sessionKey,
+      ...(channelId ? { conversationId: channelId } : {}),
+      ...(navigationUrl ? { navigationUrl } : {}),
     };
     for (const target of recipient.pushTokens as PushTarget[]) {
       targetEntries.push({
