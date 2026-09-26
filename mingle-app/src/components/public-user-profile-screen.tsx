@@ -700,7 +700,7 @@ export default function PublicUserProfileScreen({
                 <textarea
                   value={reportMessage}
                   onChange={(event) => setReportMessage(event.target.value)}
-                  maxLength={4000}
+                  maxLength={500}
                   rows={4}
                   placeholder={copy.reportMessagePlaceholder}
                   className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-[14px] leading-relaxed outline-none focus:border-gray-400"
