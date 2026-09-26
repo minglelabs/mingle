@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkVisit,
   createDwellAccumulator,
+  createVisitState,
   currentDwellMs,
   evaluateSeen,
+  pauseVisit,
+  remainingVisitMs,
+  resumeVisit,
   SEEN_DWELL_MS,
+  setActivePost,
   startInterval,
   stopInterval,
 } from "./view-dwell";
@@ -52,5 +58,57 @@ describe("view-dwell", () => {
     acc = startInterval(acc, 0);
     const same = startInterval(acc, 300);
     expect(same.activeSince).toBe(0);
+  });
+});
+
+describe("view-dwell visits (1s within one visit)", () => {
+  it("does not sum two separate 0.6s visits", () => {
+    let step = setActivePost(createVisitState(), "p1", 0);
+    step = setActivePost(step.state, "p2", 600); // leave p1 after 0.6s
+    expect(step.seenPostId).toBeNull();
+    step = setActivePost(step.state, "p1", 1_000); // come back: new visit
+    step = setActivePost(step.state, "p2", 1_600); // another 0.6s
+    expect(step.seenPostId).toBeNull();
+    expect(checkVisit(step.state, 1_600).seenPostId).toBeNull();
+  });
+
+  it("reports once a single visit reaches 1s", () => {
+    const step = setActivePost(createVisitState(), "p1", 0);
+    expect(remainingVisitMs(step.state, 400)).toBe(600);
+    expect(checkVisit(step.state, 999).seenPostId).toBeNull();
+    const seen = checkVisit(step.state, SEEN_DWELL_MS);
+    expect(seen.seenPostId).toBe("p1");
+    expect(checkVisit(seen.state, 5_000).seenPostId).toBeNull();
+  });
+
+  it("reports on leaving when the visit was long enough", () => {
+    const step = setActivePost(createVisitState(), "p1", 0);
+    expect(setActivePost(step.state, "p2", 1_200).seenPostId).toBe("p1");
+  });
+
+  it("pauses during an overlay (active=null) and resumes on the same card", () => {
+    let step = setActivePost(createVisitState(), "p1", 0);
+    step = setActivePost(step.state, null, 600); // overlay opens
+    expect(remainingVisitMs(step.state, 5_000)).toBeNull(); // not counting
+    step = setActivePost(step.state, "p1", 9_000); // overlay closes
+    expect(checkVisit(step.state, 9_300).seenPostId).toBeNull(); // 900ms
+    expect(checkVisit(step.state, 9_400).seenPostId).toBe("p1"); // 1000ms
+  });
+
+  it("pauses in the background and resumes in the foreground", () => {
+    let step = setActivePost(createVisitState(), "p1", 0);
+    step = pauseVisit(step.state, 700); // hidden
+    const resumed = resumeVisit(step.state, 60_000); // visible again
+    expect(checkVisit(resumed, 60_200).seenPostId).toBeNull();
+    expect(checkVisit(resumed, 60_300).seenPostId).toBe("p1");
+  });
+
+  it("an overlay then a different card drops the paused visit", () => {
+    let step = setActivePost(createVisitState(), "p1", 0);
+    step = setActivePost(step.state, null, 700);
+    step = setActivePost(step.state, "p2", 800);
+    expect(step.state.postId).toBe("p2");
+    step = setActivePost(step.state, "p1", 1_000);
+    expect(checkVisit(step.state, 1_500).seenPostId).toBeNull();
   });
 });
