@@ -37,9 +37,9 @@ export type UnifiedSearchProps = {
   onOpenSearchPost: (query: string, postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
-  /** Controlled query so the parent can restore it on back-navigation. */
-  query: string;
-  onQueryChange: (query: string) => void;
+  /** Controlled query so the parent can restore it on back-navigation. Omit for uncontrolled. */
+  query?: string;
+  onQueryChange?: (query: string) => void;
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
 };
 
@@ -50,11 +50,14 @@ export default function UnifiedSearch({
   onOpenPerson,
   onOpenSearchPost,
   onSeeAllPeople,
-  query,
-  onQueryChange,
+  query: controlledQuery,
+  onQueryChange: controlledOnQueryChange,
   scrollContainerRef,
 }: UnifiedSearchProps) {
   const copy = searchCopy(locale);
+  const [internalQuery, setInternalQuery] = useState("");
+  const query = controlledQuery ?? internalQuery;
+  const onQueryChange = controlledOnQueryChange ?? setInternalQuery;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const composingRef = useRef(false);
   const searchSeqRef = useRef(0);

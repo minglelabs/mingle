@@ -15,6 +15,7 @@ import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileLocation from "@/components/profile-location";
+import ProfilePostGrid from "@/components/search/profile-post-grid";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
@@ -2328,6 +2329,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             </button>
           </div>
         </section>
+
+        {sessionUserId ? (
+          <section className="border-t border-gray-100 pt-0.5">
+            <ProfilePostGrid locale={locale} authorId={sessionUserId} />
+          </section>
+        ) : null}
 
       </div>
 
