@@ -76,6 +76,9 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
   const [phase, setPhase] = useState<LoadPhase>("idle");
   const [nodes, setNodes] = useState<CommentNode[]>([]);
   const [commentCount, setCommentCount] = useState<number>(0);
+  // The language the server displays comments in (the viewer's saved default,
+  // else the UI locale). "See translation" requests exactly this language.
+  const [serverDisplayLanguage, setServerDisplayLanguage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<Notice>(null);
   const [sending, setSending] = useState(false);
@@ -94,15 +97,16 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
 
   const load = useCallback(async () => {
     setPhase("loading");
-    const res = await api.fetchComments(postId);
+    const res = await api.fetchComments(postId, { displayLanguage: viewerLanguage });
     if (!res.ok) {
       setPhase("error");
       return;
     }
     setNodes(toNodes(res.comments));
     setCommentCount(res.commentCount);
+    setServerDisplayLanguage(res.displayLanguage ?? null);
     setPhase("ready");
-  }, [postId]);
+  }, [postId, viewerLanguage]);
 
   // Load when opened; reset when closed.
   useEffect(() => {
@@ -340,17 +344,18 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         return;
       }
       if (node.translation && node.translation.state === "pending") return;
-      if (!viewerLanguage) return;
+      const targetLanguage = serverDisplayLanguage || viewerLanguage;
+      if (!targetLanguage) return;
 
       setNodes((n) => setTranslation(n, id, { state: "pending", text: null, showing: false }));
-      const res = await api.translateComment(id, viewerLanguage);
+      const res = await api.translateComment(id, targetLanguage);
       if (!res.ok || res.status === "failed" || !res.text) {
         setNodes((n) => setTranslation(n, id, { state: "failed", text: null, showing: false }));
         return;
       }
       setNodes((n) => setTranslation(n, id, { state: "ready", text: res.text, showing: true }));
     },
-    [nodes, viewerLanguage],
+    [nodes, serverDisplayLanguage, viewerLanguage],
   );
 
   const startReply = useCallback((target: NonNullable<ReplyTarget>) => {

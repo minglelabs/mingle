@@ -55,6 +55,8 @@ export type CommentThreadDto = CommentDto & {
 export type CommentListResponse = {
   comments: CommentThreadDto[]
   commentCount: number
+  /** The language the server displays comments in; "See translation" requests this one. */
+  displayLanguage: string | null
 }
 
 /** Client working copy — a thread we can mutate optimistically. */

@@ -12,6 +12,7 @@ import { prismaTranslationDeps } from '@/server/posts/post-translation-repositor
 import { resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { resolveDisplayLanguage } from '@/server/posts/feed-post-serializer'
 
 export const runtime = 'nodejs'
 
@@ -83,8 +84,9 @@ export async function GET(request: NextRequest, context: Ctx) {
       : [],
   )
 
-  // Resolve the viewer's default display language (drives translationState).
-  const displayLanguage = userId
+  // Resolve the display language with the same rule as posts: the viewer's
+  // saved default first, the request's `displayLanguage` (UI locale) otherwise.
+  const viewerDefaultDisplayLanguage = userId
     ? (
         await prisma.user.findUnique({
           where: { id: userId },
@@ -92,7 +94,11 @@ export async function GET(request: NextRequest, context: Ctx) {
         })
       )?.defaultDisplayLanguage ?? null
     : null
-  const canonicalDisplay = displayLanguage ? canonicalizeTranslationLanguageCode(displayLanguage) : ''
+  const displayLanguage = resolveDisplayLanguage(
+    request.nextUrl.searchParams.get('displayLanguage'),
+    viewerDefaultDisplayLanguage,
+  )
+  const canonicalDisplay = displayLanguage ?? ''
 
   // Build threaded response: top-level first, replies grouped under parent.
   //
@@ -188,7 +194,7 @@ export async function GET(request: NextRequest, context: Ctx) {
   // `commentCount` is the post's own counter, so the sheet can report the
   // authoritative count to the feed card (onCommentCountChange) even when a
   // create/delete response does not carry it.
-  return json({ comments: result, commentCount: post.commentCount })
+  return json({ comments: result, commentCount: post.commentCount, displayLanguage })
 }
 
 /**

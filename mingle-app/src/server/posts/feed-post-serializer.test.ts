@@ -42,14 +42,14 @@ function makeCtx(overrides: Partial<SerializerContext> = {}): SerializerContext 
 }
 
 describe('resolveDisplayLanguage', () => {
-  it('prefers the request query when it canonicalizes', () => {
-    expect(resolveDisplayLanguage('ko-KR', 'ja')).toBe('ko')
+  it("prefers the viewer's saved default display language over the request", () => {
+    expect(resolveDisplayLanguage('ko-KR', 'ja')).toBe('ja')
   })
-  it('falls back to the viewer default when the query is absent', () => {
-    expect(resolveDisplayLanguage(null, 'ja')).toBe('ja')
+  it('uses the request when the viewer has no saved default (e.g. signed out)', () => {
+    expect(resolveDisplayLanguage('ko-KR', null)).toBe('ko')
   })
-  it('falls back to the default when the query does not canonicalize', () => {
-    expect(resolveDisplayLanguage('zzz', 'fr')).toBe('fr')
+  it('falls back to the request when the saved default does not canonicalize', () => {
+    expect(resolveDisplayLanguage('fr', 'zzz')).toBe('fr')
   })
   it('returns null when neither yields a supported code', () => {
     expect(resolveDisplayLanguage(null, null)).toBeNull()

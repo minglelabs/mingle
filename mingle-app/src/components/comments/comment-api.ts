@@ -58,8 +58,15 @@ async function requestJson<T>(input: string, init: RequestInit): Promise<ApiResu
 
 // ─── List ────────────────────────────────────────────────────────────────────
 
-export async function fetchComments(postId: string): Promise<ApiResult<CommentListResponse>> {
-  return requestJson<CommentListResponse>(buildClientApiPath(commentsPath(postId)), { method: 'GET' })
+export async function fetchComments(
+  postId: string,
+  options?: { displayLanguage?: string | null },
+): Promise<ApiResult<CommentListResponse>> {
+  const fallback = options?.displayLanguage?.trim()
+  const query = fallback ? `?${new URLSearchParams({ displayLanguage: fallback }).toString()}` : ''
+  return requestJson<CommentListResponse>(buildClientApiPath(`${commentsPath(postId)}${query}` as `/${string}`), {
+    method: 'GET',
+  })
 }
 
 // ─── Create ──────────────────────────────────────────────────────────────────

@@ -103,12 +103,16 @@ export function resolveDisplayLanguage(
   rawDisplayLanguage: string | null,
   viewerDefaultDisplayLanguage: string | null,
 ): string | null {
-  const fromQuery = rawDisplayLanguage ? canonicalizeTranslationLanguageCode(rawDisplayLanguage) : ''
-  if (fromQuery) return fromQuery
+  // The planning rule: posts and comments use the same default display language
+  // the viewer set for collapsed conversation bubbles (User.defaultDisplayLanguage).
+  // The request value (the client's UI locale) only fills in when there is no
+  // saved setting — a signed-out reader, or an account that never chose one.
   const fromDefault = viewerDefaultDisplayLanguage
     ? canonicalizeTranslationLanguageCode(viewerDefaultDisplayLanguage)
     : ''
-  return fromDefault || null
+  if (fromDefault) return fromDefault
+  const fromRequest = rawDisplayLanguage ? canonicalizeTranslationLanguageCode(rawDisplayLanguage) : ''
+  return fromRequest || null
 }
 
 // ---------------------------------------------------------------------------
