@@ -91,6 +91,7 @@ import {
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import { composeCopy } from "@/i18n/compose-copy";
+import OfficialBadge from "@/components/posts/official-badge";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -117,6 +118,8 @@ type ProfileRecord = {
   birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
+  /** Operator / official account; absent means false. */
+  isOfficial?: boolean;
 };
 
 type ProfileDraft = {
@@ -2019,6 +2022,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
+          isOfficial: data.isOfficial === true,
         });
       })
       .catch(() => {
@@ -2419,7 +2423,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+            <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
+              <span className="truncate">{name}</span>
+              {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+            </p>
             {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}

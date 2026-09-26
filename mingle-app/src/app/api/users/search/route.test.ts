@@ -94,9 +94,26 @@ describe("/api/users/search route", () => {
         imageCropScale: true,
         imageCropX: true,
         imageCropY: true,
+        isOfficial: true,
         followerRelations: { where: { followerId: "user_123" }, select: { followerId: true }, take: 1 },
       },
     });
+  });
+
+  it("marks only official accounts with isOfficial in the result rows", async () => {
+    mockQueryRaw.mockResolvedValue([
+      { id: "official", tier: 0, updatedAt: new Date("2026-09-09T00:00:00.000Z") },
+      { id: "member", tier: 1, updatedAt: new Date("2026-09-08T00:00:00.000Z") },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { id: "official", handle: "mingle", name: "Mingle", image: null, isOfficial: true, followerRelations: [] },
+      { id: "member", handle: "mingle.fan", name: "Fan", image: null, isOfficial: false, followerRelations: [] },
+    ]);
+
+    const payload = await (await GET(new NextRequest("https://example.com/api/users/search?q=mingle"))).json();
+
+    expect(payload.users[0]).toMatchObject({ id: "official", isOfficial: true });
+    expect(payload.users[1]).not.toHaveProperty("isOfficial");
   });
 
   it("orders by tier then recency across the whole match set, in SQL", async () => {

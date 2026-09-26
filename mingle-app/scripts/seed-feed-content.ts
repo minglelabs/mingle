@@ -8,7 +8,8 @@
  * Flags:
  *   --apply                       write posts (default is a read-only dry-run)
  *   --author-user-id <id>         author account id (default: look up handle mingle_team)
- *   --create-author               create the mingle_team account when it does not exist
+ *   --create-author               create the mingle_team account (as an official account) when it does not exist
+ *   --mark-official               mark the existing author account as official (User.isOfficial) and exit; no posts
  *   --i-know-this-is-production   allow a DATABASE_URL whose host is not localhost/127.0.0.1
  *   --no-db                       dry-run without touching the DB (content check + plan only)
  *   --content <path>              alternative content file (default content/feed-seed/posts.v1.json)
@@ -23,6 +24,7 @@ import {
   productionGuardError,
   validateSeedContent,
   planSeed,
+  planMarkOfficial,
   publishOrder,
   summarizeByLanguage,
   previewText,
@@ -36,7 +38,7 @@ import {
 
 const DEFAULT_CONTENT_PATH = resolve(process.cwd(), 'content/feed-seed/posts.v1.json')
 
-const HELP = `Usage: node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs [--apply] [--author-user-id <id>] [--create-author] [--i-know-this-is-production] [--no-db] [--content <path>]`
+const HELP = `Usage: node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs [--apply] [--author-user-id <id>] [--create-author] [--mark-official] [--i-know-this-is-production] [--no-db] [--content <path>]`
 
 function loadContent(path: string): SeedContent {
   const raw: unknown = JSON.parse(readFileSync(path, 'utf8'))
@@ -97,12 +99,34 @@ async function main(): Promise<number> {
     const author = options.authorUserId
       ? await prisma.user.findUnique({
           where: { id: options.authorUserId },
-          select: { id: true, handle: true, name: true, isDeleted: true, moderationRestrictedAt: true },
+          select: { id: true, handle: true, name: true, isDeleted: true, moderationRestrictedAt: true, isOfficial: true },
         })
       : await prisma.user.findUnique({
           where: { handle },
-          select: { id: true, handle: true, name: true, isDeleted: true, moderationRestrictedAt: true },
+          select: { id: true, handle: true, name: true, isDeleted: true, moderationRestrictedAt: true, isOfficial: true },
         })
+
+    if (options.markOfficial) {
+      // Operator step (spec 84): flag an existing account so its posts,
+      // comments and profile carry the "Official" badge. Display only.
+      const action = planMarkOfficial(author)
+      if (action === 'not-found') {
+        console.error(`[seed-feed] refused: account ${options.authorUserId ?? `@${handle}`} not found`)
+        return 2
+      }
+      if (!author) return 2
+      if (action === 'already-official') {
+        console.log(`[seed-feed] author id=${author.id} handle=@${author.handle} is already official. Nothing to do.`)
+        return 0
+      }
+      if (!options.apply) {
+        console.log(`[seed-feed] dry-run: would mark id=${author.id} handle=@${author.handle} as official. Re-run with --apply to write.`)
+        return 0
+      }
+      await prisma.user.update({ where: { id: author.id }, data: { isOfficial: true }, select: { id: true } })
+      console.log(`[seed-feed] marked id=${author.id} handle=@${author.handle} as official.`)
+      return 0
+    }
 
     if (options.authorUserId && !author) {
       console.error(`[seed-feed] refused: no user with id ${options.authorUserId}`)
@@ -117,9 +141,12 @@ async function main(): Promise<number> {
       return 2
     }
     if (author) {
-      console.log(`[seed-feed] author id=${author.id} handle=@${author.handle} name=${author.name ?? '(none)'}`)
+      console.log(`[seed-feed] author id=${author.id} handle=@${author.handle} name=${author.name ?? '(none)'} official=${author.isOfficial}`)
+      if (!author.isOfficial) {
+        console.log('[seed-feed] note: the author is not marked official; run with --mark-official to show the "Official" badge.')
+      }
     } else if (options.createAuthor) {
-      console.log(`[seed-feed] author @${handle} not found → ${options.apply ? 'will be created' : 'would be created'} (name "${content.authorDisplayName || SEED_DEFAULT_AUTHOR_NAME}")`)
+      console.log(`[seed-feed] author @${handle} not found → ${options.apply ? 'will be created' : 'would be created'} as official (name "${content.authorDisplayName || SEED_DEFAULT_AUTHOR_NAME}")`)
     } else {
       console.error(`[seed-feed] author @${handle} not found. Pass --author-user-id <id> or --create-author.`)
       if (options.apply) return 2
@@ -143,7 +170,9 @@ async function main(): Promise<number> {
       author?.id ??
       (
         await prisma.user.create({
-          data: { handle, name: content.authorDisplayName || SEED_DEFAULT_AUTHOR_NAME },
+          // The seed author is the operator account: created as official so its
+          // posts carry the "Official" badge (spec 84).
+          data: { handle, name: content.authorDisplayName || SEED_DEFAULT_AUTHOR_NAME, isOfficial: true },
           select: { id: true },
         })
       ).id

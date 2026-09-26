@@ -146,6 +146,7 @@ export default function SearchPeopleScreen({ locale, query, onOpenPerson, onBack
               <PersonRow
                 key={person.id}
                 person={person}
+                locale={locale}
                 labels={{ userFallback: copy.userFallback, follow: copy.follow, following: copy.following }}
                 onOpen={onOpenPerson}
                 canFollow={Boolean(currentUserId) && person.id !== currentUserId}

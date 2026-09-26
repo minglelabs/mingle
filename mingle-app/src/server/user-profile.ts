@@ -28,6 +28,7 @@ export const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  isOfficial: true,
   _count: {
     select: {
       followerRelations: {
@@ -58,6 +59,8 @@ type SelectedUserProfile = {
   locationCity: string | null;
   locationCountry: string | null;
   locationCountryCode: string | null;
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  isOfficial?: boolean | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -80,6 +83,8 @@ export type UserProfile = {
   location: UserProfileLocation | null;
   followersCount: number;
   followingCount: number;
+  /** Operator / official account; present (true) only for official accounts. */
+  isOfficial?: boolean;
 };
 
 export function serializeUserProfile(profile: SelectedUserProfile): UserProfile {
@@ -101,6 +106,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     locationCity,
     locationCountry,
     locationCountryCode,
+    isOfficial,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -136,6 +142,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     location,
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
+    ...(isOfficial === true ? { isOfficial: true } : {}),
   };
 }
 

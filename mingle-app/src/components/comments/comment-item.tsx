@@ -9,6 +9,7 @@ import type { CommentNode } from "./comment-types";
 import type { WriteOutcome } from "./use-comment-sheet";
 import CommentBody from "./comment-body";
 import CommentMenu from "./comment-menu";
+import OfficialBadge from "@/components/posts/official-badge";
 
 export type CommentItemHandlers = {
   onToggleLike: (id: string) => void;
@@ -120,6 +121,9 @@ export default function CommentItem({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <span className="text-[14px] font-semibold text-foreground">{name}</span>
+            {comment.author.isOfficial === true && (
+              <OfficialBadge locale={locale} tone="dark" className="ml-1 align-[1px]" />
+            )}
             {comment.edited && !comment.isDeleted && (
               <span className="ml-1 text-[12px] text-muted-foreground">{copy.edited}</span>
             )}

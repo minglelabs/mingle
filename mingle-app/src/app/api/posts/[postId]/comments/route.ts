@@ -65,7 +65,7 @@ export async function GET(request: NextRequest, context: Ctx) {
     where: visibleCommentsWhere(postId, userId),
     orderBy: { createdAt: 'asc' },
     include: {
-      author: { select: { id: true, handle: true, name: true, image: true } },
+      author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
       replyToUser: { select: { id: true, handle: true, name: true } },
       _count: { select: { replies: true } },
       translations: {
@@ -181,7 +181,14 @@ export async function GET(request: NextRequest, context: Ctx) {
       edited: !isDeleted && c.bodyVersion > 1,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
-      author: { id: c.author.id, handle: c.author.handle, name: c.author.name, image: c.author.image },
+      author: {
+        id: c.author.id,
+        handle: c.author.handle,
+        name: c.author.name,
+        image: c.author.image,
+        // Official (operator) accounts only; absent means false, as on posts.
+        ...(c.author.isOfficial === true ? { isOfficial: true } : {}),
+      },
       replyToUser: c.replyToUser ? { id: c.replyToUser.id, handle: c.replyToUser.handle, name: c.replyToUser.name } : null,
       // Live replies only: this drives the "N replies" affordance, so counting
       // deleted rows would promise replies the client never receives.

@@ -23,13 +23,18 @@ node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --apply -
 
 # 이미 있는 운영 계정을 쓸 때
 node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --apply --author-user-id <userId>
+
+# 이미 있는 계정을 공식 계정으로 지정 (게시물은 올리지 않고 종료)
+node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --mark-official --author-user-id <userId>          # dry-run
+node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --mark-official --author-user-id <userId> --apply  # 실제 지정
 ```
 
 | 플래그 | 의미 |
 | --- | --- |
 | `--apply` | 실제로 씁니다. 없으면 항상 dry-run입니다. |
 | `--author-user-id <id>` | 작성자 계정 id. 없으면 handle `mingle_team` 계정을 찾습니다. |
-| `--create-author` | `mingle_team` 계정이 없을 때만 만듭니다(표시 이름 "Mingle 팀"). 이 플래그가 없으면 계정을 만들지 않습니다. |
+| `--create-author` | `mingle_team` 계정이 없을 때만 만듭니다(표시 이름 "Mingle 팀", 공식 계정으로 생성). 이 플래그가 없으면 계정을 만들지 않습니다. |
+| `--mark-official` | 이미 있는 작성자 계정(`--author-user-id` 또는 handle `mingle_team`)을 공식 계정(`User.isOfficial = true`)으로 지정하고 종료합니다. 게시물은 올리지 않습니다. `--apply`가 없으면 dry-run입니다. `--no-db`, `--create-author`와 함께 쓸 수 없습니다. |
 | `--i-know-this-is-production` | DATABASE_URL 호스트가 localhost/127.0.0.1이 아닐 때 필요합니다. 없으면 DB에 연결하기 전에 종료합니다(종료 코드 2). |
 | `--no-db` | DB에 연결하지 않고 검사와 목록만 보여 줍니다. `--apply`와 함께 쓸 수 없습니다. |
 | `--content <path>` | 다른 콘텐츠 파일을 씁니다. |
@@ -49,7 +54,15 @@ node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --apply -
 - `--apply`는 번역 API를 게시물당 4회(감지 1회 + 원문 언어를 뺀 3개 언어 번역) 호출합니다. 42개 기준 약 168회입니다.
 - 사실 항목(`kind: "fact"`)은 공식 출처를 `sources`에 남겼습니다. 세금 환급 조건·전화번호·운영 시간은 바뀔 수 있으니 투입 직전에 출처를 다시 확인하고 `checkedAt`을 고치세요. 특히 1330 페이지(english1.visitkorea.or.kr)는 2021년에 마지막으로 갱신되었다고 적혀 있고, 운영 시간은 Seoul Safety Nuri 페이지로도 확인했습니다.
 - 콘텐츠를 고칠 때 지킬 것: 1인칭 후기 금지("제가 받아봤는데" 등), 특정 병원·업체 추천·광고 금지, 의료 효과·안전 주장 금지, 확인할 수 없는 사실은 질문형으로. 테스트가 금지 표현·길이·언어·중복·출처를 검사하므로 고친 뒤 `npx vitest run src/server/posts/feed-seed-content.test.ts`를 돌리세요.
-- 운영 계정 배지 표시는 이번 범위가 아닙니다(스키마 변경 없음). 지금은 표시 이름 "Mingle 팀"과 handle `@mingle_team`으로만 구분됩니다.
+- 공식 계정 배지(체크리스트 84): `User.isOfficial`이 true인 계정은 게시물 카드·댓글·프로필·사람 검색에서 이름 옆에 "공식" 배지가 붙습니다. 배지는 표시만 하며 반응 수·랭킹은 바꾸지 않습니다. `--create-author`로 만든 계정은 처음부터 공식입니다. 기존 계정은 아래 절차로 지정합니다. 어드민 UI는 아직 없습니다.
+
+## 운영자 절차: 계정을 공식 계정으로 지정
+
+1. 스키마 마이그레이션 `20260926170000_add_user_official_flag`가 대상 DB에 적용됐는지 확인합니다(`npx prisma migrate deploy`).
+2. 대상 계정 id를 확인합니다. handle이 `mingle_team`이면 id 없이 실행해도 됩니다.
+3. dry-run으로 대상을 확인합니다: `node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --mark-official --author-user-id <userId>`. "would mark id=… as official"이 나오면 맞는 계정인지 봅니다. 이미 공식이면 "already official"로 끝납니다.
+4. `--apply`를 붙여 다시 실행합니다. 운영 DB는 `--i-know-this-is-production`도 필요합니다.
+5. 해제는 스크립트에 없습니다. 필요하면 DB에서 `is_official`을 false로 직접 바꿉니다.
 - 이미 올린 게시물의 본문을 파일에서 고쳐도 다시 실행할 때 바뀌지 않습니다(건너뜀). 새 글은 새 id를 붙여 추가하세요.
 
 ## 콘텐츠 요약 (42개, ko 13 / en 12 / ja 10 / zh-CN 7)

@@ -9,6 +9,7 @@ import { buildSearchAnalyticsProperties, digestAnalyticsValue, type SearchAnalyt
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
+import OfficialBadge from "@/components/posts/official-badge";
 
 /** Request headers the legacy connect search sent, for PostHog attribution. */
 export function buildConnectTrackingHeaders(): Record<string, string> {
@@ -124,8 +125,10 @@ export function PersonRow({
   onToggleFollow,
   className = "px-4 py-2.5",
   trailing,
+  locale,
 }: {
-  person: ConnectSearchResult;
+  /** `isOfficial` rides along from `/api/users/search` (absent means false). */
+  person: ConnectSearchResult & { isOfficial?: boolean };
   labels: PersonRowLabels;
   onOpen: (userId: string) => void;
   canFollow: boolean;
@@ -133,6 +136,8 @@ export function PersonRow({
   onToggleFollow: () => void;
   className?: string;
   trailing?: ReactNode;
+  /** UI locale for the official-account badge label. */
+  locale: string;
 }) {
   const profileName = person.name?.trim() || "";
   const rawHandle = person.handle?.trim() || "";
@@ -168,7 +173,10 @@ export function PersonRow({
             )}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold text-slate-900">{name}</span>
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="block truncate text-[15px] font-semibold text-slate-900">{name}</span>
+              {person.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+            </span>
             {showHandle ? <span className="block truncate text-[13px] text-gray-500">{formattedHandle}</span> : null}
           </span>
         </button>

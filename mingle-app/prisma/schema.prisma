@@ -73,6 +73,8 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
+  /// Operator / official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts.
+  isOfficial                   Boolean   @default(false) @map("is_official")
   firstSeenAt                  DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt                   DateTime  @default(now()) @map("last_seen_at")
   createdAt                    DateTime  @default(now()) @map("created_at")

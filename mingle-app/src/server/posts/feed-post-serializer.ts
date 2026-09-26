@@ -30,6 +30,11 @@ export type SerializerAuthorRow = {
   handle: string
   name: string | null
   image: string | null
+  /**
+   * Operator / official account flag. Optional so a caller whose `select`
+   * predates the column still type-checks; missing reads as not official.
+   */
+  isOfficial?: boolean | null
 }
 
 /**
@@ -221,6 +226,8 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
       handle: post.author.handle,
       name: post.author.name,
       imageUrl: post.author.image,
+      // Only official accounts carry the flag; absent on the wire means false.
+      ...(post.author.isOfficial === true ? { isOfficial: true } : {}),
     },
     sourceText: post.sourceText ?? '',
     sourceLanguage: post.sourceLanguage,

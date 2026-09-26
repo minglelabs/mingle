@@ -374,6 +374,7 @@ export default function UnifiedSearch({
                     <PersonRow
                       key={person.id}
                       person={person}
+                      locale={locale}
                       labels={{ userFallback: copy.userFallback, follow: copy.follow, following: copy.following }}
                       onOpen={openPerson}
                       canFollow={Boolean(currentUserId) && person.id !== currentUserId}

@@ -12,6 +12,8 @@ export type CommentAuthor = {
   handle: string
   name: string | null
   image: string | null
+  /** Operator / official account; absent means false (same as post authors). */
+  isOfficial?: boolean
 }
 
 export type CommentReplyToUser = {
