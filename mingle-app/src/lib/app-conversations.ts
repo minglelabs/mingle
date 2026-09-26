@@ -2414,28 +2414,76 @@ export async function inviteMembersToConversationChannel(args: {
     where: { id: { in: newInviteeUserIds } },
     select: { id: true },
   });
+  const targetUserIds = new Set(targetUsers.map((user) => user.id));
   if (targetUsers.length !== newInviteeUserIds.length) {
     throw new Error("target_user_not_found");
   }
 
   const record = await prisma.$transaction(async (tx) => {
+    // Serialize against concurrent share-joins and other invites on the same
+    // row: take the same FOR UPDATE lock joinConversationChannelViaShareToken
+    // uses, then recompute dedupe/capacity from the LOCKED read. The outside
+    // pre-checks above are only fast-fail — a share-join that filled the last
+    // seat (or added/removed a pending entry) between that read and this lock
+    // would otherwise let a stale [...existing.pendingInviteeUserIds] write
+    // overflow MAX_CONVERSATION_MEMBERS or resurrect a member who just joined
+    // via the link and was pulled out of pending.
+    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+
+    const freshChannel = await tx.appConversationChannel.findFirst({
+      where: {
+        id: args.conversationId,
+        ...buildVisibleMembershipWhere(args.userId),
+        ...buildVisibleConversationWhere(),
+      },
+      select: { id: true, pendingInviteeUserIds: true },
+    });
+    if (!freshChannel) return null;
+
+    const freshMembers = await tx.appConversationChannelMember.findMany({
+      where: { channelId: freshChannel.id },
+      select: { userId: true, leftAt: true },
+    });
+    const freshActiveMemberUserIds = freshMembers
+      .filter((member) => !member.leftAt)
+      .map((member) => member.userId);
+    const freshExistingUserIds = new Set([
+      ...freshActiveMemberUserIds,
+      ...freshChannel.pendingInviteeUserIds,
+    ]);
+
+    // Recompute from the locked read, and keep the written ids a subset of
+    // what already passed the block check (newInviteeUserIds) and the
+    // target-user existence check (targetUserIds).
+    const freshNewInviteeUserIds = newInviteeUserIds.filter(
+      (id) => !freshExistingUserIds.has(id) && targetUserIds.has(id),
+    );
+    if (freshNewInviteeUserIds.length === 0) {
+      throw new Error("already_members");
+    }
+    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+      throw new Error("too_many_invitees");
+    }
+
     const updated = await tx.appConversationChannel.update({
-      where: { id: args.conversationId },
+      where: { id: freshChannel.id },
       data: {
         // Same "no membership row until they send/receive via materialization"
         // treatment as a fresh room's invitees — see the field's doc comment
-        // and materializePendingConversationInvitees.
-        pendingInviteeUserIds: [...existing.pendingInviteeUserIds, ...newInviteeUserIds],
+        // and materializePendingConversationInvitees. Built from the LOCKED
+        // read so a concurrent share-join's pending mutation is preserved.
+        pendingInviteeUserIds: [...freshChannel.pendingInviteeUserIds, ...freshNewInviteeUserIds],
       },
       select: conversationChannelSelect,
     });
 
     // Written now, independent of materialization, so the "{inviter} invited
     // {invitee}" notice (see getConversationHydrationStateForUser) shows up
-    // immediately instead of waiting for the invitee's first message.
+    // immediately instead of waiting for the invitee's first message. Kept
+    // consistent with the final freshNewInviteeUserIds.
     await tx.appConversationChannelInvite.createMany({
-      data: newInviteeUserIds.map((inviteeUserId) => ({
-        channelId: args.conversationId,
+      data: freshNewInviteeUserIds.map((inviteeUserId) => ({
+        channelId: freshChannel.id,
         inviteeUserId,
         invitedByUserId: args.userId,
       })),
@@ -2444,6 +2492,10 @@ export async function inviteMembersToConversationChannel(args: {
 
     return updated;
   });
+
+  if (!record) {
+    return null;
+  }
 
   return serializeConversationChannelWithPreview(record, args.userId);
 }
