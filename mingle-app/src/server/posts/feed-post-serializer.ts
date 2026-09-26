@@ -14,7 +14,6 @@
  */
 
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
-import { buildClientApiPath } from '@/lib/api-contract'
 import type {
   FeedPostDto,
   FeedPostImageDto,
@@ -118,8 +117,11 @@ export function resolveDisplayLanguage(
 
 /**
  * Resolve the post image to its wire shape. Images live in the private post
- * image bucket and are served through the app's own `GET /posts/{id}/image`
- * route, so the URL is that namespaced client path — not a public bucket URL.
+ * image bucket and are served through the app's own `GET /api/posts/{id}/image`
+ * route, so the URL is that path — not a public bucket URL. It is deliberately
+ * the unversioned path: this runs on the server, where `buildClientApiPath`
+ * would resolve the namespace from build-time env (no browser, no platform) and
+ * could emit a namespace such as `ios/v2.0.0` that has no image route at all.
  *
  * Original pixel dimensions are not stored on the schema (no width/height
  * column), so both are null; the card keeps aspect ratio from the decoded
@@ -128,7 +130,7 @@ export function resolveDisplayLanguage(
 export function serializePostImage(postId: string, imageObjectKey: string | null): FeedPostImageDto | null {
   if (!imageObjectKey) return null
   return {
-    url: buildClientApiPath(`/posts/${encodeURIComponent(postId)}/image`),
+    url: `/api/posts/${encodeURIComponent(postId)}/image`,
     width: null,
     height: null,
   }

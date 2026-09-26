@@ -67,7 +67,7 @@ describe('serializePostImage', () => {
   it('builds the app image route path with null dimensions', () => {
     const img = serializePostImage('p 1', 'post-images/x.jpg')
     expect(img).not.toBeNull()
-    expect(img!.url).toContain('/posts/p%201/image')
+    expect(img!.url).toBe('/api/posts/p%201/image')
     expect(img!.width).toBeNull()
     expect(img!.height).toBeNull()
   })
