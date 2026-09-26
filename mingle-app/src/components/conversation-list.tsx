@@ -177,6 +177,7 @@ import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import AppTopHeader from "@/components/app-top-header";
+import ConversationSearchBar from "@/components/conversation-search-bar";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { composeHref, notificationsHref } from "@/lib/feed-routes";
@@ -5523,6 +5524,9 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
+          {showPostingHeader ? (
+            <ConversationSearchBar copy={copy} onOpen={handleOpenSearch} />
+          ) : null}
           {isHydratingConversations ? (
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
