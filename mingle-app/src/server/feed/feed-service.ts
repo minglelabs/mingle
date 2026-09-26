@@ -15,31 +15,36 @@ import {
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 50
 
-export interface FeedResult {
-  posts: Array<{
+export interface FeedResultPost {
+  id: string
+  authorId: string
+  bodyVersion: number
+  sourceText: string | null
+  sourceLanguage: string | null
+  backgroundKey: string | null
+  imageObjectKey: string | null
+  visibility: string
+  deletedAt: Date | null
+  likeCount: number
+  commentCount: number
+  publishedAt: Date
+  viewed: boolean
+  author: {
     id: string
-    authorId: string
-    sourceText: string | null
-    sourceLanguage: string | null
-    backgroundKey: string | null
+    handle: string
+    name: string | null
+    image: string | null
     imageObjectKey: string | null
-    likeCount: number
-    commentCount: number
-    publishedAt: string
-    viewed: boolean
-    author: {
-      id: string
-      handle: string
-      name: string | null
-      image: string | null
-      imageObjectKey: string | null
-    }
-  }>
+  }
+}
+
+export interface FeedResult {
+  posts: FeedResultPost[]
   nextCursor: string | null
 }
 
 export async function getFeed(
-  viewerId: string,
+  viewerId: string | null,
   rawCursor: string | null,
   rawLimit: number | null,
 ): Promise<FeedResult> {
@@ -81,10 +86,13 @@ export async function getFeed(
     select: {
       id: true,
       authorId: true,
+      bodyVersion: true,
       sourceText: true,
       sourceLanguage: true,
       backgroundKey: true,
       imageObjectKey: true,
+      visibility: true,
+      deletedAt: true,
       likeCount: true,
       commentCount: true,
       publishedAt: true,
@@ -104,18 +112,22 @@ export async function getFeed(
     return { posts: [], nextCursor: null }
   }
 
-  // Gather viewer's viewed post IDs
-  const viewedRows = await prisma.postView.findMany({
-    where: { userId: viewerId },
-    select: { postId: true },
-  })
+  // Gather viewer's viewed post IDs (signed-out readers have none)
+  const viewedRows = viewerId
+    ? await prisma.postView.findMany({
+        where: { userId: viewerId },
+        select: { postId: true },
+      })
+    : []
   const viewedPostIds = new Set(viewedRows.map((r) => r.postId))
 
-  // Gather viewer's followed author IDs
-  const followRows = await prisma.userFollow.findMany({
-    where: { followerId: viewerId },
-    select: { followingId: true },
-  })
+  // Gather viewer's followed author IDs (signed-out readers follow no one)
+  const followRows = viewerId
+    ? await prisma.userFollow.findMany({
+        where: { followerId: viewerId },
+        select: { followingId: true },
+      })
+    : []
   const followedAuthorIds = new Set(followRows.map((r) => r.followingId))
 
   // Gather unique commenter IDs per post (excluding post author, counting
@@ -187,13 +199,16 @@ export async function getFeed(
     return {
       id: p.id,
       authorId: p.authorId,
+      bodyVersion: p.bodyVersion,
       sourceText: p.sourceText,
       sourceLanguage: p.sourceLanguage,
       backgroundKey: p.backgroundKey,
       imageObjectKey: p.imageObjectKey,
+      visibility: p.visibility,
+      deletedAt: p.deletedAt,
       likeCount: p.likeCount,
       commentCount: p.commentCount,
-      publishedAt: p.publishedAt.toISOString(),
+      publishedAt: p.publishedAt,
       viewed: viewedPostIds.has(p.id),
       author: p.author,
     }

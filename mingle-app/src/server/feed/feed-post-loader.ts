@@ -19,6 +19,26 @@ import {
 } from '@/server/posts/feed-post-serializer'
 import type { FeedPostDto } from '@/lib/feed-post-dto'
 
+/**
+ * Prisma `select` producing exactly a `SerializerPostRow`. Every list endpoint
+ * uses this so the loaded shape and the serializer input never drift.
+ */
+export const feedPostRowSelect = {
+  id: true,
+  authorId: true,
+  bodyVersion: true,
+  sourceText: true,
+  sourceLanguage: true,
+  backgroundKey: true,
+  imageObjectKey: true,
+  visibility: true,
+  deletedAt: true,
+  likeCount: true,
+  commentCount: true,
+  publishedAt: true,
+  author: { select: { id: true, handle: true, name: true, image: true } },
+} as const
+
 export type LoadContextOptions = {
   viewerId: string | null
   rawDisplayLanguage: string | null
