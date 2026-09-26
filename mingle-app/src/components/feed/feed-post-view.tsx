@@ -1,16 +1,8 @@
 "use client";
 
-import type { PostBackgroundPreset } from "@/lib/post-backgrounds";
-import { getBackgroundPreset } from "@/lib/post-backgrounds";
+import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-
-const FALLBACK_BG: PostBackgroundPreset = {
-  key: "fallback",
-  background: "#1e293b",
-  textColor: "#f8fafc",
-  textShadow: "0 1px 4px rgba(0,0,0,0.4)",
-};
 
 export type FeedPostViewColors = {
   background: string;
@@ -23,7 +15,7 @@ export type FeedPostViewColors = {
 
 /** Resolve background preset → concrete colors, accounting for an image backdrop. */
 export function resolveViewColors(backgroundKey: string, hasImage: boolean): FeedPostViewColors {
-  const preset = getBackgroundPreset(backgroundKey) ?? FALLBACK_BG;
+  const preset = resolveBackgroundPreset(backgroundKey);
   return {
     background: preset.background,
     textColor: hasImage ? "#ffffff" : preset.textColor,

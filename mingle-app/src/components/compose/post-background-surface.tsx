@@ -1,6 +1,6 @@
 'use client'
 
-import { getBackgroundPreset } from '@/lib/post-backgrounds'
+import { resolveBackgroundPreset } from '@/lib/post-backgrounds'
 
 /**
  * The visual card used inside the editor and the preview: the post body drawn
@@ -22,7 +22,7 @@ export default function PostBackgroundSurface({
   placeholder?: string
   compact?: boolean
 }) {
-  const preset = (backgroundKey && getBackgroundPreset(backgroundKey)) || getBackgroundPreset('warm-cream')!
+  const preset = resolveBackgroundPreset(backgroundKey)
   const showPlaceholder = text.trim().length === 0 && !!placeholder
 
   return (

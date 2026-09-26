@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
-import { getBackgroundPreset } from "@/lib/post-backgrounds";
+import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
 import { searchCopy } from "@/i18n/search-copy";
 import { resolveGridTilePreview } from "./post-grid-tile-text";
 
@@ -27,12 +27,6 @@ export type PostGridTileProps = {
   /** Corner badge for management lists, e.g. the days left in the trash. */
   badge?: ReactNode;
 };
-
-const FALLBACK_BACKGROUND = {
-  background: "#f1f5f9",
-  textColor: "#0f172a",
-  textShadow: "none",
-} as const;
 
 export default function PostGridTile({ post, locale, onSelect, badge }: PostGridTileProps) {
   const preview = resolveGridTilePreview(post);
@@ -68,7 +62,7 @@ export default function PostGridTile({ post, locale, onSelect, badge }: PostGrid
 }
 
 function TextTile({ backgroundKey, text }: { backgroundKey: string; text: string }) {
-  const preset = getBackgroundPreset(backgroundKey) ?? FALLBACK_BACKGROUND;
+  const preset = resolveBackgroundPreset(backgroundKey);
   // Shrink type as the snippet grows so even a ~40-char body stays inside the
   // tile without clipping; short bodies read large. `line-clamp` is the final
   // guard against overflow on very narrow tiles.

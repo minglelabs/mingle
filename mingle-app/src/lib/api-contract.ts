@@ -167,6 +167,41 @@ export function buildClientApiPath(endpoint: `/${string}`): string {
   return `/api${namespacePrefix}${endpoint}`
 }
 
+/** First app release whose API namespace serves the posting feature. */
+const POSTING_FEED_MIN_VERSION = [2, 1, 0] as const
+
+/**
+ * Whether a client on this API namespace can use the posting feature (feed,
+ * compose, comments, unified notifications, post search, profile grid).
+ *
+ * The web UI is shared by every installed app version, but only namespaces from
+ * 2.1.0 on serve the posting routes: an older app (e.g. `ios/v2.0.4`, rewritten
+ * to v2.0.0) would get 404s from every posting call. The plain web client (the
+ * '' namespace) calls the unversioned routes, which always exist. Every posting
+ * entry point gates on this one rule.
+ */
+export function namespaceSupportsPostingFeed(namespace: string): boolean {
+  const normalized = normalizeApiNamespace(namespace)
+  if (!normalized) return true
+  const match = normalized.match(/^(?:android|ios)\/v(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return false
+  const version = [Number(match[1]), Number(match[2]), Number(match[3])]
+  for (let index = 0; index < POSTING_FEED_MIN_VERSION.length; index += 1) {
+    if (version[index] !== POSTING_FEED_MIN_VERSION[index]) {
+      return version[index] > POSTING_FEED_MIN_VERSION[index]
+    }
+  }
+  return true
+}
+
+/**
+ * The rule applied to this client's namespace. Resolved at module load like
+ * `clientApiNamespace`: on the server it reflects build-time env only, so a
+ * server render must not trust it for a specific app — gate on the client, or
+ * read the namespace from the request.
+ */
+export const clientSupportsPostingFeed = namespaceSupportsPostingFeed(clientApiNamespace)
+
 export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
   if (!namespace) return false

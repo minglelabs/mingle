@@ -1,9 +1,22 @@
 "use client";
 
 import { ChevronUp, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 const SWIPE_HINT_STORAGE_KEY = "mingle:feed-swipe-hint-done";
+
+function readHintDone(): boolean {
+  try {
+    return window.localStorage.getItem(SWIPE_HINT_STORAGE_KEY) === "1";
+  } catch {
+    // Storage unavailable: never nag.
+    return true;
+  }
+}
+
+const subscribeToNothing = () => () => {};
+// Server render and hydration treat the hint as done, so the markup matches.
+const readHintDoneOnServer = () => true;
 
 type SwipeHintOverlayProps = {
   /** Whether there is a next post to swipe to. */
@@ -18,21 +31,12 @@ export default function SwipeHintOverlay({
   onDismiss,
   label,
 }: SwipeHintOverlayProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!hasNextPost) return;
-    try {
-      const done = window.localStorage.getItem(SWIPE_HINT_STORAGE_KEY);
-      if (done === "1") return;
-    } catch {
-      return;
-    }
-    setVisible(true);
-  }, [hasNextPost]);
+  const hintDone = useSyncExternalStore(subscribeToNothing, readHintDone, readHintDoneOnServer);
+  const [dismissed, setDismissed] = useState(false);
+  const visible = hasNextPost && !hintDone && !dismissed;
 
   const dismiss = useCallback(() => {
-    setVisible(false);
+    setDismissed(true);
     try {
       window.localStorage.setItem(SWIPE_HINT_STORAGE_KEY, "1");
     } catch {

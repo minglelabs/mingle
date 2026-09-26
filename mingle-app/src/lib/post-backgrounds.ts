@@ -109,6 +109,15 @@ export function getBackgroundPreset(
   return PRESET_MAP.get(key);
 }
 
+/**
+ * The preset to draw for a stored key. An unknown or missing key (a preset
+ * retired from the catalog, a malformed row) falls back to the catalog's first
+ * preset, so the feed card, the grid tile and the compose preview always agree.
+ */
+export function resolveBackgroundPreset(key: string | null | undefined): PostBackgroundPreset {
+  return (key ? PRESET_MAP.get(key) : undefined) ?? PRESETS[0];
+}
+
 /** Pick a random preset. Uses `Math.random` — not crypto-grade. */
 export function getRandomBackgroundPreset(): PostBackgroundPreset {
   const index = Math.floor(Math.random() * PRESETS.length);
