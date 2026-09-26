@@ -118,6 +118,7 @@ import {
   findExistingConversationWithExactMembers,
   findOrCreateDirectConversation,
   findOrCreateDirectConversationSession,
+  getConversationHydrationStateForShare,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
   inviteMembersToConversationChannel,
@@ -3759,6 +3760,237 @@ describe("app-conversations", () => {
       });
 
       expect(blocked).toBe(true);
+    });
+  });
+
+  describe("getConversationHydrationStateForShare snapshot filtering", () => {
+    const cutoff = new Date("2026-04-12T10:00:00.000Z");
+    const sharedRecord = {
+      id: "conv-shared",
+      sequenceNumber: 1,
+      title: "Shared Room",
+      status: "active",
+      sessionKey: "session-shared",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      defaultDisplayLanguage: "en",
+      pendingInviteeUserIds: ["user-pre-invitee", "user-post-invitee"],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+      userEditedTitleAt: null,
+      shareToken: "token-snapshot",
+      shareEnabled: true,
+      sharedAt: cutoff,
+      sharedByUserId: "user-1",
+      ownerUserId: "user-1",
+    };
+
+    const channelMembers = [
+      {
+        channelId: "conv-shared",
+        userId: "user-1",
+        joinedAt: new Date("2026-04-12T08:00:00.000Z"),
+        leftAt: null,
+        role: "owner",
+        selectedLanguages: ["en"],
+        user: { name: "Alice", handle: "alice", image: "https://example.com/alice.jpg" },
+      },
+      {
+        channelId: "conv-shared",
+        userId: "user-2",
+        joinedAt: new Date("2026-04-12T08:30:00.000Z"),
+        // Left AFTER cutoff: as of cutoff, this member was still active!
+        leftAt: new Date("2026-04-12T11:00:00.000Z"),
+        role: "member",
+        selectedLanguages: ["en"],
+        user: { name: "Bob", handle: "bob", image: "https://example.com/bob.jpg" },
+      },
+      {
+        channelId: "conv-shared",
+        userId: "user-3",
+        // Joined AFTER cutoff: must not appear in snapshot members, title, or otherMembers
+        joinedAt: new Date("2026-04-12T10:30:00.000Z"),
+        leftAt: null,
+        role: "member",
+        selectedLanguages: ["en"],
+        user: { name: "Carol", handle: "carol", image: "https://example.com/carol.jpg" },
+      },
+      {
+        channelId: "conv-shared",
+        userId: "user-4",
+        // Left BEFORE cutoff: departed member notice should appear
+        joinedAt: new Date("2026-04-12T08:00:00.000Z"),
+        leftAt: new Date("2026-04-12T09:00:00.000Z"),
+        role: "member",
+        selectedLanguages: ["en"],
+        user: { name: "David", handle: "david", image: null },
+      },
+    ];
+
+    const inviteRecords = [
+      {
+        channelId: "conv-shared",
+        inviteeUserId: "user-pre-invitee",
+        invitedByUserId: "user-1",
+        createdAt: new Date("2026-04-12T09:30:00.000Z"), // <= cutoff
+      },
+      {
+        channelId: "conv-shared",
+        inviteeUserId: "user-post-invitee",
+        invitedByUserId: "user-1",
+        createdAt: new Date("2026-04-12T10:30:00.000Z"), // > cutoff
+      },
+    ];
+
+    const pendingUsers = [
+      {
+        id: "user-pre-invitee",
+        name: "Pre Invitee",
+        handle: "pre_invitee",
+        image: "https://example.com/pre.jpg",
+        defaultConversationLanguages: ["en"],
+      },
+      {
+        id: "user-post-invitee",
+        name: "Post Invitee",
+        handle: "post_invitee",
+        image: "https://example.com/post.jpg",
+        defaultConversationLanguages: ["en"],
+      },
+    ];
+
+    const preCutoffMessage = {
+      id: "msg-1",
+      clientMessageId: "client-1",
+      sourceLanguage: "en",
+      createdAt: new Date("2026-04-12T09:00:00.000Z"), // <= cutoff
+      userId: "user-1",
+      metadata: {
+        image: { width: 100, height: 100 },
+      },
+      contents: [
+        { contentType: "SOURCE", language: "en", text: "Pre cutoff message" },
+      ],
+    };
+
+    it("excludes post-cutoff invites, memberships, and leaves from public snapshot while preserving pre-cutoff content and speaker identity", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue(channelMembers);
+      mockChannelInviteFindMany.mockResolvedValue(inviteRecords);
+      mockUserFindMany.mockResolvedValue(pendingUsers);
+      mockAppMessageCount.mockResolvedValue(1);
+      mockAppMessageFindMany.mockResolvedValue([preCutoffMessage]);
+      mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 42 });
+
+      const state = await getConversationHydrationStateForShare({
+        shareToken: "token-snapshot",
+      });
+
+      expect(state).not.toBeNull();
+      expect(state?.sharedByUserId).toBe("user-1");
+      expect(state?.usageSec).toBe(42);
+
+      // Pre-cutoff utterance speaker name and image are resolved from pre-cutoff member profile
+      expect(state?.utterances).toHaveLength(1);
+      expect(state?.utterances[0].originalText).toBe("Pre cutoff message");
+      expect(state?.utterances[0].speakerName).toBe("Alice");
+      expect(state?.utterances[0].speakerUserId).toBe("user-1");
+      expect(state?.utterances[0].speakerImage).toBe("https://example.com/alice.jpg");
+      expect(state?.utterances[0].image).toEqual({
+        conversationId: "conv-shared",
+        messageId: "msg-1",
+        width: 100,
+        height: 100,
+      });
+
+      // Public snapshot safely falls back to stored title, avoiding member/rejoin privacy leaks
+      expect(state?.conversation.title).toBe("Shared Room");
+      expect(state?.conversation.title).not.toContain("Pre Invitee");
+      expect(state?.conversation.title).not.toContain("Carol");
+      expect(state?.conversation.title).not.toContain("Post Invitee");
+
+      // otherMembers must only contain pre-cutoff actual members
+      const otherMemberIds = state?.conversation.otherMembers.map((m) => m.userId);
+      expect(otherMemberIds).toContain("user-1");
+      expect(otherMemberIds).toContain("user-2");
+      expect(otherMemberIds).not.toContain("user-pre-invitee");
+      expect(otherMemberIds).not.toContain("user-3");
+      expect(otherMemberIds).not.toContain("user-post-invitee");
+
+      // inviteNotices is empty in public snapshot to avoid any leak
+      expect(state?.inviteNotices).toEqual([]);
+
+      // leaveNotices must only include pre-cutoff departure (David at 09:00), NOT Bob (left at 11:00 post-cutoff)
+      expect(state?.leaveNotices).toEqual([
+        expect.objectContaining({
+          userId: "user-4",
+          name: "David",
+          leftAtMs: new Date("2026-04-12T09:00:00.000Z").getTime(),
+        }),
+      ]);
+    });
+
+    it("leaves member-authenticated hydration untouched so post-cutoff invitees and members remain visible to room members", async () => {
+      mockFindConversationFirst.mockResolvedValue(sharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue(channelMembers);
+      mockChannelInviteFindMany.mockResolvedValue(inviteRecords);
+      mockUserFindMany.mockResolvedValue(pendingUsers);
+      mockAppMessageCount.mockResolvedValue(1);
+      mockAppMessageFindMany.mockResolvedValue([preCutoffMessage]);
+      mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 42 });
+
+      const state = await getConversationHydrationStateForUser({
+        conversationId: "conv-shared",
+        userId: "user-1",
+      });
+
+      expect(state).not.toBeNull();
+      // Member hydration includes both pre and post cutoff invites
+      expect(state?.inviteNotices).toHaveLength(2);
+      expect(state?.inviteNotices.map((n) => n.inviteeUserId)).toEqual(["user-pre-invitee", "user-post-invitee"]);
+
+      // Member hydration includes both pre and post cutoff leaves (David and Bob)
+      expect(state?.leaveNotices).toHaveLength(2);
+      expect(state?.leaveNotices.map((n) => n.userId)).toEqual(["user-2", "user-4"]);
+
+      // Member hydration title includes Carol and Post Invitee
+      expect(state?.conversation.title).toContain("Carol");
+      expect(state?.conversation.title).toContain("Post Invitee");
+
+      // Member hydration otherMembers includes Carol and Post Invitee
+      const otherMemberIds = state?.conversation.otherMembers.map((m) => m.userId);
+      expect(otherMemberIds).toContain("user-3");
+      expect(otherMemberIds).toContain("user-post-invitee");
+    });
+
+    it("treats room as solo as-of cutoff when second member only joined post-cutoff", async () => {
+      const soloSharedRecord = {
+        ...sharedRecord,
+        pendingInviteeUserIds: [],
+      };
+      // Only user-1 was joined at cutoff; user-2 joined post-cutoff
+      const soloMembers = [
+        channelMembers[0], // user-1, joined at 08:00
+        channelMembers[2], // user-3, joined at 10:30 (> 10:00 cutoff)
+      ];
+      mockFindConversationFirst.mockResolvedValue(soloSharedRecord);
+      mockChannelMemberFindMany.mockResolvedValue(soloMembers);
+      mockChannelInviteFindMany.mockResolvedValue([]);
+      mockUserFindMany.mockResolvedValue([]);
+      mockAppMessageCount.mockResolvedValue(1);
+      mockAppMessageFindMany.mockResolvedValue([preCutoffMessage]);
+      mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 10 });
+
+      const state = await getConversationHydrationStateForShare({
+        shareToken: "token-snapshot",
+      });
+
+      expect(state).not.toBeNull();
+      expect(state?.conversation.isMultiMember).toBe(false);
+      expect(state?.conversation.title).toBe("Shared Room");
+      expect(state?.conversation.otherMembers.map((m) => m.userId)).toEqual(["user-1"]);
     });
   });
 });

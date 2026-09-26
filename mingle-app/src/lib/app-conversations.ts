@@ -2740,6 +2740,7 @@ async function getConversationHydrationStateForRecord(args: {
       where: {
         sessionKey: conversationRecord.sessionKey,
         usageSec: { not: null },
+        ...(args.upperBoundCreatedAt ? { createdAt: { lte: args.upperBoundCreatedAt } } : {}),
       },
       orderBy: { createdAt: "desc" },
       select: { usageSec: true },
@@ -2789,10 +2790,39 @@ async function getConversationHydrationStateForRecord(args: {
   const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
 
-  const members = membersByChannelId.get(conversationRecord.id);
-  const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
-    .map((userId) => pendingInviteeProfileById.get(userId))
-    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+  const cutoffMs = args.upperBoundCreatedAt instanceof Date
+    && Number.isFinite(args.upperBoundCreatedAt.getTime())
+    ? args.upperBoundCreatedAt.getTime()
+    : null;
+
+  // A pending invitee's current row cannot prove they were pending at this
+  // snapshot: reinvites reuse the original invite record. Omit them publicly.
+  const effectivePendingInviteeUserIds = cutoffMs !== null
+    ? []
+    : conversationRecord.pendingInviteeUserIds;
+
+  const rawMembers = membersByChannelId.get(conversationRecord.id);
+  const members = cutoffMs !== null
+    ? (rawMembers ?? [])
+        .filter((member) => {
+          const joinedAtMs = member.joinedAt instanceof Date ? member.joinedAt.getTime() : 0;
+          return joinedAtMs <= cutoffMs;
+        })
+        .map((member) => {
+          const leftAtMs = member.leftAt instanceof Date ? member.leftAt.getTime() : null;
+          if (leftAtMs !== null && leftAtMs > cutoffMs) {
+            return { ...member, leftAt: null };
+          }
+          return member;
+        })
+    : rawMembers;
+
+  const pendingInviteeProfiles = cutoffMs !== null
+    ? []
+    : effectivePendingInviteeUserIds
+        .map((userId) => pendingInviteeProfileById.get(userId))
+        .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+
   // ACTIVE members only (unlike resolveViewerFacingTitle/resolveOtherMemberAvatars
   // below, which intentionally read the full membership history so the room
   // keeps showing a departed member's name/photo) — the conversation's own
@@ -2804,7 +2834,7 @@ async function getConversationHydrationStateForRecord(args: {
   // invited, without waiting for their first-message materialization.
   const isMultiMember = resolveEffectiveMemberCount(
     filterActiveMembers(members),
-    conversationRecord.pendingInviteeUserIds,
+    effectivePendingInviteeUserIds,
   ) >= 2;
   const realMembers = members ?? [];
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
@@ -2895,7 +2925,11 @@ async function getConversationHydrationStateForRecord(args: {
   // (see inviteMembersToConversationChannel) — so their name/handle always
   // resolve via the member map. An invitee resolves the same way once
   // materialized, or via pendingInviteeProfileById before that.
-  const inviteNotices: ConversationHydrationInviteNotice[] = inviteRecords.map((invite) => ({
+  const effectiveInviteRecords = cutoffMs !== null
+    ? []
+    : inviteRecords;
+
+  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => ({
     inviteeUserId: invite.inviteeUserId,
     inviteeName: nameByUserId.get(invite.inviteeUserId)
       ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
@@ -2920,9 +2954,9 @@ async function getConversationHydrationStateForRecord(args: {
   const latestUtterance = utterances.at(-1) ?? null;
   const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
     conversationRecord.defaultDisplayLanguage,
-    membersByChannelId.get(conversationRecord.id),
+    members,
     args.viewerUserId,
-    conversationRecord.pendingInviteeUserIds,
+    effectivePendingInviteeUserIds,
     pendingInviteeProfiles,
   );
   const latestMessagePreview = latestUtterance
@@ -2947,7 +2981,9 @@ async function getConversationHydrationStateForRecord(args: {
       undefined,
       resolveViewerFacingTitle(
         conversationRecord.title,
-        membersByChannelId.get(conversationRecord.id),
+        // Current membership cannot reconstruct every leave/rejoin interval.
+        // Use the stored title rather than deriving one from today's members.
+        cutoffMs !== null ? undefined : members,
         args.viewerUserId,
         pendingInviteeProfiles,
         conversationRecord.userEditedTitleAt,
@@ -2955,33 +2991,33 @@ async function getConversationHydrationStateForRecord(args: {
       viewerFacingDisplayLanguage,
       resolveViewerFacingStatus(
         conversationRecord.status,
-        membersByChannelId.get(conversationRecord.id),
+        members,
         args.viewerUserId,
-        conversationRecord.pendingInviteeUserIds,
+        effectivePendingInviteeUserIds,
       ),
       resolveViewerFacingPausedAt(
         conversationRecord.pausedAt,
-        membersByChannelId.get(conversationRecord.id),
+        members,
         args.viewerUserId,
-        conversationRecord.pendingInviteeUserIds,
+        effectivePendingInviteeUserIds,
       ),
       isMultiMember,
       resolveRoomLanguageUnion(
         conversationRecord.selectedLanguages,
-        membersByChannelId.get(conversationRecord.id),
-        conversationRecord.pendingInviteeUserIds,
+        members,
+        effectivePendingInviteeUserIds,
         args.viewerUserId,
         pendingInviteeProfiles,
       ),
       resolveViewerOwnSelectedLanguages(
         conversationRecord.selectedLanguages,
-        membersByChannelId.get(conversationRecord.id),
+        members,
         args.viewerUserId,
-        conversationRecord.pendingInviteeUserIds,
+        effectivePendingInviteeUserIds,
       ),
       Boolean(blockedCounterpartUserId),
       resolveOtherMemberAvatars(
-        membersByChannelId.get(conversationRecord.id),
+        members,
         args.viewerUserId,
         blockedCounterpartUserId,
         pendingInviteeProfiles,

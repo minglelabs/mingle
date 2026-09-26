@@ -6,11 +6,37 @@ import {
 
 export const runtime = "nodejs";
 
-// Fully public: no getServerSession/auth import anywhere in this file. Gates
-// on the room's shareToken existing (no on/off state) instead of a session,
-// so a viewer never needs a Mingle account. Returns a fixed snapshot —
-// messages up to the share's sharedAt cutoff — not a live feed, so this is
-// a plain single fetch with no realtime channel to mint a token for.
+/** The intentionally small, public shape consumed by the spectate UI. */
+function toPublicSpectateResponse(state: Awaited<ReturnType<typeof getConversationHydrationStateForShare>>) {
+  if (!state) return null;
+
+  return {
+    conversation: { title: state.conversation.title },
+    // The native overlay resolves the sharer's public profile from this ID.
+    sharedByUserId: state.sharedByUserId,
+    utterances: state.utterances.map((utterance, index) => ({
+      // The viewer only needs a React key; do not expose database message IDs.
+      id: `snapshot-message-${index}`,
+      originalText: utterance.originalText,
+      originalLang: utterance.originalLang,
+      targetLanguages: utterance.targetLanguages,
+      translations: utterance.translations,
+      translationFinalized: utterance.translationFinalized,
+      createdAtMs: utterance.createdAtMs,
+      speaker: utterance.speaker,
+      speakerAvatarSeed: utterance.speakerAvatarSeed,
+      speakerAvatarIndex: utterance.speakerAvatarIndex,
+      speakerName: utterance.speakerName,
+      // ChatBubble uses this only to distinguish a shared-room speaker from
+      // a solo-session diarized speaker. It is not a session credential.
+      speakerUserId: utterance.speakerUserId,
+      speakerImage: utterance.speakerImage,
+    })),
+  };
+}
+
+// Public read-only response. The lookup requires an enabled share token and
+// the response above excludes the member-only channel identity and notices.
 
 function readConversationHydrationCursor(
   request: NextRequest,
@@ -51,9 +77,10 @@ export async function getConversationSpectateStateResponse(
     ...(cursor ? { before: cursor } : {}),
   });
 
-  if (!state) {
+  const publicState = toPublicSpectateResponse(state);
+  if (!publicState) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  return NextResponse.json(state);
+  return NextResponse.json(publicState);
 }

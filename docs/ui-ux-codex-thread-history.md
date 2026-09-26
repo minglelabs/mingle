@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-09-26 - Keep public conversation previews within their sharing boundary
+
+- Surface: Public conversation-share API, browser spectate page, and native in-app share overlay.
+- Issue: The public API returned the room's internal `sessionKey` inside its member-oriented hydration payload. Legacy 1.x identity lookup accepts that value as a request header, so a share-link viewer could be identified as a room speaker and read private conversation data. The same payload included current invitations and member profiles made after the `sharedAt` cutoff, despite presenting the link as a fixed snapshot.
+- Interaction issue: Reusing the native overlay for links A and B left A's preview visible while B loaded. A request started for A could also complete after B and replace B's preview because both requests shared one cancellation flag.
+- Resolution: Allowlist only the public fields needed for spectating; exclude the room's `sessionKey`, internal room/message IDs, membership lists, and invitation/leave notices. Keep the sharer's public profile ID and speaker ID because the existing native preview uses them. Bound actual member participation and usage events at the snapshot cutoff, omit pending invitee identities (reinvites reuse an old invite record), and use the stored title instead of deriving one from current membership. Track preview results by share token, cancel superseded requests, and hide the previous room immediately while the new link loads.
+- Compatibility: Existing v2.0.4 API namespace rewrites continue to route to the v2.0.0 handlers. No native version change or Prisma migration is required.
+- Verification: All 181 web unit-test files passed (1,685 tests), including public response allowlist and snapshot cutoff regressions. Web TypeScript, targeted ESLint, and `git diff --check` passed. The request-isolation fix was reviewed at the hook/effect level; no mounted WebView or physical-device run was performed. Live database validation remains pending. Existing membership rows lose earlier leave/rejoin intervals, so this change avoids exposing that unverifiable history through the public response rather than claiming exact historical membership reconstruction.
+
 ## 2026-09-26 - Restore room membership when joining a conversation share link
 
 - Surface: The conversation-share overlay's Join action on web and native WebViews.

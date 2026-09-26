@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import type { Utterance } from '@/components/LivePhoneDemo/ChatBubble'
 
@@ -11,6 +11,12 @@ export type ConversationSpectateState = {
 }
 
 export type ConversationSpectateStatus = 'loading' | 'ready' | 'not_found'
+
+type SpectateRequestState = {
+  shareToken: string | null
+  status: ConversationSpectateStatus
+  state: ConversationSpectateState | null
+}
 
 type SpectateHydrationResponse = {
   conversation?: { title?: string }
@@ -68,69 +74,77 @@ export function useConversationSpectate(
   initialState?: ConversationSpectateState | null,
   initialNotFound?: boolean,
 ) {
-  const [status, setStatus] = useState<ConversationSpectateStatus>(
-    initialState ? 'ready' : initialNotFound ? 'not_found' : 'loading',
-  )
-  const [state, setState] = useState<ConversationSpectateState | null>(initialState ?? null)
-  const cancelledRef = useRef(false)
+  const [result, setResult] = useState<SpectateRequestState>({
+    shareToken,
+    status: initialState ? 'ready' : initialNotFound ? 'not_found' : 'loading',
+    state: initialState ?? null,
+  })
   const skipInitialFetchRef = useRef(initialState != null || initialNotFound === true)
 
-  const refresh = useCallback(async () => {
-    if (!shareToken) return
-    try {
-      const response = await fetch(
-        buildClientApiPath(`/conversations/shared/${encodeURIComponent(shareToken)}` as `/${string}`),
-        { cache: 'no-store' },
-      )
-      if (cancelledRef.current) return
-
-      if (!response.ok) {
-        setStatus('not_found')
-        return
-      }
-
-      const payload = await response.json() as SpectateHydrationResponse
-      const utterances = (payload.utterances ?? [])
-        .map(toUtterance)
-        .filter((utterance): utterance is Utterance => utterance !== null)
-
-      setState({
-        roomTitle: payload.conversation?.title?.trim() || '',
-        sharedByUserId: typeof payload.sharedByUserId === 'string' ? payload.sharedByUserId : null,
-        utterances,
-      })
-      setStatus('ready')
-    } catch {
-      if (cancelledRef.current) return
-      setStatus((previousStatus) => (previousStatus === 'ready' ? previousStatus : 'not_found'))
-    }
-  }, [shareToken])
-
-  // Deferred via queueMicrotask, matching LivePhoneDemo.tsx's persisted-
-  // preferences hydration effect, so this doesn't trip the
-  // react-hooks/set-state-in-effect rule (refresh's setState calls happen
-  // after its own await anyway, but the lint rule flags the direct call
-  // shape regardless of that internal gating).
   useEffect(() => {
-    cancelledRef.current = false
     if (skipInitialFetchRef.current) {
       skipInitialFetchRef.current = false
       return
     }
 
+    // Each link owns its own cancellation state. A previous request cannot
+    // become live again when the next link starts loading.
+    let cancelled = false
+    const controller = new AbortController()
+    const load = async (token: string) => {
+      try {
+        const response = await fetch(
+          buildClientApiPath(`/conversations/shared/${encodeURIComponent(token)}` as `/${string}`),
+          { cache: 'no-store', signal: controller.signal },
+        )
+        if (cancelled) return
+        if (!response.ok) {
+          setResult({ shareToken: token, status: 'not_found', state: null })
+          return
+        }
+
+        const payload = await response.json() as SpectateHydrationResponse
+        if (cancelled) return
+        const utterances = (payload.utterances ?? [])
+          .map(toUtterance)
+          .filter((utterance): utterance is Utterance => utterance !== null)
+        setResult({
+          shareToken: token,
+          status: 'ready',
+          state: {
+            roomTitle: payload.conversation?.title?.trim() || '',
+            sharedByUserId: typeof payload.sharedByUserId === 'string' ? payload.sharedByUserId : null,
+            utterances,
+          },
+        })
+      } catch {
+        if (!cancelled) setResult({ shareToken: token, status: 'not_found', state: null })
+      }
+    }
+
+    // Defer state updates past the effect body for react-hooks/set-state-in-effect.
     const schedule = typeof queueMicrotask === 'function'
       ? queueMicrotask
       : (callback: () => void) => { void Promise.resolve().then(callback) }
 
     schedule(() => {
-      if (cancelledRef.current) return
-      refresh().finally(() => {})
+      if (cancelled) return
+      if (!shareToken) {
+        setResult({ shareToken: null, status: 'loading', state: null })
+        return
+      }
+      setResult({ shareToken, status: 'loading', state: null })
+      void load(shareToken)
     })
 
     return () => {
-      cancelledRef.current = true
+      cancelled = true
+      controller.abort()
     }
-  }, [refresh])
+  }, [shareToken])
 
-  return { status, state }
+  // Hide the previous room during the render before the new effect starts.
+  return result.shareToken === shareToken
+    ? { status: result.status, state: result.state }
+    : { status: 'loading' as const, state: null }
 }
