@@ -1,13 +1,11 @@
-import { randomUUID } from 'node:crypto'
-import sharp from 'sharp'
 import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
-import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
-import { getPostImage } from '@/server/posts/post-image-storage'
 import { prisma } from '@/lib/prisma'
-import { ownPostWhere } from '@/server/posts/post-visibility'
-import { POST_IMAGE_MAX_BYTES, putPostImage, deletePostImage } from '@/server/posts/post-image-storage'
+import { ownPostWhere, visibleSinglePostWhere } from '@/server/posts/post-visibility'
+import { deletePostImage, getPostImage } from '@/server/posts/post-image-storage'
+import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
+import { contentLengthTooLarge, storeUploadedPostImage } from '@/server/posts/post-image-upload'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
@@ -21,6 +19,20 @@ function json(payload: object, init?: ResponseInit): NextResponse {
 
 type RouteContext = { params: Promise<{ postId: string }> }
 
+/**
+ * Delete a replaced image only when it is this author's own post-image key and
+ * nothing else (another post, a draft) still points at it.
+ */
+async function deleteReplacedImage(key: string, authorId: string, postId: string) {
+  if (!isOwnedPostImageKey(key, authorId)) return
+  const [posts, drafts] = await Promise.all([
+    prisma.post.count({ where: { imageObjectKey: key, NOT: { id: postId } } }),
+    prisma.postDraft.count({ where: { imageObjectKey: key } }),
+  ])
+  if (posts > 0 || drafts > 0) return
+  await deletePostImage(key)
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const { postId } = await context.params
   const session = await getServerSession(getAuthOptions())
@@ -29,8 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const restricted = await accountRestrictionGuard(userId)
   if (restricted) return restricted
 
-  // Size pre-check from header
-  if (Number(request.headers.get('content-length')) > POST_IMAGE_MAX_BYTES + 65536) {
+  if (contentLengthTooLarge(request.headers)) {
     return json({ error: 'image_too_large' }, { status: 413 })
   }
 
@@ -40,48 +51,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
   let form: FormData
   try { form = await request.formData() } catch { return json({ error: 'invalid_form_data' }, { status: 400 }) }
 
-  const file = form.get('file')
-  if (!(file instanceof File)
-    || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-    || !file.size
-    || file.size > POST_IMAGE_MAX_BYTES) {
-    return json({ error: 'invalid_image' }, { status: 400 })
-  }
+  const stored = await storeUploadedPostImage(form, userId)
+  if (!stored.ok) return json({ error: stored.error }, { status: stored.status })
+  const { objectKey, width, height } = stored.image
 
-  const bytes = Buffer.from(await file.arrayBuffer())
-
-  // sharp pipeline: EXIF strip + resize, preserve aspect ratio
-  let image: { data: Buffer; info: sharp.OutputInfo }
-  try {
-    const input = sharp(bytes, { limitInputPixels: 80_000_000, animated: false })
-    const info = await input.metadata()
-    if (!['jpeg', 'png', 'webp'].includes(info.format ?? '')) throw new Error('unsupported_image')
-    image = await input
-      .rotate() // auto-orient from EXIF
-      .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 85 })
-      .toBuffer({ resolveWithObject: true })
-  } catch {
-    return json({ error: 'invalid_image' }, { status: 400 })
-  }
-
-  const objectKey = `post-images/${randomUUID()}.jpg`
-
-  try {
-    await putPostImage(objectKey, image.data)
-  } catch {
-    return json({ error: 'image_upload_failed' }, { status: 503 })
-  }
-
-  // Delete previous image if one existed
   const previousKey = post.imageObjectKey
   try {
     await prisma.post.update({
       where: { id: postId },
-      data: {
-        imageObjectKey: objectKey,
-      },
+      data: { imageObjectKey: objectKey },
     })
   } catch (err) {
     await deletePostImage(objectKey).catch(() => {})
@@ -89,15 +67,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return json({ error: 'image_save_failed' }, { status: 500 })
   }
 
-  if (previousKey) {
-    deletePostImage(previousKey).catch(() => {})
+  if (previousKey && previousKey !== objectKey) {
+    deleteReplacedImage(previousKey, userId, postId).catch(() => {})
   }
 
-  return json({
-    imageObjectKey: objectKey,
-    width: image.info.width,
-    height: image.info.height,
-  }, { status: 201 })
+  return json({ imageObjectKey: objectKey, width, height }, { status: 201 })
 }
 
 export async function GET(_request: NextRequest, context: RouteContext) {
@@ -109,9 +83,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // visibility rule (blocks, hides, archive, trash, moderation) still decides.
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, viewerId || null),
-    select: { imageObjectKey: true },
+    select: { authorId: true, imageObjectKey: true },
   })
-  if (!post?.imageObjectKey) return json({ error: 'not_found' }, { status: 404 })
+  // Only ever read a key the post's author was issued, never an arbitrary
+  // object (e.g. a private conversation image) in the shared bucket.
+  if (!post?.imageObjectKey || !isOwnedPostImageKey(post.imageObjectKey, post.authorId)) {
+    return json({ error: 'not_found' }, { status: 404 })
+  }
 
   try {
     const bytes = await getPostImage(post.imageObjectKey)

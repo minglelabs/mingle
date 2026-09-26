@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { parseImageKeyInput } from '@/server/posts/post-image-keys'
 
 export const runtime = 'nodejs'
 
@@ -51,7 +52,10 @@ export async function POST(request: NextRequest) {
   const input = body as Record<string, unknown>
   const sourceText = typeof input.sourceText === 'string' ? input.sourceText : null
   const backgroundKey = typeof input.backgroundKey === 'string' ? input.backgroundKey : null
-  const imageObjectKey = typeof input.imageObjectKey === 'string' && input.imageObjectKey ? input.imageObjectKey : null
+  // Draft images come from POST /posts/images; only this user's issued keys.
+  const imageInput = parseImageKeyInput(input, userId)
+  if (imageInput.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+  const imageObjectKey = imageInput.kind === 'set' ? imageInput.key : null
 
   const draft = await prisma.postDraft.create({
     data: { authorId: userId, sourceText, backgroundKey, imageObjectKey },
@@ -83,7 +87,10 @@ export async function PATCH(request: NextRequest) {
   const data: Record<string, unknown> = {}
   if ('sourceText' in input) data.sourceText = typeof input.sourceText === 'string' ? input.sourceText : null
   if ('backgroundKey' in input) data.backgroundKey = typeof input.backgroundKey === 'string' ? input.backgroundKey : null
-  if ('imageObjectKey' in input) data.imageObjectKey = typeof input.imageObjectKey === 'string' && input.imageObjectKey ? input.imageObjectKey : null
+  const imageInput = parseImageKeyInput(input, userId)
+  if (imageInput.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+  if (imageInput.kind === 'set') data.imageObjectKey = imageInput.key
+  if (imageInput.kind === 'clear') data.imageObjectKey = null
 
   if (Object.keys(data).length === 0) return json({ error: 'no_changes' }, { status: 400 })
 

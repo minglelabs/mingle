@@ -10,7 +10,14 @@ import { randomBackgroundKey } from '@/lib/post-backgrounds'
 import { composeCopy } from '@/i18n/compose-copy'
 import ComposeEditor from './compose-editor'
 import { postPreviewText } from './draft-preview'
-import { canPublish, generateClientPostId, MAX_POST_LENGTH, type ComposeDraft } from './compose-state'
+import {
+  canPublish,
+  draftImageField,
+  draftImagePath,
+  generateClientPostId,
+  MAX_POST_LENGTH,
+  type ComposeDraft,
+} from './compose-state'
 import { startPublish } from './publish-store'
 import type { PreparedImage } from './compose-image'
 
@@ -26,7 +33,7 @@ function draftImage(draft: ComposeDraft): PendingImage {
     ? {
         kind: 'server',
         objectKey: draft.imageObjectKey,
-        url: buildClientApiPath(`/posts/${encodeURIComponent(draft.id)}/image`),
+        url: buildClientApiPath(draftImagePath(draft.id)),
         width: null,
         height: null,
       }
@@ -57,13 +64,27 @@ export default function ComposeScreen({
   const [draftId, setDraftId] = useState<string | null>(initialDraftId)
   const [text, setText] = useState('')
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
-  const [image, setImage] = useState<PendingImage>({ kind: 'none' })
+  const [image, setImageState] = useState<PendingImage>({ kind: 'none' })
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState(false)
 
   const clientPostId = useRef(generateClientPostId())
   const objectUrl = useRef<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Latest image, read at save time so a debounced autosave (or an upload that
+  // finishes later) never persists a stale image field.
+  const imageRef = useRef<PendingImage>({ kind: 'none' })
+  const latest = useRef({ text: '', backgroundKey: null as string | null })
+  const uploadSeq = useRef(0)
+
+  const setImage = useCallback((next: PendingImage) => {
+    imageRef.current = next
+    setImageState(next)
+  }, [])
+
+  useEffect(() => {
+    latest.current = { text, backgroundKey }
+  }, [text, backgroundKey])
 
   const isSignedIn = status === 'authenticated'
 
@@ -105,7 +126,7 @@ export default function ComposeScreen({
     return () => {
       cancelled = true
     }
-  }, [initialDraftId, isSignedIn])
+  }, [initialDraftId, isSignedIn, setImage])
 
   useEffect(() => {
     return () => {
@@ -118,6 +139,7 @@ export default function ComposeScreen({
   const persistDraft = useCallback(
     async (payload: { sourceText: string; backgroundKey: string | null }) => {
       if (!isSignedIn) return
+      const draftPayload = { ...payload, ...draftImageField(imageRef.current) }
       setSaving(true)
       try {
         if (draftId) {
@@ -125,14 +147,14 @@ export default function ComposeScreen({
             method: 'PATCH',
             cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ draftId, ...payload }),
+            body: JSON.stringify({ draftId, ...draftPayload }),
           })
         } else {
           const res = await fetch(buildClientApiPath('/posts/drafts'), {
             method: 'POST',
             cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(draftPayload),
           })
           if (res.ok) {
             const body = (await res.json()) as { draft: ComposeDraft }
@@ -153,12 +175,12 @@ export default function ComposeScreen({
       if (!isSignedIn) return
       if (saveTimer.current) clearTimeout(saveTimer.current)
       // Nothing to save for a brand-new empty draft.
-      if (!nextText.trim() && !nextBackground && image.kind === 'none') return
+      if (!nextText.trim() && !nextBackground && imageRef.current.kind === 'none') return
       saveTimer.current = setTimeout(() => {
         void persistDraft({ sourceText: nextText, backgroundKey: nextBackground })
       }, AUTOSAVE_DEBOUNCE_MS)
     },
-    [isSignedIn, persistDraft, image.kind],
+    [isSignedIn, persistDraft],
   )
 
   function beginNewPost() {
@@ -166,6 +188,7 @@ export default function ComposeScreen({
     setDraftId(null)
     setText('')
     setBackgroundKey(randomBackgroundKey())
+    uploadSeq.current += 1
     setImage({ kind: 'none' })
     setMode('editor')
   }
@@ -175,6 +198,7 @@ export default function ComposeScreen({
     setDraftId(draft.id)
     setText(draft.sourceText ?? '')
     setBackgroundKey(draft.backgroundKey ?? randomBackgroundKey())
+    uploadSeq.current += 1
     setImage(draftImage(draft))
     clientPostId.current = generateClientPostId()
     setMode('editor')
@@ -202,13 +226,43 @@ export default function ComposeScreen({
       URL.revokeObjectURL(objectUrl.current)
       objectUrl.current = null
     }
+    const seq = ++uploadSeq.current
     if (!prepared) {
       setImage({ kind: 'none' })
+      scheduleAutosave(latest.current.text, latest.current.backgroundKey)
       return
     }
     const url = URL.createObjectURL(prepared.file)
     objectUrl.current = url
     setImage({ kind: 'local', prepared, url })
+    if (isSignedIn) void uploadPickedImage(prepared, url, seq)
+  }
+
+  // Upload the picked photo right away so the draft can keep it by its
+  // server-issued key. On failure it stays local; publish uploads it then.
+  async function uploadPickedImage(prepared: PreparedImage, url: string, seq: number) {
+    try {
+      const form = new FormData()
+      form.append('file', prepared.file)
+      const res = await fetch(buildClientApiPath('/posts/images'), {
+        method: 'POST',
+        cache: 'no-store',
+        body: form,
+      })
+      if (!res.ok) return
+      const body = (await res.json()) as { imageObjectKey: string }
+      if (seq !== uploadSeq.current) return
+      setImage({
+        kind: 'server',
+        objectKey: body.imageObjectKey,
+        url,
+        width: prepared.originalWidth,
+        height: prepared.originalHeight,
+      })
+      scheduleAutosave(latest.current.text, latest.current.backgroundKey)
+    } catch {
+      // Keep the local image; the publish pipeline uploads it.
+    }
   }
 
   const previewUrl = image.kind === 'none' ? null : image.url
@@ -228,6 +282,7 @@ export default function ComposeScreen({
       clientPostId: clientPostId.current,
       sourceText: text.trim().length > 0 ? text : null,
       sourceLanguage: null,
+      imageObjectKey: image.kind === 'server' ? image.objectKey : null,
       imageFile: image.kind === 'local' ? image.prepared.file : null,
       imageWidth: image.kind === 'local' ? image.prepared.originalWidth : null,
       imageHeight: image.kind === 'local' ? image.prepared.originalHeight : null,

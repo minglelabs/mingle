@@ -11,6 +11,7 @@ import {
 } from '@/server/translation/post-translation-service'
 import { serializePostsPage } from '@/server/feed/feed-post-loader'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { parseImageKeyInput } from '@/server/posts/post-image-keys'
 
 export const runtime = 'nodejs'
 
@@ -75,6 +76,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const input = body as Record<string, unknown>
 
+  // A new image is attached through POST /posts/{id}/image; here only a key
+  // this author was issued (or null to remove) is accepted.
+  const imageInput = parseImageKeyInput(input, userId)
+  if (imageInput.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+
   // Detect whether the body text is actually changing.
   const hasNewText = 'sourceText' in input
   const newText = hasNewText ? (typeof input.sourceText === 'string' ? input.sourceText : null) : undefined
@@ -90,9 +96,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   // Non-body fields (image, background). These never trigger re-translation.
   const sideData: Record<string, unknown> = {}
-  if ('imageObjectKey' in input) {
-    sideData.imageObjectKey = typeof input.imageObjectKey === 'string' && input.imageObjectKey ? input.imageObjectKey : null
-  }
+  if (imageInput.kind === 'set') sideData.imageObjectKey = imageInput.key
+  if (imageInput.kind === 'clear') sideData.imageObjectKey = null
   if (input.changeBackground === true) {
     sideData.backgroundKey = randomBackgroundKey()
   }

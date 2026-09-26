@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPublish,
+  draftImageField,
+  draftImagePath,
   draftIsDirty,
   generateClientPostId,
   hasMeaningfulText,
@@ -50,5 +52,25 @@ describe('generateClientPostId', () => {
     expect(a.length).toBeGreaterThanOrEqual(12)
     expect(a.length).toBeLessThanOrEqual(128)
     expect(/^[\w-]+$/.test(a)).toBe(true)
+  })
+})
+
+describe('draftImageField', () => {
+  it('saves an uploaded image by key so the draft keeps its photo', () => {
+    expect(draftImageField({ kind: 'server', objectKey: 'post-images/u1/k.jpg' })).toEqual({
+      imageObjectKey: 'post-images/u1/k.jpg',
+    })
+  })
+
+  it('clears the stored image when the photo is removed', () => {
+    expect(draftImageField({ kind: 'none' })).toEqual({ imageObjectKey: null })
+  })
+
+  it('leaves the stored image alone while an upload is pending', () => {
+    expect(draftImageField({ kind: 'local' })).toEqual({})
+  })
+
+  it('serves a reopened draft image from the owner-only draft image route', () => {
+    expect(draftImagePath('d 1')).toBe('/posts/images?draftId=d%201')
   })
 })
