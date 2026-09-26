@@ -21,6 +21,10 @@ import {
   updateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelTitle,
+  getConversationChannelSharing,
+  setConversationShareEnabled,
+  refreshConversationShareSnapshot,
+  joinConversationChannelViaShareToken,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
@@ -552,6 +556,163 @@ export async function leaveConversationResponse(
   const response = NextResponse.json({
     leftConversationId: conversation.id,
   });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+// Any member can read current sharing status (so they know a spectate link
+// exists even if they didn't create it). Returns the bare shareToken rather
+// than a computed absolute URL: this server's view of its own request
+// origin (request.nextUrl.origin) doesn't reliably match what the caller's
+// browser actually used to reach it — e.g. behind the LAN-IP/tunnel setups
+// CLAUDE.md's iOS local-network testing section describes, where the
+// request can arrive with a Host header of "localhost" even though the
+// device reached it over the LAN. The client builds the shareable URL
+// itself from window.location.origin, the same pattern
+// profile-share-screen.tsx already uses for profile links.
+export async function getConversationShareResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const sharing = await getConversationChannelSharing({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!sharing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    shareToken: sharing.shareToken,
+    shareEnabled: sharing.shareEnabled,
+    sharedAt: sharing.sharedAt?.toISOString() ?? null,
+  });
+}
+
+// Any member can toggle sharing on/off or refresh the snapshot — see
+// setConversationShareEnabled's doc comment for why this isn't owner-only.
+// Body is exactly one of `{ enabled: boolean }` (toggle) or
+// `{ refresh: true }` (re-take the snapshot without changing on/off state).
+export async function postConversationShareResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let body: { enabled?: unknown; refresh?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const hasEnabled = typeof body.enabled === "boolean";
+  const hasRefresh = body.refresh === true;
+  if (hasEnabled === hasRefresh) {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+
+  const conversation = hasEnabled
+    ? await setConversationShareEnabled({
+        conversationId,
+        userId: resolvedUser.userId,
+        enabled: body.enabled as boolean,
+      })
+    : await refreshConversationShareSnapshot({
+        conversationId,
+        userId: resolvedUser.userId,
+      });
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({
+    conversation,
+    shareToken: conversation.shareToken,
+    shareEnabled: conversation.shareEnabled,
+  });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+// Called from NativeConversationShareOverlay's "join" button — turns the
+// current session's user into a real member of the shared room, same as
+// postConversationMembersResponse's invite acceptance, just self-initiated
+// off a shareToken instead of an inviter naming a specific userId.
+export async function postConversationShareJoinResponse(
+  request: NextRequest,
+  shareToken: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let conversation;
+  try {
+    conversation = await joinConversationChannelViaShareToken({
+      shareToken,
+      userId: resolvedUser.userId,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "room_full") {
+      return NextResponse.json({ error: "room_full" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
+    if (error instanceof Error && error.message === "target_user_not_found") {
+      return NextResponse.json({ error: "target_user_not_found" }, { status: 404 });
+    }
+    console.error("[conversations] share_join_failed", error);
+    return NextResponse.json({ error: "conversation_channel_join_conflict" }, { status: 409 });
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(conversation.sessionKey).catch(() => []);
+  await notifyConversationMessage(conversation.sessionKey, memberUserIds);
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({ conversation });
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }

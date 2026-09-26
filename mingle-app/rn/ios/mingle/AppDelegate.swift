@@ -40,6 +40,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     if let launchURL = launchOptions?[.url] as? URL {
       NativeRuntimeConfigModule.recordIncomingProfileLink(launchURL)
+      // A cold launch via URL scheme only delivers the URL here, in
+      // launchOptions — application(_:open:options:) is not additionally
+      // called for this same launch. Without this, RCTLinkingManager (and
+      // so JS's Linking.getInitialURL()/'url' event) never learns about it
+      // on cold start, even though the identical warm-start tap works fine
+      // via the open(_:options:) handler below. Feed it through the same
+      // RN-standard path here too, so cold and warm start behave the same
+      // way — and so conversation-share links (which only use this path,
+      // unlike profile links' extra pending-storage fallback) work cold too.
+      RCTLinkingManager.application(application, open: launchURL, options: [:])
     }
 
     return true

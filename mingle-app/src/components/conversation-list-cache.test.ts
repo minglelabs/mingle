@@ -50,6 +50,8 @@ function buildConversation(): ConversationChannelSummary {
     createdAt: "2026-08-14T01:00:00.000Z",
     updatedAt: "2026-08-15T12:10:00.000Z",
     pausedAt: "2026-08-15T12:11:00.000Z",
+    shareToken: null,
+    shareEnabled: false,
   };
 }
 

@@ -281,6 +281,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
       }
 
       if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+        // SOURCE and every TRANSLATION_FINAL row must land in one commit —
+        // a concurrent reader (the conversation list's own poll, not just
+        // the post-write WS notify below) can otherwise observe the message
+        // mid-write with only the source text visible and no translation
+        // yet, which is what makes the list flash original-language text
+        // before "later" flipping to the translated preview.
         const message = await prisma.$transaction(async tx => {
           // Serialize source/translation/retry writes even before the row exists.
           // Never erase or replace a persisted display-order key on an update.

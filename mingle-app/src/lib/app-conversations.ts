@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
@@ -73,6 +74,12 @@ export type ConversationChannelSummary = {
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
+  // Non-null once this room has ever been shared — see
+  // setConversationShareEnabled. The settings screen builds the shareable
+  // URL from this token whenever it's present (see conversation-share-link.ts),
+  // but only shows/links it while shareEnabled is true.
+  shareToken: string | null;
+  shareEnabled: boolean;
 };
 
 export type ConversationHydrationUtterance = {
@@ -160,6 +167,10 @@ type ConversationChannelRecord = {
   updatedAt: Date;
   pausedAt: Date | null;
   userEditedTitleAt: Date | null;
+  shareToken: string | null;
+  shareEnabled: boolean;
+  sharedAt: Date | null;
+  sharedTitle: string | null;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -181,6 +192,10 @@ const conversationChannelSelect = {
   updatedAt: true,
   pausedAt: true,
   userEditedTitleAt: true,
+  shareToken: true,
+  shareEnabled: true,
+  sharedAt: true,
+  sharedTitle: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -848,6 +863,8 @@ function serializeConversationChannel(
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
+    shareToken: record.shareToken,
+    shareEnabled: record.shareEnabled === true,
   };
 }
 
@@ -2209,6 +2226,24 @@ export async function getConversationSessionKeyForMember(args: {
   return record?.sessionKey ?? null;
 }
 
+// Any member can see whether the room is currently shared, its token, and
+// when the current snapshot was taken (so they know a link exists even if
+// they weren't the one who created or enabled it).
+export async function getConversationChannelSharing(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true },
+  });
+  return record ?? null;
+}
+
 // Marks only the caller's membership row as read. The message list remains
 // the source of truth; this timestamp is just the per-user cursor used by the
 // conversation-list unread aggregate.
@@ -2381,28 +2416,76 @@ export async function inviteMembersToConversationChannel(args: {
     where: { id: { in: newInviteeUserIds } },
     select: { id: true },
   });
+  const targetUserIds = new Set(targetUsers.map((user) => user.id));
   if (targetUsers.length !== newInviteeUserIds.length) {
     throw new Error("target_user_not_found");
   }
 
   const record = await prisma.$transaction(async (tx) => {
+    // Serialize against concurrent share-joins and other invites on the same
+    // row: take the same FOR UPDATE lock joinConversationChannelViaShareToken
+    // uses, then recompute dedupe/capacity from the LOCKED read. The outside
+    // pre-checks above are only fast-fail — a share-join that filled the last
+    // seat (or added/removed a pending entry) between that read and this lock
+    // would otherwise let a stale [...existing.pendingInviteeUserIds] write
+    // overflow MAX_CONVERSATION_MEMBERS or resurrect a member who just joined
+    // via the link and was pulled out of pending.
+    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+
+    const freshChannel = await tx.appConversationChannel.findFirst({
+      where: {
+        id: args.conversationId,
+        ...buildVisibleMembershipWhere(args.userId),
+        ...buildVisibleConversationWhere(),
+      },
+      select: { id: true, pendingInviteeUserIds: true },
+    });
+    if (!freshChannel) return null;
+
+    const freshMembers = await tx.appConversationChannelMember.findMany({
+      where: { channelId: freshChannel.id },
+      select: { userId: true, leftAt: true },
+    });
+    const freshActiveMemberUserIds = freshMembers
+      .filter((member) => !member.leftAt)
+      .map((member) => member.userId);
+    const freshExistingUserIds = new Set([
+      ...freshActiveMemberUserIds,
+      ...freshChannel.pendingInviteeUserIds,
+    ]);
+
+    // Recompute from the locked read, and keep the written ids a subset of
+    // what already passed the block check (newInviteeUserIds) and the
+    // target-user existence check (targetUserIds).
+    const freshNewInviteeUserIds = newInviteeUserIds.filter(
+      (id) => !freshExistingUserIds.has(id) && targetUserIds.has(id),
+    );
+    if (freshNewInviteeUserIds.length === 0) {
+      throw new Error("already_members");
+    }
+    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+      throw new Error("too_many_invitees");
+    }
+
     const updated = await tx.appConversationChannel.update({
-      where: { id: args.conversationId },
+      where: { id: freshChannel.id },
       data: {
         // Same "no membership row until they send/receive via materialization"
         // treatment as a fresh room's invitees — see the field's doc comment
-        // and materializePendingConversationInvitees.
-        pendingInviteeUserIds: [...existing.pendingInviteeUserIds, ...newInviteeUserIds],
+        // and materializePendingConversationInvitees. Built from the LOCKED
+        // read so a concurrent share-join's pending mutation is preserved.
+        pendingInviteeUserIds: [...freshChannel.pendingInviteeUserIds, ...freshNewInviteeUserIds],
       },
       select: conversationChannelSelect,
     });
 
     // Written now, independent of materialization, so the "{inviter} invited
     // {invitee}" notice (see getConversationHydrationStateForUser) shows up
-    // immediately instead of waiting for the invitee's first message.
+    // immediately instead of waiting for the invitee's first message. Kept
+    // consistent with the final freshNewInviteeUserIds.
     await tx.appConversationChannelInvite.createMany({
-      data: newInviteeUserIds.map((inviteeUserId) => ({
-        channelId: args.conversationId,
+      data: freshNewInviteeUserIds.map((inviteeUserId) => ({
+        channelId: freshChannel.id,
         inviteeUserId,
         invitedByUserId: args.userId,
       })),
@@ -2411,6 +2494,10 @@ export async function inviteMembersToConversationChannel(args: {
 
     return updated;
   });
+
+  if (!record) {
+    return null;
+  }
 
   return serializeConversationChannelWithPreview(record, args.userId);
 }
@@ -2433,15 +2520,257 @@ export async function getConversationHydrationStateForUser(args: {
     return null;
   }
 
+  return getConversationHydrationStateForRecord({
+    conversationRecord,
+    viewerUserId: args.userId,
+    before: args.before,
+  });
+}
+
+// Public "spectate" link lookup — gates on shareToken match AND
+// shareEnabled being true (instead of membership), so turning sharing off
+// makes the link 404 immediately, and setConversationShareEnabled mints a
+// new token on the next enable so the old one stays dead. Caps the message
+// query at the snapshot's sharedAt cutoff instead of always showing the
+// latest.
+// viewerUserId is a synthetic id that never matches a real member: every
+// "viewer-facing" resolver below (resolveViewerFacingTitle,
+// resolveOtherMemberAvatars, etc.) already degrades to its
+// room-wide/no-personalization fallback when the viewer id matches nobody,
+// which is exactly the right behavior for someone who isn't a member — e.g.
+// resolveOtherMemberAvatars ends up including every real member instead of
+// excluding "self".
+export type ConversationSpectateHydrationState = ConversationHydrationState & {
+  sharedByUserId: string | null;
+};
+
+export async function getConversationHydrationStateForShare(args: {
+  shareToken: string;
+  before?: ConversationHydrationCursor | null;
+}): Promise<ConversationSpectateHydrationState | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      shareToken: args.shareToken,
+      shareEnabled: true,
+      ...buildVisibleConversationWhere(),
+    },
+    select: { ...conversationChannelSelect, sharedByUserId: true },
+  });
+
+  if (!conversationRecord) {
+    return null;
+  }
+
+  const state = await getConversationHydrationStateForRecord({
+    conversationRecord,
+    viewerUserId: `spectator:${args.shareToken}`,
+    before: args.before,
+    upperBoundCreatedAt: conversationRecord.sharedAt,
+  });
+
+  return { ...state, sharedByUserId: conversationRecord.sharedByUserId };
+}
+
+// Turns a spectate-link viewer into a real member — same member-row shape as
+// materializePendingConversationInvitees, but written immediately instead of
+// deferred behind pendingInviteeUserIds/first-message materialization, since
+// here the joining user is the one initiating, not someone else's invitee.
+export async function joinConversationChannelViaShareToken(args: {
+  shareToken: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      shareToken: args.shareToken,
+      shareEnabled: true,
+      ...buildVisibleConversationWhere(),
+    },
+    select: { ...conversationChannelSelect, ownerUserId: true },
+  });
+  if (!conversationRecord) return null;
+
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+  const channelMembers = membersByChannelId.get(conversationRecord.id) ?? [];
+  const callerExistingMember = channelMembers.find((member) => member.userId === args.userId);
+
+  // Active idempotence: if the caller is already an active member, no-op immediately.
+  if (callerExistingMember && !callerExistingMember.leftAt) {
+    return serializeConversationChannelWithPreview(conversationRecord, args.userId);
+  }
+
+  const activeMembers = filterActiveMembers(channelMembers);
+  const initialOccupiedUserIds = new Set([
+    ...activeMembers.map((member) => member.userId),
+    ...conversationRecord.pendingInviteeUserIds,
+  ]);
+  const isInitiallyOccupied = initialOccupiedUserIds.has(args.userId);
+  const initialEffectiveCount = isInitiallyOccupied
+    ? initialOccupiedUserIds.size
+    : initialOccupiedUserIds.size + 1;
+  if (initialEffectiveCount > MAX_CONVERSATION_MEMBERS) {
+    throw new Error("room_full");
+  }
+
+  const otherUserIdsToCheck = [
+    conversationRecord.ownerUserId,
+    ...activeMembers.map((member) => member.userId),
+  ].filter((id) => id !== args.userId);
+  if (otherUserIdsToCheck.length > 0) {
+    await assertNoBlockAmong(args.userId, otherUserIdsToCheck);
+  }
+
+  const joiningUser = await prisma.user.findUnique({
+    where: { id: args.userId },
+    select: { defaultConversationLanguages: true, defaultDisplayLanguage: true },
+  });
+  if (!joiningUser) throw new Error("target_user_not_found");
+
+  const selectedLanguages = resolveDefaultConversationLanguages(joiningUser.defaultConversationLanguages);
+  const defaultDisplayLanguage = resolvePersistedDisplayLanguage(joiningUser.defaultDisplayLanguage);
+
+  const record = await prisma.$transaction(async (tx) => {
+    // Acquire row-level lock on the conversation channel to serialize concurrent joins against capacity and pending invitee updates
+    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
+
+    const freshChannel = await tx.appConversationChannel.findFirst({
+      where: {
+        id: conversationRecord.id,
+        shareToken: args.shareToken,
+        shareEnabled: true,
+        ...buildVisibleConversationWhere(),
+      },
+      select: {
+        ...conversationChannelSelect,
+        ownerUserId: true,
+      },
+    });
+    if (!freshChannel) return null;
+
+    const freshMembers = await tx.appConversationChannelMember.findMany({
+      where: { channelId: freshChannel.id },
+      select: {
+        userId: true,
+        role: true,
+        leftAt: true,
+        joinedAt: true,
+        selectedLanguages: true,
+        displayLanguage: true,
+      },
+    });
+
+    const currentCallerMember = freshMembers.find((member) => member.userId === args.userId);
+    if (currentCallerMember && !currentCallerMember.leftAt) {
+      return freshChannel;
+    }
+
+    const freshActiveMembers = freshMembers.filter((member) => !member.leftAt);
+    const freshActiveMemberUserIds = freshActiveMembers.map((member) => member.userId);
+    const occupiedUserIds = new Set([
+      ...freshActiveMemberUserIds,
+      ...freshChannel.pendingInviteeUserIds,
+    ]);
+
+    const isAlreadyOccupied = occupiedUserIds.has(args.userId);
+    const effectiveCount = isAlreadyOccupied ? occupiedUserIds.size : occupiedUserIds.size + 1;
+    if (effectiveCount > MAX_CONVERSATION_MEMBERS) {
+      throw new Error("room_full");
+    }
+
+    // Verify blocks against fresh active members under lock so concurrent joins cannot bypass blocks
+    const freshOtherUserIds = [
+      freshChannel.ownerUserId,
+      ...freshActiveMemberUserIds,
+    ].filter((id) => id !== args.userId);
+    if (freshOtherUserIds.length > 0) {
+      const block = await tx.userBlock.findFirst({
+        where: {
+          OR: freshOtherUserIds.flatMap((otherUserId) => [
+            { blockerId: args.userId, blockedId: otherUserId },
+            { blockerId: otherUserId, blockedId: args.userId },
+          ]),
+        },
+        select: { blockerId: true },
+      });
+      if (block) {
+        throw new Error("target_user_blocked");
+      }
+    }
+
+    if (freshChannel.pendingInviteeUserIds.includes(args.userId)) {
+      await tx.appConversationChannel.update({
+        where: { id: freshChannel.id },
+        data: {
+          pendingInviteeUserIds: freshChannel.pendingInviteeUserIds.filter((id) => id !== args.userId),
+        },
+      });
+    }
+
+    const isOwner = freshChannel.ownerUserId === args.userId;
+    if (currentCallerMember) {
+      // Departed member / owner rejoining: restore active membership and preserve owner role & history
+      await tx.appConversationChannelMember.update({
+        where: {
+          channelId_userId: {
+            channelId: freshChannel.id,
+            userId: args.userId,
+          },
+        },
+        data: {
+          leftAt: null,
+          role: isOwner || currentCallerMember.role === "owner" ? "owner" : "member",
+        },
+      });
+    } else {
+      await tx.appConversationChannelMember.createMany({
+        data: [{
+          channelId: freshChannel.id,
+          userId: args.userId,
+          role: isOwner ? "owner" : "member",
+          status: freshChannel.status,
+          pausedAt: freshChannel.pausedAt,
+          selectedLanguages,
+          ...(defaultDisplayLanguage && selectedLanguages.includes(defaultDisplayLanguage)
+            ? { displayLanguage: defaultDisplayLanguage }
+            : {}),
+        }],
+        skipDuplicates: true,
+      });
+    }
+
+    return tx.appConversationChannel.findUniqueOrThrow({
+      where: { id: freshChannel.id },
+      select: conversationChannelSelect,
+    });
+  });
+
+  if (!record) return null;
+  return serializeConversationChannelWithPreview(record, args.userId);
+}
+
+async function getConversationHydrationStateForRecord(args: {
+  conversationRecord: ConversationChannelRecord;
+  viewerUserId: string;
+  before?: ConversationHydrationCursor | null;
+  // Caps the message query at a fixed point in time instead of always
+  // showing the latest — used only by the share/snapshot path above; the
+  // member path never passes this, so its behavior is unchanged.
+  upperBoundCreatedAt?: Date | null;
+}): Promise<ConversationHydrationState> {
+  const conversationRecord = args.conversationRecord;
+
   const beforeDate = typeof args.before?.createdAtMs === "number"
     && Number.isFinite(args.before.createdAtMs)
     && args.before.createdAtMs > 0
     ? new Date(args.before.createdAtMs)
     : null;
   const beforeMessageId = (args.before?.messageId || "").trim();
+  const upperBoundWhere: Prisma.AppMessageWhereInput = args.upperBoundCreatedAt
+    ? { createdAt: { lte: args.upperBoundCreatedAt } }
+    : {};
   const messageWhere: Prisma.AppMessageWhereInput = {
     sessionKey: conversationRecord.sessionKey,
     ...buildVisibleMessageWhere(),
+    ...upperBoundWhere,
     ...(beforeDate && beforeMessageId
       ? {
           AND: [
@@ -2466,6 +2795,7 @@ export async function getConversationHydrationStateForUser(args: {
       where: {
         sessionKey: conversationRecord.sessionKey,
         usageSec: { not: null },
+        ...(args.upperBoundCreatedAt ? { createdAt: { lte: args.upperBoundCreatedAt } } : {}),
       },
       orderBy: { createdAt: "desc" },
       select: { usageSec: true },
@@ -2474,6 +2804,7 @@ export async function getConversationHydrationStateForUser(args: {
       where: {
         sessionKey: conversationRecord.sessionKey,
         ...buildVisibleMessageWhere(),
+        ...upperBoundWhere,
       },
     }),
     prisma.appMessage.findMany({
@@ -2514,10 +2845,39 @@ export async function getConversationHydrationStateForUser(args: {
   const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
 
-  const members = membersByChannelId.get(conversationRecord.id);
-  const pendingInviteeProfiles = conversationRecord.pendingInviteeUserIds
-    .map((userId) => pendingInviteeProfileById.get(userId))
-    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+  const cutoffMs = args.upperBoundCreatedAt instanceof Date
+    && Number.isFinite(args.upperBoundCreatedAt.getTime())
+    ? args.upperBoundCreatedAt.getTime()
+    : null;
+
+  // A pending invitee's current row cannot prove they were pending at this
+  // snapshot: reinvites reuse the original invite record. Omit them publicly.
+  const effectivePendingInviteeUserIds = cutoffMs !== null
+    ? []
+    : conversationRecord.pendingInviteeUserIds;
+
+  const rawMembers = membersByChannelId.get(conversationRecord.id);
+  const members = cutoffMs !== null
+    ? (rawMembers ?? [])
+        .filter((member) => {
+          const joinedAtMs = member.joinedAt instanceof Date ? member.joinedAt.getTime() : 0;
+          return joinedAtMs <= cutoffMs;
+        })
+        .map((member) => {
+          const leftAtMs = member.leftAt instanceof Date ? member.leftAt.getTime() : null;
+          if (leftAtMs !== null && leftAtMs > cutoffMs) {
+            return { ...member, leftAt: null };
+          }
+          return member;
+        })
+    : rawMembers;
+
+  const pendingInviteeProfiles = cutoffMs !== null
+    ? []
+    : effectivePendingInviteeUserIds
+        .map((userId) => pendingInviteeProfileById.get(userId))
+        .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+
   // ACTIVE members only (unlike resolveViewerFacingTitle/resolveOtherMemberAvatars
   // below, which intentionally read the full membership history so the room
   // keeps showing a departed member's name/photo) — the conversation's own
@@ -2529,14 +2889,14 @@ export async function getConversationHydrationStateForUser(args: {
   // invited, without waiting for their first-message materialization.
   const isMultiMember = resolveEffectiveMemberCount(
     filterActiveMembers(members),
-    conversationRecord.pendingInviteeUserIds,
+    effectivePendingInviteeUserIds,
   ) >= 2;
   const realMembers = members ?? [];
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
-    args.userId,
+    args.viewerUserId,
     membersByChannelId,
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
@@ -2620,7 +2980,11 @@ export async function getConversationHydrationStateForUser(args: {
   // (see inviteMembersToConversationChannel) — so their name/handle always
   // resolve via the member map. An invitee resolves the same way once
   // materialized, or via pendingInviteeProfileById before that.
-  const inviteNotices: ConversationHydrationInviteNotice[] = inviteRecords.map((invite) => ({
+  const effectiveInviteRecords = cutoffMs !== null
+    ? []
+    : inviteRecords;
+
+  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => ({
     inviteeUserId: invite.inviteeUserId,
     inviteeName: nameByUserId.get(invite.inviteeUserId)
       ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
@@ -2634,60 +2998,88 @@ export async function getConversationHydrationStateForUser(args: {
     invitedAtMs: invite.createdAt.getTime(),
   }));
 
+  // This endpoint already loaded the room's messages (including their
+  // translations) to build `utterances` below — reuse the last one for the
+  // list's latest-message preview instead of leaving it unset. An unset
+  // preview isn't just a blank field: ConversationList's upsertConversation
+  // merge treats an absent value as "nothing changed" and keeps whatever
+  // preview was already on screen, so a viewer whose list refresh hits this
+  // endpoint (the realtime single-conversation refetch, or opening the room)
+  // would keep seeing a stale/earlier message here instead of this one.
+  const latestUtterance = utterances.at(-1) ?? null;
+  const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
+    conversationRecord.defaultDisplayLanguage,
+    members,
+    args.viewerUserId,
+    effectivePendingInviteeUserIds,
+    pendingInviteeProfiles,
+  );
+  const latestMessagePreview = latestUtterance
+    ? resolveLatestMessagePreviewForViewer(
+        {
+          preview: normalizeConversationPreview(latestUtterance.originalText),
+          translations: latestUtterance.translations,
+        },
+        viewerFacingDisplayLanguage,
+      )
+    : undefined;
+
   return {
     conversation: serializeConversationChannel(
       conversationRecord,
+      latestMessagePreview,
+      latestUtterance ? new Date(latestUtterance.createdAtMs).toISOString() : undefined,
+      latestUtterance?.speaker ?? undefined,
+      latestUtterance?.speakerAvatarSeed ?? undefined,
+      latestUtterance?.speakerAvatarIndex ?? undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      resolveViewerFacingTitle(
-        conversationRecord.title,
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
-        pendingInviteeProfiles,
-        conversationRecord.userEditedTitleAt,
-      ),
-      resolveViewerFacingDisplayLanguage(
-        conversationRecord.defaultDisplayLanguage,
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
-        conversationRecord.pendingInviteeUserIds,
-        pendingInviteeProfiles,
-      ),
+      // In cutoff/share mode the public view must show the title FROZEN at
+      // sharedAt, not the room's current stored title (a rename after
+      // sharing must not leak into the public snapshot). sharedTitle is
+      // stamped alongside sharedAt in the locked share transaction; fall
+      // back to the live title only for legacy rows shared before the
+      // snapshot column existed (the migration backfills those).
+      cutoffMs !== null
+        ? (conversationRecord.sharedTitle ?? conversationRecord.title)
+        : resolveViewerFacingTitle(
+            conversationRecord.title,
+            members,
+            args.viewerUserId,
+            pendingInviteeProfiles,
+            conversationRecord.userEditedTitleAt,
+          ),
+      viewerFacingDisplayLanguage,
       resolveViewerFacingStatus(
         conversationRecord.status,
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
-        conversationRecord.pendingInviteeUserIds,
+        members,
+        args.viewerUserId,
+        effectivePendingInviteeUserIds,
       ),
       resolveViewerFacingPausedAt(
         conversationRecord.pausedAt,
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
-        conversationRecord.pendingInviteeUserIds,
+        members,
+        args.viewerUserId,
+        effectivePendingInviteeUserIds,
       ),
       isMultiMember,
       resolveRoomLanguageUnion(
         conversationRecord.selectedLanguages,
-        membersByChannelId.get(conversationRecord.id),
-        conversationRecord.pendingInviteeUserIds,
-        args.userId,
+        members,
+        effectivePendingInviteeUserIds,
+        args.viewerUserId,
         pendingInviteeProfiles,
       ),
       resolveViewerOwnSelectedLanguages(
         conversationRecord.selectedLanguages,
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
-        conversationRecord.pendingInviteeUserIds,
+        members,
+        args.viewerUserId,
+        effectivePendingInviteeUserIds,
       ),
       Boolean(blockedCounterpartUserId),
       resolveOtherMemberAvatars(
-        membersByChannelId.get(conversationRecord.id),
-        args.userId,
+        members,
+        args.viewerUserId,
         blockedCounterpartUserId,
         pendingInviteeProfiles,
       ),
@@ -2774,6 +3166,199 @@ export async function deleteConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_delete_conflict");
+}
+
+// Any member can turn the room's share link on or off — unlike
+// deleteConversationChannel this isn't owner-only, since it's a repeatable,
+// non-destructive toggle (no "who owns the switch" conflict to resolve).
+//
+// Turning sharing OFF is a REVOKE, not a pause: it flips the flag now, and
+// the next enable mints a brand-new shareToken, so every link handed out
+// before the switch went off is dead for good — it can neither be viewed
+// (getConversationHydrationStateForShare gates on shareToken + shareEnabled)
+// nor joined (joinConversationChannelViaShareToken gates on the same pair,
+// outside and inside its row lock). Without rotation, "stop sharing" would
+// only ever be temporary: re-enabling later would silently re-arm a link the
+// member believed they had taken back.
+//
+// Enabling while ALREADY enabled keeps the current token (that is the
+// idempotent "still on" case, and is also what the separate refresh action
+// does) and only jumps sharedAt to now(), taking a fresh snapshot as of that
+// moment — what a member expects when they flip the switch after the room has
+// moved on since it was last shared.
+export async function setConversationShareEnabled(args: {
+  conversationId: string;
+  userId: string;
+  enabled: boolean;
+}): Promise<ConversationChannelSummary | null> {
+  // Authorize (membership/visibility) with an unlocked read: this only proves
+  // the caller may touch this room, and does NOT drive the enable/disable
+  // decision — that is re-read under the row lock below, so a disable that
+  // commits between this read and the write can never re-arm a revoked token.
+  const authorized = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true },
+  });
+
+  if (!authorized) {
+    return null;
+  }
+
+  // A unique violation aborts the whole Postgres transaction, so the P2002
+  // retry has to wrap the entire transaction, not just the mint update.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await prisma.$transaction(async (tx) => {
+        // Same lock joinConversationChannelViaShareToken takes, so an enable
+        // and a concurrent disable serialize on this row instead of racing.
+        await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+
+        // Re-read the on/off state and token UNDER the lock — this, not the
+        // unlocked authorize read above, is what the decision is made on.
+        // Membership is re-checked here too, so a caller who left the room
+        // after the authorize read cannot still flip the switch.
+        const locked = await tx.appConversationChannel.findFirst({
+          where: {
+            id: args.conversationId,
+            ...buildVisibleMembershipWhere(args.userId),
+            ...buildVisibleConversationWhere(),
+          },
+          select: { id: true, shareToken: true, shareEnabled: true },
+        });
+        if (!locked) {
+          return null;
+        }
+
+        if (!args.enabled) {
+          // Disable is a REVOKE: drop shareEnabled AND null the token, so the
+          // link is dead for good and the next enable is forced to mint a new
+          // one (a surviving token could otherwise be silently re-armed).
+          return tx.appConversationChannel.update({
+            where: { id: args.conversationId },
+            data: { shareEnabled: false, shareToken: null },
+            select: conversationChannelSelect,
+          });
+        }
+
+        // Enable while STILL on per the locked read: keep the live token and
+        // re-stamp the snapshot (sharedAt + the frozen title) to now.
+        if (locked.shareEnabled && locked.shareToken) {
+          const stored = await tx.appConversationChannel.findUniqueOrThrow({
+            where: { id: args.conversationId },
+            select: { title: true },
+          });
+          return tx.appConversationChannel.update({
+            where: { id: args.conversationId },
+            data: {
+              shareEnabled: true,
+              sharedByUserId: args.userId,
+              sharedAt: new Date(),
+              sharedTitle: stored.title,
+            },
+            select: conversationChannelSelect,
+          });
+        }
+
+        // Enable while OFF (first enable, or re-enable after a revoke): mint a
+        // fresh token and take a new snapshot. The P2002 retry around the
+        // whole transaction covers the (astronomically unlikely) collision.
+        const stored = await tx.appConversationChannel.findUniqueOrThrow({
+          where: { id: args.conversationId },
+          select: { title: true },
+        });
+        return tx.appConversationChannel.update({
+          where: { id: args.conversationId },
+          data: {
+            shareToken: crypto.randomBytes(16).toString("base64url"),
+            shareEnabled: true,
+            sharedByUserId: args.userId,
+            sharedAt: new Date(),
+            sharedTitle: stored.title,
+          },
+          select: conversationChannelSelect,
+        });
+      });
+
+      if (!record) {
+        return null;
+      }
+      return serializeConversationChannel(record);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("conversation_share_token_conflict");
+}
+
+// Any member can re-take the share snapshot without touching the on/off
+// state — this is the separate "refresh" action next to the toggle, for
+// bumping sharedAt forward to include messages sent since the room was last
+// (re-)shared. Requires a share link to already exist (the toggle is what
+// mints one); a room that was never shared has nothing to refresh.
+export async function refreshConversationShareSnapshot(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  // Authorize only — the refresh decision is made on the locked re-read.
+  const authorized = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { id: true },
+  });
+
+  if (!authorized) {
+    return null;
+  }
+
+  const record = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+
+    // Re-read under the lock: only refresh a snapshot that is STILL live. A
+    // disable that revoked the link (shareToken=null, shareEnabled=false)
+    // between the authorize read and here must not be silently re-stamped
+    // back into a shareable state.
+    const locked = await tx.appConversationChannel.findFirst({
+      where: {
+        id: args.conversationId,
+        ...buildVisibleMembershipWhere(args.userId),
+        ...buildVisibleConversationWhere(),
+      },
+      select: { id: true, title: true, shareToken: true, shareEnabled: true },
+    });
+
+    if (!locked || !locked.shareToken || !locked.shareEnabled) {
+      return null;
+    }
+
+    return tx.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
+        sharedByUserId: args.userId,
+        sharedAt: new Date(),
+        sharedTitle: locked.title,
+      },
+      select: conversationChannelSelect,
+    });
+  });
+
+  if (!record) {
+    return null;
+  }
+  return serializeConversationChannel(record);
 }
 
 // Member-level equivalent of deleteConversationChannel above, for a shared

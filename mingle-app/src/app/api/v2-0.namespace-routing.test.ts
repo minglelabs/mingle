@@ -19,6 +19,15 @@ describe('installed 2.x client compatibility', () => {
     ]))
   })
 
+  // 2.1.0 deliberately gets a real route tree instead of a rewrite alias: an
+  // afterFiles catch-all would run before dynamic routes and shadow them.
+  it.each(['ios', 'android'])('does not alias %s/v2.1.0 onto the v2.0.0 tree', async platform => {
+    const rewrites = await nextConfig.rewrites!()
+    expect(rewrites).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: expect.stringContaining(`/${platform}/v2.1.0`) }),
+    ]))
+  })
+
   for (const platform of ['ios', 'android']) {
     it.each([
       ['conversations', ['GET', 'POST']],

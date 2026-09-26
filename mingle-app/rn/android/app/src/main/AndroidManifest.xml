@@ -69,10 +69,18 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
+            <!-- /p/ shared profiles and /s/ shared conversation snapshots.
+                 Both <data> prefixes share this filter's scheme and host, so
+                 App Links verification (assetlinks.json) covers them
+                 together and needs no change for a new path. -->
             <data
                 android:scheme="https"
                 android:host="mingle-2-0-0-production.up.railway.app"
                 android:pathPrefix="/p/" />
+            <data
+                android:scheme="https"
+                android:host="mingle-2-0-0-production.up.railway.app"
+                android:pathPrefix="/s/" />
         </intent-filter>
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
@@ -89,6 +97,22 @@
             <data
                 android:scheme="mingleprofile"
                 android:host="profile" />
+        </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="mingle"
+                android:host="conversation-spectate" />
+        </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="mingleconversation"
+                android:host="conversation-spectate" />
         </intent-filter>
       </activity>
     </application>
