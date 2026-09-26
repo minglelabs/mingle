@@ -39,6 +39,7 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       putExtra("notificationId", notificationId)
       putExtra("type", message.data["type"] ?: "")
       putExtra("actorId", message.data["actorId"] ?: "")
+      putExtra("url", message.data["url"] ?: "")
     }
     val pendingIntent = PendingIntent.getActivity(
       this,

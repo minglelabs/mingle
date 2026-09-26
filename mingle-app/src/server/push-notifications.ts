@@ -1,6 +1,8 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { connect } from "node:http2";
 import { prisma } from "@/lib/prisma";
+import { feedHref } from "@/lib/feed-routes";
+import { resolveSupportedLocaleTag } from "@/i18n/config";
 
 type PushPlatform = "ios" | "android";
 
@@ -20,6 +22,8 @@ type PushMessage = {
   messagePreview?: string;
   sessionKey?: string;
   conversationId?: string;
+  /** In-app destination the tap should open (e.g. feedHref with post/comment). */
+  navigationUrl?: string;
 };
 
 type PushSendResult = {
@@ -141,6 +145,30 @@ function resolvePushCopy(message: PushMessage): { title: string; body: string } 
     return { title: "New follower", body: `${label} followed you.` };
   }
 
+  if (message.type === "comment") {
+    if (language === "ko") return { title: "새 댓글", body: `${label}님이 회원님의 게시물에 댓글을 남겼습니다.` };
+    if (language === "ja") return { title: "新しいコメント", body: `${label}さんがあなたの投稿にコメントしました。` };
+    if (language === "zh-cn") return { title: "新评论", body: `${label}评论了你的动态。` };
+    if (language === "zh-tw") return { title: "新留言", body: `${label}在你的貼文留言了。` };
+    if (language === "es") return { title: "Nuevo comentario", body: `${label} comentó tu publicación.` };
+    if (language === "fr") return { title: "Nouveau commentaire", body: `${label} a commenté votre publication.` };
+    if (language === "de") return { title: "Neuer Kommentar", body: `${label} hat deinen Beitrag kommentiert.` };
+    if (language === "pt") return { title: "Novo comentário", body: `${label} comentou na sua publicação.` };
+    return { title: "New comment", body: `${label} commented on your post.` };
+  }
+
+  if (message.type === "comment_reply") {
+    if (language === "ko") return { title: "새 답글", body: `${label}님이 회원님의 댓글에 답글을 남겼습니다.` };
+    if (language === "ja") return { title: "新しい返信", body: `${label}さんがあなたのコメントに返信しました。` };
+    if (language === "zh-cn") return { title: "新回复", body: `${label}回复了你的评论。` };
+    if (language === "zh-tw") return { title: "新回覆", body: `${label}回覆了你的留言。` };
+    if (language === "es") return { title: "Nueva respuesta", body: `${label} respondió a tu comentario.` };
+    if (language === "fr") return { title: "Nouvelle réponse", body: `${label} a répondu à votre commentaire.` };
+    if (language === "de") return { title: "Neue Antwort", body: `${label} hat auf deinen Kommentar geantwortet.` };
+    if (language === "pt") return { title: "Nova resposta", body: `${label} respondeu ao seu comentário.` };
+    return { title: "New reply", body: `${label} replied to your comment.` };
+  }
+
   return { title: "Mingle", body: "You have a new notification." };
 }
 
@@ -152,6 +180,7 @@ function createPushData(message: PushMessage): Record<string, string> {
   };
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
+  if (message.navigationUrl) data.url = message.navigationUrl;
   return data;
 }
 
@@ -185,6 +214,7 @@ async function sendApnsNotification(
     messageId: message.notificationId,
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),
+    ...(message.navigationUrl ? { url: message.navigationUrl } : {}),
   });
 
   return new Promise((resolve) => {
@@ -350,6 +380,8 @@ export async function sendPushNotificationForUserNotification(notificationId: st
     select: {
       id: true,
       type: true,
+      postId: true,
+      commentId: true,
       recipient: {
         select: {
           language: true,
@@ -375,14 +407,23 @@ export async function sendPushNotificationForUserNotification(notificationId: st
   });
   if (!notification) return;
 
+  const recipientLanguage = notification.recipient.pageLanguage?.trim()
+    || notification.recipient.language?.trim()
+    || "en";
+  const navigationUrl = notification.postId
+    ? feedHref(resolveSupportedLocaleTag(recipientLanguage) ?? "en", {
+        postId: notification.postId,
+        commentId: notification.commentId,
+      })
+    : undefined;
+
   const message: PushMessage = {
     notificationId: notification.id,
     type: notification.type,
     actorId: notification.actor.id,
     actorLabel: notification.actor.name?.trim() || `@${notification.actor.handle}`,
-    recipientLanguage: notification.recipient.pageLanguage?.trim()
-      || notification.recipient.language?.trim()
-      || "en",
+    recipientLanguage,
+    ...(navigationUrl ? { navigationUrl } : {}),
   };
   const targets = notification.recipient.pushTokens as PushTarget[];
   const results = await Promise.allSettled(

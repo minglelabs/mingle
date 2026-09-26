@@ -86,7 +86,7 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { Archive, BarChart3, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import { composeCopy } from "@/i18n/compose-copy";
 import { signOut, useSession } from "next-auth/react";
@@ -446,6 +446,8 @@ function ProfileSettingsPanel({
   ));
   const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
+  const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
@@ -498,6 +500,10 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
+    notifications: locale === "ko" ? "앱 알림" : "App notifications",
+    notificationsDescription: locale === "ko"
+      ? "팔로우·좋아요·댓글·답글·신고 처리 알림을 앱에서 받습니다."
+      : "Receive follow, like, comment, reply and report-result notifications in the app.",
     deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
     deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
     deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
@@ -701,6 +707,44 @@ function ProfileSettingsPanel({
       setUnblockingId(null);
     }
   }, [copy.unblockError, unblockingId]);
+
+  useEffect(() => {
+    if (!open || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/account/preferences"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { inAppNotificationsEnabled?: unknown } | null) => {
+        if (cancelled || !payload) return;
+        setInAppNotificationsEnabled(payload.inAppNotificationsEnabled !== false);
+      })
+      .catch(() => {
+        // Leave the toggle in its unknown state; it stays interactive.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
+
+  const handleToggleInAppNotifications = useCallback(async () => {
+    if (isSavingNotificationsPreference) return;
+    const current = inAppNotificationsEnabled ?? true;
+    const next = !current;
+    setInAppNotificationsEnabled(next);
+    setIsSavingNotificationsPreference(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/preferences"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inAppNotificationsEnabled: next }),
+      });
+      if (!response.ok) throw new Error("preference_save_failed");
+    } catch {
+      // Roll the optimistic toggle back on failure.
+      setInAppNotificationsEnabled(current);
+    } finally {
+      setIsSavingNotificationsPreference(false);
+    }
+  }, [inAppNotificationsEnabled, isSavingNotificationsPreference]);
 
   const handleSelectAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
     if (nextLocale === locale) return;
@@ -994,6 +1038,33 @@ function ProfileSettingsPanel({
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.appLanguage}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Bell size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold">{copy.notifications}</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-gray-500">{copy.notificationsDescription}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={inAppNotificationsEnabled ?? true}
+                  aria-label={copy.notifications}
+                  disabled={isSavingNotificationsPreference || sessionStatus !== "authenticated"}
+                  onClick={() => void handleToggleInAppNotifications()}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                    (inAppNotificationsEnabled ?? true) ? "bg-amber-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      (inAppNotificationsEnabled ?? true) ? "translate-x-6" : "translate-x-1"
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             </div>
             {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
