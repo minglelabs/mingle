@@ -11,15 +11,46 @@
 |---|---|---|
 | 1 DB 스키마 | 완료 | `e96d714c` |
 | 2 번역 서비스 추출 | 완료 | `70735f40` |
-| 3 게시물 CRUD API | 진행 | |
-| 4 피드 랭킹 API | 대기 | |
-| 5 피드 UI | 진행(셸) | |
-| 6~10 | 대기 | |
+| 3 게시물 CRUD API · 5a 피드 셸 | 완료 | `0e552236` |
+| 4 랭킹 · 5b 피드 상호작용 · 6 반응 API | 완료 | `beaf51ee` |
+| W0 계약·스키마(모더레이션·알림 토글) | 완료 | 이 문서와 같은 커밋 |
+| W3 병렬 8건 (아래 표) | 진행 | |
 
 Phase 1 주의: 마이그레이션 `20260925170000_add_posting_feed`는 기존 drift 2건
 (`app_users` TIMESTAMPTZ, `app_event_logs` partial index)을 의도적으로 제외했다.
 `prisma migrate diff`를 다시 돌리면 그 2건이 계속 잔여 drift로 보이는 것이 정상이며,
 새 마이그레이션에 섞어 넣으면 운영 데이터가 손상된다. 근거는 마이그레이션 헤더에 있다.
+`20260926034500_add_feed_moderation_and_notification_prefs`도 같은 방식으로 생성했다.
+
+### W3 — 병렬 작업 분할 (각자 `/Users/nam/workspaces/mingle-pf-*` 워크트리·브랜치)
+
+이음새는 코드로 먼저 고정했다. 아래 파일의 **시그니처는 변경 금지**, 본문만 담당자가 구현한다.
+
+| 계약 파일 | 내용 | 구현 담당 |
+|---|---|---|
+| `src/lib/feed-post-dto.ts` | 피드·프로필·검색 공통 게시물 wire shape | S1(서버가 이 모양으로 응답) |
+| `src/lib/feed-routes.ts` | 모든 화면 경로·목록 endpoint 빌더 (경로 문자열 직접 작성 금지) | 완성본 |
+| `components/comments/comment-sheet.tsx` | 댓글 시트 props | C3 |
+| `components/posts/post-action-sheet.tsx` · `components/reports/report-sheet.tsx` | ⋯ 메뉴·신고 시트 props | R |
+| `components/compose/publish-status-banner.tsx` | 백그라운드 게시 상태 배너 | C2 |
+| `components/feed/feed-post-preview.tsx` | 작성 미리보기(피드 카드와 동일 렌더) | C1 |
+| `components/notifications/use-unread-notifications.ts` | 종 아이콘 빨간 점 | N |
+| `server/notifications/create-post-notification.ts` | 모든 게시물 알림의 단일 진입점 | N (R은 호출만) |
+| `server/posts/{block,post,comment}-visibility.ts` | 비로그인·운영자 비노출 반영 완료. 시그니처 고정 | 내부 수정은 R만 |
+
+| 담당 | 범위 |
+|---|---|
+| S1 서버 피드 | DTO 직렬화기, 비로그인 피드, `GET /users/{id}/posts`, `GET /search/posts` |
+| C1 피드 UI | 목 데이터 제거·API 연결, 뷰어 라우트, 딥링크, 로그인 유도·복귀, 오류·로딩, 접근성 |
+| C2 글쓰기 | 작성·초안·첨부·미리보기·게시·수정·보관함·휴지통·숨긴 글 화면 |
+| C3 댓글 | 댓글 시트 UI 전체 |
+| N 알림 | Phase 7 전체 (서버 트리거·푸시·통합 목록·읽음·빨간 점·토글) |
+| P 검색·프로필 | Phase 8 (프로필 3열 그리드, 사람 검색, 최근 검색어, 검색 UI) |
+| R 신고·운영 | Phase 9 (신고 API·시트, ⋯ 메뉴, 어드민, 운영자 비노출, rate limit) |
+| V 버전 | 앱·API 네임스페이스 2.1.0 동시 상향 |
+
+신규 UI 문구는 공유 사전(`i18n/types.ts`, `dictionaries/*`)을 건드리지 않고 기능별 copy 모듈
+(`src/i18n/<기능>-copy.ts`, `profile-bio-copy.ts` 패턴, 15개 언어)에 둔다.
 
 ---
 

@@ -8,7 +8,7 @@
 
 import type { Prisma } from '@prisma/client'
 
-import { notMutuallyBlockedWhere } from './block-visibility'
+import { visibleAuthorWhere } from './block-visibility'
 
 /**
  * Returns a Prisma `where` clause that excludes posts the viewer must not see:
@@ -16,17 +16,21 @@ import { notMutuallyBlockedWhere } from './block-visibility'
  * 1. visibility !== 'public'
  * 2. isDeleted (soft-deleted / trashed)
  * 3. moderationHiddenAt is set (admin hidden)
- * 4. Mutual block (viewer blocks author OR author blocks viewer)
+ * 4. Author hidden by an operator, or mutual block (viewer blocks author OR
+ *    author blocks viewer) — see visibleAuthorWhere
  * 5. Viewer explicitly hid the post (PostHide)
+ *
+ * `viewerId` is null for a signed-out viewer of the public feed: no blocks and
+ * no hides apply, every other rule does.
  */
-export function visiblePostWhere(viewerId: string): Prisma.PostWhereInput {
+export function visiblePostWhere(viewerId: string | null): Prisma.PostWhereInput {
   return {
     visibility: 'public',
     OR: [{ isDeleted: null }, { isDeleted: false }],
     moderationHiddenAt: null,
-    author: notMutuallyBlockedWhere(viewerId),
+    author: visibleAuthorWhere(viewerId),
     // Exclude posts the viewer explicitly hid
-    hides: { none: { userId: viewerId } },
+    ...(viewerId ? { hides: { none: { userId: viewerId } } } : {}),
   }
 }
 
@@ -34,7 +38,7 @@ export function visiblePostWhere(viewerId: string): Prisma.PostWhereInput {
  * Returns a Prisma `where` clause for accessing a single post by id.
  * Same visibility rules as `visiblePostWhere` but scoped to one postId.
  */
-export function visibleSinglePostWhere(postId: string, viewerId: string): Prisma.PostWhereInput {
+export function visibleSinglePostWhere(postId: string, viewerId: string | null): Prisma.PostWhereInput {
   return {
     id: postId,
     ...visiblePostWhere(viewerId),

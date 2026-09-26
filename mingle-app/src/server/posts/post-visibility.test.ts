@@ -19,9 +19,10 @@ describe('visiblePostWhere', () => {
     expect(where.moderationHiddenAt).toBeNull()
   })
 
-  it('excludes mutually blocked authors (both directions)', () => {
+  it('excludes mutually blocked and operator-hidden authors', () => {
     const where = visiblePostWhere(viewerId)
     expect(where.author).toEqual({
+      moderationHiddenAt: null,
       AND: [
         { blockedByRelations: { none: { blockerId: viewerId } } },
         { blockingRelations: { none: { blockedId: viewerId } } },
@@ -32,6 +33,14 @@ describe('visiblePostWhere', () => {
   it('excludes viewer-hidden posts', () => {
     const where = visiblePostWhere(viewerId)
     expect(where.hides).toEqual({ none: { userId: viewerId } })
+  })
+
+  it('keeps every content rule for a signed-out viewer but drops blocks and hides', () => {
+    const where = visiblePostWhere(null)
+    expect(where.visibility).toBe('public')
+    expect(where.moderationHiddenAt).toBeNull()
+    expect(where.author).toEqual({ moderationHiddenAt: null })
+    expect(where).not.toHaveProperty('hides')
   })
 })
 
