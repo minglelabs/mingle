@@ -2915,3 +2915,11 @@
 - User impact: Returning from a profile to a long "See all" list can land at a different position than the one the user left.
 - Resolution: Open; queued with the explore-tab cleanup.
 - Verification: Pending.
+
+## 2026-09-26 — Conversation list: search entry moved from the header to the top of the list
+
+- Surface: Conversation list header and list (posting-capable clients: app 2.1.0+ and the plain web).
+- Issue: The planning spec requires the conversation-list header to match the feed header exactly (Mingle on the left; compose and the notification bell on the right). Adopting the shared header removed the header's conversation-search button.
+- User impact: On 2.1.0+ the only entry point to conversation search would have disappeared.
+- Resolution: By the user's decision, a search bar is now the first row inside the conversation list's scroll area and scrolls with the list. It calls the same `handleOpenSearch` the old header button called, so it opens the existing search overlay with the same filtering, results, empty state, clear/IME handling and analytics. The header keeps the shared `AppTopHeader`. Clients before 2.1.0 keep the previous header and search button unchanged.
+- Verification: Label resolver unit test; conversation-list, header and posting-guard tests (69) passed; TypeScript clean. On-device check pending in the device test.
