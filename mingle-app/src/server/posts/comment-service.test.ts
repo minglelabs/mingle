@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   mockTransaction,
   mockCommentFindUnique,
+  mockCommentFindFirst,
   mockCommentCreate,
   mockCommentUpdate,
   mockCommentCount,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   mockTransaction: vi.fn(),
   mockCommentFindUnique: vi.fn(),
+  mockCommentFindFirst: vi.fn(),
   mockCommentCreate: vi.fn(),
   mockCommentUpdate: vi.fn(),
   mockCommentCount: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock('@/lib/prisma', () => ({
     $transaction: mockTransaction,
     postComment: {
       findUnique: mockCommentFindUnique,
+      findFirst: mockCommentFindFirst,
       create: mockCommentCreate,
       update: mockCommentUpdate,
       count: mockCommentCount,
@@ -50,6 +53,7 @@ function setupTransaction() {
     const tx = {
       postComment: {
         findUnique: mockCommentFindUnique,
+      findFirst: mockCommentFindFirst,
         create: mockCommentCreate,
         update: mockCommentUpdate,
         count: mockCommentCount,
@@ -106,51 +110,140 @@ describe('createComment', () => {
       data: { commentCount: { increment: 1 } },
     })
   })
+})
 
-  it('hoists reply-to-reply to root comment', async () => {
-    // Parent is already a reply (has parentId)
-    mockCommentFindUnique.mockResolvedValue({
-      id: 'reply-1',
-      parentId: 'root-comment',
-      authorId: 'user-2',
+describe('createComment reply target', () => {
+  type Row = { id: string; postId: string; parentId: string | null; authorId: string; isDeleted: boolean | null }
+  const rows: Row[] = [
+    { id: 'root-1', postId: 'post-1', parentId: null, authorId: 'root-author', isDeleted: null },
+    { id: 'reply-1', postId: 'post-1', parentId: 'root-1', authorId: 'reply-author', isDeleted: null },
+    { id: 'reply-dead', postId: 'post-1', parentId: 'root-1', authorId: 'dead-author', isDeleted: true },
+    { id: 'root-dead', postId: 'post-1', parentId: null, authorId: 'root-author', isDeleted: true },
+    { id: 'reply-under-dead', postId: 'post-1', parentId: 'root-dead', authorId: 'reply-author', isDeleted: null },
+    { id: 'other-root', postId: 'post-2', parentId: null, authorId: 'other-author', isDeleted: null },
+    { id: 'other-reply', postId: 'post-1', parentId: 'root-2', authorId: 'stranger', isDeleted: null },
+    { id: 'root-2', postId: 'post-1', parentId: null, authorId: 'root2-author', isDeleted: null },
+  ]
+  // Comments the viewer cannot see (operator-hidden / blocked author).
+  const invisible = new Set<string>()
+
+  // Minimal evaluator for the `where` shapes resolveReplyTarget builds.
+  function matches(row: Row, where: Record<string, unknown>): boolean {
+    if (invisible.has(row.id)) return false
+    if (where.postId !== undefined && row.postId !== where.postId) return false
+    if (where.id !== undefined && row.id !== where.id) return false
+    if (where.parentId !== undefined && row.parentId !== where.parentId) return false
+    if (where.authorId !== undefined && row.authorId !== where.authorId) return false
+    if (where.AND && row.isDeleted === true) return false
+    // Visibility filters must always be composed in.
+    expect(where).toHaveProperty('moderationHiddenAt', null)
+    expect(where).toHaveProperty('author')
+    return true
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupTransaction()
+    invisible.clear()
+    mockCommentFindFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      return rows.find((r) => matches(r, where)) ?? null
     })
-    mockCommentCreate.mockResolvedValue({
-      id: 'reply-2',
-      parentId: 'root-comment',
-      replyToUserId: 'user-2',
-      bodyVersion: 1,
-    })
+    mockCommentCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'new', ...data }))
     mockPostUpdate.mockResolvedValue({})
-
-    const result = await createComment({
-      postId: 'post-1',
-      authorId: 'user-3',
-      sourceText: 'replying to reply',
-      sourceLanguage: 'en',
-      parentId: 'reply-1',
-    })
-
-    // Should be hoisted: parentId is root-comment, not reply-1
-    expect(mockCommentCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        parentId: 'root-comment',
-        replyToUserId: 'user-2',
-      }),
-    })
   })
 
-  it('throws parent_not_found for invalid parentId', async () => {
-    mockCommentFindUnique.mockResolvedValue(null)
+  function create(parentId: string, replyToUserId: string | null = null, postId = 'post-1') {
+    return createComment({ postId, authorId: 'viewer', sourceText: 'hi', sourceLanguage: 'en', parentId, replyToUserId })
+  }
 
-    await expect(
-      createComment({
-        postId: 'post-1',
-        authorId: 'user-1',
-        sourceText: 'reply',
-        sourceLanguage: 'en',
-        parentId: 'nonexistent',
-      }),
-    ).rejects.toThrow('parent_not_found')
+  it('hoists a reply-to-reply to its root and mentions the replied-to author (client value ignored)', async () => {
+    const result = await create('reply-1', 'someone-else')
+    expect(mockCommentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ parentId: 'root-1', replyToUserId: 'reply-author' }),
+    })
+    expect(result.replyRecipientId).toBe('reply-author')
+  })
+
+  it('rejects a parent that belongs to another post', async () => {
+    await expect(create('other-root')).rejects.toThrow('parent_not_found')
+    expect(mockCommentCreate).not.toHaveBeenCalled()
+    expect(mockPostUpdate).not.toHaveBeenCalled()
+  })
+
+  it('throws parent_not_found for a nonexistent parent', async () => {
+    await expect(create('nonexistent')).rejects.toThrow('parent_not_found')
+  })
+
+  it('rejects an invisible (blocked / hidden) parent', async () => {
+    invisible.add('root-1')
+    await expect(create('root-1')).rejects.toThrow('parent_not_found')
+  })
+
+  it('rejects a reply whose root is invisible', async () => {
+    invisible.add('root-1')
+    await expect(create('reply-1')).rejects.toThrow('parent_not_found')
+  })
+
+  it('rejects replying to a deleted reply', async () => {
+    await expect(create('reply-dead')).rejects.toThrow('parent_not_found')
+  })
+
+  it('direct reply to a root without a mention notifies the root author', async () => {
+    const result = await create('root-1')
+    expect(mockCommentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ parentId: 'root-1', replyToUserId: null }),
+    })
+    expect(result.replyRecipientId).toBe('root-author')
+  })
+
+  it('keeps a mention of the root author', async () => {
+    const result = await create('root-1', 'root-author')
+    expect(result.replyToUserId).toBe('root-author')
+    expect(result.replyRecipientId).toBe('root-author')
+  })
+
+  it('keeps a mention of a live reply author in the same thread', async () => {
+    const result = await create('root-1', 'reply-author')
+    expect(result.replyToUserId).toBe('reply-author')
+    expect(result.replyRecipientId).toBe('reply-author')
+  })
+
+  it('drops a mention of a user outside the thread and notifies the root author', async () => {
+    // 'stranger' only replied in root-2, not root-1.
+    const result = await create('root-1', 'stranger')
+    expect(result.replyToUserId).toBeNull()
+    expect(result.replyRecipientId).toBe('root-author')
+  })
+
+  it('drops a mention whose only reply is deleted', async () => {
+    const result = await create('root-1', 'dead-author')
+    expect(result.replyToUserId).toBeNull()
+    expect(result.replyRecipientId).toBe('root-author')
+  })
+
+  it('drops a mention whose reply is invisible to the author', async () => {
+    invisible.add('reply-1')
+    const result = await create('root-1', 'reply-author')
+    expect(result.replyToUserId).toBeNull()
+  })
+
+  it('allows replying under a deleted root only via one of its live replies', async () => {
+    const viaReply = await create('reply-under-dead')
+    expect(viaReply.parentId).toBe('root-dead')
+    expect(viaReply.replyRecipientId).toBe('reply-author')
+
+    const viaMention = await create('root-dead', 'reply-author')
+    expect(viaMention.replyToUserId).toBe('reply-author')
+
+    await expect(create('root-dead')).rejects.toThrow('parent_not_found')
+    // The deleted root's author is not a valid target through the root itself.
+    await expect(create('root-dead', 'root-author')).rejects.toThrow('parent_not_found')
+  })
+
+  it('returns no reply recipient for a top-level comment', async () => {
+    const result = await createComment({ postId: 'post-1', authorId: 'viewer', sourceText: 'hi', sourceLanguage: 'en' })
+    expect(result.replyRecipientId).toBeNull()
+    expect(mockCommentFindFirst).not.toHaveBeenCalled()
   })
 })
 

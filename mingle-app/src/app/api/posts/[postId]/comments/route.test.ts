@@ -12,6 +12,7 @@ const {
   mockDetectSourceLanguage,
   mockTranslateCommentBodySettled,
   mockResolveDefaultPostTranslationLanguages,
+  mockCreatePostNotification,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockPostFindFirst: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockDetectSourceLanguage: vi.fn(),
   mockTranslateCommentBodySettled: vi.fn(),
   mockResolveDefaultPostTranslationLanguages: vi.fn(),
+  mockCreatePostNotification: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
@@ -42,6 +44,9 @@ vi.mock('next/server', async (importOriginal) => {
 vi.mock('@/server/posts/comment-service', () => ({
   createComment: mockCreateComment,
   deleteComment: mockDeleteComment,
+}))
+vi.mock('@/server/notifications/create-post-notification', () => ({
+  createPostNotification: mockCreatePostNotification,
 }))
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
@@ -346,5 +351,44 @@ describe('POST /api/posts/{postId}/comments', () => {
       makeCtx('post-1'),
     )
     expect(res.status).toBe(400)
+  })
+
+  it('notifies the reply recipient derived by the service, not the client replyToUserId', async () => {
+    mockCreatePostNotification.mockResolvedValue(undefined)
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', authorId: 'post-author' })
+    mockCreateComment.mockResolvedValue({
+      id: 'r1', postId: 'post-1', parentId: 'root-1',
+      replyToUserId: null, replyRecipientId: 'root-author', bodyVersion: 1, createdAt: new Date(),
+    })
+
+    const res = await POST(
+      makeRequest({ sourceText: 'reply', parentId: 'root-1', replyToUserId: 'victim' }),
+      makeCtx('post-1'),
+    )
+    expect(res.status).toBe(201)
+    // The client hint is only forwarded for validation.
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'root-1', replyToUserId: 'victim' }),
+    )
+    await vi.waitFor(() => expect(mockCreatePostNotification).toHaveBeenCalledTimes(1))
+    expect(mockCreatePostNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'comment_reply', recipientId: 'root-author', commentId: 'r1' }),
+    )
+  })
+
+  it('notifies the post author for a top-level comment', async () => {
+    mockCreatePostNotification.mockResolvedValue(undefined)
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', authorId: 'post-author' })
+    mockCreateComment.mockResolvedValue({
+      id: 'c2', postId: 'post-1', parentId: null,
+      replyToUserId: null, replyRecipientId: null, bodyVersion: 1, createdAt: new Date(),
+    })
+
+    const res = await POST(makeRequest({ sourceText: 'top' }), makeCtx('post-1'))
+    expect(res.status).toBe(201)
+    await vi.waitFor(() => expect(mockCreatePostNotification).toHaveBeenCalledTimes(1))
+    expect(mockCreatePostNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'comment', recipientId: 'post-author' }),
+    )
   })
 })
