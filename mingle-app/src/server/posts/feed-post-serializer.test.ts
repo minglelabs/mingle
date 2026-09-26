@@ -71,6 +71,15 @@ describe('serializePostImage', () => {
     expect(img!.width).toBeNull()
     expect(img!.height).toBeNull()
   })
+  it('passes stored pixel dimensions through', () => {
+    const img = serializePostImage('p1', 'post-images/x.jpg', 1536, 2048)
+    expect(img).toEqual({ url: '/api/posts/p1/image', width: 1536, height: 2048 })
+  })
+  it('drops a partial or invalid dimension pair', () => {
+    expect(serializePostImage('p1', 'k', 100, null)).toMatchObject({ width: null, height: null })
+    expect(serializePostImage('p1', 'k', 0, 10)).toMatchObject({ width: null, height: null })
+    expect(serializePostImage('p1', 'k', 1.5, 10)).toMatchObject({ width: null, height: null })
+  })
 })
 
 describe('deriveTranslation', () => {

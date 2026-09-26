@@ -691,6 +691,8 @@ model Post {
   sourceLanguage      String?   @map("source_language")
   backgroundKey       String?   @map("background_key")
   imageObjectKey      String?   @map("image_object_key")
+  imageWidth          Int?      @map("image_width")
+  imageHeight         Int?      @map("image_height")
   visibility          String    @default("public")
   archivedAt          DateTime? @map("archived_at")
   isDeleted           Boolean?  @map("is_deleted")
@@ -844,6 +846,8 @@ model PostDraft {
   sourceText      String?  @map("source_text") @db.Text
   backgroundKey   String?  @map("background_key")
   imageObjectKey  String?  @map("image_object_key")
+  imageWidth      Int?     @map("image_width")
+  imageHeight     Int?     @map("image_height")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
