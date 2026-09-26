@@ -56,6 +56,18 @@ export type FeedPostViewProps = {
   onImageError?: () => void;
   imageFailed?: boolean;
   imageFailedLabel?: string;
+  /** Retry after a failed image load (button shown with the failure notice). */
+  onImageRetry?: () => void;
+  imageRetryLabel?: string;
+  /** Changes on retry so a fresh `<img>` is mounted. */
+  imageAttempt?: number;
+  /** CSS aspect-ratio ("w / h") from the DTO or measured after load. */
+  imageAspect?: string | null;
+  onImageLoad?: React.ReactEventHandler<HTMLImageElement>;
+  /** Off-screen cards load lazily; the active and next card pass "eager". */
+  imageLoading?: "eager" | "lazy";
+  /** The collapsed 3-line snippet of an image post, measured for overflow. */
+  previewClampRef?: React.Ref<HTMLParagraphElement>;
   /** Whether the body scroll region is interactive (real card) or static (preview). */
   bodyScrollRef?: React.Ref<HTMLDivElement>;
   onBodyScroll?: React.UIEventHandler<HTMLDivElement>;
@@ -83,6 +95,13 @@ export default function FeedPostView({
   onImageError,
   imageFailed = false,
   imageFailedLabel,
+  onImageRetry,
+  imageRetryLabel,
+  imageAttempt = 0,
+  imageAspect = null,
+  onImageLoad,
+  imageLoading = "lazy",
+  previewClampRef,
   bodyScrollRef,
   onBodyScroll,
   bodyTouchAction = "pan-y",
@@ -101,30 +120,55 @@ export default function FeedPostView({
     >
       {overlaySlot}
 
-      {/* Image backdrop */}
+      {/* Image backdrop: whole photo (object-contain, never cropped); the
+          letterbox shows the post background. */}
       {imageUrl ? (
-        <div className="absolute inset-0" data-feed-image>
-          {imageFailed ? (
-            <div
-              className="flex h-full w-full items-center justify-center px-8 text-center text-sm"
-              style={{ color: "#e2e8f0" }}
-            >
+        imageFailed ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-800 px-8 text-center">
+            <p className="text-sm" style={{ color: "#e2e8f0" }} role="status">
               {imageFailedLabel}
-            </div>
-          ) : (
-            <>
+            </p>
+            {onImageRetry ? (
+              <button
+                type="button"
+                data-feed-action
+                onClick={onImageRetry}
+                className="min-h-11 rounded-full bg-white/15 px-4 text-sm font-semibold text-white transition active:scale-95"
+              >
+                {imageRetryLabel}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="absolute inset-0 flex items-center justify-center [container-type:size]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                key={imageAttempt}
                 src={imageUrl}
                 alt=""
-                className="h-full w-full object-cover"
+                data-feed-image
+                className="h-full w-full object-contain"
+                style={
+                  imageAspect
+                    ? {
+                        aspectRatio: imageAspect,
+                        width: `min(100cqw, calc(100cqh * (${imageAspect})))`,
+                        height: "auto",
+                        maxHeight: "100%",
+                      }
+                    : undefined
+                }
                 draggable={false}
+                loading={imageLoading}
+                decoding="async"
                 onError={onImageError}
+                onLoad={onImageLoad}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
-            </>
-          )}
-        </div>
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+          </>
+        )
       ) : null}
 
       {/* Centre preview (text-only, collapsed) */}
@@ -181,28 +225,17 @@ export default function FeedPostView({
       {/* Bottom section: author + (image body) + actions */}
       <div className="relative z-10 mt-auto flex items-end gap-3 px-4 pb-5">
         <div className="min-w-0 flex-1" style={{ maxWidth: "calc(100% - 56px)" }}>
-          {authorSlot}
-
-          {/* Body text for image posts */}
-          {imageUrl && !expanded ? (
-            <p
-              className="line-clamp-3 text-sm leading-relaxed"
-              style={{
-                color: colors.onImageColor,
-                textShadow: colors.textShadow,
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {displayText}
-            </p>
-          ) : null}
-
+          {/* Expanded body for image posts opens UPWARD from the author row,
+              so the author row and controls stay exactly where they were. */}
           {imageUrl && expanded ? (
             <div
               ref={bodyScrollRef}
-              className="mb-2 max-h-[40vh] overflow-y-auto"
-              style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+              className="absolute bottom-full left-4 right-4 mb-1 max-h-[40vh] overflow-y-auto rounded-xl bg-black/35 px-3 py-2 backdrop-blur-[2px]"
+              style={{
+                overscrollBehavior: "contain",
+                WebkitOverflowScrolling: "touch",
+                touchAction: bodyTouchAction,
+              }}
               onScroll={onBodyScroll}
             >
               <p
@@ -217,6 +250,26 @@ export default function FeedPostView({
                 {displayText}
               </p>
             </div>
+          ) : null}
+
+          {authorSlot}
+
+          {/* Body text for image posts (collapsed snippet). Kept, invisible,
+              while expanded so the row below does not shift. */}
+          {imageUrl && displayText ? (
+            <p
+              ref={expanded ? undefined : previewClampRef}
+              className={`line-clamp-3 text-sm leading-relaxed${expanded ? " invisible" : ""}`}
+              aria-hidden={expanded ? true : undefined}
+              style={{
+                color: colors.onImageColor,
+                textShadow: colors.textShadow,
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {displayText}
+            </p>
           ) : null}
 
           {controlSlot}

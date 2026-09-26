@@ -2,24 +2,27 @@
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import type { FeedCopy } from "@/i18n/feed-copy";
+import { moderationCopy } from "@/i18n/moderation-copy";
 import {
   classifyHitZone,
   isDoubleTap,
   isTapGesture,
-  resolveGestureOwner,
-  scrollBoundary,
-  shouldBlockOverscroll,
-  type GestureOwner,
-  type Rect,
+  shouldBlockBodyTouchMove,
   type TapRecord,
 } from "@/lib/feed-gesture";
-import { generatePreviewText } from "@/lib/post-preview-text";
-import { resolveDisplayText } from "@/components/feed/feed-list";
+import { postForegroundTone } from "@/lib/post-backgrounds";
+import {
+  foregroundTokens,
+  formatPostTime,
+  imageAspectRatio,
+  resolveCardTexts,
+  shouldShowExpand,
+} from "@/components/feed/feed-card-format";
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
 import { useFeedFollow } from "@/components/feed/use-feed-follow";
 import { useFeedLike, type LikeError, type LikeState } from "@/components/feed/use-feed-like";
-import { useFeedTranslate } from "@/components/feed/use-feed-translate";
+import { shouldToastTranslateFailure, useFeedTranslate } from "@/components/feed/use-feed-translate";
 import {
   Check,
   ChevronDown,
@@ -28,7 +31,7 @@ import {
   Heart,
   MessageCircle,
   MoreHorizontal,
-  UserPlus,
+  Plus,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -40,8 +43,14 @@ export type FeedPostCardProps = {
   viewerId: string | null;
   viewerLanguage: string;
   reducedMotion: boolean;
+  /** Read at mount only (initial expanded state for a restored card). */
   restoreExpanded?: boolean;
   restoreScrollTop?: number;
+  /**
+   * Load the image eagerly (the active card and the one after it). Every
+   * other card loads lazily. Defaults to lazy.
+   */
+  eagerImage?: boolean;
   onExpandStateChange?: (expanded: boolean, scrollTop: number) => void;
   onRequireLogin: (postId: string) => void;
   onOpenComments: (postId: string) => void;
@@ -55,6 +64,12 @@ export type FeedPostCardProps = {
   onGoPrevious?: () => void;
 };
 
+/**
+ * Enlarges a small control's hit area to >= 44px without changing its layout
+ * (an invisible ::before box around the visible label/icon).
+ */
+const HIT_44 = "relative before:absolute before:left-1/2 before:top-1/2 before:h-11 before:min-w-11 before:w-[calc(100%+12px)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+
 export default function FeedPostCard({
   post,
   cardHeight,
@@ -65,6 +80,7 @@ export default function FeedPostCard({
   reducedMotion,
   restoreExpanded = false,
   restoreScrollTop = 0,
+  eagerImage = false,
   onExpandStateChange,
   onRequireLogin,
   onOpenComments,
@@ -78,10 +94,11 @@ export default function FeedPostCard({
   onGoPrevious,
 }: FeedPostCardProps) {
   const isSignedIn = Boolean(viewerId);
-  void locale;
-
-  const preview = useMemo(() => generatePreviewText(post.sourceText), [post.sourceText]);
+  const hasImage = Boolean(post.image?.url);
   const displayName = post.author.name?.trim() || `@${post.author.handle}`;
+
+  const tone = postForegroundTone(post.backgroundKey, hasImage);
+  const fg = foregroundTokens(tone);
 
   const requireLogin = useCallback(() => onRequireLogin(post.id), [onRequireLogin, post.id]);
 
@@ -90,11 +107,13 @@ export default function FeedPostCard({
     (error: LikeError) => {
       if (error.kind === "rate_limited") {
         onToast(copy.rateLimited.replace("{seconds}", String(Math.max(1, Math.ceil(error.retryAfterSeconds)))));
+      } else if (error.kind === "account_restricted") {
+        onToast(moderationCopy(locale).accountRestricted);
       } else {
         onToast(copy.likeFailed);
       }
     },
-    [copy, onToast],
+    [copy, locale, onToast],
   );
   const handleLikeChange = useCallback(
     (state: LikeState) => onLikeChange(post.id, state),
@@ -116,21 +135,23 @@ export default function FeedPostCard({
     isSignedIn,
     onRequireLogin: requireLogin,
   });
+  // Toast only when a request the viewer made fails — never because the DTO
+  // arrived with `failed`.
+  const toastedFailuresRef = useRef(translate.requestFailureCount);
   useEffect(() => {
-    if (translate.failed && translate.mode === "retry") {
+    if (shouldToastTranslateFailure(toastedFailuresRef.current, translate.requestFailureCount)) {
       onToast(copy.translateFailed);
     }
-    // Only when failed transitions.
+    toastedFailuresRef.current = translate.requestFailureCount;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [translate.failed]);
+  }, [translate.requestFailureCount]);
 
-  const displayText = resolveDisplayText(
-    { sourceText: post.sourceText, displayText: translate.translatedText, translationState: post.translationState },
-    translate.showingTranslation,
+  // One shown text drives the centre preview, the image snippet and the
+  // expanded body, so all three switch language together.
+  const { displayText, previewText, previewTruncated } = useMemo(
+    () => resolveCardTexts(post.sourceText, translate.translatedText, translate.showingTranslation),
+    [post.sourceText, translate.translatedText, translate.showingTranslation],
   );
-  const previewText = translate.showingTranslation && translate.translatedText
-    ? generatePreviewText(translate.translatedText).text
-    : preview.text;
 
   // ── Follow ──
   const handleFollowError = useCallback(() => onToast(copy.followFailed), [copy, onToast]);
@@ -144,25 +165,81 @@ export default function FeedPostCard({
     onError: handleFollowError,
   });
 
+  // ── Image ──
+  const [imageFailed, setImageFailed] = useState(false);
+  const [imageAttempt, setImageAttempt] = useState(0);
+  const [measuredImage, setMeasuredImage] = useState<{ width: number; height: number } | null>(null);
+  const imageAspect = imageAspectRatio(post.image, measuredImage);
+  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      setMeasuredImage((prev) =>
+        prev && prev.width === img.naturalWidth && prev.height === img.naturalHeight
+          ? prev
+          : { width: img.naturalWidth, height: img.naturalHeight },
+      );
+    }
+  }, []);
+  const handleImageError = useCallback(() => setImageFailed(true), []);
+  const handleImageRetry = useCallback(() => {
+    setImageFailed(false);
+    setImageAttempt((n) => n + 1);
+  }, []);
+
   // ── Expand / collapse ──
+  // `restoreExpanded` is read once, at mount.
   const [expanded, setExpanded] = useState(restoreExpanded);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const previewClampRef = useRef<HTMLParagraphElement>(null);
   const [bodyNeedsScroll, setBodyNeedsScroll] = useState(false);
+  const [clampOverflows, setClampOverflows] = useState(false);
 
+  // Re-measure whenever the shown text changes (translate ↔ original) or the
+  // box resizes, so a longer translation never leaves the body unscrollable.
   useEffect(() => {
     if (!expanded) return;
     const el = bodyScrollRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      setBodyNeedsScroll(el.scrollHeight > el.clientHeight + 2);
-    });
-  }, [expanded]);
+    const measure = () => setBodyNeedsScroll(el.scrollHeight > el.clientHeight + 2);
+    const raf = requestAnimationFrame(measure);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, [expanded, displayText]);
+
+  // Image posts: "See more" only when the 3-line snippet really overflows.
+  useEffect(() => {
+    if (!hasImage || expanded) return;
+    const el = previewClampRef.current;
+    if (!el) {
+      setClampOverflows(false);
+      return;
+    }
+    const measure = () => setClampOverflows(el.scrollHeight > el.clientHeight + 1);
+    const raf = requestAnimationFrame(measure);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, [hasImage, expanded, displayText]);
 
   useEffect(() => {
     if (restoreExpanded && restoreScrollTop > 0 && bodyScrollRef.current) {
       bodyScrollRef.current.scrollTop = restoreScrollTop;
     }
   }, [restoreExpanded, restoreScrollTop]);
+
+  const showExpand = shouldShowExpand({
+    hasImage,
+    expanded,
+    previewTruncated,
+    clampOverflows,
+  });
 
   const handleExpand = useCallback(() => {
     setExpanded(true);
@@ -176,43 +253,50 @@ export default function FeedPostCard({
   }, [onExpandStateChange]);
 
   // ── Gesture routing ──
-  const gestureOwnerRef = useRef<GestureOwner>("none");
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      pointerStartRef.current = { x: e.clientX, y: e.clientY };
-      if (!expanded) {
-        gestureOwnerRef.current = "feed-swipe";
-        return;
-      }
-      const bodyEl = bodyScrollRef.current;
-      let bodyRect: Rect | null = null;
-      if (bodyEl) {
-        const r = bodyEl.getBoundingClientRect();
-        bodyRect = { top: r.top, left: r.left, bottom: r.bottom, right: r.right };
-      }
-      gestureOwnerRef.current = resolveGestureOwner(e.clientX, e.clientY, bodyRect);
-    },
-    [expanded],
-  );
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (gestureOwnerRef.current !== "body-scroll") return;
+  // A drag that starts in the expanded body scrolls the body only. At the
+  // body's top/bottom edge, the browser would chain the scroll into the feed
+  // and page to the next post; React's touch listeners are passive, so the
+  // guard is a native non-passive listener on the body scroller itself
+  // (`overscroll-behavior: contain` stays as the first line of defence).
+  useEffect(() => {
+    if (!expanded) return;
     const el = bodyScrollRef.current;
     if (!el) return;
-    const touch = e.touches[0];
-    const startY = pointerStartRef.current?.y ?? touch.clientY;
-    const deltaY = touch.clientY - startY;
-    const bound = scrollBoundary(el.scrollTop, el.scrollHeight, el.clientHeight);
-    if (shouldBlockOverscroll(-deltaY, bound)) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+    let lastY: number | null = null;
+    const onStart = (e: TouchEvent) => {
+      lastY = e.touches[0]?.clientY ?? null;
+    };
+    const onMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      const prevY = lastY ?? touch.clientY;
+      lastY = touch.clientY;
+      if (shouldBlockBodyTouchMove(prevY, touch.clientY, el) && e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    const onEnd = () => {
+      lastY = null;
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [expanded, displayText]);
+
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const handlePointerUpCleanup = useCallback(() => {
-    gestureOwnerRef.current = "none";
     pointerStartRef.current = null;
   }, []);
 
@@ -251,12 +335,12 @@ export default function FeedPostCard({
         lastTapRef.current = null;
         singleTapTimerRef.current = null;
         // Confirmed single tap: open image zoom if the tap landed on the image.
-        if (onImage && post.image?.url) {
+        if (onImage && !imageFailed && post.image?.url) {
           onOpenImage(post.image.url);
         }
       }, 320);
     },
-    [addLike, onOpenImage, post.image],
+    [addLike, imageFailed, onOpenImage, post.image],
   );
 
   useEffect(() => {
@@ -281,13 +365,15 @@ export default function FeedPostCard({
 
   const ariaLabel = `${displayName}: ${previewText}`;
 
+  const iconStyle = fg.iconFilter ? { filter: fg.iconFilter } : undefined;
+
   const authorSlot = (
     <div className="mb-2 flex items-center gap-2">
       <button
         type="button"
         data-feed-action
         onClick={() => onOpenAuthor(post.author.id)}
-        className="flex items-center gap-2 rounded-full transition active:opacity-70"
+        className="flex min-w-0 items-center gap-2 rounded-full transition active:opacity-70"
         aria-label={displayName}
       >
         {post.author.imageUrl ? (
@@ -297,22 +383,21 @@ export default function FeedPostCard({
             alt=""
             className="h-9 w-9 shrink-0 rounded-full object-cover"
             draggable={false}
+            loading={eagerImage ? "eager" : "lazy"}
+            decoding="async"
           />
         ) : (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold text-white">
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${fg.chipClass}`}>
             {displayName.charAt(0).toUpperCase()}
           </span>
         )}
-        <span className="max-w-[9rem] truncate text-sm font-semibold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+        <span className={`max-w-[9rem] truncate text-sm font-semibold ${fg.textClass}`}>
           {displayName}
         </span>
       </button>
 
-      <time
-        className="shrink-0 text-[11px] font-medium text-white/70"
-        dateTime={post.publishedAt}
-      >
-        {relativeTimeShort(post.publishedAt)}
+      <time className={`shrink-0 text-[11px] font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
+        {formatPostTime(post.publishedAt, locale)}
       </time>
 
       {followState === "idle" || followState === "pending" ? (
@@ -321,65 +406,64 @@ export default function FeedPostCard({
           data-feed-action
           onClick={follow}
           disabled={followState === "pending"}
-          className="flex h-6 shrink-0 items-center gap-1 rounded-full bg-white/20 px-2 text-[11px] font-semibold text-white backdrop-blur-sm transition active:scale-95 disabled:opacity-60"
-          aria-label={`${copy.follow} ${displayName}`}
+          className={`${HIT_44} flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition active:scale-90 disabled:opacity-60 ${fg.chipClass}`}
+          aria-label={copy.follow}
         >
-          <UserPlus size={12} strokeWidth={2.5} />
-          <span>{copy.follow}</span>
+          <Plus size={13} strokeWidth={3} aria-hidden="true" />
         </button>
       ) : null}
       {followState === "success" ? (
         <span
-          className="flex h-6 shrink-0 items-center gap-1 rounded-full bg-emerald-500/80 px-2 text-[11px] font-semibold text-white"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"
+          role="status"
           aria-label={copy.followed}
         >
-          <Check size={12} strokeWidth={3} />
+          <Check size={12} strokeWidth={3} aria-hidden="true" />
         </span>
       ) : null}
     </div>
   );
 
-  const controlSlot = (
-    <>
-      {preview.isTruncated && !expanded ? (
-        <button
-          type="button"
-          data-feed-action
-          onClick={handleExpand}
-          className="mt-1 text-xs font-semibold text-white opacity-90 transition hover:opacity-100 drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
-        >
-          {copy.expand}
-        </button>
-      ) : null}
+  const controlSlot =
+    showExpand || expanded || translate.mode !== "hidden" ? (
+      <div className="mt-1 flex items-center gap-4">
+        {showExpand ? (
+          <button
+            type="button"
+            data-feed-action
+            onClick={handleExpand}
+            className={`${HIT_44} text-xs font-semibold transition ${fg.textClass}`}
+          >
+            {copy.expand}
+          </button>
+        ) : null}
 
-      {expanded ? (
-        <button
-          type="button"
-          data-feed-action
-          onClick={handleCollapse}
-          className="mt-1 flex items-center gap-1 text-xs font-semibold text-white opacity-90 transition hover:opacity-100 drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
-          aria-label={copy.collapse}
-        >
-          <ChevronDown size={12} strokeWidth={2.5} />
-          <span>{copy.collapse}</span>
-        </button>
-      ) : null}
+        {expanded ? (
+          <button
+            type="button"
+            data-feed-action
+            onClick={handleCollapse}
+            className={`${HIT_44} flex items-center gap-1 text-xs font-semibold transition ${fg.textClass}`}
+          >
+            <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
+            <span>{copy.collapse}</span>
+          </button>
+        ) : null}
 
-      {translate.mode !== "hidden" ? (
-        <button
-          type="button"
-          data-feed-action
-          onClick={translate.toggle}
-          className="mt-1.5 flex items-center gap-1.5 rounded-sm py-1 text-xs font-medium text-white opacity-90 transition hover:opacity-100 drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
-          style={{ minHeight: "32px", minWidth: "44px" }}
-          aria-busy={translate.mode === "loading"}
-        >
-          <Globe size={13} strokeWidth={2} />
-          <span>{translateLabel}</span>
-        </button>
-      ) : null}
-    </>
-  );
+        {translate.mode !== "hidden" ? (
+          <button
+            type="button"
+            data-feed-action
+            onClick={translate.toggle}
+            className={`${HIT_44} flex items-center gap-1.5 text-xs font-medium transition ${fg.textClass}`}
+            aria-busy={translate.mode === "loading"}
+          >
+            <Globe size={13} strokeWidth={2} aria-hidden="true" />
+            <span>{translateLabel}</span>
+          </button>
+        ) : null}
+      </div>
+    ) : null;
 
   const actionSlot = (
     <>
@@ -389,17 +473,19 @@ export default function FeedPostCard({
         onClick={toggleLike}
         aria-pressed={likeState.likedByMe}
         className="flex flex-col items-center gap-0.5 transition active:scale-95"
-        aria-label={`${likeState.likedByMe ? copy.unlike : copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
+        // Fixed name; the pressed state alone announces liked/unliked.
+        aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
       >
         <Heart
           size={26}
           fill={likeState.likedByMe ? "#ef4444" : "none"}
-          stroke={likeState.likedByMe ? "#ef4444" : "#ffffff"}
+          stroke={likeState.likedByMe ? "#ef4444" : fg.iconColor}
           strokeWidth={1.8}
-          style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
+          style={iconStyle}
+          aria-hidden="true"
         />
         {likeState.likeCount > 0 ? (
-          <span className="text-[11px] font-semibold tabular-nums text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
+          <span className={`text-[11px] font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
             {likeState.likeCount}
           </span>
         ) : null}
@@ -412,14 +498,9 @@ export default function FeedPostCard({
         className="flex flex-col items-center gap-0.5 transition active:scale-95"
         aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
       >
-        <MessageCircle
-          size={26}
-          stroke="#ffffff"
-          strokeWidth={1.8}
-          style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
-        />
+        <MessageCircle size={26} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
         {post.commentCount > 0 ? (
-          <span className="text-[11px] font-semibold tabular-nums text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
+          <span className={`text-[11px] font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
             {post.commentCount}
           </span>
         ) : null}
@@ -432,15 +513,11 @@ export default function FeedPostCard({
         className="transition active:scale-95"
         aria-label={copy.more}
       >
-        <MoreHorizontal
-          size={26}
-          stroke="#ffffff"
-          strokeWidth={1.8}
-          style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
-        />
+        <MoreHorizontal size={26} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
       </button>
 
-      {/* Accessibility: explicit next / previous beyond the swipe gesture. */}
+      {/* Accessibility: explicit next / previous beyond the swipe gesture.
+          Hidden until focused (keyboard / switch access). */}
       {onGoPrevious ? (
         <button
           type="button"
@@ -449,7 +526,7 @@ export default function FeedPostCard({
           className="sr-only-focusable transition active:scale-95"
           aria-label={copy.previousPost}
         >
-          <ChevronUp size={22} strokeWidth={2} className="text-white/80" />
+          <ChevronUp size={22} strokeWidth={2} stroke={fg.iconColor} style={iconStyle} aria-hidden="true" />
         </button>
       ) : null}
       {onGoNext ? (
@@ -460,7 +537,7 @@ export default function FeedPostCard({
           className="sr-only-focusable transition active:scale-95"
           aria-label={copy.nextPost}
         >
-          <ChevronDown size={22} strokeWidth={2} className="text-white/80" />
+          <ChevronDown size={22} strokeWidth={2} stroke={fg.iconColor} style={iconStyle} aria-hidden="true" />
         </button>
       ) : null}
     </>
@@ -474,7 +551,7 @@ export default function FeedPostCard({
         handlePointerUpCleanup();
       }}
       onPointerCancel={handlePointerUpCleanup}
-      onTouchMove={handleTouchMove}
+      data-foreground-tone={tone}
     >
       <FeedPostView
         cardHeight={cardHeight}
@@ -488,6 +565,16 @@ export default function FeedPostCard({
         actionSlot={actionSlot}
         controlSlot={controlSlot}
         overlaySlot={<HeartBurst visible={showBurst && !reducedMotion} onDone={clearBurst} />}
+        onImageError={handleImageError}
+        imageFailed={imageFailed}
+        imageFailedLabel={copy.imageFailed}
+        onImageRetry={handleImageRetry}
+        imageRetryLabel={copy.retry}
+        imageAttempt={imageAttempt}
+        imageAspect={imageAspect}
+        onImageLoad={handleImageLoad}
+        imageLoading={eagerImage ? "eager" : "lazy"}
+        previewClampRef={previewClampRef}
         bodyScrollRef={bodyScrollRef}
         bodyTouchAction={bodyNeedsScroll ? "pan-y" : "none"}
         onBodyScroll={() => {
@@ -498,19 +585,4 @@ export default function FeedPostCard({
       />
     </div>
   );
-}
-
-/** Compact relative time (m / h / d) with an absolute fallback. */
-function relativeTimeShort(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "";
-  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (diffSec < 60) return `${diffSec}s`;
-  const min = Math.floor(diffSec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d`;
-  return new Date(then).toLocaleDateString();
 }
