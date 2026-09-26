@@ -6,13 +6,15 @@ import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
 import { MAX_COMMENT_LENGTH } from "./comment-state";
 import type { CommentNode } from "./comment-types";
+import type { WriteOutcome } from "./use-comment-sheet";
 import CommentBody from "./comment-body";
 import CommentMenu from "./comment-menu";
 
 export type CommentItemHandlers = {
   onToggleLike: (id: string) => void;
   onStartReply: (comment: CommentNode) => void;
-  onEdit: (id: string, text: string) => void;
+  /** Resolves "restricted" when the account is restricted: the edit stays open with the draft. */
+  onEdit: (id: string, text: string) => Promise<WriteOutcome> | void;
   onDelete: (id: string) => void;
   onReport: (comment: CommentNode) => void;
   onToggleTranslation: (id: string) => void;
@@ -156,8 +158,15 @@ export default function CommentItem({
                 type="button"
                 disabled={draft.trim().length === 0 || draft.length > MAX_COMMENT_LENGTH}
                 onClick={() => {
-                  handlers.onEdit(comment.id, draft);
+                  const text = draft;
                   setEditing(false);
+                  void Promise.resolve(handlers.onEdit(comment.id, text)).then((outcome) => {
+                    // A restricted account keeps what it typed: reopen the edit.
+                    if (outcome === "restricted") {
+                      setDraft(text);
+                      setEditing(true);
+                    }
+                  });
                 }}
                 className="rounded-md bg-primary px-2.5 py-1 text-[13px] font-medium text-primary-foreground disabled:opacity-40"
               >
@@ -181,21 +190,21 @@ export default function CommentItem({
             </div>
           </div>
         ) : (
-          <>
-            {comment.replyToUser && (
-              <span className="mr-1 text-[14px] font-medium text-primary">
-                {formatCommentsCopy(copy.replyToUser, {
-                  name: comment.replyToUser.name ?? comment.replyToUser.handle,
-                })}
-              </span>
-            )}
-            <CommentBody
-              comment={comment}
-              locale={locale}
-              canTranslate={canTranslate}
-              onToggleTranslation={() => handlers.onToggleTranslation(comment.id)}
-            />
-          </>
+          <CommentBody
+            comment={comment}
+            locale={locale}
+            canTranslate={canTranslate}
+            onToggleTranslation={() => handlers.onToggleTranslation(comment.id)}
+            prefix={
+              comment.replyToUser ? (
+                <span className="mr-1 font-medium text-primary">
+                  {formatCommentsCopy(copy.replyToUser, {
+                    name: comment.replyToUser.name ?? comment.replyToUser.handle,
+                  })}
+                </span>
+              ) : null
+            }
+          />
         )}
 
         {/* Actions row */}
@@ -205,7 +214,9 @@ export default function CommentItem({
               type="button"
               onClick={() => handlers.onToggleLike(comment.id)}
               aria-pressed={comment.liked}
-              aria-label={comment.liked ? copy.unlike : copy.like}
+              aria-label={formatCommentsCopy(comment.liked ? copy.unlikeWithCount : copy.likeWithCount, {
+                n: comment.likeCount,
+              })}
               className={cn(
                 "flex items-center gap-1 text-[13px]",
                 comment.liked ? "text-red-500" : "text-muted-foreground",

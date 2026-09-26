@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy } from "@/i18n/comments-copy";
+import { resolveCommentBodyView } from "./comment-state";
 import type { CommentNode } from "./comment-types";
 
 type Props = {
@@ -12,6 +14,8 @@ type Props = {
   onToggleTranslation: () => void;
   /** Whether translation is offered (viewer has a display language, source differs). */
   canTranslate: boolean;
+  /** Inline lead-in on the first line of the body (e.g. the reply's "@name"). */
+  prefix?: ReactNode;
 };
 
 /**
@@ -19,37 +23,34 @@ type Props = {
  * - line breaks preserved (whitespace-pre-wrap),
  * - a 3-line clamp measured against the CURRENTLY shown text (source or
  *   translation), expanded via "See more",
- * - a translation toggle line mirroring the post policy.
+ * - a translation toggle (Globe icon + label) mirroring the feed card. A
+ *   translation the server already applied is shown first, and "See original"
+ *   always shows the source text.
  */
-export default function CommentBody({ comment, locale, onToggleTranslation, canTranslate }: Props) {
+export default function CommentBody({ comment, locale, onToggleTranslation, canTranslate, prefix }: Props) {
   const copy = commentsCopy(locale);
-  const [expanded, setExpanded] = useState(false);
+  const view = resolveCommentBodyView(comment);
+  const shownText = view.text;
+
+  // "Expanded" belongs to one shown text: switching source <-> translation
+  // collapses in the SAME render, so the clamp is already applied when the
+  // overflow is measured below.
+  const [expandedFor, setExpandedFor] = useState<string | null>(null);
+  const expanded = expandedFor === shownText;
   const [clamped, setClamped] = useState(false);
   const textRef = useRef<HTMLParagraphElement | null>(null);
-
-  const overlay = comment.translation;
-  const showingTranslation = overlay?.state === "ready" && overlay.showing;
-  const shownText = showingTranslation ? overlay?.text ?? "" : comment.displayText ?? comment.sourceText ?? "";
 
   // Measure whether the body overflows 3 lines for the currently-shown text.
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
-      setExpanded(false);
       const el = textRef.current;
       if (!el) return;
-      const isOverflowing = el.scrollHeight - el.clientHeight > 1;
-      setClamped(isOverflowing);
+      setClamped(el.scrollHeight - el.clientHeight > 1);
     });
     return () => window.cancelAnimationFrame(id);
   }, [shownText]);
 
-  const translationLabel = (() => {
-    const state = overlay?.state;
-    if (state === "pending") return copy.translating;
-    if (state === "failed") return copy.translationFailed;
-    if (state === "ready" && overlay?.showing) return copy.seeOriginal;
-    return copy.seeTranslation;
-  })();
+  const translationLabel = copy[view.label];
 
   return (
     <div className="mt-0.5">
@@ -60,13 +61,14 @@ export default function CommentBody({ comment, locale, onToggleTranslation, canT
           !expanded && "line-clamp-3",
         )}
       >
+        {prefix}
         {shownText}
       </p>
 
       {clamped && !expanded && (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
+          onClick={() => setExpandedFor(shownText)}
           className="mt-0.5 text-[13px] font-medium text-muted-foreground hover:text-foreground"
         >
           {copy.seeMore}
@@ -75,7 +77,7 @@ export default function CommentBody({ comment, locale, onToggleTranslation, canT
       {expanded && clamped && (
         <button
           type="button"
-          onClick={() => setExpanded(false)}
+          onClick={() => setExpandedFor(null)}
           className="mt-0.5 text-[13px] font-medium text-muted-foreground hover:text-foreground"
         >
           {copy.seeLess}
@@ -86,14 +88,15 @@ export default function CommentBody({ comment, locale, onToggleTranslation, canT
         <button
           type="button"
           onClick={onToggleTranslation}
-          disabled={overlay?.state === "pending"}
+          disabled={comment.translation?.state === "pending"}
           aria-live="polite"
           className={cn(
-            "mt-1 block text-[13px] font-medium",
-            overlay?.state === "failed" ? "text-destructive" : "text-primary",
+            "mt-1 flex items-center gap-1 text-[13px] font-medium",
+            view.label === "translationFailed" ? "text-destructive" : "text-primary",
             "disabled:opacity-60",
           )}
         >
+          <Globe size={13} strokeWidth={2} aria-hidden="true" />
           {translationLabel}
         </button>
       )}

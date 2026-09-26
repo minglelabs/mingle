@@ -13,7 +13,8 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
+import { commentsCopy, formatCommentsCopy, formatViewReplies } from "@/i18n/comments-copy";
+import { moderationCopy } from "@/i18n/moderation-copy";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import ReportSheet, { type ReportTarget } from "@/components/reports/report-sheet";
 import type { CommentNode } from "./comment-types";
@@ -45,6 +46,21 @@ export type CommentSheetProps = {
  * FeedShell (`viewerLanguage = locale`); it drives translation only, never the
  * body's source language.
  */
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function focusableWithin(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+  );
+}
 
 export default function CommentSheet(props: CommentSheetProps) {
   const { open, postId, postAuthorId, locale, viewerId, initialCommentId, onClose, onCommentCountChange, onRequireLogin } = props;
@@ -141,17 +157,72 @@ export default function CommentSheet(props: CommentSheetProps) {
     };
   }, [open]);
 
-  // ── Scroll to initialCommentId once its thread is expanded ───────────────
+  // ── Scroll to initialCommentId ONCE, after its thread is expanded ────────
+  // The effect re-runs as the list/expansion changes only until the target
+  // row exists; after the first scroll, likes, replies and expansions never
+  // yank the list back to it. Reset when the sheet closes.
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) scrolledToRef.current = null;
+  }, [open]);
   useEffect(() => {
     if (sheet.phase !== "ready" || !initialCommentId) return;
+    if (scrolledToRef.current === initialCommentId) return;
     const container = scrollRef.current;
     if (!container) return;
     const id = window.requestAnimationFrame(() => {
+      if (scrolledToRef.current === initialCommentId) return;
       const target = container.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(initialCommentId)}"]`);
-      if (target) target.scrollIntoView({ block: "center" });
+      if (!target) return;
+      scrolledToRef.current = initialCommentId;
+      target.scrollIntoView({ block: "center" });
     });
     return () => window.cancelAnimationFrame(id);
   }, [sheet.phase, initialCommentId, sheet.expanded, sheet.nodes]);
+
+  // ── Focus: move into the sheet, trap Tab, restore on close ────────────────
+  const reportOpenRef = useRef(false);
+  useEffect(() => {
+    reportOpenRef.current = reportTarget !== null;
+  }, [reportTarget]);
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const raf = window.requestAnimationFrame(() => {
+      if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      // The nested report sheet manages its own focus.
+      if (event.key !== "Tab" || reportOpenRef.current) return;
+      const focusables = focusableWithin(panel);
+      if (focusables.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && panel.contains(active);
+      if (event.shiftKey) {
+        if (!inside || active === first || active === panel) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (!inside || active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", onKeyDown);
+      if (previouslyFocused && previouslyFocused.isConnected) previouslyFocused.focus({ preventScroll: true });
+    };
+  }, [open, mounted]);
 
   const handlers: CommentItemHandlers = {
     onToggleLike: sheet.toggleLike,
@@ -178,8 +249,9 @@ export default function CommentSheet(props: CommentSheetProps) {
     const n = sheet.notice;
     if (!n) return null;
     if (n.kind === "rate_limited") return formatCommentsCopy(copy.rateLimited, { n: n.retryAfterSeconds });
+    if (n.kind === "account_restricted") return moderationCopy(locale).accountRestricted;
     return copy.actionFailed;
-  }, [sheet.notice, copy]);
+  }, [sheet.notice, copy, locale]);
 
   if (!open || !mounted) return null;
 
@@ -201,7 +273,9 @@ export default function CommentSheet(props: CommentSheetProps) {
 
       <div
         ref={panelRef}
+        tabIndex={-1}
         className={cn(
+          "outline-none",
           "relative flex max-h-[85vh] min-h-[50vh] flex-col overflow-hidden rounded-t-2xl bg-background shadow-2xl",
           "motion-safe:animate-in motion-safe:slide-in-from-bottom motion-safe:duration-200",
         )}
@@ -277,7 +351,7 @@ export default function CommentSheet(props: CommentSheetProps) {
                       >
                         {isExpanded
                           ? copy.hideReplies
-                          : formatCommentsCopy(copy.viewReplies, { n: replies.length })}
+                          : formatViewReplies(locale, replies.length)}
                       </button>
 
                       {isExpanded &&

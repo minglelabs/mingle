@@ -7,12 +7,15 @@ import type { CommentNode } from "./comment-types";
 import {
   applyDelete,
   applyEdit,
+  applyCreateFailure,
   applyLikeToggle,
   confirmNode,
+  failedRetryTarget,
   findNode,
   insertOptimistic,
   makeOptimisticNode,
-  markFailed,
+  mapNode,
+  nextTranslationToggle,
   removeNode,
   rootIdOf,
   setTranslation,
@@ -23,6 +26,8 @@ export type LoadPhase = "idle" | "loading" | "ready" | "error";
 
 export type Notice =
   | { kind: "rate_limited"; retryAfterSeconds: number }
+  /** The account is restricted by an operator: permanent, no retry offered. */
+  | { kind: "account_restricted" }
   | { kind: "error"; message: string }
   | null;
 
@@ -37,6 +42,20 @@ export type ReplyTarget = {
 } | null;
 
 type Author = NonNullable<CommentNode["author"]>;
+
+/** Where a new comment goes: a top-level comment (null) or a reply in a thread. */
+type SendTarget = {
+  parentId: string | null;
+  replyToUserId: string | null;
+  replyToUser: CommentNode["replyToUser"];
+} | null;
+
+/**
+ * Result of a create or edit. `restricted` means the account is restricted:
+ * the caller keeps what the viewer typed (composer text / edit draft) because
+ * no failed row with a retry is created for it.
+ */
+export type WriteOutcome = "sent" | "failed" | "restricted" | "skipped";
 
 export type UseCommentSheetArgs = {
   open: boolean;
@@ -87,8 +106,12 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
   // Guards against double-fire (rapid taps) per comment id.
   const likeInFlight = useRef<Set<string>>(new Set());
 
+  // Latest count, so a create/delete resolving after another one counts from
+  // the current value rather than the one its closure captured.
+  const commentCountRef = useRef(0);
   const reportCount = useCallback(
     (count: number) => {
+      commentCountRef.current = count;
       setCommentCount(count);
       onCommentCountChange?.(count);
     },
@@ -103,6 +126,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       return;
     }
     setNodes(toNodes(res.comments));
+    commentCountRef.current = res.commentCount;
     setCommentCount(res.commentCount);
     setServerDisplayLanguage(res.displayLanguage ?? null);
     setPhase("ready");
@@ -161,6 +185,13 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     setNotice({ kind: "rate_limited", retryAfterSeconds });
   }, []);
 
+  /** Surface a failed write: restricted account, rate limit, or generic. */
+  const reportFailure = useCallback((res: { ok: false; error: string; retryAfterSeconds?: number; accountRestricted?: boolean }) => {
+    if (api.isAccountRestricted(res)) setNotice({ kind: "account_restricted" });
+    else if (api.isRateLimited(res)) handleRateLimited(res.retryAfterSeconds);
+    else setNotice({ kind: "error", message: res.error });
+  }, [handleRateLimited]);
+
   // ─── Like (optimistic, double-tap guarded) ──────────────────────────────
   const toggleLike = useCallback(
     async (id: string) => {
@@ -182,26 +213,30 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       if (!res.ok) {
         // Roll back.
         setNodes((n) => applyLikeToggle(n, id, !nextLiked));
-        if (api.isRateLimited(res)) handleRateLimited(res.retryAfterSeconds);
-        else setNotice({ kind: "error", message: res.error });
+        reportFailure(res);
       }
     },
-    [nodes, viewerId, onRequireLogin, handleRateLimited],
+    [nodes, viewerId, onRequireLogin, reportFailure],
   );
 
   // ─── Create (optimistic) ─────────────────────────────────────────────────
-  const submit = useCallback(
-    async (text: string) => {
+  /**
+   * Send one comment to an EXPLICIT target. The composer passes its current
+   * reply target; a retry passes the target the failed row was written for,
+   * so a retry never lands in whatever thread the composer points at now.
+   */
+  const send = useCallback(
+    async (text: string, target: SendTarget, fromComposer: boolean): Promise<WriteOutcome> => {
       const trimmed = text.trim();
-      if (!trimmed || sending) return;
+      if (!trimmed || sending) return "skipped";
       if (viewerId === null || !viewer) {
         onRequireLogin();
-        return;
+        return "skipped";
       }
       setNotice(null);
       setSending(true);
 
-      const target = replyTarget;
+      const parentId = target?.parentId ?? null;
       const tempId = nextTempId();
       const optimistic = makeOptimisticNode({
         tempId,
@@ -213,30 +248,31 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         // not the display language. Leave it null: the server detects the body
         // language on create. The optimistic row just shows the original text.
         sourceLanguage: null,
-        parentId: target?.parentId ?? null,
-        replyToUserId: target?.replyToUserId ?? null,
-        replyToUser: target?.replyToUser ?? null,
+        parentId,
+        replyToUserId: parentId ? target?.replyToUserId ?? null : null,
+        replyToUser: parentId ? target?.replyToUser ?? null : null,
       });
       setNodes((n) => insertOptimistic(n, optimistic));
       // A direct reply should reveal the thread it lands in.
-      if (target?.parentId) {
-        setExpanded((prev) => new Set(prev).add(target.parentId));
+      if (parentId) {
+        setExpanded((prev) => new Set(prev).add(parentId));
       }
 
       const res = await api.createComment(postId, {
         sourceText: text,
         // Server detects the body language; do not send the display language.
         sourceLanguage: null,
-        parentId: target?.parentId ?? null,
-        replyToUserId: target?.replyToUserId ?? null,
+        parentId,
+        replyToUserId: parentId ? target?.replyToUserId ?? null : null,
       });
       setSending(false);
 
       if (!res.ok) {
-        setNodes((n) => markFailed(n, tempId));
-        if (api.isRateLimited(res)) handleRateLimited(res.retryAfterSeconds);
-        else setNotice({ kind: "error", message: res.error });
-        return;
+        // Restricted: permanent, so no failed row + retry; the composer keeps the text.
+        const restricted = api.isAccountRestricted(res);
+        setNodes((n) => applyCreateFailure(n, tempId, restricted));
+        reportFailure(res);
+        return restricted ? "restricted" : "failed";
       }
 
       setNodes((n) =>
@@ -248,42 +284,36 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
           createdAt: res.createdAt,
         }),
       );
-      setReplyTarget(null);
-      reportCount(commentCount + 1);
+      if (fromComposer) setReplyTarget(null);
+      reportCount(commentCountRef.current + 1);
+      return "sent";
     },
-    [
-      sending,
-      viewerId,
-      viewer,
-      replyTarget,
-      postId,
-      commentCount,
-      reportCount,
-      onRequireLogin,
-      handleRateLimited,
-    ],
+    [sending, viewerId, viewer, postId, reportCount, onRequireLogin, reportFailure],
   );
 
-  /** Retry a failed optimistic row using its preserved text. */
+  /** Composer submit: goes to the composer's current reply target. */
+  const submit = useCallback(
+    (text: string): Promise<WriteOutcome> =>
+      send(
+        text,
+        replyTarget
+          ? { parentId: replyTarget.parentId, replyToUserId: replyTarget.replyToUserId, replyToUser: replyTarget.replyToUser }
+          : null,
+        true,
+      ),
+    [send, replyTarget],
+  );
+
+  /** Retry a failed optimistic row using its preserved text AND its own target. */
   const retryFailed = useCallback(
     async (id: string) => {
       const node = findNode(nodes, id);
       if (!node || !node.failed || !node.sourceText) return;
-      // Remove the failed placeholder and re-submit the same text/target.
+      // Remove the failed placeholder and re-send to the thread it was written for.
       setNodes((n) => removeNode(n, id));
-      setReplyTarget(
-        node.parentId
-          ? {
-              parentId: node.parentId,
-              replyToUserId: node.replyToUserId,
-              replyToUser: node.replyToUser,
-              label: node.replyToUser?.name ?? node.replyToUser?.handle ?? "",
-            }
-          : null,
-      );
-      await submit(node.sourceText);
+      await send(node.sourceText, failedRetryTarget(node), false);
     },
-    [nodes, submit],
+    [nodes, send],
   );
 
   const discardFailed = useCallback((id: string) => {
@@ -292,11 +322,11 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
 
   // ─── Edit ────────────────────────────────────────────────────────────────
   const edit = useCallback(
-    async (id: string, text: string) => {
+    async (id: string, text: string): Promise<WriteOutcome> => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed) return "skipped";
       const before = findNode(nodes, id);
-      if (!before) return;
+      if (!before) return "skipped";
       // As with create, the edited text is in the viewer's own language; send
       // null so the server re-detects the body language and re-translates.
       setNodes((n) => applyEdit(n, id, text, null));
@@ -304,15 +334,24 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       if (!res.ok) {
         // Roll back to the previous body.
         setNodes((n) =>
-          applyEdit(n, id, before.sourceText ?? "", before.sourceLanguage).map((node) =>
-            node.id === id ? { ...node, bodyVersion: before.bodyVersion, edited: before.edited } : node,
-          ),
+          mapNode(n, id, (node) => ({
+            ...node,
+            sourceText: before.sourceText,
+            sourceLanguage: before.sourceLanguage,
+            displayText: before.displayText,
+            displayLanguage: before.displayLanguage,
+            translationState: before.translationState,
+            translation: before.translation,
+            bodyVersion: before.bodyVersion,
+            edited: before.edited,
+          })),
         );
-        if (api.isRateLimited(res)) handleRateLimited(res.retryAfterSeconds);
-        else setNotice({ kind: "error", message: res.error });
+        reportFailure(res);
+        return api.isAccountRestricted(res) ? "restricted" : "failed";
       }
+      return "sent";
     },
-    [nodes, handleRateLimited],
+    [nodes, reportFailure],
   );
 
   // ─── Delete ──────────────────────────────────────────────────────────────
@@ -320,30 +359,28 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     async (id: string) => {
       const res = await api.deleteComment(id);
       if (!res.ok) {
-        if (api.isRateLimited(res)) handleRateLimited(res.retryAfterSeconds);
-        else setNotice({ kind: "error", message: res.error });
+        reportFailure(res);
         return;
       }
       setNodes((n) => applyDelete(n, id, res.hadReplies));
-      reportCount(Math.max(0, commentCount - 1));
+      reportCount(Math.max(0, commentCountRef.current - 1));
     },
-    [commentCount, reportCount, handleRateLimited],
+    [reportCount, reportFailure],
   );
 
   // ─── Translate (on demand, toggle) ─────────────────────────────────────────
   const toggleTranslation = useCallback(
     async (id: string) => {
       const node = findNode(nodes, id);
-      if (!node || node.isDeleted) return;
+      if (!node) return;
 
-      // Already have a translation: just flip showing.
-      if (node.translation && node.translation.state === "ready") {
-        setNodes((n) =>
-          setTranslation(n, id, { ...node.translation!, showing: !node.translation!.showing }),
-        );
+      // A known translation (server-provided or fetched) only flips; no network.
+      const step = nextTranslationToggle(node);
+      if (step.kind === "noop") return;
+      if (step.kind === "flip") {
+        setNodes((n) => setTranslation(n, id, step.translation));
         return;
       }
-      if (node.translation && node.translation.state === "pending") return;
       const targetLanguage = serverDisplayLanguage || viewerLanguage;
       if (!targetLanguage) return;
 
