@@ -2,14 +2,9 @@
 
 import { buildClientApiPath } from "@/lib/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { optimisticLike, reconcileLike, type LikeState } from "./like-state";
+import { likeFailureFromResponse, optimisticLike, reconcileLike, type LikeError, type LikeState } from "./like-state";
 
-export type { LikeState } from "./like-state";
-
-/** Reported to the caller so it can show a toast and update the DTO. */
-export type LikeError =
-  | { kind: "rate_limited"; retryAfterSeconds: number }
-  | { kind: "generic" };
+export type { LikeError, LikeState } from "./like-state";
 
 type UseFeedLikeOptions = {
   postId: string;
@@ -39,6 +34,8 @@ type UseFeedLikeReturn = {
  * - Optimistic flip, rolled back to the prior count/flag on failure.
  * - A 429 (`{ error: 'rate_limited', retryAfterSeconds }`) rolls back and
  *   surfaces the retry hint.
+ * - A 403 `account_restricted` rolls back and reports `account_restricted`
+ *   (the caller shows the moderation notice; nothing is retried).
  * - Concurrent taps are coalesced (`pendingRef`) so a double click cannot send
  *   two conflicting writes.
  * - Double-tap adds a like but never removes one, and shows the burst even when
@@ -81,20 +78,11 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
           cache: "no-store",
         });
 
-        if (res.status === 429) {
-          const body = (await res.json().catch(() => ({}))) as { retryAfterSeconds?: number };
+        const failure = await likeFailureFromResponse(res);
+        if (failure) {
           setState(prev);
           onChange?.(prev);
-          onError?.({
-            kind: "rate_limited",
-            retryAfterSeconds: typeof body.retryAfterSeconds === "number" ? body.retryAfterSeconds : 5,
-          });
-          return;
-        }
-        if (!res.ok) {
-          setState(prev);
-          onChange?.(prev);
-          onError?.({ kind: "generic" });
+          onError?.(failure);
           return;
         }
 
