@@ -43,19 +43,22 @@ const PRESETS: readonly PostBackgroundPreset[] = [
   // ── Gradients ──
   {
     key: "sunset-orange",
-    background: "linear-gradient(135deg, #f97316 0%, #ec4899 100%)",
+    // #ea580c (not #f97316): white large text stays >= 3:1 at the light stop.
+    background: "linear-gradient(135deg, #ea580c 0%, #ec4899 100%)",
     textColor: "#ffffff",
     textShadow: "0 1px 6px rgba(0,0,0,0.35)",
   },
   {
     key: "ocean-blue",
-    background: "linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)",
+    // Deepened from #3b82f6 → #06b6d4 (cyan-500 was ~2.4:1 against white).
+    background: "linear-gradient(135deg, #2563eb 0%, #0e7490 100%)",
     textColor: "#ffffff",
     textShadow: "0 1px 6px rgba(0,0,0,0.3)",
   },
   {
     key: "aurora-green",
-    background: "linear-gradient(135deg, #10b981 0%, #6366f1 100%)",
+    // #059669 (not #10b981, ~2.5:1) keeps white large text >= 3:1.
+    background: "linear-gradient(135deg, #059669 0%, #6366f1 100%)",
     textColor: "#ffffff",
     textShadow: "0 1px 6px rgba(0,0,0,0.3)",
   },
@@ -68,8 +71,9 @@ const PRESETS: readonly PostBackgroundPreset[] = [
   {
     key: "golden-hour",
     background: "linear-gradient(135deg, #fbbf24 0%, #f97316 100%)",
-    textColor: "#ffffff",
-    textShadow: "0 1px 6px rgba(0,0,0,0.3)",
+    // Dark ink: white on amber #fbbf24 was ~1.7:1.
+    textColor: "#431407",
+    textShadow: "none",
   },
   {
     key: "midnight-purple",
@@ -80,14 +84,24 @@ const PRESETS: readonly PostBackgroundPreset[] = [
   // ── Patterned / textured ──
   {
     key: "paper-texture",
-    background: "linear-gradient(145deg, #fefce8 0%, #fef3c7 50%, #fde68a 100%)",
+    // Paper grain: a fine dot grid + faint fibres over the warm paper tone.
+    background: [
+      "radial-gradient(rgba(120,53,15,0.09) 0.8px, transparent 1.2px) 0 0 / 7px 7px",
+      "repeating-linear-gradient(100deg, rgba(120,53,15,0.035) 0 1px, transparent 1px 11px)",
+      "linear-gradient(145deg, #fefce8 0%, #fef3c7 50%, #fde68a 100%)",
+    ].join(", "),
     textColor: "#451a03",
     textShadow: "none",
   },
   {
     key: "dark-mesh",
-    background:
-      "radial-gradient(circle at 20% 30%, #1e293b 0%, #0f172a 60%), #0f172a",
+    // Mesh: two crossing hairline grids over a soft navy glow.
+    background: [
+      "repeating-linear-gradient(45deg, rgba(148,163,184,0.08) 0 1px, transparent 1px 18px)",
+      "repeating-linear-gradient(-45deg, rgba(148,163,184,0.08) 0 1px, transparent 1px 18px)",
+      "radial-gradient(circle at 20% 30%, #1e293b 0%, #0f172a 60%)",
+      "#0f172a",
+    ].join(", "),
     textColor: "#e2e8f0",
     textShadow: "0 1px 4px rgba(0,0,0,0.5)",
   },
@@ -155,6 +169,12 @@ export const PRESET_COUNT = PRESETS.length;
  * the catalog automatically fixes every overlay drawn on it.
  */
 export type PostForegroundTone = "light" | "dark";
+
+/** Glyph color for each tone (single source for card overlays and the header). */
+export const POST_FOREGROUND_COLOR: Readonly<Record<PostForegroundTone, string>> = {
+  light: "#ffffff",
+  dark: "#0f172a",
+};
 
 export function postForegroundTone(
   backgroundKey: string | null | undefined,
