@@ -85,7 +85,9 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { myPostsHref } from "@/lib/feed-routes";
+import { composeCopy } from "@/i18n/compose-copy";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -450,6 +452,15 @@ function ProfileSettingsPanel({
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
+  const postsRouter = useRouter();
+  const postsMenu = useMemo(() => composeCopy(locale), [locale]);
+  const goToMyPosts = useCallback(
+    (section: "archived" | "trash" | "hidden") => {
+      onClose();
+      postsRouter.push(myPostsHref(locale, section));
+    },
+    [locale, onClose, postsRouter],
+  );
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -889,6 +900,35 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <button
+                type="button"
+                onClick={() => goToMyPosts("archived")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Archive size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.archiveTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("trash")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Trash2 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.trashTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("hidden")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <EyeOff size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.hiddenTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
