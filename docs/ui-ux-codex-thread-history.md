@@ -3085,3 +3085,33 @@ A four-part audit of the posting feed against the numbered spec (`docs/posting-f
 - Issue: The server's 403 `account_restricted` was never recognised by the client.
 - Resolution: A shared detector (`lib/account-restriction.ts`) and one 15-language notice (`i18n/moderation-copy.ts`). Every write path shows the notice, offers no retry and keeps the user's input.
 - Verification: `moderation-copy`, `like-state`, `publish-store`, `draft-autosave` and comment API tests.
+
+## 2026-09-26 — Posting feed: official badge, read-only archived posts, measurement (wave 2)
+
+Merged into `feat/posting-feed` (not `main`). Web 286 files / 2,930 tests, RN 111 tests, TypeScript clean. On-device checks pending.
+
+### Operator content was indistinguishable from member posts
+- Surface: Feed card author row, comments and replies, other-user profile, My page, people search rows.
+- Issue: The initial content is posted by the Mingle team account, but nothing marked it (spec item 84).
+- User impact: Readers could take operator-written posts for other members' experiences.
+- Resolution:
+  - A new `User.isOfficial` column (migration `20260926170000_add_user_official_flag`) marks the account, and one shared `<OfficialBadge>` renders it everywhere in 15 languages.
+  - On feed cards the badge follows the card glyph tone (white on photos and dark backgrounds, sky pill on light ones).
+  - Long names truncate and the badge stays visible.
+  - The badge never changes counts or ranking.
+  - Operators mark the account with the seed script (`--mark-official`); `--create-author` creates it as official.
+- Verification: Serializer, list, comment and search response tests (failed before the fix). On device: narrow screens, RTL (ar).
+
+### Authors opening an archived or trashed post could try to like or comment
+- Surface: Full-screen viewer opened from the archive or trash list.
+- Issue: The author can now load their own archived and trashed posts, but likes and comments on them return 404.
+- Resolution:
+  - A pill under the header reads "Archived post" or "Post in trash" (15 languages).
+  - Like and comment are dimmed and disabled, and double-tap like and the heart effect are off.
+  - The ⋯ menu (restore, delete) is unchanged.
+- Verification: `read-only-post` tests. On device: pill position under the notch.
+
+### Following from a restricted account showed a generic failure
+- Surface: Feed card "+" follow button.
+- Resolution: A 403 `account_restricted` shows the shared restricted-account notice with no retry, and "+" stays.
+- Verification: `use-feed-follow` tests.

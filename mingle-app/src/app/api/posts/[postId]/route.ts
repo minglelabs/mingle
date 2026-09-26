@@ -69,7 +69,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       likeCount: true,
       commentCount: true,
       publishedAt: true,
-      author: { select: { id: true, handle: true, name: true, image: true } },
+      author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
     },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })

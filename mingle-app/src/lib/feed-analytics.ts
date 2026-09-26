@@ -14,7 +14,7 @@
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import type { FeedSource } from "@/lib/feed-routes";
-import { captureMingleClientEvent, type MingleClientEvent } from "@/lib/posthog-client";
+import { captureMingleClientEvent } from "@/lib/posthog-client";
 
 // ---------------------------------------------------------------------------
 // Event names (`mingle_<area>_<action>`, like the existing client events)
@@ -305,10 +305,7 @@ export const feedEvents = {
 type FeedEventSink = (event: FeedAnalyticsEvent) => void;
 
 const defaultSink: FeedEventSink = ({ event, properties }) => {
-  // The feed names are not in the shared `MingleClientEvent` union yet
-  // (posthog-client.ts is outside this change); the builders above are the
-  // typed source of truth for them.
-  captureMingleClientEvent(event as unknown as MingleClientEvent, properties);
+  captureMingleClientEvent(event, properties);
 };
 
 let sink: FeedEventSink = defaultSink;
