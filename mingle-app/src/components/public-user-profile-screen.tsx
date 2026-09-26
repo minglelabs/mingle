@@ -39,6 +39,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -197,6 +198,8 @@ export default function PublicUserProfileScreen({
   // Rollout gate (W4): hide another user's post grid for a pre-2.2.0 client.
   const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
+  // The profile's real scroller; the post grid restores its offset on return.
+  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
@@ -524,7 +527,7 @@ export default function PublicUserProfileScreen({
         <div aria-hidden="true" />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />
@@ -664,7 +667,7 @@ export default function PublicUserProfileScreen({
             </section>
             {!profile.isBlocked && postingFeedSupported !== false ? (
               <section className="border-t border-gray-100 pt-0.5">
-                <ProfilePostGrid locale={locale} authorId={profile.id} />
+                <ProfilePostGrid locale={locale} authorId={profile.id} scrollContainerRef={profileScrollRef} />
               </section>
             ) : null}
           </>
