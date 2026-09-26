@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Search, UserRound, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import type { AppLocale } from "@/i18n";
-import { buildClientApiPath, clientApiNamespace, clientSupportsPostingFeed } from "@/lib/api-contract";
-import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { buildClientApiPath, clientSupportsPostingFeed } from "@/lib/api-contract";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
 import { searchCopy } from "@/i18n/search-copy";
 import { feedSourceEndpoint } from "@/lib/feed-routes";
-import { formatHandle, isSearchExcludedHandle } from "@/lib/handles";
-import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { isSearchExcludedHandle } from "@/lib/handles";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
+import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
 import {
   resolveResultsRetention,
   shouldApplyResponse,
@@ -29,25 +28,13 @@ import {
 
 const PEOPLE_PREVIEW_LIMIT = 3;
 
-/** Same request headers the legacy connect search sent, for PostHog attribution. */
-function buildConnectTrackingHeaders(): Record<string, string> {
-  const clientPlatform = clientApiNamespace.startsWith("android/")
-    ? "android"
-    : clientApiNamespace.startsWith("ios/")
-      ? "ios"
-      : "web";
-  return {
-    "x-mingle-user-id": getOrCreateTrackingUserId(),
-    "x-mingle-api-namespace": clientApiNamespace,
-    "x-mingle-client-platform": clientPlatform,
-  };
-}
-
 export type UnifiedSearchProps = {
   locale: AppLocale;
   displayLanguage?: string | null;
   /** Whether recent searches may be shown (signed-out hides them). */
   canUseRecentSearches: boolean;
+  /** The signed-in user's id, so their own row never shows a follow button. Empty when signed out. */
+  currentUserId?: string;
   /** Open a person's profile (people result / see-all). */
   onOpenPerson: (userId: string) => void;
   /** Open a post in the search viewer, scoped to this query's results. */
@@ -64,6 +51,7 @@ export default function UnifiedSearch({
   locale,
   displayLanguage,
   canUseRecentSearches,
+  currentUserId,
   onOpenPerson,
   onOpenSearchPost,
   onSeeAllPeople,
@@ -92,8 +80,12 @@ export default function UnifiedSearch({
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [postsEmpty, setPostsEmpty] = useState(false);
-
   const normalizedQuery = query.trim();
+  const lastSearchContextRef = useRef<PeopleSearchContext>(null);
+  const { followInFlightIds, followError, toggleFollow } = usePeopleFollow(
+    setPeople,
+    () => (lastSearchContextRef.current?.query === normalizedQuery ? lastSearchContextRef.current : null),
+  );
 
   // Load recent searches when the empty field gains focus.
   useEffect(() => {
@@ -147,6 +139,7 @@ export default function UnifiedSearch({
       setPeople(users.slice(0, PEOPLE_PREVIEW_LIMIT));
       setHasMorePeople(hasMore);
       setPeopleQuery(searchQuery);
+      lastSearchContextRef.current = { query: searchQuery, sequence: analyticsSeq, properties: searchProperties };
     } catch {
       // A failed request is shown as "no results", no error/retry UI.
       captureMingleClientEvent("mingle_connect_search_completed", {
@@ -299,10 +292,21 @@ export default function UnifiedSearch({
                   ) : null}
                 </div>
                 <ul>
-                  {showPeople.map((person) => (
-                    <PersonRow key={person.id} person={person} fallback={copy.userFallback} onOpen={onOpenPerson} />
+                  {showPeople.map((person, index) => (
+                    <PersonRow
+                      key={person.id}
+                      person={person}
+                      labels={{ userFallback: copy.userFallback, follow: copy.follow, following: copy.following }}
+                      onOpen={onOpenPerson}
+                      canFollow={Boolean(currentUserId) && person.id !== currentUserId}
+                      isFollowPending={followInFlightIds.has(person.id)}
+                      onToggleFollow={() => void toggleFollow(person, index, showPeople.length)}
+                    />
                   ))}
                 </ul>
+                {followError ? (
+                  <p className="px-4 pt-1 text-[13px] text-red-500" role="alert">{copy.followError}</p>
+                ) : null}
               </section>
             ) : null}
 
@@ -338,56 +342,6 @@ export default function UnifiedSearch({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function PersonRow({
-  person,
-  fallback,
-  onOpen,
-}: {
-  person: ConnectSearchResult;
-  fallback: string;
-  onOpen: (userId: string) => void;
-}) {
-  const profileName = person.name?.trim() || "";
-  const rawHandle = person.handle?.trim() || "";
-  const formattedHandle = formatHandle(rawHandle);
-  const name = profileName || rawHandle || fallback;
-  const showHandle = Boolean(formattedHandle && profileName
-    && profileName.replace(/^@/, "").toLocaleLowerCase() !== rawHandle.toLocaleLowerCase());
-
-  return (
-    <li className="px-4 py-2.5">
-      <button
-        type="button"
-        onClick={() => onOpen(person.id)}
-        className="flex min-w-0 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-        aria-label={showHandle ? `${name}, ${formattedHandle}` : name}
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-          {person.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={person.image}
-              alt=""
-              className="h-full w-full object-cover"
-              style={{ transform: buildProfileImageTransform(44, {
-                scale: person.imageCropScale,
-                x: person.imageCropX,
-                y: person.imageCropY,
-              }) }}
-            />
-          ) : (
-            <UserRound size={24} className="text-gray-400" aria-hidden="true" />
-          )}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[15px] font-semibold text-slate-900">{name}</span>
-          {showHandle ? <span className="block truncate text-[13px] text-gray-500">{formattedHandle}</span> : null}
-        </span>
-      </button>
-    </li>
   );
 }
 
