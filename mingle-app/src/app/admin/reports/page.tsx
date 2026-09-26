@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle, ChevronLeft, ChevronRight, EyeOff, FileText, LogOut, MessageSquare, Send, ShieldBan, ShieldCheck, UserRound } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { sanitizeAdminReturnTo } from "@/lib/admin-return-to";
 import {
   ADMIN_SESSION_COOKIE_NAME,
   ADMIN_SESSION_MAX_AGE_SECONDS,
@@ -85,6 +86,9 @@ function reportsPath(status: string, type: string, page: number, result?: string
   return query ? `/admin/reports?${query}` : "/admin/reports";
 }
 
+/** Default list for report actions when the posted `returnTo` is missing or refused. */
+const ADMIN_REPORTS_PATH = "/admin/reports";
+
 function withResult(returnTo: string, result: string): string {
   return `${returnTo}${returnTo.includes("?") ? "&" : "?"}result=${result}`;
 }
@@ -119,7 +123,7 @@ async function logoutAdminAction() {
  */
 async function createReportReplyAction(formData: FormData) {
   "use server";
-  const returnTo = readFormString(formData.get("returnTo")) || "/admin/reports";
+  const returnTo = sanitizeAdminReturnTo(formData.get("returnTo"), ADMIN_REPORTS_PATH);
   if (!(await isAdminAuthenticated())) redirect(withResult(returnTo, "session_required"));
 
   const reportId = readFormString(formData.get("reportId")).trim();
@@ -146,7 +150,7 @@ async function createReportReplyAction(formData: FormData) {
 /** Persist the operator's processing note on a report. */
 async function saveReportNoteAction(formData: FormData) {
   "use server";
-  const returnTo = readFormString(formData.get("returnTo")) || "/admin/reports";
+  const returnTo = sanitizeAdminReturnTo(formData.get("returnTo"), ADMIN_REPORTS_PATH);
   if (!(await isAdminAuthenticated())) redirect(withResult(returnTo, "session_required"));
 
   const reportId = readFormString(formData.get("reportId")).trim();
@@ -168,7 +172,7 @@ async function saveReportNoteAction(formData: FormData) {
  */
 async function updateReportStatusAction(formData: FormData) {
   "use server";
-  const returnTo = readFormString(formData.get("returnTo")) || "/admin/reports";
+  const returnTo = sanitizeAdminReturnTo(formData.get("returnTo"), ADMIN_REPORTS_PATH);
   if (!(await isAdminAuthenticated())) redirect(withResult(returnTo, "session_required"));
 
   const reportId = readFormString(formData.get("reportId")).trim();
@@ -205,7 +209,7 @@ async function updateReportStatusAction(formData: FormData) {
  */
 async function applyModerationAction(formData: FormData) {
   "use server";
-  const returnTo = readFormString(formData.get("returnTo")) || "/admin/reports";
+  const returnTo = sanitizeAdminReturnTo(formData.get("returnTo"), ADMIN_REPORTS_PATH);
   if (!(await isAdminAuthenticated())) redirect(withResult(returnTo, "session_required"));
 
   const reportId = readFormString(formData.get("reportId")).trim();
