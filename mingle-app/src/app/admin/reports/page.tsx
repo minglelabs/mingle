@@ -11,6 +11,7 @@ import {
   verifyAdminSessionToken,
 } from "@/lib/admin-auth";
 import {
+  contentModerationToggle,
   hideCommentByModerator,
   hidePostByModerator,
   hideUserByModerator,
@@ -18,6 +19,7 @@ import {
   isValidModerationAction,
   isValidReportStatus,
   normalizeReportReply,
+  reportContentExcerpt,
   restrictUserByModerator,
   shouldAdvanceOnReply,
   unhideCommentByModerator,
@@ -288,6 +290,28 @@ async function loadReports(status: ReportStatus | "all", type: TargetType | "all
       createdAt: true,
       resolvedAt: true,
       reporter: { select: { id: true, name: true, email: true } },
+      // The reported content itself, so an operator can judge without leaving the console.
+      targetPost: {
+        select: {
+          id: true,
+          sourceText: true,
+          imageObjectKey: true,
+          visibility: true,
+          isDeleted: true,
+          moderationHiddenAt: true,
+          author: { select: { id: true, name: true, handle: true, email: true } },
+        },
+      },
+      targetComment: {
+        select: {
+          id: true,
+          postId: true,
+          sourceText: true,
+          isDeleted: true,
+          moderationHiddenAt: true,
+          author: { select: { id: true, name: true, handle: true, email: true } },
+        },
+      },
       reportedUser: { select: { id: true, name: true, email: true, moderationHiddenAt: true, moderationRestrictedAt: true } },
       replies: {
         orderBy: { createdAt: "asc" },
@@ -399,6 +423,10 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
           const noteInputId = `report-note-${report.id}`;
           const replyInputId = `report-reply-${report.id}`;
           const isContent = report.targetType === "post" || report.targetType === "comment";
+          const content = report.targetType === "post" ? report.targetPost : report.targetType === "comment" ? report.targetComment : null;
+          const contentAuthor = content?.author ? (content.author.name || (content.author.handle ? `@${content.author.handle}` : "") || content.author.email || content.author.id) : "";
+          const contentToggle = contentModerationToggle(content);
+          const hasImage = report.targetType === "post" && Boolean(report.targetPost?.imageObjectKey);
           const targetIcon = report.targetType === "post" ? <FileText className="h-3.5 w-3.5" aria-hidden="true" /> : report.targetType === "comment" ? <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" /> : <UserRound className="h-3.5 w-3.5" aria-hidden="true" />;
           return (
             <article key={report.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -418,6 +446,28 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
                 </div>
                 <time className="shrink-0 text-sm text-slate-500" dateTime={report.createdAt.toISOString()}>{REPORT_DATE_FORMATTER.format(report.createdAt)}</time>
               </div>
+              {isContent ? (
+                <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+                    <span>Reported {targetTypeLabel(report.targetType).toLowerCase()}</span>
+                    {contentAuthor ? <span className="normal-case text-slate-600">by {contentAuthor}</span> : null}
+                    {content?.moderationHiddenAt ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Hidden by operator</span> : null}
+                    {content?.isDeleted ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-600">Deleted by author</span> : null}
+                    {report.targetType === "post" && report.targetPost && report.targetPost.visibility !== "public" ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-600">{report.targetPost.visibility}</span> : null}
+                  </div>
+                  {content ? (
+                    <div className="flex gap-3">
+                      {hasImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/admin/reports/${encodeURIComponent(report.id)}/image`} alt="Reported post image" loading="lazy" className="h-20 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-cover" />
+                      ) : null}
+                      <p className="min-w-0 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{reportContentExcerpt(content.sourceText) || <span className="italic text-slate-400">No text</span>}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm italic text-slate-400">The reported content no longer exists.</p>
+                  )}
+                </div>
+              ) : null}
               {report.message ? <div className="mb-4 border-l-2 border-rose-300 py-1 pl-4"><p className="mb-2 text-xs font-semibold uppercase text-slate-500">Reporter note</p><p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{report.message}</p></div> : null}
 
               <form action={updateReportStatusAction} className="flex flex-wrap items-center gap-2">
@@ -428,11 +478,8 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
               </form>
 
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Moderation actions">
-                {isContent ? (
-                  <>
-                    <ModAction reportId={report.id} returnTo={returnTo} action="hide_content" label="Hide content" tone="danger" />
-                    <ModAction reportId={report.id} returnTo={returnTo} action="unhide_content" label="Unhide content" tone="neutral" />
-                  </>
+                {isContent && contentToggle ? (
+                  <ModAction reportId={report.id} returnTo={returnTo} action={contentToggle} label={contentToggle === "unhide_content" ? "Unhide content" : "Hide content"} tone={contentToggle === "unhide_content" ? "neutral" : "danger"} />
                 ) : null}
                 <ModAction reportId={report.id} returnTo={returnTo} action={report.reportedUser.moderationHiddenAt ? "unhide_user" : "hide_user"} label={report.reportedUser.moderationHiddenAt ? "Unhide user" : "Hide user"} tone={report.reportedUser.moderationHiddenAt ? "neutral" : "danger"} />
                 <ModAction reportId={report.id} returnTo={returnTo} action={report.reportedUser.moderationRestrictedAt ? "unrestrict_user" : "restrict_user"} label={report.reportedUser.moderationRestrictedAt ? "Remove restriction" : "Restrict user"} tone={report.reportedUser.moderationRestrictedAt ? "neutral" : "danger"} />

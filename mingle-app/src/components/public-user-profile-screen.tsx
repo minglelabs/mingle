@@ -17,6 +17,8 @@ import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
+import { isDuplicateReportBody } from "@/components/reports/report-response";
+import { reportCopy } from "@/i18n/report-copy";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
@@ -208,6 +210,7 @@ export default function PublicUserProfileScreen({
   const [reportMessage, setReportMessage] = useState("");
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reportDuplicate, setReportDuplicate] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const [showProfileShare, setShowProfileShare] = useState(false);
   const [existingConversation, setExistingConversation] = useState<ConversationChannelSummary | null>(null);
@@ -337,12 +340,8 @@ export default function PublicUserProfileScreen({
 
   const handleToggleBlock = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending) return;
+    // Block / unblock applies at once, without a confirmation dialog (plan 80).
     const nextIsBlocked = !profile.isBlocked;
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm(nextIsBlocked ? copy.blockConfirm : copy.unblockConfirm);
-      if (!confirmed) return;
-    }
-
     setIsActionPending(true);
     setActionError(false);
     try {
@@ -361,7 +360,7 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
+  }, [isActionPending, isOwnProfile, profile]);
 
   const requestDirectConversation = useCallback(async (force: boolean) => {
     if (!profile) throw new Error("direct_conversation_failed");
@@ -445,6 +444,7 @@ export default function PublicUserProfileScreen({
     if (isOwnProfile || !profile || reportPending) return;
     setReportPending(true);
     setReportSubmitted(false);
+    setReportDuplicate(false);
     setActionError(false);
     try {
       const response = await fetch(
@@ -459,9 +459,12 @@ export default function PublicUserProfileScreen({
         },
       );
       if (!response.ok) throw new Error("report_failed");
-      setReportSubmitted(true);
+      // A repeat report of this person says "already reported", not "received".
+      const payload: unknown = await response.json().catch(() => ({}));
+      if (isDuplicateReportBody(payload)) setReportDuplicate(true);
+      else setReportSubmitted(true);
       setReportMessage("");
-      window.setTimeout(() => setReportOpen(false), 700);
+      window.setTimeout(() => setReportOpen(false), 1400);
     } catch {
       setActionError(true);
     } finally {
@@ -645,6 +648,7 @@ export default function PublicUserProfileScreen({
                     type="button"
                     onClick={() => {
                       setReportSubmitted(false);
+                      setReportDuplicate(false);
                       setActionError(false);
                       setReportOpen(true);
                     }}
@@ -721,6 +725,11 @@ export default function PublicUserProfileScreen({
                   <Check size={16} aria-hidden="true" /> {copy.reportSubmitted}
                 </p>
               ) : null}
+              {reportDuplicate ? (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600" role="status">
+                  <Check size={16} aria-hidden="true" /> {reportCopy(locale).alreadyReported}
+                </p>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -731,7 +740,7 @@ export default function PublicUserProfileScreen({
                 </button>
                 <button
                   type="submit"
-                  disabled={reportPending || reportSubmitted}
+                  disabled={reportPending || reportSubmitted || reportDuplicate}
                   className="h-11 rounded-xl bg-rose-500 text-[14px] font-semibold text-white transition active:bg-rose-600 disabled:opacity-50"
                 >
                   {reportPending ? "…" : copy.reportSubmit}

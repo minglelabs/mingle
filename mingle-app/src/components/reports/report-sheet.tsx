@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { reportCopy } from "@/i18n/report-copy";
+import { isDuplicateReportBody } from "./report-response";
 import { REPORT_REASONS, MAX_REPORT_MESSAGE_LENGTH, type ReportReason } from "@/server/reports/report-service";
 
 /**
@@ -78,8 +79,8 @@ export default function ReportSheet({ open, target, locale, onClose }: ReportShe
         body: JSON.stringify({ reason, message: note.trim() || undefined }),
       });
       if (!response.ok) throw new Error("report_failed");
-      const data = (await response.json().catch(() => ({}))) as { duplicate?: boolean; status?: string };
-      setPhase(data.duplicate || data.status === "already_reported" ? "already" : "submitted");
+      const data: unknown = await response.json().catch(() => ({}));
+      setPhase(isDuplicateReportBody(data) ? "already" : "submitted");
     } catch {
       setPhase("error");
     }
