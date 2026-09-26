@@ -75,6 +75,7 @@ import {
 } from "@/lib/birth-date";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
 import { resolveProfileManagementCopy } from "@/i18n/profile-management-copy";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { checkProfileLocationPermission } from "@/components/profile-location";
 import {
   normalizeProfileLocation,
@@ -502,10 +503,8 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
-    notifications: locale === "ko" ? "앱 알림" : "App notifications",
-    notificationsDescription: locale === "ko"
-      ? "팔로우·좋아요·댓글·답글·신고 처리 알림을 앱에서 받습니다."
-      : "Receive follow, like, comment, reply and report-result notifications in the app.",
+    notifications: resolveNotificationCopy(locale).inAppToggleTitle,
+    notificationsDescription: resolveNotificationCopy(locale).inAppToggleDescription,
     deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
     deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
     deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),

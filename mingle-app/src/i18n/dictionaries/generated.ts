@@ -30,6 +30,7 @@ export const generatedLocaleDictionaries = {
       "connect": "连接",
       "moments": "精彩瞬间",
       "my": "我的",
+      "feed": "动态",
     },
     "titles": {
       "chats": "聊天记录",
@@ -189,6 +190,7 @@ export const generatedLocaleDictionaries = {
       "connect": "連接",
       "moments": "精彩瞬間",
       "my": "我的",
+      "feed": "動態",
     },
     "titles": {
       "chats": "聊天記錄",
@@ -348,6 +350,7 @@ export const generatedLocaleDictionaries = {
       "connect": "Подключиться",
       "moments": "Моменты",
       "my": "Мой",
+      "feed": "Лента",
     },
     "titles": {
       "chats": "Чаты",
@@ -507,6 +510,7 @@ export const generatedLocaleDictionaries = {
       "connect": "الاتصال",
       "moments": "لحظات",
       "my": "بلدي",
+      "feed": "الموجز",
     },
     "titles": {
       "chats": "الدردشات",
@@ -3459,6 +3463,7 @@ export const generatedLocaleDictionaries = {
       "connect": "कनेक्ट करें",
       "moments": "क्षण",
       "my": "मेरा",
+      "feed": "फ़ीड",
     },
     "titles": {
       "chats": "चैट",
@@ -4206,6 +4211,7 @@ export const generatedLocaleDictionaries = {
       "connect": "เชื่อมต่อ",
       "moments": "ช่วงเวลา",
       "my": "ของฉัน",
+      "feed": "ฟีด",
     },
     "titles": {
       "chats": "แชท",
@@ -7599,6 +7605,7 @@ export const generatedLocaleDictionaries = {
       "connect": "Kết nối",
       "moments": "Khoảnh khắc",
       "my": "của tôi",
+      "feed": "Bảng tin",
     },
     "titles": {
       "chats": "Trò chuyện",

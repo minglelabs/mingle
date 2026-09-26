@@ -27,6 +27,7 @@ export const frDictionary: BaseAppDictionarySource = {
     connect: "Découvrir",
     moments: "Moments",
     my: "Moi",
+    feed: "Fil",
   },
   titles: {
     chats: "Discussions",

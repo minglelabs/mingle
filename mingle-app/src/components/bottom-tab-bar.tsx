@@ -17,6 +17,15 @@ import {
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
 
+/**
+ * The feed tab's accessible name. `tabs.feed` is translated in every locale
+ * dictionary; `feed.tabLabel` exists only in ko/en, so a merged dictionary
+ * would otherwise inherit the base locale's word for other languages.
+ */
+function feedTabLabel(dictionary: AppDictionary): string {
+  return dictionary.tabs.feed ?? dictionary.feed?.tabLabel ?? "Feed";
+}
+
 type BottomTabBarProps = {
   activeRoute: "feed" | "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
@@ -223,7 +232,7 @@ export default function BottomTabBar({
             router.replace(feedHref);
           }}
           className="flex flex-1 items-center justify-center transition active:opacity-60"
-          aria-label={dictionary.feed?.tabLabel ?? dictionary.tabs.feed ?? "Feed"}
+          aria-label={feedTabLabel(dictionary)}
           aria-current={isFeedActive ? "page" : undefined}
         >
           <Home
