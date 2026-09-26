@@ -7,6 +7,7 @@ import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { markPostViewedQuietly } from '@/server/feed/post-view'
 
 export const runtime = 'nodejs'
 
@@ -57,10 +58,15 @@ export async function POST(_request: NextRequest, context: Ctx) {
       'code' in err &&
       (err as { code: string }).code === 'P2002'
     ) {
+      await markPostViewedQuietly(userId, postId)
       return json({ liked: true, duplicate: true })
     }
     throw err
   }
+
+  // Liking a post means the viewer saw it: mark it seen right away (73)
+  // instead of waiting for the 1s dwell beacon.
+  await markPostViewedQuietly(userId, postId)
 
   // Notify the post author (in-app only; likes never push). Fire-and-forget so
   // the like response is not delayed. Runs only on a newly created like.
@@ -87,17 +93,33 @@ export async function DELETE(_request: NextRequest, context: Ctx) {
   const existing = await prisma.postLike.findUnique({
     where: { postId_userId: { postId, userId } },
   })
-  if (!existing) return json({ liked: false })
+  if (!existing) return json({ liked: false, likeCount: await currentLikeCount(postId) })
 
-  await prisma.$transaction(async (tx) => {
-    await tx.postLike.delete({
-      where: { id: existing.id },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.postLike.delete({
+        where: { id: existing.id },
+      })
+      await tx.post.update({
+        where: { id: postId },
+        data: { likeCount: { decrement: 1 } },
+      })
     })
-    await tx.post.update({
-      where: { id: postId },
-      data: { likeCount: { decrement: 1 } },
-    })
-  })
+  } catch (err: unknown) {
+    // A concurrent unlike deleted the row between our read and delete
+    // (P2025). The like is gone either way and the other request already
+    // decremented the counter, so this is a success, not a 500.
+    if (!isPrismaCode(err, 'P2025')) throw err
+  }
 
-  return json({ liked: false })
+  return json({ liked: false, likeCount: await currentLikeCount(postId) })
+}
+
+function isPrismaCode(err: unknown, code: string): boolean {
+  return !!err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === code
+}
+
+async function currentLikeCount(postId: string): Promise<number | null> {
+  const row = await prisma.post.findUnique({ where: { id: postId }, select: { likeCount: true } })
+  return row ? Math.max(0, row.likeCount) : null
 }
