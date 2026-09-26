@@ -16,8 +16,12 @@ import {
   DIRECT_CONVERSATION_NAVIGATION_GUARD_MS,
   replaceWithConversationListThenPush,
 } from "@/lib/direct-conversation-navigation";
+import SlideSurface from "@/components/slide-surface";
 import UnifiedSearch from "@/components/search/unified-search";
-import { postViewerHref, searchPeopleHref } from "@/lib/feed-routes";
+import SearchPeopleScreen from "@/components/search/search-people-screen";
+import { useReducedMotion } from "@/components/feed/use-reduced-motion";
+import { searchCopy } from "@/i18n/search-copy";
+import { postViewerHref } from "@/lib/feed-routes";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,6 +33,27 @@ type ConnectPageProps = {
 
 const CONNECT_SURFACE_SCOPE = "connect";
 const CONNECT_PROFILE_SURFACE_ID = "profile";
+const CONNECT_PEOPLE_SURFACE_ID = "people";
+const SEARCH_QUERY_PARAM = "q";
+
+/**
+ * Mirror the search query into `?q=` of the CURRENT history entry (no new
+ * entry, history.state kept — slide surfaces live there), so returning from
+ * the post viewer / a profile remounts the page with the same query.
+ */
+function replaceSearchQueryInUrl(query: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    const trimmed = query.trim();
+    if (trimmed) url.searchParams.set(SEARCH_QUERY_PARAM, trimmed);
+    else url.searchParams.delete(SEARCH_QUERY_PARAM);
+    if (url.href === window.location.href) return;
+    window.history.replaceState(window.history.state, "", url.href);
+  } catch {
+    // The query still works in memory; only restore-on-back is lost.
+  }
+}
 
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const { data: session } = useSession();
@@ -46,6 +71,20 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const connectProfileSurface = [...connectSurfaceHistory]
     .reverse()
     .find((entry) => entry.id === CONNECT_PROFILE_SURFACE_ID);
+  const connectPeopleSurface = [...connectSurfaceHistory]
+    .reverse()
+    .find((entry) => entry.id === CONNECT_PEOPLE_SURFACE_ID);
+  // Keep the last "see all" query mounted while its surface slides out.
+  const [peopleSurfaceQuery, setPeopleSurfaceQuery] = useState(connectPeopleSurface?.value ?? "");
+  if (connectPeopleSurface?.value && connectPeopleSurface.value !== peopleSurfaceQuery) {
+    setPeopleSurfaceQuery(connectPeopleSurface.value);
+  }
+  const reducedMotion = useReducedMotion();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get(SEARCH_QUERY_PARAM) ?? "");
+  const handleSearchQueryChange = useCallback((next: string) => {
+    setSearchQuery(next);
+    replaceSearchQueryInUrl(next);
+  }, []);
 
   useEffect(() => {
     if (!pageRef.current) return;
@@ -81,12 +120,23 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
     setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
   }, []);
 
-  const closeConnectProfile = useCallback((userId: string) => {
+  const openConnectPeople = useCallback((query: string) => {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return;
+    pushSlideSurfaceHistory({
+      scope: CONNECT_SURFACE_SCOPE,
+      id: CONNECT_PEOPLE_SURFACE_ID,
+      value: normalizedQuery,
+    });
+    setConnectSurfaceHistory(readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE));
+  }, []);
+
+  const closeConnectSurface = useCallback((surfaceId: string, value: string) => {
     const currentEntries = readSlideSurfaceHistoryForScope(CONNECT_SURFACE_SCOPE);
     const currentEntry = currentEntries[currentEntries.length - 1];
     if (
-      currentEntry?.id === CONNECT_PROFILE_SURFACE_ID
-      && currentEntry.value === userId
+      currentEntry?.id === surfaceId
+      && currentEntry.value === value
     ) {
       window.history.back();
       return;
@@ -94,7 +144,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
 
     setConnectSurfaceHistory((current) => {
       const entryIndex = [...current].reverse().findIndex((entry) => (
-        entry.id === CONNECT_PROFILE_SURFACE_ID && entry.value === userId
+        entry.id === surfaceId && entry.value === value
       ));
       if (entryIndex < 0) return current;
       const actualIndex = current.length - 1 - entryIndex;
@@ -144,10 +194,12 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             locale={locale}
             canUseRecentSearches={Boolean(authenticatedUserId)}
             currentUserId={authenticatedUserId}
+            query={searchQuery}
+            onQueryChange={handleSearchQueryChange}
             onOpenPerson={(userId) => openConnectProfile(userId)}
-            onOpenSearchPost={(searchQuery, postId) =>
-              router.push(postViewerHref(locale, { kind: "search", query: searchQuery }, postId))}
-            onSeeAllPeople={(searchQuery) => router.push(searchPeopleHref(locale, searchQuery))}
+            onOpenSearchPost={(postQuery, postId) =>
+              router.push(postViewerHref(locale, { kind: "search", query: postQuery }, postId))}
+            onSeeAllPeople={openConnectPeople}
           />
         </div>
 
@@ -155,6 +207,29 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
         </div>
       </main>
+      <SlideSurface
+        open={Boolean(connectPeopleSurface?.value)}
+        ariaLabel={searchCopy(locale).peopleScreenTitle}
+        transitionMode={reducedMotion ? "instant" : "animate"}
+        nativeBackPriority={30}
+        style={{ touchAction: "pan-y" }}
+        onClose={() => {
+          if (!connectPeopleSurface?.value) return;
+          closeConnectSurface(CONNECT_PEOPLE_SURFACE_ID, connectPeopleSurface.value);
+        }}
+      >
+        {peopleSurfaceQuery ? (
+          <SearchPeopleScreen
+            locale={locale}
+            query={peopleSurfaceQuery}
+            onOpenPerson={(userId) => openConnectProfile(userId)}
+            onBack={() => {
+              if (!connectPeopleSurface?.value) return;
+              closeConnectSurface(CONNECT_PEOPLE_SURFACE_ID, connectPeopleSurface.value);
+            }}
+          />
+        ) : null}
+      </SlideSurface>
       <PublicUserProfileScreen
         dictionary={dictionary}
         locale={locale}
@@ -163,7 +238,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         onStartDirectConversation={startDirectConversationFromConnectProfile}
         onClose={() => {
           if (!connectProfileSurface?.value) return;
-          closeConnectProfile(connectProfileSurface.value);
+          closeConnectSurface(CONNECT_PROFILE_SURFACE_ID, connectProfileSurface.value);
         }}
       />
     </>

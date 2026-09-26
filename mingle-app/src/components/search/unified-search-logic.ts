@@ -72,3 +72,170 @@ export function resolveResultsRetention({
   }
   return { keepCurrentResults: false, showInlineLoading: true, clearResults: true };
 }
+
+// ---------------------------------------------------------------------------
+// Input controller: debounce + IME composition guard (people AND posts)
+// ---------------------------------------------------------------------------
+
+export type SearchInputController = {
+  /** Every input change (also fired mid-composition). */
+  setValue: (value: string) => void;
+  compositionStart: () => void;
+  /**
+   * Composition committed. Dispatches even when the committed value equals the
+   * value already stored (React would not re-render for an identical value).
+   */
+  compositionEnd: (value: string) => void;
+  /** Submit (Enter / search key): dispatch now, skipping the debounce. */
+  flush: () => void;
+  /** Seed the controller as if `value` were already searched (restore path). */
+  prime: (value: string) => void;
+  dispose: () => void;
+  isComposing: () => boolean;
+};
+
+/**
+ * One debounced query feeds BOTH the people search and the post grid, so the
+ * post grid can never race ahead of the IME or the 300ms debounce. `onDispatch`
+ * receives the trimmed query (`""` = cleared, dispatched immediately).
+ */
+export function createSearchInputController({
+  onDispatch,
+  debounceMs = SEARCH_DEBOUNCE_MS,
+}: {
+  onDispatch: (query: string) => void;
+  debounceMs?: number;
+}): SearchInputController {
+  let value = "";
+  let composing = false;
+  let lastDispatched: string | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  const dispatchNow = () => {
+    cancel();
+    const query = value.trim();
+    if (composing) return;
+    if (query === lastDispatched) return;
+    lastDispatched = query;
+    onDispatch(query);
+  };
+  const schedule = () => {
+    cancel();
+    const query = value.trim();
+    if (!query) {
+      // Clearing never waits and is allowed mid-composition teardown.
+      if (lastDispatched !== "") {
+        lastDispatched = "";
+        onDispatch("");
+      }
+      return;
+    }
+    if (!shouldDispatchSearch({ query, isComposing: composing })) return;
+    timer = setTimeout(dispatchNow, debounceMs);
+  };
+
+  return {
+    setValue(next) {
+      value = next;
+      schedule();
+    },
+    compositionStart() {
+      composing = true;
+      cancel();
+    },
+    compositionEnd(next) {
+      composing = false;
+      value = next;
+      schedule();
+    },
+    flush() {
+      dispatchNow();
+    },
+    prime(next) {
+      cancel();
+      value = next;
+      lastDispatched = next.trim();
+    },
+    dispose() {
+      cancel();
+    },
+    isComposing: () => composing,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Recent-search recording
+// ---------------------------------------------------------------------------
+
+export type RecentSearchRecorder = {
+  /** Tell the recorder which query currently has results on screen ("" = none). */
+  setShownResults: (query: string, hasResults: boolean) => void;
+  /** A result was tapped or the search was submitted. */
+  commit: (query: string) => void;
+  /** The user is leaving search: record the query whose results are showing. */
+  commitOnLeave: () => void;
+};
+
+/**
+ * Records a term only on intent — a result tap, a submit, or leaving the search
+ * while results are shown — never on each debounced dispatch, so the partial
+ * text typed on the way to a word is not saved.
+ */
+export function createRecentSearchRecorder({
+  enabled,
+  record,
+}: {
+  enabled: () => boolean;
+  record: (query: string) => void;
+}): RecentSearchRecorder {
+  let shownQuery = "";
+  let recorded = new Set<string>();
+  const commit = (raw: string) => {
+    const query = raw.trim();
+    if (!query || !enabled() || recorded.has(query)) return;
+    recorded = new Set(recorded).add(query);
+    record(query);
+  };
+  return {
+    setShownResults(query, hasResults) {
+      shownQuery = hasResults ? query.trim() : "";
+    },
+    commit,
+    commitOnLeave() {
+      if (shownQuery) commit(shownQuery);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Combined "no results"
+// ---------------------------------------------------------------------------
+
+/**
+ * "No results" appears once the search for the visible query has settled on
+ * both sides with nothing: people returned none (a people failure counts as
+ * none) and the post grid is empty — including when the post request FAILED.
+ */
+export function shouldShowNoResults({
+  query,
+  dispatchedQuery,
+  peopleSettledQuery,
+  peopleCount,
+  postsSettledEmpty,
+}: {
+  query: string;
+  dispatchedQuery: string;
+  peopleSettledQuery: string;
+  peopleCount: number;
+  /** Post grid finished (ready OR error) for `dispatchedQuery` and shows no tile. */
+  postsSettledEmpty: boolean;
+}): boolean {
+  const current = query.trim();
+  if (!current || current !== dispatchedQuery) return false;
+  if (peopleSettledQuery !== dispatchedQuery) return false;
+  return peopleCount === 0 && postsSettledEmpty;
+}

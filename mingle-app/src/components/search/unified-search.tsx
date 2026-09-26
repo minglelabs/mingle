@@ -13,11 +13,13 @@ import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
 import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
 import {
-  resolveResultsRetention,
+  createRecentSearchRecorder,
+  createSearchInputController,
   shouldApplyResponse,
-  shouldDispatchSearch,
-  SEARCH_DEBOUNCE_MS,
+  shouldShowNoResults,
+  type SearchInputController,
 } from "./unified-search-logic";
+import { readPeopleSnapshot, rememberPeopleSnapshot } from "./search-session-cache";
 import {
   clearAllRecentSearches,
   deleteRecentSearch,
@@ -41,7 +43,11 @@ export type UnifiedSearchProps = {
   onOpenSearchPost: (query: string, postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
-  /** Controlled query so the parent can restore it on back-navigation. Omit for uncontrolled. */
+  /**
+   * Controlled query so the parent can restore it on back-navigation (e.g.
+   * from `?q=`). The value present at mount is treated as an already-run
+   * search: its session snapshot (people + post tiles + scroll) is restored.
+   */
   query?: string;
   onQueryChange?: (query: string) => void;
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
@@ -67,25 +73,41 @@ export default function UnifiedSearch({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const internalScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = (scrollContainerRef ?? internalScrollRef) as React.RefObject<HTMLDivElement | null>;
-  const composingRef = useRef(false);
   const searchSeqRef = useRef(0);
   const analyticsSeqRef = useRef(0);
-  const activeQueryRef = useRef("");
-  const recordedRef = useRef<Set<string>>(new Set());
+  const normalizedQuery = query.trim();
 
-  const [people, setPeople] = useState<ConnectSearchResult[]>([]);
-  const [peopleQuery, setPeopleQuery] = useState("");
-  const [hasMorePeople, setHasMorePeople] = useState(false);
+  // The query present at mount is a return to an earlier search.
+  const [initialQuery] = useState(normalizedQuery);
+  const [initialPeople] = useState(() => (initialQuery ? readPeopleSnapshot(initialQuery) : null));
+  const activeQueryRef = useRef(initialQuery);
+
+  const [people, setPeople] = useState<ConnectSearchResult[]>(initialPeople?.people ?? []);
+  const [peopleQuery, setPeopleQuery] = useState(initialPeople ? initialQuery : "");
+  const [hasMorePeople, setHasMorePeople] = useState(initialPeople?.hasMore ?? false);
+  /** The debounced, composition-safe query that BOTH people and posts use. */
+  const [dispatchedQuery, setDispatchedQuery] = useState(initialQuery);
   const [isSearching, setIsSearching] = useState(false);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [postsEmpty, setPostsEmpty] = useState(false);
-  const normalizedQuery = query.trim();
   const lastSearchContextRef = useRef<PeopleSearchContext>(null);
   const { followInFlightIds, followError, toggleFollow } = usePeopleFollow(
     setPeople,
-    () => (lastSearchContextRef.current?.query === normalizedQuery ? lastSearchContextRef.current : null),
+    () => (lastSearchContextRef.current?.query === peopleQuery ? lastSearchContextRef.current : null),
   );
+
+  const recentEnabledRef = useRef(false);
+  recentEnabledRef.current = postingFeedEnabled && canUseRecentSearches;
+  const recorderRef = useRef<ReturnType<typeof createRecentSearchRecorder> | null>(null);
+  if (!recorderRef.current) {
+    recorderRef.current = createRecentSearchRecorder({
+      enabled: () => recentEnabledRef.current,
+      record: (value) => void recordRecentSearch(value),
+    });
+  }
+  const recorder = recorderRef.current;
 
   // Load recent searches when the empty field gains focus.
   useEffect(() => {
@@ -136,9 +158,11 @@ export default function UnifiedSearch({
         responseQuery: searchQuery,
         activeQuery: activeQueryRef.current,
       })) return;
-      setPeople(users.slice(0, PEOPLE_PREVIEW_LIMIT));
+      const preview = users.slice(0, PEOPLE_PREVIEW_LIMIT);
+      setPeople(preview);
       setHasMorePeople(hasMore);
       setPeopleQuery(searchQuery);
+      rememberPeopleSnapshot({ query: searchQuery, people: preview, hasMore });
       lastSearchContextRef.current = { query: searchQuery, sequence: analyticsSeq, properties: searchProperties };
     } catch {
       // A failed request is shown as "no results", no error/retry UI.
@@ -166,51 +190,104 @@ export default function UnifiedSearch({
     }
   }, []);
 
-  // Debounced search dispatch; IME composition suppresses it until it ends.
-  useEffect(() => {
-    activeQueryRef.current = normalizedQuery;
-    if (!shouldDispatchSearch({ query: normalizedQuery, isComposing: composingRef.current })) {
-      if (!normalizedQuery) {
-        setPeople([]);
-        setPeopleQuery("");
-        setHasMorePeople(false);
-        setIsSearching(false);
-      }
+  const handleDispatch = useCallback((searchQuery: string) => {
+    activeQueryRef.current = searchQuery;
+    setDispatchedQuery(searchQuery);
+    if (!searchQuery) {
+      searchSeqRef.current += 1;
+      setPeople([]);
+      setPeopleQuery("");
+      setHasMorePeople(false);
+      setIsSearching(false);
       return;
     }
-    const timer = window.setTimeout(() => {
-      const seq = ++searchSeqRef.current;
-      const analyticsSeq = ++analyticsSeqRef.current;
-      setIsSearching(true);
-      void runPeopleSearch(normalizedQuery, seq, analyticsSeq);
-      // Record the term once results are being shown for it (posting feed only).
-      if (postingFeedEnabled && canUseRecentSearches && !recordedRef.current.has(normalizedQuery)) {
-        recordedRef.current.add(normalizedQuery);
-        void recordRecentSearch(normalizedQuery);
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
-  }, [normalizedQuery, runPeopleSearch, canUseRecentSearches, postingFeedEnabled]);
+    const seq = ++searchSeqRef.current;
+    const analyticsSeq = ++analyticsSeqRef.current;
+    setIsSearching(true);
+    void runPeopleSearch(searchQuery, seq, analyticsSeq);
+  }, [runPeopleSearch]);
 
-  const retention = resolveResultsRetention({
-    currentResultsQuery: peopleQuery,
-    pendingQuery: normalizedQuery,
-    hasCurrentResults: people.length > 0,
-  });
-  const showPeople = peopleQuery === normalizedQuery ? people : (retention.keepCurrentResults ? people : []);
-  const showPostGrid = postingFeedEnabled && Boolean(normalizedQuery);
+  // One controller owns debounce + IME composition for people AND posts.
+  const handleDispatchRef = useRef(handleDispatch);
+  handleDispatchRef.current = handleDispatch;
+  const controllerRef = useRef<SearchInputController | null>(null);
+  if (!controllerRef.current) {
+    controllerRef.current = createSearchInputController({
+      onDispatch: (value) => handleDispatchRef.current(value),
+    });
+    controllerRef.current.prime(initialQuery);
+  }
+  const controller = controllerRef.current;
+  useEffect(() => () => controller.dispose(), [controller]);
+
+  // Returning to a search: refetch people only when no snapshot was kept.
+  useEffect(() => {
+    if (!initialQuery) return;
+    if (initialPeople) {
+      void buildSearchAnalyticsProperties(initialQuery).then((properties) => {
+        lastSearchContextRef.current ??= { query: initialQuery, sequence: 0, properties };
+      });
+      return;
+    }
+    const seq = ++searchSeqRef.current;
+    const analyticsSeq = ++analyticsSeqRef.current;
+    setIsSearching(true);
+    void runPeopleSearch(initialQuery, seq, analyticsSeq);
+  }, [initialQuery, initialPeople, runPeopleSearch]);
+
+  // A query set by the parent (not typed here) still goes through the controller.
+  const lastFedQueryRef = useRef(query);
+  useEffect(() => {
+    if (query === lastFedQueryRef.current) return;
+    lastFedQueryRef.current = query;
+    controller.setValue(query);
+  }, [query, controller]);
+  const feedInput = useCallback((value: string, kind: "change" | "compositionEnd") => {
+    lastFedQueryRef.current = value;
+    onQueryChange(value);
+    if (kind === "compositionEnd") controller.compositionEnd(value);
+    else controller.setValue(value);
+  }, [controller, onQueryChange]);
+
+  const showPostGrid = postingFeedEnabled && Boolean(normalizedQuery) && Boolean(dispatchedQuery);
+  const showPeople = normalizedQuery ? people : [];
   const showRecent = postingFeedEnabled && canUseRecentSearches && !normalizedQuery && recent.length > 0;
-  // When posting feed is off, the surface is people-only (like the legacy search):
-  // show a people-only "no results" once the search settled with nothing.
-  const showPeopleOnlyNoResults = !postingFeedEnabled
-    && Boolean(normalizedQuery)
-    && peopleQuery === normalizedQuery
-    && showPeople.length === 0;
+  const showNoResults = shouldShowNoResults({
+    query: normalizedQuery,
+    dispatchedQuery,
+    peopleSettledQuery: peopleQuery,
+    peopleCount: people.length,
+    // Posting feed off: the surface is people-only, so posts count as empty.
+    postsSettledEmpty: postingFeedEnabled ? postsEmpty : true,
+  });
+
+  // Track which query has results on screen, for "record on leave".
+  const postsShown = showPostGrid && !postsEmpty && !postsLoading;
+  const hasShownResults = Boolean(dispatchedQuery)
+    && ((peopleQuery === dispatchedQuery && people.length > 0) || postsShown);
+  useEffect(() => {
+    recorder.setShownResults(dispatchedQuery, hasShownResults);
+  }, [recorder, dispatchedQuery, hasShownResults]);
+  useEffect(() => {
+    const onPageHide = () => recorder.commitOnLeave();
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      recorder.commitOnLeave();
+    };
+  }, [recorder]);
 
   const handleRecentTap = useCallback((value: string) => {
-    onQueryChange(value);
+    feedInput(value, "change");
+    controller.flush();
+    recorder.commit(value);
     inputRef.current?.focus({ preventScroll: true });
-  }, [onQueryChange]);
+  }, [controller, feedInput, recorder]);
+
+  const openPerson = useCallback((userId: string) => {
+    recorder.commit(dispatchedQuery);
+    onOpenPerson(userId);
+  }, [dispatchedQuery, onOpenPerson, recorder]);
 
   return (
     <div className="unified-search flex h-full min-h-0 flex-col">
@@ -223,6 +300,8 @@ export default function UnifiedSearch({
           className="relative block"
           onSubmit={(event) => {
             event.preventDefault();
+            controller.flush();
+            recorder.commit(normalizedQuery);
             inputRef.current?.blur();
           }}
         >
@@ -232,15 +311,11 @@ export default function UnifiedSearch({
             type="search"
             enterKeyHint="search"
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(event) => feedInput(event.target.value, "change")}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            onCompositionStart={() => { composingRef.current = true; }}
-            onCompositionEnd={(event) => {
-              composingRef.current = false;
-              // Sync the committed composition so the debounce effect re-runs.
-              onQueryChange(event.currentTarget.value);
-            }}
+            onCompositionStart={() => controller.compositionStart()}
+            onCompositionEnd={(event) => feedInput(event.currentTarget.value, "compositionEnd")}
             placeholder={copy.searchPlaceholder}
             autoComplete="off"
             autoCorrect="off"
@@ -248,13 +323,13 @@ export default function UnifiedSearch({
             aria-label={copy.searchPlaceholder}
             className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-10 text-[15px] text-slate-900 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-2 focus:ring-amber-100"
           />
-          {isSearching ? (
+          {isSearching || (showPostGrid && postsLoading) ? (
             <Loader2 size={16} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-gray-400" aria-label={copy.searching} />
           ) : null}
           {query ? (
             <button
               type="button"
-              onClick={() => { onQueryChange(""); inputRef.current?.focus({ preventScroll: true }); }}
+              onClick={() => { feedInput("", "change"); inputRef.current?.focus({ preventScroll: true }); }}
               className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition active:bg-gray-200"
               aria-label={copy.clearSearch}
             >
@@ -284,7 +359,10 @@ export default function UnifiedSearch({
                   {hasMorePeople ? (
                     <button
                       type="button"
-                      onClick={() => onSeeAllPeople(normalizedQuery)}
+                      onClick={() => {
+                        recorder.commit(peopleQuery);
+                        onSeeAllPeople(peopleQuery);
+                      }}
                       className="rounded-md px-2 py-1 text-[13px] font-semibold text-amber-700 transition active:bg-amber-50"
                     >
                       {copy.seeAllPeople}
@@ -297,7 +375,7 @@ export default function UnifiedSearch({
                       key={person.id}
                       person={person}
                       labels={{ userFallback: copy.userFallback, follow: copy.follow, following: copy.following }}
-                      onOpen={onOpenPerson}
+                      onOpen={openPerson}
                       canFollow={Boolean(currentUserId) && person.id !== currentUserId}
                       isFollowPending={followInFlightIds.has(person.id)}
                       onToggleFollow={() => void toggleFollow(person, index, showPeople.length)}
@@ -311,29 +389,29 @@ export default function UnifiedSearch({
             ) : null}
 
             {showPostGrid ? (
-              <>
-                <section className="px-0.5 pt-2" aria-label={copy.postsHeading}>
-                  {!postsEmpty ? (
-                    <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
-                  ) : null}
-                  <PostGrid
-                    locale={locale}
-                    endpoint={feedSourceEndpoint({ kind: "search", query: normalizedQuery }, { limit: 18, displayLanguage })}
-                    displayLanguage={displayLanguage}
-                    scrollScope={`search-posts:${normalizedQuery}`}
-                    onSelectPost={(postId) => onOpenSearchPost(normalizedQuery, postId)}
-                    scrollContainerRef={scrollRef}
-                    onEmptyStateChange={setPostsEmpty}
-                  />
-                </section>
-
-                {postsEmpty && showPeople.length === 0 ? (
-                  <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
-                    {copy.noResults}
-                  </p>
+              <section className="px-0.5 pt-2" aria-label={copy.postsHeading}>
+                {!postsEmpty ? (
+                  <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
                 ) : null}
-              </>
-            ) : showPeopleOnlyNoResults ? (
+                <PostGrid
+                  locale={locale}
+                  endpoint={feedSourceEndpoint({ kind: "search", query: dispatchedQuery }, { limit: 18, displayLanguage })}
+                  displayLanguage={displayLanguage}
+                  scrollScope={`search-posts:${dispatchedQuery}`}
+                  onSelectPost={(postId) => {
+                    recorder.commit(dispatchedQuery);
+                    onOpenSearchPost(dispatchedQuery, postId);
+                  }}
+                  scrollContainerRef={scrollRef}
+                  onEmptyStateChange={setPostsEmpty}
+                  onLoadingChange={setPostsLoading}
+                  keepPreviousWhileLoading
+                  cacheResults
+                />
+              </section>
+            ) : null}
+
+            {showNoResults ? (
               <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
                 {copy.noResults}
               </p>
