@@ -1,5 +1,6 @@
 "use client";
 
+import { feedEvents, trackFeedEvent } from "@/lib/feed-analytics";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as api from "./comment-api";
@@ -152,6 +153,11 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     };
   }, [open, load]);
 
+  // Analytics: one event per opening of the sheet (post id only, no content).
+  useEffect(() => {
+    if (open && postId) trackFeedEvent(feedEvents.commentsOpened(postId));
+  }, [open, postId]);
+
   // Expand the thread for initialCommentId once loaded, so a reply deep-link
   // shows its root thread. Scrolling is handled by the view via data attributes.
   useEffect(() => {
@@ -286,6 +292,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       );
       if (fromComposer) setReplyTarget(null);
       reportCount(commentCountRef.current + 1);
+      trackFeedEvent(feedEvents.commentCreated(postId, parentId !== null));
       return "sent";
     },
     [sending, viewerId, viewer, postId, reportCount, onRequireLogin, reportFailure],

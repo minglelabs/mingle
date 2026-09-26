@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import {
+  cycleOfEntryKey,
   appendCyclePage,
   appendPage,
   createCycleList,
@@ -211,5 +212,13 @@ describe("cycle list (feed wrap-around)", () => {
     expect(patchCycleList(list, "x", { likeCount: 1 })).toBe(list);
     expect(removeFromCycleList(list, "x")).toBe(list);
     expect(appendCyclePage(list, [])).toBe(list);
+  });
+});
+
+describe("cycleOfEntryKey", () => {
+  it("reads the cycle from an entry key", () => {
+    const list = appendCyclePage(createCycleList([{ id: "a" } as FeedPostDto]), [{ id: "a" } as FeedPostDto]);
+    expect(list.entries.map((e) => cycleOfEntryKey(e.key))).toEqual([0, 1]);
+    expect(cycleOfEntryKey("nope")).toBeNull();
   });
 });

@@ -104,6 +104,12 @@ function entryKey(cycle: number, id: string): string {
   return `${cycle}:${id}`;
 }
 
+/** Cycle number encoded in an entry key (`<cycle>:<id>`), or null. */
+export function cycleOfEntryKey(key: string): number | null {
+  const match = /^(\d+):/.exec(key);
+  return match ? Number(match[1]) : null;
+}
+
 /**
  * Start a cycle list from the first ranked page, optionally with a pinned post
  * (home deep link / restored post / viewer fallback) placed first.

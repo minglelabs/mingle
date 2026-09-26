@@ -25,6 +25,7 @@ import {
 } from './compose-state'
 import { createDraftAutosaver, type DraftAutosaver, type DraftSaveState } from './draft-autosave'
 import { isPublishRunning, startPublish } from './publish-store'
+import { feedEvents, trackFeedEvent } from '@/lib/feed-analytics'
 import type { PreparedImage } from './compose-image'
 
 const AUTOSAVE_DEBOUNCE_MS = 1200
@@ -153,6 +154,14 @@ export default function ComposeScreen({
   }, [text, backgroundKey])
 
   const isSignedIn = status === 'authenticated'
+
+  // Analytics: compose entry, once per screen mount for a signed-in author.
+  const composeOpenedRef = useRef(false)
+  useEffect(() => {
+    if (!isSignedIn || composeOpenedRef.current) return
+    composeOpenedRef.current = true
+    trackFeedEvent(feedEvents.composeOpened(initialDraftId ? 'draft' : 'new'))
+  }, [isSignedIn, initialDraftId])
 
   // ── Load drafts (paged) + restore an initial draft ───────────────────────
   const loadDrafts = useCallback(async () => {

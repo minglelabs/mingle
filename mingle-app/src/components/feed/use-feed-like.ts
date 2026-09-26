@@ -1,6 +1,7 @@
 "use client";
 
 import { buildClientApiPath } from "@/lib/api-contract";
+import type { LikeMethod } from "@/lib/feed-analytics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { likeFailureFromResponse, optimisticLike, reconcileLike, type LikeError, type LikeState } from "./like-state";
 
@@ -15,7 +16,11 @@ type UseFeedLikeOptions = {
   /** Persist confirmed state up to the feed list so it survives re-render. */
   onChange?: (state: LikeState) => void;
   onError?: (error: LikeError) => void;
+  /** A like / unlike the server confirmed, with the gesture that made it. */
+  onCommitted?: (liked: boolean, method: LikeMethod) => void;
 };
+
+export type { LikeMethod };
 
 type UseFeedLikeReturn = {
   state: LikeState;
@@ -42,7 +47,7 @@ type UseFeedLikeReturn = {
  *   the post is already liked.
  */
 export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
-  const { postId, initial, isSignedIn, onRequireLogin, onChange, onError } = options;
+  const { postId, initial, isSignedIn, onRequireLogin, onChange, onError, onCommitted } = options;
 
   const [state, setState] = useState<LikeState>(initial);
   const [showBurst, setShowBurst] = useState(false);
@@ -58,7 +63,7 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
   }, [postId]);
 
   const send = useCallback(
-    async (nextLiked: boolean) => {
+    async (nextLiked: boolean, method: LikeMethod) => {
       if (pendingRef.current) return;
       if (!isSignedIn) {
         onRequireLogin();
@@ -95,6 +100,7 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
           setState(confirmed);
           onChange?.(confirmed);
         }
+        onCommitted?.(nextLiked, method);
       } catch {
         setState(prev);
         onChange?.(prev);
@@ -103,7 +109,7 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
         pendingRef.current = false;
       }
     },
-    [postId, isSignedIn, onRequireLogin, onChange, onError],
+    [postId, isSignedIn, onRequireLogin, onChange, onError, onCommitted],
   );
 
   const toggleLike = useCallback(() => {
@@ -111,7 +117,7 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
       onRequireLogin();
       return;
     }
-    void send(!stateRef.current.likedByMe);
+    void send(!stateRef.current.likedByMe, "button");
   }, [isSignedIn, onRequireLogin, send]);
 
   const addLike = useCallback(() => {
@@ -121,7 +127,7 @@ export function useFeedLike(options: UseFeedLikeOptions): UseFeedLikeReturn {
     }
     setShowBurst(true);
     if (!stateRef.current.likedByMe) {
-      void send(true);
+      void send(true, "double_tap");
     }
   }, [isSignedIn, onRequireLogin, send]);
 

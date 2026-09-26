@@ -9,6 +9,9 @@ import FeedToast from "@/components/feed/feed-toast";
 import ImageZoomOverlay from "@/components/feed/image-zoom-overlay";
 import SwipeHintOverlay, { markSwipeHintDone } from "@/components/feed/swipe-hint-overlay";
 import { usePostViewTracker } from "@/components/feed/use-post-view-tracker";
+import { useFeedExposureTracker } from "@/components/feed/use-feed-exposure-tracker";
+import { cycleOfEntryKey } from "@/components/feed/feed-list";
+import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } from "@/lib/feed-analytics";
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
@@ -240,6 +243,28 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const trackedPostId = anyOverlayOpen ? null : activePost?.id ?? null;
   usePostViewTracker({ activePostId: trackedPostId, isSignedIn: Boolean(viewerId) });
 
+  // ── Analytics: impression / quick skip per appearance (same visit clock,
+  // paused while an overlay is open or the app is in the background) ──
+  const surface = feedSurfaceForSource(source);
+  const activeEntry = entries[activeIndex] ?? null;
+  const exposureKey = anyOverlayOpen ? null : activeEntry?.key ?? null;
+  const entryIndexByKey = useMemo(() => new Map(entries.map((entry, idx) => [entry.key, idx])), [entries]);
+  const analyticsFor = useCallback(
+    (key: string) => {
+      const idx = entryIndexByKey.get(key);
+      const entry = idx === undefined ? null : entries[idx];
+      if (!entry || idx === undefined) return null;
+      return feedPostContext(entry.post, {
+        surface,
+        position: idx,
+        cycle: cycleOfEntryKey(key),
+        displayLanguage: viewerLanguage,
+      });
+    },
+    [entries, entryIndexByKey, surface, viewerLanguage],
+  );
+  useFeedExposureTracker({ activeKey: exposureKey, surface, contextFor: analyticsFor });
+
   // Refresh unread dot on focus / visibility.
   useEffect(() => {
     const onFocus = () => notifications.refresh();
@@ -414,6 +439,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               restoreExpanded={saved?.expanded ?? false}
               restoreScrollTop={saved?.scrollTop ?? 0}
               eagerImage={idx <= activeIndex + 1}
+              isActive={idx === activeIndex && !anyOverlayOpen}
+              analytics={analyticsFor(key)}
               onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
               onRequireLogin={goToLogin}
               onOpenComments={(id) => {
@@ -421,7 +448,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
                 setCommentPostId(id);
               }}
               onOpenActions={(id) => setActionPostId(id)}
-              onOpenAuthor={(authorId) => router.push(`/${locale}/users/${encodeURIComponent(authorId)}`)}
+              onOpenAuthor={(authorId) => {
+                const ctx = analyticsFor(key);
+                if (ctx) trackFeedEvent(feedEvents.profileOpened(ctx));
+                router.push(`/${locale}/users/${encodeURIComponent(authorId)}`);
+              }}
               onOpenImage={(src) => setZoomSrc(src)}
               onLikeChange={handleLikeChange}
               onFollowed={handleFollowed}

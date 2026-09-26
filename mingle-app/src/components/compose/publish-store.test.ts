@@ -4,11 +4,13 @@ import {
   clearPublishJob,
   getPublishJob,
   onPublishSuccess,
+  publishFailureReason,
   isPublishRunning,
   retryPublish,
   startPublish,
   type PublishInput,
 } from './publish-store'
+import { __setFeedEventSinkForTest, FEED_EVENTS, type FeedAnalyticsEvent } from '@/lib/feed-analytics'
 
 function jsonResponse(body: object, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -349,5 +351,43 @@ describe('publish store', () => {
     await flush()
     expect(fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts')).toHaveLength(1)
     expect(fetchMock.mock.calls.some((c) => callKey(c) === 'POST /posts/drafts')).toBe(false)
+  })
+})
+
+describe('publish analytics', () => {
+  let sent: FeedAnalyticsEvent[] = []
+  beforeEach(() => {
+    __resetPublishStoreForTest()
+    sent = []
+    __setFeedEventSinkForTest((e) => sent.push(e))
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    __resetPublishStoreForTest()
+    __setFeedEventSinkForTest(null)
+  })
+
+  it('sends success with image flag and length bucket, never the text', async () => {
+    routeFetch({ 'POST /posts': () => jsonResponse({ postId: 'post-1' }, 201) })
+    startPublish(baseInput({ imageObjectKey: 'k', sourceText: 'hello world' }))
+    await flush()
+    expect(sent).toEqual([
+      { event: FEED_EVENTS.publishSucceeded, properties: { has_image: true, text_length_bucket: '1-50' } },
+    ])
+    expect(JSON.stringify(sent)).not.toContain('hello world')
+  })
+
+  it('sends failure with a coarse reason', async () => {
+    routeFetch({ 'POST /posts': () => jsonResponse({ error: 'account_restricted' }, 403) })
+    startPublish(baseInput())
+    await flush()
+    expect(sent.map((e) => [e.event, e.properties.failure_reason])).toEqual([[FEED_EVENTS.publishFailed, 'restricted']])
+  })
+
+  it('classifies failure reasons', () => {
+    expect(publishFailureReason({ status: 403, restricted: true }, 'create')).toBe('restricted')
+    expect(publishFailureReason({ status: 429, restricted: false }, 'create')).toBe('rate_limited')
+    expect(publishFailureReason({ status: 500, restricted: false }, 'image_upload')).toBe('image_upload')
+    expect(publishFailureReason({ status: 500, restricted: false }, 'create')).toBe('create')
   })
 })

@@ -2,6 +2,7 @@
 
 import { buildClientApiPath } from '@/lib/api-contract'
 import { isAccountRestrictedBody } from '@/lib/account-restriction'
+import { feedEvents, trackFeedEvent, type PublishFailureReason } from '@/lib/feed-analytics'
 
 /**
  * Background publish store.
@@ -191,10 +192,27 @@ async function preserveFailedJob(input: PublishInput) {
   })
 }
 
+/** Coarse, content-free failure class for the publish analytics event. */
+export function publishFailureReason(
+  err: Pick<ApiError, 'status' | 'restricted'>,
+  step: 'image_upload' | 'create',
+): PublishFailureReason {
+  if (err.restricted) return 'restricted'
+  if (err.status === 429) return 'rate_limited'
+  return step
+}
+
 async function runPipeline(initialInput: PublishInput) {
   let input = initialInput
 
-  const fail = (err: ApiError, postId: string | null) => {
+  const fail = (err: ApiError, postId: string | null, step: 'image_upload' | 'create') => {
+    trackFeedEvent(
+      feedEvents.publishFailed({
+        hasImage: Boolean(input.imageObjectKey || input.imageFile),
+        text: input.sourceText,
+        reason: publishFailureReason(err, step),
+      }),
+    )
     setJob({
       status: 'failed',
       input,
@@ -217,7 +235,7 @@ async function runPipeline(initialInput: PublishInput) {
       body: form,
     })
     if (!imageRes.ok) {
-      fail(await readError(imageRes), null)
+      fail(await readError(imageRes), null, 'image_upload')
       return
     }
     const uploaded = (await imageRes.json()) as { imageObjectKey: string; width?: number; height?: number }
@@ -248,7 +266,7 @@ async function runPipeline(initialInput: PublishInput) {
   })
 
   if (!createRes.ok) {
-    fail(await readError(createRes), null)
+    fail(await readError(createRes), null, 'create')
     return
   }
 
@@ -269,6 +287,9 @@ async function runPipeline(initialInput: PublishInput) {
     restricted: false,
     savedAsDraft: false,
   })
+  trackFeedEvent(
+    feedEvents.publishSucceeded({ hasImage: Boolean(input.imageObjectKey), text: input.sourceText }),
+  )
   for (const cb of onSuccessCallbacks) cb({ postId, draftId })
 }
 
@@ -298,6 +319,13 @@ export function startPublish(input: PublishInput): boolean {
   })
   void runPipeline(input).catch(() => {
     const failedInput = isSameJob(current, input) ? current.input : input
+    trackFeedEvent(
+      feedEvents.publishFailed({
+        hasImage: Boolean(failedInput.imageObjectKey || failedInput.imageFile),
+        text: failedInput.sourceText,
+        reason: 'network',
+      }),
+    )
     setJob({
       status: 'failed',
       input: failedInput,
