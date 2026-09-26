@@ -2959,3 +2959,129 @@
 - User impact: On 2.1.0+ the only entry point to conversation search would have disappeared.
 - Resolution: By the user's decision, a search bar is now the first row inside the conversation list's scroll area and scrolls with the list. It calls the same `handleOpenSearch` the old header button called, so it opens the existing search overlay with the same filtering, results, empty state, clear/IME handling and analytics. The header keeps the shared `AppTopHeader`. Clients before 2.1.0 keep the previous header and search button unchanged.
 - Verification: Label resolver unit test; conversation-list, header and posting-guard tests (69) passed; TypeScript clean. On-device check pending in the device test.
+
+## 2026-09-26 — Posting feed gap audit: fixes merged into `feat/posting-feed`
+
+A four-part audit of the posting feed against the numbered spec (`docs/posting-feed-checklist.md`) found the UI/UX issues below. All of them were fixed on `feat/posting-feed` (not `main`). Across the merged branch: web unit tests 276 files / 2,817 passed, RN 20 suites / 111 passed, TypeScript clean. On-device checks listed per entry are still pending (no connected device).
+
+### Feed: a requested translation never reached the body
+- Surface: Feed card (center large text, photo-post caption, expanded body).
+- Issue: After "See translation" the button switched to "See original", but the photo caption and the expanded body kept the original. The text resolver only trusted the server's `ready` state, not a translation the viewer had just fetched.
+- User impact: Viewers outside the four default languages effectively could not read posts in their language, and the three places showed different languages.
+- Resolution: One resolver (`resolveCardTexts`) derives all three texts from the text currently shown. Loading a post whose stored translation failed no longer shows an unrequested failure toast, and photo-only posts no longer show a translate button.
+- Verification: `feed-card-format` and `use-feed-translate` tests (failed before the fix).
+
+### Feed: position and expanded state reset after every tab switch
+- Surface: Home feed after returning from a profile, the comment sheet or another tab.
+- Issue: On the first render (no posts yet) the persist effect overwrote the saved state with an empty one, and the default `source` object was recreated on every render.
+- User impact: Returning to the feed always landed on the first post, collapsed.
+- Resolution: The saved state is read synchronously before cards mount, and writes start only after the start position is applied. A notification deep link (`?postId`) takes precedence. A saved post that is no longer visible shows the existing "no longer available" toast.
+- Verification: `feed-restore-state` tests. On device: restore after a profile round trip.
+
+### Feed: unseen posts skipped while paging; feed stopped at the end
+- Surface: Home feed scrolling.
+- Issue: The server re-ranked on every page request using the latest seen set and cut by offset, so posts seen on page 1 pulled other unseen posts forward and they were skipped. At the end the server wrapped to offset 0, but the client discarded the repeated ids, so nothing was appended.
+- User impact: Some posts were never shown, and with few posts the feed simply ended.
+- Resolution: Each snapshot ranks from views before its `snapshotAt`, with a deterministic tiebreak. A cached ranked list keeps pages stable within the snapshot. The end cursor starts a fresh snapshot, and the client appends repeated ids as a new cycle with per-occurrence keys. A like or a comment marks the post seen at once. One visit must show the post for 1 continuous second to count as seen.
+- Verification: `feed-service`, `feed-ranking`, `view-dwell`, `feed-list` tests.
+
+### Feed: white controls invisible on light backgrounds; some gradients below 3:1
+- Surface: Author row, time, follow, expand, translate and like/comment/⋯ icons, plus the transparent header over the active post.
+- Issue: All glyphs were hard-coded white. Five light presets made them nearly invisible. White text on golden-hour, ocean-blue, sunset-orange and aurora-green measured below 3:1.
+- User impact: Unreadable controls on about half of the text posts.
+- Resolution: `postForegroundTone()` in `post-backgrounds.ts` is the single rule, and the card and the header both follow it. Light backgrounds get dark glyphs without shadow; photos and dark backgrounds get white glyphs with shadow. The four gradients were darkened (golden-hour now uses dark text). "Pattern" presets now render real patterns.
+- Verification: A per-preset contrast test over every color stop (failed before the fix).
+
+### Feed: photos cropped; broken images and load-more errors unreachable
+- Surface: Photo posts, the end of the feed.
+- Issue: Photos used `object-cover`. The image-error props were not wired. The load-more spinner and the retry sat outside the mandatory snap, and requests had no timeout.
+- User impact: Faces or text in photos were cut off, broken images showed as blank, and a stalled network produced an endless, unretryable wait at the bottom.
+- Resolution: `object-contain` over the post background. Original dimensions are now stored (`imageWidth`/`imageHeight`, migration `20260926150000_add_post_image_dimensions`) and used for layout. A failed image shows a message and a retry. The end of the feed is a snapping full-height status card (loading / failed + retry). Feed requests time out after 15 s.
+- Verification: `fetchWithTimeout` and `imageAspectRatio` tests. On device: letterboxing, status card.
+
+### Feed: publish banner pushed cards; swipe hint blocked swipes; a11y chevrons visible
+- Surface: Feed overlays.
+- Issues:
+  - The publish banner sat in the layout flow, so the fixed-height cards overflowed and the bottom row clipped. The banner was also missing in the loading, error and empty states.
+  - The first-run hint covered the whole feed and swallowed swipes, and a programmatic restore scroll marked it complete.
+  - The `sr-only-focusable` class was undefined, so the keyboard previous/next chevrons showed on every card.
+- Resolution:
+  - The banner is an overlay under the header in every state.
+  - Card height is measured from the real container.
+  - The hint passes touches through (only its close button is interactive), completes only on a real gesture, and uses localized copy ("swipe up for the next post").
+  - The utility class is defined.
+  - The follow button is a small "+", the compose icon is a note-and-pencil (`SquarePen`), and times are locale-formatted.
+- Verification: Unit tests where pure. On device: banner position under the notch, hint pass-through.
+
+### Comments: auto-translated comments could not show the original
+- Surface: Comment sheet.
+- Issue: The server's translated `displayText` was used as the "original".
+- User impact: Users of the four default languages could never read a foreign comment's original.
+- Resolution:
+  - A translated comment opens in translation with "See original" and toggles to `sourceText`. It uses the same Globe icon as the feed.
+  - On touch keyboards Enter inserts a newline, and sending uses the button. On desktop an Enter pressed during IME composition no longer sends.
+  - A failed reply retries to its original target.
+  - The @name is inline with the body, and "View N replies" uses plural rules.
+  - The sheet traps and restores focus.
+- Verification: `comment-state`, composer and API tests.
+
+### Notifications: dot could persist, follow alerts ignored the toggle, labels untranslated
+- Surface: Bell dot (feed and conversation list), notification list, My page toggle, feed tab.
+- Issues:
+  - The dot query and the list used different visibility filters, so an unread alert from a blocked author kept the dot on forever.
+  - Opening the list skipped the read PATCH when nothing unread was visible.
+  - Follow alerts and pushes ignored "app notifications off", and a re-follow re-notified.
+  - The toggle title and description and the feed tab label fell back to English or Korean in 13 languages, and comment, reply and follow pushes were missing in 6 languages.
+- Resolution:
+  - One visibility filter for both queries.
+  - The list marks everything read up to its load time and clears the dot optimistically.
+  - Follow alerts respect the toggle and are not duplicated.
+  - All strings exist in 15 languages.
+  - Rows wrap to two lines.
+  - The list pages and merges like-groups across pages.
+- Verification: Notification route tests (7 failed before the fix), follow route and copy-completeness tests.
+
+### Compose: previewed background not saved; second publish lost; failures discarded
+- Surface: Compose, edit, publish banner, drafts, archive/trash/hidden lists.
+- Issues:
+  - The server re-randomized the background on publish and on "change background", so the result differed from the preview.
+  - Publishing while another publish ran was silently dropped.
+  - Dismissing a failed banner discarded the text and photo, and autosave was not flushed when leaving.
+  - An image-only edit was reported as a failure.
+  - Archive and trash thumbnails returned 404 for the author.
+  - Restoring a post deleted from the archive made it public.
+- Resolution:
+  - The previewed key is saved.
+  - A second publish is blocked with a notice while the content goes to drafts.
+  - A failed publish is saved as a draft, and discarding asks first if that save failed.
+  - Autosave is serialized and flushed on pagehide and hide.
+  - A no-op or image-only edit succeeds, and concurrent edits get a conflict notice with reload.
+  - The author (and the person who hid a post) can see its image.
+  - Restore keeps the archived state.
+  - Lists page with "More".
+  - Large photos (up to 50 MB) are downsized instead of rejected, and HEIC or decode failures have clear messages.
+- Verification: Route and publish-store tests (failed before the fix). On device: keepalive flush on app switch, HEIC.
+
+### Search and profile: IME, state loss on back, "See all" screen, grid scroll
+- Surface: Explore unified search, "See all" people, profile grids.
+- Issues:
+  - A Korean composition could end without triggering the people search, and the post grid bypassed the debounce.
+  - Results cleared on every new query.
+  - Going back lost the query, results and scroll.
+  - "See all" was a bare page, and the people ranking held only within each page.
+  - Profile grids restored the window scroll instead of the real container's.
+- Resolution:
+  - One composition-aware dispatch drives people and posts.
+  - Previous results stay while loading, with a small spinner.
+  - The query lives in `?q=` with a session cache for results and scroll.
+  - "See all" is a right-sliding surface with a header and a back button.
+  - Tiering (exact → prefix → contains) and post scoring run in SQL across all rows.
+  - Grids bind to their scroll container and load pages until the saved position is reachable.
+  - This supersedes the earlier open entry about the "See all" scroll position.
+- Verification: Search controller and route tests. SQL parity checked against the old in-memory algorithm on temp tables. On device: IME order on Gboard, Samsung and iOS keyboards.
+
+### Restricted accounts saw generic failures and endless retries
+- Surface: Every posting write path (publish, drafts, edit, image upload, post and comment likes, comments).
+- Issue: The server's 403 `account_restricted` was never recognised by the client.
+- Resolution: A shared detector (`lib/account-restriction.ts`) and one 15-language notice (`i18n/moderation-copy.ts`). Every write path shows the notice, offers no retry and keeps the user's input.
+- Verification: `moderation-copy`, `like-state`, `publish-store`, `draft-autosave` and comment API tests.

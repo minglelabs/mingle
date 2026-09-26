@@ -55,6 +55,8 @@ export interface FeedResultPost {
   sourceLanguage: string | null
   backgroundKey: string | null
   imageObjectKey: string | null
+  imageWidth: number | null
+  imageHeight: number | null
   visibility: string
   deletedAt: Date | null
   likeCount: number
@@ -211,6 +213,8 @@ const PAGE_SELECT = {
   sourceLanguage: true,
   backgroundKey: true,
   imageObjectKey: true,
+  imageWidth: true,
+  imageHeight: true,
   visibility: true,
   deletedAt: true,
   likeCount: true,

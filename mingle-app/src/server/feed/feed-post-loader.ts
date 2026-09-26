@@ -31,6 +31,8 @@ export const feedPostRowSelect = {
   sourceLanguage: true,
   backgroundKey: true,
   imageObjectKey: true,
+  imageWidth: true,
+  imageHeight: true,
   visibility: true,
   deletedAt: true,
   likeCount: true,
