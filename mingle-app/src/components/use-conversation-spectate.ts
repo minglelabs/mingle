@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { buildClientApiPath } from '@/lib/api-contract'
+import type { PublicSpectateInviter } from '@/lib/conversation-share-public-payload'
 import type { Utterance } from '@/components/LivePhoneDemo/ChatBubble'
 
 export type ConversationSpectateState = {
   roomTitle: string
-  sharedByUserId: string | null
+  // Who shared the room, as the already-public profile card the API returns.
+  // Deliberately not their account id: this payload is readable by anyone
+  // holding the link (see lib/conversation-share-public-payload).
+  inviter: PublicSpectateInviter | null
   utterances: Utterance[]
 }
 
@@ -21,7 +25,19 @@ type SpectateRequestState = {
 type SpectateHydrationResponse = {
   conversation?: { title?: string }
   utterances?: Array<Record<string, unknown>>
-  sharedByUserId?: string | null
+  sharedBy?: Record<string, unknown> | null
+}
+
+function toInviter(raw: unknown): PublicSpectateInviter | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const record = raw as Record<string, unknown>
+  return {
+    name: typeof record.name === 'string' ? record.name : null,
+    image: typeof record.image === 'string' ? record.image : null,
+    imageCropScale: typeof record.imageCropScale === 'number' ? record.imageCropScale : null,
+    imageCropX: typeof record.imageCropX === 'number' ? record.imageCropX : null,
+    imageCropY: typeof record.imageCropY === 'number' ? record.imageCropY : null,
+  }
 }
 
 function toUtterance(raw: Record<string, unknown>): Utterance | null {
@@ -45,7 +61,13 @@ function toUtterance(raw: Record<string, unknown>): Utterance | null {
     speakerAvatarSeed: typeof raw.speakerAvatarSeed === 'string' ? raw.speakerAvatarSeed : undefined,
     speakerAvatarIndex: typeof raw.speakerAvatarIndex === 'number' ? raw.speakerAvatarIndex : undefined,
     speakerName: typeof raw.speakerName === 'string' ? raw.speakerName : null,
-    speakerUserId: typeof raw.speakerUserId === 'string' ? raw.speakerUserId : null,
+    // ChatBubble keys "is this an identified room member" off speakerUserId.
+    // The public payload has no account ids, so the opaque per-response alias
+    // ('s1', 's2', …) takes that slot: it satisfies every use the spectate
+    // surfaces make of the field (identified-member layout, name + photo,
+    // memo comparison) and matches no real account, so the viewer-is-sender
+    // branch simply never fires here.
+    speakerUserId: typeof raw.speakerAlias === 'string' ? raw.speakerAlias : null,
     speakerImage: typeof raw.speakerImage === 'string' ? raw.speakerImage : null,
   }
 }
@@ -113,7 +135,7 @@ export function useConversationSpectate(
           status: 'ready',
           state: {
             roomTitle: payload.conversation?.title?.trim() || '',
-            sharedByUserId: typeof payload.sharedByUserId === 'string' ? payload.sharedByUserId : null,
+            inviter: toInviter(payload.sharedBy),
             utterances,
           },
         })

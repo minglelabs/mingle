@@ -25,7 +25,8 @@ export type NativeConversationShareOverlayRequest = {
 // CustomEvent into the currently-loaded page (and stashes the same payload
 // on window as a fallback for a listener that hasn't mounted yet) instead of
 // navigating the WebView away, so NativeConversationShareOverlay can render
-// an in-app-only read-only view on top of whatever screen was already open.
+// an in-app view (the snapshot plus a join action) on top of whatever screen
+// was already open.
 export function buildNativeConversationShareEventScript(
   request: NativeConversationShareOverlayRequest,
 ): string {
@@ -107,7 +108,7 @@ export type NativeConversationShareWebUrlOptions = {
   shareToken: string;
 };
 
-// The spectate page (/s/[shareToken]) is the same read-only page for
+// The spectate page (/s/[shareToken]) is the same snapshot page for
 // everyone, member or not, app or web — unlike profile links there's no
 // separate "authenticated in-app" destination to build here.
 export function buildNativeConversationShareWebUrl({
