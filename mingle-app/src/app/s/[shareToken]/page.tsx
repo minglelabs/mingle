@@ -125,11 +125,32 @@ export default async function ConversationSpectatePage({ params }: ConversationS
 }
 
 export async function generateMetadata({ params }: ConversationSpectatePageProps) {
-  const { shareToken } = await params;
+  const { shareToken: rawShareToken } = await params;
+  const shareToken = decodePathSegment(rawShareToken);
+  if (!isValidConversationShareToken(shareToken)) {
+    return {
+      title: "Invalid Mingle conversation link",
+      description: "View a shared Mingle conversation in the Mingle app.",
+    };
+  }
+
+  // Title the tab/OG card with the room's SNAPSHOT title (frozen at sharedAt),
+  // never the live stored title — a rename after sharing must not leak into
+  // the public metadata. getConversationHydrationStateForShare returns the
+  // frozen title in state.conversation.title. Fall back to the generic label
+  // on any failure or a revoked link.
+  let snapshotTitle = "";
+  try {
+    const state = await getConversationHydrationStateForShare({ shareToken });
+    snapshotTitle = state?.conversation.title?.trim() ?? "";
+  } catch {
+    snapshotTitle = "";
+  }
+
   return {
-    title: isValidConversationShareToken(decodePathSegment(shareToken))
-      ? "Open shared conversation in Mingle"
-      : "Invalid Mingle conversation link",
+    title: snapshotTitle
+      ? `${snapshotTitle} — shared on Mingle`
+      : "Open shared conversation in Mingle",
     description: "View a shared Mingle conversation in the Mingle app.",
   };
 }
