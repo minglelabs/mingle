@@ -44,6 +44,18 @@ export type PostTranslationRepository = {
 
   /** Find all translations for a specific bodyVersion. */
   findByPostVersion(postId: string, bodyVersion: number): Promise<PostTranslationRecord[]>
+
+  /**
+   * Atomically write a settled set of translation rows for one bodyVersion.
+   * Used by the settle-then-commit publish/edit paths so the body and its
+   * translations become visible together. Implementations run this in a
+   * transaction; the in-memory test repo writes them synchronously.
+   */
+  replaceVersionTranslations(args: {
+    postId: string
+    bodyVersion: number
+    rows: Array<{ language: string; status: PostTranslationStatus; text: string | null }>
+  }): Promise<void>
 }
 
 export type CommentTranslationRecord = {
@@ -66,6 +78,16 @@ export type CommentTranslationRepository = {
   find(commentId: string, bodyVersion: number, language: string): Promise<CommentTranslationRecord | null>
 
   findByCommentVersion(commentId: string, bodyVersion: number): Promise<CommentTranslationRecord[]>
+
+  /** Find all translations for a comment (any body version). */
+  findByComment(commentId: string): Promise<CommentTranslationRecord[]>
+
+  /** Atomically write a settled set of translation rows for one bodyVersion. */
+  replaceVersionTranslations(args: {
+    commentId: string
+    bodyVersion: number
+    rows: Array<{ language: string; status: PostTranslationStatus; text: string | null }>
+  }): Promise<void>
 }
 
 // ─── In-flight dedup map ─────────────────────────────────────────────────────
@@ -462,6 +484,157 @@ export async function translateCommentOnDemand(
     args.language,
     args.modelSelection,
   )
+}
+
+// ─── Settle-then-commit translation (planning policy) ────────────────────────
+//
+// The planning policy publishes a post/comment only AFTER its default-language
+// translations have settled (each either ready or failed), and on edit replaces
+// the body + all its translations atomically. To make that possible the caller
+// needs the settled translation rows BEFORE it writes anything to the DB, so
+// these helpers translate purely in memory (no repository writes) and hand back
+// rows the caller then persists inside its own transaction.
+
+/** Overall wall-clock budget for a settle-then-commit translation batch. */
+export const SETTLE_TRANSLATION_BUDGET_MS = 15_000
+
+export type SettledTranslationRow = {
+  language: string
+  status: 'ready' | 'failed'
+  text: string | null
+}
+
+/**
+ * Translate one language, resolving to a settled row instead of writing to a
+ * repository. A provider failure or empty result becomes status 'failed' with
+ * null text — never thrown, so one failing language cannot sink the batch.
+ */
+async function translateSettledLanguage(
+  sourceText: string,
+  sourceLanguage: string,
+  language: string,
+  systemPrompt: string,
+  userPromptFor: (lang: string) => string,
+  modelSelection?: TranslateTextsInput['modelSelection'],
+): Promise<SettledTranslationRow> {
+  try {
+    const result = await translateTexts({
+      text: sourceText,
+      sourceLanguage,
+      targetLanguages: [language],
+      modelSelection,
+      isFinal: true,
+      systemPromptOverride: systemPrompt,
+      userPromptOverride: userPromptFor(language),
+    })
+    const text = result.translations[language]
+    if (text) return { language, status: 'ready', text }
+    return { language, status: 'failed', text: null }
+  } catch {
+    return { language, status: 'failed', text: null }
+  }
+}
+
+/**
+ * Race the whole batch against a wall-clock budget. Languages that have not
+ * settled when the budget expires are recorded as 'failed' (their late result
+ * is discarded), so publishing is never blocked past the cap.
+ */
+async function settleWithinBudget(
+  languages: string[],
+  translateOne: (language: string) => Promise<SettledTranslationRow>,
+  budgetMs: number,
+): Promise<SettledTranslationRow[]> {
+  const settled = new Map<string, SettledTranslationRow>()
+
+  const work = languages.map(async (language) => {
+    const row = await translateOne(language)
+    // Only record if the budget has not already timed this language out.
+    if (!settled.has(language)) settled.set(language, row)
+  })
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const budget = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, budgetMs)
+  })
+
+  await Promise.race([Promise.allSettled(work), budget])
+  if (timer) clearTimeout(timer)
+
+  // Any language not settled by the deadline is failed.
+  return languages.map(
+    (language) => settled.get(language) ?? { language, status: 'failed' as const, text: null },
+  )
+}
+
+/**
+ * Translate a post body to the given target languages, purely in memory.
+ * Returns one settled row per language (never throws). The caller persists
+ * these rows transactionally alongside the post row / body update.
+ */
+export async function translatePostBodySettled(args: {
+  sourceText: string
+  sourceLanguage: string
+  targetLanguages: string[]
+  budgetMs?: number
+  modelSelection?: TranslateTextsInput['modelSelection']
+}): Promise<SettledTranslationRow[]> {
+  const targets = args.targetLanguages.filter(Boolean)
+  if (targets.length === 0) return []
+  const systemPrompt = buildPostTranslationSystemPrompt()
+  return settleWithinBudget(
+    targets,
+    (language) =>
+      translateSettledLanguage(
+        args.sourceText,
+        args.sourceLanguage,
+        language,
+        systemPrompt,
+        (lang) => buildPostTranslationUserPrompt(args.sourceText, args.sourceLanguage, [lang]),
+        args.modelSelection,
+      ),
+    args.budgetMs ?? SETTLE_TRANSLATION_BUDGET_MS,
+  )
+}
+
+/** Same as translatePostBodySettled but with the comment prompt. */
+export async function translateCommentBodySettled(args: {
+  sourceText: string
+  sourceLanguage: string
+  targetLanguages: string[]
+  budgetMs?: number
+  modelSelection?: TranslateTextsInput['modelSelection']
+}): Promise<SettledTranslationRow[]> {
+  const targets = args.targetLanguages.filter(Boolean)
+  if (targets.length === 0) return []
+  const systemPrompt = buildCommentTranslationSystemPrompt()
+  return settleWithinBudget(
+    targets,
+    (language) =>
+      translateSettledLanguage(
+        args.sourceText,
+        args.sourceLanguage,
+        language,
+        systemPrompt,
+        (lang) => buildCommentTranslationUserPrompt(args.sourceText, args.sourceLanguage, [lang]),
+        args.modelSelection,
+      ),
+    args.budgetMs ?? SETTLE_TRANSLATION_BUDGET_MS,
+  )
+}
+
+/**
+ * Compute the full set of target languages for a post edit: the default 4
+ * (minus the new source language) unioned with every language that already had
+ * a translation on the post, minus the source. Pure — the caller supplies the
+ * existing languages so this can run before or inside a transaction.
+ */
+export function resolveEditTargetLanguages(sourceLanguage: string, existingLanguages: string[]): string[] {
+  const canonicalSource = canonicalizeTranslationLanguageCode(sourceLanguage)
+  const set = new Set<string>(existingLanguages)
+  for (const lang of resolveDefaultPostTranslationLanguages(sourceLanguage)) set.add(lang)
+  set.delete(canonicalSource)
+  return Array.from(set)
 }
 
 // ─── Test helper: clear in-flight map ────────────────────────────────────────

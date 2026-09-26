@@ -74,6 +74,25 @@ export const prismaPostTranslationRepo: PostTranslationRepository = {
     })
     return rows.map(toPostRecord)
   },
+
+  async replaceVersionTranslations({ postId, bodyVersion, rows }) {
+    await prisma.$transaction([
+      prisma.postTranslation.deleteMany({ where: { postId, bodyVersion } }),
+      ...(rows.length > 0
+        ? [
+            prisma.postTranslation.createMany({
+              data: rows.map((r) => ({
+                postId,
+                bodyVersion,
+                language: r.language,
+                status: r.status,
+                text: r.text,
+              })),
+            }),
+          ]
+        : []),
+    ])
+  },
 }
 
 // ─── Comment translation ─────────────────────────────────────────────────────
@@ -131,6 +150,30 @@ export const prismaCommentTranslationRepo: CommentTranslationRepository = {
       where: { commentId, bodyVersion },
     })
     return rows.map(toCommentRecord)
+  },
+
+  async findByComment(commentId) {
+    const rows = await prisma.postCommentTranslation.findMany({ where: { commentId } })
+    return rows.map(toCommentRecord)
+  },
+
+  async replaceVersionTranslations({ commentId, bodyVersion, rows }) {
+    await prisma.$transaction([
+      prisma.postCommentTranslation.deleteMany({ where: { commentId, bodyVersion } }),
+      ...(rows.length > 0
+        ? [
+            prisma.postCommentTranslation.createMany({
+              data: rows.map((r) => ({
+                commentId,
+                bodyVersion,
+                language: r.language,
+                status: r.status,
+                text: r.text,
+              })),
+            }),
+          ]
+        : []),
+    ])
   },
 }
 
