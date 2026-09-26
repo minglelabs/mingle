@@ -1,0 +1,379 @@
+{
+  "version": 1,
+  "authorHandle": "mingle_team",
+  "authorDisplayName": "Mingle 팀",
+  "notes": "Launch seed posts for the posting feed. Written by the Mingle team account. No first-person reviews, no clinic/shop promotion, no medical efficacy or safety claims. Every 'fact' item carries official sources; re-check them before each run.",
+  "items": [
+    {
+      "key": "welcome-team",
+      "clientPostId": "mingleseed-v1-001",
+      "kind": "notice",
+      "topic": "local",
+      "language": "ko",
+      "text": "안녕하세요, Mingle 팀입니다. 서울 여행, 한국어, 현지 생활에 대해 궁금한 것을 자유롭게 올려 주세요. 올린 글은 여러 언어로 번역되어 다른 나라 사람들도 읽을 수 있어요."
+    },
+    {
+      "key": "tax-refund-minimum-ko",
+      "clientPostId": "mingleseed-v1-002",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "ko",
+      "text": "외국인 관광객 사후면세(Tax Refund)는 택스리펀 매장에서 15,000원 이상 구매해야 대상이 돼요. 여권을 꼭 챙겨 가세요. (출처: 한국관광공사 VISITKOREA)",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tax-refund-immediate-en",
+      "clientPostId": "mingleseed-v1-003",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "en",
+      "text": "Immediate tax refund at participating stores in Korea: purchases of KRW 15,000 or more, under KRW 1 million per transaction and KRW 5 million or less in total. Bring your passport. Source: VISITKOREA (Korea Tourism Organization).",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tax-refund-eligibility-ja",
+      "clientPostId": "mingleseed-v1-004",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "韓国のタックスリファンドの対象は、韓国での滞在が6か月以内の外国人旅行者などです。購入した商品は3か月以内に国外へ持ち出す必要があります。出典：韓国観光公社 VISITKOREA",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tax-refund-excluded-zh",
+      "clientPostId": "mingleseed-v1-005",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "zh-CN",
+      "text": "在韩国退税要注意：已经开封或使用过的商品、现场烹饪的食品、按摩等服务不在退税范围内。出处：韩国观光公社 VISITKOREA",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tax-refund-airport-ko",
+      "clientPostId": "mingleseed-v1-006",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "ko",
+      "text": "택스리펀 매장에서 받은 환급 영수증은 출국할 때 세관에서 반출 확인을 받은 뒤, 공항 환급 창구나 무인 키오스크에서 환급받을 수 있어요. 출처: 한국관광공사 VISITKOREA",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tax-refund-icn-t1-ja",
+      "clientPostId": "mingleseed-v1-007",
+      "kind": "fact",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "仁川空港第1ターミナルの税金還付カウンター（有人）は7:00〜22:00、無人キオスクは24時間だそうです。変更されることもあるので、出発前に公式情報を確認してください。出典：VISITKOREA",
+      "sources": [
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=248765", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "hotline-1330-en",
+      "clientPostId": "mingleseed-v1-008",
+      "kind": "fact",
+      "topic": "local",
+      "language": "en",
+      "text": "Need an interpreter while traveling? The 1330 Korea Travel Helpline (Korea Tourism Organization) answers in Korean, English, Japanese and Chinese 24/7. From abroad, dial +82-2-1330. Russian, Vietnamese, Thai and Malay: 08:00–19:00.",
+      "sources": [
+        { "url": "https://english1.visitkorea.or.kr/enu/TRV/TV_ENG_3_1.jsp", "checkedAt": "2026-09-26" },
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?menuSn=454&vcontsId=140632", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "hotline-1330-ko",
+      "clientPostId": "mingleseed-v1-009",
+      "kind": "fact",
+      "topic": "local",
+      "language": "ko",
+      "text": "여행 중 말이 안 통할 때는 1330(한국관광공사 관광통역안내전화)을 기억해 두세요. 해외에서는 +82-2-1330이고, 한국어·영어·일본어·중국어는 24시간 운영해요.",
+      "sources": [
+        { "url": "https://english1.visitkorea.or.kr/enu/TRV/TV_ENG_3_1.jsp", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "dasan-120-ja",
+      "clientPostId": "mingleseed-v1-010",
+      "kind": "fact",
+      "topic": "local",
+      "language": "ja",
+      "text": "ソウル市のタサンコールセンターは「120」に電話して「9」を押すと外国語相談につながります（英語・日本語・中国語・ベトナム語・モンゴル語、9〜18時、祝日を除く）。出典：ソウル安全ヌリ",
+      "sources": [
+        { "url": "https://safecity.seoul.go.kr/global/emergencyContact/phoneServiceIndex.do", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "tourist-complaint-zh",
+      "clientPostId": "mingleseed-v1-011",
+      "kind": "fact",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "在韩国旅游时遇到不愉快的经历或消费纠纷，可以拨打 1330，或在韩国观光公社的旅游投诉中心网站 touristcomplaint.or.kr 提交投诉。",
+      "sources": [
+        { "url": "https://english1.visitkorea.or.kr/enu/TRV/TV_ENG_3_1.jsp", "checkedAt": "2026-09-26" },
+        { "url": "https://english.visitkorea.or.kr/svc/contents/contentsView.do?menuSn=454&vcontsId=140632", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "immigration-1345-en",
+      "clientPostId": "mingleseed-v1-012",
+      "kind": "fact",
+      "topic": "local",
+      "language": "en",
+      "text": "Visa or immigration question? The Foreigner Information Center is 1345 (weekdays 09:00–22:00, many languages). Source: Seoul Safety Nuri.",
+      "sources": [
+        { "url": "https://safecity.seoul.go.kr/global/emergencyContact/phoneServiceIndex.do", "checkedAt": "2026-09-26" }
+      ]
+    },
+    {
+      "key": "derm-consult-memo-ko",
+      "clientPostId": "mingleseed-v1-013",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "ko",
+      "text": "피부과 상담 전에 지금 먹는 약이나 알레르기를 메모해 가면 설명하기 편해요. 한국어로는 '알레르기가 있어요', '먹는 약이 있어요'라고 말하면 돼요."
+    },
+    {
+      "key": "clinic-questions-en",
+      "clientPostId": "mingleseed-v1-014",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "en",
+      "text": "Questions worth asking at a clinic consultation: Who will perform the procedure? What does the total price include? Who do I contact if something feels wrong after I fly home?"
+    },
+    {
+      "key": "salon-bangs-ja",
+      "clientPostId": "mingleseed-v1-015",
+      "kind": "phrase",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "美容室で「前髪は眉の上まで」は韓国語で「앞머리는 눈썹 위까지 잘라 주세요」。写真を見せながら言うと伝わりやすいです。"
+    },
+    {
+      "key": "nail-design-zh",
+      "clientPostId": "mingleseed-v1-016",
+      "kind": "phrase",
+      "topic": "beauty",
+      "language": "zh-CN",
+      "text": "在韩国做美甲时，可以一边给店员看图片，一边说「이 디자인으로 해 주세요」（请按这个款式做）。"
+    },
+    {
+      "key": "nail-walkin-ko",
+      "clientPostId": "mingleseed-v1-017",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "ko",
+      "text": "서울에서 네일 받을 때 예약 없이 가도 되는지 궁금해요. 다들 보통 어떻게 하시나요?"
+    },
+    {
+      "key": "haircut-first-en",
+      "clientPostId": "mingleseed-v1-018",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "en",
+      "text": "Getting a haircut in Seoul for the first time? What would you want to know before booking — price, how to explain the style, or how long it takes?"
+    },
+    {
+      "key": "salon-phrases-ko",
+      "clientPostId": "mingleseed-v1-019",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ko",
+      "text": "미용실에서 쓰는 말: '다듬기만 해 주세요'(trim only), '숱 좀 쳐 주세요'(thin it out), '드라이만 해 주세요'(blow-dry only)."
+    },
+    {
+      "key": "salon-phrases-en",
+      "clientPostId": "mingleseed-v1-020",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "At a Korean hair salon: \"얼마나 걸려요?\" (eolmana geollyeoyo?) means \"How long will it take?\" and \"가격이 얼마예요?\" (gagyeogi eolmayeyo?) means \"How much is it?\""
+    },
+    {
+      "key": "derm-booking-ja",
+      "clientPostId": "mingleseed-v1-021",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "ソウルで皮膚科を予約するとき、事前に何を確認しますか？通訳の有無や支払い方法など、気になる点を教えてください。"
+    },
+    {
+      "key": "surgery-consult-zh",
+      "clientPostId": "mingleseed-v1-022",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "zh-CN",
+      "text": "第一次在首尔做整形外科咨询，大家会提前准备哪些问题？欢迎一起整理一份清单。"
+    },
+    {
+      "key": "procedure-questions-ko",
+      "clientPostId": "mingleseed-v1-023",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "ko",
+      "text": "시술 상담 때는 '총 비용에 뭐가 포함돼요?', '회복 기간은 얼마나 걸려요?', '문제가 생기면 어디로 연락해요?'를 미리 적어 가서 물어보세요."
+    },
+    {
+      "key": "quote-in-writing-en",
+      "clientPostId": "mingleseed-v1-024",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "en",
+      "text": "Before any cosmetic procedure abroad, ask for the quote, the aftercare plan and the clinic's contact details in writing, in a language you can read."
+    },
+    {
+      "key": "nail-phrases-ja",
+      "clientPostId": "mingleseed-v1-025",
+      "kind": "phrase",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "ネイルサロンで使える韓国語：「길이는 짧게 해 주세요」（長さは短めにしてください）、「기존 젤 제거도 해 주세요」（前のジェルも落としてください）。"
+    },
+    {
+      "key": "pharmacy-phrases-ko",
+      "clientPostId": "mingleseed-v1-026",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ko",
+      "text": "약국에서 쓰는 말: '두통약 있어요?'(Do you have headache medicine?), '하루에 몇 번 먹어요?'(How many times a day?)"
+    },
+    {
+      "key": "pharmacy-phrases-en",
+      "clientPostId": "mingleseed-v1-027",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Pharmacy Korean: \"소화제 주세요\" (sohwaje juseyo) = \"Digestive medicine, please.\" \"이거 먹으면 졸려요?\" = \"Will this make me drowsy?\""
+    },
+    {
+      "key": "shop-phrases-ja",
+      "clientPostId": "mingleseed-v1-028",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "お店で便利な韓国語：「이거 입어 봐도 돼요?」（試着してもいいですか？）、「다른 색 있어요?」（他の色はありますか？）"
+    },
+    {
+      "key": "shop-phrases-zh",
+      "clientPostId": "mingleseed-v1-029",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "在韩国买东西常用的一句：「카드 돼요?」（可以刷卡吗？）、「봉투 주세요」（请给我一个袋子）。"
+    },
+    {
+      "key": "clinic-reception-ko",
+      "clientPostId": "mingleseed-v1-030",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ko",
+      "text": "병원 접수할 때 쓰는 말: '처음 왔어요', '예약했어요, 이름은 ○○예요', '영어 하시는 분 계세요?'"
+    },
+    {
+      "key": "receipt-phrase-en",
+      "clientPostId": "mingleseed-v1-031",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"영수증 주세요\" (yeongsujeung juseyo) = \"Receipt, please.\" Handy when you shop at tax refund stores."
+    },
+    {
+      "key": "hospital-phrases-ja",
+      "clientPostId": "mingleseed-v1-032",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "病院で使える韓国語：「여기가 아파요」（ここが痛いです）。「언제부터 아팠어요?」（いつから痛いですか？）と聞かれたら「어제부터요」（昨日からです）。"
+    },
+    {
+      "key": "directions-zh",
+      "clientPostId": "mingleseed-v1-033",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "在首尔问路可以说：「○○역 어떻게 가요?」（○○站怎么走？）、「여기서 멀어요?」（离这里远吗？）"
+    },
+    {
+      "key": "goodbye-shop-ko",
+      "clientPostId": "mingleseed-v1-034",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ko",
+      "text": "가게에서 나올 때는 '감사합니다' 뒤에 '안녕히 계세요'를 붙이면 더 자연스러워요. 남아 있는 사람에게 하는 인사예요."
+    },
+    {
+      "key": "excuse-me-en",
+      "clientPostId": "mingleseed-v1-035",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"잠시만요\" (jamsimanyo) works as \"Excuse me\" when you need to get past someone, and also as \"Just a moment.\""
+    },
+    {
+      "key": "first-confusion-ko",
+      "clientPostId": "mingleseed-v1-036",
+      "kind": "question",
+      "topic": "local",
+      "language": "ko",
+      "text": "서울에 처음 왔을 때 가장 헷갈렸던 게 뭐였나요? 교통카드, 분리수거, 앱 가입 등 뭐든 좋으니 적어 주세요."
+    },
+    {
+      "key": "before-landing-en",
+      "clientPostId": "mingleseed-v1-037",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Visiting Seoul for the first time soon? What do you want to know before you land? Ask here and people who live in Seoul can answer."
+    },
+    {
+      "key": "quiet-walk-ja",
+      "clientPostId": "mingleseed-v1-038",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "ソウルに住んでいる方に質問です。観光客があまり知らない、静かに散歩できる場所はありますか？"
+    },
+    {
+      "key": "weekend-local-zh",
+      "clientPostId": "mingleseed-v1-039",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "住在首尔的朋友们，周末一般喜欢去哪里？想听听本地人的推荐。"
+    },
+    {
+      "key": "one-phrase-en",
+      "clientPostId": "mingleseed-v1-040",
+      "kind": "question",
+      "topic": "korean",
+      "language": "en",
+      "text": "Locals: what's one Korean phrase every visitor should learn before their first day in Seoul?"
+    },
+    {
+      "key": "show-friend-ko",
+      "clientPostId": "mingleseed-v1-041",
+      "kind": "question",
+      "topic": "local",
+      "language": "ko",
+      "text": "외국인 친구에게 서울을 소개한다면 어디부터 데려가고 싶으세요?"
+    },
+    {
+      "key": "ordering-ja",
+      "clientPostId": "mingleseed-v1-042",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ja",
+      "text": "韓国語で注文するのが不安な方、どんな場面が一番難しいですか？役に立つ表現をみんなで集めましょう。"
+    }
+  ]
+}
