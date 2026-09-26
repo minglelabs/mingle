@@ -8,6 +8,8 @@ const {
   mockCommentCount,
   mockPostFindUnique,
   mockPostUpdate,
+  mockTranslationCreateMany,
+  mockTranslationDeleteMany,
 } = vi.hoisted(() => ({
   mockTransaction: vi.fn(),
   mockCommentFindUnique: vi.fn(),
@@ -16,6 +18,8 @@ const {
   mockCommentCount: vi.fn(),
   mockPostFindUnique: vi.fn(),
   mockPostUpdate: vi.fn(),
+  mockTranslationCreateMany: vi.fn(),
+  mockTranslationDeleteMany: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -30,6 +34,10 @@ vi.mock('@/lib/prisma', () => ({
     post: {
       findUnique: mockPostFindUnique,
       update: mockPostUpdate,
+    },
+    postCommentTranslation: {
+      createMany: mockTranslationCreateMany,
+      deleteMany: mockTranslationDeleteMany,
     },
   },
 }))
@@ -49,6 +57,10 @@ function setupTransaction() {
       post: {
         findUnique: mockPostFindUnique,
         update: mockPostUpdate,
+      },
+      postCommentTranslation: {
+        createMany: mockTranslationCreateMany,
+        deleteMany: mockTranslationDeleteMany,
       },
     }
     return cb(tx)
@@ -145,9 +157,10 @@ describe('createComment', () => {
 describe('updateComment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setupTransaction()
   })
 
-  it('updates own comment and increments bodyVersion', async () => {
+  it('updates own comment and increments bodyVersion, replacing new-version translations', async () => {
     mockCommentFindUnique.mockResolvedValue({
       id: 'c1',
       authorId: 'user-1',
@@ -160,23 +173,29 @@ describe('updateComment', () => {
       sourceText: 'edited',
       updatedAt: new Date(),
     })
-
-    // Use the real prisma mock directly
-    const { prisma } = await import('@/lib/prisma')
-    ;(prisma.postComment.update as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 'c1',
-      bodyVersion: 2,
-      sourceText: 'edited',
-      updatedAt: new Date(),
-    })
+    mockTranslationDeleteMany.mockResolvedValue({ count: 0 })
+    mockTranslationCreateMany.mockResolvedValue({ count: 1 })
 
     const result = await updateComment({
       commentId: 'c1',
       actorId: 'user-1',
       sourceText: 'edited',
       sourceLanguage: 'en',
+      translationRows: [{ language: 'ko', status: 'ready', text: '수정됨' }],
     })
     expect(result.bodyVersion).toBe(2)
+    // New body version = 2; update targets bodyVersion 2 explicitly
+    expect(mockCommentUpdate).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: expect.objectContaining({ sourceText: 'edited', sourceLanguage: 'en', bodyVersion: 2 }),
+    })
+    // Translations for the new version are replaced atomically
+    expect(mockTranslationDeleteMany).toHaveBeenCalledWith({
+      where: { commentId: 'c1', bodyVersion: 2 },
+    })
+    expect(mockTranslationCreateMany).toHaveBeenCalledWith({
+      data: [{ commentId: 'c1', bodyVersion: 2, language: 'ko', status: 'ready', text: '수정됨' }],
+    })
   })
 
   it('rejects edit by non-author', async () => {
