@@ -70,7 +70,7 @@ async function resolveFollowTarget(
   params: Promise<{ userId: string }>,
 ): Promise<
   | { response: NextResponse }
-  | { followerId: string; followingId: string }
+  | { followerId: string; followingId: string; notificationsEnabled: boolean }
 > {
   const followerId = getSessionUserId(session);
   if (!followerId) {
@@ -88,7 +88,7 @@ async function resolveFollowTarget(
 
   const target = await prisma.user.findUnique({
     where: { id: followingId, isActive: true },
-    select: { id: true },
+    select: { id: true, inAppNotificationsEnabled: true },
   });
   if (!target) {
     return { response: NextResponse.json({ error: "user_not_found" }, { status: 404 }) };
@@ -107,7 +107,46 @@ async function resolveFollowTarget(
     return { response: NextResponse.json({ error: "user_blocked" }, { status: 409 }) };
   }
 
-  return { followerId, followingId };
+  return {
+    followerId,
+    followingId,
+    // The recipient's single app-notification switch (default on). When off,
+    // no in-app row is created and therefore no push either.
+    notificationsEnabled: target.inAppNotificationsEnabled !== false,
+  };
+}
+
+/**
+ * Create the follow notification (and its push) at most once per
+ * (follower, followed) pair, and only when the followed user's app
+ * notifications are on. Unfollowing and following again reuses the first row
+ * instead of notifying again. Never throws into the follow action.
+ */
+async function notifyNewFollower(args: { followerId: string; followingId: string; notificationsEnabled: boolean }): Promise<void> {
+  if (!args.notificationsEnabled) return;
+  try {
+    const existing = await prisma.userNotification.findFirst({
+      where: { recipientId: args.followingId, actorId: args.followerId, type: "follow" },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const notification = await prisma.userNotification.create({
+      data: {
+        recipientId: args.followingId,
+        actorId: args.followerId,
+        type: "follow",
+      },
+    });
+
+    try {
+      await sendPushNotificationForUserNotification(notification.id);
+    } catch (error) {
+      console.error("[PushNotifications] follow notification delivery failed", error);
+    }
+  } catch (error) {
+    console.error("[follow] notification failed", error);
+  }
 }
 
 export async function POST(request: NextRequest, { params }: FollowRouteProps) {
@@ -128,19 +167,7 @@ export async function POST(request: NextRequest, { params }: FollowRouteProps) {
   }
 
   if (created) {
-    const notification = await prisma.userNotification.create({
-      data: {
-        recipientId: result.followingId,
-        actorId: result.followerId,
-        type: "follow",
-      },
-    });
-
-    try {
-      await sendPushNotificationForUserNotification(notification.id);
-    } catch (error) {
-      console.error("[PushNotifications] follow notification delivery failed", error);
-    }
+    await notifyNewFollower(result);
   }
 
   await captureFollowApiAction({

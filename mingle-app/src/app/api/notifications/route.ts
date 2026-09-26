@@ -2,8 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { notMutuallyBlockedWhere } from "@/server/posts/block-visibility";
-import { visiblePostWhere } from "@/server/posts/post-visibility";
+import {
+  resolveReadBefore,
+  visibleNotificationWhere,
+} from "@/server/notifications/notification-visibility";
 import {
   buildNotificationListResponse,
   type RawNotificationRow,
@@ -14,10 +16,6 @@ export const runtime = "nodejs";
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 
-// Types that reference a post; when that post is no longer visible to the
-// viewer (deleted, hidden, author blocked, operator-hidden) the notification
-// is withheld from the list but still counts as read on entry.
-const POST_SCOPED_TYPES = ["post_like", "comment", "comment_reply", "comment_like"] as const;
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -50,21 +48,17 @@ export async function GET(request: NextRequest) {
 
   const limit = resolveLimit(request);
   const cursor = resolveCursor(request);
+  // The entry snapshot: the client sends it back with PATCH so only what had
+  // arrived by this read is marked read.
+  const readBefore = new Date();
 
   // Withhold notifications whose actor is now mutually blocked, and — for
-  // post-scoped types — whose post is no longer visible. Follow and
-  // report_resolved are not post-scoped. The extra row (+1) drives the cursor.
+  // post-scoped types — whose post is no longer visible (the same rule the
+  // red-dot probe uses). The extra row (+1) drives the cursor.
   const rows = await prisma.userNotification.findMany({
     where: {
-      recipientId: viewerId,
-      actor: notMutuallyBlockedWhere(viewerId),
-      OR: [
-        { type: { notIn: [...POST_SCOPED_TYPES] } },
-        {
-          type: { in: [...POST_SCOPED_TYPES] },
-          post: visiblePostWhere(viewerId),
-        },
-      ],
+      ...visibleNotificationWhere(viewerId),
+      ...(cursor ? {} : { createdAt: { lte: readBefore } }),
     },
     orderBy: { createdAt: "desc" },
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -93,25 +87,42 @@ export async function GET(request: NextRequest) {
     unreadCount,
     nextCursor,
     hasMore,
+    readBefore: readBefore.toISOString(),
   });
+}
+
+async function readBeforeFromBody(request: Request | undefined): Promise<unknown> {
+  if (!request) return undefined;
+  try {
+    const body = (await request.json()) as { before?: unknown } | null;
+    return body && typeof body === "object" ? body.before : undefined;
+  } catch {
+    // Older clients send no body: mark up to now.
+    return undefined;
+  }
 }
 
 /**
  * Mark every notification that had arrived by entry time as read. The panel
- * opens the list and calls this once — there is no per-item read and no
- * "mark all read" button. Read state is stored per account so the red dot
- * clears on every device, feed and conversation-list header.
+ * opens the list and calls this once with `{ before: <readBefore of the list
+ * read> }` — there is no per-item read and no "mark all read" button. All of
+ * the viewer's unread rows up to `before` are marked, including ones the list
+ * withholds, so nothing hidden can keep the red dot on. Read state is stored
+ * per account so the dot clears on every device and header.
  */
-export async function PATCH() {
+export async function PATCH(request?: Request) {
   const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!viewerId) return responseJson({ error: "unauthorized" }, { status: 401 });
 
+  const now = new Date();
+  const before = resolveReadBefore(await readBeforeFromBody(request), now);
   const result = await prisma.userNotification.updateMany({
     where: {
       recipientId: viewerId,
       readAt: null,
+      createdAt: { lte: before },
     },
-    data: { readAt: new Date() },
+    data: { readAt: now },
   });
 
   return responseJson({ isRead: true, updatedCount: result.count });

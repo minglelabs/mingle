@@ -9,6 +9,8 @@ import {
   createComment,
   deleteComment,
   fetchComments,
+  isAccountRestricted,
+  isRateLimited,
   likeComment,
   translateComment,
   unlikeComment,
@@ -64,6 +66,28 @@ describe('comment-api', () => {
     mockFetchOnce(403, { error: 'forbidden' })
     const res = await deleteComment('c1')
     expect(res).toEqual({ ok: false, error: 'forbidden' })
+  })
+
+  it('flags a 403 account_restricted as a permanent restricted failure on every write', async () => {
+    mockFetchOnce(403, { error: 'account_restricted' })
+    const created = await createComment('p1', { sourceText: 'hi' })
+    mockFetchOnce(403, { error: 'account_restricted' })
+    const updated = await updateComment('c1', { sourceText: 'x' })
+    mockFetchOnce(403, { error: 'account_restricted' })
+    const liked = await likeComment('c1')
+    for (const res of [created, updated, liked]) {
+      expect(res.ok).toBe(false)
+      if (res.ok) continue
+      expect(isAccountRestricted(res)).toBe(true)
+      expect(isRateLimited(res)).toBe(false)
+    }
+  })
+
+  it('does not flag other 403s as restricted', async () => {
+    mockFetchOnce(403, { error: 'forbidden' })
+    const res = await createComment('p1', { sourceText: 'hi' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(isAccountRestricted(res)).toBe(false)
   })
 
   it('collapses a thrown fetch to a network error', async () => {

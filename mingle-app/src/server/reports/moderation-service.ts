@@ -150,3 +150,31 @@ export function normalizeReportReply(value: string): string | null {
 export function shouldAdvanceOnReply(currentStatus: string): boolean {
   return currentStatus === 'open'
 }
+
+// ─── Admin console read helpers (reported-content preview) ───────────────────
+
+export const REPORT_CONTENT_EXCERPT_LENGTH = 280
+
+/** A one-glance excerpt of reported text: whitespace collapsed, capped with "…". */
+export function reportContentExcerpt(text: string | null | undefined, max: number = REPORT_CONTENT_EXCERPT_LENGTH): string {
+  const collapsed = (text ?? '').replace(/\s+/g, ' ').trim()
+  if (collapsed.length <= max) return collapsed
+  return `${collapsed.slice(0, Math.max(0, max - 1)).trimEnd()}…`
+}
+
+export type ReportedContentState = {
+  moderationHiddenAt: Date | null
+  isDeleted: boolean | null
+}
+
+/**
+ * The one content action that makes sense for the target's CURRENT state:
+ * hidden -> offer unhide, visible -> offer hide, missing/deleted -> none.
+ * The console shows only this button instead of both.
+ */
+export function contentModerationToggle(target: ReportedContentState | null): 'hide_content' | 'unhide_content' | null {
+  if (!target) return null
+  if (target.moderationHiddenAt) return 'unhide_content'
+  if (target.isDeleted === true) return null
+  return 'hide_content'
+}

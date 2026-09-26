@@ -1,4 +1,5 @@
 import { buildClientApiPath } from '@/lib/api-contract'
+import { isAccountRestrictedBody } from '@/lib/account-restriction'
 import type { CommentListResponse } from './comment-types'
 
 /**
@@ -8,8 +9,18 @@ import type { CommentListResponse } from './comment-types'
  */
 
 export type RateLimited = { ok: false; error: 'rate_limited'; retryAfterSeconds: number }
-export type Failure = { ok: false; error: string; retryAfterSeconds?: number }
+/**
+ * `accountRestricted` is set when a write API answered 403 with the
+ * restricted-account body (see `@/lib/account-restriction`). Such a failure is
+ * permanent: the UI shows the moderation notice and never offers a retry.
+ */
+export type Failure = { ok: false; error: string; retryAfterSeconds?: number; accountRestricted?: boolean }
 export type ApiResult<T> = ({ ok: true } & T) | RateLimited | Failure
+
+/** Whether a failed result is the permanent restricted-account 403. */
+export function isAccountRestricted(res: { ok: false; accountRestricted?: boolean }): boolean {
+  return res.accountRestricted === true
+}
 
 /** Narrow a failed result to a rate-limit (429). */
 export function isRateLimited(res: { ok: false; error: string; retryAfterSeconds?: number }): res is RateLimited {
@@ -28,6 +39,9 @@ async function parseError(res: Response): Promise<Failure | RateLimited> {
   if (res.status === 429) {
     const retry = typeof record.retryAfterSeconds === 'number' ? record.retryAfterSeconds : 30
     return { ok: false, error: 'rate_limited', retryAfterSeconds: retry }
+  }
+  if (res.status === 403 && isAccountRestrictedBody(body)) {
+    return { ok: false, error, accountRestricted: true }
   }
   return { ok: false, error }
 }

@@ -7,14 +7,22 @@ const {
   mockUserBlockFindFirst,
   mockUserFollowCreate,
   mockUserNotificationCreate,
+  mockUserNotificationFindFirst,
   mockUserFollowDeleteMany,
+  mockSendPush,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserBlockFindFirst: vi.fn(),
   mockUserFollowCreate: vi.fn(),
   mockUserNotificationCreate: vi.fn(),
+  mockUserNotificationFindFirst: vi.fn(),
   mockUserFollowDeleteMany: vi.fn(),
+  mockSendPush: vi.fn(),
+}));
+
+vi.mock("@/server/push-notifications", () => ({
+  sendPushNotificationForUserNotification: mockSendPush,
 }));
 
 vi.mock("next-auth", () => ({
@@ -39,6 +47,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     userNotification: {
       create: mockUserNotificationCreate,
+      findFirst: mockUserNotificationFindFirst,
     },
   },
 }));
@@ -54,6 +63,44 @@ describe("/api/users/[userId]/follow route", () => {
     mockUserFollowCreate.mockResolvedValue({ id: "follow_123" });
     mockUserFollowDeleteMany.mockResolvedValue({ count: 0 });
     mockUserNotificationCreate.mockResolvedValue({ id: "notification_123" });
+    mockUserNotificationFindFirst.mockResolvedValue(null);
+    mockSendPush.mockResolvedValue(undefined);
+  });
+
+  function follow() {
+    return POST(
+      new NextRequest("https://example.com/api/users/user_456/follow", { method: "POST" }),
+      { params: Promise.resolve({ userId: "user_456" }) },
+    );
+  }
+
+  it("creates no notification and no push when the followed user turned app notifications off", async () => {
+    mockUserFindUnique.mockResolvedValue({ id: "user_456", inAppNotificationsEnabled: false });
+    const response = await follow();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ isFollowing: true });
+    expect(mockUserFollowCreate).toHaveBeenCalled();
+    expect(mockUserNotificationCreate).not.toHaveBeenCalled();
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("does not notify again when a follower unfollows and follows again", async () => {
+    mockUserNotificationFindFirst.mockResolvedValue({ id: "notification_old" });
+    const response = await follow();
+    expect(response.status).toBe(200);
+    expect(mockUserFollowCreate).toHaveBeenCalled();
+    expect(mockUserNotificationFindFirst).toHaveBeenCalledWith({
+      where: { recipientId: "user_456", actorId: "user_123", type: "follow" },
+      select: { id: true },
+    });
+    expect(mockUserNotificationCreate).not.toHaveBeenCalled();
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("pushes the first follow notification", async () => {
+    await follow();
+    expect(mockUserNotificationCreate).toHaveBeenCalledTimes(1);
+    expect(mockSendPush).toHaveBeenCalledWith("notification_123");
   });
 
   it("creates a follow relation and notification", async () => {

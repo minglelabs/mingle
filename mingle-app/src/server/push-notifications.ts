@@ -3,6 +3,7 @@ import { connect } from "node:http2";
 import { prisma } from "@/lib/prisma";
 import { feedHref } from "@/lib/feed-routes";
 import { resolveSupportedLocaleTag } from "@/i18n/config";
+import { resolvePushNotificationCopy } from "@/i18n/notification-copy";
 
 type PushPlatform = "ios" | "android";
 
@@ -133,40 +134,9 @@ function resolvePushCopy(message: PushMessage): { title: string; body: string } 
     if (language === "pt") return { title: "Nova mensagem", body: `${label}: ${preview}` };
     return { title: "New message", body: `${label}: ${preview}` };
   }
-  if (message.type === "follow") {
-    if (language === "ko") return { title: "새 팔로워", body: `${label}님이 회원님을 팔로우했습니다.` };
-    if (language === "ja") return { title: "新しいフォロワー", body: `${label}さんがあなたをフォローしました。` };
-    if (language === "zh-cn") return { title: "新的关注者", body: `${label}关注了你。` };
-    if (language === "zh-tw") return { title: "新的追蹤者", body: `${label}追蹤了你。` };
-    if (language === "es") return { title: "Nuevo seguidor", body: `${label} empezó a seguirte.` };
-    if (language === "fr") return { title: "Nouveau follower", body: `${label} vous suit maintenant.` };
-    if (language === "de") return { title: "Neuer Follower", body: `${label} folgt Ihnen jetzt.` };
-    if (language === "pt") return { title: "Novo seguidor", body: `${label} começou a seguir você.` };
-    return { title: "New follower", body: `${label} followed you.` };
-  }
-
-  if (message.type === "comment") {
-    if (language === "ko") return { title: "새 댓글", body: `${label}님이 회원님의 게시물에 댓글을 남겼습니다.` };
-    if (language === "ja") return { title: "新しいコメント", body: `${label}さんがあなたの投稿にコメントしました。` };
-    if (language === "zh-cn") return { title: "新评论", body: `${label}评论了你的动态。` };
-    if (language === "zh-tw") return { title: "新留言", body: `${label}在你的貼文留言了。` };
-    if (language === "es") return { title: "Nuevo comentario", body: `${label} comentó tu publicación.` };
-    if (language === "fr") return { title: "Nouveau commentaire", body: `${label} a commenté votre publication.` };
-    if (language === "de") return { title: "Neuer Kommentar", body: `${label} hat deinen Beitrag kommentiert.` };
-    if (language === "pt") return { title: "Novo comentário", body: `${label} comentou na sua publicação.` };
-    return { title: "New comment", body: `${label} commented on your post.` };
-  }
-
-  if (message.type === "comment_reply") {
-    if (language === "ko") return { title: "새 답글", body: `${label}님이 회원님의 댓글에 답글을 남겼습니다.` };
-    if (language === "ja") return { title: "新しい返信", body: `${label}さんがあなたのコメントに返信しました。` };
-    if (language === "zh-cn") return { title: "新回复", body: `${label}回复了你的评论。` };
-    if (language === "zh-tw") return { title: "新回覆", body: `${label}回覆了你的留言。` };
-    if (language === "es") return { title: "Nueva respuesta", body: `${label} respondió a tu comentario.` };
-    if (language === "fr") return { title: "Nouvelle réponse", body: `${label} a répondu à votre commentaire.` };
-    if (language === "de") return { title: "Neue Antwort", body: `${label} hat auf deinen Kommentar geantwortet.` };
-    if (language === "pt") return { title: "Nova resposta", body: `${label} respondeu ao seu comentário.` };
-    return { title: "New reply", body: `${label} replied to your comment.` };
+  if (message.type === "follow" || message.type === "comment" || message.type === "comment_reply") {
+    // All 15 primary UI languages; an unknown language falls back to English.
+    return resolvePushNotificationCopy(message.recipientLanguage, message.type, label);
   }
 
   return { title: "Mingle", body: "You have a new notification." };

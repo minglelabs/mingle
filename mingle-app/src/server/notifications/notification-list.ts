@@ -41,6 +41,15 @@ export type NotificationListItem = {
   actors: NotificationActor[];
   /** Distinct actor count in this entry (>= actors.length). */
   actorCount: number;
+  /**
+   * Grouping key ("post_like:<postId>", "comment_like:<commentId>", or
+   * "row:<id>" for an ungrouped row). A client that loads further pages merges
+   * entries with the same grouped key so a group split across pages still
+   * reads as one entry.
+   */
+  groupKey: string;
+  /** Every distinct actor id in this entry (uncapped, for cross-page merges). */
+  actorIds: string[];
 };
 
 const GROUPED_TYPES = new Set(["post_like", "comment_like"]);
@@ -50,7 +59,7 @@ function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function groupKey(row: RawNotificationRow): string {
+export function notificationGroupKey(row: Pick<RawNotificationRow, "id" | "type" | "postId" | "commentId">): string {
   if (row.type === "post_like") return `post_like:${row.postId ?? ""}`;
   if (row.type === "comment_like") return `comment_like:${row.commentId ?? ""}`;
   // Non-grouped rows each get a unique key so they never merge.
@@ -74,7 +83,7 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
 
   // rows arrive newest-first, so the first row seen for a key is the newest.
   for (const row of rows) {
-    const key = groupKey(row);
+    const key = notificationGroupKey(row);
     const existing = groups.get(key);
     const isUnread = row.readAt === null || row.readAt === undefined;
 
@@ -112,6 +121,8 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
       createdAt: toIso(newest.createdAt),
       actors: group.actors,
       actorCount: isGrouped ? group.actorIds.size : 1,
+      groupKey: key,
+      actorIds: [...group.actorIds],
     };
   });
 

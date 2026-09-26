@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  contentModerationToggle,
   hidePostByModerator,
   hideUserByModerator,
   isClosingStatus,
   isValidModerationAction,
   isValidReportStatus,
   normalizeReportReply,
+  reportContentExcerpt,
   restrictUserByModerator,
   shouldAdvanceOnReply,
   unhideCommentByModerator,
@@ -103,5 +105,24 @@ describe('operator reply helpers', () => {
     expect(shouldAdvanceOnReply('in_review')).toBe(false)
     expect(shouldAdvanceOnReply('resolved')).toBe(false)
     expect(shouldAdvanceOnReply('rejected')).toBe(false)
+  })
+})
+
+describe('admin report preview helpers', () => {
+  it('collapses whitespace and caps the excerpt with an ellipsis', () => {
+    expect(reportContentExcerpt('  hello\n\nworld  ')).toBe('hello world')
+    const long = 'a'.repeat(300)
+    const excerpt = reportContentExcerpt(long, 10)
+    expect(excerpt).toHaveLength(10)
+    expect(excerpt.endsWith('…')).toBe(true)
+    expect(reportContentExcerpt(null)).toBe('')
+  })
+
+  it('offers only the action that fits the current visibility', () => {
+    expect(contentModerationToggle({ moderationHiddenAt: null, isDeleted: false })).toBe('hide_content')
+    expect(contentModerationToggle({ moderationHiddenAt: new Date(), isDeleted: false })).toBe('unhide_content')
+    expect(contentModerationToggle({ moderationHiddenAt: new Date(), isDeleted: true })).toBe('unhide_content')
+    expect(contentModerationToggle({ moderationHiddenAt: null, isDeleted: true })).toBeNull()
+    expect(contentModerationToggle(null)).toBeNull()
   })
 })

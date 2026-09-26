@@ -141,6 +141,16 @@ export function markFailed(nodes: CommentNode[], tempId: string): CommentNode[] 
   })
 }
 
+/**
+ * Fold a failed create into the tree. A restricted account's failure is
+ * permanent, so its optimistic row is removed (no failed row, no retry — the
+ * composer keeps the text instead); any other failure keeps the row with a
+ * retry.
+ */
+export function applyCreateFailure(nodes: CommentNode[], tempId: string, accountRestricted: boolean): CommentNode[] {
+  return accountRestricted ? removeNode(nodes, tempId) : markFailed(nodes, tempId)
+}
+
 /** Remove a node entirely (used to roll back a failed create the user discards). */
 export function removeNode(nodes: CommentNode[], id: string): CommentNode[] {
   return nodes
@@ -213,6 +223,103 @@ export function setTranslation(
   translation: NonNullable<CommentNode['translation']>,
 ): CommentNode[] {
   return mapNode(nodes, id, (n) => ({ ...n, translation }))
+}
+
+/**
+ * What the body currently shows and which translation label the toggle carries.
+ *
+ * Two sources of a translation exist and both follow ONE rule — the
+ * translation is shown first and the toggle reads "See original":
+ * - the list read already returned the translation as `displayText`
+ *   (`translationState: 'ready'`, auto-translated by the server);
+ * - the viewer requested one on demand (the `translation` overlay).
+ * "See original" always shows `sourceText`, never `displayText`.
+ */
+export type CommentBodyView = {
+  text: string
+  showingTranslation: boolean
+  label: 'seeTranslation' | 'seeOriginal' | 'translating' | 'translationFailed'
+}
+
+export function resolveCommentBodyView(comment: CommentNode): CommentBodyView {
+  const source = comment.sourceText ?? comment.displayText ?? ''
+  const overlay = comment.translation
+  if (overlay?.state === 'pending') return { text: source, showingTranslation: false, label: 'translating' }
+  if (overlay?.state === 'failed') return { text: source, showingTranslation: false, label: 'translationFailed' }
+  if (overlay?.state === 'ready' && overlay.text) {
+    return overlay.showing
+      ? { text: overlay.text, showingTranslation: true, label: 'seeOriginal' }
+      : { text: source, showingTranslation: false, label: 'seeTranslation' }
+  }
+  if (comment.translationState === 'ready' && comment.displayText) {
+    return { text: comment.displayText, showingTranslation: true, label: 'seeOriginal' }
+  }
+  return { text: source, showingTranslation: false, label: 'seeTranslation' }
+}
+
+/**
+ * The next step when the viewer taps the translation toggle:
+ * - `flip`: a translation is already known (server-provided or fetched) —
+ *   apply `translation` as the new overlay, no network.
+ * - `fetch`: request an on-demand translation.
+ * - `noop`: a request is already in flight, or the comment is deleted.
+ */
+export type TranslationToggleStep =
+  | { kind: 'flip'; translation: NonNullable<CommentNode['translation']> }
+  | { kind: 'fetch' }
+  | { kind: 'noop' }
+
+export function nextTranslationToggle(comment: CommentNode): TranslationToggleStep {
+  if (comment.isDeleted) return { kind: 'noop' }
+  const overlay = comment.translation
+  if (overlay?.state === 'pending') return { kind: 'noop' }
+  if (overlay?.state === 'ready' && overlay.text) {
+    return { kind: 'flip', translation: { ...overlay, showing: !overlay.showing } }
+  }
+  if (!overlay && comment.translationState === 'ready' && comment.displayText) {
+    // The server showed the translation first; the first tap reveals the original.
+    return { kind: 'flip', translation: { state: 'ready', text: comment.displayText, showing: false } }
+  }
+  return { kind: 'fetch' }
+}
+
+/**
+ * The thread a failed optimistic row must be re-sent to. It is read from the
+ * failed row itself (which kept its original parent and reply target), never
+ * from whatever the composer targets now.
+ */
+export function failedRetryTarget(node: CommentNode): {
+  parentId: string | null
+  replyToUserId: string | null
+  replyToUser: CommentNode['replyToUser']
+} {
+  return {
+    parentId: node.parentId ?? null,
+    replyToUserId: node.parentId ? node.replyToUserId ?? null : null,
+    replyToUser: node.parentId ? node.replyToUser ?? null : null,
+  }
+}
+
+/**
+ * What Enter does in the comment composer.
+ * - While an IME composition is active (Korean/Japanese/Chinese input), Enter
+ *   commits the composition: ignore it (`none`), never send.
+ * - On a touch keyboard there is no Shift key, so Enter inserts a newline and
+ *   sending is done with the button.
+ * - On a hardware keyboard Enter sends and Shift+Enter inserts a newline.
+ */
+export function composerEnterAction(event: {
+  key: string
+  shiftKey: boolean
+  isComposing?: boolean
+  keyCode?: number
+  touchInput: boolean
+}): 'send' | 'newline' | 'none' {
+  if (event.key !== 'Enter') return 'none'
+  // keyCode 229 is what browsers report for keys consumed by an IME.
+  if (event.isComposing || event.keyCode === 229) return 'none'
+  if (event.touchInput) return 'newline'
+  return event.shiftKey ? 'newline' : 'send'
 }
 
 // ─── Permissions ─────────────────────────────────────────────────────────────

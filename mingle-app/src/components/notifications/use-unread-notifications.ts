@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildClientApiPath, clientApiNamespace, namespaceSupportsPostingFeed } from "@/lib/api-contract";
+import { NOTIFICATIONS_READ_EVENT, awaitPendingNotificationRead } from "./notification-read-sync";
 
 export type UnreadNotificationsState = {
   hasUnread: boolean;
@@ -42,6 +43,10 @@ export function useUnreadNotifications(viewerId: string | null): UnreadNotificat
     abortRef.current = controller;
 
     try {
+      // A mark-read the list just sent must land first, or this read could
+      // resurrect the dot the list already cleared.
+      await awaitPendingNotificationRead();
+      if (controller.signal.aborted) return;
       const response = await fetch(buildClientApiPath("/notifications/unread"), {
         cache: "no-store",
         signal: controller.signal,
@@ -82,13 +87,20 @@ export function useUnreadNotifications(viewerId: string | null): UnreadNotificat
     const handleVisibility = () => {
       if (document.visibilityState === "visible") void fetchUnread();
     };
+    // The list marked everything read: drop the dot now (optimistic).
+    const handleRead = () => {
+      abortRef.current?.abort();
+      setHasUnread(false);
+    };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener(NOTIFICATIONS_READ_EVENT, handleRead);
 
     return () => {
       abortRef.current?.abort();
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener(NOTIFICATIONS_READ_EVENT, handleRead);
     };
   }, [fetchUnread, normalizedViewerId]);
 

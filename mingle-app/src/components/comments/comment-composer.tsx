@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
-import { MAX_COMMENT_LENGTH } from "./comment-state";
-import type { ReplyTarget } from "./use-comment-sheet";
+import { MAX_COMMENT_LENGTH, composerEnterAction } from "./comment-state";
+import type { ReplyTarget, WriteOutcome } from "./use-comment-sheet";
 
 type Props = {
   locale: string;
@@ -13,9 +13,19 @@ type Props = {
   disabled: boolean; // signed-out: composer prompts login
   replyTarget: ReplyTarget;
   onCancelReply: () => void;
-  onSubmit: (text: string) => void;
+  /** Resolves "restricted" when the account is restricted: the text is put back. */
+  onSubmit: (text: string) => Promise<WriteOutcome> | void;
   onFocusRequiresLogin?: () => void;
 };
+
+/** A touch keyboard has no Shift key, so Enter must stay a newline there. */
+function isTouchInput(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  }
+  return typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+}
 
 /**
  * The bottom composer. Enforces the 500-char limit with a live counter,
@@ -48,8 +58,13 @@ export default function CommentComposer({
 
   const handleSubmit = () => {
     if (!canSend) return;
-    onSubmit(value);
+    const text = value;
     setValue("");
+    void Promise.resolve(onSubmit(text)).then((outcome) => {
+      // No failed row exists for a restricted account, so keep what was typed
+      // (unless the viewer already started typing something else).
+      if (outcome === "restricted") setValue((current) => (current ? current : text));
+    });
   };
 
   return (
@@ -88,8 +103,17 @@ export default function CommentComposer({
               "focus:outline-none focus:ring-2 focus:ring-ring",
             )}
             onKeyDown={(e) => {
-              // Enter sends, Shift+Enter inserts a newline (line breaks preserved).
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Hardware keyboard: Enter sends, Shift+Enter is a newline.
+              // Touch keyboard: Enter is a newline; the button sends.
+              // Enter during IME composition only commits the composition.
+              const action = composerEnterAction({
+                key: e.key,
+                shiftKey: e.shiftKey,
+                isComposing: e.nativeEvent.isComposing,
+                keyCode: e.nativeEvent.keyCode,
+                touchInput: isTouchInput(),
+              });
+              if (action === "send") {
                 e.preventDefault();
                 handleSubmit();
               }
