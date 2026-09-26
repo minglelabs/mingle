@@ -276,6 +276,86 @@ export function publishOrder<T>(entries: T[]): T[] {
   return [...entries].reverse()
 }
 
+/** The publish call the seed makes (structurally `publishPost` from `@/server/posts/publish-post`). */
+export type SeedPublishInput = {
+  authorId: string
+  text: string
+  imageObjectKey: null
+  clientHint: string
+  clientPostId: string
+}
+
+export type SeedPublishResult =
+  | {
+      kind: 'created'
+      post: { id: string }
+      sourceLanguage: string | null
+      translations: Array<{ language: string; status: string }>
+    }
+  | { kind: 'duplicate' }
+  | { kind: 'conflict' }
+
+export type SeedApplyDeps = {
+  authorId: string
+  /** Whether any post (any author) already has this id. */
+  postExists: (id: string) => Promise<boolean>
+  publish: (input: SeedPublishInput) => Promise<SeedPublishResult>
+  log: (line: string) => void
+  warn: (line: string) => void
+}
+
+export type SeedApplySummary = { created: number; skipped: number; failedTranslations: number }
+
+/**
+ * Publishes every `create` entry through the shared publish pipeline, newest
+ * last (see `publishOrder`). An id that appeared since the plan was made, or a
+ * duplicate / conflict answer from the pipeline, is skipped, never
+ * overwritten. Only posts and their translations are written.
+ */
+export async function applySeedPlan(plan: SeedPlanEntry[], deps: SeedApplyDeps): Promise<SeedApplySummary> {
+  const summary: SeedApplySummary = { created: 0, skipped: 0, failedTranslations: 0 }
+  for (const { item } of publishOrder(plan.filter((p) => p.action === 'create'))) {
+    if (await deps.postExists(item.clientPostId)) {
+      deps.log(`  = ${item.clientPostId} appeared meanwhile, skipped`)
+      summary.skipped += 1
+      continue
+    }
+    const result = await deps.publish({
+      authorId: deps.authorId,
+      text: item.text,
+      imageObjectKey: null,
+      clientHint: item.language,
+      clientPostId: item.clientPostId,
+    })
+    if (result.kind === 'duplicate') {
+      deps.log(`  = ${item.clientPostId} appeared meanwhile, skipped`)
+      summary.skipped += 1
+      continue
+    }
+    if (result.kind === 'conflict') {
+      deps.log(`  ! ${item.clientPostId} already belongs to another user, skipped`)
+      summary.skipped += 1
+      continue
+    }
+    if (result.post.id !== item.clientPostId) {
+      // Validation guarantees a well-formed id; a mismatch would break idempotent re-runs.
+      throw new Error(`post ${result.post.id} was created without its seed id ${item.clientPostId}`)
+    }
+    const detected = result.sourceLanguage
+    if (detected !== item.language) {
+      deps.warn(`  ! ${item.clientPostId} declared=${item.language} detected=${detected ?? 'null'}`)
+    }
+    const rows = result.translations
+    const failed = rows.filter((row) => row.status !== 'ready').map((row) => row.language)
+    summary.failedTranslations += failed.length
+    summary.created += 1
+    deps.log(
+      `  + ${item.clientPostId} lang=${detected} translations=${rows.length - failed.length}/${rows.length}${failed.length ? ` failed=${failed.join(',')}` : ''}`,
+    )
+  }
+  return summary
+}
+
 export function summarizeByLanguage(items: SeedItem[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const item of items) counts[item.language] = (counts[item.language] ?? 0) + 1

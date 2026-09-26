@@ -25,7 +25,7 @@ import {
   validateSeedContent,
   planSeed,
   planMarkOfficial,
-  publishOrder,
+  applySeedPlan,
   summarizeByLanguage,
   previewText,
   databaseHost,
@@ -178,64 +178,18 @@ async function main(): Promise<number> {
       ).id
     if (!author) console.log(`[seed-feed] created author id=${authorId} handle=@${handle}`)
 
-    // Same publish pipeline as POST /api/posts: server language detection,
-    // default 4-language settled translation, random background preset,
-    // atomic post + translations insert.
-    const { detectSourceLanguage } = await import('@/server/translation/detect-source-language')
-    const { resolveDefaultPostTranslationLanguages, translatePostBodySettled } = await import(
-      '@/server/translation/post-translation-service'
-    )
-    const { randomBackgroundKey } = await import('@/lib/post-backgrounds')
+    // The exact publish pipeline of POST /api/posts (shared `publishPost`):
+    // server language detection, default settled translations, random
+    // background preset, atomic post + translations insert, idempotent id.
+    const { publishPost } = await import('@/server/posts/publish-post')
 
-    let created = 0
-    let failedTranslations = 0
-    for (const entry of publishOrder(plan.filter((p) => p.action === 'create'))) {
-      const { item } = entry
-      const already = await prisma.post.findUnique({ where: { id: item.clientPostId }, select: { id: true } })
-      if (already) {
-        console.log(`  = ${item.clientPostId} appeared meanwhile, skipped`)
-        continue
-      }
-      const detected = await detectSourceLanguage({ text: item.text, clientHint: item.language })
-      if (detected !== item.language) {
-        console.warn(`  ! ${item.clientPostId} declared=${item.language} detected=${detected ?? 'null'}`)
-      }
-      const targets = detected ? resolveDefaultPostTranslationLanguages(detected) : []
-      const rows =
-        detected && targets.length > 0
-          ? await translatePostBodySettled({ sourceText: item.text, sourceLanguage: detected, targetLanguages: targets })
-          : []
-      const failed = rows.filter((row) => row.status !== 'ready').map((row) => row.language)
-      failedTranslations += failed.length
-
-      await prisma.$transaction(async (tx) => {
-        const post = await tx.post.create({
-          data: {
-            id: item.clientPostId,
-            authorId,
-            sourceText: item.text,
-            sourceLanguage: detected,
-            backgroundKey: randomBackgroundKey(),
-            imageObjectKey: null,
-            visibility: 'public',
-            bodyVersion: 1,
-          },
-        })
-        if (rows.length > 0) {
-          await tx.postTranslation.createMany({
-            data: rows.map((row) => ({
-              postId: post.id,
-              bodyVersion: 1,
-              language: row.language,
-              status: row.status,
-              text: row.text,
-            })),
-          })
-        }
-      })
-      created += 1
-      console.log(`  + ${item.clientPostId} lang=${detected} translations=${rows.length - failed.length}/${rows.length}${failed.length ? ` failed=${failed.join(',')}` : ''}`)
-    }
+    const { created, failedTranslations } = await applySeedPlan(plan, {
+      authorId,
+      postExists: async (id) => Boolean(await prisma.post.findUnique({ where: { id }, select: { id: true } })),
+      publish: publishPost,
+      log: (line) => console.log(line),
+      warn: (line) => console.warn(line),
+    })
     console.log(`\n[seed-feed] applied: created=${created} failedTranslations=${failedTranslations}`)
     if (failedTranslations > 0) {
       console.log('  failed translations are stored as status=failed, exactly like a post published from the app.')
