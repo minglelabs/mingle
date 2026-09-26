@@ -2875,3 +2875,43 @@
 - User impact: New members could start with Gemini despite the new-account policy, while changing the shared fallback would unexpectedly switch existing accounts whose preference is unset.
 - Resolution: Seed GPT-6 Luna only when a registered account row is first created across email, OAuth, and native Apple registration. Preserve all existing preference values and the Gemini fallback for existing unset and anonymous accounts. For a fresh account without cached preferences, omit the temporary model from pre-hydration preference patches and merge the server model into unrelated local edits; keep an explicit user model selection.
 - Verification: Focused auth, account-preference, cache, and translation tests passed (130 tests), along with TypeScript, focused ESLint, and `git diff --check`.
+
+## 2026-09-26 — Posting feed: post images broken for signed-out readers
+
+- Surface: Home feed, post viewer, profile grid and search tiles (`GET /api/posts/{postId}/image`).
+- Issue: The feed was made readable without signing in, but the image route still returned `401` when there was no session. The post wire shape (`FeedPostDto.image.url`) also built its URL with a client-side helper on the server, which could emit a namespace with no image route (e.g. `ios/v2.0.0`) depending on build-time env.
+- User impact: A signed-out reader would see every photo post as a broken image, and a signed-in reader could hit the same failure in production depending on server env.
+- Resolution: The image GET resolves visibility with a null viewer, so public posts serve to everyone while blocks, hides, archive, trash and moderation still apply. The serializer emits the unversioned `/api/posts/{id}/image` path directly.
+- Verification: New route tests (signed-out public 200, signed-in viewer passed to the visibility rule, invisible 404) and an exact-URL serializer assertion; TypeScript and the full unit suite passed.
+
+## 2026-09-26 — Posting feed: first screen switched for every installed app version
+
+- Surface: App launch landing (`src/web/shared/v1.1.0/home-entry.tsx`), bottom tab bar.
+- Issue: The web UI is shared by every installed app version, but the posting routes exist only in the `v2.1.0` API namespace. Switching the landing to the feed applied to 2.0.x apps too, whose namespace answers every posting call with `404`.
+- User impact: After a web deploy, a user still on a 2.0.x app would open the app straight into a failing feed.
+- Resolution: In progress. One capability rule (`namespaceSupportsPostingFeed`, 2.1.0+ or the plain web) now exists, and every posting entry point is being gated on it so older apps keep the previous conversation-first behaviour.
+- Verification: Rule covered by unit tests; entry-point gating pending.
+
+## 2026-09-26 — Posting feed: unknown post background drawn three different ways
+
+- Surface: Feed card, 3-column grid tile, compose preview.
+- Issue: Each surface had its own fallback for a background key missing from the catalog (dark slate in the feed, light gray in the grid, warm cream in compose).
+- User impact: A post with a retired or malformed background key would look different in the feed, on the profile grid and in the editor preview.
+- Resolution: The catalog owns one fallback (`resolveBackgroundPreset`, the first preset), and all three surfaces use it.
+- Verification: Feed, grid and compose tests passed; TypeScript clean.
+
+## 2026-09-26 — Posting feed: comment sheet showed a blank identity for the author's own new comment
+
+- Surface: Comment sheet, optimistic rendering of a comment or reply the viewer just sent.
+- Issue: The sheet read the viewer's name, avatar and language from a `window.__MINGLE_VIEWER__` global that nothing injects, and sent the viewer's display language as the comment's source language.
+- User impact: A just-sent comment appeared with a neutral avatar and no name until the list reloaded, and comments were stored with no usable source language, so they were never translated.
+- Resolution: In progress. The sheet will read the signed-in user from the app's real session source and send no source language, and the server will detect the language from the text.
+- Verification: Pending.
+
+## 2026-09-26 — Posting feed: "See all" people list does not restore its exact scroll position
+
+- Surface: Explore tab → "See all" people list and post grids hosted inside the sliding surface.
+- Issue: Scroll restoration is keyed to the window, but these lists scroll inside the sliding surface's own container.
+- User impact: Returning from a profile to a long "See all" list can land at a different position than the one the user left.
+- Resolution: Open; queued with the explore-tab cleanup.
+- Verification: Pending.
