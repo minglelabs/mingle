@@ -5,7 +5,9 @@ import {
   isClosingStatus,
   isValidModerationAction,
   isValidReportStatus,
+  normalizeReportReply,
   restrictUserByModerator,
+  shouldAdvanceOnReply,
   unhideCommentByModerator,
   unhidePostByModerator,
   unhideUserByModerator,
@@ -85,5 +87,21 @@ describe('validators', () => {
     expect(isClosingStatus('rejected')).toBe(true)
     expect(isClosingStatus('open')).toBe(false)
     expect(isClosingStatus('in_review')).toBe(false)
+  })
+})
+
+describe('operator reply helpers', () => {
+  it('normalises a reply: trims, caps at 4000, rejects under 2 chars', () => {
+    expect(normalizeReportReply('  ok  ')).toBe('ok')
+    expect(normalizeReportReply(' a ')).toBeNull()
+    expect(normalizeReportReply('   ')).toBeNull()
+    expect(normalizeReportReply('x'.repeat(5000))).toHaveLength(4000)
+  })
+
+  it('advances only an open report on reply, never a closed or in-review one', () => {
+    expect(shouldAdvanceOnReply('open')).toBe(true)
+    expect(shouldAdvanceOnReply('in_review')).toBe(false)
+    expect(shouldAdvanceOnReply('resolved')).toBe(false)
+    expect(shouldAdvanceOnReply('rejected')).toBe(false)
   })
 })

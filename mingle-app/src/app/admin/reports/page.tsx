@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertTriangle, ChevronLeft, ChevronRight, EyeOff, FileText, LogOut, MessageSquare, ShieldBan, ShieldCheck, UserRound } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, EyeOff, FileText, LogOut, MessageSquare, Send, ShieldBan, ShieldCheck, UserRound } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_SESSION_COOKIE_NAME,
@@ -17,7 +17,9 @@ import {
   isClosingStatus,
   isValidModerationAction,
   isValidReportStatus,
+  normalizeReportReply,
   restrictUserByModerator,
+  shouldAdvanceOnReply,
   unhideCommentByModerator,
   unhidePostByModerator,
   unhideUserByModerator,
@@ -105,6 +107,38 @@ async function logoutAdminAction() {
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_SESSION_COOKIE_NAME, "", { ...adminCookieOptions(), maxAge: 0 });
   redirect("/admin");
+}
+
+/**
+ * Post an operator reply to a report. Works for every report type (user, post,
+ * comment) since it keys only on the report id. Matches the pre-integration
+ * behavior: 2–4000 chars, and posting a reply moves an `open` report to
+ * `in_review`. The reporter reads these replies in /account/reports.
+ */
+async function createReportReplyAction(formData: FormData) {
+  "use server";
+  const returnTo = readFormString(formData.get("returnTo")) || "/admin/reports";
+  if (!(await isAdminAuthenticated())) redirect(withResult(returnTo, "session_required"));
+
+  const reportId = readFormString(formData.get("reportId")).trim();
+  const message = normalizeReportReply(readFormString(formData.get("message")));
+  if (!reportId || !message) redirect(withResult(returnTo, "invalid_reply"));
+
+  const report = await prisma.userReport.findUnique({ where: { id: reportId }, select: { id: true, status: true } });
+  if (!report) redirect(withResult(returnTo, "report_not_found"));
+
+  await prisma.$transaction([
+    prisma.userReportReply.create({
+      data: { reportId, authorType: "team", message },
+    }),
+    // Only nudge an untouched report forward; do not reopen a closed one.
+    ...(shouldAdvanceOnReply(report.status)
+      ? [prisma.userReport.update({ where: { id: reportId }, data: { status: "in_review" } })]
+      : []),
+  ]);
+
+  revalidatePath("/admin/reports");
+  redirect(withResult(returnTo, "reply_sent"));
 }
 
 /** Persist the operator's processing note on a report. */
@@ -255,6 +289,10 @@ async function loadReports(status: ReportStatus | "all", type: TargetType | "all
       resolvedAt: true,
       reporter: { select: { id: true, name: true, email: true } },
       reportedUser: { select: { id: true, name: true, email: true, moderationHiddenAt: true, moderationRestrictedAt: true } },
+      replies: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, authorType: true, message: true, createdAt: true },
+      },
     },
   });
 
@@ -294,6 +332,8 @@ function resultMessage(result: string): string {
     case "status_updated": return "Report status updated.";
     case "note_saved": return "Processing note saved.";
     case "action_applied": return "Moderation action applied.";
+    case "reply_sent": return "Reply sent to the reporter.";
+    case "invalid_reply": return "Please enter a reply of at least 2 characters.";
     case "session_required": return "Please sign in again before changing a report.";
     case "invalid_note": return "Could not save the note.";
     case "invalid_status": return "Invalid status.";
@@ -357,6 +397,7 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
           const reporter = report.reporter.name || report.reporter.email || report.reporter.id;
           const reported = report.reportedUser.name || report.reportedUser.email || report.reportedUser.id;
           const noteInputId = `report-note-${report.id}`;
+          const replyInputId = `report-reply-${report.id}`;
           const isContent = report.targetType === "post" || report.targetType === "comment";
           const targetIcon = report.targetType === "post" ? <FileText className="h-3.5 w-3.5" aria-hidden="true" /> : report.targetType === "comment" ? <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" /> : <UserRound className="h-3.5 w-3.5" aria-hidden="true" />;
           return (
@@ -404,6 +445,30 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
                 <textarea id={noteInputId} name="adminNote" maxLength={4000} defaultValue={report.adminNote ?? ""} className="min-h-20 w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" placeholder="Internal note about how this report was handled." />
                 <div className="flex justify-end"><button className="h-10 rounded-md bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-700" type="submit">Save note</button></div>
               </form>
+
+              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase text-slate-500">Reporter conversation</p>
+                {report.replies.length === 0 ? (
+                  <p className="text-sm text-slate-400">No replies yet. The reporter sees your reply in their account.</p>
+                ) : (
+                  report.replies.map((reply) => (
+                    <div key={reply.id} className="border-l-2 border-emerald-300 py-1 pl-4">
+                      <div className="mb-1 flex items-center justify-between text-xs font-semibold uppercase text-slate-500">
+                        <span><MessageSquare className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />{reply.authorType === "team" ? "Team reply" : reply.authorType}</span>
+                        <time dateTime={reply.createdAt.toISOString()}>{REPORT_DATE_FORMATTER.format(reply.createdAt)}</time>
+                      </div>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{reply.message}</p>
+                    </div>
+                  ))
+                )}
+                <form action={createReportReplyAction} className="space-y-2">
+                  <input name="reportId" type="hidden" value={report.id} />
+                  <input name="returnTo" type="hidden" value={returnTo} />
+                  <label className="block text-sm font-medium text-slate-700" htmlFor={replyInputId}>Reply to reporter</label>
+                  <textarea id={replyInputId} name="message" maxLength={4000} minLength={2} required className="min-h-24 w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" placeholder="Write a response the reporter will see in the app." />
+                  <div className="flex justify-end"><button className="inline-flex h-10 items-center gap-2 rounded-md bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-600" type="submit"><Send className="h-4 w-4" aria-hidden="true" />Send reply</button></div>
+                </form>
+              </div>
             </article>
           );
         })}
