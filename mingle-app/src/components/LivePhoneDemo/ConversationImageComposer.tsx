@@ -7,6 +7,7 @@ import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
+import { beginMediaPickerInFlight, endMediaPickerInFlight } from './media-picker-in-flight'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -227,6 +228,32 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       : { side, top: rect.bottom + 8, left })
     setOpen(true)
   }, [diagEnabled, pushDiag])
+
+  // Opening the native chooser blurs the WebView; mark a picker "in flight" so
+  // the STT background-recovery logic does not treat the round-trip as an app
+  // backgrounding and tear down live recording. Cleared on the input's
+  // `change`, or when the page/window regains focus after the picker closes
+  // (covers Cancel, which fires no `change`), with a safety timeout in the
+  // signal itself.
+  const openFilePicker = useCallback(() => {
+    beginMediaPickerInFlight()
+    input.current?.click()
+  }, [])
+
+  useEffect(() => {
+    const handleReturn = () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      endMediaPickerInFlight()
+    }
+    window.addEventListener('focus', handleReturn)
+    document.addEventListener('visibilitychange', handleReturn)
+    return () => {
+      window.removeEventListener('focus', handleReturn)
+      document.removeEventListener('visibilitychange', handleReturn)
+      endMediaPickerInFlight()
+    }
+  }, [])
+
   const handleAttachmentClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     // If a long-press just toggled diag mode, suppress the trailing click.
     if (diagSuppressClickRef.current) {
@@ -248,12 +275,12 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     }
 
     if (!onCloseKeyboard) {
-      input.current?.click()
+      openFilePicker()
       return
     }
 
     openAttachmentMenu(event.currentTarget)
-  }, [onCloseKeyboard, openAttachmentMenu, diagEnabled, pushDiag])
+  }, [onCloseKeyboard, openAttachmentMenu, openFilePicker, diagEnabled, pushDiag])
 
   // ── Diagnostic touch/pointer event handlers ─────────────────────────
   const handleDiagTouchStart = useCallback(() => { pushDiag('TS') }, [pushDiag])
@@ -323,6 +350,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}</button>
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
       onChange={event => {
+        endMediaPickerInFlight()
         const file = event.target.files?.[0]; event.target.value = ''
         if (!file) return
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); return }
@@ -344,7 +372,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
           <button
             type="button"
             aria-label={copy.choose}
-            onClick={event => { event.preventDefault(); event.stopPropagation(); input.current?.click() }}
+            onClick={event => { event.preventDefault(); event.stopPropagation(); openFilePicker() }}
             className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${onCloseKeyboard ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <span>{copy.choose}</span>

@@ -7,6 +7,7 @@ import { parseSttServerError } from '@/lib/stt-server-error'
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 import { nativeStopIntent } from './native-stop-intent'
+import { isMediaPickerInFlight } from './media-picker-in-flight'
 import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -6789,6 +6790,10 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     const handleVisibilityChange = () => {
+      // A media/file picker opened from the WebView briefly hides/blurs the
+      // page. That is not an app backgrounding: skip both the background mark
+      // and the recovery restart so live recording is left running.
+      if (isMediaPickerInFlight()) return
       if (document.hidden) {
         wasBackgroundedRef.current = true
         return
@@ -6800,12 +6805,14 @@ export default function useRealtimeSTT({
 
     const handlePageShow = () => {
       if (document.hidden) return
+      if (isMediaPickerInFlight()) return
       wasBackgroundedRef.current = false
       void recoverFromBackgroundIfNeeded()
     }
 
     const handleFocus = () => {
       if (document.hidden) return
+      if (isMediaPickerInFlight()) return
       void recoverFromBackgroundIfNeeded()
     }
 
