@@ -17,6 +17,7 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent?.dataString)
+    NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
     super.onCreate(savedInstanceState)
   }
 
@@ -25,6 +26,7 @@ class MainActivity : ReactActivity() {
     if (intent != null) {
       setIntent(intent)
       NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent.dataString)
+      NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
     }
   }
 
