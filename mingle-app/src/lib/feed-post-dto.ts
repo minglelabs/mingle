@@ -32,6 +32,13 @@ export type FeedPostDto = {
     handle: string
     name: string | null
     imageUrl: string | null
+    /**
+     * Operator / official account (e.g. the Mingle team account that posts the
+     * initial content). Surfaces render `<OfficialBadge>` next to the name so
+     * operator-made content is never mistaken for a member's post. Optional on
+     * the wire: absent means false.
+     */
+    isOfficial?: boolean
   }
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string
