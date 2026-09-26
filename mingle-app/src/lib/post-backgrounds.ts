@@ -142,3 +142,36 @@ export function isKnownBackgroundKey(key: string): boolean {
 
 /** Total number of presets available. */
 export const PRESET_COUNT = PRESETS.length;
+
+/**
+ * Tone of the text and icons drawn directly on a post (author row, time,
+ * follow, expand/collapse, translate, like/comment/⋯, and the transparent feed
+ * header over the active post): `light` = white glyphs, `dark` = dark glyphs.
+ *
+ * Single source for "which glyph color sits on this post": the feed card, its
+ * control slots and the feed header all call this, so they can never disagree.
+ * Photo posts are always `light` (glyphs carry a shadow over the image). Text
+ * posts follow the preset's own `textColor`, so fixing a preset's contrast in
+ * the catalog automatically fixes every overlay drawn on it.
+ */
+export type PostForegroundTone = "light" | "dark";
+
+export function postForegroundTone(
+  backgroundKey: string | null | undefined,
+  hasImage: boolean,
+): PostForegroundTone {
+  if (hasImage) return "light";
+  return isDarkColor(resolveBackgroundPreset(backgroundKey).textColor) ? "dark" : "light";
+}
+
+/** True for a dark `#rgb`/`#rrggbb` color (relative luminance below 0.5). */
+function isDarkColor(color: string): boolean {
+  const hex = color.trim().replace(/^#/, "");
+  const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const v = parseInt(full.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
+}

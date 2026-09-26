@@ -9,10 +9,11 @@
  * image upload all answer 403 `{ error: 'account_restricted' }`.
  */
 import { NextResponse } from 'next/server'
+import { ACCOUNT_RESTRICTED_ERROR } from '@/lib/account-restriction'
 import { prisma } from '@/lib/prisma'
 
-/** Stable error code the client branches on to show the restriction notice. */
-export const ACCOUNT_RESTRICTED_ERROR = 'account_restricted' as const
+/** Stable error code the client branches on; single source in `@/lib/account-restriction`. */
+export { ACCOUNT_RESTRICTED_ERROR }
 
 export async function isAccountRestricted(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({

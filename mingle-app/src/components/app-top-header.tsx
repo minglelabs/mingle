@@ -1,6 +1,7 @@
 "use client";
 
 import MingleWordmark from "@/components/mingle-wordmark";
+import type { PostForegroundTone } from "@/lib/post-backgrounds";
 import { Bell, PencilLine } from "lucide-react";
 
 export type AppTopHeaderVariant = "transparent" | "surface";
@@ -20,6 +21,13 @@ type AppTopHeaderProps = {
    * bottom border, dark glyphs (used on the conversation list).
    */
   variant?: AppTopHeaderVariant;
+  /**
+   * Transparent variant only: glyph tone over the ACTIVE post, from
+   * `postForegroundTone(activePost.backgroundKey, Boolean(activePost.image))`
+   * in `@/lib/post-backgrounds`. `light` (default) = white glyphs, `dark` =
+   * dark glyphs for light text-post backgrounds.
+   */
+  glyphTone?: PostForegroundTone;
 };
 
 /**
@@ -36,8 +44,12 @@ export default function AppTopHeader({
   onNotifications,
   hasUnread = false,
   variant = "transparent",
+  glyphTone = "light",
 }: AppTopHeaderProps) {
   const isTransparent = variant === "transparent";
+  // Visual treatment for glyphTone="dark" is implemented by the feed-card fix
+  // (W2); until then the prop is accepted and exposed for styling hooks.
+  const toneAttr = isTransparent ? glyphTone : undefined;
 
   const headerClassName = isTransparent
     ? "pointer-events-auto absolute inset-x-0 top-0 z-20 flex shrink-0 items-center justify-between px-4"
@@ -62,6 +74,7 @@ export default function AppTopHeader({
   return (
     <header
       className={headerClassName}
+      data-glyph-tone={toneAttr}
       style={{
         paddingTop: "env(safe-area-inset-top, 44px)",
         height: "calc(56px + env(safe-area-inset-top, 44px))",

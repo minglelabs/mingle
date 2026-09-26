@@ -57,3 +57,21 @@ describe("post-backgrounds", () => {
     }
   });
 });
+
+describe("postForegroundTone", () => {
+  it("uses dark glyphs on light text-post backgrounds and light glyphs on dark ones", async () => {
+    const { postForegroundTone } = await import("./post-backgrounds");
+    expect(postForegroundTone("warm-cream", false)).toBe("dark");
+    expect(postForegroundTone("lavender-mist", false)).toBe("dark");
+    expect(postForegroundTone("soft-navy", false)).toBe("light");
+    expect(postForegroundTone("midnight-purple", false)).toBe("light");
+  });
+
+  it("always uses light glyphs over a photo and resolves unknown keys like the card does", async () => {
+    const { postForegroundTone, resolveBackgroundPreset } = await import("./post-backgrounds");
+    expect(postForegroundTone("warm-cream", true)).toBe("light");
+    expect(postForegroundTone("no-such-key", false)).toBe(
+      postForegroundTone(resolveBackgroundPreset("no-such-key").key, false),
+    );
+  });
+});

@@ -25,6 +25,10 @@ export type RateLimitAction =
   | 'like_post'
   | 'like_comment'
   | 'upload_post_image'
+  | 'update_post'
+  | 'update_comment'
+  | 'translate_post'
+  | 'translate_comment'
 
 type WindowRule = { limit: number; windowMs: number }
 
@@ -38,6 +42,12 @@ const RULES: Record<RateLimitAction, WindowRule> = {
   like_post: { limit: 60, windowMs: 60_000 },
   like_comment: { limit: 60, windowMs: 60_000 },
   upload_post_image: { limit: 20, windowMs: 60_000 },
+  // Edits re-translate the body (LLM cost), so they are capped like creates.
+  update_post: { limit: 10, windowMs: 60_000 },
+  update_comment: { limit: 30, windowMs: 60_000 },
+  // "See translation" taps: generous for real reading, blocks scripted cost abuse.
+  translate_post: { limit: 60, windowMs: 60_000 },
+  translate_comment: { limit: 60, windowMs: 60_000 },
 }
 
 export type RateLimitDecision =
