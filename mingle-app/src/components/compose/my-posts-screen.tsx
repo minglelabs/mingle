@@ -7,7 +7,33 @@ import { myPostsEndpoint, feedHref, type MyPostsSection } from '@/lib/feed-route
 import type { FeedPostDto, FeedPostListResponse } from '@/lib/feed-post-dto'
 import PostGridTile from '@/components/posts/post-grid-tile'
 import { composeCopy, formatComposeCopy } from '@/i18n/compose-copy'
+import { moderationCopy } from '@/i18n/moderation-copy'
+import { isAccountRestrictedResponse } from '@/lib/account-restriction'
+import { composeGapCopy, type ComposeGapCopy } from './compose-gap-copy'
 import { trashDaysLeft } from './trash-retention'
+
+/** Append a page, skipping posts already shown (a restore may shift pages). */
+function appendPosts(current: FeedPostDto[], page: FeedPostDto[]): FeedPostDto[] {
+  const seen = new Set(current.map((p) => p.id))
+  return [...current, ...page.filter((p) => !seen.has(p.id))]
+}
+
+async function actionFailureText(
+  res: Response,
+  section: MyPostsSection,
+  gapCopy: ComposeGapCopy,
+  locale: string,
+): Promise<string> {
+  if (await isAccountRestrictedResponse(res)) return moderationCopy(locale).accountRestricted
+  if (section === 'hidden') return gapCopy.unhideFailed
+  try {
+    const body = (await res.clone().json()) as { error?: unknown }
+    if (body.error === 'restore_window_expired') return gapCopy.restoreExpired
+  } catch {
+    // no JSON body
+  }
+  return gapCopy.restoreFailed
+}
 
 function sectionTitle(section: MyPostsSection, copy: ReturnType<typeof composeCopy>): string {
   return section === 'archived' ? copy.archiveTitle : section === 'trash' ? copy.trashTitle : copy.hiddenTitle
@@ -33,11 +59,15 @@ export default function MyPostsScreen({
   section: MyPostsSection
 }) {
   const copy = composeCopy(locale)
+  const gapCopy = composeGapCopy(locale)
   const router = useRouter()
   const [posts, setPosts] = useState<FeedPostDto[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,12 +77,31 @@ export default function MyPostsScreen({
       if (!res.ok) throw new Error('list_unavailable')
       const body = (await res.json()) as FeedPostListResponse
       setPosts(body.posts)
+      setNextCursor(body.nextCursor)
     } catch {
       setLoadError(true)
     } finally {
       setLoading(false)
     }
   }, [section])
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetch(buildClientApiPath(myPostsEndpoint(section, { cursor: nextCursor })), {
+        cache: 'no-store',
+      })
+      if (!res.ok) throw new Error('list_unavailable')
+      const body = (await res.json()) as FeedPostListResponse
+      setPosts((prev) => appendPosts(prev, body.posts))
+      setNextCursor(body.nextCursor)
+    } catch {
+      // Keep the cursor so "Load more" can be tapped again.
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, nextCursor, section])
 
   useEffect(() => {
     void load()
@@ -61,7 +110,8 @@ export default function MyPostsScreen({
   const runAction = useCallback(
     async (postId: string) => {
       setBusyId(postId)
-      // Optimistically drop the tile; reload on failure.
+      setActionError(null)
+      // Optimistically drop the tile; put it back and say why on failure.
       const snapshot = posts
       setPosts((prev) => prev.filter((p) => p.id !== postId))
       try {
@@ -76,14 +126,18 @@ export default function MyPostsScreen({
                 cache: 'no-store',
               })
         const res = await request
-        if (!res.ok) throw new Error('action_failed')
+        if (!res.ok) {
+          setPosts(snapshot)
+          setActionError(await actionFailureText(res, section, gapCopy, locale))
+        }
       } catch {
         setPosts(snapshot)
+        setActionError(section === 'hidden' ? gapCopy.unhideFailed : gapCopy.restoreFailed)
       } finally {
         setBusyId(null)
       }
     },
-    [posts, section],
+    [gapCopy, locale, posts, section],
   )
 
   return (
@@ -99,6 +153,12 @@ export default function MyPostsScreen({
         </button>
         <h1 className="text-base font-semibold">{sectionTitle(section, copy)}</h1>
       </header>
+
+      {actionError ? (
+        <p role="alert" className="mx-4 mb-2 rounded-lg bg-secondary px-3 py-2 text-xs text-foreground">
+          {actionError}
+        </p>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-6">
         {loading ? (
@@ -146,6 +206,16 @@ export default function MyPostsScreen({
             ))}
           </ul>
         )}
+        {!loading && !loadError && nextCursor ? (
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="mx-1 mt-3 inline-flex min-h-11 w-[calc(100%-0.5rem)] items-center justify-center rounded-xl bg-secondary px-4 py-2 text-sm text-secondary-foreground disabled:opacity-60"
+          >
+            {loadingMore ? '…' : gapCopy.loadMore}
+          </button>
+        ) : null}
       </div>
     </div>
   )

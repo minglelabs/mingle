@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
 import { searchCopy } from "@/i18n/search-copy";
@@ -19,6 +19,9 @@ import { resolveGridTilePreview } from "./post-grid-tile-text";
  * - Text follows the default display-language policy: `displayText` when the
  *   translation is ready, otherwise `sourceText`.
  * - No like or comment counts.
+ * - An image that fails to load (removed object, a list the viewer can no
+ *   longer read, offline) falls back to the text tile instead of a broken
+ *   image, so the tile always shows the post's background and words.
  */
 export type PostGridTileProps = {
   post: Pick<FeedPostDto, "id" | "sourceText" | "displayText" | "translationState" | "backgroundKey" | "image">;
@@ -32,6 +35,10 @@ export default function PostGridTile({ post, locale, onSelect, badge }: PostGrid
   const preview = resolveGridTilePreview(post);
   const previewText = preview.text.trim();
   const accessibleName = previewText || searchCopy(locale).postTileLabel;
+  // Remember WHICH url failed, so a post whose image changes is tried again.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageUrl = post.image?.url ?? null;
+  const showImage = imageUrl !== null && failedUrl !== imageUrl;
 
   return (
     <button
@@ -40,12 +47,13 @@ export default function PostGridTile({ post, locale, onSelect, badge }: PostGrid
       aria-label={accessibleName}
       className="post-grid-tile relative block aspect-square w-full overflow-hidden bg-gray-100 transition active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
     >
-      {post.image ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={post.image.url}
+          src={imageUrl}
           alt=""
           loading="lazy"
+          onError={() => setFailedUrl(imageUrl)}
           className="h-full w-full object-cover"
         />
       ) : (

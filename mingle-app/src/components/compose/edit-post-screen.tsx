@@ -6,9 +6,11 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import { postEndpoint, feedHref } from '@/lib/feed-routes'
 import type { FeedPostResponse } from '@/lib/feed-post-dto'
 import { composeCopy } from '@/i18n/compose-copy'
+import { moderationCopy } from '@/i18n/moderation-copy'
 import ComposeEditor from './compose-editor'
+import { composeGapCopy } from './compose-gap-copy'
 import { nextBackgroundKey } from './compose-background'
-import { canPublish, MAX_POST_LENGTH } from './compose-state'
+import { canPublish, editSaveError, MAX_POST_LENGTH, type EditSaveError } from './compose-state'
 import type { PreparedImage } from './compose-image'
 
 type EditImage =
@@ -16,15 +18,19 @@ type EditImage =
   | { kind: 'local'; prepared: PreparedImage; url: string }
   | { kind: 'removed' }
 
+type SaveError = EditSaveError | null
+
 export default function EditPostScreen({ locale, postId }: { locale: string; postId: string }) {
   const copy = composeCopy(locale)
+  const gapCopy = composeGapCopy(locale)
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [text, setText] = useState('')
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
-  const [changeBackground, setChangeBackground] = useState(false)
+  const [loadedBackgroundKey, setLoadedBackgroundKey] = useState<string | null>(null)
+  const [bodyVersion, setBodyVersion] = useState<number | null>(null)
   const [image, setImage] = useState<EditImage>({ kind: 'unchanged', url: null, width: null, height: null })
   const [author, setAuthor] = useState<{ name: string | null; handle: string; imageUrl: string | null }>({
     name: null,
@@ -32,13 +38,23 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
     imageUrl: null,
   })
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<SaveError>(null)
 
   const objectUrl = useRef<string | null>(null)
+  // A save can take up to ~15 s (re-translation). If the author left the
+  // screen meanwhile, finishing must not drag them back to the feed.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(false)
+    setSaveError(null)
     try {
       const res = await fetch(buildClientApiPath(postEndpoint(postId)), { cache: 'no-store' })
       if (!res.ok) throw new Error('post_unavailable')
@@ -46,6 +62,8 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
       const post = body.post
       setText(post.sourceText ?? '')
       setBackgroundKey(post.backgroundKey)
+      setLoadedBackgroundKey(post.backgroundKey)
+      setBodyVersion(post.bodyVersion)
       setImage({
         kind: 'unchanged',
         url: post.image?.url ?? null,
@@ -71,7 +89,7 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
   }, [])
 
   function handleChangeBackground() {
-    setChangeBackground(true)
+    // The key shown here is the key that gets saved (never the current one).
     setBackgroundKey((current) => nextBackgroundKey(current ?? 'warm-cream'))
   }
 
@@ -103,26 +121,40 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
   async function handleSave() {
     if (!publishable || saving) return
     setSaving(true)
-    setSaveError(false)
+    setSaveError(null)
     try {
-      // Upload a new image first, so its object key is set before the PATCH.
+      // Upload a new image first; the image route stores it (and its size) on
+      // the post, so the PATCH below does not need to mention it.
       if (image.kind === 'local') {
         const form = new FormData()
         form.append('file', image.prepared.file)
-        form.append('width', String(image.prepared.originalWidth))
-        form.append('height', String(image.prepared.originalHeight))
         const imgRes = await fetch(buildClientApiPath(`/posts/${encodeURIComponent(postId)}/image`), {
           method: 'POST',
           cache: 'no-store',
           body: form,
         })
-        if (!imgRes.ok) throw new Error('image_failed')
+        if (!imgRes.ok) {
+          if (mounted.current) setSaveError(await editSaveError(imgRes))
+          return
+        }
+        const uploaded = (await imgRes.json().catch(() => ({}))) as { width?: number; height?: number }
+        // Already on the post: a retry after a failed PATCH must not upload it again.
+        if (mounted.current) {
+          setImage({
+            kind: 'unchanged',
+            url: image.url,
+            width: typeof uploaded.width === 'number' ? uploaded.width : null,
+            height: typeof uploaded.height === 'number' ? uploaded.height : null,
+          })
+        }
       }
 
       const patch: Record<string, unknown> = {
         sourceText: text.trim().length > 0 ? text : null,
       }
-      if (changeBackground) patch.changeBackground = true
+      // Optimistic lock: the server answers 409 if the post changed since load.
+      if (bodyVersion !== null) patch.bodyVersion = bodyVersion
+      if (backgroundKey && backgroundKey !== loadedBackgroundKey) patch.backgroundKey = backgroundKey
       if (image.kind === 'removed') patch.imageObjectKey = null
 
       const res = await fetch(buildClientApiPath(postEndpoint(postId)), {
@@ -131,13 +163,18 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
-      if (!res.ok) throw new Error('save_failed')
+      // A save with nothing left to change (e.g. only the photo was replaced)
+      // answers 200 as a no-op, so it reads as saved here too.
+      if (!res.ok) {
+        if (mounted.current) setSaveError(await editSaveError(res))
+        return
+      }
 
-      router.push(feedHref(locale, { postId }))
+      if (mounted.current) router.push(feedHref(locale, { postId }))
     } catch {
-      setSaveError(true)
+      if (mounted.current) setSaveError('failed')
     } finally {
-      setSaving(false)
+      if (mounted.current) setSaving(false)
     }
   }
 
@@ -202,9 +239,24 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
             {copy.emptyBlocked}
           </p>
         ) : null}
-        {saveError ? (
+        {saveError === 'conflict' ? (
+          <div role="alert" className="flex items-center gap-2 px-4 pb-4 text-xs text-destructive">
+            <span className="flex-1">{gapCopy.editConflict}</span>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex min-h-9 items-center rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+            >
+              {gapCopy.editReload}
+            </button>
+          </div>
+        ) : saveError === 'restricted' ? (
           <p role="alert" className="px-4 pb-4 text-xs text-destructive">
-            {copy.loadError}
+            {moderationCopy(locale).accountRestricted}
+          </p>
+        ) : saveError === 'failed' ? (
+          <p role="alert" className="px-4 pb-4 text-xs text-destructive">
+            {gapCopy.editSaveFailed}
           </p>
         ) : null}
       </div>

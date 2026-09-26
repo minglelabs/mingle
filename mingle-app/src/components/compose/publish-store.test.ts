@@ -4,6 +4,7 @@ import {
   clearPublishJob,
   getPublishJob,
   onPublishSuccess,
+  isPublishRunning,
   retryPublish,
   startPublish,
   type PublishInput,
@@ -21,6 +22,7 @@ function baseInput(overrides: Partial<PublishInput> = {}): PublishInput {
     clientPostId: 'client-post-000000000001',
     sourceText: 'hello world',
     sourceLanguage: 'en',
+    backgroundKey: 'warm-cream',
     imageObjectKey: null,
     imageFile: null,
     imageWidth: null,
@@ -28,6 +30,28 @@ function baseInput(overrides: Partial<PublishInput> = {}): PublishInput {
     draftId: null,
     ...overrides,
   }
+}
+
+/** "METHOD /path" of a fetch call, without the API namespace prefix or query. */
+function callKey(call: unknown[]): string {
+  const url = String(call[0])
+  const method = ((call[1] as RequestInit | undefined)?.method ?? 'GET').toUpperCase()
+  const path = url.split('?')[0].replace(/^.*?\/api(?:\/(?:ios|android|web)\/v[\d.]+)?/, '')
+  return `${method} ${path}`
+}
+
+/** A fake API: each "METHOD /path" answers from its handler; anything else 404s. */
+function routeFetch(routes: Record<string, (init: RequestInit | undefined) => Response>) {
+  const fetchMock = vi.fn(async (...args: unknown[]) => {
+    const handler = routes[callKey(args)]
+    return handler ? handler(args[1] as RequestInit | undefined) : jsonResponse({ error: 'not_found' }, 404)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function bodyOf(call: unknown[]): Record<string, unknown> {
+  return JSON.parse(String((call[1] as RequestInit).body))
 }
 
 // Drain the microtask queue so the async pipeline settles.
@@ -133,16 +157,17 @@ describe('publish store', () => {
     const job = getPublishJob()
     expect(job?.status).toBe('failed')
     expect(job?.postId).toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts')).toHaveLength(0)
   })
 
   it('keeps the uploaded key when the create fails so a retry does not re-upload', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ imageObjectKey: 'post-images/u1/r.jpg' }, 201))
-      .mockResolvedValueOnce(jsonResponse({ error: 'request_failed' }, 500))
-      .mockResolvedValueOnce(jsonResponse({ postId: 'post-3' }, 201))
-    vi.stubGlobal('fetch', fetchMock)
+    const creates = [jsonResponse({ error: 'request_failed' }, 500), jsonResponse({ postId: 'post-3' }, 201)]
+    const fetchMock = routeFetch({
+      'POST /posts/images': () => jsonResponse({ imageObjectKey: 'post-images/u1/r.jpg' }, 201),
+      'POST /posts': () => creates.shift()!,
+      'POST /posts/drafts': () => jsonResponse({ draft: { id: 'draft-kept' } }, 201),
+      'DELETE /posts/drafts': () => jsonResponse({ deleted: true }),
+    })
 
     startPublish(baseInput({ imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) }))
     await flush()
@@ -152,19 +177,23 @@ describe('publish store', () => {
     retryPublish()
     await flush()
     expect(getPublishJob()?.status).toBe('success')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(fetchMock.mock.calls[2][0] as string).toMatch(/\/posts$/)
+    const uploads = fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts/images')
+    expect(uploads).toHaveLength(1)
   })
 
-  it('ignores a second startPublish while one is running (no duplicate create)', async () => {
+  it('refuses a second startPublish while one is running (no duplicate create, caller told)', async () => {
     let resolveCreate: (r: Response) => void = () => {}
     const fetchMock = vi.fn().mockImplementation(
       () => new Promise<Response>((resolve) => { resolveCreate = resolve }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    startPublish(baseInput())
-    startPublish(baseInput()) // ignored — job running
+    expect(startPublish(baseInput())).toBe(true)
+    expect(isPublishRunning()).toBe(true)
+    // A different post while the first runs is refused, not silently dropped:
+    // the caller gets false and keeps that post on screen / as a draft.
+    expect(startPublish(baseInput({ clientPostId: 'client-post-000000000002', sourceText: 'second' }))).toBe(false)
+    expect(getPublishJob()?.input.clientPostId).toBe('client-post-000000000001')
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     resolveCreate(jsonResponse({ postId: 'post-4' }, 201))
@@ -173,11 +202,11 @@ describe('publish store', () => {
   })
 
   it('retry reuses the same clientPostId', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ error: 'request_failed' }, 500))
-      .mockResolvedValueOnce(jsonResponse({ postId: 'post-5', duplicate: true }, 200))
-    vi.stubGlobal('fetch', fetchMock)
+    const creates = [jsonResponse({ error: 'request_failed' }, 500), jsonResponse({ postId: 'post-5', duplicate: true }, 200)]
+    const fetchMock = routeFetch({
+      'POST /posts': () => creates.shift()!,
+      'POST /posts/drafts': () => jsonResponse({ error: 'offline' }, 503),
+    })
 
     startPublish(baseInput({ clientPostId: 'reuse-me-000000000001' }))
     await flush()
@@ -187,8 +216,9 @@ describe('publish store', () => {
     await flush()
     expect(getPublishJob()?.status).toBe('success')
 
-    const firstBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
+    const createCalls = fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts')
+    const firstBody = JSON.parse((createCalls[0][1] as RequestInit).body as string)
+    const secondBody = JSON.parse((createCalls[1][1] as RequestInit).body as string)
     expect(firstBody.clientPostId).toBe('reuse-me-000000000001')
     expect(secondBody.clientPostId).toBe('reuse-me-000000000001')
   })
@@ -222,5 +252,102 @@ describe('publish store', () => {
     await flush()
     clearPublishJob() // settled — cleared
     expect(getPublishJob()).toBeNull()
+  })
+
+  it('sends the previewed background key and the image size with the create', async () => {
+    const fetchMock = routeFetch({
+      'POST /posts/images': () => jsonResponse({ imageObjectKey: 'post-images/u1/k.jpg', width: 1536, height: 2048 }, 201),
+      'POST /posts': () => jsonResponse({ postId: 'post-bg' }, 201),
+    })
+    startPublish(baseInput({ backgroundKey: 'dark-mesh', imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) }))
+    await flush()
+    const create = fetchMock.mock.calls.find((c) => callKey(c) === 'POST /posts')!
+    expect(bodyOf(create)).toMatchObject({
+      backgroundKey: 'dark-mesh',
+      imageObjectKey: 'post-images/u1/k.jpg',
+      imageWidth: 1536,
+      imageHeight: 2048,
+    })
+  })
+
+  it('saves a failed post as a new draft, so dismissing the banner loses nothing', async () => {
+    const fetchMock = routeFetch({
+      'POST /posts': () => jsonResponse({ error: 'request_failed' }, 500),
+      'POST /posts/drafts': () => jsonResponse({ draft: { id: 'draft-new' } }, 201),
+    })
+    startPublish(baseInput({ sourceText: 'keep me', backgroundKey: 'dark-mesh' }))
+    await flush()
+    const job = getPublishJob()
+    expect(job?.status).toBe('failed')
+    expect(job?.savedAsDraft).toBe(true)
+    expect(job?.input.draftId).toBe('draft-new')
+    const draftCall = fetchMock.mock.calls.find((c) => callKey(c) === 'POST /posts/drafts')!
+    expect(bodyOf(draftCall)).toMatchObject({ sourceText: 'keep me', backgroundKey: 'dark-mesh' })
+    // Dismissing the banner now only clears memory; the draft stays on the server.
+    clearPublishJob()
+    expect(fetchMock.mock.calls.some((c) => callKey(c) === 'DELETE /posts/drafts')).toBe(false)
+  })
+
+  it('updates the existing draft on failure and deletes it after a successful retry', async () => {
+    const creates = [jsonResponse({ error: 'request_failed' }, 500), jsonResponse({ postId: 'post-r' }, 201)]
+    const fetchMock = routeFetch({
+      'POST /posts': () => creates.shift()!,
+      'PATCH /posts/drafts': () => jsonResponse({ draft: { id: 'draft-1' } }),
+      'DELETE /posts/drafts': () => jsonResponse({ deleted: true }),
+    })
+    startPublish(baseInput({ draftId: 'draft-1', sourceText: 'edited body' }))
+    await flush()
+    expect(getPublishJob()?.savedAsDraft).toBe(true)
+    const patch = fetchMock.mock.calls.find((c) => callKey(c) === 'PATCH /posts/drafts')!
+    expect(bodyOf(patch)).toMatchObject({ draftId: 'draft-1', sourceText: 'edited body' })
+
+    retryPublish()
+    await flush()
+    expect(getPublishJob()?.status).toBe('success')
+    const del = fetchMock.mock.calls.find((c) => callKey(c) === 'DELETE /posts/drafts')!
+    expect(String(del[0])).toContain('draftId=draft-1')
+  })
+
+  it('a successful retry deletes the draft the failure created', async () => {
+    const creates = [jsonResponse({ error: 'request_failed' }, 500), jsonResponse({ postId: 'post-x' }, 201)]
+    const fetchMock = routeFetch({
+      'POST /posts': () => creates.shift()!,
+      'POST /posts/drafts': () => jsonResponse({ draft: { id: 'draft-from-failure' } }, 201),
+      'DELETE /posts/drafts': () => jsonResponse({ deleted: true }),
+    })
+    startPublish(baseInput())
+    await flush()
+    retryPublish()
+    await flush()
+    const del = fetchMock.mock.calls.find((c) => callKey(c) === 'DELETE /posts/drafts')
+    expect(String(del?.[0])).toContain('draftId=draft-from-failure')
+  })
+
+  it('keeps the failed job in memory (not saved) when the draft save fails too', async () => {
+    routeFetch({
+      'POST /posts': () => jsonResponse({ error: 'request_failed' }, 500),
+      'POST /posts/drafts': () => jsonResponse({ error: 'offline' }, 503),
+    })
+    startPublish(baseInput({ sourceText: 'only here' }))
+    await flush()
+    const job = getPublishJob()
+    expect(job?.status).toBe('failed')
+    expect(job?.savedAsDraft).toBe(false)
+    expect(job?.input.sourceText).toBe('only here')
+  })
+
+  it('marks a 403 account_restricted as restricted: no retry, no draft write', async () => {
+    const fetchMock = routeFetch({
+      'POST /posts': () => jsonResponse({ error: 'account_restricted' }, 403),
+    })
+    startPublish(baseInput())
+    await flush()
+    const job = getPublishJob()
+    expect(job?.status).toBe('failed')
+    expect(job?.restricted).toBe(true)
+    retryPublish()
+    await flush()
+    expect(fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts')).toHaveLength(1)
+    expect(fetchMock.mock.calls.some((c) => callKey(c) === 'POST /posts/drafts')).toBe(false)
   })
 })
