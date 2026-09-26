@@ -1,5 +1,6 @@
 "use client";
 
+import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { ChevronUp, X } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
@@ -23,14 +24,19 @@ type SwipeHintOverlayProps = {
   hasNextPost: boolean;
   /** Called once the hint is dismissed (swiped or closed). */
   onDismiss?: () => void;
+  /** Hint text; pass `copy.swipeHint` ("swipe up for the next post"). */
   label: string;
+  /** Accessible name of the close button; pass `copy.swipeHintClose`. */
+  closeLabel?: string;
 };
 
 export default function SwipeHintOverlay({
   hasNextPost,
   onDismiss,
   label,
+  closeLabel,
 }: SwipeHintOverlayProps) {
+  const reducedMotion = useReducedMotion();
   const hintDone = useSyncExternalStore(subscribeToNothing, readHintDone, readHintDoneOnServer);
   const [dismissed, setDismissed] = useState(false);
   const visible = hasNextPost && !hintDone && !dismissed;
@@ -54,16 +60,18 @@ export default function SwipeHintOverlay({
 
   if (!visible) return null;
 
+  // The overlay never intercepts touches: the swipe it teaches must reach the
+  // feed scroller underneath (that first swipe is what completes the hint).
+  // Only the close button takes pointer events.
   return (
     <div
-      className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/30"
-      onClick={dismiss}
-      role="dialog"
-      aria-modal="false"
+      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/30"
+      role="status"
       aria-label={label}
+      data-swipe-hint
     >
       <div className="flex flex-col items-center gap-3 text-white">
-        <div className="animate-bounce">
+        <div className={reducedMotion ? undefined : "animate-bounce"} aria-hidden="true">
           <ChevronUp size={40} strokeWidth={2.5} />
         </div>
         <p className="text-base font-semibold drop-shadow-md">{label}</p>
@@ -73,8 +81,8 @@ export default function SwipeHintOverlay({
             e.stopPropagation();
             dismiss();
           }}
-          className="mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition active:scale-90"
-          aria-label="Close"
+          className="pointer-events-auto relative mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition active:scale-90 before:absolute before:-inset-1.5 before:content-['']"
+          aria-label={closeLabel ?? label}
         >
           <X size={18} strokeWidth={2.5} />
         </button>

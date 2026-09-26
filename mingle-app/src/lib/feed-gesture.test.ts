@@ -4,6 +4,7 @@ import {
   resolveGestureOwner,
   scrollBoundary,
   shouldBlockOverscroll,
+  shouldBlockBodyTouchMove,
   isDoubleTap,
   isTapGesture,
   DEFAULT_DOUBLE_TAP_CONFIG,
@@ -192,5 +193,29 @@ describe("isTapGesture", () => {
   it("supports custom threshold", () => {
     expect(isTapGesture(100, 200, 100, 225, 30)).toBe(true);
     expect(isTapGesture(100, 200, 100, 235, 30)).toBe(false);
+  });
+});
+
+describe("shouldBlockBodyTouchMove", () => {
+  const atTop = { scrollTop: 0, scrollHeight: 1000, clientHeight: 400 };
+  const middle = { scrollTop: 300, scrollHeight: 1000, clientHeight: 400 };
+  const atBottom = { scrollTop: 600, scrollHeight: 1000, clientHeight: 400 };
+  const noScroll = { scrollTop: 0, scrollHeight: 400, clientHeight: 400 };
+
+  it("blocks dragging down past the top edge (would page to the previous post)", () => {
+    expect(shouldBlockBodyTouchMove(100, 120, atTop)).toBe(true);
+  });
+  it("blocks dragging up past the bottom edge (would page to the next post)", () => {
+    expect(shouldBlockBodyTouchMove(300, 280, atBottom)).toBe(true);
+  });
+  it("lets the body scroll inward from either edge and anywhere in the middle", () => {
+    expect(shouldBlockBodyTouchMove(300, 280, atTop)).toBe(false);
+    expect(shouldBlockBodyTouchMove(100, 120, atBottom)).toBe(false);
+    expect(shouldBlockBodyTouchMove(100, 120, middle)).toBe(false);
+    expect(shouldBlockBodyTouchMove(300, 280, middle)).toBe(false);
+  });
+  it("blocks both directions when the body does not scroll at all", () => {
+    expect(shouldBlockBodyTouchMove(100, 120, noScroll)).toBe(true);
+    expect(shouldBlockBodyTouchMove(300, 280, noScroll)).toBe(true);
   });
 });

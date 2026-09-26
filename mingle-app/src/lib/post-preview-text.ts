@@ -1,37 +1,92 @@
 /**
  * Post preview text utilities for the feed centre display.
  *
- * The visual target is ~20 characters as a starting point, but the actual
- * truncation uses clause/sentence boundaries within 2–3 display lines to
- * produce a readable snippet. The original body text is never mutated.
+ * The centre preview is drawn in large type (1.5rem) on a phone-width card, so
+ * the budget is measured in DISPLAY WIDTH, not characters: a Hangul/CJK/kana
+ * character or an emoji is about twice as wide as a Latin letter. One card line
+ * holds roughly `LINE_UNITS` narrow units (~12 Hangul characters).
+ *
+ * - A body that fits in about 2–3 lines is shown whole (`isTruncated: false`).
+ * - Otherwise the cut starts from ~20 wide characters (`TARGET_UNITS`) and
+ *   snaps to the nearest meaning boundary (sentence end, clause punctuation,
+ *   then a space) inside the 1–3 line window, falling back to a hard cut.
+ * - Text is split into grapheme clusters (`Intl.Segmenter`), so ZWJ emoji,
+ *   flags and combining marks are never broken.
+ * - The original body text is never mutated.
  */
 
-/** Segmenter-friendly sentence/clause terminators. */
-const CLAUSE_END_RE = /[.!?。！？、，\n]/;
+/** Narrow units per displayed line at the feed's 1.5rem preview size. */
+export const LINE_UNITS = 24;
+/** Starting point for the cut: ~20 wide characters. */
+export const TARGET_UNITS = 40;
+/** Never cut before one full line. */
+const MIN_UNITS = LINE_UNITS;
+/** Whole-body / cut ceiling: under three lines, leaving room for "…". */
+export const MAX_UNITS = LINE_UNITS * 3 - 6;
+
+/** Sentence ends: the cut reads as complete, no ellipsis. */
+const SENTENCE_END_RE = /^[.!?。！？…]$/u;
+/** Clause punctuation: a natural pause, but the thought continues ("…"). */
+const CLAUSE_END_RE = /^[,，、;；:：]$/u;
+const WIDE_RE =
+  /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\uff00-\uffef\p{Extended_Pictographic}\p{Regional_Indicator}]/u;
+
+type SegmenterLike = { segment(input: string): Iterable<{ segment: string }> };
+
+function makeSegmenter(): SegmenterLike | null {
+  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => SegmenterLike })
+    .Segmenter;
+  if (typeof Seg !== "function") return null;
+  try {
+    return new Seg(undefined, { granularity: "grapheme" });
+  } catch {
+    return null;
+  }
+}
+
+const segmenter = makeSegmenter();
+
+/** Split into user-perceived characters (grapheme clusters). */
+export function splitGraphemes(text: string): string[] {
+  if (segmenter) return Array.from(segmenter.segment(text), (s) => s.segment);
+  return Array.from(text);
+}
+
+/** Display width of one grapheme in narrow units (wide scripts / emoji = 2). */
+export function graphemeUnits(grapheme: string): number {
+  return WIDE_RE.test(grapheme) ? 2 : 1;
+}
 
 /**
- * Maximum grapheme clusters to scan before giving up on finding a clause
- * boundary. Set generously above the ~20-char visual target so that a
- * sentence ending at character 28 is still preferred over a mid-word cut.
+ * Cumulative display cost after each grapheme. A newline ends the current
+ * line, so it costs the rest of that line.
  */
-const SCAN_LIMIT = 60;
+function cumulativeCost(graphemes: string[]): number[] {
+  const out: number[] = [];
+  let cost = 0;
+  for (const g of graphemes) {
+    if (g === "\n") {
+      const used = cost % LINE_UNITS;
+      cost += used === 0 && cost > 0 ? LINE_UNITS : LINE_UNITS - used;
+    } else {
+      cost += graphemeUnits(g);
+    }
+    out.push(cost);
+  }
+  return out;
+}
 
-/** Ideal range (inclusive) for character count. */
-const IDEAL_MIN = 15;
-const IDEAL_MAX = 40;
+function closestTo(target: number, candidates: { index: number; cost: number }[]) {
+  let best: { index: number; cost: number } | null = null;
+  for (const c of candidates) {
+    if (!best || Math.abs(c.cost - target) < Math.abs(best.cost - target)) best = c;
+  }
+  return best;
+}
 
 /**
  * Produce a preview snippet from the first portion of `bodyText`.
- *
- * Returns `{ text, isTruncated }`. When the full body fits within the
- * ideal range it is returned as-is with `isTruncated: false`.
- *
- * Guarantees:
- * - Never returns more than `SCAN_LIMIT` grapheme clusters.
- * - Tries to break at a clause boundary inside `[IDEAL_MIN, IDEAL_MAX]`.
- * - Falls back to a word boundary, then a hard cut with "…".
- * - Handles long single words, emoji, and multiline input.
- * - Strips leading/trailing whitespace and collapses runs of newlines.
+ * Returns `{ text, isTruncated }`.
  */
 export function generatePreviewText(bodyText: string): {
   text: string;
@@ -42,41 +97,53 @@ export function generatePreviewText(bodyText: string): {
     return { text: "", isTruncated: false };
   }
 
-  // Spread into grapheme clusters (handles emoji / combining chars).
-  const chars = [...normalized];
+  const graphemes = splitGraphemes(normalized);
+  const cost = cumulativeCost(graphemes);
 
-  if (chars.length <= IDEAL_MAX) {
+  if (cost[cost.length - 1] <= MAX_UNITS) {
     return { text: normalized, isTruncated: false };
   }
 
-  // 1. Try clause boundary in [IDEAL_MIN, IDEAL_MAX]
-  for (let i = IDEAL_MIN; i <= Math.min(IDEAL_MAX, chars.length - 1); i++) {
-    if (CLAUSE_END_RE.test(chars[i])) {
-      const candidate = chars.slice(0, i + 1).join("").trim();
-      if (candidate.length > 0) {
-        return { text: candidate, isTruncated: true };
-      }
+  const join = (end: number) => graphemes.slice(0, end).join("").trim();
+
+  // 1. Sentence end / line break, then clause punctuation, inside the window.
+  const sentence: { index: number; cost: number }[] = [];
+  const clause: { index: number; cost: number }[] = [];
+  const space: { index: number; cost: number }[] = [];
+  for (let i = 0; i < graphemes.length; i++) {
+    const g = graphemes[i];
+    const c = cost[i];
+    if (c > MAX_UNITS) break;
+    if (g === "\n") {
+      // Cut BEFORE the newline; its cost is the text before it.
+      const before = i > 0 ? cost[i - 1] : 0;
+      if (before >= MIN_UNITS) sentence.push({ index: i, cost: before });
+      continue;
     }
+    if (c < MIN_UNITS) continue;
+    if (SENTENCE_END_RE.test(g)) sentence.push({ index: i + 1, cost: c });
+    else if (CLAUSE_END_RE.test(g)) clause.push({ index: i + 1, cost: c });
+    else if (/^\s$/u.test(g) && c <= MAX_UNITS - 2) space.push({ index: i, cost: c });
   }
 
-  // 2. Try word boundary (last space before IDEAL_MAX)
-  const scanSlice = chars.slice(0, IDEAL_MAX);
-  let lastSpaceIdx = -1;
-  for (let i = scanSlice.length - 1; i >= IDEAL_MIN; i--) {
-    if (/\s/.test(scanSlice[i])) {
-      lastSpaceIdx = i;
-      break;
-    }
+  const sentenceCut = closestTo(TARGET_UNITS, sentence);
+  if (sentenceCut) {
+    const text = join(sentenceCut.index);
+    if (text) return { text, isTruncated: true };
+  }
+  const clauseCut = closestTo(TARGET_UNITS, clause);
+  if (clauseCut) {
+    const text = join(clauseCut.index);
+    if (text) return { text: `${text}…`, isTruncated: true };
+  }
+  const spaceCut = closestTo(TARGET_UNITS, space);
+  if (spaceCut) {
+    const text = join(spaceCut.index);
+    if (text) return { text: `${text}…`, isTruncated: true };
   }
 
-  if (lastSpaceIdx > IDEAL_MIN) {
-    const candidate = chars.slice(0, lastSpaceIdx).join("").trim();
-    if (candidate.length > 0) {
-      return { text: `${candidate}…`, isTruncated: true };
-    }
-  }
-
-  // 3. Hard cut at IDEAL_MAX
-  const hardCut = chars.slice(0, IDEAL_MAX).join("").trim();
-  return { text: `${hardCut}…`, isTruncated: true };
+  // 2. Hard cut at the target width (whole graphemes only).
+  let end = 0;
+  while (end < graphemes.length && cost[end] <= TARGET_UNITS) end++;
+  return { text: `${join(Math.max(1, end))}…`, isTruncated: true };
 }

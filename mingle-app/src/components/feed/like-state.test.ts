@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { optimisticLike, reconcileLike } from "./like-state";
+import { likeFailureFromResponse, optimisticLike, reconcileLike } from "./like-state";
 
 describe("optimisticLike", () => {
   it("increments and sets liked when liking a not-liked post", () => {
@@ -50,5 +50,37 @@ describe("reconcileLike", () => {
       likedByMe: false,
       likeCount: 0,
     });
+  });
+});
+
+describe("likeFailureFromResponse", () => {
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  it("returns null for a successful write", async () => {
+    expect(await likeFailureFromResponse(json(200, { likeCount: 3, likedByMe: true }))).toBeNull();
+  });
+
+  it("classifies a restricted account (403 account_restricted) without a retry hint", async () => {
+    expect(await likeFailureFromResponse(json(403, { error: "account_restricted" }))).toEqual({
+      kind: "account_restricted",
+    });
+  });
+
+  it("treats any other 403 as a generic failure", async () => {
+    expect(await likeFailureFromResponse(json(403, { error: "forbidden" }))).toEqual({ kind: "generic" });
+  });
+
+  it("keeps the 429 retry-after hint", async () => {
+    expect(await likeFailureFromResponse(json(429, { error: "rate_limited", retryAfterSeconds: 12 }))).toEqual({
+      kind: "rate_limited",
+      retryAfterSeconds: 12,
+    });
+  });
+
+  it("does not consume the body the caller may still read", async () => {
+    const res = json(200, { likeCount: 1 });
+    await likeFailureFromResponse(res);
+    expect(await res.json()).toEqual({ likeCount: 1 });
   });
 });

@@ -210,3 +210,24 @@ export function isTapGesture(
   const dy = endY - startY;
   return Math.sqrt(dx * dx + dy * dy) <= threshold;
 }
+
+/**
+ * Native (non-passive) touchmove guard for the expanded body scroller.
+ *
+ * `prevY` / `currY` are consecutive touch clientY samples, so the decision
+ * follows the finger's CURRENT direction: dragging past the bottom edge is
+ * blocked (it would chain into the feed and page to the next post), while
+ * reversing direction inside the same gesture scrolls the body again.
+ */
+export function shouldBlockBodyTouchMove(
+  prevY: number,
+  currY: number,
+  metrics: { scrollTop: number; scrollHeight: number; clientHeight: number },
+): boolean {
+  // Finger moving up (currY < prevY) = intent to scroll content down.
+  const scrollIntent = prevY - currY;
+  return shouldBlockOverscroll(
+    scrollIntent,
+    scrollBoundary(metrics.scrollTop, metrics.scrollHeight, metrics.clientHeight),
+  );
+}
