@@ -46,7 +46,7 @@ node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --apply -
 ## 주의사항
 
 - 운영 DB에 넣을지는 사용자가 결정합니다. 넣기 전 로컬에서 dry-run과 `--apply`로 먼저 피드 모양을 확인하세요.
-- `--apply`는 번역 API를 게시물당 5회(감지 1회 + 번역 대상 언어 수) 정도 호출합니다. 42개 기준 약 170~210회입니다.
+- `--apply`는 번역 API를 게시물당 4회(감지 1회 + 원문 언어를 뺀 3개 언어 번역) 호출합니다. 42개 기준 약 168회입니다.
 - 사실 항목(`kind: "fact"`)은 공식 출처를 `sources`에 남겼습니다. 세금 환급 조건·전화번호·운영 시간은 바뀔 수 있으니 투입 직전에 출처를 다시 확인하고 `checkedAt`을 고치세요. 특히 1330 페이지(english1.visitkorea.or.kr)는 2021년에 마지막으로 갱신되었다고 적혀 있고, 운영 시간은 Seoul Safety Nuri 페이지로도 확인했습니다.
 - 콘텐츠를 고칠 때 지킬 것: 1인칭 후기 금지("제가 받아봤는데" 등), 특정 병원·업체 추천·광고 금지, 의료 효과·안전 주장 금지, 확인할 수 없는 사실은 질문형으로. 테스트가 금지 표현·길이·언어·중복·출처를 검사하므로 고친 뒤 `npx vitest run src/server/posts/feed-seed-content.test.ts`를 돌리세요.
 - 운영 계정 배지 표시는 이번 범위가 아닙니다(스키마 변경 없음). 지금은 표시 이름 "Mingle 팀"과 handle `@mingle_team`으로만 구분됩니다.
