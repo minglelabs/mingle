@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import type { AppLocale } from "@/i18n";
-import { buildClientApiPath } from "@/lib/api-contract";
+import { buildClientApiPath, clientApiNamespace, clientSupportsPostingFeed } from "@/lib/api-contract";
+import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { captureMingleClientEvent } from "@/lib/posthog-client";
+import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
 import { searchCopy } from "@/i18n/search-copy";
 import { feedSourceEndpoint } from "@/lib/feed-routes";
 import { formatHandle, isSearchExcludedHandle } from "@/lib/handles";
@@ -25,6 +28,20 @@ import {
 } from "./recent-searches-client";
 
 const PEOPLE_PREVIEW_LIMIT = 3;
+
+/** Same request headers the legacy connect search sent, for PostHog attribution. */
+function buildConnectTrackingHeaders(): Record<string, string> {
+  const clientPlatform = clientApiNamespace.startsWith("android/")
+    ? "android"
+    : clientApiNamespace.startsWith("ios/")
+      ? "ios"
+      : "web";
+  return {
+    "x-mingle-user-id": getOrCreateTrackingUserId(),
+    "x-mingle-api-namespace": clientApiNamespace,
+    "x-mingle-client-platform": clientPlatform,
+  };
+}
 
 export type UnifiedSearchProps = {
   locale: AppLocale;
@@ -55,12 +72,16 @@ export default function UnifiedSearch({
   scrollContainerRef,
 }: UnifiedSearchProps) {
   const copy = searchCopy(locale);
+  const postingFeedEnabled = clientSupportsPostingFeed;
   const [internalQuery, setInternalQuery] = useState("");
   const query = controlledQuery ?? internalQuery;
   const onQueryChange = controlledOnQueryChange ?? setInternalQuery;
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const internalScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = (scrollContainerRef ?? internalScrollRef) as React.RefObject<HTMLDivElement | null>;
   const composingRef = useRef(false);
   const searchSeqRef = useRef(0);
+  const analyticsSeqRef = useRef(0);
   const activeQueryRef = useRef("");
   const recordedRef = useRef<Set<string>>(new Set());
 
@@ -76,7 +97,7 @@ export default function UnifiedSearch({
 
   // Load recent searches when the empty field gains focus.
   useEffect(() => {
-    if (!canUseRecentSearches || normalizedQuery || !isFocused) return;
+    if (!postingFeedEnabled || !canUseRecentSearches || normalizedQuery || !isFocused) return;
     let cancelled = false;
     void fetchRecentSearches().then((entries) => {
       if (!cancelled) setRecent(entries);
@@ -84,17 +105,39 @@ export default function UnifiedSearch({
     return () => {
       cancelled = true;
     };
-  }, [canUseRecentSearches, normalizedQuery, isFocused]);
+  }, [postingFeedEnabled, canUseRecentSearches, normalizedQuery, isFocused]);
 
-  const runPeopleSearch = useCallback(async (searchQuery: string, seq: number) => {
+  const runPeopleSearch = useCallback(async (searchQuery: string, seq: number, analyticsSeq: number) => {
+    const startedAt = performance.now();
+    const searchProperties = await buildSearchAnalyticsProperties(searchQuery);
+    captureMingleClientEvent("mingle_connect_search_requested", {
+      search_sequence: analyticsSeq,
+      ...searchProperties,
+    });
+    let httpStatus: number | null = null;
     try {
       const params = new URLSearchParams({ q: searchQuery });
-      const response = await fetch(buildClientApiPath(`/users/search?${params.toString()}`), { cache: "no-store" });
+      const response = await fetch(buildClientApiPath(`/users/search?${params.toString()}`), {
+        cache: "no-store",
+        headers: buildConnectTrackingHeaders(),
+      });
+      httpStatus = response.status;
       if (!response.ok) throw new Error("people_search_failed");
       const payload = (await response.json()) as { users?: ConnectSearchResult[]; nextCursor?: unknown };
       const users = Array.isArray(payload.users)
         ? payload.users.filter((user) => !isSearchExcludedHandle(user.handle))
         : [];
+      const hasMore = users.length > PEOPLE_PREVIEW_LIMIT || typeof payload.nextCursor === "string";
+      captureMingleClientEvent("mingle_connect_search_completed", {
+        search_sequence: analyticsSeq,
+        success: true,
+        http_status: httpStatus,
+        result_count: users.length,
+        has_more: hasMore,
+        load_more: false,
+        duration_ms: Math.max(0, Math.round(performance.now() - startedAt)),
+        ...searchProperties,
+      });
       if (!shouldApplyResponse({
         responseSequence: seq,
         latestSequence: searchSeqRef.current,
@@ -102,10 +145,20 @@ export default function UnifiedSearch({
         activeQuery: activeQueryRef.current,
       })) return;
       setPeople(users.slice(0, PEOPLE_PREVIEW_LIMIT));
-      setHasMorePeople(users.length > PEOPLE_PREVIEW_LIMIT || typeof payload.nextCursor === "string");
+      setHasMorePeople(hasMore);
       setPeopleQuery(searchQuery);
     } catch {
       // A failed request is shown as "no results", no error/retry UI.
+      captureMingleClientEvent("mingle_connect_search_completed", {
+        search_sequence: analyticsSeq,
+        success: false,
+        http_status: httpStatus,
+        result_count: 0,
+        has_more: false,
+        load_more: false,
+        duration_ms: Math.max(0, Math.round(performance.now() - startedAt)),
+        ...searchProperties,
+      });
       if (!shouldApplyResponse({
         responseSequence: seq,
         latestSequence: searchSeqRef.current,
@@ -134,16 +187,17 @@ export default function UnifiedSearch({
     }
     const timer = window.setTimeout(() => {
       const seq = ++searchSeqRef.current;
+      const analyticsSeq = ++analyticsSeqRef.current;
       setIsSearching(true);
-      void runPeopleSearch(normalizedQuery, seq);
-      // Record the term once results are being shown for it.
-      if (canUseRecentSearches && !recordedRef.current.has(normalizedQuery)) {
+      void runPeopleSearch(normalizedQuery, seq, analyticsSeq);
+      // Record the term once results are being shown for it (posting feed only).
+      if (postingFeedEnabled && canUseRecentSearches && !recordedRef.current.has(normalizedQuery)) {
         recordedRef.current.add(normalizedQuery);
         void recordRecentSearch(normalizedQuery);
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [normalizedQuery, runPeopleSearch, canUseRecentSearches]);
+  }, [normalizedQuery, runPeopleSearch, canUseRecentSearches, postingFeedEnabled]);
 
   const retention = resolveResultsRetention({
     currentResultsQuery: peopleQuery,
@@ -151,8 +205,14 @@ export default function UnifiedSearch({
     hasCurrentResults: people.length > 0,
   });
   const showPeople = peopleQuery === normalizedQuery ? people : (retention.keepCurrentResults ? people : []);
-  const showPostGrid = Boolean(normalizedQuery);
-  const showRecent = canUseRecentSearches && !normalizedQuery && recent.length > 0;
+  const showPostGrid = postingFeedEnabled && Boolean(normalizedQuery);
+  const showRecent = postingFeedEnabled && canUseRecentSearches && !normalizedQuery && recent.length > 0;
+  // When posting feed is off, the surface is people-only (like the legacy search):
+  // show a people-only "no results" once the search settled with nothing.
+  const showPeopleOnlyNoResults = !postingFeedEnabled
+    && Boolean(normalizedQuery)
+    && peopleQuery === normalizedQuery
+    && showPeople.length === 0;
 
   const handleRecentTap = useCallback((value: string) => {
     onQueryChange(value);
@@ -211,7 +271,7 @@ export default function UnifiedSearch({
         </form>
       </div>
 
-      <div ref={scrollContainerRef as React.RefObject<HTMLDivElement>} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
         {showRecent ? (
           <RecentSearches
             copy={copy}
@@ -222,7 +282,7 @@ export default function UnifiedSearch({
           />
         ) : null}
 
-        {showPostGrid ? (
+        {normalizedQuery ? (
           <>
             {showPeople.length > 0 ? (
               <section className="border-b border-gray-100 pb-2" aria-label={copy.peopleHeading}>
@@ -246,22 +306,30 @@ export default function UnifiedSearch({
               </section>
             ) : null}
 
-            <section className="px-0.5 pt-2" aria-label={copy.postsHeading}>
-              {!postsEmpty ? (
-                <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
-              ) : null}
-              <PostGrid
-                locale={locale}
-                endpoint={feedSourceEndpoint({ kind: "search", query: normalizedQuery }, { limit: 18, displayLanguage })}
-                displayLanguage={displayLanguage}
-                scrollScope={`search-posts:${normalizedQuery}`}
-                onSelectPost={(postId) => onOpenSearchPost(normalizedQuery, postId)}
-                scrollContainerRef={scrollContainerRef}
-                onEmptyStateChange={setPostsEmpty}
-              />
-            </section>
+            {showPostGrid ? (
+              <>
+                <section className="px-0.5 pt-2" aria-label={copy.postsHeading}>
+                  {!postsEmpty ? (
+                    <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
+                  ) : null}
+                  <PostGrid
+                    locale={locale}
+                    endpoint={feedSourceEndpoint({ kind: "search", query: normalizedQuery }, { limit: 18, displayLanguage })}
+                    displayLanguage={displayLanguage}
+                    scrollScope={`search-posts:${normalizedQuery}`}
+                    onSelectPost={(postId) => onOpenSearchPost(normalizedQuery, postId)}
+                    scrollContainerRef={scrollRef}
+                    onEmptyStateChange={setPostsEmpty}
+                  />
+                </section>
 
-            {postsEmpty && showPeople.length === 0 ? (
+                {postsEmpty && showPeople.length === 0 ? (
+                  <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
+                    {copy.noResults}
+                  </p>
+                ) : null}
+              </>
+            ) : showPeopleOnlyNoResults ? (
               <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
                 {copy.noResults}
               </p>
