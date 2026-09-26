@@ -128,3 +128,25 @@ export function isValidModerationAction(value: string): value is ModerationActio
 export function isClosingStatus(status: ReportStatus): boolean {
   return status === 'resolved' || status === 'rejected'
 }
+
+export const MIN_REPORT_REPLY_LENGTH = 2
+export const MAX_REPORT_REPLY_LENGTH = 4000
+
+/**
+ * Normalise an operator reply body: trimmed and capped at 4000 chars, or null
+ * when it does not meet the 2-char minimum. Shared so the admin action and its
+ * test agree on the exact rule.
+ */
+export function normalizeReportReply(value: string): string | null {
+  const message = value.trim().slice(0, MAX_REPORT_REPLY_LENGTH)
+  return message.length >= MIN_REPORT_REPLY_LENGTH ? message : null
+}
+
+/**
+ * Posting a reply nudges an untouched (`open`) report to `in_review`, but never
+ * reopens a report an operator already closed (resolved / rejected) or one
+ * already in review.
+ */
+export function shouldAdvanceOnReply(currentStatus: string): boolean {
+  return currentStatus === 'open'
+}
