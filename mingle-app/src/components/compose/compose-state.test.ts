@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPublish,
+  appendDraftPage,
   draftImageField,
   draftImagePath,
   draftIsDirty,
+  editSaveError,
   generateClientPostId,
   hasMeaningfulText,
   MAX_POST_LENGTH,
@@ -62,6 +64,14 @@ describe('draftImageField', () => {
     })
   })
 
+  it('sends the uploaded pixel size with the key when known', () => {
+    expect(draftImageField({ kind: 'server', objectKey: 'k', width: 1536, height: 2048 })).toEqual({
+      imageObjectKey: 'k',
+      imageWidth: 1536,
+      imageHeight: 2048,
+    })
+  })
+
   it('clears the stored image when the photo is removed', () => {
     expect(draftImageField({ kind: 'none' })).toEqual({ imageObjectKey: null })
   })
@@ -72,5 +82,26 @@ describe('draftImageField', () => {
 
   it('serves a reopened draft image from the owner-only draft image route', () => {
     expect(draftImagePath('d 1')).toBe('/posts/images?draftId=d%201')
+  })
+})
+
+describe('appendDraftPage', () => {
+  const d = (id: string) => ({ id, sourceText: id, backgroundKey: null, imageObjectKey: null, updatedAt: '2026-09-26T00:00:00.000Z' })
+  it('appends the next page and skips duplicates', () => {
+    expect(appendDraftPage([d('a'), d('b')], [d('b'), d('c')]).map((x) => x.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('editSaveError', () => {
+  const res = (status: number, body: object) => new Response(JSON.stringify(body), { status })
+  it('maps a 409 to the "edited elsewhere" conflict', async () => {
+    await expect(editSaveError(res(409, { error: 'conflict' }))).resolves.toBe('conflict')
+  })
+  it('maps 403 account_restricted to the moderation notice', async () => {
+    await expect(editSaveError(res(403, { error: 'account_restricted' }))).resolves.toBe('restricted')
+  })
+  it('treats any other failure as generic', async () => {
+    await expect(editSaveError(res(403, { error: 'forbidden' }))).resolves.toBe('failed')
+    await expect(editSaveError(res(500, {}))).resolves.toBe('failed')
   })
 })

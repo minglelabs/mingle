@@ -18,7 +18,22 @@
  */
 
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB, matches POST_IMAGE_MAX_BYTES
+/**
+ * HEIC/HEIF: offered in the picker and attempted, because a browser that can
+ * decode them (Safari) re-encodes them to JPEG here like any other photo. One
+ * that cannot gets a specific "choose a JPG" message instead of a generic one.
+ */
+export const HEIC_IMAGE_TYPES = ['image/heic', 'image/heif'] as const
+/** What the file picker offers. */
+export const PICKER_IMAGE_TYPES = [...ACCEPTED_IMAGE_TYPES, ...HEIC_IMAGE_TYPES] as const
+/** Upload cap AFTER the re-encode — matches the server's POST_IMAGE_MAX_BYTES. */
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB
+/**
+ * Cap on the ORIGINAL file before decoding. The original is never uploaded —
+ * it is shrunk to 2048px first — so a large camera photo (48 MP JPEG ≈ 15-25
+ * MB) is accepted; this only keeps a pathological file from exhausting memory.
+ */
+export const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024 // 50 MB
 const MAX_EDGE = 2048
 const OUTPUT_QUALITY = 0.85
 
@@ -32,6 +47,7 @@ export type PreparedImage = {
 
 export type ImagePrepError =
   | 'unsupported'
+  | 'heic_unsupported'
   | 'too_large'
   | 'decode_failed'
   | 'encode_failed'
@@ -44,13 +60,26 @@ export class ComposeImageError extends Error {
   }
 }
 
-/** Whether a File is an accepted type and within the size cap (pre-decode check). */
+/** HEIC/HEIF by MIME type, or by extension when the picker reports no type. */
+export function isHeicFile(file: Pick<File, 'type' | 'name'>): boolean {
+  if (HEIC_IMAGE_TYPES.includes(file.type.toLowerCase() as (typeof HEIC_IMAGE_TYPES)[number])) return true
+  return !file.type && /\.(heic|heif)$/i.test(file.name)
+}
+
+/**
+ * Pre-decode check: an accepted type (or HEIC, which is attempted) within the
+ * ORIGINAL-file cap. The upload size is judged after shrinking, not here.
+ */
 export function validatePickedImage(file: File): ImagePrepError | null {
-  if (!ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
-    return 'unsupported'
-  }
-  if (file.size > MAX_IMAGE_BYTES) return 'too_large'
+  const accepted = ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])
+  if (!accepted && !isHeicFile(file)) return 'unsupported'
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) return 'too_large'
   return null
+}
+
+/** The upload limit, judged on the re-encoded file. */
+export function preparedSizeError(bytes: number): ImagePrepError | null {
+  return bytes > MAX_IMAGE_BYTES ? 'too_large' : null
 }
 
 /** Fit dimensions inside a square bound, never enlarging. */
@@ -84,7 +113,8 @@ export async function prepareComposeImage(file: File): Promise<PreparedImage> {
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
   } catch {
-    throw new ComposeImageError('decode_failed')
+    // A HEIC this browser cannot decode gets its own message.
+    throw new ComposeImageError(isHeicFile(file) ? 'heic_unsupported' : 'decode_failed')
   }
 
   const originalWidth = bitmap.width
@@ -106,6 +136,8 @@ export async function prepareComposeImage(file: File): Promise<PreparedImage> {
       canvas.toBlob(resolve, 'image/jpeg', OUTPUT_QUALITY),
     )
     if (!blob) throw new ComposeImageError('encode_failed')
+    const sizeError = preparedSizeError(blob.size)
+    if (sizeError) throw new ComposeImageError(sizeError)
 
     const outName = file.name.replace(/\.[^./\\]+$/, '') || 'photo'
     return {

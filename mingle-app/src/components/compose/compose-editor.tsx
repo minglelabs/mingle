@@ -5,7 +5,8 @@ import { ImagePlus, RefreshCw, X, Eye } from 'lucide-react'
 import type { FeedPostImageDto } from '@/lib/feed-post-dto'
 import FeedPostPreview from '@/components/feed/feed-post-preview'
 import { composeCopy, formatComposeCopy, type ComposeCopy } from '@/i18n/compose-copy'
-import { ACCEPTED_IMAGE_TYPES, ComposeImageError, prepareComposeImage, type PreparedImage } from './compose-image'
+import { ComposeImageError, PICKER_IMAGE_TYPES, prepareComposeImage, type PreparedImage } from './compose-image'
+import { composeGapCopy, type ComposeGapCopy } from './compose-gap-copy'
 import { MAX_POST_LENGTH } from './compose-state'
 import PostBackgroundSurface from './post-background-surface'
 
@@ -25,12 +26,23 @@ export type ComposeEditorProps = {
   disabled?: boolean
 }
 
-function mapImageError(reason: ComposeImageError['reason'], copy: ComposeCopy): string {
+function mapImageError(
+  reason: ComposeImageError['reason'],
+  copy: ComposeCopy,
+  gapCopy: ComposeGapCopy,
+): string {
   switch (reason) {
     case 'unsupported':
       return copy.photoUnsupported
+    case 'heic_unsupported':
+      return gapCopy.photoHeicUnsupported
     case 'too_large':
       return copy.photoTooLarge
+    case 'decode_failed':
+    case 'unavailable':
+      // The web picker cannot tell a denied photo permission apart from an
+      // unreadable file, so the failure message also points at Settings.
+      return gapCopy.photoLoadFailed
     default:
       return copy.photoUploadFailed
   }
@@ -38,6 +50,7 @@ function mapImageError(reason: ComposeImageError['reason'], copy: ComposeCopy): 
 
 export default function ComposeEditor(props: ComposeEditorProps) {
   const copy = composeCopy(props.locale)
+  const gapCopy = composeGapCopy(props.locale)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [preparing, setPreparing] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
@@ -55,7 +68,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
       props.onPickImage(prepared)
     } catch (err) {
       setImageError(
-        err instanceof ComposeImageError ? mapImageError(err.reason, copy) : copy.photoUploadFailed,
+        err instanceof ComposeImageError ? mapImageError(err.reason, copy, gapCopy) : gapCopy.photoLoadFailed,
       )
     } finally {
       setPreparing(false)
@@ -201,7 +214,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept={ACCEPTED_IMAGE_TYPES.join(',')}
+        accept={PICKER_IMAGE_TYPES.join(',')}
         className="hidden"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />

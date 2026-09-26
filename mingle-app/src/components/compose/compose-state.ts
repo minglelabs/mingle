@@ -3,13 +3,24 @@
  * Kept framework-agnostic so they can be unit-tested without React.
  */
 
+import { isAccountRestrictedResponse } from '@/lib/account-restriction'
+
 /** A draft as returned by GET/POST/PATCH /posts/drafts. */
 export type ComposeDraft = {
   id: string
   sourceText: string | null
   backgroundKey: string | null
   imageObjectKey: string | null
+  /** Stored pixel size of the draft photo (null for drafts saved before it was kept). */
+  imageWidth?: number | null
+  imageHeight?: number | null
   updatedAt: string
+}
+
+/** GET /posts/drafts: newest-updated first; `nextCursor` loads the next page. */
+export type ComposeDraftListResponse = {
+  drafts: ComposeDraft[]
+  nextCursor?: string | null
 }
 
 /** The editable state of a post being composed or edited. */
@@ -53,11 +64,25 @@ export function draftIsDirty(a: ComposeState, b: ComposeState): boolean {
  * untouched until the upload returns a key.
  */
 export function draftImageField(
-  image: { kind: 'none' } | { kind: 'server'; objectKey: string } | { kind: 'local' },
-): { imageObjectKey?: string | null } {
-  if (image.kind === 'server') return { imageObjectKey: image.objectKey }
+  image:
+    | { kind: 'none' }
+    | { kind: 'server'; objectKey: string; width?: number | null; height?: number | null }
+    | { kind: 'local' },
+): { imageObjectKey?: string | null; imageWidth?: number | null; imageHeight?: number | null } {
+  if (image.kind === 'server') {
+    // The size rides along only when known, so an old draft keeps its stored one.
+    return image.width && image.height
+      ? { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height }
+      : { imageObjectKey: image.objectKey }
+  }
   if (image.kind === 'none') return { imageObjectKey: null }
   return {}
+}
+
+/** Append a page of drafts, skipping any id already listed. */
+export function appendDraftPage(current: ComposeDraft[], page: ComposeDraft[]): ComposeDraft[] {
+  const seen = new Set(current.map((d) => d.id))
+  return [...current, ...page.filter((d) => !seen.has(d.id))]
 }
 
 /** Where the private image of a saved draft is served from (owner only). */
@@ -75,4 +100,17 @@ export function generateClientPostId(): string {
       ? crypto.randomUUID().replace(/-/g, '')
       : Math.random().toString(36).slice(2).padEnd(24, '0')
   return `cpost-${rand}`.slice(0, 128)
+}
+
+/** Why an edit save (image upload or PATCH) failed, as the edit screen shows it. */
+export type EditSaveError = 'failed' | 'conflict' | 'restricted'
+
+/**
+ * 409 = the post was edited elsewhere (reload, no retry of the stale edit);
+ * 403 account_restricted = the moderation notice; anything else = generic.
+ */
+export async function editSaveError(res: Response): Promise<EditSaveError> {
+  if (res.status === 409) return 'conflict'
+  if (await isAccountRestrictedResponse(res)) return 'restricted'
+  return 'failed'
 }

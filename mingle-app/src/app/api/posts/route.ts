@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
-import { randomBackgroundKey } from '@/lib/post-backgrounds'
+import { isKnownBackgroundKey, randomBackgroundKey } from '@/lib/post-backgrounds'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import {
   resolveDefaultPostTranslationLanguages,
@@ -11,10 +11,32 @@ import {
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { parseImageKeyInput } from '@/server/posts/post-image-keys'
+import { imageDimensionColumns, parseImageDimensions } from '@/server/posts/post-image-dimensions'
 
 export const runtime = 'nodejs'
 
 const MAX_BODY_LENGTH = 1000
+
+/**
+ * Accepted idempotency-key format. The key doubles as the post id, so the
+ * lookup and the create must apply the SAME rule: a malformed key is ignored
+ * for both (the post then gets a server id and no dedupe), never looked up
+ * under one rule and dropped under another.
+ */
+const CLIENT_POST_ID = /^[\w-]{12,128}$/
+
+function parseClientPostId(value: unknown): string | null {
+  return typeof value === 'string' && CLIENT_POST_ID.test(value) ? value : null
+}
+
+/** The background the author saw in the preview when it is a catalog key, else a random one. */
+function resolveCreateBackgroundKey(value: unknown): string {
+  return typeof value === 'string' && isKnownBackgroundKey(value) ? value : randomBackgroundKey()
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002'
+}
 
 function json(payload: object, init?: ResponseInit): NextResponse {
   return NextResponse.json(payload, {
@@ -59,28 +81,51 @@ export async function POST(request: NextRequest) {
 
   // Idempotency via clientPostId — a retry of the same request must not create
   // a second post or a second set of translations.
-  const idempotentId = typeof clientPostId === 'string' && /^[\w-]{12,128}$/.test(clientPostId)
-    ? clientPostId
-    : undefined
-  if (typeof clientPostId === 'string' && clientPostId.trim()) {
+  const postId = parseClientPostId(clientPostId) ?? undefined
+  const duplicateResponse = async () => {
+    if (!postId) return null
     const existing = await prisma.post.findFirst({
-      where: { authorId: userId, id: clientPostId },
+      where: { authorId: userId, id: postId },
       select: { id: true, backgroundKey: true, publishedAt: true },
     })
-    if (existing) {
+    return existing
+      ? json(
+          { postId: existing.id, backgroundKey: existing.backgroundKey, publishedAt: existing.publishedAt, duplicate: true },
+          { status: 200 },
+        )
+      : null
+  }
+  const earlier = await duplicateResponse()
+  if (earlier) return earlier
+
+  /**
+   * Two requests with the same clientPostId can both pass the lookup (a retry
+   * sent while the first is still settling translations). The loser's create
+   * hits the primary-key unique index; answer it with the winner's post.
+   */
+  const createOrDuplicate = async (create: () => Promise<{ id: string; backgroundKey: string | null; publishedAt: Date }>) => {
+    try {
+      const post = await create()
       return json(
-        { postId: existing.id, backgroundKey: existing.backgroundKey, publishedAt: existing.publishedAt, duplicate: true },
-        { status: 200 },
+        { postId: post.id, backgroundKey: post.backgroundKey, publishedAt: post.publishedAt },
+        { status: 201 },
       )
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err
+      const winner = await duplicateResponse()
+      if (winner) return winner
+      return json({ error: 'client_post_id_conflict' }, { status: 409 })
     }
   }
 
-  const backgroundKey = randomBackgroundKey()
-  const postId = idempotentId
+  // The preview showed this background; keep it when it is a catalog key.
+  const backgroundKey = resolveCreateBackgroundKey(input.backgroundKey)
+  const dimensions = hasImage ? parseImageDimensions(input) : null
+  const imageColumns = hasImage ? imageDimensionColumns(dimensions) : {}
 
   // ── Image-only post: nothing to translate, publish immediately. ──
   if (!hasText) {
-    const post = await prisma.post.create({
+    return createOrDuplicate(() => prisma.post.create({
       data: {
         ...(postId ? { id: postId } : {}),
         authorId: userId,
@@ -88,14 +133,11 @@ export async function POST(request: NextRequest) {
         sourceLanguage: null,
         backgroundKey,
         imageObjectKey,
+        ...imageColumns,
         visibility: 'public',
         bodyVersion: 1,
       },
-    })
-    return json(
-      { postId: post.id, backgroundKey: post.backgroundKey, publishedAt: post.publishedAt },
-      { status: 201 },
-    )
+    }))
   }
 
   // ── Text post: detect → translate (settle within budget) → publish. ──
@@ -114,7 +156,7 @@ export async function POST(request: NextRequest) {
 
   // Atomic publish: the post row and its settled translations become visible
   // together — the post does not exist (and so is invisible) until now.
-  const post = await prisma.$transaction(async (tx) => {
+  return createOrDuplicate(() => prisma.$transaction(async (tx) => {
     const created = await tx.post.create({
       data: {
         ...(postId ? { id: postId } : {}),
@@ -123,6 +165,7 @@ export async function POST(request: NextRequest) {
         sourceLanguage: detected,
         backgroundKey,
         imageObjectKey,
+        ...imageColumns,
         visibility: 'public',
         bodyVersion: 1,
       },
@@ -141,10 +184,5 @@ export async function POST(request: NextRequest) {
     }
 
     return created
-  })
-
-  return json(
-    { postId: post.id, backgroundKey: post.backgroundKey, publishedAt: post.publishedAt },
-    { status: 201 },
-  )
+  }))
 }

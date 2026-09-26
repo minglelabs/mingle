@@ -44,6 +44,13 @@ export type SerializerPostRow = {
   sourceLanguage: string | null
   backgroundKey: string | null
   imageObjectKey: string | null
+  /**
+   * Stored pixel size of the processed image (see post-image-upload). Optional
+   * so a caller whose `select` predates the columns still type-checks; missing
+   * reads as unknown (null).
+   */
+  imageWidth?: number | null
+  imageHeight?: number | null
   visibility: string
   deletedAt: Date | null
   likeCount: number
@@ -127,17 +134,28 @@ export function resolveDisplayLanguage(
  * would resolve the namespace from build-time env (no browser, no platform) and
  * could emit a namespace such as `ios/v2.0.0` that has no image route at all.
  *
- * Original pixel dimensions are not stored on the schema (no width/height
- * column), so both are null; the card keeps aspect ratio from the decoded
- * image instead. (Reported as a contract gap.)
+ * `width`/`height` are the stored pixel size of the processed image (recorded
+ * at upload, saved with the post). Rows created before the columns existed, or
+ * a pair that is not two positive integers, yield null for both so the card
+ * falls back to the decoded image's aspect ratio.
  */
-export function serializePostImage(postId: string, imageObjectKey: string | null): FeedPostImageDto | null {
+export function serializePostImage(
+  postId: string,
+  imageObjectKey: string | null,
+  imageWidth?: number | null,
+  imageHeight?: number | null,
+): FeedPostImageDto | null {
   if (!imageObjectKey) return null
+  const valid = isPositiveInt(imageWidth) && isPositiveInt(imageHeight)
   return {
     url: `/api/posts/${encodeURIComponent(postId)}/image`,
-    width: null,
-    height: null,
+    width: valid ? imageWidth : null,
+    height: valid ? imageHeight : null,
   }
+}
+
+function isPositiveInt(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +229,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     displayLanguage,
     translationState,
     backgroundKey: post.backgroundKey ?? '',
-    image: serializePostImage(post.id, post.imageObjectKey),
+    image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
     likeCount: post.likeCount,
     commentCount: post.commentCount,
     likedByMe: ctx.viewerId != null && ctx.likedPostIds.has(post.id),

@@ -68,6 +68,7 @@ vi.mock('@/server/reports/account-restriction', () => ({
   accountRestrictionGuard: mockAccountRestrictionGuard,
 }))
 
+import { isKnownBackgroundKey } from '@/lib/post-backgrounds'
 import { POST } from './route'
 
 function makeRequest(body: unknown): NextRequest {
@@ -179,7 +180,7 @@ describe('POST /api/posts', () => {
     const res = await POST(makeRequest({
       sourceText: 'Hello',
       sourceLanguage: 'en',
-      clientPostId: 'post-dup',
+      clientPostId: 'cpost-0000000000dup',
     }))
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -205,6 +206,56 @@ describe('POST /api/posts', () => {
     }))
     expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
     expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
+  })
+
+  it('stores the background key the author previewed when it is a catalog key', async () => {
+    mockPostCreate.mockResolvedValue({ id: 'post-bg', backgroundKey: 'dark-mesh', publishedAt: new Date() })
+    const res = await POST(makeRequest({ sourceText: 'Hello', backgroundKey: 'dark-mesh' }))
+    expect(res.status).toBe(201)
+    expect(mockPostCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ backgroundKey: 'dark-mesh' }),
+    })
+  })
+
+  it('replaces an unknown background key with a random catalog key', async () => {
+    mockPostCreate.mockResolvedValue({ id: 'post-bg2', backgroundKey: 'x', publishedAt: new Date() })
+    const res = await POST(makeRequest({ sourceText: 'Hello', backgroundKey: 'not-a-preset' }))
+    expect(res.status).toBe(201)
+    const stored = mockPostCreate.mock.calls[0][0].data.backgroundKey as string
+    expect(stored).not.toBe('not-a-preset')
+    expect(isKnownBackgroundKey(stored)).toBe(true)
+  })
+
+  it('answers a concurrent create with the same clientPostId (P2002) with the existing post', async () => {
+    const clientPostId = 'cpost-000000000000race'
+    mockPostFindFirst
+      .mockResolvedValueOnce(null) // lookup before create: not there yet
+      .mockResolvedValueOnce({ id: clientPostId, backgroundKey: 'warm-cream', publishedAt: new Date() })
+    mockPostCreate.mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }))
+
+    const res = await POST(makeRequest({ sourceText: 'Hello', clientPostId }))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json).toMatchObject({ postId: clientPostId, duplicate: true })
+  })
+
+  it('ignores a malformed clientPostId for both the lookup and the create', async () => {
+    mockPostCreate.mockResolvedValue({ id: 'server-id', backgroundKey: 'warm-cream', publishedAt: new Date() })
+    const res = await POST(makeRequest({ sourceText: 'Hello', clientPostId: 'short' }))
+    expect(res.status).toBe(201)
+    expect(mockPostFindFirst).not.toHaveBeenCalled()
+    expect(mockPostCreate.mock.calls[0][0].data).not.toHaveProperty('id')
+  })
+
+  it('stores the uploaded image pixel size with an image post', async () => {
+    mockPostCreate.mockResolvedValue({ id: 'post-dim', backgroundKey: 'warm-cream', publishedAt: new Date() })
+    const res = await POST(makeRequest({
+      imageObjectKey: 'post-images/user-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg',
+      imageWidth: 1536,
+      imageHeight: 2048,
+    }))
+    expect(res.status).toBe(201)
+    expect(mockPostCreate.mock.calls[0][0].data).toMatchObject({ imageWidth: 1536, imageHeight: 2048 })
   })
 
   it.each([

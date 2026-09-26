@@ -55,8 +55,24 @@ describe('POST /api/posts/[postId]/restore', () => {
     const res = await POST(req(), makeParams('p1'))
     expect(res.status).toBe(200)
     expect(mockPostUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ isDeleted: false, deletedAt: null, visibility: 'public' }) }),
+      expect.objectContaining({ data: { isDeleted: false, deletedAt: null } }),
     )
+    expect((await res.json()).visibility).toBe('public')
+  })
+
+  it('returns a post deleted from the archive to the archive, not to the public feed', async () => {
+    mockPostFindFirst.mockResolvedValue({
+      id: 'p1',
+      visibility: 'archived',
+      isDeleted: true,
+      deletedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+    const res = await POST(req(), makeParams('p1'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).visibility).toBe('archived')
+    const data = mockPostUpdate.mock.calls[0][0].data
+    expect(data).toEqual({ isDeleted: false, deletedAt: null })
+    expect(data).not.toHaveProperty('visibility')
   })
 
   it('refuses to recover a trashed post past the 30-day window', async () => {

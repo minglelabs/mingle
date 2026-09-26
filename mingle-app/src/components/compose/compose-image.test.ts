@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { scaleToFit, validatePickedImage, MAX_IMAGE_BYTES } from './compose-image'
+import {
+  isHeicFile,
+  MAX_IMAGE_BYTES,
+  MAX_SOURCE_IMAGE_BYTES,
+  preparedSizeError,
+  scaleToFit,
+  validatePickedImage,
+} from './compose-image'
 
-function fakeFile(type: string, size: number): File {
-  const f = new File(['x'], 'photo', { type })
+function fakeFile(type: string, size: number, name = 'photo'): File {
+  const f = new File(['x'], name, { type })
   Object.defineProperty(f, 'size', { value: size })
   return f
 }
@@ -37,7 +44,28 @@ describe('validatePickedImage', () => {
     expect(validatePickedImage(fakeFile('application/pdf', 1000))).toBe('unsupported')
   })
 
-  it('rejects files over the size cap', () => {
-    expect(validatePickedImage(fakeFile('image/jpeg', MAX_IMAGE_BYTES + 1))).toBe('too_large')
+  it('does not reject a large original that shrinking can bring under the upload cap', () => {
+    // A 48 MP camera JPEG (~20 MB) used to be refused before it was shrunk.
+    expect(validatePickedImage(fakeFile('image/jpeg', 20 * 1024 * 1024))).toBeNull()
+    expect(validatePickedImage(fakeFile('image/jpeg', MAX_IMAGE_BYTES + 1))).toBeNull()
+  })
+
+  it('rejects only a pathological original over the source cap', () => {
+    expect(validatePickedImage(fakeFile('image/jpeg', MAX_SOURCE_IMAGE_BYTES + 1))).toBe('too_large')
+  })
+
+  it('attempts HEIC/HEIF (by type or by extension) instead of refusing it up front', () => {
+    expect(validatePickedImage(fakeFile('image/heic', 1000))).toBeNull()
+    expect(validatePickedImage(fakeFile('image/heif', 1000))).toBeNull()
+    expect(validatePickedImage(fakeFile('', 1000, 'IMG_0001.HEIC'))).toBeNull()
+    expect(isHeicFile(fakeFile('', 1, 'a.heic'))).toBe(true)
+    expect(isHeicFile(fakeFile('image/jpeg', 1, 'a.jpg'))).toBe(false)
+  })
+})
+
+describe('preparedSizeError', () => {
+  it('judges the upload limit on the re-encoded size', () => {
+    expect(preparedSizeError(MAX_IMAGE_BYTES)).toBeNull()
+    expect(preparedSizeError(MAX_IMAGE_BYTES + 1)).toBe('too_large')
   })
 })
