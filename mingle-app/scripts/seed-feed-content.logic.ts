@@ -152,6 +152,11 @@ export type SeedCliOptions = {
   apply: boolean
   authorUserId: string | null
   createAuthor: boolean
+  /**
+   * Mark an EXISTING account as official (User.isOfficial = true) and exit
+   * without seeding posts. Follows the dry-run default: writes only with --apply.
+   */
+  markOfficial: boolean
   allowProduction: boolean
   noDb: boolean
   contentPath: string | null
@@ -163,6 +168,7 @@ export function parseSeedArgs(argv: string[]): SeedCliOptions {
     apply: false,
     authorUserId: null,
     createAuthor: false,
+    markOfficial: false,
     allowProduction: false,
     noDb: false,
     contentPath: null,
@@ -181,6 +187,7 @@ export function parseSeedArgs(argv: string[]): SeedCliOptions {
     if (arg === '--') continue
     else if (arg === '--apply') options.apply = true
     else if (arg === '--create-author') options.createAuthor = true
+    else if (arg === '--mark-official') options.markOfficial = true
     else if (arg === '--i-know-this-is-production') options.allowProduction = true
     else if (arg === '--no-db') options.noDb = true
     else if (arg === '--help' || arg === '-h') options.help = true
@@ -191,7 +198,22 @@ export function parseSeedArgs(argv: string[]): SeedCliOptions {
     } else throw new Error(`unknown argument: ${arg}`)
   }
   if (options.apply && options.noDb) throw new Error('--apply cannot be combined with --no-db')
+  if (options.markOfficial && options.noDb) throw new Error('--mark-official needs the DB; it cannot be combined with --no-db')
+  if (options.markOfficial && options.createAuthor) {
+    throw new Error('--mark-official only marks an existing account; it cannot be combined with --create-author')
+  }
   return options
+}
+
+export type MarkOfficialAction = 'not-found' | 'already-official' | 'mark'
+
+/**
+ * What `--mark-official` does to the resolved account. Only the flag changes:
+ * no posts, reactions or counters are touched (checklist 84).
+ */
+export function planMarkOfficial(author: { isOfficial: boolean } | null): MarkOfficialAction {
+  if (!author) return 'not-found'
+  return author.isOfficial ? 'already-official' : 'mark'
 }
 
 /** Host part of a postgres URL, or null when it cannot be parsed. */
