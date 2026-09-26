@@ -6,6 +6,7 @@ const {
   mockCommentFindFirst,
   mockCommentCreate,
   mockCommentUpdate,
+  mockCommentUpdateMany,
   mockCommentCount,
   mockPostFindUnique,
   mockPostUpdate,
@@ -17,6 +18,7 @@ const {
   mockCommentFindFirst: vi.fn(),
   mockCommentCreate: vi.fn(),
   mockCommentUpdate: vi.fn(),
+  mockCommentUpdateMany: vi.fn(),
   mockCommentCount: vi.fn(),
   mockPostFindUnique: vi.fn(),
   mockPostUpdate: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: mockCommentFindFirst,
       create: mockCommentCreate,
       update: mockCommentUpdate,
+      updateMany: mockCommentUpdateMany,
       count: mockCommentCount,
     },
     post: {
@@ -45,7 +48,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { createComment, updateComment, deleteComment } from './comment-service'
+import { authorizeCommentEdit, createComment, updateComment, deleteComment } from './comment-service'
 
 // Helper: make $transaction execute the callback with a fake tx
 function setupTransaction() {
@@ -56,6 +59,7 @@ function setupTransaction() {
       findFirst: mockCommentFindFirst,
         create: mockCommentCreate,
         update: mockCommentUpdate,
+        updateMany: mockCommentUpdateMany,
         count: mockCommentCount,
       },
       post: {
@@ -254,18 +258,10 @@ describe('updateComment', () => {
   })
 
   it('updates own comment and increments bodyVersion, replacing new-version translations', async () => {
-    mockCommentFindUnique.mockResolvedValue({
-      id: 'c1',
-      authorId: 'user-1',
-      isDeleted: null,
-      bodyVersion: 1,
-    })
-    mockCommentUpdate.mockResolvedValue({
-      id: 'c1',
-      bodyVersion: 2,
-      sourceText: 'edited',
-      updatedAt: new Date(),
-    })
+    mockCommentFindUnique
+      .mockResolvedValueOnce({ id: 'c1', authorId: 'user-1', isDeleted: null, bodyVersion: 1 })
+      .mockResolvedValueOnce({ id: 'c1', bodyVersion: 2, sourceText: 'edited', updatedAt: new Date() })
+    mockCommentUpdateMany.mockResolvedValue({ count: 1 })
     mockTranslationDeleteMany.mockResolvedValue({ count: 0 })
     mockTranslationCreateMany.mockResolvedValue({ count: 1 })
 
@@ -277,9 +273,9 @@ describe('updateComment', () => {
       translationRows: [{ language: 'ko', status: 'ready', text: '수정됨' }],
     })
     expect(result.bodyVersion).toBe(2)
-    // New body version = 2; update targets bodyVersion 2 explicitly
-    expect(mockCommentUpdate).toHaveBeenCalledWith({
-      where: { id: 'c1' },
+    // Conditional on the base version (optimistic lock) → new version 2
+    expect(mockCommentUpdateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: 'c1', authorId: 'user-1', bodyVersion: 1 }),
       data: expect.objectContaining({ sourceText: 'edited', sourceLanguage: 'en', bodyVersion: 2 }),
     })
     // Translations for the new version are replaced atomically
@@ -289,6 +285,59 @@ describe('updateComment', () => {
     expect(mockTranslationCreateMany).toHaveBeenCalledWith({
       data: [{ commentId: 'c1', bodyVersion: 2, language: 'ko', status: 'ready', text: '수정됨' }],
     })
+  })
+
+  it('uses expectedBodyVersion as the lock without re-reading', async () => {
+    mockCommentUpdateMany.mockResolvedValue({ count: 1 })
+    mockCommentFindUnique.mockResolvedValueOnce({ id: 'c1', bodyVersion: 6 })
+    mockTranslationDeleteMany.mockResolvedValue({ count: 0 })
+    await updateComment({
+      commentId: 'c1',
+      actorId: 'user-1',
+      sourceText: 'x',
+      sourceLanguage: 'en',
+      expectedBodyVersion: 5,
+    })
+    expect(mockCommentUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ bodyVersion: 5 }),
+        data: expect.objectContaining({ bodyVersion: 6 }),
+      }),
+    )
+    expect(mockCommentFindUnique).toHaveBeenCalledTimes(1) // only the final read
+  })
+
+  it('throws conflict when another edit committed first, writing no translations', async () => {
+    mockCommentUpdateMany.mockResolvedValue({ count: 0 })
+    mockCommentFindUnique.mockResolvedValueOnce({ authorId: 'user-1', isDeleted: null })
+    await expect(
+      updateComment({
+        commentId: 'c1',
+        actorId: 'user-1',
+        sourceText: 'late',
+        sourceLanguage: 'en',
+        expectedBodyVersion: 1,
+        translationRows: [{ language: 'ko', status: 'ready', text: '늦음' }],
+      }),
+    ).rejects.toThrow('conflict')
+    expect(mockTranslationDeleteMany).not.toHaveBeenCalled()
+    expect(mockTranslationCreateMany).not.toHaveBeenCalled()
+  })
+
+  it('reports already_deleted when the comment was deleted during the edit', async () => {
+    mockCommentUpdateMany.mockResolvedValue({ count: 0 })
+    mockCommentFindUnique.mockResolvedValueOnce({ authorId: 'user-1', isDeleted: true })
+    await expect(
+      updateComment({ commentId: 'c1', actorId: 'user-1', sourceText: 'x', sourceLanguage: 'en', expectedBodyVersion: 1 }),
+    ).rejects.toThrow('already_deleted')
+  })
+
+  it('authorizeCommentEdit returns the base version for the author only', async () => {
+    mockCommentFindUnique.mockResolvedValue({ id: 'c1', authorId: 'user-1', isDeleted: null, bodyVersion: 4 })
+    await expect(authorizeCommentEdit('c1', 'user-1')).resolves.toEqual({ bodyVersion: 4 })
+    await expect(authorizeCommentEdit('c1', 'user-2')).rejects.toThrow('forbidden')
+    mockCommentFindUnique.mockResolvedValue(null)
+    await expect(authorizeCommentEdit('c1', 'user-1')).rejects.toThrow('not_found')
   })
 
   it('rejects edit by non-author', async () => {

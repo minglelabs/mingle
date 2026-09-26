@@ -43,6 +43,12 @@ export type UpdateCommentArgs = {
    * body swap. The previous body + translations stay visible until commit.
    */
   translationRows?: Array<{ language: string; status: string; text: string | null }>
+  /**
+   * bodyVersion the edit was based on (from `authorizeCommentEdit`). The swap
+   * only applies while the comment is still at this version; otherwise
+   * `conflict`. Omitted → read the current version (no cross-request lock).
+   */
+  expectedBodyVersion?: number
 }
 
 export type DeleteCommentResult = {
@@ -185,31 +191,60 @@ export async function createComment(args: CreateCommentArgs) {
 
 // ─── Update ──────────────────────────────────────────────────────────────────
 
-export async function updateComment(args: UpdateCommentArgs) {
+/**
+ * Permission check for a comment edit, run BEFORE any language detection or
+ * translation so a non-author cannot spend LLM calls on someone else's
+ * comment. Returns the body version the edit is based on; pass it back to
+ * `updateComment` as `expectedBodyVersion`.
+ */
+export async function authorizeCommentEdit(
+  commentId: string,
+  actorId: string,
+): Promise<{ bodyVersion: number }> {
   const comment = await prisma.postComment.findUnique({
-    where: { id: args.commentId },
+    where: { id: commentId },
     select: { id: true, authorId: true, isDeleted: true, bodyVersion: true },
   })
-
   if (!comment) throw new Error('not_found')
-  if (comment.authorId !== args.actorId) throw new Error('forbidden')
+  if (comment.authorId !== actorId) throw new Error('forbidden')
   if (comment.isDeleted) throw new Error('already_deleted')
+  return { bodyVersion: comment.bodyVersion }
+}
 
-  const newBodyVersion = comment.bodyVersion + 1
+export async function updateComment(args: UpdateCommentArgs) {
+  const baseVersion =
+    args.expectedBodyVersion ?? (await authorizeCommentEdit(args.commentId, args.actorId)).bodyVersion
+  const newBodyVersion = baseVersion + 1
 
   // Atomic swap: bump the body to a new version and replace that version's
   // translations together, so the previous body + translations remain visible
-  // until commit and a late result from an earlier version cannot overwrite
-  // the new ones (they live under a different bodyVersion).
+  // until commit. The update is conditional on the base bodyVersion (optimistic
+  // lock): when two edits race, the one that commits second matches no row and
+  // fails with `conflict` instead of overwriting the newer body with its own.
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.postComment.update({
-      where: { id: args.commentId },
+    const { count } = await tx.postComment.updateMany({
+      where: {
+        id: args.commentId,
+        authorId: args.actorId,
+        bodyVersion: baseVersion,
+        OR: [{ isDeleted: null }, { isDeleted: false }],
+      },
       data: {
         sourceText: args.sourceText,
         sourceLanguage: args.sourceLanguage,
         bodyVersion: newBodyVersion,
       },
     })
+    if (count === 0) {
+      const now = await tx.postComment.findUnique({
+        where: { id: args.commentId },
+        select: { authorId: true, isDeleted: true },
+      })
+      if (!now) throw new Error('not_found')
+      if (now.authorId !== args.actorId) throw new Error('forbidden')
+      if (now.isDeleted) throw new Error('already_deleted')
+      throw new Error('conflict')
+    }
 
     await tx.postCommentTranslation.deleteMany({
       where: { commentId: args.commentId, bodyVersion: newBodyVersion },
@@ -226,6 +261,8 @@ export async function updateComment(args: UpdateCommentArgs) {
       })
     }
 
+    const updated = await tx.postComment.findUnique({ where: { id: args.commentId } })
+    if (!updated) throw new Error('not_found')
     return updated
   })
 }

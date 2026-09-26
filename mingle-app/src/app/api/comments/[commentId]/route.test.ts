@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 const {
   mockGetServerSession,
   mockUpdateComment,
+  mockAuthorizeCommentEdit,
   mockDeleteComment,
   mockDetectSourceLanguage,
   mockTranslateCommentBodySettled,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUpdateComment: vi.fn(),
+  mockAuthorizeCommentEdit: vi.fn(),
   mockDeleteComment: vi.fn(),
   mockDetectSourceLanguage: vi.fn(),
   mockTranslateCommentBodySettled: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/posts/comment-service', () => ({
   updateComment: mockUpdateComment,
+  authorizeCommentEdit: mockAuthorizeCommentEdit,
   deleteComment: mockDeleteComment,
 }))
 vi.mock('@/server/translation/detect-source-language', () => ({
@@ -50,6 +53,7 @@ vi.mock('@/server/reports/account-restriction', () => ({
 }))
 
 import { PATCH, DELETE } from './route'
+import { __resetRateLimitStore } from '@/server/rate-limit/rate-limit'
 
 function makeCtx(commentId: string) {
   return { params: Promise.resolve({ commentId }) }
@@ -66,6 +70,8 @@ function makePatchRequest(body: unknown): NextRequest {
 describe('PATCH /api/comments/{commentId}', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetRateLimitStore()
+    mockAuthorizeCommentEdit.mockResolvedValue({ bodyVersion: 3 })
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
     mockDetectSourceLanguage.mockResolvedValue('en')
     mockCommentTranslationFindMany.mockResolvedValue([])
@@ -98,6 +104,44 @@ describe('PATCH /api/comments/{commentId}', () => {
     mockUpdateComment.mockRejectedValue(new Error('forbidden'))
     const res = await PATCH(makePatchRequest({ sourceText: 'edit' }), makeCtx('c1'))
     expect(res.status).toBe(403)
+  })
+
+  it('checks permission before detecting or translating (no LLM for a non-author)', async () => {
+    mockAuthorizeCommentEdit.mockRejectedValue(new Error('forbidden'))
+    const res = await PATCH(makePatchRequest({ sourceText: 'hack' }), makeCtx('c1'))
+    expect(res.status).toBe(403)
+    expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
+    expect(mockTranslateCommentBodySettled).not.toHaveBeenCalled()
+    expect(mockCommentTranslationFindMany).not.toHaveBeenCalled()
+    expect(mockUpdateComment).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 / 410 from the permission check without translating', async () => {
+    mockAuthorizeCommentEdit.mockRejectedValueOnce(new Error('not_found'))
+    expect((await PATCH(makePatchRequest({ sourceText: 'x' }), makeCtx('c1'))).status).toBe(404)
+    mockAuthorizeCommentEdit.mockRejectedValueOnce(new Error('already_deleted'))
+    expect((await PATCH(makePatchRequest({ sourceText: 'x' }), makeCtx('c1'))).status).toBe(410)
+    expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
+  })
+
+  it('passes the authorized bodyVersion as the lock and maps a lost race to 409 conflict', async () => {
+    mockUpdateComment.mockRejectedValue(new Error('conflict'))
+    const res = await PATCH(makePatchRequest({ sourceText: 'edit' }), makeCtx('c1'))
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('conflict')
+    expect(mockUpdateComment).toHaveBeenCalledWith(expect.objectContaining({ expectedBodyVersion: 3 }))
+  })
+
+  it('rate-limits edits with update_comment (429 before any work)', async () => {
+    mockUpdateComment.mockResolvedValue({ id: 'c1', bodyVersion: 4, sourceText: 'e', updatedAt: new Date() })
+    for (let i = 0; i < 30; i++) {
+      expect((await PATCH(makePatchRequest({ sourceText: 'e' }), makeCtx('c1'))).status).toBe(200)
+    }
+    mockAuthorizeCommentEdit.mockClear()
+    const res = await PATCH(makePatchRequest({ sourceText: 'e' }), makeCtx('c1'))
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBeTruthy()
+    expect(mockAuthorizeCommentEdit).not.toHaveBeenCalled()
   })
 
   it('updates and increments bodyVersion, passing settled translations', async () => {
