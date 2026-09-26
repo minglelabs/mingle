@@ -19,7 +19,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1">
-        <FeedShell dictionary={dictionary} locale={locale} />
+        <FeedShell locale={locale} />
       </div>
       <BottomTabBar
         activeRoute="feed"

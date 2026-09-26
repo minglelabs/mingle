@@ -8,23 +8,22 @@ type FeedHeaderProps = {
   notificationsLabel: string;
   onCompose?: () => void;
   onNotifications?: () => void;
-  unreadNotificationCount?: number;
+  /** Numberless red dot from useUnreadNotifications(viewerId).hasUnread. */
+  hasUnread?: boolean;
 };
 
 /**
- * Transparent floating header for the feed screen.
- * Mirrors the conversations header dimensions:
- *   height = calc(56px + env(safe-area-inset-top, 44px))
- *   paddingTop = env(safe-area-inset-top, 44px)
- *   icon buttons: min-h-11, min-w-11, p-3, gap-1
- *   icon size: 22px, strokeWidth 2
+ * Transparent floating header for the feed screen. Mirrors the conversations
+ * header dimensions (height, safe-area padding, icon sizing) so the two tabs
+ * line up. Left: Mingle wordmark. Right: compose (memo + pencil) then the bell.
+ * Fully transparent — no bar/blur — so posts show through behind it.
  */
 export default function FeedHeader({
   composeLabel,
   notificationsLabel,
   onCompose,
   onNotifications,
-  unreadNotificationCount = 0,
+  hasUnread = false,
 }: FeedHeaderProps) {
   return (
     <header
@@ -34,13 +33,9 @@ export default function FeedHeader({
         height: "calc(56px + env(safe-area-inset-top, 44px))",
       }}
     >
-      {/* Mingle wordmark with light outline/shadow for readability */}
-      <MingleWordmark
-        className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
-      />
+      <MingleWordmark className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />
 
       <div className="flex items-center gap-1">
-        {/* Compose / write button */}
         <button
           type="button"
           onClick={onCompose}
@@ -54,7 +49,6 @@ export default function FeedHeader({
           />
         </button>
 
-        {/* Notifications */}
         <button
           type="button"
           onClick={onNotifications}
@@ -66,13 +60,11 @@ export default function FeedHeader({
             strokeWidth={2}
             className="text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
           />
-          {unreadNotificationCount > 0 ? (
+          {hasUnread ? (
             <span
-              className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white"
+              className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black/30"
               aria-hidden="true"
-            >
-              {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-            </span>
+            />
           ) : null}
         </button>
       </div>
