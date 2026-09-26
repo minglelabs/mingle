@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const {
   mockFindConversationMany,
@@ -131,6 +132,8 @@ import {
   listConversationChannelsForUser,
   markConversationChannelRead,
   materializePendingConversationInvitees,
+  refreshConversationShareSnapshot,
+  setConversationShareEnabled,
   updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelSelectedLanguages,
   updateConversationChannelStatus,
@@ -3991,6 +3994,151 @@ describe("app-conversations", () => {
       expect(state?.conversation.isMultiMember).toBe(false);
       expect(state?.conversation.title).toBe("Shared Room");
       expect(state?.conversation.otherMembers.map((m) => m.userId)).toEqual(["user-1"]);
+    });
+  });
+
+  describe("share token rotation", () => {
+    const updatedRecord = {
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Shared Room",
+      status: "active",
+      sessionKey: "session-a",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    };
+
+    function lastUpdateData(): Record<string, unknown> {
+      const call = mockUpdateConversation.mock.calls.at(-1);
+      return (call?.[0] as { data: Record<string, unknown> }).data;
+    }
+
+    beforeEach(() => {
+      mockUpdateConversation.mockResolvedValue(updatedRecord);
+      mockChannelMemberFindMany.mockResolvedValue([]);
+    });
+
+    it("mints a brand-new token when sharing is re-enabled after being turned off", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: "old-revoked-token",
+        shareEnabled: false,
+      });
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      const data = lastUpdateData();
+      expect(data.shareEnabled).toBe(true);
+      expect(typeof data.shareToken).toBe("string");
+      // The whole point: the link people already have must stop working.
+      expect(data.shareToken).not.toBe("old-revoked-token");
+      expect((data.shareToken as string).length).toBeGreaterThanOrEqual(20);
+      expect(data.sharedAt).toBeInstanceOf(Date);
+      expect(data.sharedByUserId).toBe("user-1");
+    });
+
+    it("mints a token on the very first enable", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: null,
+        shareEnabled: false,
+      });
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      expect(typeof lastUpdateData().shareToken).toBe("string");
+    });
+
+    it("keeps the live token when the toggle is switched on while already enabled", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: "live-token",
+        shareEnabled: true,
+      });
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      const data = lastUpdateData();
+      expect(data).not.toHaveProperty("shareToken");
+      expect(data.shareEnabled).toBe(true);
+      expect(data.sharedAt).toBeInstanceOf(Date);
+    });
+
+    it("only flips the flag when sharing is turned off", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: "live-token",
+        shareEnabled: true,
+      });
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: false });
+
+      expect(lastUpdateData()).toEqual({ shareEnabled: false });
+    });
+
+    it("keeps the token when only the snapshot is refreshed", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: "live-token",
+      });
+
+      await refreshConversationShareSnapshot({ conversationId: "conv-a", userId: "user-1" });
+
+      const data = lastUpdateData();
+      expect(data).not.toHaveProperty("shareToken");
+      expect(data.sharedAt).toBeInstanceOf(Date);
+    });
+
+    it("retries a token uniqueness collision instead of surfacing it", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        shareToken: null,
+        shareEnabled: false,
+      });
+      mockUpdateConversation
+        .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("duplicate share token", {
+          code: "P2002",
+          clientVersion: "test",
+        }))
+        .mockResolvedValueOnce(updatedRecord);
+
+      const summary = await setConversationShareEnabled({
+        conversationId: "conv-a",
+        userId: "user-1",
+        enabled: true,
+      });
+
+      expect(summary).not.toBeNull();
+      expect(mockUpdateConversation).toHaveBeenCalledTimes(2);
+      const [first, second] = mockUpdateConversation.mock.calls.map(
+        (call) => (call[0] as { data: { shareToken?: string } }).data.shareToken,
+      );
+      expect(first).not.toBe(second);
+    });
+
+    it("stops resolving a rotated-away token for viewing and for joining", async () => {
+      // Both lookups gate on shareToken AND shareEnabled, so a token that was
+      // rotated away (or a disabled one) matches no row at all.
+      mockFindConversationFirst.mockResolvedValue(null);
+
+      await expect(getConversationHydrationStateForShare({ shareToken: "old-revoked-token" }))
+        .resolves.toBeNull();
+      expect(mockFindConversationFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ shareToken: "old-revoked-token", shareEnabled: true }),
+      }));
+
+      await expect(joinConversationChannelViaShareToken({
+        shareToken: "old-revoked-token",
+        userId: "user-9",
+      })).resolves.toBeNull();
+      expect(mockFindConversationFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ shareToken: "old-revoked-token", shareEnabled: true }),
+      }));
     });
   });
 });

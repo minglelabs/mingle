@@ -4,6 +4,7 @@ import type { ConversationSpectateInviter } from "@/components/conversation-spec
 import { resolveConversationSpectateLocale } from "@/components/conversation-spectate-copy";
 import { isValidConversationShareToken } from "@/lib/conversation-share-link";
 import { getConversationHydrationStateForShare } from "@/lib/app-conversations";
+import { toPublicSpectateUtterances } from "@/lib/conversation-share-public-payload";
 import { getUserProfile } from "@/server/user-profile";
 import type { ConversationSpectateState } from "@/components/use-conversation-spectate";
 
@@ -59,25 +60,6 @@ export default async function ConversationSpectatePage({ params }: ConversationS
       const state = await getConversationHydrationStateForShare({ shareToken });
       if (state) {
         roomTitle = state.conversation.title;
-        initialState = {
-          roomTitle: state.conversation.title,
-          sharedByUserId: state.sharedByUserId,
-          utterances: state.utterances.map((utterance) => ({
-            id: utterance.id,
-            originalText: utterance.originalText,
-            originalLang: utterance.originalLang,
-            targetLanguages: utterance.targetLanguages,
-            translations: utterance.translations,
-            translationFinalized: utterance.translationFinalized,
-            createdAtMs: utterance.createdAtMs,
-            speaker: utterance.speaker ?? undefined,
-            speakerAvatarSeed: utterance.speakerAvatarSeed ?? undefined,
-            speakerAvatarIndex: utterance.speakerAvatarIndex ?? undefined,
-            speakerName: utterance.speakerName,
-            speakerUserId: utterance.speakerUserId,
-            speakerImage: utterance.speakerImage,
-          })),
-        };
         if (state.sharedByUserId) {
           const inviterProfile = await getUserProfile(state.sharedByUserId);
           if (inviterProfile) {
@@ -90,6 +72,30 @@ export default async function ConversationSpectatePage({ params }: ConversationS
             };
           }
         }
+        // Same serializer the public API route uses, so this server render
+        // can't hand the client a field the API would have withheld — in
+        // particular no account ids (see conversation-share-public-payload).
+        initialState = {
+          roomTitle: state.conversation.title,
+          inviter,
+          utterances: toPublicSpectateUtterances(state.utterances).map((utterance) => ({
+            id: utterance.id,
+            originalText: utterance.originalText,
+            originalLang: utterance.originalLang,
+            targetLanguages: utterance.targetLanguages,
+            translations: utterance.translations,
+            translationFinalized: utterance.translationFinalized,
+            createdAtMs: utterance.createdAtMs,
+            speaker: utterance.speaker ?? undefined,
+            speakerAvatarSeed: utterance.speakerAvatarSeed ?? undefined,
+            speakerAvatarIndex: utterance.speakerAvatarIndex ?? undefined,
+            speakerName: utterance.speakerName,
+            // The opaque alias takes ChatBubble's speaker-key slot — see the
+            // same mapping in useConversationSpectate.
+            speakerUserId: utterance.speakerAlias,
+            speakerImage: utterance.speakerImage,
+          })),
+        };
       } else {
         initialNotFound = true;
       }

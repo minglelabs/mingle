@@ -3,40 +3,38 @@ import {
   type ConversationHydrationCursor,
   getConversationHydrationStateForShare,
 } from "@/lib/app-conversations";
+import {
+  type PublicSpectateInviter,
+  toPublicSpectateSnapshot,
+} from "@/lib/conversation-share-public-payload";
+import { getUserProfile } from "@/server/user-profile";
 
 export const runtime = "nodejs";
 
-/** The intentionally small, public shape consumed by the spectate UI. */
-function toPublicSpectateResponse(state: Awaited<ReturnType<typeof getConversationHydrationStateForShare>>) {
-  if (!state) return null;
+// The sharer's public profile card, resolved here so the response can carry
+// who shared the room without carrying their account id — see
+// conversation-share-public-payload for why no internal id may leak into a
+// payload anyone with the link can read.
+async function resolvePublicInviter(
+  sharedByUserId: string | null,
+): Promise<PublicSpectateInviter | null> {
+  if (!sharedByUserId) return null;
+
+  const profile = await getUserProfile(sharedByUserId);
+  if (!profile) return null;
 
   return {
-    conversation: { title: state.conversation.title },
-    // The native overlay resolves the sharer's public profile from this ID.
-    sharedByUserId: state.sharedByUserId,
-    utterances: state.utterances.map((utterance, index) => ({
-      // The viewer only needs a React key; do not expose database message IDs.
-      id: `snapshot-message-${index}`,
-      originalText: utterance.originalText,
-      originalLang: utterance.originalLang,
-      targetLanguages: utterance.targetLanguages,
-      translations: utterance.translations,
-      translationFinalized: utterance.translationFinalized,
-      createdAtMs: utterance.createdAtMs,
-      speaker: utterance.speaker,
-      speakerAvatarSeed: utterance.speakerAvatarSeed,
-      speakerAvatarIndex: utterance.speakerAvatarIndex,
-      speakerName: utterance.speakerName,
-      // ChatBubble uses this only to distinguish a shared-room speaker from
-      // a solo-session diarized speaker. It is not a session credential.
-      speakerUserId: utterance.speakerUserId,
-      speakerImage: utterance.speakerImage,
-    })),
+    name: profile.name,
+    image: profile.image,
+    imageCropScale: profile.imageCropScale,
+    imageCropX: profile.imageCropX,
+    imageCropY: profile.imageCropY,
   };
 }
 
-// Public read-only response. The lookup requires an enabled share token and
-// the response above excludes the member-only channel identity and notices.
+// Public response: the lookup requires an enabled share token, and the
+// serializer above excludes the member-only channel identity and notices as
+// well as every internal id.
 
 function readConversationHydrationCursor(
   request: NextRequest,
@@ -77,10 +75,14 @@ export async function getConversationSpectateStateResponse(
     ...(cursor ? { before: cursor } : {}),
   });
 
-  const publicState = toPublicSpectateResponse(state);
-  if (!publicState) {
+  if (!state) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+
+  const publicState = toPublicSpectateSnapshot(
+    state,
+    await resolvePublicInviter(state.sharedByUserId),
+  );
 
   return NextResponse.json(publicState);
 }

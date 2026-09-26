@@ -2473,11 +2473,12 @@ export async function getConversationHydrationStateForUser(args: {
   });
 }
 
-// Public read-only "spectate" link lookup — gates on shareToken match AND
+// Public "spectate" link lookup — gates on shareToken match AND
 // shareEnabled being true (instead of membership), so turning sharing off
-// makes the link 404 immediately even though the token itself is kept
-// around for a possible re-enable. Caps the message query at the snapshot's
-// sharedAt cutoff instead of always showing the latest.
+// makes the link 404 immediately, and setConversationShareEnabled mints a
+// new token on the next enable so the old one stays dead. Caps the message
+// query at the snapshot's sharedAt cutoff instead of always showing the
+// latest.
 // viewerUserId is a synthetic id that never matches a real member: every
 // "viewer-facing" resolver below (resolveViewerFacingTitle,
 // resolveOtherMemberAvatars, etc.) already degrades to its
@@ -3110,15 +3111,21 @@ export async function deleteConversationChannel(args: {
 // Any member can turn the room's share link on or off — unlike
 // deleteConversationChannel this isn't owner-only, since it's a repeatable,
 // non-destructive toggle (no "who owns the switch" conflict to resolve).
-// shareToken is minted once and kept stable across disable/re-enable cycles
-// so a link people already have keeps working. Turning sharing ON always
-// jumps sharedAt to now(), taking a fresh snapshot as of that moment — this
-// is what a member expects when they flip the switch after the room has
-// moved on since it was last shared. Turning sharing OFF only flips the
-// flag; shareToken/sharedAt are left untouched so the next enable reuses
-// them. getConversationHydrationStateForShare gates on shareEnabled, so a
-// disabled link 404s immediately for spectators without needing a revoke
-// list.
+//
+// Turning sharing OFF is a REVOKE, not a pause: it flips the flag now, and
+// the next enable mints a brand-new shareToken, so every link handed out
+// before the switch went off is dead for good — it can neither be viewed
+// (getConversationHydrationStateForShare gates on shareToken + shareEnabled)
+// nor joined (joinConversationChannelViaShareToken gates on the same pair,
+// outside and inside its row lock). Without rotation, "stop sharing" would
+// only ever be temporary: re-enabling later would silently re-arm a link the
+// member believed they had taken back.
+//
+// Enabling while ALREADY enabled keeps the current token (that is the
+// idempotent "still on" case, and is also what the separate refresh action
+// does) and only jumps sharedAt to now(), taking a fresh snapshot as of that
+// moment — what a member expects when they flip the switch after the room has
+// moved on since it was last shared.
 export async function setConversationShareEnabled(args: {
   conversationId: string;
   userId: string;
@@ -3130,28 +3137,65 @@ export async function setConversationShareEnabled(args: {
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true, shareToken: true },
+    select: { id: true, shareToken: true, shareEnabled: true },
   });
 
   if (!existing) {
     return null;
   }
 
-  const data = args.enabled
-    ? {
-        shareToken: existing.shareToken || crypto.randomBytes(16).toString("base64url"),
+  if (!args.enabled) {
+    const record = await prisma.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: { shareEnabled: false },
+      select: conversationChannelSelect,
+    });
+    return serializeConversationChannel(record);
+  }
+
+  // Already-on: keep the live token, just re-stamp the snapshot.
+  if (existing.shareEnabled && existing.shareToken) {
+    const record = await prisma.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
         shareEnabled: true,
         sharedByUserId: args.userId,
         sharedAt: new Date(),
-      }
-    : { shareEnabled: false };
+      },
+      select: conversationChannelSelect,
+    });
+    return serializeConversationChannel(record);
+  }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data,
-    select: conversationChannelSelect,
-  });
-  return serializeConversationChannel(record);
+  // First enable, or re-enable after a revoke: mint a fresh token. shareToken
+  // is @unique, so retry the (astronomically unlikely) collision the same way
+  // deleteConversationChannel retries its own unique-constraint race instead
+  // of surfacing a P2002 to the caller.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await prisma.appConversationChannel.update({
+        where: { id: args.conversationId },
+        data: {
+          shareToken: crypto.randomBytes(16).toString("base64url"),
+          shareEnabled: true,
+          sharedByUserId: args.userId,
+          sharedAt: new Date(),
+        },
+        select: conversationChannelSelect,
+      });
+      return serializeConversationChannel(record);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("conversation_share_token_conflict");
 }
 
 // Any member can re-take the share snapshot without touching the on/off

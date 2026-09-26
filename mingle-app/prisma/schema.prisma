@@ -314,9 +314,9 @@ model AppConversationChannel {
   // literally zero DB footprint for the invitee before a message is sent, not
   // just zero visibility.
   pendingInviteeUserIds      String[]  @default([]) @map("pending_invitee_user_ids")
-  // Public read-only "spectate" link. shareToken is minted once and kept
-  // stable across enable/disable cycles (re-enabling reuses the same link
-  // instead of handing out a new one). shareEnabled is the on/off switch a
+  // Public "spectate" link: link holders can view the snapshot and join the
+  // room. Turning sharing off revokes the link, and the next enable mints a
+  // new shareToken, so links handed out earlier stay dead. shareEnabled is the on/off switch a
   // member flips from the room settings screen; sharedAt is the snapshot
   // cutoff, jumped forward to now() whenever sharing is turned on or
   // refreshed — see setConversationShareEnabled and
