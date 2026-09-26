@@ -227,6 +227,7 @@ const PAGE_SELECT = {
       name: true,
       image: true,
       imageObjectKey: true,
+      isOfficial: true,
     },
   },
 } as const

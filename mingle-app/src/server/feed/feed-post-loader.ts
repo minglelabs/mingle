@@ -38,7 +38,7 @@ export const feedPostRowSelect = {
   likeCount: true,
   commentCount: true,
   publishedAt: true,
-  author: { select: { id: true, handle: true, name: true, image: true } },
+  author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
 } as const
 
 export type LoadContextOptions = {

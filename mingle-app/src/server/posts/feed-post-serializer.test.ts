@@ -127,6 +127,30 @@ describe('serializeFeedPost', () => {
     expect(dto.deletedAt).toBeNull()
   })
 
+  it('sets author.isOfficial only for official accounts and omits it otherwise', () => {
+    const official = serializeFeedPost(
+      makePost({ author: { id: 'author-1', handle: 'mingle_team', name: 'Mingle', image: null, isOfficial: true } }),
+      makeCtx(),
+    )
+    expect(official.author.isOfficial).toBe(true)
+    const member = serializeFeedPost(
+      makePost({ author: { id: 'author-1', handle: 'alice', name: 'Alice', image: null, isOfficial: false } }),
+      makeCtx(),
+    )
+    expect(member.author).not.toHaveProperty('isOfficial')
+    // A select that predates the column reads as not official.
+    expect(serializeFeedPost(makePost(), makeCtx()).author).not.toHaveProperty('isOfficial')
+  })
+
+  it('does not change counts or order for an official author', () => {
+    const rows = [
+      makePost({ id: 'a', likeCount: 1, author: { id: 'o', handle: 'mingle_team', name: null, image: null, isOfficial: true } }),
+      makePost({ id: 'b', likeCount: 5 }),
+    ]
+    const dtos = serializeFeedPosts(rows, makeCtx())
+    expect(dtos.map((d) => [d.id, d.likeCount, d.commentCount])).toEqual([['a', 1, 1], ['b', 5, 1]])
+  })
+
   it('likedByMe and followingAuthor reflect the batched sets', () => {
     const dto = serializeFeedPost(
       makePost(),

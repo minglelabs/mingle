@@ -18,6 +18,7 @@ const db = vi.hoisted(() => ({
   comments: [] as Array<{ postId: string; authorId: string; createdAt: Date }>,
   likes: [] as Array<{ postId: string; createdAt: Date }>,
   postFindManyCalls: 0,
+  lastPostSelect: null as unknown,
 }))
 
 type Where = Record<string, unknown> & {
@@ -48,8 +49,9 @@ vi.mock('@/lib/prisma', () => {
   return {
     prisma: {
       post: {
-        findMany: async ({ where }: { where: Where }) => {
+        findMany: async ({ where, select }: { where: Where; select?: unknown }) => {
           db.postFindManyCalls += 1
+          db.lastPostSelect = select ?? null
           let rows = db.posts.filter((p) => !p.hidden)
           if (where.publishedAt) rows = rows.filter((p) => p.publishedAt <= where.publishedAt!.lte)
           if (where.id) rows = rows.filter((p) => where.id!.in.includes(p.id))
@@ -118,6 +120,7 @@ beforeEach(() => {
   db.comments = []
   db.likes = []
   db.postFindManyCalls = 0
+  db.lastPostSelect = null
   __resetFeedSnapshotCache()
 })
 
@@ -186,6 +189,15 @@ describe('getFeed – page stability inside one snapshot', () => {
     db.postFindManyCalls = 0
     await getFeed('viewer', page1.nextCursor, 2)
     expect(db.postFindManyCalls).toBe(1)
+  })
+})
+
+describe('getFeed – official author flag', () => {
+  it('asks for author.isOfficial on the page read so the card can badge it', async () => {
+    seedPosts(['a', 'b'])
+    await getFeed('viewer', null, 2)
+    const select = db.lastPostSelect as { author: { select: Record<string, boolean> } }
+    expect(select.author.select.isOfficial).toBe(true)
   })
 })
 
