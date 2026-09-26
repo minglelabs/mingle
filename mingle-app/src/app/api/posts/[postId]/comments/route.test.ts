@@ -124,6 +124,31 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(body.commentCount).toBe(7)
   })
 
+  it('marks official comment and reply authors, and omits the flag for everyone else', async () => {
+    mockCommentFindMany.mockResolvedValue([
+      {
+        id: 'c1', postId: 'post-1', authorId: 'u1', parentId: null,
+        replyToUserId: null, bodyVersion: 1, sourceText: 'Hello', sourceLanguage: 'en',
+        likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null, isOfficial: false },
+        replyToUser: null, _count: { replies: 1 }, translations: [],
+      },
+      {
+        id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
+        replyToUserId: 'u1', bodyVersion: 1, sourceText: 'Reply', sourceLanguage: 'en',
+        likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u2', handle: 'mingle', name: 'Mingle', image: null, isOfficial: true },
+        replyToUser: { id: 'u1', handle: 'h1', name: 'd1' }, _count: { replies: 0 }, translations: [],
+      },
+    ])
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    const body = await res.json()
+    expect(body.comments[0].author).not.toHaveProperty('isOfficial')
+    expect(body.comments[0].replies[0].author.isOfficial).toBe(true)
+    // The select asks for the flag, so the wire value comes from the DB row.
+    expect(mockCommentFindMany.mock.calls[0][0].include.author.select.isOfficial).toBe(true)
+  })
+
   it('returns threaded comments with deleted parent sourceText=null', async () => {
     mockCommentFindMany.mockResolvedValue([
       {
