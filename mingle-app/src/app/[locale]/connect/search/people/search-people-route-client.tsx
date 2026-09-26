@@ -16,10 +16,14 @@ export default function SearchPeopleRouteClient({ locale, query }: { locale: App
   const openPerson = useCallback((userId: string) => {
     router.push(`/${locale}/users/${encodeURIComponent(userId)}`);
   }, [locale, router]);
+  const goBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.replace(`/${locale}/connect`);
+  }, [locale, router]);
 
   return (
     <main className="flex h-full min-h-0 w-full flex-col bg-white text-slate-900">
-      <SearchPeopleScreen locale={locale} query={query} onOpenPerson={openPerson} />
+      <SearchPeopleScreen locale={locale} query={query} onOpenPerson={openPerson} onBack={goBack} />
     </main>
   );
 }

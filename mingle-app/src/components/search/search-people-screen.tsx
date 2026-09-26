@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import type { AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -17,14 +17,17 @@ import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSea
  * pagination and additional loading on scroll. Each row carries the same inline
  * follow toggle (and PostHog events) as the preview. Selecting a person is
  * delegated so the caller opens the existing profile and can restore afterwards.
+ * The screen has its own header (title + back); the host decides how it is
+ * presented (a sliding surface on the connect tab, or a standalone route).
  */
 export type SearchPeopleScreenProps = {
   locale: AppLocale;
   query: string;
   onOpenPerson: (userId: string) => void;
+  onBack: () => void;
 };
 
-export default function SearchPeopleScreen({ locale, query, onOpenPerson }: SearchPeopleScreenProps) {
+export default function SearchPeopleScreen({ locale, query, onOpenPerson, onBack }: SearchPeopleScreenProps) {
   const copy = searchCopy(locale);
   const { data: session } = useSession();
   const currentUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -111,7 +114,29 @@ export default function SearchPeopleScreen({ locale, query, onOpenPerson }: Sear
   }, [cursor, loadMore]);
 
   return (
-    <div ref={scrollRef} className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-white">
+    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+      <header
+        className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4"
+        style={{
+          height: "calc(54px + env(safe-area-inset-top, 44px))",
+          paddingTop: "env(safe-area-inset-top, 44px)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+          aria-label={copy.back}
+        >
+          <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+        <h1 className="min-w-0 truncate text-center text-[17px] font-bold">
+          {copy.peopleScreenTitle}
+          {normalizedQuery ? <span className="ml-1.5 font-normal text-gray-500">{normalizedQuery}</span> : null}
+        </h1>
+        <div aria-hidden="true" />
+      </header>
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-white">
       {status === "ready" && people.length === 0 ? (
         <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">{copy.noResults}</p>
       ) : (
@@ -140,6 +165,7 @@ export default function SearchPeopleScreen({ locale, query, onOpenPerson }: Sear
           {isLoadingMore ? <Loader2 size={18} className="animate-spin" aria-label={copy.loadMore} /> : <span className="h-px w-full" />}
         </div>
       ) : null}
+    </div>
     </div>
   );
 }

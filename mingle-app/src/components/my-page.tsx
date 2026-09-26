@@ -1796,6 +1796,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const sessionUserId = session?.user?.id ?? "";
   const currentAccountRef = useRef(sessionUserId);
   currentAccountRef.current = sessionUserId;
+  // The profile's real scroller; the post grid restores its offset on return.
+  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
@@ -2379,7 +2381,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
           <div className="flex items-center gap-6 pl-2">
             <div className="flex shrink-0 flex-col items-center">
@@ -2451,7 +2453,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
         {sessionUserId && postingFeedSupported !== false ? (
           <section className="border-t border-gray-100 pt-0.5">
-            <ProfilePostGrid locale={locale} authorId={sessionUserId} />
+            <ProfilePostGrid locale={locale} authorId={sessionUserId} scrollContainerRef={profileScrollRef} />
           </section>
         ) : null}
 
