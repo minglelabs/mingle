@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react'
 import { X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
@@ -10,12 +10,16 @@ import {
   DIRECTION_SLOP_PX,
   backdropOpacityForProgress,
   dragProgress,
+  effectiveVelocity,
   isDismissibleDrag,
   offsetForDrag,
   resolveDragAxis,
   scaleForProgress,
   shouldDismissOnRelease,
 } from './swipe-to-dismiss.logic'
+
+/** How long the animate-out transition runs before the fallback timer fires. */
+const DISMISS_ANIMATION_MS = 260
 
 const MIN_IMAGE_SCALE = 1
 const MAX_IMAGE_SCALE = 4
@@ -56,9 +60,9 @@ type DismissDrag = {
   velocityY: number
 }
 
-function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss, onDragProgress }: {
+function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss, onDragProgress, onSettleChange }: {
   src: string; alt: string; width: number; height: number; onError: () => void
-  onDismiss: () => void; onDragProgress: (progress: number) => void
+  onDismiss: () => void; onDragProgress: (progress: number) => void; onSettleChange: (settling: boolean) => void
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerPoint>>(new Map())
@@ -69,11 +73,41 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
   const dismissRef = useRef<DismissDrag | null>(null)
   const [dismissOffset, setDismissOffset] = useState(0)
   const [animateOut, setAnimateOut] = useState(false)
-  const [dragging, setDragging] = useState(false)
+  // `settling` is true only while a released drag animates (spring-back or
+  // animate-out); it is the ONLY time the photo gets a CSS transition, so
+  // pinch, pan and double-click zoom keep their original no-transition, 1:1
+  // response. A live finger drag also has no transition.
+  const [settling, setSettling] = useState(false)
+  const closedRef = useRef(false)
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearDismissTimer = useCallback(() => {
+    if (dismissTimerRef.current != null) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+  }, [])
+
+  // Idempotent: transitionend and the fallback timer both call this, and only
+  // the first wins, so the viewer never double-closes.
+  const finishDismiss = useCallback(() => {
+    if (closedRef.current) return
+    closedRef.current = true
+    clearDismissTimer()
+    onDismiss()
+  }, [clearDismissTimer, onDismiss])
+
+  // Clear any pending fallback timer if the viewer unmounts first.
+  useEffect(() => clearDismissTimer, [clearDismissTimer])
+
+  // Mirror the settling flag to the parent so the backdrop can fade smoothly
+  // during a settle (spring-back / animate-out) but track the finger 1:1 while
+  // dragging.
+  useEffect(() => { onSettleChange(settling) }, [settling, onSettleChange])
 
   const resetDismissDrag = useCallback(() => {
     dismissRef.current = null
-    setDragging(false)
+    setSettling(false)
     setDismissOffset(0)
     onDragProgress(0)
   }, [onDragProgress])
@@ -131,6 +165,9 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     }
     // Only base zoom may swipe-to-dismiss; when zoomed the single pointer pans.
     if (current.scale <= MIN_IMAGE_SCALE) {
+      // A fresh drag interrupts any in-flight spring-back: drop the transition
+      // so it tracks the finger 1:1 again.
+      if (settling) setSettling(false)
       dismissRef.current = {
         pointerId: event.pointerId,
         startPoint: point,
@@ -142,7 +179,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
       }
     }
     gestureRef.current = { kind: 'pan', startPoint: point, startTransform: current }
-  }, [localPoint, resetDismissDrag])
+  }, [localPoint, resetDismissDrag, settling])
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!pointersRef.current.has(event.pointerId)) return
@@ -166,7 +203,6 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
           dismissRef.current = null
         } else if (isDismissibleDrag(delta, DIRECTION_SLOP_PX)) {
           dismiss.locked = true
-          setDragging(true)
         }
       }
       if (dismissRef.current?.locked) {
@@ -227,24 +263,31 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     if (dismiss && event.pointerId === dismiss.pointerId) {
       dismissRef.current = null
       if (dismiss.locked) {
-        setDragging(false)
         const viewportHeight = viewportRef.current?.getBoundingClientRect().height ?? window.innerHeight ?? 0
+        const velocityY = effectiveVelocity(dismiss.velocityY, event.timeStamp - dismiss.lastTime)
         const dismissing = shouldDismissOnRelease({
           offsetY: dismiss.offsetY,
-          velocityY: dismiss.velocityY,
+          velocityY,
           viewportHeight,
         })
         if (dismissing) {
           if (prefersReducedMotion()) {
-            onDismiss()
+            finishDismiss()
           } else {
+            // Settle: run the animate-out transition, then close on whichever
+            // fires first — transitionend or the fallback timer (which covers
+            // an interrupted or no-op transition). finishDismiss is idempotent.
+            setSettling(true)
             setAnimateOut(true)
-            setDismissOffset(viewportRef.current?.getBoundingClientRect().height ?? window.innerHeight ?? dismiss.offsetY)
+            setDismissOffset(viewportHeight || dismiss.offsetY)
             onDragProgress(1)
+            clearDismissTimer()
+            dismissTimerRef.current = setTimeout(finishDismiss, DISMISS_ANIMATION_MS)
           }
           return
         }
-        // Spring back.
+        // Spring back with a transition.
+        setSettling(true)
         applyDismissOffset(0)
       }
     }
@@ -255,7 +298,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     } else if (!remaining.length) {
       gestureRef.current = null
     }
-  }, [applyDismissOffset, onDismiss, onDragProgress])
+  }, [applyDismissOffset, clearDismissTimer, finishDismiss, onDragProgress])
 
   const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -303,12 +346,18 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     {/* The authenticated image endpoint must bypass image optimization and retain cookies. */}
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={src} alt={alt} width={width} height={height} draggable={false} onError={onError}
-      onTransitionEnd={() => { if (animateOut) onDismiss() }}
+      onTransitionEnd={event => {
+        if (event.propertyName !== 'transform') return
+        if (animateOut) finishDismiss()
+        else setSettling(false) // spring-back finished; drop the transition again
+      }}
       className="max-h-full max-w-full object-contain will-change-transform"
       style={{
         transform: composedTransform,
         transformOrigin: 'center',
-        transition: !dragging ? 'transform 200ms ease-out' : undefined,
+        // Transition ONLY while settling a released drag; pinch, pan and
+        // double-click zoom keep the original 1:1, no-transition behavior.
+        transition: settling ? 'transform 200ms ease-out' : undefined,
       }} />
   </div>
 }
@@ -319,7 +368,8 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
   const [dragProgressValue, setDragProgressValue] = useState(0)
-  const close = useCallback(() => { setDragProgressValue(0); setExpanded(false) }, [])
+  const [backdropSettling, setBackdropSettling] = useState(false)
+  const close = useCallback(() => { setDragProgressValue(0); setBackdropSettling(false); setExpanded(false) }, [])
   const path = buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
   const src = retry ? `${path}?retry=${retry}` : path
   return <>
@@ -332,12 +382,13 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
         <img src={src} alt={copy.image} width={image.width} height={image.height} loading="lazy" draggable={false}
           className="max-h-80 w-full object-contain" onError={() => setFailed(true)} />}
     </CopyableBubbleSurface>
-    {expanded && <MessageMediaDialog title={copy.image} onClose={close} dark backdropOpacity={0.95 * backdropOpacityForProgress(dragProgressValue)}>
+    {expanded && <MessageMediaDialog title={copy.image} onClose={close} dark
+      backdropOpacity={0.95 * backdropOpacityForProgress(dragProgressValue)} backdropTransition={backdropSettling}>
       <div className="relative h-[80dvh] min-h-[240px] w-full overflow-hidden">
         <button type="button" aria-label={copy.close} onClick={close} className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15"><X size={22} /></button>
         <ZoomableConversationImage src={src} alt={copy.image} width={image.width} height={image.height}
           onError={() => { setFailed(true); setExpanded(false) }}
-          onDismiss={close} onDragProgress={setDragProgressValue} />
+          onDismiss={close} onDragProgress={setDragProgressValue} onSettleChange={setBackdropSettling} />
       </div>
     </MessageMediaDialog>}
   </>

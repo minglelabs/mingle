@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DISMISS_DISTANCE_FLOOR_PX,
+  DISMISS_DISTANCE_MAX_PX,
   DISMISS_VELOCITY_PX_PER_MS,
   DIRECTION_SLOP_PX,
   MIN_BACKDROP_OPACITY,
   MIN_DRAG_SCALE,
+  VELOCITY_STALE_MS,
   backdropOpacityForProgress,
   dragProgress,
+  effectiveVelocity,
   isDismissibleDrag,
   offsetForDrag,
   resolveDragAxis,
@@ -81,10 +83,10 @@ describe('dragProgress / opacity / scale mapping', () => {
 })
 
 describe('shouldDismissOnRelease', () => {
-  const viewportHeight = 800 // fraction threshold = 800 * 0.22 = 176, floored to 120
+  const viewportHeight = 800 // fraction threshold = 800 * 0.22 = 176, capped at 120
 
   it('dismisses when the drag passes the distance threshold', () => {
-    expect(shouldDismissOnRelease({ offsetY: DISMISS_DISTANCE_FLOOR_PX, velocityY: 0, viewportHeight })).toBe(true)
+    expect(shouldDismissOnRelease({ offsetY: DISMISS_DISTANCE_MAX_PX, velocityY: 0, viewportHeight })).toBe(true)
     expect(shouldDismissOnRelease({ offsetY: 200, velocityY: 0, viewportHeight })).toBe(true)
   })
 
@@ -102,9 +104,27 @@ describe('shouldDismissOnRelease', () => {
     expect(shouldDismissOnRelease({ offsetY: -50, velocityY: 5, viewportHeight })).toBe(false)
   })
 
-  it('uses the smaller of fractional and floor thresholds', () => {
-    // Tall viewport: fraction (0.22 * 400 = 88) is below the 120 floor, so 88 wins.
+  it('uses the smaller of the fractional threshold and the absolute cap', () => {
+    // Tall viewport: fraction (0.22 * 400 = 88) is below the 120 cap, so 88 wins.
     expect(shouldDismissOnRelease({ offsetY: 90, velocityY: 0, viewportHeight: 400 })).toBe(true)
     expect(shouldDismissOnRelease({ offsetY: 80, velocityY: 0, viewportHeight: 400 })).toBe(false)
+  })
+})
+
+describe('effectiveVelocity — stale velocity guard', () => {
+  it('keeps the velocity for a recent move', () => {
+    expect(effectiveVelocity(0.8, 0)).toBe(0.8)
+    expect(effectiveVelocity(0.8, VELOCITY_STALE_MS)).toBe(0.8)
+  })
+
+  it('drops to zero when the last move is stale (a hold, not a flick)', () => {
+    expect(effectiveVelocity(0.8, VELOCITY_STALE_MS + 1)).toBe(0)
+    expect(effectiveVelocity(2, 500)).toBe(0)
+  })
+
+  it('makes a held-then-released fast drag spring back instead of flick-dismissing', () => {
+    const velocityY = effectiveVelocity(1.5, 300) // fast earlier, but held 300ms before release
+    expect(velocityY).toBe(0)
+    expect(shouldDismissOnRelease({ offsetY: 30, velocityY, viewportHeight: 800 })).toBe(false)
   })
 })

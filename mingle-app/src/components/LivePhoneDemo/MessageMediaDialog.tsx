@@ -3,7 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 
-export default function MessageMediaDialog({ title, onClose, children, dark = false, backdropOpacity }: { title: string; onClose: () => void; children: ReactNode; dark?: boolean; backdropOpacity?: number }) {
+export default function MessageMediaDialog({ title, onClose, children, dark = false, backdropOpacity, backdropTransition = false }: { title: string; onClose: () => void; children: ReactNode; dark?: boolean; backdropOpacity?: number; backdropTransition?: boolean }) {
   const panel = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -22,7 +22,11 @@ export default function MessageMediaDialog({ title, onClose, children, dark = fa
     return () => { document.removeEventListener('keydown', keydown, true); unregister(); if (previous?.isConnected) previous.focus({ preventScroll: true }) }
   }, [onClose, title])
   return createPortal(<div className={`fixed inset-0 z-[10010] flex items-center justify-center p-4 ${backdropOpacity == null ? (dark ? 'bg-black/95' : 'bg-black/40') : ''}`}
-    style={backdropOpacity == null ? undefined : { backgroundColor: `rgba(0, 0, 0, ${Math.max(0, Math.min(1, backdropOpacity))})` }}
+    style={backdropOpacity == null ? undefined : {
+      backgroundColor: `rgba(0, 0, 0, ${Math.max(0, Math.min(1, backdropOpacity))})`,
+      // Smoothly fade only while a released drag settles; a live drag tracks 1:1.
+      transition: backdropTransition ? 'background-color 200ms ease-out' : undefined,
+    }}
     onPointerDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
       className={`flex max-h-[85dvh] w-full ${dark ? 'max-w-4xl overflow-hidden text-white' : 'max-w-sm rounded-3xl bg-white p-4 text-slate-900 overflow-y-auto'} flex-col overscroll-contain outline-none`}>

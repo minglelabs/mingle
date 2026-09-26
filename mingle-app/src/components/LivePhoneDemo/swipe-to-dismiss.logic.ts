@@ -9,11 +9,16 @@ export const DIRECTION_SLOP_PX = 8
 /** Fraction of viewport height a downward drag must pass to dismiss on release. */
 export const DISMISS_DISTANCE_FRACTION = 0.22
 
-/** Absolute distance (px) that also dismisses, for short viewports. */
-export const DISMISS_DISTANCE_FLOOR_PX = 120
+/** Upper cap (px) on the dismiss distance threshold, so tall viewers do not
+ *  require an unreachably long drag: threshold = min(22% of height, this). */
+export const DISMISS_DISTANCE_MAX_PX = 120
 
 /** Downward velocity (px/ms) that dismisses regardless of distance (a flick). */
 export const DISMISS_VELOCITY_PX_PER_MS = 0.5
+
+/** A release whose last pointermove is older than this (ms) is treated as a
+ *  hold, not a flick — its stale velocity is ignored. */
+export const VELOCITY_STALE_MS = 100
 
 /** Backdrop stays at least this opaque while dragging, so it never fully clears. */
 export const MIN_BACKDROP_OPACITY = 0.15
@@ -105,6 +110,20 @@ export function scaleForProgress(
   return 1 - clamped * (1 - minScale)
 }
 
+/**
+ * The stale velocity guard: a release whose most recent pointermove happened
+ * longer than `staleMs` before the release means the finger was held still, so
+ * the last measured velocity is meaningless and must not count as a flick.
+ * Returns the velocity to use in the dismiss decision (0 when stale).
+ */
+export function effectiveVelocity(
+  velocityY: number,
+  msSinceLastMove: number,
+  staleMs: number = VELOCITY_STALE_MS,
+): number {
+  return msSinceLastMove > staleMs ? 0 : velocityY
+}
+
 export interface DismissDecisionInput {
   /** Applied downward offset in px at release (see offsetForDrag). */
   offsetY: number
@@ -113,27 +132,28 @@ export interface DismissDecisionInput {
   /** Viewport height in px, for the fractional distance threshold. */
   viewportHeight: number
   distanceFraction?: number
-  distanceFloor?: number
+  distanceMax?: number
   velocityThreshold?: number
 }
 
 /**
  * Whether releasing the drag should dismiss the viewer. Dismiss when the drag
- * passed the distance threshold (fraction of viewport OR the absolute floor,
- * whichever is smaller) OR when it was a fast downward flick. Anything else
- * (including any upward motion) springs back.
+ * passed the distance threshold (the smaller of a fraction of the viewer height
+ * and the absolute cap) OR when it was a fast downward flick. Anything else
+ * (including any upward motion) springs back. Callers should pass a
+ * stale-guarded velocity (see effectiveVelocity) so a hold is not a flick.
  */
 export function shouldDismissOnRelease({
   offsetY,
   velocityY,
   viewportHeight,
   distanceFraction = DISMISS_DISTANCE_FRACTION,
-  distanceFloor = DISMISS_DISTANCE_FLOOR_PX,
+  distanceMax = DISMISS_DISTANCE_MAX_PX,
   velocityThreshold = DISMISS_VELOCITY_PX_PER_MS,
 }: DismissDecisionInput): boolean {
   if (offsetY <= 0) return false
   const fractionThreshold = viewportHeight > 0 ? viewportHeight * distanceFraction : Infinity
-  const distanceThreshold = Math.min(fractionThreshold, distanceFloor)
+  const distanceThreshold = Math.min(fractionThreshold, distanceMax)
   if (offsetY >= distanceThreshold) return true
   return velocityY >= velocityThreshold
 }
