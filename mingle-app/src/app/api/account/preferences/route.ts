@@ -49,6 +49,7 @@ type PreferencesBody = {
   echoAllowed?: unknown;
   bubbleDisplayMode?: unknown;
   sttSegmentationMode?: unknown;
+  inAppNotificationsEnabled?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -71,6 +72,7 @@ type UserPreferencesRecord = {
   demoEchoAllowed: boolean | null;
   demoBubbleDisplayMode: string | null;
   sttSegmentationMode: string | null;
+  inAppNotificationsEnabled: boolean | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -285,6 +287,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoEchoAllowed: true,
     demoBubbleDisplayMode: true,
     sttSegmentationMode: true,
+    inAppNotificationsEnabled: true,
   } as const;
 
   if (identity.id) {
@@ -400,6 +403,7 @@ export async function GET(request: Request) {
     bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
       ?? DEFAULT_BUBBLE_DISPLAY_MODE,
     sttSegmentationMode: normalizeSttSegmentationMode(preferences?.sttSegmentationMode),
+    inAppNotificationsEnabled: preferences?.inAppNotificationsEnabled ?? true,
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -468,6 +472,7 @@ export async function PATCH(request: Request) {
   const nextEchoAllowed = normalizeBooleanPreference(body.echoAllowed);
   const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
   const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
+  const nextInAppNotificationsEnabled = normalizeBooleanPreference(body.inAppNotificationsEnabled);
   const hasNextSttSegmentationMode = hasValidSttSegmentationMode(body);
   if (
     nextTextSizeLevel === null
@@ -481,6 +486,7 @@ export async function PATCH(request: Request) {
     && nextEchoAllowed === null
     && nextBubbleDisplayMode === null
     && !hasNextSttSegmentationMode
+    && nextInAppNotificationsEnabled === null
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -497,6 +503,7 @@ export async function PATCH(request: Request) {
     ...(nextEchoAllowed !== null ? { demoEchoAllowed: nextEchoAllowed } : {}),
     ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
     ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
+    ...(nextInAppNotificationsEnabled !== null ? { inAppNotificationsEnabled: nextInAppNotificationsEnabled } : {}),
   };
 
   if (identity.id) {

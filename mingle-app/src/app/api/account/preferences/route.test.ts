@@ -134,6 +134,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: true,
       bubbleDisplayMode: "expanded",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
@@ -166,6 +167,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: true,
       bubbleDisplayMode: "expanded",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
     expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
       expect.any(NextRequest),
@@ -235,6 +237,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: false,
       bubbleDisplayMode: "collapsed",
       sttSegmentationMode: "fin",
+      inAppNotificationsEnabled: true,
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -251,6 +254,7 @@ describe("/api/account/preferences route", () => {
         demoEchoAllowed: true,
         demoBubbleDisplayMode: true,
         sttSegmentationMode: true,
+        inAppNotificationsEnabled: true,
       },
     });
   });
@@ -303,6 +307,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: true,
       bubbleDisplayMode: "expanded",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -351,6 +356,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: true,
       bubbleDisplayMode: "expanded",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
   });
 
@@ -635,6 +641,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: false,
       bubbleDisplayMode: "collapsed",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
@@ -651,6 +658,7 @@ describe("/api/account/preferences route", () => {
         demoEchoAllowed: true,
         demoBubbleDisplayMode: true,
         sttSegmentationMode: true,
+        inAppNotificationsEnabled: true,
       },
     });
   });
@@ -720,6 +728,7 @@ describe("/api/account/preferences route", () => {
       echoAllowed: true,
       bubbleDisplayMode: "expanded",
       sttSegmentationMode: null,
+      inAppNotificationsEnabled: true,
     });
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
@@ -744,6 +753,7 @@ describe("/api/account/preferences route", () => {
         demoEchoAllowed: true,
         demoBubbleDisplayMode: true,
         sttSegmentationMode: true,
+        inAppNotificationsEnabled: true,
       },
     });
   });
