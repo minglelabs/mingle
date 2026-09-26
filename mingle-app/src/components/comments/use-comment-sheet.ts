@@ -205,7 +205,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         authorId: viewerId,
         author: viewer,
         sourceText: text,
-        sourceLanguage: viewerLanguage,
+        // The composed text is written in the viewer's OWN language, which is
+        // not the display language. Leave it null: the server detects the body
+        // language on create. The optimistic row just shows the original text.
+        sourceLanguage: null,
         parentId: target?.parentId ?? null,
         replyToUserId: target?.replyToUserId ?? null,
         replyToUser: target?.replyToUser ?? null,
@@ -218,7 +221,8 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
 
       const res = await api.createComment(postId, {
         sourceText: text,
-        sourceLanguage: viewerLanguage,
+        // Server detects the body language; do not send the display language.
+        sourceLanguage: null,
         parentId: target?.parentId ?? null,
         replyToUserId: target?.replyToUserId ?? null,
       });
@@ -247,7 +251,6 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       sending,
       viewerId,
       viewer,
-      viewerLanguage,
       replyTarget,
       postId,
       commentCount,
@@ -290,8 +293,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       if (!trimmed) return;
       const before = findNode(nodes, id);
       if (!before) return;
-      setNodes((n) => applyEdit(n, id, text, viewerLanguage));
-      const res = await api.updateComment(id, { sourceText: text, sourceLanguage: viewerLanguage });
+      // As with create, the edited text is in the viewer's own language; send
+      // null so the server re-detects the body language and re-translates.
+      setNodes((n) => applyEdit(n, id, text, null));
+      const res = await api.updateComment(id, { sourceText: text, sourceLanguage: null });
       if (!res.ok) {
         // Roll back to the previous body.
         setNodes((n) =>
@@ -303,7 +308,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         else setNotice({ kind: "error", message: res.error });
       }
     },
-    [nodes, viewerLanguage, handleRateLimited],
+    [nodes, handleRateLimited],
   );
 
   // ─── Delete ──────────────────────────────────────────────────────────────
