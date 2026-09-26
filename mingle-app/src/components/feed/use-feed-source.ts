@@ -23,6 +23,11 @@ export type FeedSourceState = {
   hasMore: boolean;
   /** The deep-linked post could not be loaded (gone / not visible). */
   deepLinkUnavailable: boolean;
+  /**
+   * Viewer route: index of `startPostId` in `posts` (list order is kept, so the
+   * viewer must open at this index). 0 for the home feed / deep link.
+   */
+  startIndex: number;
 };
 
 export type UseFeedSourceOptions = {
@@ -30,7 +35,7 @@ export type UseFeedSourceOptions = {
   displayLanguage: string | null;
   /** A deep-linked post id to place first (home feed only). */
   deepLinkPostId?: string | null;
-  /** In the viewer route, start the list at this post id. */
+  /** In the viewer route, open the list (kept in its own order) at this post id. */
   startPostId?: string | null;
   limit?: number;
 };
@@ -49,6 +54,49 @@ type UseFeedSourceReturn = FeedSourceState & {
   /** Drop every post by an author (block). */
   dropAuthor: (authorId: string) => void;
 };
+
+/** Max extra pages the viewer fetches to find the selected post in list order. */
+export const VIEWER_START_MAX_PAGES = 10;
+
+export type ViewerStartResult = {
+  posts: FeedPostDto[];
+  nextCursor: string | null;
+  /** Index of the selected post in `posts` (0 when it had to be prepended). */
+  startIndex: number;
+};
+
+/**
+ * Viewer (profile grid / search results): keep the list in its own order and
+ * start at the selected post, so swiping moves to the next / previous post in
+ * grid order. If the selected post is not on the first page, follow the cursor
+ * (bounded) until it is found. Only if it never appears (e.g. it dropped out of
+ * the list between grid and viewer) is it placed first as a fallback.
+ */
+export async function resolveViewerStart(
+  startPost: FeedPostDto,
+  firstPage: FeedPostListResponse,
+  fetchNext: (cursor: string) => Promise<FeedPostListResponse>,
+  maxExtraPages: number = VIEWER_START_MAX_PAGES,
+): Promise<ViewerStartResult> {
+  let posts = firstPage.posts;
+  let nextCursor = firstPage.nextCursor;
+  let index = posts.findIndex((p) => p.id === startPost.id);
+  let pagesFetched = 0;
+  while (index === -1 && nextCursor && pagesFetched < maxExtraPages) {
+    const page = await fetchNext(nextCursor);
+    pagesFetched += 1;
+    posts = appendPage(posts, page.posts);
+    nextCursor = page.nextCursor;
+    index = posts.findIndex((p) => p.id === startPost.id);
+  }
+  if (index === -1) {
+    return { posts: prependDeepLinkPost(startPost, posts), nextCursor, startIndex: 0 };
+  }
+  // Prefer the freshly fetched single-post payload for the selected post.
+  const copy = posts.slice();
+  copy[index] = startPost;
+  return { posts: copy, nextCursor, startIndex: index };
+}
 
 async function fetchList(endpoint: `/${string}`, signal: AbortSignal): Promise<FeedPostListResponse> {
   const res = await fetch(buildClientApiPath(endpoint), { cache: "no-store", signal });
@@ -82,7 +130,8 @@ async function fetchOne(
  * - Prefetches the next page before the reader reaches the end.
  * - De-duplicates and never reorders posts already on screen; new posts only
  *   appear on an explicit `refresh()`.
- * - A deep-linked / start post is fetched with `postEndpoint` and placed first.
+ * - A home deep-linked post is fetched with `postEndpoint` and placed first.
+ * - A viewer start post keeps the list order; `startIndex` says where to open.
  */
 export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceReturn {
   const { source, displayLanguage, deepLinkPostId, startPostId, limit = DEFAULT_PAGE_LIMIT } = options;
@@ -93,6 +142,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
   const [loadMoreError, setLoadMoreError] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [deepLinkUnavailable, setDeepLinkUnavailable] = useState(false);
+  const [startIndex, setStartIndex] = useState(0);
 
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
@@ -113,6 +163,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
       cursorRef.current = null;
       setHasMore(true);
       setDeepLinkUnavailable(false);
+      setStartIndex(0);
 
       try {
         const anchorId = deepLinkPostId ?? startPostId ?? null;
@@ -128,11 +179,26 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
         const [anchor, list] = await Promise.all([anchorPromise, listPromise]);
         if (generation !== generationRef.current) return;
 
+        if (!deepLinkPostId && startPostId && anchor) {
+          // Viewer: keep grid / search order and open at the selected post.
+          const start = await resolveViewerStart(anchor, list, (cursor) =>
+            fetchList(feedSourceEndpoint(source, { cursor, limit, displayLanguage }), controller.signal),
+          );
+          if (generation !== generationRef.current) return;
+          cursorRef.current = start.nextCursor;
+          setHasMore(Boolean(start.nextCursor));
+          setPosts(start.posts);
+          setStartIndex(start.startIndex);
+          setPhase("ready");
+          return;
+        }
+
         cursorRef.current = list.nextCursor;
         setHasMore(Boolean(list.nextCursor));
 
         if (anchorId) {
           if (anchor) {
+            // Home deep link: the linked post goes first, ahead of the ranked feed.
             setPosts(prependDeepLinkPost(anchor, list.posts));
           } else {
             // The deep-linked post is gone / not visible: show the feed anyway.
@@ -227,6 +293,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
     loadMoreError,
     hasMore,
     deepLinkUnavailable,
+    startIndex,
     loadMore,
     onVisibleIndexChange,
     refresh,
