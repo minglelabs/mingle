@@ -9,6 +9,8 @@ import {
   translatePostBodySettled,
 } from '@/server/translation/post-translation-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { parseImageKeyInput } from '@/server/posts/post-image-keys'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +27,8 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const limited = rateLimitGuard('create_post', userId)
   if (limited) return limited
@@ -33,12 +37,19 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }
   if (!body || typeof body !== 'object') return json({ error: 'invalid_body' }, { status: 400 })
 
-  const { sourceText, sourceLanguage, clientPostId, imageObjectKey } = body as Record<string, unknown>
+  const input = body as Record<string, unknown>
+  const { sourceText, sourceLanguage, clientPostId } = input
+
+  // Only a key the server issued to this user (POST /posts/images) may be
+  // attached; a foreign key (another user's, a conversation image) is refused.
+  const imageInput = parseImageKeyInput(input, userId)
+  if (imageInput.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+  const imageObjectKey = imageInput.kind === 'set' ? imageInput.key : null
 
   // Validate sourceText
   const text = typeof sourceText === 'string' ? sourceText : null
   const hasText = text !== null && text.trim().length > 0
-  const hasImage = typeof imageObjectKey === 'string' && imageObjectKey.length > 0
+  const hasImage = imageObjectKey !== null
 
   if (!hasText && !hasImage) return json({ error: 'text_or_image_required' }, { status: 400 })
   if (text !== null && text.length > MAX_BODY_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
@@ -76,7 +87,7 @@ export async function POST(request: NextRequest) {
         sourceText: null,
         sourceLanguage: null,
         backgroundKey,
-        imageObjectKey: imageObjectKey as string,
+        imageObjectKey,
         visibility: 'public',
         bodyVersion: 1,
       },
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
         sourceText: text,
         sourceLanguage: detected,
         backgroundKey,
-        imageObjectKey: hasImage ? (imageObjectKey as string) : null,
+        imageObjectKey,
         visibility: 'public',
         bodyVersion: 1,
       },

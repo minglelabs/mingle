@@ -5,7 +5,11 @@
  * happen inside Prisma transactions so they are atomic.
  */
 
+import type { Prisma } from '@prisma/client'
+
 import { prisma } from '@/lib/prisma'
+
+import { visibleCommentsWhere } from './comment-visibility'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -14,7 +18,12 @@ export type CreateCommentArgs = {
   authorId: string
   sourceText: string
   sourceLanguage: string | null
+  /** The comment being replied to (a root, or a reply that is hoisted to its root). */
   parentId?: string | null
+  /**
+   * Client-suggested `@mention` for a reply to a root. Untrusted: kept only
+   * when it names the root's author or a live reply author in the same thread.
+   */
   replyToUserId?: string | null
   /**
    * Settled default-language translations to persist atomically with the
@@ -44,24 +53,99 @@ export type DeleteCommentResult = {
 
 // ─── Create ──────────────────────────────────────────────────────────────────
 
+const LIVE_COMMENT: Prisma.PostCommentWhereInput = { OR: [{ isDeleted: null }, { isDeleted: false }] }
+
+type ResolvedReplyTarget = {
+  /** Root comment the reply attaches to (one-level rule). */
+  parentId: string
+  /** `@name` mention, derived server-side; null for a plain reply to the root. */
+  replyToUserId: string | null
+  /** Who gets the `comment_reply` notification. */
+  recipientId: string
+}
+
+/**
+ * Resolve where a reply attaches and whom it addresses, from server state only.
+ *
+ * - `parentId` must be a comment on THIS post that the author can see
+ *   (same visibility rule as the comment list: not operator-hidden, author not
+ *   hidden, no block either way). Anything else is `parent_not_found`.
+ * - Reply to a reply: attach to its root and mention the replied-to reply's
+ *   author. The replied-to reply must be live and its root visible, otherwise
+ *   it is not on screen and cannot be replied to.
+ * - Reply to a root: the client may name a mention (`replyToUserId`, the
+ *   current client shape sends the root id + the tapped comment's author). It
+ *   is accepted only when that user authored the root or a live, visible reply
+ *   in the SAME thread; any other id is dropped, never trusted.
+ * - A soft-deleted root is only a placeholder kept for its live replies, so a
+ *   reply to it must address one of those replies.
+ */
+async function resolveReplyTarget(
+  tx: Prisma.TransactionClient,
+  args: { postId: string; authorId: string; parentId: string; replyToUserId: string | null },
+): Promise<ResolvedReplyTarget> {
+  const select = { id: true, parentId: true, authorId: true, isDeleted: true } as const
+  const visibleOnPost = (id: string): Prisma.PostCommentWhereInput => ({
+    ...visibleCommentsWhere(args.postId, args.authorId),
+    id,
+  })
+
+  const target = await tx.postComment.findFirst({ where: visibleOnPost(args.parentId), select })
+  if (!target) throw new Error('parent_not_found')
+
+  if (target.parentId) {
+    // Reply to a reply: the reply itself must be live, its root visible.
+    if (target.isDeleted === true) throw new Error('parent_not_found')
+    const root = await tx.postComment.findFirst({ where: visibleOnPost(target.parentId), select })
+    if (!root || root.parentId) throw new Error('parent_not_found')
+    return { parentId: root.id, replyToUserId: target.authorId, recipientId: target.authorId }
+  }
+
+  const root = target
+  const rootIsLive = root.isDeleted !== true
+  let mention: string | null = null
+  if (args.replyToUserId) {
+    if (rootIsLive && args.replyToUserId === root.authorId) {
+      mention = root.authorId
+    } else {
+      const reply = await tx.postComment.findFirst({
+        where: {
+          ...visibleCommentsWhere(args.postId, args.authorId),
+          parentId: root.id,
+          authorId: args.replyToUserId,
+          AND: [LIVE_COMMENT],
+        },
+        select: { authorId: true },
+      })
+      mention = reply?.authorId ?? null
+    }
+  }
+
+  if (!rootIsLive && !mention) throw new Error('parent_not_found')
+  return { parentId: root.id, replyToUserId: mention, recipientId: mention ?? root.authorId }
+}
+
+/**
+ * Create a comment or reply. The returned row carries `replyRecipientId`: the
+ * user a reply notifies (null for a top-level comment, which notifies the post
+ * author).
+ */
 export async function createComment(args: CreateCommentArgs) {
   return prisma.$transaction(async (tx) => {
-    // If parentId provided, enforce 1-level nesting
-    let resolvedParentId = args.parentId ?? null
-    let resolvedReplyToUserId = args.replyToUserId ?? null
+    let resolvedParentId: string | null = null
+    let resolvedReplyToUserId: string | null = null
+    let replyRecipientId: string | null = null
 
-    if (resolvedParentId) {
-      const parent = await tx.postComment.findUnique({
-        where: { id: resolvedParentId },
-        select: { id: true, parentId: true, authorId: true },
+    if (args.parentId) {
+      const resolved = await resolveReplyTarget(tx, {
+        postId: args.postId,
+        authorId: args.authorId,
+        parentId: args.parentId,
+        replyToUserId: args.replyToUserId ?? null,
       })
-      if (!parent) throw new Error('parent_not_found')
-
-      // If replying to a reply, hoist to the root comment
-      if (parent.parentId) {
-        resolvedReplyToUserId = resolvedReplyToUserId || parent.authorId
-        resolvedParentId = parent.parentId
-      }
+      resolvedParentId = resolved.parentId
+      resolvedReplyToUserId = resolved.replyToUserId
+      replyRecipientId = resolved.recipientId
     }
 
     const comment = await tx.postComment.create({
@@ -95,7 +179,7 @@ export async function createComment(args: CreateCommentArgs) {
       data: { commentCount: { increment: 1 } },
     })
 
-    return comment
+    return { ...comment, replyRecipientId }
   })
 }
 

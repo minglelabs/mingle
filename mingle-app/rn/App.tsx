@@ -111,6 +111,10 @@ import {
   resolvePushTapPath,
   type PushTapPayload,
 } from './src/pushNavigation';
+import {
+  addNativePushOpenedListener,
+  createSerialTaskRunner,
+} from './src/pushNavigationEvents';
 import { resolveInitialWebRoute } from './src/initialWebRoute';
 import {
   buildNativeConversationShareEventScript,
@@ -1501,6 +1505,10 @@ function AppInner(): React.JSX.Element {
   const pendingConversationShareRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingConversationShareFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationShareNavigationSequenceRef = useRef(0);
+  // Pending-slot reads are triggered from several places at once (mount,
+  // retries, AppState, the iOS `opened` event). Run them one at a time so a
+  // read never races the clear of the previous one and routes the tap twice.
+  const pushTapConsumptionRunnerRef = useRef(createSerialTaskRunner());
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1758,7 +1766,7 @@ function AppInner(): React.JSX.Element {
     pendingPushTapPathRef.current = normalizedPath;
     schedulePendingPushTapFlush();
   }, [dispatchPushTapToWebView, schedulePendingPushTapFlush]);
-  const consumePendingPushTap = useCallback(async () => {
+  const consumePendingPushTap = useCallback(() => pushTapConsumptionRunnerRef.current(async () => {
     const nativePushModule = (NativeModules as {
       NativePushNotificationModule?: NativePushNotificationModule;
     }).NativePushNotificationModule;
@@ -1787,7 +1795,7 @@ function AppInner(): React.JSX.Element {
     } catch {
       // The pending tap remains for the next foreground/poll attempt.
     }
-  }, [navigateWebViewToPushTap, webLocale]);
+  }), [navigateWebViewToPushTap, webLocale]);
   const schedulePendingPushTapConsumption = useCallback(() => {
     pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     pendingPushTapRetryTimersRef.current = [];
@@ -2154,6 +2162,16 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
     };
   }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush, schedulePendingPushTapConsumption, schedulePendingPushTapFlush]);
+  useEffect(() => {
+    // A tap on a banner shown while the app is already active never changes
+    // AppState, so consume the pending slot when native reports the open.
+    const subscription = addNativePushOpenedListener(() => {
+      schedulePendingPushTapConsumption();
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [schedulePendingPushTapConsumption]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],

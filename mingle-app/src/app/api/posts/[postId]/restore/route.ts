@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,8 @@ export async function POST(_request: NextRequest, context: RouteContext) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const post = await prisma.post.findFirst({
     where: { id: postId, authorId: userId },

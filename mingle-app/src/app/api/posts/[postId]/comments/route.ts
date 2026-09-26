@@ -15,6 +15,7 @@ import {
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { resolveDisplayLanguage } from '@/server/posts/feed-post-serializer'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -202,11 +203,15 @@ export async function GET(request: NextRequest, context: Ctx) {
 /**
  * POST — create a comment or reply.
  * Body: { sourceText, sourceLanguage?, parentId?, replyToUserId? }
+ * `parentId` must be a visible comment on this post; `replyToUserId` is only a
+ * mention hint, validated against the thread by createComment.
  */
 export async function POST(request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const limited = rateLimitGuard('create_comment', userId)
   if (limited) return limited
@@ -273,23 +278,13 @@ export async function POST(request: NextRequest, context: Ctx) {
     throw err
   }
 
-  // Notify the right recipient. A reply notifies the person being replied to
-  // (the target comment's author); a top-level comment notifies the post
-  // author. createComment resolves replyToUserId for reply-to-a-reply, but a
-  // direct reply to a top-level comment may arrive without it, so fall back to
-  // the parent comment's author. Fire-and-forget AFTER the commit so the
-  // notification never fires for a comment that failed to persist.
-  const notifyParentId = comment.parentId ?? pId
+  // Notify the right recipient. A reply notifies the person being replied to,
+  // which createComment derives from server state (never the client's
+  // replyToUserId as-is); a top-level comment notifies the post author.
+  // Fire-and-forget AFTER the commit so the notification never fires for a
+  // comment that failed to persist.
+  const replyRecipientId = comment.replyRecipientId
   after(async () => {
-    let replyRecipientId = comment.replyToUserId ?? null
-    if (!replyRecipientId && notifyParentId) {
-      const parentComment = await prisma.postComment.findUnique({
-        where: { id: notifyParentId },
-        select: { authorId: true },
-      })
-      replyRecipientId = parentComment?.authorId ?? null
-    }
-
     if (replyRecipientId) {
       await createPostNotification({
         type: 'comment_reply',

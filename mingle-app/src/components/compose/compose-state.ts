@@ -47,6 +47,25 @@ export function draftIsDirty(a: ComposeState, b: ComposeState): boolean {
 }
 
 /**
+ * The draft `imageObjectKey` field for the compose image state. A server image
+ * (uploaded through POST /posts/images) is saved by key, a removed image clears
+ * it, and a local image whose upload is still pending leaves the stored value
+ * untouched until the upload returns a key.
+ */
+export function draftImageField(
+  image: { kind: 'none' } | { kind: 'server'; objectKey: string } | { kind: 'local' },
+): { imageObjectKey?: string | null } {
+  if (image.kind === 'server') return { imageObjectKey: image.objectKey }
+  if (image.kind === 'none') return { imageObjectKey: null }
+  return {}
+}
+
+/** Where the private image of a saved draft is served from (owner only). */
+export function draftImagePath(draftId: string): `/${string}` {
+  return `/posts/images?draftId=${encodeURIComponent(draftId)}`
+}
+
+/**
  * A stable, collision-resistant idempotency key for a publish attempt. Matches
  * the server's `/^[\w-]{12,128}$/` id format so it can also become the post id.
  */

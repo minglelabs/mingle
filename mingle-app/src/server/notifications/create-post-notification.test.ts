@@ -43,9 +43,36 @@ describe("createPostNotification", () => {
   });
 
   it("still delivers report_resolved to the reporter (recipient === actor)", async () => {
-    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1" });
+    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1", reportId: "r1" });
     expect(mockNotificationCreate).toHaveBeenCalledTimes(1);
+    expect(mockNotificationCreate.mock.calls[0][0].data.reportId).toBe("r1");
     expect(mockSendPush).not.toHaveBeenCalled(); // report results never push
+  });
+
+  it("notifies the reporter once for EACH closed report, not only the first", async () => {
+    // Simulate the table: findFirst matches only rows that satisfy every key.
+    const rows: Array<Record<string, unknown>> = [];
+    mockNotificationFindFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
+      rows.find((row) => Object.entries(where).every(([k, v]) => row[k] === v)) ?? null,
+    );
+    mockNotificationCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      rows.push({ ...data, id: `n${rows.length + 1}` });
+      return { id: `n${rows.length}` };
+    });
+
+    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1", reportId: "r1" });
+    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1", reportId: "r2" });
+    // The same report closing again (reopened, then closed) must not re-notify.
+    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1", reportId: "r1" });
+
+    expect(mockNotificationCreate).toHaveBeenCalledTimes(2);
+    expect(rows.map((row) => row.reportId)).toEqual(["r1", "r2"]);
+    expect(mockNotificationFindFirst.mock.calls[1][0].where).toMatchObject({ type: "report_resolved", reportId: "r2" });
+  });
+
+  it("drops a report_resolved without a report id", async () => {
+    await createPostNotification({ type: "report_resolved", recipientId: "u1", actorId: "u1", reportId: " " });
+    expect(mockNotificationCreate).not.toHaveBeenCalled();
   });
 
   it("skips creation when the recipient disabled in-app notifications", async () => {

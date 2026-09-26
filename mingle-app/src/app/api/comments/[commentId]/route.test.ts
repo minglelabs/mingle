@@ -41,6 +41,14 @@ vi.mock('@/server/posts/post-translation-repository', () => ({
   prismaTranslationDeps: {},
 }))
 
+// Posting writes are gated on the moderation restriction; unrestricted here.
+const { mockAccountRestrictionGuard } = vi.hoisted(() => ({
+  mockAccountRestrictionGuard: vi.fn<(userId: string) => Promise<Response | null>>(async () => null),
+}))
+vi.mock('@/server/reports/account-restriction', () => ({
+  accountRestrictionGuard: mockAccountRestrictionGuard,
+}))
+
 import { PATCH, DELETE } from './route'
 
 function makeCtx(commentId: string) {
@@ -72,6 +80,13 @@ describe('PATCH /api/comments/{commentId}', () => {
     mockGetServerSession.mockResolvedValue(null)
     const res = await PATCH(makePatchRequest({ sourceText: 'x' }), makeCtx('c1'))
     expect(res.status).toBe(401)
+  })
+
+  it('returns 403 account_restricted for a restricted account', async () => {
+    mockAccountRestrictionGuard.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'account_restricted' }), { status: 403 }))
+    const res = await PATCH(makePatchRequest({ sourceText: 'edit' }), makeCtx('c1'))
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toBe('account_restricted')
   })
 
   it('returns 400 when text is empty', async () => {

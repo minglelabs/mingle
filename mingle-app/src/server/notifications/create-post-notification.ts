@@ -20,9 +20,10 @@ export type PostNotificationInput =
   /**
    * Sent to the reporter when an operator closes their report. There is no
    * human actor: pass the reporter as `actorId`. Self-suppression does not
-   * apply to this type, and the renderer ignores the actor.
+   * apply to this type, and the renderer ignores the actor. `reportId` scopes
+   * the dedupe: each closed report notifies its reporter exactly once.
    */
-  | { type: 'report_resolved'; recipientId: string; actorId: string }
+  | { type: 'report_resolved'; recipientId: string; actorId: string; reportId: string }
 
 /** Only comment and reply notifications are delivered as a push. */
 const PUSH_TYPES: ReadonlySet<PostNotificationInput['type']> = new Set([
@@ -38,7 +39,9 @@ function normalizeId(value: string | null | undefined): string {
  * The scope of "the same notification from the same person". A like on a post
  * is one row per (recipient, actor, post); a comment/reply/comment-like is one
  * row per (recipient, actor, comment). This is what makes unliking and liking
- * again reuse the existing row instead of creating a new one.
+ * again reuse the existing row instead of creating a new one. A report result
+ * is one row per report, so a reporter hears about every report they filed —
+ * and only once per report, even if an operator reopens and closes it again.
  */
 function dedupeWhere(input: PostNotificationInput): {
   recipientId: string
@@ -46,6 +49,7 @@ function dedupeWhere(input: PostNotificationInput): {
   type: PostNotificationInput['type']
   postId?: string | null
   commentId?: string | null
+  reportId?: string
 } {
   const base = {
     recipientId: input.recipientId,
@@ -60,7 +64,7 @@ function dedupeWhere(input: PostNotificationInput): {
     case 'comment_like':
       return { ...base, commentId: input.commentId }
     case 'report_resolved':
-      return base
+      return { ...base, reportId: normalizeId(input.reportId) }
   }
 }
 
@@ -69,6 +73,9 @@ export async function createPostNotification(input: PostNotificationInput): Prom
     const recipientId = normalizeId(input.recipientId)
     const actorId = normalizeId(input.actorId)
     if (!recipientId || !actorId) return
+    const reportId = input.type === 'report_resolved' ? normalizeId(input.reportId) : null
+    // Without its report a result row could not be deduped per report.
+    if (input.type === 'report_resolved' && !reportId) return
 
     // Never notify someone about their own action. The one exception is a
     // report result, which is always delivered to the reporter (who is passed
@@ -102,6 +109,7 @@ export async function createPostNotification(input: PostNotificationInput): Prom
         type: input.type,
         postId,
         commentId,
+        reportId,
       },
       select: { id: true },
     })
