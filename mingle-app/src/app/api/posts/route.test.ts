@@ -41,6 +41,9 @@ vi.mock('@/server/translation/post-translation-service', () => ({
   translatePostBodySettled: mockTranslatePostBodySettled,
   resolveDefaultPostTranslationLanguages: mockResolveDefaultPostTranslationLanguages,
 }))
+// The in-memory limiter is covered by its own tests; here it would cap the
+// suite at 10 creates per user per minute.
+vi.mock('@/server/rate-limit/rate-limit', () => ({ rateLimitGuard: () => null }))
 vi.mock('@/server/posts/post-translation-repository', () => ({
   prismaTranslationDeps: {},
 }))
@@ -177,10 +180,26 @@ describe('POST /api/posts', () => {
     })
 
     const res = await POST(makeRequest({
-      imageObjectKey: 'post-images/abc.jpg',
+      imageObjectKey: 'post-images/user-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg',
     }))
     expect(res.status).toBe(201)
+    expect(mockPostCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ imageObjectKey: 'post-images/user-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg' }),
+    }))
     expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
     expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a private conversation image', 'conversation-images/conv-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg'],
+    ['another user\'s post image', 'post-images/user-2/0f8fad5b-d9cb-469f-a165-70867728950e.jpg'],
+    ['an unscoped legacy key', 'post-images/0f8fad5b-d9cb-469f-a165-70867728950e.jpg'],
+    ['a traversal attempt', 'post-images/user-1/../../conversation-images/x.jpg'],
+  ])('rejects %s as the image key and creates nothing', async (_label, key) => {
+    const res = await POST(makeRequest({ sourceText: 'hi', imageObjectKey: key }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('invalid_image_key')
+    expect(mockPostCreate).not.toHaveBeenCalled()
+    expect(mockTransaction).not.toHaveBeenCalled()
   })
 })

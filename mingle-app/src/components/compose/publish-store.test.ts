@@ -21,6 +21,7 @@ function baseInput(overrides: Partial<PublishInput> = {}): PublishInput {
     clientPostId: 'client-post-000000000001',
     sourceText: 'hello world',
     sourceLanguage: 'en',
+    imageObjectKey: null,
     imageFile: null,
     imageWidth: null,
     imageHeight: null,
@@ -60,11 +61,11 @@ describe('publish store', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uploads the image after creating the post', async () => {
+  it('uploads the image first and creates the post with its server-issued key', async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(jsonResponse({ imageObjectKey: 'post-images/u1/k.jpg', width: 100, height: 80 }, 201))
       .mockResolvedValueOnce(jsonResponse({ postId: 'post-2' }, 201))
-      .mockResolvedValueOnce(jsonResponse({ imageObjectKey: 'k', width: 100, height: 80 }, 201))
     vi.stubGlobal('fetch', fetchMock)
 
     startPublish(baseInput({ imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }), imageWidth: 100, imageHeight: 80 }))
@@ -72,8 +73,37 @@ describe('publish store', () => {
 
     expect(getPublishJob()?.status).toBe('success')
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    const imageUrl = fetchMock.mock.calls[1][0] as string
-    expect(imageUrl).toContain('/posts/post-2/image')
+    expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/posts\/images$/)
+    const createBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
+    expect(createBody.imageObjectKey).toBe('post-images/u1/k.jpg')
+  })
+
+  it('publishes an image-only post: the create carries the image key, not an empty body', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ imageObjectKey: 'post-images/u1/only.jpg', width: 10, height: 10 }, 201))
+      .mockResolvedValueOnce(jsonResponse({ postId: 'post-img' }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    startPublish(baseInput({ sourceText: null, imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) }))
+    await flush()
+
+    expect(getPublishJob()?.status).toBe('success')
+    const createBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
+    expect(createBody).toMatchObject({ sourceText: null, imageObjectKey: 'post-images/u1/only.jpg' })
+  })
+
+  it('reuses an already-uploaded draft image key without re-uploading', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ postId: 'post-d' }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    startPublish(baseInput({ sourceText: null, imageObjectKey: 'post-images/u1/draft.jpg' }))
+    await flush()
+
+    expect(getPublishJob()?.status).toBe('success')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const createBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(createBody.imageObjectKey).toBe('post-images/u1/draft.jpg')
   })
 
   it('marks failed and surfaces retryAfterSeconds on a 429 create', async () => {
@@ -91,10 +121,9 @@ describe('publish store', () => {
     expect(job?.postId).toBeNull()
   })
 
-  it('keeps the created postId when the image step fails so retry only re-uploads', async () => {
+  it('does not create the post when the image upload fails', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ postId: 'post-3' }, 201))
       .mockResolvedValueOnce(jsonResponse({ error: 'image_upload_failed' }, 503))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -103,7 +132,28 @@ describe('publish store', () => {
 
     const job = getPublishJob()
     expect(job?.status).toBe('failed')
-    expect(job?.postId).toBe('post-3')
+    expect(job?.postId).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the uploaded key when the create fails so a retry does not re-upload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ imageObjectKey: 'post-images/u1/r.jpg' }, 201))
+      .mockResolvedValueOnce(jsonResponse({ error: 'request_failed' }, 500))
+      .mockResolvedValueOnce(jsonResponse({ postId: 'post-3' }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    startPublish(baseInput({ imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) }))
+    await flush()
+    expect(getPublishJob()?.status).toBe('failed')
+    expect(getPublishJob()?.input.imageObjectKey).toBe('post-images/u1/r.jpg')
+
+    retryPublish()
+    await flush()
+    expect(getPublishJob()?.status).toBe('success')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock.mock.calls[2][0] as string).toMatch(/\/posts$/)
   })
 
   it('ignores a second startPublish while one is running (no duplicate create)', async () => {

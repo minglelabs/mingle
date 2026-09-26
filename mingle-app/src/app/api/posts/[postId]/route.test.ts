@@ -209,7 +209,7 @@ describe('PATCH /api/posts/[postId]', () => {
     const req = new NextRequest('http://localhost/api/posts/p1', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageObjectKey: 'img/new' }),
+      body: JSON.stringify({ imageObjectKey: 'post-images/user-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg' }),
     })
     const res = await PATCH(req, makeParams('p1'))
     expect(res.status).toBe(200)
@@ -218,6 +218,20 @@ describe('PATCH /api/posts/[postId]', () => {
     expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
     expect(mockTranslatePostBodySettled).not.toHaveBeenCalled()
     expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
+  })
+
+  it('rejects a foreign (conversation) image key without updating the post', async () => {
+    mockPostFindFirst.mockResolvedValue({
+      id: 'p1', authorId: 'user-1', bodyVersion: 3, imageObjectKey: null, sourceText: 'keep',
+    })
+    const req = new NextRequest('http://localhost/api/posts/p1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageObjectKey: 'conversation-images/conv-1/secret.jpg' }),
+    })
+    const res = await PATCH(req, makeParams('p1'))
+    expect(res.status).toBe(400)
+    expect(mockPostUpdate).not.toHaveBeenCalled()
   })
 })
 

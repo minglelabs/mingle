@@ -9,10 +9,12 @@ import { buildClientApiPath } from '@/lib/api-contract'
  * navigates the feed, opens a conversation, etc. A single job is tracked at a
  * time (the app publishes one post at a time); the banner subscribes to it.
  *
- * Pipeline: POST /posts (create, with a reused clientPostId for idempotency) →
- * optionally POST /posts/{id}/image (multipart) → success. On failure the body,
- * image and clientPostId are kept so a retry re-uses the same id and the server
- * dedupes instead of creating a second post.
+ * Pipeline: optionally POST /posts/images (multipart; returns a server-issued
+ * key) → POST /posts (create with that key and a reused clientPostId for
+ * idempotency) → success. The image is uploaded first so an image-only post's
+ * create already carries its image. On failure the body, the uploaded key and
+ * clientPostId are kept so a retry re-uses them and the server dedupes instead
+ * of creating a second post.
  */
 
 export type PublishJobStatus = 'publishing' | 'success' | 'failed'
@@ -22,7 +24,9 @@ export type PublishInput = {
   clientPostId: string
   sourceText: string | null
   sourceLanguage: string | null
-  /** Prepared JPEG (EXIF-stripped) to upload after the post is created. */
+  /** Server-issued key of an image already uploaded (draft photo, prior attempt). */
+  imageObjectKey: string | null
+  /** Prepared JPEG (EXIF-stripped) to upload when there is no key yet. */
   imageFile: File | null
   imageWidth: number | null
   imageHeight: number | null
@@ -106,8 +110,38 @@ async function readError(response: Response): Promise<ApiError> {
   return { status: response.status, error, retryAfterSeconds }
 }
 
-async function runPipeline(input: PublishInput) {
-  // Step 1 — create the post (idempotent via clientPostId).
+async function runPipeline(initialInput: PublishInput) {
+  let input = initialInput
+
+  const fail = (err: ApiError, postId: string | null) => {
+    setJob({
+      status: 'failed',
+      input,
+      postId,
+      retryAfterSeconds: err.status === 429 ? err.retryAfterSeconds : null,
+      running: false,
+    })
+  }
+
+  // Step 1 — upload a new image first, so the create request carries its key.
+  if (!input.imageObjectKey && input.imageFile) {
+    const form = new FormData()
+    form.append('file', input.imageFile)
+    const imageRes = await fetch(buildClientApiPath('/posts/images'), {
+      method: 'POST',
+      cache: 'no-store',
+      body: form,
+    })
+    if (!imageRes.ok) {
+      fail(await readError(imageRes), null)
+      return
+    }
+    const uploaded = (await imageRes.json()) as { imageObjectKey: string }
+    // Keep the key on the job so a retry skips the re-upload.
+    input = { ...input, imageObjectKey: uploaded.imageObjectKey, imageFile: null }
+  }
+
+  // Step 2 — create the post (idempotent via clientPostId).
   const createRes = await fetch(buildClientApiPath('/posts'), {
     method: 'POST',
     cache: 'no-store',
@@ -116,50 +150,17 @@ async function runPipeline(input: PublishInput) {
       clientPostId: input.clientPostId,
       sourceText: input.sourceText,
       sourceLanguage: input.sourceLanguage,
+      ...(input.imageObjectKey ? { imageObjectKey: input.imageObjectKey } : {}),
     }),
   })
 
   if (!createRes.ok) {
-    const err = await readError(createRes)
-    setJob({
-      status: 'failed',
-      input,
-      postId: null,
-      retryAfterSeconds: err.status === 429 ? err.retryAfterSeconds : null,
-      running: false,
-    })
+    fail(await readError(createRes), null)
     return
   }
 
   const created = (await createRes.json()) as { postId: string }
   const postId = created.postId
-
-  // Step 2 — attach the image if there is one.
-  if (input.imageFile) {
-    const form = new FormData()
-    form.append('file', input.imageFile)
-    if (input.imageWidth != null) form.append('width', String(input.imageWidth))
-    if (input.imageHeight != null) form.append('height', String(input.imageHeight))
-
-    const imageRes = await fetch(buildClientApiPath(`/posts/${encodeURIComponent(postId)}/image`), {
-      method: 'POST',
-      cache: 'no-store',
-      body: form,
-    })
-    if (!imageRes.ok) {
-      const err = await readError(imageRes)
-      // The post exists; keep the same clientPostId so a retry dedupes on create
-      // and only re-runs the image step.
-      setJob({
-        status: 'failed',
-        input,
-        postId,
-        retryAfterSeconds: err.status === 429 ? err.retryAfterSeconds : null,
-        running: false,
-      })
-      return
-    }
-  }
 
   // Step 3 — success. Delete only this draft, keep it on failure (handled above).
   if (input.draftId) void deleteDraftQuietly(input.draftId)
@@ -176,7 +177,7 @@ export function startPublish(input: PublishInput) {
   if (current?.running) return
   setJob({ status: 'publishing', input, postId: current?.postId ?? null, retryAfterSeconds: null, running: true })
   void runPipeline(input).catch(() => {
-    setJob({ status: 'failed', input, postId: current?.postId ?? null, retryAfterSeconds: null, running: false })
+    setJob({ status: 'failed', input: current?.input ?? input, postId: current?.postId ?? null, retryAfterSeconds: null, running: false })
   })
 }
 

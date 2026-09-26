@@ -24,6 +24,7 @@ export type RateLimitAction =
   | 'create_comment'
   | 'like_post'
   | 'like_comment'
+  | 'upload_post_image'
 
 type WindowRule = { limit: number; windowMs: number }
 
@@ -36,6 +37,7 @@ const RULES: Record<RateLimitAction, WindowRule> = {
   create_comment: { limit: 30, windowMs: 60_000 },
   like_post: { limit: 60, windowMs: 60_000 },
   like_comment: { limit: 60, windowMs: 60_000 },
+  upload_post_image: { limit: 20, windowMs: 60_000 },
 }
 
 export type RateLimitDecision =
