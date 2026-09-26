@@ -3995,6 +3995,48 @@ describe("app-conversations", () => {
       expect(state?.conversation.title).toBe("Shared Room");
       expect(state?.conversation.otherMembers.map((m) => m.userId)).toEqual(["user-1"]);
     });
+
+    it("freezes the public title at the sharedTitle snapshot even after the room is renamed", async () => {
+      // The room's LIVE title was changed to "Renamed After Sharing" after the
+      // link was shared, but the snapshot froze "Original Shared Title". The
+      // public spectate view must show the frozen title, never the live one.
+      mockFindConversationFirst.mockResolvedValue({
+        ...sharedRecord,
+        title: "Renamed After Sharing",
+        sharedTitle: "Original Shared Title",
+      });
+      mockChannelMemberFindMany.mockResolvedValue(channelMembers);
+      mockChannelInviteFindMany.mockResolvedValue([]);
+      mockUserFindMany.mockResolvedValue([]);
+      mockAppMessageCount.mockResolvedValue(1);
+      mockAppMessageFindMany.mockResolvedValue([preCutoffMessage]);
+      mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 5 });
+
+      const state = await getConversationHydrationStateForShare({ shareToken: "token-snapshot" });
+
+      expect(state?.conversation.title).toBe("Original Shared Title");
+      expect(state?.conversation.title).not.toBe("Renamed After Sharing");
+    });
+
+    it("falls back to the live title for a legacy row shared before the snapshot column existed", async () => {
+      // sharedTitle is null (row predates the migration backfill): the public
+      // view degrades to the stored title rather than showing nothing.
+      mockFindConversationFirst.mockResolvedValue({
+        ...sharedRecord,
+        title: "Legacy Title",
+        sharedTitle: null,
+      });
+      mockChannelMemberFindMany.mockResolvedValue(channelMembers);
+      mockChannelInviteFindMany.mockResolvedValue([]);
+      mockUserFindMany.mockResolvedValue([]);
+      mockAppMessageCount.mockResolvedValue(1);
+      mockAppMessageFindMany.mockResolvedValue([preCutoffMessage]);
+      mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 5 });
+
+      const state = await getConversationHydrationStateForShare({ shareToken: "token-snapshot" });
+
+      expect(state?.conversation.title).toBe("Legacy Title");
+    });
   });
 
   describe("share token rotation", () => {
@@ -4021,6 +4063,9 @@ describe("app-conversations", () => {
     beforeEach(() => {
       mockUpdateConversation.mockResolvedValue(updatedRecord);
       mockChannelMemberFindMany.mockResolvedValue([]);
+      // The locked share transaction reads the room's current title via
+      // findUniqueOrThrow to stamp the frozen sharedTitle snapshot.
+      mockFindConversationUniqueOrThrow.mockResolvedValue({ title: "Shared Room" });
     });
 
     it("mints a brand-new token when sharing is re-enabled after being turned off", async () => {
@@ -4040,6 +4085,8 @@ describe("app-conversations", () => {
       expect((data.shareToken as string).length).toBeGreaterThanOrEqual(20);
       expect(data.sharedAt).toBeInstanceOf(Date);
       expect(data.sharedByUserId).toBe("user-1");
+      // The title snapshot is frozen at (re-)enable time.
+      expect(data.sharedTitle).toBe("Shared Room");
     });
 
     it("mints a token on the very first enable", async () => {
@@ -4069,7 +4116,34 @@ describe("app-conversations", () => {
       expect(data.sharedAt).toBeInstanceOf(Date);
     });
 
-    it("only flips the flag when sharing is turned off", async () => {
+    it("mints a new token off the LOCKED read even if an earlier read said enabled (never re-arms the old token)", async () => {
+      // Simulate the race: the unlocked authorize read still sees the room
+      // enabled with its old token, but by the time we hold the row lock a
+      // concurrent disable has committed (shareEnabled=false, shareToken=null).
+      // The decision MUST follow the locked read and mint a fresh token, never
+      // re-arm "old-token".
+      mockFindConversationFirst.mockImplementation((args: { select?: Record<string, unknown> }) => {
+        // The locked re-read is the one that selects shareToken/shareEnabled.
+        if (args?.select && "shareToken" in args.select && "shareEnabled" in args.select) {
+          return Promise.resolve({ id: "conv-a", shareToken: null, shareEnabled: false });
+        }
+        // The unlocked authorize read (select { id }) — pretend it still saw
+        // the stale "enabled with old token" state.
+        return Promise.resolve({ id: "conv-a", shareToken: "old-token", shareEnabled: true });
+      });
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      const data = lastUpdateData();
+      expect(typeof data.shareToken).toBe("string");
+      expect(data.shareToken).not.toBe("old-token");
+      expect((data.shareToken as string).length).toBeGreaterThanOrEqual(20);
+      expect(data.shareEnabled).toBe(true);
+      // A FOR UPDATE row lock is taken before the locked re-read.
+      expect(mockQueryRaw).toHaveBeenCalled();
+    });
+
+    it("revokes the token (nulls it) when sharing is turned off", async () => {
       mockFindConversationFirst.mockResolvedValue({
         id: "conv-a",
         shareToken: "live-token",
@@ -4078,13 +4152,17 @@ describe("app-conversations", () => {
 
       await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: false });
 
-      expect(lastUpdateData()).toEqual({ shareEnabled: false });
+      // Disable is a REVOKE: the token must be dropped so an old link can
+      // never be silently re-armed by a later enable.
+      expect(lastUpdateData()).toEqual({ shareEnabled: false, shareToken: null });
     });
 
     it("keeps the token when only the snapshot is refreshed", async () => {
       mockFindConversationFirst.mockResolvedValue({
         id: "conv-a",
+        title: "Shared Room",
         shareToken: "live-token",
+        shareEnabled: true,
       });
 
       await refreshConversationShareSnapshot({ conversationId: "conv-a", userId: "user-1" });
@@ -4092,6 +4170,25 @@ describe("app-conversations", () => {
       const data = lastUpdateData();
       expect(data).not.toHaveProperty("shareToken");
       expect(data.sharedAt).toBeInstanceOf(Date);
+      // Refresh re-freezes the title snapshot to the current title.
+      expect(data.sharedTitle).toBe("Shared Room");
+    });
+
+    it("does not re-stamp a refresh when the locked read shows sharing was revoked", async () => {
+      // Authorize read sees the room; the locked re-read shows a concurrent
+      // disable already nulled the token and flipped the flag off. Refresh
+      // must NOT silently re-stamp it back into a shareable state.
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-a",
+        title: "Shared Room",
+        shareToken: null,
+        shareEnabled: false,
+      });
+
+      const result = await refreshConversationShareSnapshot({ conversationId: "conv-a", userId: "user-1" });
+
+      expect(result).toBeNull();
+      expect(mockUpdateConversation).not.toHaveBeenCalled();
     });
 
     it("retries a token uniqueness collision instead of surfacing it", async () => {
