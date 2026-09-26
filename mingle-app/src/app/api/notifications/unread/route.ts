@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { visibleNotificationWhere } from "@/server/notifications/notification-visibility";
 
 export const runtime = "nodejs";
 
@@ -20,21 +21,21 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
 }
 
 /**
- * The cheapest possible unread check: does the viewer have ANY unread
- * notification? Drives the numberless red dot on the feed and conversation-list
- * bell. A signed-out caller gets 401 and the client treats that as "no dot".
+ * Does the viewer have ANY unread notification the list would show? Drives the
+ * numberless red dot on the feed and conversation-list bell. A signed-out
+ * caller gets 401 and the client treats that as "no dot".
  *
- * This deliberately does not run the list's visibility filters (block / hidden
- * post): those are relation joins, and an at-most-one-row existence probe must
- * stay index-only. A notification the list would withhold is still cleared by
- * the mark-all-read on entry, so the dot self-corrects on the next open.
+ * It uses the list's own visibility rule (`visibleNotificationWhere`): a
+ * notification the list withholds (blocked actor, hidden/deleted post) must
+ * never light a dot the viewer can never clear by looking. It is still an
+ * at-most-one-row probe on the (recipientId, readAt, createdAt) index.
  */
 export async function GET() {
   const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!viewerId) return responseJson({ error: "unauthorized" }, { status: 401 });
 
   const unread = await prisma.userNotification.findFirst({
-    where: { recipientId: viewerId, readAt: null },
+    where: { ...visibleNotificationWhere(viewerId), readAt: null },
     select: { id: true },
   });
 

@@ -6,6 +6,8 @@ import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notificat
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import SlideSurface from "@/components/slide-surface";
+import { mergeNotificationPage } from "@/components/notifications/notification-pages";
+import { markNotificationsReadOptimistically } from "@/components/notifications/notification-read-sync";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -50,6 +52,18 @@ type NotificationRecord = {
   actors: NotificationActor[];
   actorCount: number;
   isFollowing: boolean;
+  /** Server grouping key; entries sharing a grouped key merge across pages. */
+  groupKey: string;
+  actorIds: string[];
+};
+
+const PAGE_SIZE = 50;
+
+type NotificationPage = {
+  items: NotificationRecord[];
+  unreadCount: number;
+  nextCursor: string | null;
+  readBefore: string | null;
 };
 
 const NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
@@ -101,6 +115,10 @@ function parseNotification(value: unknown): NotificationRecord | null {
     ? value.actorCount
     : Math.max(actors.length, 1);
 
+  const actorIds = Array.isArray(value.actorIds)
+    ? value.actorIds.filter((id): id is string => typeof id === "string")
+    : actors.map((actor) => actor.id);
+
   return {
     id: value.id,
     type: value.type as NotificationType,
@@ -111,6 +129,21 @@ function parseNotification(value: unknown): NotificationRecord | null {
     actors,
     actorCount,
     isFollowing: value.isFollowing === true,
+    groupKey: nullableString(value.groupKey) ?? `row:${value.id}`,
+    actorIds,
+  };
+}
+
+function parsePage(payload: unknown): NotificationPage {
+  const record = isRecord(payload) ? payload : {};
+  const items = Array.isArray(record.notifications)
+    ? record.notifications.map(parseNotification).filter((item): item is NotificationRecord => item !== null)
+    : [];
+  return {
+    items,
+    unreadCount: typeof record.unreadCount === "number" ? record.unreadCount : items.filter((item) => !item.isRead).length,
+    nextCursor: nullableString(record.nextCursor),
+    readBefore: nullableString(record.readBefore),
   };
 }
 
@@ -180,7 +213,12 @@ export default function NotificationPanel({
   const [loadError, setLoadError] = useState(false);
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
   const [followErrorId, setFollowErrorId] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
     const normalizedCount = Math.max(0, Math.floor(nextCount));
@@ -188,19 +226,26 @@ export default function NotificationPanel({
     onUnreadCountChange?.(normalizedCount);
   }, [onUnreadCountChange]);
 
-  const markAllNotificationsAsRead = useCallback(() => {
+  // Entry marks everything that had arrived by the list read (`readBefore`) as
+  // read — always, even when no unread row is visible (hidden/blocked rows
+  // must not keep the dot on). The dot clears at once, before the PATCH ends.
+  const markAllNotificationsAsRead = useCallback((readBefore: string | null) => {
     setNotifications((current) => current.map((notification) => (
       notification.isRead ? notification : { ...notification, isRead: true }
     )));
     updateUnreadCount(0);
-    void fetch(buildClientApiPath("/notifications"), {
+    const request = fetch(buildClientApiPath("/notifications"), {
       method: "PATCH",
-    }).catch(() => {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(readBefore ? { before: readBefore } : {}),
+    });
+    markNotificationsReadOptimistically(request);
+    void request.catch(() => {
       // The panel remains optimistically read; the next refresh reconciles it.
     });
   }, [updateUnreadCount]);
 
-  const loadNotifications = useCallback(async (): Promise<{ unreadCount: number } | null> => {
+  const loadNotifications = useCallback(async (): Promise<{ unreadCount: number; readBefore: string | null } | null> => {
     if (!enabled || !open) return null;
 
     abortControllerRef.current?.abort();
@@ -210,27 +255,20 @@ export default function NotificationPanel({
     setLoadError(false);
 
     try {
-      const response = await fetch(buildClientApiPath("/notifications?limit=50"), {
+      loadMoreAbortRef.current?.abort();
+      const response = await fetch(buildClientApiPath(`/notifications?limit=${PAGE_SIZE}`), {
         cache: "no-store",
         signal: controller.signal,
       });
       if (!response.ok) throw new Error("notifications_load_failed");
 
-      const payload = await response.json() as {
-        notifications?: unknown;
-        unreadCount?: unknown;
-      };
-      const nextNotifications = Array.isArray(payload.notifications)
-        ? payload.notifications.map(parseNotification).filter((item): item is NotificationRecord => item !== null)
-        : [];
-      const nextUnreadCount = typeof payload.unreadCount === "number"
-        ? payload.unreadCount
-        : nextNotifications.filter((item) => !item.isRead).length;
-
-      setNotifications(nextNotifications);
-      updateUnreadCount(nextUnreadCount);
+      const page = parsePage(await response.json());
+      setNotifications(page.items);
+      setNextCursor(page.nextCursor);
+      setLoadMoreError(false);
+      updateUnreadCount(page.unreadCount);
       setHasLoaded(true);
-      return { unreadCount: nextUnreadCount };
+      return { unreadCount: page.unreadCount, readBefore: page.readBefore };
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return null;
       setLoadError(true);
@@ -253,17 +291,58 @@ export default function NotificationPanel({
     }
 
     let isCurrent = true;
-    // Entry marks everything that had arrived by now as read, regardless of
-    // whether the row is ever scrolled into view or tapped.
+    // Entry marks everything that had arrived by the list read as read,
+    // regardless of whether the row is ever scrolled into view or tapped, and
+    // even when no visible row is unread.
     void loadNotifications().then((result) => {
-      if (!isCurrent || !result || result.unreadCount <= 0) return;
-      markAllNotificationsAsRead();
+      if (!isCurrent || !result) return;
+      markAllNotificationsAsRead(result.readBefore);
     });
     return () => {
       isCurrent = false;
       abortControllerRef.current?.abort();
     };
   }, [enabled, loadNotifications, markAllNotificationsAsRead, open, updateUnreadCount]);
+
+  // ── Load more (older pages via nextCursor) ─────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (!enabled || !open || !nextCursor || isLoadingMore) return;
+    const controller = new AbortController();
+    loadMoreAbortRef.current = controller;
+    setIsLoadingMore(true);
+    setLoadMoreError(false);
+    try {
+      const query = new URLSearchParams({ limit: String(PAGE_SIZE), cursor: nextCursor }).toString();
+      const response = await fetch(buildClientApiPath(`/notifications?${query}`), {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("notifications_load_more_failed");
+      const page = parsePage(await response.json());
+      // Older pages were all created before the entry snapshot, which entry
+      // already marked read.
+      const olderItems = page.items.map((item) => (item.isRead ? item : { ...item, isRead: true }));
+      setNotifications((current) => mergeNotificationPage(current, olderItems));
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setLoadMoreError(true);
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
+    }
+  }, [enabled, isLoadingMore, nextCursor, open]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !nextCursor || loadMoreError || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+    }, { rootMargin: "200px 0px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, loadMoreError, nextCursor]);
+
+  useEffect(() => () => loadMoreAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (!open) return;
@@ -378,7 +457,7 @@ export default function NotificationPanel({
               <NotificationAvatar image={primaryActor?.image ?? null} label={actorName} />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[14px] leading-5 text-slate-900">
+              <span className="line-clamp-2 block break-words text-[14px] leading-5 text-slate-900">
                 {isReportResolved ? (
                   <span>{message}</span>
                 ) : (
@@ -492,6 +571,21 @@ export default function NotificationPanel({
                       </h2>
                       <ul>{readNotifications.map(renderNotification)}</ul>
                     </section>
+                  ) : null}
+                  {nextCursor ? (
+                    <div ref={loadMoreSentinelRef} className="flex justify-center px-4 py-4">
+                      {isLoadingMore ? (
+                        <Loader2 size={20} className="animate-spin text-gray-400" aria-label={copy.loadingLabel} />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void loadMore()}
+                          className="min-h-11 rounded-full bg-gray-100 px-4 text-[13px] font-semibold text-slate-700 active:bg-gray-200"
+                        >
+                          {loadMoreError ? copy.retryAction : copy.loadMoreAction}
+                        </button>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               )}
