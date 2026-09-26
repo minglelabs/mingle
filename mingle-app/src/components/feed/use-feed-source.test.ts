@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FeedPostDto, FeedPostListResponse } from "@/lib/feed-post-dto";
-import { resolveViewerStart } from "./use-feed-source";
+import { FEED_REQUEST_TIMEOUT_MS, fetchWithTimeout, resolveViewerStart, shouldPrefetch } from "./use-feed-source";
 
 function post(id: string, extra: Partial<FeedPostDto> = {}): FeedPostDto {
   return {
@@ -73,6 +73,7 @@ describe("resolveViewerStart (profile grid / search viewer)", () => {
 
     expect(ids(result.posts)).toEqual(["x", "p1", "p2", "p3"]);
     expect(result.startIndex).toBe(0);
+    expect(result.prepended).toBe(true);
     expect(result.nextCursor).toBeNull();
   });
 
@@ -85,5 +86,69 @@ describe("resolveViewerStart (profile grid / search viewer)", () => {
     expect(result.startIndex).toBe(0);
     expect(ids(result.posts)).toEqual(["x", "p1", "q1", "q2", "q3"]);
     expect(result.nextCursor).toBe("c4");
+  });
+});
+
+describe("fetchWithTimeout", () => {
+  it("aborts a stalled request after the timeout and rejects with feed_timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let seenSignal: AbortSignal | undefined;
+      const stalled = vi.fn((_input: string, init?: RequestInit) => {
+        seenSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      }) as unknown as typeof fetch;
+      const pending = fetchWithTimeout("/x", {}, FEED_REQUEST_TIMEOUT_MS, stalled);
+      const assertion = expect(pending).rejects.toThrow("feed_timeout");
+      await vi.advanceTimersByTimeAsync(FEED_REQUEST_TIMEOUT_MS - 1);
+      expect(seenSignal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await assertion;
+      expect(seenSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses a ~15s budget", () => {
+    expect(FEED_REQUEST_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it("passes a fast response through and does not fire the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const res = new Response("{}", { status: 200 });
+      const fast = vi.fn(async () => res) as unknown as typeof fetch;
+      await expect(fetchWithTimeout("/x", {}, 1000, fast)).resolves.toBe(res);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("propagates a caller abort as that abort, not a timeout", async () => {
+    const outer = new AbortController();
+    const hang = vi.fn((_input: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("caller_abort")));
+      }),
+    ) as unknown as typeof fetch;
+    const pending = fetchWithTimeout("/x", { signal: outer.signal }, 60_000, hang);
+    outer.abort();
+    await expect(pending).rejects.toThrow("caller_abort");
+  });
+});
+
+describe("shouldPrefetch", () => {
+  it("requests more near the end, including on the load-more status card", () => {
+    expect(shouldPrefetch(10, 0)).toBe(false);
+    expect(shouldPrefetch(10, 7)).toBe(true);
+    // Parked on the last card or the status card after it.
+    expect(shouldPrefetch(10, 9)).toBe(true);
+    expect(shouldPrefetch(10, 10)).toBe(true);
+    // A tiny feed is always "near the end".
+    expect(shouldPrefetch(2, 0)).toBe(true);
   });
 });

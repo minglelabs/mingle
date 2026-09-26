@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import {
+  appendCyclePage,
   appendPage,
+  createCycleList,
+  patchCycleList,
+  patchCycleListByAuthor,
+  removeAuthorFromCycleList,
+  removeFromCycleList,
+  replaceInCycleList,
+  type FeedCycleList,
   patchPost,
   prependDeepLinkPost,
   removeByAuthor,
@@ -112,5 +120,96 @@ describe("resolveDisplayText", () => {
       const p = { sourceText: "orig", displayText: null, translationState: state };
       expect(resolveDisplayText(p, true)).toBe("orig");
     }
+  });
+});
+
+describe("cycle list (feed wrap-around)", () => {
+  const keys = (list: FeedCycleList) => list.entries.map((e) => e.key);
+  const entryIds = (list: FeedCycleList) => list.entries.map((e) => e.post.id);
+
+  it("appends pages within one cycle", () => {
+    let list = createCycleList([post("1"), post("2")]);
+    list = appendCyclePage(list, [post("3"), post("4")]);
+    expect(entryIds(list)).toEqual(["1", "2", "3", "4"]);
+    expect(list.cycle).toBe(0);
+  });
+
+  it("treats a page with an already-shown id as a new cycle and appends it (not dropped)", () => {
+    let list = createCycleList([post("1"), post("2"), post("3")]);
+    // Server reached the end and restarted from offset 0 with a fresh snapshot.
+    list = appendCyclePage(list, [post("2"), post("1")]);
+    expect(entryIds(list)).toEqual(["1", "2", "3", "2", "1"]);
+    expect(list.cycle).toBe(1);
+    // A later page of the new cycle continues it.
+    list = appendCyclePage(list, [post("3")]);
+    expect(entryIds(list)).toEqual(["1", "2", "3", "2", "1", "3"]);
+    expect(list.cycle).toBe(1);
+  });
+
+  it("the old appendPage dropped the whole wrapped page (regression guard)", () => {
+    expect(appendPage([post("1"), post("2")], [post("1"), post("2")]).map((p) => p.id)).toEqual(["1", "2"]);
+  });
+
+  it("gives every appearance a unique key", () => {
+    let list = createCycleList([post("1")]);
+    list = appendCyclePage(list, [post("1")]);
+    list = appendCyclePage(list, [post("1")]);
+    expect(entryIds(list)).toEqual(["1", "1", "1"]);
+    expect(new Set(keys(list)).size).toBe(3);
+  });
+
+  it("drops the pinned deep-link post silently when the first cycle brings it again", () => {
+    let list = createCycleList([post("1"), post("2")], post("9"));
+    expect(entryIds(list)).toEqual(["9", "1", "2"]);
+    list = appendCyclePage(list, [post("3"), post("9"), post("4")]);
+    expect(entryIds(list)).toEqual(["9", "1", "2", "3", "4"]);
+    expect(list.cycle).toBe(0);
+    // After that, a real wrap still repeats it.
+    list = appendCyclePage(list, [post("9"), post("1")]);
+    expect(list.cycle).toBe(1);
+    expect(entryIds(list).slice(-2)).toEqual(["9", "1"]);
+  });
+
+  it("a pinned post already in the first page counts as delivered", () => {
+    let list = createCycleList([post("1"), post("9")], post("9"));
+    expect(entryIds(list)).toEqual(["9", "1"]);
+    expect(list.pendingPinnedId).toBeNull();
+    list = appendCyclePage(list, [post("9")]);
+    expect(list.cycle).toBe(1);
+    expect(entryIds(list)).toEqual(["9", "1", "9"]);
+  });
+
+  it("a page holding only the pinned repeat adds nothing and is not a wrap", () => {
+    const list = appendCyclePage(createCycleList([post("1")], post("9")), [post("9")]);
+    expect(entryIds(list)).toEqual(["9", "1"]);
+    expect(list.cycle).toBe(0);
+    expect(list.pendingPinnedId).toBeNull();
+  });
+
+  it("patches, replaces and removes every appearance of a post", () => {
+    let list = createCycleList([post("1", "a"), post("2", "b")]);
+    list = appendCyclePage(list, [post("1", "a"), post("2", "b")]);
+
+    const liked = patchCycleList(list, "1", { likeCount: 7, likedByMe: true });
+    expect(liked.entries.filter((e) => e.post.id === "1").map((e) => e.post.likeCount)).toEqual([7, 7]);
+    expect(liked.entries[1]).toBe(list.entries[1]);
+
+    const followed = patchCycleListByAuthor(list, "b", { followingAuthor: true });
+    expect(followed.entries.filter((e) => e.post.author.id === "b").every((e) => e.post.followingAuthor)).toBe(true);
+
+    const replaced = replaceInCycleList(list, { ...post("2", "b"), commentCount: 4 });
+    expect(replaced.entries.filter((e) => e.post.id === "2").map((e) => e.post.commentCount)).toEqual([4, 4]);
+
+    expect(entryIds(removeFromCycleList(list, "1"))).toEqual(["2", "2"]);
+    expect(entryIds(removeAuthorFromCycleList(list, "b"))).toEqual(["1", "1"]);
+    // Keys stay the per-appearance keys after removal.
+    expect(keys(removeFromCycleList(list, "1"))).toEqual(["0:2", "1:2"]);
+  });
+
+  it("returns the same reference when nothing matches", () => {
+    const list = createCycleList([post("1")]);
+    expect(patchCycleList(list, "x", { likeCount: 1 })).toBe(list);
+    expect(removeFromCycleList(list, "x")).toBe(list);
+    expect(appendCyclePage(list, [])).toBe(list);
   });
 });
