@@ -410,12 +410,17 @@ export async function sendPushNotificationForUserNotification(notificationId: st
   const recipientLanguage = notification.recipient.pageLanguage?.trim()
     || notification.recipient.language?.trim()
     || "en";
+  const recipientLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
   const navigationUrl = notification.postId
-    ? feedHref(resolveSupportedLocaleTag(recipientLanguage) ?? "en", {
+    ? feedHref(recipientLocale, {
         postId: notification.postId,
         commentId: notification.commentId,
       })
-    : undefined;
+    : notification.type === "follow"
+      // Follow taps open the new follower's profile (same path the web push-tap
+      // receiver resolves for `/{locale}/users/{id}`).
+      ? `/${recipientLocale}/users/${encodeURIComponent(notification.actor.id)}`
+      : undefined;
 
   const message: PushMessage = {
     notificationId: notification.id,
