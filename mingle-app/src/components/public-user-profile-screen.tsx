@@ -15,6 +15,7 @@ import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
+import ProfilePostGrid from "@/components/search/profile-post-grid";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
@@ -658,6 +659,11 @@ export default function PublicUserProfileScreen({
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.messageError}</p>
               ) : null}
             </section>
+            {!profile.isBlocked ? (
+              <section className="border-t border-gray-100 pt-0.5">
+                <ProfilePostGrid locale={locale} authorId={profile.id} />
+              </section>
+            ) : null}
           </>
         )}
       </div>

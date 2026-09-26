@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { Prisma } from "@prisma/client";
 import { getAuthOptions } from "@/lib/auth-options";
 import { ANONYMOUS_HANDLE_PREFIX, RESERVED_SEARCH_HANDLE } from "@/lib/handles";
 import { prisma } from "@/lib/prisma";
+import { rankPeopleByRelevance } from "@/lib/people-search-ranking";
 import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
 import { captureMingleEvent } from "@/lib/posthog-server";
@@ -119,7 +121,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { handle: { contains: handleQuery, mode: "insensitive" } },
             { name: { contains: query, mode: "insensitive" } },
-          ],
+          ] as Prisma.UserWhereInput[],
         },
         ...(cursor ? [{
           OR: [
@@ -149,6 +151,13 @@ export async function GET(request: NextRequest) {
     ? encodeSearchCursor(lastUser.updatedAt, lastUser.id)
     : null;
 
+  // Relevance ordering is applied within the fetched page: exact match on name
+  // or handle first, then prefix, then contains, keeping the DB's updatedAt-desc
+  // order within each tier. Pagination stays keyed on (updatedAt, id) so the
+  // people-list order across pages is preserved, matching the current people
+  // list's ordering as the spec requires.
+  const rankedUsers = rankPeopleByRelevance(pageUsers, query);
+
   try {
     const [requestContext, searchProperties] = await Promise.all([
       buildPostHogRequestContext(request, userId),
@@ -175,7 +184,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    users: pageUsers.map((user) => ({
+    users: rankedUsers.map((user) => ({
       id: user.id,
       handle: user.handle,
       name: user.name,

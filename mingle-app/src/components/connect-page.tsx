@@ -15,8 +15,7 @@ import {
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { observeConnectViewport } from "@/lib/connect-viewport";
-import { formatHandle, isSearchExcludedHandle } from "@/lib/handles";
-import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { isSearchExcludedHandle } from "@/lib/handles";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   buildSearchAnalyticsProperties,
@@ -35,7 +34,8 @@ import {
   replaceWithConversationListThenPush,
 } from "@/lib/direct-conversation-navigation";
 import { resolveConnectSearchRestore } from "@/components/connect-search-restore";
-import { Loader2, Search, UserRound, X } from "lucide-react";
+import UnifiedSearch from "@/components/search/unified-search";
+import { postViewerHref, searchPeopleHref } from "@/lib/feed-routes";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -740,168 +740,16 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   return (
     <>
       <main ref={pageRef} className="connect-page relative flex h-full min-h-0 w-full flex-col overflow-clip bg-white text-slate-900">
-      <header
-        className="shrink-0 px-4 pb-3"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 44px) + 12px)",
-        }}
-      >
-        <form
-          role="search"
-          className="relative block"
-          onSubmit={(event) => {
-            event.preventDefault();
-            dismissSearchKeyboard();
-          }}
-        >
-          <Search
-            size={19}
-            strokeWidth={2.1}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-            aria-hidden="true"
+        <div className="min-h-0 flex-1">
+          <UnifiedSearch
+            locale={locale}
+            canUseRecentSearches={Boolean(authenticatedUserId)}
+            onOpenPerson={(userId) => openConnectProfile(userId)}
+            onOpenSearchPost={(searchQuery, postId) =>
+              router.push(postViewerHref(locale, { kind: "search", query: searchQuery }, postId))}
+            onSeeAllPeople={(searchQuery) => router.push(searchPeopleHref(locale, searchQuery))}
           />
-          <input
-            ref={inputRef}
-            type="search"
-            enterKeyHint="search"
-            value={query}
-            onChange={(event) => handleSearchQueryChange(event.target.value)}
-            placeholder={copy.placeholder}
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            aria-label={copy.placeholder}
-            className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-10 text-[15px] text-slate-900 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-2 focus:ring-amber-100"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => {
-                handleSearchQueryChange("");
-                focusSearchInput();
-              }}
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition active:bg-gray-200"
-              aria-label={copy.clearSearch}
-            >
-              <X size={16} strokeWidth={2.2} aria-hidden="true" />
-            </button>
-          ) : null}
-        </form>
-      </header>
-
-      <div
-        ref={resultsRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
-        onTouchMove={dismissSearchKeyboard}
-        onClickCapture={dismissSearchKeyboard}
-      >
-        {followError ? (
-          <p className="px-6 pt-4 text-center text-[13px] text-red-500" role="alert">
-            {copy.followError}
-          </p>
-        ) : null}
-        {isSearching ? (
-          <div className="flex justify-center pt-6 text-gray-400" aria-live="polite">
-            <Loader2 size={22} className="animate-spin" aria-label={copy.searching} />
-          </div>
-        ) : isSearchErrorVisible ? (
-          <p className="px-6 pt-6 text-center text-[14px] text-gray-500" role="alert">
-            {copy.error}
-          </p>
-        ) : normalizedQuery && visibleResults.length === 0 ? (
-          <p className="px-6 pt-6 text-center text-[14px] text-gray-500" aria-live="polite">
-            {copy.noResults}
-          </p>
-        ) : visibleResults.length > 0 ? (
-          <>
-            <ul className="border-t border-gray-100">
-              {visibleResults.map((user) => {
-                const profileName = user.name?.trim() || "";
-                const rawHandle = user.handle?.trim() || "";
-                const formattedHandle = formatHandle(rawHandle);
-                const name = profileName || rawHandle || copy.userFallback;
-                const normalizedNameForHandleComparison = profileName.replace(/^@/, "").toLocaleLowerCase();
-                const shouldShowHandle = Boolean(
-                  formattedHandle
-                  && profileName
-                  && normalizedNameForHandleComparison !== rawHandle.toLocaleLowerCase(),
-                );
-                const isFollowPending = followInFlightIds.has(user.id);
-                return (
-                  <li key={user.id} className="border-b border-gray-100 px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => openConnectProfile(user.id)}
-                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                        aria-label={shouldShowHandle ? `${name}, ${formattedHandle}` : name}
-                      >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-                          {user.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={user.image}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              style={{
-                                transform: buildProfileImageTransform(44, {
-                                  scale: user.imageCropScale,
-                                  x: user.imageCropX,
-                                  y: user.imageCropY,
-                                }),
-                              }}
-                            />
-                          ) : (
-                            <UserRound size={24} className="text-gray-400" aria-hidden="true" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                          {shouldShowHandle ? <p className="truncate text-[13px] text-gray-500">{formattedHandle}</p> : null}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleFollow(user)}
-                        disabled={isFollowPending}
-                        aria-busy={isFollowPending}
-                        className={`ml-auto flex h-10 min-w-[4.5rem] shrink-0 items-center justify-center rounded-lg border px-3 text-center text-[13px] font-semibold transition-colors active:opacity-70 disabled:cursor-wait disabled:opacity-50 ${
-                          user.isFollowing
-                            ? "border-amber-200 bg-amber-50 text-amber-700"
-                            : "border-gray-200 bg-white text-slate-800"
-                        }`}
-                        aria-pressed={user.isFollowing}
-                      >
-                        {isFollowPending ? "…" : user.isFollowing ? copy.following : copy.follow}
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            {hasMoreResults ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-4">
-                <div ref={loadMoreSentinelRef} className="h-px w-full" aria-hidden="true" />
-                {loadMoreError ? (
-                  <p className="text-center text-[13px] text-red-500" role="alert">
-                    {copy.loadMoreError}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void loadMoreSearchResults()}
-                  disabled={isLoadingMore}
-                  aria-busy={isLoadingMore}
-                  className="inline-flex min-h-9 min-w-[10rem] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-[13px] font-semibold text-slate-800 transition-colors active:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {isLoadingMore ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
-                  <span>{isLoadingMore ? copy.loadingMore : copy.loadMore}</span>
-                </button>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </div>
+        </div>
 
         <div className="connect-bottom-tabs shrink-0" onClickCapture={dismissSearchKeyboard}>
           <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />

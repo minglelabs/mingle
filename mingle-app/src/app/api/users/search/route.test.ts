@@ -178,4 +178,27 @@ describe("/api/users/search route", () => {
     expect(await response.json()).toEqual({ error: "invalid_cursor" });
     expect(mockUserFindMany).not.toHaveBeenCalled();
   });
+
+  it("ranks exact then prefix then contains matches, keeping DB order within a tier", async () => {
+    // DB returns updatedAt-desc order; ranking must reorder within the page.
+    mockUserFindMany.mockResolvedValue([
+      { id: "contains", handle: "amina", name: "Yamina", image: null, updatedAt: new Date(), followerRelations: [] },
+      { id: "exact", handle: "mina", name: "Someone", image: null, updatedAt: new Date(), followerRelations: [] },
+      { id: "prefix", handle: "mina.song", name: "Mina Song", image: null, updatedAt: new Date(), followerRelations: [] },
+      { id: "exact-name", handle: "user_x", name: "Mina", image: null, updatedAt: new Date(), followerRelations: [] },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/users/search?q=mina"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    // exact (handle "mina") and exact-name ("Mina") first in DB order, then
+    // prefix ("mina.song"/"Mina Song"), then contains ("amina"/"Yamina").
+    expect(payload.users.map((user: { id: string }) => user.id)).toEqual([
+      "exact",
+      "exact-name",
+      "prefix",
+      "contains",
+    ]);
+  });
 });
