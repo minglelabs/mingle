@@ -87,7 +87,7 @@ export default function BottomTabBar({
   const { data: session } = useSession();
   const postingFeedSupported = useIsPostingFeedSupported();
   // Hide the feed tab for a client whose namespace does not serve the posting
-  // feature (a pre-2.1.0 app). `null` means "not resolved yet" — the first
+  // feature (a pre-2.2.0 app). `null` means "not resolved yet" — the first
   // paint matches the server render (which renders with the build-time
   // namespace), and the tab collapses to the original three once a client is
   // known to be unsupported. A supported client never reaches this branch.

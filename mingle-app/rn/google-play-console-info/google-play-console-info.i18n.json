@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "2.1.0",
+      "version": "2.2.0",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.1.0 (99)",
+      "releaseName": "2.2.0 (100)",
       "releaseNotes": {
         "en-US": "Version 2.1.0 adds conversation sharing: create a link to share a conversation snapshot, and people who open it can view and join in the app. It also introduces a posting feed for discovering and sharing posts, with smoother loading, translations, comments, and notifications.",
         "ar": "يضيف الإصدار 2.1.0 ميزة مشاركة المحادثات: أنشئ رابطًا لمشاركة لقطة من المحادثة، ويمكن لمن يفتحه عرضها والانضمام إليها في التطبيق. كما يقدّم خلاصة المنشورات لاكتشاف المنشورات ومشاركتها، مع تحسين سلاسة التحميل والترجمة والتعليقات والإشعارات.",

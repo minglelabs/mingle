@@ -93,14 +93,35 @@ function namespaceTargetRoutes(): string[] {
 }
 
 describe(`mingle-app v${NAMESPACE_TARGET_VERSION} namespace re-export guard`, () => {
-  const targets = namespaceTargetRoutes();
+  // 2.1.0 is a PURE mirror of the previous minor: it serves exactly what the
+  // same platform's v2.0.0 namespace serves and nothing new (the posting feed
+  // ships in 2.2.0, not here). So the routes this guard checks are the routes
+  // that platform's v2.0.0 namespace actually has, not the full unversioned
+  // route set — a route unique to a later release must NOT appear in v2.1.0.
+  const allTargets = namespaceTargetRoutes();
 
   it("has namespace-target routes to check", () => {
-    expect(targets.length).toBeGreaterThan(0);
+    expect(allTargets.length).toBeGreaterThan(0);
   });
 
   for (const platform of ["ios", "android"] as const) {
+    const inheritedRoot = join(API_ROOT, platform, INHERITED_VERSION_DIR);
+    const targets = allTargets.filter((routePath) =>
+      existsSync(join(inheritedRoot, routePath, "route.ts")),
+    );
+
     describe(`${platform}/v${NAMESPACE_TARGET_VERSION}`, () => {
+      it("mirrors every v2.0.0 route and adds none of its own", () => {
+        expect(targets.length).toBeGreaterThan(0);
+        // The v2.1.0 namespace must hold exactly the mirrored set — no extra
+        // (e.g. posting) route.ts leaked in.
+        const nsRoot = join(API_ROOT, platform, `v${NAMESPACE_TARGET_VERSION}`);
+        const present = listRouteFiles(nsRoot)
+          .map((file) => relative(nsRoot, file).split("/").slice(0, -1).join("/"))
+          .sort();
+        expect(present).toEqual([...targets].sort());
+      });
+
       it.each(targets)("re-exports %s", (routePath) => {
         const reexport = join(API_ROOT, platform, `v${NAMESPACE_TARGET_VERSION}`, routePath, "route.ts");
 

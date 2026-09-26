@@ -5,6 +5,8 @@ const COMPATIBLE_NAMESPACES = [
   ['android/v2.0.0', 'android/v2.0.1', 'android/v2.0.2', 'android/v2.0.3', 'android/v2.0.4'],
   ['ios/v2.1.0'],
   ['android/v2.1.0'],
+  ['ios/v2.2.0'],
+  ['android/v2.2.0'],
 ] as const
 
 export function compatiblePendingWorkNamespaces(namespace: string): readonly string[] {

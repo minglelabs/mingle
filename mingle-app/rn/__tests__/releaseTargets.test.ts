@@ -41,6 +41,11 @@ describe('releaseTargets', () => {
     expect(resolveMingleReleaseTarget('ios/v2.0.0')).toBe('v2_0_0');
     expect(resolveMingleReleaseTarget('android/v2.0.0')).toBe('v2_0_0');
     expect(resolveMingleReleaseTarget('android/v2.0.1')).toBe('v2_0_0');
+    expect(resolveMingleReleaseTarget('ios/v2.1.0')).toBe('v2_1_0');
+    expect(resolveMingleReleaseTarget('android/v2.1.9')).toBe('v2_1_0');
+    expect(resolveMingleReleaseTarget('ios/v2.2.0')).toBe('v2_2_0');
+    expect(resolveMingleReleaseTarget('android/v2.2.0')).toBe('v2_2_0');
+    expect(resolveMingleReleaseTarget('ios/v3.0.0')).toBe('v2_2_0');
   });
 
   it('rejects the legacy production web host for a 1.1.0 release target', () => {

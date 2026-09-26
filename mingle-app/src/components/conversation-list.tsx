@@ -1843,9 +1843,9 @@ export default function ConversationList({
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
-  // Rollout gate (W4): a supported client (v2.1.0+) shows the shared posting
+  // Rollout gate (W4): a supported client (v2.2.0+) shows the shared posting
   // header (compose + bell → notification center) so the conversation list and
-  // the feed line up; a pre-2.1.0 client keeps the existing search + in-app
+  // the feed line up; a pre-2.2.0 client keeps the existing search + in-app
   // notification-panel header unchanged. `null` before mount → existing header,
   // matching the server render.
   const postingFeedSupported = useIsPostingFeedSupported();

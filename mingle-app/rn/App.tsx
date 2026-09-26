@@ -1549,7 +1549,7 @@ function AppInner(): React.JSX.Element {
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
     // Plain launch lands on the feed when this build's namespace supports the
-    // posting feed (v2.1.0+); otherwise on the conversation list. A live
+    // posting feed (v2.2.0+); otherwise on the conversation list. A live
     // conversation/STT restore target or a pending push tap override this base
     // route (see webUrl memo and the push-tap handlers). The same query params
     // are kept regardless of route. Loading the locale root first would create

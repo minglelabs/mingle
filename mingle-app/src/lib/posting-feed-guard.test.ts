@@ -34,12 +34,13 @@ describe("inferNativeApiNamespaceFromSearchParams", () => {
 });
 
 describe("requestNamespaceSupportsPostingFeed", () => {
-  it("supports a 2.1.0+ app namespace (explicit apiNamespace query)", () => {
-    expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "ios/v2.1.0" })).toBe(true);
-    expect(requestNamespaceSupportsPostingFeed({ apiNs: "android/v2.1.0" })).toBe(true);
+  it("supports a 2.2.0+ app namespace (explicit apiNamespace query)", () => {
+    expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "ios/v2.2.0" })).toBe(true);
+    expect(requestNamespaceSupportsPostingFeed({ apiNs: "android/v2.2.0" })).toBe(true);
   });
 
-  it("gates a pre-2.1.0 app namespace (e.g. 2.0.x) out of the posting feed", () => {
+  it("gates a pre-2.2.0 app namespace (e.g. 2.1.x / 2.0.x) out of the posting feed", () => {
+    expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "ios/v2.1.0" })).toBe(false);
     expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "ios/v2.0.4" })).toBe(false);
     expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "android/v2.0.0" })).toBe(false);
     expect(requestNamespaceSupportsPostingFeed({ apiNamespace: "ios/v1.1.3" })).toBe(false);
@@ -50,7 +51,7 @@ describe("requestNamespaceSupportsPostingFeed", () => {
     expect(requestNamespaceSupportsPostingFeed({ postId: "p1" })).toBe(true);
   });
 
-  it("recovers a pre-2.1.0 native shell that dropped apiNamespace but kept native params", () => {
+  it("recovers a pre-2.2.0 native shell that dropped apiNamespace but kept native params", () => {
     expect(
       requestNamespaceSupportsPostingFeed({ nativePlatform: "ios", nativeClientVersion: "2.0.4" }),
     ).toBe(false);
@@ -59,7 +60,7 @@ describe("requestNamespaceSupportsPostingFeed", () => {
   it("prefers the explicit namespace query over the inferred native namespace", () => {
     expect(
       requestNamespaceSupportsPostingFeed({
-        apiNamespace: "ios/v2.1.0",
+        apiNamespace: "ios/v2.2.0",
         nativePlatform: "ios",
         nativeClientVersion: "2.0.4",
       }),
@@ -68,6 +69,6 @@ describe("requestNamespaceSupportsPostingFeed", () => {
 
   it("reads the first value of an array-valued namespace query", () => {
     expect(requestNamespaceSupportsPostingFeed({ apiNamespace: ["ios/v2.0.4"] })).toBe(false);
-    expect(requestNamespaceSupportsPostingFeed({ apiNamespace: ["ios/v2.1.0"] })).toBe(true);
+    expect(requestNamespaceSupportsPostingFeed({ apiNamespace: ["ios/v2.2.0"] })).toBe(true);
   });
 });

@@ -30,11 +30,12 @@ describe("v1.1.0 home entry rollout gate", () => {
     redirectMock.mockClear();
   });
 
-  it("sends a supported app (2.1.0+) to the feed", () => {
-    expect(landingFor({ apiNamespace: "ios/v2.1.0" })).toBe("/ko/feed?apiNamespace=ios%2Fv2.1.0");
+  it("sends a supported app (2.2.0+) to the feed", () => {
+    expect(landingFor({ apiNamespace: "ios/v2.2.0" })).toBe("/ko/feed?apiNamespace=ios%2Fv2.2.0");
   });
 
-  it("sends a pre-2.1.0 app (2.0.x) to the conversation list, not the feed", () => {
+  it("sends a pre-2.2.0 app (2.1.x / 2.0.x) to the conversation list, not the feed", () => {
+    expect(landingFor({ apiNamespace: "ios/v2.1.0" })).toBe("/ko/conversations?apiNamespace=ios%2Fv2.1.0");
     expect(landingFor({ apiNamespace: "ios/v2.0.4" })).toBe("/ko/conversations?apiNamespace=ios%2Fv2.0.4");
   });
 
@@ -46,7 +47,7 @@ describe("v1.1.0 home entry rollout gate", () => {
     expect(landingFor({ postId: "p9" })).toBe("/ko/feed?postId=p9");
   });
 
-  it("recovers a pre-2.1.0 native shell that only kept native params", () => {
+  it("recovers a pre-2.2.0 native shell that only kept native params", () => {
     expect(landingFor({ nativePlatform: "ios", nativeClientVersion: "2.0.4" }))
       .toBe("/ko/conversations?nativePlatform=ios&nativeClientVersion=2.0.4");
   });
