@@ -1,6 +1,7 @@
 import { isSupportedLocale } from "@/i18n";
 import { notFound } from "next/navigation";
 import ComposeScreen from "@/components/compose/compose-screen";
+import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
 
 type ComposePageProps = {
   params: Promise<{ locale: string }>;
@@ -17,8 +18,10 @@ export default async function ComposePage({ params, searchParams }: ComposePageP
   if (!isSupportedLocale(locale)) notFound();
 
   return (
-    <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
-      <ComposeScreen locale={locale} initialDraftId={resolveDraftId(resolvedSearchParams.draftId)} />
-    </main>
+    <PostingFeedRouteGuard locale={locale}>
+      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+        <ComposeScreen locale={locale} initialDraftId={resolveDraftId(resolvedSearchParams.draftId)} />
+      </main>
+    </PostingFeedRouteGuard>
   );
 }

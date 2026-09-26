@@ -1,5 +1,6 @@
 import { isSupportedLocale } from "@/i18n";
 import FeedViewerClient from "@/components/feed/feed-viewer-client";
+import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
 
 type ViewerPageProps = {
@@ -35,10 +36,12 @@ export default async function PostsViewerPage({ params, searchParams }: ViewerPa
   if (kind !== "author" && kind !== "search") notFound();
 
   return (
-    <FeedViewerClient
-      locale={locale}
-      source={kind === "author" ? { kind: "author", authorId } : { kind: "search", query: q }}
-      startPostId={postId}
-    />
+    <PostingFeedRouteGuard locale={locale}>
+      <FeedViewerClient
+        locale={locale}
+        source={kind === "author" ? { kind: "author", authorId } : { kind: "search", query: q }}
+        startPostId={postId}
+      />
+    </PostingFeedRouteGuard>
   );
 }

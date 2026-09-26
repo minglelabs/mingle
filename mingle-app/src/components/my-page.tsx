@@ -16,6 +16,7 @@ import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
@@ -423,6 +424,7 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -945,6 +947,7 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {postingFeedSupported !== false ? (
             <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -974,6 +977,7 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
             </div>
+            ) : null}
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -1732,6 +1736,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Rollout gate (W4): hide the post grid for a pre-2.1.0 client (its posts
+  // endpoints 404). `null` before mount → shown, matching the server render;
+  // hidden once a client is known to be unsupported.
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
     image: null,
     imageCropScale: null,
@@ -2441,7 +2449,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
         </section>
 
-        {sessionUserId ? (
+        {sessionUserId && postingFeedSupported !== false ? (
           <section className="border-t border-gray-100 pt-0.5">
             <ProfilePostGrid locale={locale} authorId={sessionUserId} />
           </section>

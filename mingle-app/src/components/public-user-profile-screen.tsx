@@ -5,6 +5,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
@@ -193,6 +194,8 @@ export default function PublicUserProfileScreen({
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Rollout gate (W4): hide another user's post grid for a pre-2.1.0 client.
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -659,7 +662,7 @@ export default function PublicUserProfileScreen({
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.messageError}</p>
               ) : null}
             </section>
-            {!profile.isBlocked ? (
+            {!profile.isBlocked && postingFeedSupported !== false ? (
               <section className="border-t border-gray-100 pt-0.5">
                 <ProfilePostGrid locale={locale} authorId={profile.id} />
               </section>

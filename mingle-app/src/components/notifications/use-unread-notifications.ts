@@ -8,7 +8,7 @@
  * devices) and separate from conversation message read state.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildClientApiPath } from "@/lib/api-contract";
+import { buildClientApiPath, clientApiNamespace, namespaceSupportsPostingFeed } from "@/lib/api-contract";
 
 export type UnreadNotificationsState = {
   hasUnread: boolean;
@@ -18,15 +18,21 @@ export type UnreadNotificationsState = {
 
 const NOOP = () => {};
 
+// `/notifications/unread` exists only on the v2.1.0+ namespace. A pre-2.1.0
+// client must never call it (it would 404), so the hook short-circuits to
+// "no dot" for an unsupported namespace. Resolved at module load like
+// `clientApiNamespace`.
+const POSTING_FEED_SUPPORTED = namespaceSupportsPostingFeed(clientApiNamespace);
+
 export function useUnreadNotifications(viewerId: string | null): UnreadNotificationsState {
   const normalizedViewerId = viewerId?.trim() || null;
   const [hasUnread, setHasUnread] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchUnread = useCallback(async () => {
-    if (!normalizedViewerId) {
-      // The returned state is forced to false for a signed-out viewer, so no
-      // state write is needed (and a synchronous write here would trip
+    if (!normalizedViewerId || !POSTING_FEED_SUPPORTED) {
+      // Forced to false for a signed-out viewer or an unsupported client, so no
+      // state write is needed here (and a synchronous write would trip
       // react-hooks/set-state-in-effect when called from the effect).
       return;
     }
@@ -58,9 +64,10 @@ export function useUnreadNotifications(viewerId: string | null): UnreadNotificat
   }, [fetchUnread]);
 
   useEffect(() => {
-    if (!normalizedViewerId) {
+    if (!normalizedViewerId || !POSTING_FEED_SUPPORTED) {
       abortRef.current?.abort();
-      // Returned state is forced to false for a signed-out viewer; nothing to fetch.
+      // Forced to false for a signed-out viewer or an unsupported client;
+      // nothing to fetch and no listeners to attach.
       return;
     }
 
@@ -85,5 +92,7 @@ export function useUnreadNotifications(viewerId: string | null): UnreadNotificat
     };
   }, [fetchUnread, normalizedViewerId]);
 
-  return normalizedViewerId ? { hasUnread, refresh } : { hasUnread: false, refresh: NOOP };
+  return normalizedViewerId && POSTING_FEED_SUPPORTED
+    ? { hasUnread, refresh }
+    : { hasUnread: false, refresh: NOOP };
 }
