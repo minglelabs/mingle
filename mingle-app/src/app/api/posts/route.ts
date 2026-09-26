@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { randomBackgroundKey } from '@/lib/post-backgrounds'
 import { translatePostOnPublish } from '@/server/translation/post-translation-service'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,9 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+
+  const limited = rateLimitGuard('create_post', userId)
+  if (limited) return limited
 
   let body: unknown
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }
