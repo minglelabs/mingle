@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
@@ -84,6 +85,13 @@ export default function BottomTabBar({
   unreadConversationMessageCount,
 }: BottomTabBarProps) {
   const { data: session } = useSession();
+  const postingFeedSupported = useIsPostingFeedSupported();
+  // Hide the feed tab for a client whose namespace does not serve the posting
+  // feature (a pre-2.1.0 app). `null` means "not resolved yet" — the first
+  // paint matches the server render (which renders with the build-time
+  // namespace), and the tab collapses to the original three once a client is
+  // known to be unsupported. A supported client never reaches this branch.
+  const showFeedTab = postingFeedSupported !== false;
   const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -207,24 +215,26 @@ export default function BottomTabBar({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      <button
-        type="button"
-        onClick={() => {
-          if (isFeedActive) return;
-          router.replace(feedHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.feed?.tabLabel ?? dictionary.tabs.feed ?? "Feed"}
-        aria-current={isFeedActive ? "page" : undefined}
-      >
-        <Home
-          size={26}
-          fill={isFeedActive ? "#f59e0b" : "none"}
-          stroke={isFeedActive ? "#f59e0b" : "#9ca3af"}
-          strokeWidth={1.9}
-          aria-hidden="true"
-        />
-      </button>
+      {showFeedTab ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (isFeedActive) return;
+            router.replace(feedHref);
+          }}
+          className="flex flex-1 items-center justify-center transition active:opacity-60"
+          aria-label={dictionary.feed?.tabLabel ?? dictionary.tabs.feed ?? "Feed"}
+          aria-current={isFeedActive ? "page" : undefined}
+        >
+          <Home
+            size={26}
+            fill={isFeedActive ? "#f59e0b" : "none"}
+            stroke={isFeedActive ? "#f59e0b" : "#9ca3af"}
+            strokeWidth={1.9}
+            aria-hidden="true"
+          />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() => {
