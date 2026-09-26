@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
@@ -36,41 +37,36 @@ export type CommentSheetProps = {
 };
 
 /**
- * The frozen props carry only viewerId. The viewer's identity fields (name,
- * avatar, display language) needed to render an optimistic row are read from
- * the global viewer context the app already exposes; when unavailable we still
- * render but optimistic rows fall back to a neutral avatar.
+ * The signed-in viewer's identity for optimistic rows (name, avatar, handle)
+ * comes from next-auth `useSession` — the same source the feed and compose
+ * screens use — not a bespoke global. `viewerId` still arrives as a frozen
+ * prop (the caller already resolved it); the session only supplies the display
+ * fields. The viewer's DISPLAY language is the route `locale`, matching
+ * FeedShell (`viewerLanguage = locale`); it drives translation only, never the
+ * body's source language.
  */
-type ViewerContext = {
-  id: string;
-  handle: string;
-  name: string | null;
-  image: string | null;
-  displayLanguage: string | null;
-};
-
-function readViewerContext(viewerId: string | null): ViewerContext | null {
-  if (!viewerId) return null;
-  if (typeof window === "undefined") return null;
-  // The app publishes the signed-in viewer on window for WebView screens; fall
-  // back to a minimal record so optimistic rendering still works.
-  const w = window as unknown as { __MINGLE_VIEWER__?: Partial<ViewerContext> };
-  const v = w.__MINGLE_VIEWER__;
-  return {
-    id: viewerId,
-    handle: v?.handle ?? "",
-    name: v?.name ?? null,
-    image: v?.image ?? null,
-    displayLanguage: v?.displayLanguage ?? null,
-  };
-}
 
 export default function CommentSheet(props: CommentSheetProps) {
   const { open, postId, postAuthorId, locale, viewerId, initialCommentId, onClose, onCommentCountChange, onRequireLogin } = props;
   const copy = commentsCopy(locale);
 
-  const viewer = useMemo(() => readViewerContext(viewerId), [viewerId]);
-  const viewerLanguage = viewer?.displayLanguage ?? null;
+  const { data: session } = useSession();
+  const viewer = useMemo(() => {
+    if (!viewerId) return null;
+    const user = session?.user as
+      | { id?: string; name?: string | null; image?: string | null; handle?: string }
+      | undefined;
+    return {
+      id: viewerId,
+      handle: user?.handle ?? "",
+      name: user?.name ?? null,
+      image: user?.image ?? null,
+    };
+  }, [viewerId, session]);
+
+  // Display language = route locale (same as FeedShell). Drives translation
+  // requests and the translate affordance; it is NOT the comment body language.
+  const viewerLanguage = locale;
 
   const [mounted, setMounted] = useState(false);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);

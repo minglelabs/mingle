@@ -256,6 +256,30 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(byId.c.translationState).toBe('none')
     expect(byId.c.displayText).toBe('Bonjour')
   })
+
+  it('shows the original with state none when a comment has no source language yet', async () => {
+    // Newly created comments send sourceLanguage=null (the server detects the
+    // body language asynchronously). Until a ready translation exists the read
+    // must return the original text, never claim same_language.
+    mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 1 })
+    mockUserFindUnique.mockResolvedValue({ defaultDisplayLanguage: 'ko' })
+    mockCommentFindMany.mockResolvedValue([
+      {
+        id: 'n', postId: 'post-1', authorId: 'u1', parentId: null, replyToUserId: null,
+        bodyVersion: 1, sourceText: 'just written', sourceLanguage: null, likeCount: 0,
+        isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 0 }, translations: [],
+      },
+    ])
+
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    const body = await res.json()
+    expect(body.comments[0].translationState).toBe('none')
+    expect(body.comments[0].displayText).toBe('just written')
+    expect(body.comments[0].sourceLanguage).toBeNull()
+  })
 })
 
 describe('POST /api/posts/{postId}/comments', () => {

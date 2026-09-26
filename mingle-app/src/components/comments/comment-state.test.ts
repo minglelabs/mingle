@@ -105,6 +105,18 @@ describe('optimistic create → confirm / fail / rollback', () => {
     expect(out[0].replyCount).toBe(1)
   })
 
+  it('builds an optimistic node with no source language, showing the original', () => {
+    const opt = makeOptimisticNode({
+      tempId: 'tmp', postId: 'p1', authorId: 'me', author: AUTHOR,
+      // The composer always leaves the source language to the server (null).
+      sourceText: 'my text', sourceLanguage: null, parentId: null, replyToUserId: null, replyToUser: null,
+    })
+    expect(opt.sourceLanguage).toBeNull()
+    expect(opt.displayLanguage).toBeNull()
+    expect(opt.displayText).toBe('my text') // original shown optimistically
+    expect(opt.translationState).toBe('none')
+  })
+
   it('confirms a temp node with the server id, clearing pending', () => {
     let nodes = toNodes([dto({ id: 'c1' })])
     const opt = makeOptimisticNode({
