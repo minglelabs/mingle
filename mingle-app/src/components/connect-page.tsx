@@ -143,6 +143,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <UnifiedSearch
             locale={locale}
             canUseRecentSearches={Boolean(authenticatedUserId)}
+            currentUserId={authenticatedUserId}
             onOpenPerson={(userId) => openConnectProfile(userId)}
             onOpenSearchPost={(searchQuery, postId) =>
               router.push(postViewerHref(locale, { kind: "search", query: searchQuery }, postId))}
