@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
+import { createPostNotification } from '@/server/notifications/create-post-notification'
 
 export const runtime = 'nodejs'
 
@@ -26,7 +28,7 @@ export async function POST(_request: NextRequest, context: Ctx) {
   // Verify post is visible
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, userId),
-    select: { id: true },
+    select: { id: true, authorId: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
@@ -52,6 +54,17 @@ export async function POST(_request: NextRequest, context: Ctx) {
     }
     throw err
   }
+
+  // Notify the post author (in-app only; likes never push). Fire-and-forget so
+  // the like response is not delayed. Runs only on a newly created like.
+  after(async () => {
+    await createPostNotification({
+      type: 'post_like',
+      recipientId: post.authorId,
+      actorId: userId,
+      postId,
+    })
+  })
 
   return json({ liked: true }, { status: 201 })
 }

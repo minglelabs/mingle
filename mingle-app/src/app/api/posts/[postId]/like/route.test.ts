@@ -21,6 +21,13 @@ const {
 
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>()
+  return { ...actual, after: (fn: () => Promise<void>) => { void fn().catch(() => {}) } }
+})
+vi.mock('@/server/notifications/create-post-notification', () => ({
+  createPostNotification: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     post: { findFirst: mockPostFindFirst, update: mockPostUpdate },
@@ -39,7 +46,7 @@ describe('POST /api/posts/{postId}/like', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
-    mockPostFindFirst.mockResolvedValue({ id: 'post-1' })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', authorId: 'author-1' })
     mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         postLike: { create: mockPostLikeCreate },

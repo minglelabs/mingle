@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { visibleCommentsWhere, notMutuallyBlockedWhere } from '@/server/posts/comment-visibility'
 import { createComment } from '@/server/posts/comment-service'
+import { createPostNotification } from '@/server/notifications/create-post-notification'
 import { translateCommentOnDemand } from '@/server/translation/post-translation-service'
 import { prismaTranslationDeps } from '@/server/posts/post-translation-repository'
 import { resolveDefaultPostTranslationLanguages } from '@/server/translation/post-translation-service'
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest, context: Ctx) {
   // Verify post is visible and not deleted
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, userId),
-    select: { id: true },
+    select: { id: true, authorId: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
@@ -170,6 +171,42 @@ export async function POST(request: NextRequest, context: Ctx) {
     }
     throw err
   }
+
+  // Notify the right recipient. A reply notifies the person being replied to
+  // (the target comment's author); a top-level comment notifies the post
+  // author. createComment resolves replyToUserId for reply-to-a-reply, but a
+  // direct reply to a top-level comment may arrive without it, so fall back to
+  // the parent comment's author. Fire-and-forget so the response is not
+  // delayed; comment/reply also push.
+  const notifyParentId = comment.parentId ?? pId
+  after(async () => {
+    let replyRecipientId = comment.replyToUserId ?? null
+    if (!replyRecipientId && notifyParentId) {
+      const parentComment = await prisma.postComment.findUnique({
+        where: { id: notifyParentId },
+        select: { authorId: true },
+      })
+      replyRecipientId = parentComment?.authorId ?? null
+    }
+
+    if (replyRecipientId) {
+      await createPostNotification({
+        type: 'comment_reply',
+        recipientId: replyRecipientId,
+        actorId: userId,
+        postId: comment.postId,
+        commentId: comment.id,
+      })
+    } else {
+      await createPostNotification({
+        type: 'comment',
+        recipientId: post.authorId,
+        actorId: userId,
+        postId: comment.postId,
+        commentId: comment.id,
+      })
+    }
+  })
 
   // Fire-and-forget translation for default languages (like post creation)
   if (lang) {

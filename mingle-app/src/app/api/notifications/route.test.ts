@@ -4,15 +4,11 @@ import { NextRequest } from "next/server";
 const {
   mockGetServerSession,
   mockNotificationFindMany,
-  mockNotificationCount,
   mockNotificationUpdateMany,
-  mockUserFollowFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockNotificationFindMany: vi.fn(),
-  mockNotificationCount: vi.fn(),
   mockNotificationUpdateMany: vi.fn(),
-  mockUserFollowFindMany: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -27,133 +23,88 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     userNotification: {
       findMany: mockNotificationFindMany,
-      count: mockNotificationCount,
       updateMany: mockNotificationUpdateMany,
-    },
-    userFollow: {
-      findMany: mockUserFollowFindMany,
     },
   },
 }));
 
 import { GET, PATCH } from "@/app/api/notifications/route";
 
+function actor(id: string) {
+  return { id, handle: `${id}.h`, name: id, image: null };
+}
+
 describe("/api/notifications route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
-    mockNotificationFindMany.mockResolvedValue([
-      {
-        id: "notification_1",
-        type: "follow",
-        readAt: null,
-        createdAt: new Date("2026-08-15T10:00:00.000Z"),
-        actor: {
-          id: "actor_1",
-          handle: "mina.song",
-          name: "Mina",
-          image: "https://example.com/mina.png",
-        },
-      },
-      {
-        id: "notification_2",
-        type: "follow",
-        readAt: new Date("2026-08-14T10:00:00.000Z"),
-        createdAt: new Date("2026-08-14T10:00:00.000Z"),
-        actor: {
-          id: "actor_2",
-          handle: "alex",
-          name: "Alex",
-          image: null,
-        },
-      },
-    ]);
-    mockNotificationCount.mockResolvedValue(1);
-    mockNotificationUpdateMany.mockResolvedValue({ count: 1 });
-    mockUserFollowFindMany.mockResolvedValue([{ followingId: "actor_2" }]);
+    mockNotificationUpdateMany.mockResolvedValue({ count: 3 });
   });
 
-  it("returns the viewer's follow notifications with current follow state", async () => {
-    const response = await GET(new NextRequest("https://example.com/api/notifications?limit=2"));
+  it("returns all notification types and groups likes per target", async () => {
+    // Two likes on the same post collapse into one entry; a comment stays separate.
+    mockNotificationFindMany.mockResolvedValue([
+      { id: "n3", type: "comment", postId: "p1", commentId: "c9", readAt: null, createdAt: new Date("2026-08-15T12:00:00.000Z"), actor: actor("a3") },
+      { id: "n2", type: "post_like", postId: "p1", commentId: null, readAt: null, createdAt: new Date("2026-08-15T11:00:00.000Z"), actor: actor("a2") },
+      { id: "n1", type: "post_like", postId: "p1", commentId: null, readAt: new Date("2026-08-15T10:00:00.000Z"), createdAt: new Date("2026-08-15T10:00:00.000Z"), actor: actor("a1") },
+    ]);
 
+    const response = await GET(new NextRequest("https://example.com/api/notifications?limit=30"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      notifications: [
-        {
-          id: "notification_1",
-          type: "follow",
-          isRead: false,
-          createdAt: "2026-08-15T10:00:00.000Z",
-          actor: {
-            id: "actor_1",
-            handle: "mina.song",
-            name: "Mina",
-            image: "https://example.com/mina.png",
-          },
-          isFollowing: false,
-        },
-        {
-          id: "notification_2",
-          type: "follow",
-          isRead: true,
-          createdAt: "2026-08-14T10:00:00.000Z",
-          actor: {
-            id: "actor_2",
-            handle: "alex",
-            name: "Alex",
-            image: null,
-          },
-          isFollowing: true,
-        },
-      ],
-      unreadCount: 1,
-    });
-    expect(mockNotificationFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { recipientId: "user_123", type: "follow" },
-      take: 2,
-      orderBy: { createdAt: "desc" },
+    const body = await response.json();
+
+    expect(body.notifications).toHaveLength(2);
+    const [comment, like] = body.notifications;
+    expect(comment.type).toBe("comment");
+    expect(comment.actorCount).toBe(1);
+    expect(like.type).toBe("post_like");
+    expect(like.postId).toBe("p1");
+    expect(like.actorCount).toBe(2); // two distinct likers on the same post
+    expect(body.unreadCount).toBe(2); // comment + grouped like both have an unread row
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("paginates with a cursor when more rows exist", async () => {
+    const rows = Array.from({ length: 31 }, (_, i) => ({
+      id: `n${i}`,
+      type: "follow",
+      postId: null,
+      commentId: null,
+      readAt: null,
+      createdAt: new Date(2026, 7, 15, 12, 0, 31 - i),
+      actor: actor(`a${i}`),
     }));
-    expect(mockUserFollowFindMany).toHaveBeenCalledWith({
-      where: {
-        followerId: "user_123",
-        followingId: { in: ["actor_1", "actor_2"] },
-      },
-      select: { followingId: true },
-    });
+    mockNotificationFindMany.mockResolvedValue(rows);
+
+    const response = await GET(new NextRequest("https://example.com/api/notifications?limit=30"));
+    const body = await response.json();
+    expect(body.hasMore).toBe(true);
+    expect(body.nextCursor).toBe("n29");
+    expect(body.notifications).toHaveLength(30);
   });
 
   it("requires an authenticated viewer", async () => {
     mockGetServerSession.mockResolvedValue(null);
-
     const response = await GET(new NextRequest("https://example.com/api/notifications"));
-
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: "unauthorized" });
     expect(mockNotificationFindMany).not.toHaveBeenCalled();
   });
 
-  it("marks all unread follow notifications for the viewer as read", async () => {
+  it("marks every unread notification (all types) as read on entry", async () => {
     const response = await PATCH();
-
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ isRead: true, updatedCount: 1 });
+    expect(await response.json()).toEqual({ isRead: true, updatedCount: 3 });
     expect(mockNotificationUpdateMany).toHaveBeenCalledWith({
-      where: {
-        recipientId: "user_123",
-        type: "follow",
-        readAt: null,
-      },
+      where: { recipientId: "user_123", readAt: null },
       data: { readAt: expect.any(Date) },
     });
   });
 
-  it("requires an authenticated viewer when marking all notifications as read", async () => {
+  it("requires an authenticated viewer when marking read", async () => {
     mockGetServerSession.mockResolvedValue(null);
-
     const response = await PATCH();
-
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: "unauthorized" });
     expect(mockNotificationUpdateMany).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
+import { createPostNotification } from '@/server/notifications/create-post-notification'
 
 export const runtime = 'nodejs'
 
@@ -29,7 +31,7 @@ export async function POST(_request: NextRequest, context: Ctx) {
       ...visibleSingleCommentWhere(commentId, userId),
       OR: [{ isDeleted: null }, { isDeleted: false }],
     },
-    select: { id: true },
+    select: { id: true, authorId: true, postId: true },
   })
   if (!comment) return json({ error: 'not_found' }, { status: 404 })
 
@@ -54,6 +56,17 @@ export async function POST(_request: NextRequest, context: Ctx) {
     }
     throw err
   }
+
+  // Notify the comment author (in-app only; likes never push). Fire-and-forget.
+  after(async () => {
+    await createPostNotification({
+      type: 'comment_like',
+      recipientId: comment.authorId,
+      actorId: userId,
+      postId: comment.postId,
+      commentId,
+    })
+  })
 
   return json({ liked: true }, { status: 201 })
 }
