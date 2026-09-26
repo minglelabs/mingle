@@ -248,6 +248,95 @@ describe('avoidConsecutiveAuthors', () => {
   it('handles empty list', () => {
     expect(avoidConsecutiveAuthors([])).toEqual([])
   })
+
+  const post = (id: string, authorId: string, viewed = false, isFollowed = false) => ({
+    id,
+    authorId,
+    viewed,
+    isFollowed,
+    tier: 0,
+    score: 0,
+  })
+
+  it('never pulls a seen post in front of an unseen one to break a run', () => {
+    const sorted = [post('u1', 'alice'), post('u2', 'alice'), post('s1', 'bob', true)]
+    expect(avoidConsecutiveAuthors(sorted)).toEqual(['u1', 'u2', 's1'])
+  })
+
+  it('never pulls a non-followed post in front of a followed one', () => {
+    const sorted = [
+      post('f1', 'alice', false, true),
+      post('f2', 'alice', false, true),
+      post('n1', 'bob', false, false),
+    ]
+    expect(avoidConsecutiveAuthors(sorted)).toEqual(['f1', 'f2', 'n1'])
+  })
+
+  it('breaks a run across a group boundary using the next group itself', () => {
+    // last unseen card is alice; the seen group starts with alice but has bob.
+    const sorted = [post('u1', 'alice'), post('s1', 'alice', true), post('s2', 'bob', true)]
+    expect(avoidConsecutiveAuthors(sorted)).toEqual(['u1', 's2', 's1'])
+  })
+
+  it('looks past the first few posts (whole list, no look-ahead cap)', () => {
+    const sorted = [
+      ...Array.from({ length: 7 }, (_, i) => post(`a${i}`, 'alice')),
+      post('b0', 'bob'),
+    ]
+    const result = avoidConsecutiveAuthors(sorted)
+    expect(result.slice(0, 3)).toEqual(['a0', 'b0', 'a1'])
+  })
+
+  it('fixes runs deep in the list, not only near the top', () => {
+    const sorted = [
+      post('x0', 'x'), post('y0', 'y'), post('x1', 'x'), post('y1', 'y'), post('x2', 'x'),
+      post('c0', 'carol'), post('c1', 'carol'), post('d0', 'dave'),
+    ]
+    const result = avoidConsecutiveAuthors(sorted)
+    expect(result).toEqual(['x0', 'y0', 'x1', 'y1', 'x2', 'c0', 'd0', 'c1'])
+  })
+
+  it('keeps the relative order of the posts it shifts back', () => {
+    const sorted = [post('a0', 'a'), post('a1', 'a'), post('a2', 'a'), post('b0', 'b')]
+    // b0 moves into slot 1; a1 then a2 keep their order behind it.
+    expect(avoidConsecutiveAuthors(sorted)).toEqual(['a0', 'b0', 'a1', 'a2'])
+  })
+
+  it('avoids opening with the previous cycle\'s last author when possible', () => {
+    const sorted = [post('a0', 'alice'), post('b0', 'bob'), post('a1', 'alice')]
+    expect(avoidConsecutiveAuthors(sorted, 'alice')).toEqual(['b0', 'a0', 'a1'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// rankFeed – deterministic tiebreak
+// ---------------------------------------------------------------------------
+describe('rankFeed – deterministic tiebreak', () => {
+  const now = new Date('2026-09-25T12:00:00Z')
+  const cand = (id: string, authorId: string, publishedAt: string): FeedCandidate => ({
+    id,
+    authorId,
+    publishedAt: new Date(publishedAt),
+    likeCount: 0,
+    uniqueCommenterIds: new Set(),
+    viewed: false,
+  })
+
+  it('orders equal keys by publishedAt desc, then id desc, whatever the input order', () => {
+    const a = cand('p-a', 'u1', '2026-09-25T11:40:00Z')
+    const b = cand('p-b', 'u2', '2026-09-25T11:50:00Z')
+    const c = cand('p-c', 'u3', '2026-09-25T11:50:00Z')
+    const expected = ['p-c', 'p-b', 'p-a']
+    expect(rankFeed([a, b, c], new Set(), now)).toEqual(expected)
+    expect(rankFeed([c, a, b], new Set(), now)).toEqual(expected)
+    expect(rankFeed([b, c, a], new Set(), now)).toEqual(expected)
+  })
+
+  it('passes the boundary author through to same-author avoidance', () => {
+    const a0 = cand('a0', 'alice', '2026-09-25T11:50:00Z')
+    const b0 = cand('b0', 'bob', '2026-09-25T11:40:00Z')
+    expect(rankFeed([a0, b0], new Set(), now, { avoidFirstAuthorId: 'alice' })).toEqual(['b0', 'a0'])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -272,6 +361,24 @@ describe('cursor encoding/decoding', () => {
   it('returns null for valid base64 but wrong shape', () => {
     const bad = Buffer.from(JSON.stringify({ foo: 'bar' })).toString('base64url')
     expect(decodeCursor(bad)).toBeNull()
+  })
+
+  it('round-trips the restart flag and boundary author', () => {
+    const cursor = {
+      snapshotAt: '2026-09-25T12:00:00.000Z',
+      offset: 0,
+      viewedPhase: false,
+      restart: true,
+      avoidFirstAuthorId: 'alice',
+    }
+    expect(decodeCursor(encodeCursor(cursor))).toEqual(cursor)
+  })
+
+  it('rejects a negative / fractional offset or an invalid date', () => {
+    const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString('base64url')
+    expect(decodeCursor(enc({ snapshotAt: '2026-09-25T12:00:00.000Z', offset: -1, viewedPhase: false }))).toBeNull()
+    expect(decodeCursor(enc({ snapshotAt: '2026-09-25T12:00:00.000Z', offset: 1.5, viewedPhase: false }))).toBeNull()
+    expect(decodeCursor(enc({ snapshotAt: 'nope', offset: 0, viewedPhase: false }))).toBeNull()
   })
 })
 
