@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -23,6 +24,8 @@ export async function POST(_request: NextRequest, context: Ctx) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   const limited = rateLimitGuard('like_post', userId)
   if (limited) return limited

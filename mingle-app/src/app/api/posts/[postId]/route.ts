@@ -10,6 +10,7 @@ import {
   translatePostBodySettled,
 } from '@/server/translation/post-translation-service'
 import { serializePostsPage } from '@/server/feed/feed-post-loader'
+import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 
 export const runtime = 'nodejs'
 
@@ -60,6 +61,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const restricted = await accountRestrictionGuard(userId)
+  if (restricted) return restricted
 
   let body: unknown
   try { body = await request.json() } catch { return json({ error: 'invalid_body' }, { status: 400 }) }

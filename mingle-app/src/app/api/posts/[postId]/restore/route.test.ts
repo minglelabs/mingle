@@ -15,6 +15,14 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+// Posting writes are gated on the moderation restriction; unrestricted here.
+const { mockAccountRestrictionGuard } = vi.hoisted(() => ({
+  mockAccountRestrictionGuard: vi.fn<(userId: string) => Promise<Response | null>>(async () => null),
+}))
+vi.mock('@/server/reports/account-restriction', () => ({
+  accountRestrictionGuard: mockAccountRestrictionGuard,
+}))
+
 import { POST } from './route'
 
 const makeParams = (postId: string) => ({ params: Promise.resolve({ postId }) })

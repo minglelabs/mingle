@@ -31,12 +31,32 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+// Posting writes are gated on the moderation restriction; unrestricted here.
+const { mockAccountRestrictionGuard } = vi.hoisted(() => ({
+  mockAccountRestrictionGuard: vi.fn<(userId: string) => Promise<Response | null>>(async () => null),
+}))
+vi.mock('@/server/reports/account-restriction', () => ({
+  accountRestrictionGuard: mockAccountRestrictionGuard,
+}))
+
 import { GET, POST, PATCH, DELETE } from './route'
 
 describe('POST /api/posts/drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } })
+  })
+
+  it('returns 403 account_restricted for a restricted account', async () => {
+    mockAccountRestrictionGuard.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'account_restricted' }), { status: 403 }))
+    const req = new NextRequest('http://localhost/api/posts/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceText: 'hello' }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(403)
+    expect(mockDraftCreate).not.toHaveBeenCalled()
   })
 
   it('creates a draft', async () => {

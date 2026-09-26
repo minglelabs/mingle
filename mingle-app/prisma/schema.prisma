@@ -136,6 +136,8 @@ model UserNotification {
   type        String    @default("follow")
   postId      String?   @map("post_id")
   commentId   String?   @map("comment_id")
+  /// Set only on report_resolved: the report whose closing this row announces.
+  reportId    String?   @map("report_id")
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
@@ -143,11 +145,13 @@ model UserNotification {
   actor     User         @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
   post      Post?        @relation(fields: [postId], references: [id], onDelete: SetNull)
   comment   PostComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  report    UserReport?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
   @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")
   @@index([postId], map: "app_user_notifications_post_id_idx")
   @@index([commentId], map: "app_user_notifications_comment_id_idx")
+  @@index([reportId], map: "app_user_notifications_report_id_idx")
   @@map("app_user_notifications")
 }
 
@@ -207,6 +211,7 @@ model UserReport {
   targetPost    Post?             @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
   targetComment PostComment?      @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
   replies       UserReportReply[]
+  notifications UserNotification[]
 
   @@unique([reporterId, targetKey], map: "app_user_reports_reporter_target_key_uidx")
   @@index([reporterId, createdAt], map: "app_user_reports_reporter_created_at_idx")
