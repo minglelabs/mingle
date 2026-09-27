@@ -178,6 +178,88 @@ describe('durable message finalization', () => {
     expect(jobs.parseFinalizationResult({ sourceLanguage: 'en', translations: {} }, { targetLanguages: ['en'] })).toMatchObject({ sourceLanguage: 'en', translations: {} })
   })
 
+  it('exempts the resolved Chinese source variant when the server only says zh', () => {
+    const request = { text: '这是简体中文', sourceLanguage: 'zh-CN', targetLanguages: ['zh-CN', 'zh-TW', 'ko'] }
+    const result = jobs.parseFinalizationResult({
+      sourceLanguage: 'zh', translations: { 'zh-TW': '這是簡體中文', ko: '중국어' },
+    }, request)
+    expect(result.sourceLanguage).toBe('zh-CN')
+    expect(result.translations).toEqual({ 'zh-TW': '這是簡體中文', ko: '중국어' })
+  })
+
+  it('resolves a bare zh translation key into the missing variant and never keeps zh', () => {
+    const request = { text: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['ko', 'zh-TW'] }
+    const result = jobs.parseFinalizationResult({ sourceLanguage: 'ko', translations: { zh: '你好嗎' } }, request)
+    expect(result.translations).toEqual({ 'zh-TW': '你好嗎' })
+    // A bare zh next to an explicit variant that already has text is dropped.
+    const both = jobs.parseFinalizationResult({
+      sourceLanguage: 'ko', translations: { 'zh-TW': '你好嗎', zh: '你好吗' },
+    }, { ...request, targetLanguages: ['ko', 'zh-TW'] })
+    expect(both.translations).toEqual({ 'zh-TW': '你好嗎' })
+  })
+
+  it('resolves a generic zh server source with the room when the request had no variant', () => {
+    const request = { text: '这是简体中文', sourceLanguage: 'en', targetLanguages: ['en', 'zh-TW'] }
+    const result = jobs.parseFinalizationResult({ sourceLanguage: 'zh', translations: { en: 'Chinese' } }, request)
+    expect(result.sourceLanguage).toBe('zh-TW')
+    // Typed text: the script outranks the room.
+    const typed = jobs.parseFinalizationResult({ sourceLanguage: 'zh', translations: { en: 'Chinese', 'zh-TW': '這是簡體中文' } },
+      { ...request, sourceLanguage: 'unknown' }, { preferSourceScript: true })
+    expect(typed.sourceLanguage).toBe('zh-CN')
+  })
+
+  it('keeps sourceDisplayText only when it differs from the request text', () => {
+    const request = { text: '这是中文', sourceLanguage: 'zh-TW', targetLanguages: ['zh-TW', 'ko'] }
+    expect(jobs.parseFinalizationResult({ sourceLanguage: 'zh-TW', sourceDisplayText: '這是中文', translations: { ko: '중국어' } }, request)
+      .sourceDisplayText).toBe('這是中文')
+    expect(jobs.parseFinalizationResult({ sourceLanguage: 'zh-TW', sourceDisplayText: '这是中文', translations: { ko: '중국어' } }, request))
+      .not.toHaveProperty('sourceDisplayText')
+  })
+
+  it('applies sourceDisplayText to the warm cache and keeps it out of the source event', async () => {
+    const zh = {
+      ...input('zh-one'),
+      eventBody: { ...input('zh-one').eventBody, sourceText: '这是中文', sourceLanguage: 'zh-TW', targetLanguages: ['ko'] },
+      translationBody: { text: '这是中文', sourceLanguage: 'zh-TW', targetLanguages: ['zh-TW', 'ko'] },
+      utterance: { id: 'zh-one', originalText: '这是中文', originalLang: 'zh-TW', translations: {}, targetLanguages: ['ko'] },
+    }
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json({ sourceLanguage: 'zh-TW', sourceDisplayText: '這是中文', translations: { ko: '중국어' } })
+      : new Response(null, { status: 204 }))
+    const record = jobs.enqueueDurableFinalization(zh)
+    await jobs.deliverDurableFinalization(record)
+    const cached = JSON.parse(localStorage.getItem(cacheKey)!)[0]
+    expect(cached).toMatchObject({ originalText: '这是中文', originalDisplayText: '這是中文', originalLang: 'zh-TW' })
+    const events = fetcher.mock.calls.filter(([url]) => String(url).endsWith('log/client-event')).map(([, init]) => bodyOf(init))
+    expect(events.every(event => event.sourceText === '这是中文' && !('sourceDisplayText' in event))).toBe(true)
+  })
+
+  it('stops retrying an incomplete response after a small cap and keeps what arrived', async () => {
+    const partial = { sourceLanguage: 'ko', translations: { en: 'Hello' } }
+    const request = { ...input(), translationBody: { text: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['ko', 'en', 'ja'] } }
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize') ? Response.json(partial) : new Response(null, { status: 204 }))
+    const record = jobs.enqueueDurableFinalization(request)
+    for (let attempt = 1; attempt < jobs.MAX_INCOMPLETE_TRANSLATION_ATTEMPTS; attempt += 1) {
+      await jobs.deliverDurableFinalization(record)
+      expect(jobs.readDurableFinalizations(owner, namespace)[0]).toMatchObject({ result: null, incompleteAttempts: attempt })
+    }
+    expect(await jobs.deliverDurableFinalization(record)).toMatchObject({ translations: { en: 'Hello' } })
+    expect(jobs.readDurableFinalizations(owner, namespace)).toEqual([])
+    expect(jobs.MAX_INCOMPLETE_TRANSLATION_ATTEMPTS).toBeLessThanOrEqual(3)
+  })
+
+  it('reads the full room selection and typed-ness from a durable record', () => {
+    const record = jobs.enqueueDurableFinalization({
+      ...input(),
+      eventBody: { ...input().eventBody, metadata: { reason: 'manual_text_input' } },
+      translationBody: { text: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['ko', 'zh-CN', 'zh-TW'] },
+    })
+    expect(jobs.resolveDurableFinalizationSelectedLanguages(record, ['en'])).toEqual(['ko', 'zh-CN', 'zh-TW'])
+    expect(jobs.isTypedDurableFinalization(record)).toBe(true)
+    expect(jobs.resolveDurableFinalizationSelectedLanguages({ ...record, translationBody: null }, ['en'])).toEqual(['en'])
+    expect(jobs.isTypedDurableFinalization(jobs.enqueueDurableFinalization(input('other')))).toBe(false)
+  })
+
   it('times out a stalled response body, not only stalled response headers', async () => {
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
       ? { ok: true, json: () => new Promise(() => {}) } as Response : new Response(null, { status: 204 }))

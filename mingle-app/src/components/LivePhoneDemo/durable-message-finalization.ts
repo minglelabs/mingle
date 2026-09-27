@@ -1,7 +1,8 @@
 'use client'
 
 import type { Utterance } from './ChatBubble'
-import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { canonicalizeLanguageKey, classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
+import { canonicalizeUtteranceLanguages } from './conversation-live'
 import { readConversationMutationRecords } from '../conversation-mutation-queue'
 import { compatiblePendingWorkNamespaces } from '@/lib/pending-work-api-namespace'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
@@ -10,10 +11,16 @@ import { consumeVoiceOrder } from './voice-order-reservation'
 const STORAGE_KEY = 'mingle:message-finalization:v1'
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const REQUEST_TIMEOUT_MS = 30_000
+// A response that keeps omitting a target is accepted after this many tries
+// instead of retrying forever; the missing row simply stays untranslated.
+export const MAX_INCOMPLETE_TRANSLATION_ATTEMPTS = 3
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 export type FinalizationResult = {
   translations: Record<string, string>
   sourceLanguage?: string
+  // The source in its Chinese variant's script; present only when it differs
+  // from the request text. Display-only.
+  sourceDisplayText?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
   provider?: string
@@ -38,6 +45,7 @@ export type DurableFinalization = {
   createdAt: number
   nextAttemptAt: number
   attemptCount: number
+  incompleteAttempts?: number
 }
 type Update = { record: DurableFinalization; result: FinalizationResult | null; retrying: boolean }
 type FinalizationOwner = { consumers: number; generation: number }
@@ -103,7 +111,12 @@ function load(): void {
         || (r.translationBody !== null && (!r.translationBody || typeof r.translationBody !== 'object' || Array.isArray(r.translationBody)))
         || !Number.isFinite(r.createdAt) || Date.now() - r.createdAt > MAX_AGE_MS) continue
       if (r.result && r.translationBody) {
-        try { r.result = parseFinalizationResult(r.result, r.translationBody) } catch { r.result = null }
+        // Already accepted once (possibly after the incomplete-retry cap).
+        try {
+          r.result = parseFinalizationResult(r.result, r.translationBody, {
+            allowIncomplete: true, preferSourceScript: isTypedDurableFinalization(r),
+          })
+        } catch { r.result = null }
       }
       records.set(r.id, r)
     }
@@ -132,7 +145,8 @@ function persistUtterance(record: DurableFinalization, retrying = false): void {
   const target = storage()
   if (!target) return
   const result = record.result
-  const next: Utterance = {
+  const requestText = typeof record.translationBody?.text === 'string' ? record.translationBody.text : undefined
+  const merged: Utterance = {
     ...record.utterance,
     ...(result ? {
       originalLang: result.sourceLanguage || record.utterance.originalLang,
@@ -140,9 +154,15 @@ function persistUtterance(record: DurableFinalization, retrying = false): void {
       translationFinalized: { ...record.utterance.translationFinalized, ...Object.fromEntries(Object.keys(result.translations).map(k => [k, true])) },
       sourceLanguagesMixed: result.sourceLanguagesMixed,
       sourceTextHasForeignScript: result.sourceTextHasForeignScript,
+      ...(result.sourceDisplayText && requestText !== undefined && record.utterance.originalText === requestText
+        ? { originalDisplayText: result.sourceDisplayText } : {}),
     } : {}),
     translationStatus: result || !record.translationBody ? undefined : retrying ? 'retrying' : 'pending',
   }
+  // Both sides are canonical already; this only folds legacy generic keys.
+  const next = canonicalizeUtteranceLanguages(merged, {
+    roomLanguages: resolveDurableFinalizationSelectedLanguages(record, []),
+  })
   record.utterance = next
   const key = `mingle_demo_utterances${record.storageNamespace ? `__${record.storageNamespace}` : ''}`
   try {
@@ -284,20 +304,65 @@ export async function adoptDurableFinalizations(fromOwner: string, toOwner: stri
   persist()
 }
 
-export function parseFinalizationResult(value: unknown, request: Record<string, unknown>): FinalizationResult {
+/** The full room selection at finalize time (the request's targets include the local source guess). */
+export function resolveDurableFinalizationSelectedLanguages(
+  record: Pick<DurableFinalization, 'translationBody' | 'utterance'>,
+  fallback: readonly string[],
+): string[] {
+  const requested = Array.isArray(record.translationBody?.targetLanguages)
+    ? (record.translationBody.targetLanguages as unknown[]).filter((s): s is string => typeof s === 'string' && !!s.trim())
+    : []
+  if (requested.length) return requested
+  if (fallback.length) return [...fallback]
+  return [...(record.utterance.targetLanguages || [])]
+}
+
+/** A typed message: its script is real evidence for the Chinese variant. */
+export function isTypedDurableFinalization(record: Pick<DurableFinalization, 'eventBody'>): boolean {
+  const metadata = record.eventBody?.metadata
+  return !!metadata && typeof metadata === 'object' && (metadata as Record<string, unknown>).reason === 'manual_text_input'
+}
+
+export function parseFinalizationResult(
+  value: unknown,
+  request: Record<string, unknown>,
+  options: { allowIncomplete?: boolean, preferSourceScript?: boolean } = {},
+): FinalizationResult {
   if (!value || typeof value !== 'object') throw new Error('invalid_translation_response')
   const data = value as FinalizationResult
   if (!data.translations || typeof data.translations !== 'object' || Array.isArray(data.translations)) throw new Error('missing_translations')
-  const translations = Object.fromEntries(Object.entries(data.translations).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !!entry[1].trim()))
-  const sourceLanguage = typeof data.sourceLanguage === 'string' ? data.sourceLanguage : String(request.sourceLanguage || '')
-  const sourceKey = canonicalizeTranslationLanguageCode(sourceLanguage)
-  const keys = new Set(Object.keys(translations).map(canonicalizeTranslationLanguageCode))
+  const rawTranslations = Object.fromEntries(Object.entries(data.translations).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !!entry[1].trim()))
   const targets = Array.isArray(request.targetLanguages) ? request.targetLanguages.filter((s): s is string => typeof s === 'string') : []
-  if (!targets.length || targets.some(t => canonicalizeTranslationLanguageCode(t) !== sourceKey && !keys.has(canonicalizeTranslationLanguageCode(t)))) {
+  const requestText = typeof request.text === 'string' ? request.text : ''
+  const requestSource = typeof request.sourceLanguage === 'string' ? request.sourceLanguage : ''
+  const rawSourceLanguage = typeof data.sourceLanguage === 'string' ? data.sourceLanguage : requestSource
+  // A bare `zh` never survives: resolve it against the request (its own
+  // variant guess first, then the room, then the script).
+  const sourceLanguage = classifyChineseLanguage(rawSourceLanguage)
+    ? resolveChineseVariant({
+      hint: requestSource,
+      language: rawSourceLanguage,
+      text: requestText,
+      candidates: targets,
+      preferScript: options.preferSourceScript === true,
+    })
+    : rawSourceLanguage
+  const translations = canonicalizeUtteranceLanguages({
+    id: '', originalText: requestText, originalLang: sourceLanguage || 'unknown', translations: rawTranslations,
+  }, { roomLanguages: targets }).translations
+  const sourceKey = sourceLanguage ? canonicalizeLanguageKey(sourceLanguage) : ''
+  const keys = new Set(Object.keys(translations))
+  if (!targets.length || (!options.allowIncomplete && targets.some(t => {
+    const key = canonicalizeLanguageKey(t, { candidates: targets })
+    return key !== sourceKey && !keys.has(key)
+  }))) {
     throw new Error('incomplete_translations')
   }
+  const sourceDisplayText = typeof data.sourceDisplayText === 'string' && data.sourceDisplayText.trim()
+    && data.sourceDisplayText !== requestText ? data.sourceDisplayText : undefined
   return {
     translations, sourceLanguage,
+    ...(sourceDisplayText ? { sourceDisplayText } : {}),
     sourceLanguagesMixed: data.sourceLanguagesMixed === true,
     sourceTextHasForeignScript: data.sourceTextHasForeignScript === true,
     ...Object.fromEntries(['provider', 'infrastructureProvider', 'model'].flatMap(key => {
@@ -378,7 +443,16 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
         if (!record.translationBody || record.result) return
         const startedAt = Date.now()
         const response = await post(record, 'translate/finalize', record.translationBody, fetcher, controller.signal, canSend)
-        const result = parseFinalizationResult(response, record.translationBody)
+        const preferSourceScript = isTypedDurableFinalization(record)
+        let result: FinalizationResult
+        try {
+          result = parseFinalizationResult(response, record.translationBody, { preferSourceScript })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'incomplete_translations' || !canSend()) throw error
+          record.incompleteAttempts = (record.incompleteAttempts ?? 0) + 1
+          if (record.incompleteAttempts < MAX_INCOMPLETE_TRANSLATION_ATTEMPTS) throw error
+          result = parseFinalizationResult(response, record.translationBody, { preferSourceScript, allowIncomplete: true })
+        }
         if (canSend()) {
           record.result = result
           record.eventBody.totalDurationMs = Number(record.eventBody.sttDurationMs || 0) + Math.max(0, Date.now() - startedAt)
@@ -389,8 +463,11 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
     if (!canSend()) return null
     if (!record.sourceDelivered || (record.translationBody && !record.result)) throw new Error('finalization_incomplete')
     if (record.result) {
+      // sourceDisplayText is display-only; the event keeps the recognized text.
+      const { sourceDisplayText: _sourceDisplayText, ...persistedResult } = record.result
+      void _sourceDisplayText
       await post(record, 'log/client-event', {
-        ...record.eventBody, ...record.result, translationUpdate: true,
+        ...record.eventBody, ...persistedResult, translationUpdate: true,
       }, fetcher, controller.signal, canSend)
     }
     if (!canSend()) return null
