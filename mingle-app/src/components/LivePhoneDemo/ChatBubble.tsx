@@ -5,6 +5,13 @@ import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
 import { UserRound } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import {
+  classifyChineseLanguage,
+  getSiblingChineseVariant,
+  listChineseVariants,
+  resolveChineseVariant,
+  toChineseVariant,
+} from '@/lib/chinese-variant'
 import { getSttLanguageDisplayName, getSttLanguageFlag } from '@/lib/stt-languages'
 import LanguageFlag from '@/components/language-flag'
 import {
@@ -143,52 +150,118 @@ function normalizeTranslationLanguageKey(rawLanguage: string): string {
   return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
 }
 
-function findLanguageByKey(
-  languages: readonly string[],
-  targetKey: string,
-): string | null {
-  return languages.find((language) => normalizeTranslationLanguageKey(language) === targetKey) || null
+type DisplayLanguageUtterance = Pick<
+  Utterance,
+  'originalLang' | 'originalText' | 'targetLanguages' | 'translations' | 'translationFinalized'
+>
+
+/**
+ * One display-language key for every surface (web bubble, native PiP,
+ * latest-message preview). Keys are lower-case catalog codes; a Chinese key
+ * is always zh-cn or zh-tw, never a bare zh, so zh / zh-CN / zh-cn / zh-Hans
+ * collapse into one row, button and flag.
+ */
+export type DisplayLanguageResolver = {
+  /** Display language of the original: zh-CN / zh-TW for any Chinese original. */
+  originalLanguage: string
+  originalKey: string
+  keyOf: (rawLanguage: string | null | undefined, text?: string | null) => string
+  /** The code handed to renderers for a key (canonical casing for Chinese). */
+  displayCodeOf: (rawLanguage: string, key?: string) => string
+}
+
+function listUtteranceLanguageCandidates(utterance: DisplayLanguageUtterance): string[] {
+  return [
+    ...(utterance.targetLanguages || []),
+    ...Object.keys(utterance.translations || {}),
+    ...Object.keys(utterance.translationFinalized || {}),
+  ]
 }
 
 export function resolveOriginalDisplayLanguage(
   originalLanguage: string,
   candidateLanguages: readonly string[] = [],
   roomLanguageOrder: readonly string[] = [],
+  originalText?: string | null,
 ): string {
-  if (normalizeTranslationLanguageKey(originalLanguage) !== 'zh') {
-    return originalLanguage
-  }
+  const chinese = classifyChineseLanguage(originalLanguage)
+  if (chinese === 'zh-CN' || chinese === 'zh-TW') return chinese
+  if (chinese !== 'zh') return originalLanguage
 
-  // Soniox reports generic Chinese as zh, while Gemini/translation targets
-  // use the script-specific zh-CN/zh-TW labels. Represent that source with
-  // one display language, preferring Simplified Chinese whenever both exist.
-  const roomSimplifiedChinese = findLanguageByKey(roomLanguageOrder, 'zh-cn')
-  if (roomSimplifiedChinese) return roomSimplifiedChinese
-
-  const roomTraditionalChinese = findLanguageByKey(roomLanguageOrder, 'zh-tw')
-  if (roomTraditionalChinese) return roomTraditionalChinese
-
-  if (roomLanguageOrder.length > 0) return 'zh-CN'
-
-  return (
-    findLanguageByKey(candidateLanguages, 'zh-cn')
-    || findLanguageByKey(candidateLanguages, 'zh-tw')
-    || 'zh-CN'
-  )
+  // A generic zh original (legacy rows, spectate/share snapshots). A single
+  // Chinese variant among the translations was most likely produced for the
+  // other variant, so the original is its sibling (weak tie-breaker only).
+  const translatedVariants = listChineseVariants(candidateLanguages)
+  return resolveChineseVariant({
+    language: 'zh',
+    text: originalText,
+    candidates: roomLanguageOrder.length > 0 ? roomLanguageOrder : candidateLanguages,
+    fallback: translatedVariants.length === 1 ? getSiblingChineseVariant(translatedVariants[0]) : null,
+  })
 }
 
-function normalizeLanguageKeyForOriginalDisplay(
-  rawLanguage: string,
-  originalDisplayLanguage: string,
-): string {
-  const normalized = normalizeTranslationLanguageKey(rawLanguage)
-  if (
-    normalized === 'zh'
-    && normalizeTranslationLanguageKey(originalDisplayLanguage) !== 'zh'
-  ) {
-    return normalizeTranslationLanguageKey(originalDisplayLanguage)
+export function createDisplayLanguageResolver(
+  utterance: DisplayLanguageUtterance,
+  languageOrder: readonly string[] = [],
+): DisplayLanguageResolver {
+  const originalLanguage = resolveOriginalDisplayLanguage(
+    utterance.originalLang,
+    listUtteranceLanguageCandidates(utterance),
+    languageOrder,
+    utterance.originalText,
+  )
+  const originalKey = normalizeTranslationLanguageKey(originalLanguage)
+  const rawOriginalKey = (utterance.originalLang || '').trim().toLowerCase()
+  const originalVariant = toChineseVariant(originalLanguage)
+  const variantCandidates = [...languageOrder, ...(utterance.targetLanguages || [])]
+
+  const resolveGenericChineseKey = (text: string | null | undefined): string => {
+    if (originalVariant) {
+      // A generic zh value next to a Chinese original is either a copy of the
+      // original or the translation meant for the sibling variant.
+      return resolveChineseVariant({
+        language: 'zh',
+        text,
+        preferScript: true,
+        candidates: variantCandidates.filter((language) => toChineseVariant(language) !== originalVariant),
+        fallback: originalVariant,
+      }).toLowerCase()
+    }
+    return resolveChineseVariant({
+      language: 'zh',
+      text,
+      preferScript: true,
+      candidates: variantCandidates,
+    }).toLowerCase()
   }
-  return normalized
+
+  const keyOf = (rawLanguage: string | null | undefined, text?: string | null): string => {
+    const language = (rawLanguage || '').trim()
+    if (!language) return ''
+    if (rawOriginalKey && language.toLowerCase() === rawOriginalKey) return originalKey
+    const chinese = classifyChineseLanguage(language)
+    if (chinese === 'zh-CN' || chinese === 'zh-TW') return chinese.toLowerCase()
+    if (chinese === 'zh') {
+      const value = text ?? utterance.translations?.[language]
+      return resolveGenericChineseKey(typeof value === 'string' ? value : null)
+    }
+    return normalizeTranslationLanguageKey(language)
+  }
+
+  const displayCodeOf = (rawLanguage: string, key = keyOf(rawLanguage)): string => {
+    if (key === originalKey) return originalLanguage
+    if (key === 'zh-cn') return 'zh-CN'
+    if (key === 'zh-tw') return 'zh-TW'
+    return (rawLanguage || '').trim()
+  }
+
+  return { originalLanguage, originalKey, keyOf, displayCodeOf }
+}
+
+/** The original as it should be read: in its Chinese variant's script when the server supplied one. */
+export function resolveOriginalDisplayText(utterance: Pick<Utterance, 'originalText' | 'originalDisplayText'>): string {
+  const displayText = utterance.originalDisplayText
+  return typeof displayText === 'string' && displayText.trim() ? displayText : utterance.originalText
 }
 
 function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
@@ -199,12 +272,25 @@ function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
   return rawLanguage
 }
 
+/**
+ * A key that can only be a copy of the original, never a deliberate
+ * same-language rendering: a bare `zh` key, or any key of a legacy generic
+ * `zh` original. Mixed-language speech keeps its same-language bubble
+ * (e.g. a ko original with a full-Korean `ko` rendering) otherwise.
+ */
+function isGenericChineseOriginalAlias(
+  rawLanguage: string,
+  utterance: DisplayLanguageUtterance,
+): boolean {
+  return classifyChineseLanguage(rawLanguage) === 'zh'
+    || classifyChineseLanguage(utterance.originalLang) === 'zh'
+}
+
 export function buildTargetLanguagesForUtterance(
   utterance: Utterance,
-  originalDisplayLanguage = utterance.originalLang,
+  languageOrder: readonly string[] = [],
+  resolver: DisplayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder),
 ): string[] {
-  const sourceLanguage = normalizeTranslationLanguageKey(originalDisplayLanguage)
-  const hasGenericChineseSource = normalizeTranslationLanguageKey(utterance.originalLang) === 'zh'
   const keepSourceLanguageBubble = (
     utterance.sourceLanguagesMixed === true
     || utterance.sourceTextHasForeignScript === true
@@ -215,18 +301,17 @@ export function buildTargetLanguagesForUtterance(
   const pushLanguage = (rawLanguage: string) => {
     const language = (rawLanguage || '').trim()
     if (!language) return
-    const normalized = normalizeTranslationLanguageKey(language)
+    const key = resolver.keyOf(language)
+    if (!key) return
     if (
-      hasGenericChineseSource
-      && (normalized === 'zh' || normalized === sourceLanguage)
+      key === resolver.originalKey
+      && (!keepSourceLanguageBubble || isGenericChineseOriginalAlias(language, utterance))
     ) {
       return
     }
-    if (!keepSourceLanguageBubble && sourceLanguage && normalized === sourceLanguage) return
-    const key = normalized || language.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
-    targetLanguages.push(language)
+    targetLanguages.push(resolver.displayCodeOf(language, key))
   }
 
   for (const language of utterance.targetLanguages || []) pushLanguage(language)
@@ -237,36 +322,39 @@ export function buildTargetLanguagesForUtterance(
 }
 
 function buildLanguageOptionsForUtterance(
-  originalLanguage: string,
+  resolver: DisplayLanguageResolver,
   targetLanguages: readonly string[],
   languageOrder?: readonly string[],
 ): string[] {
-  const availableLanguages = [originalLanguage, ...targetLanguages]
+  const originalLanguage = resolver.originalLanguage
   const availableByKey = new Map<string, string>()
-  for (const language of availableLanguages) {
-    const key = normalizeLanguageKeyForOriginalDisplay(language, originalLanguage)
+  for (const language of [originalLanguage, ...targetLanguages]) {
+    const key = resolver.keyOf(language)
     if (key && !availableByKey.has(key)) availableByKey.set(key, language)
   }
 
   const options: string[] = []
   const seen = new Set<string>()
-  const pushLanguage = (rawLanguage: string) => {
+  const pushLanguage = (rawLanguage: string, fromRoomOrder: boolean) => {
     const language = (rawLanguage || '').trim()
     if (!language) return
-    const key = normalizeTranslationLanguageKey(language) || language.toLowerCase()
+    const key = resolver.keyOf(language) || language.toLowerCase()
     if (seen.has(key)) return
+    const available = availableByKey.get(key)
+    // A room's Chinese variant that is neither the original, a turn target
+    // nor translated would stay an empty button forever.
+    if (!available && fromRoomOrder && classifyChineseLanguage(language)) return
     seen.add(key)
-    options.push(language)
+    options.push(available || language)
   }
 
-  const hasExplicitLanguageOrder = Boolean(languageOrder?.length)
-  const orderedCandidates = hasExplicitLanguageOrder
-    ? [...languageOrder!, ...targetLanguages, originalLanguage]
-    : [originalLanguage, ...targetLanguages]
-
-  for (const language of orderedCandidates) {
-    const normalizedKey = normalizeLanguageKeyForOriginalDisplay(language, originalLanguage)
-    pushLanguage(normalizedKey ? (availableByKey.get(normalizedKey) || language) : language)
+  if (languageOrder?.length) {
+    for (const language of languageOrder) pushLanguage(language, true)
+    for (const language of targetLanguages) pushLanguage(language, false)
+    pushLanguage(originalLanguage, false)
+  } else {
+    pushLanguage(originalLanguage, false)
+    for (const language of targetLanguages) pushLanguage(language, false)
   }
 
   return options
@@ -286,17 +374,63 @@ function buildCombinedUtteranceCopyText(
   return lines.join('\n')
 }
 
+export type DisplayTranslation = {
+  text: string
+  finalized: boolean | undefined
+}
+
+/**
+ * The translation for a display language. When several raw keys collapse
+ * into that language (zh, zh-cn, zh-CN), the finalized one wins, then the
+ * newest (last inserted) one with text.
+ */
+export function findDisplayTranslation(
+  utterance: Pick<Utterance, 'translations' | 'translationFinalized'>,
+  language: string,
+  resolver: DisplayLanguageResolver,
+): DisplayTranslation {
+  const targetKey = resolver.keyOf(language)
+  if (!targetKey) return { text: '', finalized: undefined }
+
+  const finalizedRecord = utterance.translationFinalized || {}
+  const findFinalized = (rawKey: string): boolean | undefined => {
+    if (Object.prototype.hasOwnProperty.call(finalizedRecord, rawKey)) return finalizedRecord[rawKey]
+    const alias = Object.keys(finalizedRecord).find((key) => resolver.keyOf(key) === targetKey)
+    return alias ? finalizedRecord[alias] : undefined
+  }
+
+  let best: (DisplayTranslation & { rank: number }) | null = null
+  for (const [rawKey, value] of Object.entries(utterance.translations || {})) {
+    if (typeof value !== 'string' || !value.trim()) continue
+    if (resolver.keyOf(rawKey, value) !== targetKey) continue
+    const finalized = findFinalized(rawKey)
+    const rank = finalized === false ? 1 : 2
+    if (!best || rank >= best.rank) best = { text: value, finalized, rank }
+  }
+  if (best) return { text: best.text, finalized: best.finalized }
+
+  const finalizedAlias = Object.keys(finalizedRecord).find((key) => resolver.keyOf(key) === targetKey)
+  return { text: '', finalized: finalizedAlias ? finalizedRecord[finalizedAlias] : undefined }
+}
+
 export function findLanguageRecordValue<T>(
   record: Record<string, T> | undefined,
   language: string,
+  resolver?: DisplayLanguageResolver,
 ): T | undefined {
   if (!record) return undefined
 
-  const targetKey = normalizeTranslationLanguageKey(language)
-  const matchingKey = Object.keys(record).find((key) => (
-    normalizeTranslationLanguageKey(key) === targetKey
-  ))
-  return matchingKey ? record[matchingKey] : undefined
+  const keyOf = resolver
+    ? (key: string) => resolver.keyOf(key, typeof record[key] === 'string' ? record[key] as string : null)
+    : normalizeTranslationLanguageKey
+  const targetKey = resolver ? resolver.keyOf(language) : normalizeTranslationLanguageKey(language)
+  const matchingKeys = Object.keys(record).filter((key) => keyOf(key) === targetKey)
+  // Prefer the newest non-empty alias when several raw keys collapse into one.
+  for (let index = matchingKeys.length - 1; index >= 0; index -= 1) {
+    const value = record[matchingKeys[index]]
+    if (typeof value !== 'string' || value.trim()) return value
+  }
+  return matchingKeys.length ? record[matchingKeys[matchingKeys.length - 1]] : undefined
 }
 
 export function resolveInitialDisplayLanguage(
@@ -305,14 +439,18 @@ export function resolveInitialDisplayLanguage(
   originalLanguage: string,
   targetLanguages: readonly string[],
   roomLanguageOrder: readonly string[] = [],
+  resolver: DisplayLanguageResolver = createDisplayLanguageResolver({
+    originalLang: originalLanguage,
+    originalText: '',
+    targetLanguages: [...targetLanguages],
+    translations: {},
+  }, roomLanguageOrder),
 ): string {
   const availableLanguages = [originalLanguage, ...targetLanguages]
   const findAvailableLanguage = (rawLanguage: string | null | undefined) => {
-    const languageKey = normalizeLanguageKeyForOriginalDisplay(rawLanguage || '', originalLanguage)
+    const languageKey = resolver.keyOf(rawLanguage || '')
     if (!languageKey) return null
-    return availableLanguages.find((language) => (
-      normalizeLanguageKeyForOriginalDisplay(language, originalLanguage) === languageKey
-    )) || null
+    return availableLanguages.find((language) => resolver.keyOf(language) === languageKey) || null
   }
 
   const explicitMatch = findAvailableLanguage(explicitDisplayLanguage)
@@ -320,18 +458,16 @@ export function resolveInitialDisplayLanguage(
     return explicitMatch
   }
 
-  const originalKey = normalizeTranslationLanguageKey(originalLanguage)
+  const originalKey = resolver.keyOf(originalLanguage)
   for (const preferredLanguage of preferredLanguages || []) {
-    const preferredKey = normalizeLanguageKeyForOriginalDisplay(preferredLanguage, originalLanguage)
+    const preferredKey = resolver.keyOf(preferredLanguage)
     if (!preferredKey) continue
 
     if (preferredKey === originalKey) {
       return originalLanguage
     }
 
-    const roomLanguage = roomLanguageOrder.find((language) => (
-      normalizeTranslationLanguageKey(language) === preferredKey
-    ))
+    const roomLanguage = roomLanguageOrder.find((language) => resolver.keyOf(language) === preferredKey)
     if (!roomLanguage) continue
 
     const roomLanguageMatch = findAvailableLanguage(roomLanguage)
@@ -612,15 +748,10 @@ function ChatBubble({
   const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
-  const originalDisplayLanguage = resolveOriginalDisplayLanguage(
-    utterance.originalLang,
-    [
-      ...(utterance.targetLanguages || []),
-      ...Object.keys(utterance.translations || {}),
-      ...Object.keys(utterance.translationFinalized || {}),
-    ],
-    languageOrder,
-  )
+  const displayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder)
+  const displayLanguageKey = displayLanguageResolver.keyOf
+  const originalDisplayLanguage = displayLanguageResolver.originalLanguage
+  const originalDisplayText = resolveOriginalDisplayText(utterance)
   const flag = getSttLanguageFlag(originalDisplayLanguage)
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(originalDisplayLanguage)
   const avatar = getSpeakerAvatar(
@@ -640,11 +771,10 @@ function ChatBubble({
   }, [bubbleDisplayMode])
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
-  const targetLangs = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
+  const targetLangs = buildTargetLanguagesForUtterance(utterance, languageOrder, displayLanguageResolver)
   const translationEntries = targetLangs
     .map((lang) => {
-      const text = findLanguageRecordValue(utterance.translations, lang) || ''
-      const finalized = findLanguageRecordValue(utterance.translationFinalized, lang)
+      const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
       return {
         lang,
         text,
@@ -653,7 +783,7 @@ function ChatBubble({
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
   const languageOptions = buildLanguageOptionsForUtterance(
-    originalDisplayLanguage,
+    displayLanguageResolver,
     targetLangs,
     languageOrder,
   )
@@ -665,6 +795,7 @@ function ChatBubble({
     originalDisplayLanguage,
     targetLangs,
     languageOrder,
+    displayLanguageResolver,
   )
   // Only an explicit language selection is sticky. The automatic choice must
   // follow newly available translations after a source-only first snapshot.
@@ -672,17 +803,17 @@ function ChatBubble({
   const selectDisplayLanguage = (language: string) => setDisplayLanguage({ messageId: utterance.id, language })
   const displayLanguage = resolveSelectedBubbleLanguage(utterance.id, automaticDisplayLanguage, selectedLanguage)
   const activeLanguage = languageOptions.find((language) => (
-    normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
+    displayLanguageKey(language) === displayLanguageKey(displayLanguage)
   )) || originalDisplayLanguage
-  const isOriginalLanguageSelected = normalizeTranslationLanguageKey(activeLanguage)
-    === normalizeTranslationLanguageKey(originalDisplayLanguage)
+  const isOriginalLanguageSelected = displayLanguageKey(activeLanguage)
+    === displayLanguageKey(originalDisplayLanguage)
   const activeTranslationEntry = isOriginalLanguageSelected
     ? null
     : translationEntries.find((entry) => (
-      normalizeTranslationLanguageKey(entry.lang) === normalizeTranslationLanguageKey(activeLanguage)
+      displayLanguageKey(entry.lang) === displayLanguageKey(activeLanguage)
     )) || null
   const activeText = isOriginalLanguageSelected
-    ? utterance.originalText
+    ? originalDisplayText
     : activeTranslationEntry?.text || ''
   const activeIsPending = !isOriginalLanguageSelected && !activeText
   const activePlaybackKey = isOriginalLanguageSelected
@@ -699,7 +830,7 @@ function ChatBubble({
   const collapsedBubblePaddingClassName = isCounterpartMessage ? 'px-2.5 pt-0.5 pb-1' : 'px-2.5 py-1'
   const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
     flag,
-    utterance.originalText,
+    originalDisplayText,
     completedTranslationEntries,
   )
 
@@ -707,7 +838,7 @@ function ChatBubble({
     {
       key: `original:${originalDisplayLanguage}`,
       lang: originalDisplayLanguage,
-      text: utterance.originalText,
+      text: originalDisplayText,
       isOriginal: true,
       isDraft,
       translationState: undefined,
@@ -747,14 +878,14 @@ function ChatBubble({
             className="mr-1 inline-flex items-center gap-0 align-middle whitespace-nowrap"
           >
             {languageOptions.map((lang) => {
-              const isOriginal = normalizeTranslationLanguageKey(lang)
-                === normalizeTranslationLanguageKey(originalDisplayLanguage)
+              const isOriginal = displayLanguageKey(lang)
+                === displayLanguageKey(originalDisplayLanguage)
               return (
                 <ChatLanguageBadge
                   key={lang}
                   lang={lang}
                   isOriginal={isOriginal}
-                  isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                  isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(lang)}
                   variant="icon"
                   uiLocale={uiLocale}
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
@@ -769,7 +900,7 @@ function ChatBubble({
         )}
         {activeIsPending ? (
           <>
-            <span data-current-bubble-text-value className="align-middle">{utterance.originalText}</span>
+            <span data-current-bubble-text-value className="align-middle">{originalDisplayText}</span>
             <span
               data-interim-translation-cursor
               className="inline-flex h-4 items-center gap-0.5 align-middle"
@@ -843,14 +974,14 @@ function ChatBubble({
     </div>
   )
 
-  const originalLanguageKey = normalizeTranslationLanguageKey(originalDisplayLanguage)
+  const originalLanguageKey = displayLanguageKey(originalDisplayLanguage)
   const firstCollapsedHeaderLanguageOptions = languageOptions.slice(0, 5)
   const originalHeaderLanguage = languageOptions.find((language) => (
-    normalizeTranslationLanguageKey(language) === originalLanguageKey
+    displayLanguageKey(language) === originalLanguageKey
   ))
   const collapsedHeaderLanguageOptions = originalHeaderLanguage
     && !firstCollapsedHeaderLanguageOptions.some((language) => (
-      normalizeTranslationLanguageKey(language) === originalLanguageKey
+      displayLanguageKey(language) === originalLanguageKey
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
@@ -877,14 +1008,14 @@ function ChatBubble({
           className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"
         >
           {collapsedHeaderLanguageOptions.map((lang) => {
-            const isOriginal = normalizeTranslationLanguageKey(lang)
-              === normalizeTranslationLanguageKey(originalDisplayLanguage)
+            const isOriginal = displayLanguageKey(lang)
+              === displayLanguageKey(originalDisplayLanguage)
             return (
               <ChatLanguageBadge
                 key={lang}
                 lang={lang}
                 isOriginal={isOriginal}
-                isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(lang)}
                 variant="icon"
                 uiLocale={uiLocale}
                 originalLanguageLabel={copyActionCopy.originalLanguageLabel}
@@ -993,7 +1124,7 @@ function ChatBubble({
                   uiLocale={uiLocale}
                   originalLanguageLabel={copyActionCopy.originalLanguageLabel}
                   translationLanguageLabel={copyActionCopy.translationLanguageLabel}
-                  isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(entry.lang)}
+                  isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(entry.lang)}
                   showDivider={index > 0}
                   speakingPlaybackKey={speakingPlaybackKey}
                   onPlayOriginal={onPlayOriginal}
