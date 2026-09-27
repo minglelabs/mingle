@@ -141,16 +141,19 @@ export function normalizeChineseContent(input: NormalizeChineseContentInput): No
     if (language) translations[language] = text
   }
 
-  // A value under a bare `zh` key belongs to the variant its script names,
-  // else to a wanted variant that has no text yet. Explicit keys win.
+  // A value under a bare `zh` key was meant for a Chinese variant the
+  // message wants but has no text for yet (preferring one that is not the
+  // source's own variant). Only when several are open does the script
+  // decide. Explicit keys win.
+  const wantedVariants = listChineseVariants([...requestedTargets, ...(input.candidates || [])])
   for (const text of genericChineseTexts) {
-    const openVariants = listChineseVariants([...requestedTargets, ...(input.candidates || [])])
-      .filter((variant) => !translations[variant])
+    const openVariants = wantedVariants.filter((variant) => !translations[variant])
+    const openOtherVariants = openVariants.filter((variant) => variant !== sourceVariant)
+    const pool = openOtherVariants.length > 0 ? openOtherVariants : openVariants
     const variant = resolveChineseVariant({
       language: 'zh',
       text,
-      preferScript: true,
-      candidates: openVariants.length > 0 ? openVariants : candidates,
+      candidates: pool.length > 0 ? pool : candidates,
     })
     if (!translations[variant]) translations[variant] = text
   }

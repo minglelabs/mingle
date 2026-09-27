@@ -91,6 +91,32 @@ describe('normalizeChineseContent', () => {
     expect(result.targetLanguages).toEqual(['zh-CN', 'zh-TW', 'ko'])
   })
 
+  it('gives a legacy bare zh value to the only wanted variant even when its script disagrees', () => {
+    // TW-only room: the model once wrote Simplified for zh-TW and storage collapsed the key to `zh`.
+    const result = normalizeChineseContent({
+      sourceLanguage: 'ko',
+      sourceText: '안녕하세요',
+      translations: { zh: '你们好' },
+      targetLanguages: ['zh-TW'],
+      candidates: ['ko', 'zh-TW'],
+    })
+    expect(result.translations).toEqual({ 'zh-TW': '你們好' })
+    expect(result.targetLanguages).toEqual(['zh-TW'])
+  })
+
+  it('gives a legacy bare zh value to the variant that is not the source', () => {
+    const result = normalizeChineseContent({
+      sourceLanguage: 'zh',
+      sourceText: '我们走吧',
+      translations: { zh: '我們走吧', ko: '가자' },
+      targetLanguages: ['zh-TW', 'ko'],
+      candidates: ['zh-CN', 'zh-TW', 'ko'],
+    })
+    expect(result.sourceLanguage).toBe('zh-CN')
+    expect(result.translations['zh-TW']).toBe('我們走吧')
+    expect(result.translations['zh-CN']).toBeUndefined()
+  })
+
   it('never lets a bare zh key overwrite an explicit variant', () => {
     const result = normalizeChineseContent({
       sourceLanguage: 'ko',

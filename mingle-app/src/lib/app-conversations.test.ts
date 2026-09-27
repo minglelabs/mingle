@@ -1445,6 +1445,77 @@ describe("app-conversations", () => {
     expect(state?.conversation.latestMessagePreview).toBe("안녕");
   });
 
+  it("repairs legacy Chinese rows stored as a collapsed zh on hydration", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-zh",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-zh",
+      selectedLanguages: ["zh-TW", "ko"],
+      speechLanguages: ["zh-TW"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-zh", userId: "user-1", displayLanguage: "zh-TW", selectedLanguages: ["zh-TW", "ko"], user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-zh", userId: "user-2", displayLanguage: "ko", selectedLanguages: ["zh-TW", "ko"], user: { name: "Bob", handle: "bob" } },
+    ]);
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(2);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        id: "msg-ko",
+        clientMessageId: "u-ko",
+        sourceLanguage: "ko",
+        createdAt: new Date("2026-04-12T09:40:00.000Z"),
+        metadata: { translationTargetLanguages: ["zh-TW", "zh"] },
+        contents: [
+          { contentType: "SOURCE", language: "ko", text: "이 문제는 어렵다" },
+          { contentType: "TRANSLATION_FINAL", language: "zh", text: "這個問題很難" },
+        ],
+      },
+      {
+        id: "msg-zh",
+        clientMessageId: "u-zh",
+        sourceLanguage: "zh",
+        createdAt: new Date("2026-04-12T09:30:00.000Z"),
+        metadata: { translationTargetLanguages: ["zh-TW", "ko", "zh"] },
+        contents: [
+          { contentType: "SOURCE", language: "zh", text: "这个问题很难" },
+          { contentType: "TRANSLATION_FINAL", language: "zh", text: "這個問題很難" },
+          { contentType: "TRANSLATION_FINAL", language: "ko", text: "이 문제는 어렵다" },
+        ],
+      },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-zh",
+      userId: "user-1",
+    });
+
+    const [zhMessage, koMessage] = state?.utterances ?? [];
+    expect(zhMessage?.originalLang).toBe("zh-TW");
+    // The stored source text stays the identity; its display text is Traditional.
+    expect(zhMessage?.originalText).toBe("这个问题很难");
+    expect(zhMessage?.originalDisplayText).toBe("這個問題很難");
+    expect(zhMessage?.translations).toEqual({ "zh-TW": "這個問題很難", ko: "이 문제는 어렵다" });
+    expect(zhMessage?.targetLanguages).toEqual(["zh-TW", "ko"]);
+    expect(zhMessage?.translationFinalized).toEqual({ "zh-TW": true, ko: true });
+
+    expect(koMessage?.originalLang).toBe("ko");
+    expect(koMessage?.originalDisplayText).toBeUndefined();
+    expect(koMessage?.translations).toEqual({ "zh-TW": "這個問題很難" });
+    expect(koMessage?.targetLanguages).toEqual(["zh-TW"]);
+
+    // The zh-TW viewer's list preview finds the repaired translation.
+    expect(state?.conversation.latestMessagePreview).toBe("這個問題很難");
+  });
+
   it("populates speakerImage from membership only once the room has 2+ real members", async () => {
     mockFindConversationFirst.mockResolvedValue({
       id: "conv-group",

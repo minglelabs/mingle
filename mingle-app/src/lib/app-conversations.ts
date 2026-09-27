@@ -4,13 +4,13 @@ import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
+import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 
+export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
 export const CONVERSATION_HYDRATION_MESSAGE_LIMIT = 100;
-// Total people in a room, including the creator — matches the invite
-// picker's selection cap.
-export const MAX_CONVERSATION_MEMBERS = 10;
 
 export type AppConversationChannelStatus =
   | typeof APP_CONVERSATION_STATUS_ACTIVE
@@ -977,17 +977,29 @@ async function listLatestMessageSummaryBySessionKey(
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
       || null;
-    const preview = normalizeConversationPreview(sourceContent?.text);
-    const translations: Record<string, string> = {};
+    const storedTranslations: Record<string, string> = {};
     for (const content of message.contents) {
       if (content.contentType !== "TRANSLATION_FINAL") continue;
       const language = content.language.trim();
       const text = normalizeConversationPreview(content.text);
       if (!language || !text) continue;
-      translations[language] = text;
+      storedTranslations[language] = text;
     }
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
+    const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
+    // Same repair as hydration: canonical Chinese keys (legacy `zh` rows) in
+    // their variant's script, so a zh-TW viewer's preview finds its text.
+    const normalizedContent = normalizeChineseContent({
+      sourceLanguage: (message.sourceLanguage || "").trim() || "unknown",
+      sourceText: sourceContent?.text?.trim() || "",
+      translations: storedTranslations,
+      targetLanguages: storedTargetLanguages,
+      candidates: storedTargetLanguages,
+      sourceScriptIsEvidence: clientMetadata?.reason === "manual_text_input",
+    });
+    const preview = normalizeConversationPreview(normalizedContent.sourceDisplayText ?? sourceContent?.text);
+    const translations = normalizedContent.translations;
     if (!message.sessionKey) continue;
     summaryBySessionKey.set(message.sessionKey, {
       preview,
@@ -2903,32 +2915,48 @@ async function getConversationHydrationStateForRecord(args: {
     membersByChannelId,
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
+  // Decides a generic/legacy `zh` when a message's text cannot.
+  const conversationLanguages = [
+    ...conversationRecord.selectedLanguages,
+    ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
+  ];
 
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
       || null;
-    const translations: Record<string, string> = {};
-    const translationFinalized: Record<string, boolean> = {};
+    const storedTranslations: Record<string, string> = {};
 
     for (const content of message.contents) {
       if (content.contentType !== "TRANSLATION_FINAL") continue;
       const language = content.language.trim();
       const text = content.text.trim();
       if (!language || !text) continue;
-      translations[language] = text;
-      translationFinalized[language] = true;
+      storedTranslations[language] = text;
     }
 
     const metadata = readJsonObject(message.metadata);
-    const targetLanguages = [...new Set([
-      ...readStringArray(metadata?.translationTargetLanguages),
-      ...Object.keys(translations),
-    ])];
+    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
+    const originalText = sourceContent?.text?.trim() || "";
+    const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
+    // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
+    // value in its variant's script. The stored source text is never changed.
+    const normalizedContent = normalizeChineseContent({
+      sourceLanguage: (message.sourceLanguage || "").trim() || "unknown",
+      sourceText: originalText,
+      translations: storedTranslations,
+      targetLanguages: storedTargetLanguages,
+      candidates: [...conversationLanguages, ...storedTargetLanguages],
+      sourceScriptIsEvidence: clientMetadata?.reason === "manual_text_input",
+    });
+    const translations = normalizedContent.translations;
+    const translationFinalized = Object.fromEntries(
+      Object.keys(translations).map((language) => [language, true]),
+    );
+    const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
-    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -2941,8 +2969,9 @@ async function getConversationHydrationStateForRecord(args: {
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
       ...(image ? { image } : {}),
-      originalText: sourceContent?.text?.trim() || "",
-      originalLang: (message.sourceLanguage || "").trim() || "unknown",
+      originalText,
+      ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
+      originalLang: normalizedContent.sourceLanguage || "unknown",
       targetLanguages,
       translations,
       translationFinalized,
