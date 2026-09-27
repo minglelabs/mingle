@@ -81,6 +81,11 @@ export interface Utterance {
   // than a solo interpreter session.
   speakerImage?: string | null
   originalText: string
+  // The original rendered in the script of its Chinese variant (Traditional
+  // for zh-TW, Simplified for zh-CN), supplied by the server when that
+  // differs from the recognized text. Display-only: `originalText` stays the
+  // identity used for matching, dedupe and persistence.
+  originalDisplayText?: string
   originalLang: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean

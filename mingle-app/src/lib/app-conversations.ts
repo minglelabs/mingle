@@ -88,6 +88,9 @@ export type ConversationHydrationUtterance = {
   serverMessageId?: string;
   id: string;
   originalText: string;
+  // Display-only rendering of originalText in its Chinese variant's script
+  // (see normalizeChineseContent). Omitted when it equals originalText.
+  originalDisplayText?: string;
   originalLang: string;
   targetLanguages: string[];
   translations: Record<string, string>;
