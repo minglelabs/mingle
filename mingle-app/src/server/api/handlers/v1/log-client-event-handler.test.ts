@@ -305,6 +305,53 @@ describe("handleLogClientEventV1", () => {
     expect(mockCreateTrackedEventLog).not.toHaveBeenCalledWith(expect.objectContaining({ skipAnalyticsCapture: true }));
   });
 
+  it("stores both Chinese variants with canonical codes and publishes the display text", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "zh_1",
+        sourceLanguage: "zh", sourceText: "这个问题很难",
+        targetLanguages: ["zh-TW", "ko"], translations: { ko: "이 문제는 어렵다" },
+      }),
+    }));
+    expect(response.status).toBe(200);
+
+    const upsert = mockAppMessageUpsert.mock.calls[0][0];
+    expect(upsert.create.sourceLanguage).toBe("zh-TW");
+    expect(upsert.create.metadata.translationTargetLanguages).toEqual(["zh-TW", "ko"]);
+    const contents = mockAppMessageContentUpsert.mock.calls.map(([args]) => args.create);
+    // The source text is stored exactly as recognized.
+    expect(contents).toContainEqual(expect.objectContaining({ contentType: "SOURCE", language: "zh-TW", text: "这个问题很难" }));
+    expect(contents).toContainEqual(expect.objectContaining({ contentType: "TRANSLATION_FINAL", language: "ko" }));
+    expect(contents.some((content) => content.language === "zh")).toBe(false);
+
+    const payload = mockNotifyConversationMessage.mock.calls[0][2];
+    expect(payload.originalLang).toBe("zh-TW");
+    expect(payload.originalText).toBe("这个问题很难");
+    expect(payload.originalDisplayText).toBe("這個問題很難");
+    expect(payload.targetLanguages).toEqual(["zh-TW", "ko"]);
+  });
+
+  it("keeps zh-CN and zh-TW translations of a non-Chinese source apart", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "ko_1",
+        sourceLanguage: "ko", sourceText: "이 문제는 어렵다",
+        targetLanguages: ["zh-CN", "zh-TW"], translations: { "zh-CN": "这个问题很难", "zh-TW": "這個問題很難" },
+      }),
+    }));
+    const contents = mockAppMessageContentUpsert.mock.calls.map(([args]) => args.create);
+    expect(contents.filter((content) => content.contentType === "TRANSLATION_FINAL").map((content) => [content.language, content.text]))
+      .toEqual([["zh-CN", "这个问题很难"], ["zh-TW", "這個問題很難"]]);
+    const payload = mockNotifyConversationMessage.mock.calls[0][2];
+    expect(payload.originalLang).toBe("ko");
+    expect(payload.originalDisplayText).toBeUndefined();
+    expect(payload.translations).toEqual({ "zh-CN": "这个问题很难", "zh-TW": "這個問題很難" });
+  });
+
   it("persists translation model and infrastructure provider for finalized turns", async () => {
     const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
       method: "POST",

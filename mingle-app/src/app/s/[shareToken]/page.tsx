@@ -81,6 +81,7 @@ export default async function ConversationSpectatePage({ params }: ConversationS
           utterances: toPublicSpectateUtterances(state.utterances).map((utterance) => ({
             id: utterance.id,
             originalText: utterance.originalText,
+            ...(utterance.originalDisplayText ? { originalDisplayText: utterance.originalDisplayText } : {}),
             originalLang: utterance.originalLang,
             targetLanguages: utterance.targetLanguages,
             translations: utterance.translations,

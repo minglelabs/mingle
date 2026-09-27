@@ -21,6 +21,8 @@ import {
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
+import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
@@ -170,7 +172,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const eventType = sanitizeText(body.eventType, 64)
   const sessionKeyHint = sanitizeText(body.sessionKey, 128)
   const clientMessageId = sanitizeText(body.clientMessageId, 128)
-  const sourceLanguage = normalizeLang(body.sourceLanguage)
+  // A generic Chinese source stays `zh` until normalizeChineseContent resolves it.
+  const declaredSourceLanguage = typeof body.sourceLanguage === 'string' && classifyChineseLanguage(body.sourceLanguage) === 'zh'
+    ? 'zh'
+    : normalizeLang(body.sourceLanguage)
   const sourceTextRaw = sanitizeText(body.sourceText, 20000)
   const sourceText = sourceTextRaw ? stripEndpointMarkers(sourceTextRaw).trim() : null
   const durationValidation = validateReportedTurnDurations(body)
@@ -181,9 +186,25 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const translationPromptTokens = sanitizeNonNegativeInt(body.translationPromptTokens)
   const translationCompletionTokens = sanitizeNonNegativeInt(body.translationCompletionTokens)
   const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
-  const translations = sanitizeTranslations(body.translations)
   const requestedTargetLanguages = sanitizeTargetLanguages(body.targetLanguages)
   const clientMetadata = sanitizeJsonObject(body.metadata)
+  // Chinese variants are made consistent on write: the source language is
+  // zh-CN or zh-TW, every Chinese translation is in its variant's script, and
+  // a requested sibling variant is filled by conversion. The source text is
+  // stored exactly as sent.
+  const normalizedContent = normalizeChineseContent({
+    sourceLanguage: declaredSourceLanguage,
+    sourceText: sourceText ?? '',
+    translations: sanitizeTranslations(body.translations, { keepGenericChinese: true }),
+    targetLanguages: requestedTargetLanguages,
+    candidates: requestedTargetLanguages,
+    // Only typed text carries script evidence; the client already marks it.
+    sourceScriptIsEvidence: clientMetadata?.reason === 'manual_text_input',
+  })
+  const sourceLanguage = normalizedContent.sourceLanguage || 'unknown'
+  const translations = normalizedContent.translations
+  const originalDisplayText = normalizedContent.sourceDisplayText
+  const translationTargetLanguages = sanitizeTargetLanguages(normalizedContent.targetLanguages)
   const clientContext = parseClientContext(body.clientContext)
   const usageSecFromBody = sanitizeNonNegativeInt(body.usageSec)
 
@@ -252,10 +273,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         infrastructureProvider: infrastructureProvider ?? null,
         model: model ?? null,
         translationLanguages: Object.keys(translations),
-        translationTargetLanguages: sanitizeTargetLanguages([
-          ...requestedTargetLanguages,
-          ...Object.keys(translations),
-        ]),
+        translationTargetLanguages,
       }
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
@@ -465,6 +483,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           if (sharedAtMessage) {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
+              ...(originalDisplayText ? { originalDisplayText } : {}),
               translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
               targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,

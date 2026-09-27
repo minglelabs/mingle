@@ -77,6 +77,25 @@ describe('translate/finalize utils', () => {
       .toBe('')
   })
 
+  it('treats Chinese names and aliases in the detected source language as Chinese', () => {
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"Chinese"}')).toBe('zh')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"Mandarin"}')).toBe('zh')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"cmn"}')).toBe('zh')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"zh-Hant"}')).toBe('zh-TW')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"Traditional Chinese"}')).toBe('zh-TW')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"zh"}')).toBe('zh')
+  })
+
+  it('excludes only the exact canonical Chinese source variant from targets', () => {
+    expect(normalizeTargetLanguages(['zh-CN', 'zh-TW', 'en'], 'zh-TW')).toEqual(['zh-CN', 'en'])
+    expect(normalizeTargetLanguages(['zh-CN', 'zh-TW', 'en'], 'zh-hant')).toEqual(['zh-CN', 'en'])
+    expect(normalizeTargetLanguages(['zh-CN', 'zh-TW'], 'zh')).toEqual(['zh-CN', 'zh-TW'])
+  })
+
+  it('keeps Chinese-named translation keys as generic Chinese', () => {
+    expect(parseTranslations('{"Chinese":"你好","en":"hello"}')).toEqual({ zh: '你好', en: 'hello' })
+  })
+
   it('keeps only latest 12 recent turns and removes source-language translations', () => {
     const raw = [
       { sourceLanguage: 'en', sourceText: 'too-old', translations: { ko: '오래됨' }, ageMs: 9999 },

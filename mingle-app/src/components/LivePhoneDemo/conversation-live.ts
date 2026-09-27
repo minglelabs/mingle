@@ -1,4 +1,163 @@
 import type { Utterance } from './ChatBubble'
+import {
+  canonicalizeLanguageKey,
+  classifyChineseLanguage,
+  listChineseVariants,
+  resolveChineseVariant,
+  toChineseVariant,
+} from '@/lib/chinese-variant'
+
+export type LanguageCandidates = readonly (string | null | undefined)[]
+
+export type CanonicalizeUtteranceLanguagesOptions = {
+  /** The room's current languages; they help resolve a generic `zh`. */
+  roomLanguages?: LanguageCandidates | null
+  /** The source text was typed, so its script is evidence for the source variant. */
+  preferSourceScript?: boolean
+}
+
+function isGenericChineseKey(rawLanguage: string): boolean {
+  return classifyChineseLanguage(rawLanguage) === 'zh'
+}
+
+function dedupeLanguages(languages: readonly string[]): string[] {
+  const output: string[] = []
+  for (const language of languages) if (language && !output.includes(language)) output.push(language)
+  return output
+}
+
+function isCanonicalKey(rawLanguage: string): boolean {
+  return canonicalizeLanguageKey(rawLanguage) === rawLanguage
+}
+
+// Cheap check run before the full rewrite: mergeDisplayUtterances normalizes
+// every utterance on each live update, and almost all of them are canonical.
+function hasCanonicalLanguages(utterance: Utterance): boolean {
+  const originalLang = typeof utterance.originalLang === 'string' ? utterance.originalLang : ''
+  if (classifyChineseLanguage(originalLang) && toChineseVariant(originalLang) !== originalLang) return false
+  for (const [key, value] of Object.entries(utterance.translations || {})) {
+    if (typeof value !== 'string' || !isCanonicalKey(key)) return false
+  }
+  for (const [key, value] of Object.entries(utterance.translationFinalized || {})) {
+    if (typeof value !== 'boolean' || !isCanonicalKey(key)) return false
+  }
+  const targets = utterance.targetLanguages || []
+  for (let index = 0; index < targets.length; index += 1) {
+    const language = targets[index]
+    if (typeof language !== 'string' || !language || !isCanonicalKey(language)) return false
+    if (targets.indexOf(language) !== index) return false
+  }
+  return true
+}
+
+/**
+ * Rewrites an utterance so every language key it carries is canonical: Chinese
+ * is always zh-CN or zh-TW, never a bare `zh`. Legacy data (old DB rows,
+ * localStorage, previews from old clients) may still say `zh`; it is resolved
+ * against the utterance's own languages, the room's languages and the text.
+ * A generic translation key never becomes a row of its own: it is folded into
+ * the variant its text is written in, or dropped when that variant already has
+ * text. Returns the same object when nothing changes.
+ */
+export function canonicalizeUtteranceLanguages(
+  utterance: Utterance,
+  options: CanonicalizeUtteranceLanguagesOptions = {},
+): Utterance {
+  if (hasCanonicalLanguages(utterance)) return utterance
+  const rawTargets = (utterance.targetLanguages || []).filter((language): language is string => typeof language === 'string')
+  const rawTranslations = utterance.translations || {}
+  const roomLanguages = options.roomLanguages || []
+  const sourceCandidates = [...rawTargets, ...roomLanguages]
+
+  const rawOriginalLang = typeof utterance.originalLang === 'string' ? utterance.originalLang : ''
+  const originalLang = classifyChineseLanguage(rawOriginalLang)
+    ? resolveChineseVariant({
+        language: rawOriginalLang,
+        text: utterance.originalText,
+        candidates: sourceCandidates,
+        preferScript: options.preferSourceScript === true,
+      })
+    : rawOriginalLang
+  const sourceVariant = toChineseVariant(originalLang)
+
+  // Candidates for a generic translation key or target. A translation into the
+  // source's own variant is rarely wanted, so the sibling wins when present.
+  const keyCandidateVariants = listChineseVariants([
+    ...rawTargets, ...Object.keys(rawTranslations), ...roomLanguages,
+  ])
+  const siblingCandidates = keyCandidateVariants.filter(variant => variant !== sourceVariant)
+  const keyCandidates = siblingCandidates.length > 0 ? siblingCandidates : keyCandidateVariants
+
+  const translations: Record<string, string> = {}
+  let genericTranslationVariant: string | null = null
+  let genericTranslationDropped = false
+  const genericEntries: Array<[string, string]> = []
+  for (const [rawKey, value] of Object.entries(rawTranslations)) {
+    if (typeof value !== 'string') continue
+    if (isGenericChineseKey(rawKey)) {
+      genericEntries.push([rawKey, value])
+      continue
+    }
+    const key = canonicalizeLanguageKey(rawKey)
+    if (!key) continue
+    // Same canonical key twice (zh-CN and zh-cn): the later value is newer.
+    translations[key] = value
+  }
+  for (const [, value] of genericEntries) {
+    let variant = resolveChineseVariant({ language: 'zh', text: value, candidates: keyCandidates, preferScript: true })
+    // Never promote it into a variant nobody asked for.
+    if (keyCandidates.length > 0 && !keyCandidates.includes(variant)) {
+      variant = resolveChineseVariant({ language: 'zh', candidates: keyCandidates })
+    }
+    genericTranslationVariant = variant
+    if (translations[variant]?.trim()) {
+      genericTranslationDropped = true
+      continue
+    }
+    translations[variant] = value
+  }
+
+  const resolveGenericKey = () => genericTranslationVariant
+    ?? resolveChineseVariant({ language: 'zh', candidates: keyCandidates })
+
+  const targetLanguages = dedupeLanguages(rawTargets.map(language => (
+    isGenericChineseKey(language) ? resolveGenericKey() : canonicalizeLanguageKey(language)
+  )))
+
+  let translationFinalized: Record<string, boolean> | undefined
+  if (utterance.translationFinalized) {
+    translationFinalized = {}
+    const genericFinalized: boolean[] = []
+    for (const [rawKey, value] of Object.entries(utterance.translationFinalized)) {
+      if (typeof value !== 'boolean') continue
+      if (isGenericChineseKey(rawKey)) {
+        genericFinalized.push(value)
+        continue
+      }
+      const key = canonicalizeLanguageKey(rawKey)
+      if (key) translationFinalized[key] = value
+    }
+    if (!genericTranslationDropped) {
+      for (const value of genericFinalized) {
+        const key = resolveGenericKey()
+        if (!(key in translationFinalized)) translationFinalized[key] = value
+      }
+    }
+  }
+
+  const changed = originalLang !== utterance.originalLang
+    || (utterance.targetLanguages !== undefined && JSON.stringify(targetLanguages) !== JSON.stringify(utterance.targetLanguages))
+    || JSON.stringify(translations) !== JSON.stringify(rawTranslations)
+    || (translationFinalized !== undefined && JSON.stringify(translationFinalized) !== JSON.stringify(utterance.translationFinalized))
+  if (!changed) return utterance
+  return {
+    ...utterance,
+    originalLang,
+    ...(utterance.targetLanguages !== undefined ? { targetLanguages } : {}),
+    translations,
+    ...(translationFinalized !== undefined ? { translationFinalized } : {}),
+  }
+}
 
 let sequence = Date.now()
 export type PreviewEvent = {
@@ -15,6 +174,8 @@ export class RemotePreviews {
   accept(event: PreviewEvent): boolean {
     if (!event.utterance?.id || !event.utterance.speakerUserId || !Number.isFinite(event.revision)
       || !Number.isFinite(event.expiresAt) || typeof event.utterance.originalText !== 'string') return false
+    // Previews from older clients may still carry a bare `zh`.
+    event = { ...event, utterance: canonicalizeUtteranceLanguages(event.utterance) }
     const key = JSON.stringify([event.utterance.speakerUserId, event.utterance.id])
     const previous = this.records.get(key)
     if (previous && (previous.revision >= event.revision || (previous.final && !event.final))) return false
@@ -43,7 +204,7 @@ export class RemotePreviews {
     if (!preview || preview.expiresAt <= Date.now()) return utterance
     // Source persistence may beat the final translation. Keep the preview's
     // targets and interim text until the committed translation replaces them.
-    const partial = preview.utterance
+    const partial = canonicalizeUtteranceLanguages(preview.utterance, { roomLanguages: utterance.targetLanguages })
     return {
       ...utterance,
       targetLanguages: [...new Set([...(partial.targetLanguages || []), ...(utterance.targetLanguages || [])])],
