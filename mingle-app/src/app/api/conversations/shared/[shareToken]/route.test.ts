@@ -166,6 +166,43 @@ describe("/api/conversations/shared/[shareToken] route", () => {
     expect(mockGetConversationHydrationStateForShare).toHaveBeenCalledWith({ shareToken: "tok-a" });
   });
 
+  it("passes the Chinese original display text through the public payload", async () => {
+    const utterance = {
+      id: "private-message-id",
+      originalText: "这个问题很难",
+      originalLang: "zh-TW",
+      targetLanguages: ["ko"],
+      translations: { ko: "이 문제는 어렵다" },
+      translationFinalized: { ko: true },
+      createdAtMs: 1,
+      speaker: null,
+      speakerAvatarSeed: null,
+      speakerAvatarIndex: null,
+      speakerName: null,
+      speakerUserId: null,
+      speakerImage: null,
+    };
+    mockGetConversationHydrationStateForShare.mockResolvedValue({
+      conversation: { title: "Chinese room" },
+      utterances: [
+        { ...utterance, originalDisplayText: "這個問題很難" },
+        { ...utterance, originalText: "这个问题很难", originalDisplayText: "这个问题很难", originalLang: "zh-CN" },
+      ],
+      sharedByUserId: null,
+    });
+
+    const response = await GET(
+      new NextRequest("https://example.com/api/conversations/shared/tok-zh"),
+      { params: Promise.resolve({ shareToken: "tok-zh" }) },
+    );
+    const json = await response.json();
+
+    expect(json.utterances[0].originalText).toBe("这个问题很难");
+    expect(json.utterances[0].originalDisplayText).toBe("這個問題很難");
+    // Omitted when it equals the original text.
+    expect(json.utterances[1]).not.toHaveProperty("originalDisplayText");
+  });
+
   it("carries no account id anywhere in the public payload, only per-response speaker aliases", async () => {
     mockGetConversationHydrationStateForShare.mockResolvedValue({
       conversation: { id: "private-conversation-id", title: "Team sync", memberUserIds: ["private-member-id"] },

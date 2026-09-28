@@ -22,9 +22,11 @@ import type { Utterance } from './ChatBubble'
 import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
 import {
   buildTargetLanguagesForUtterance,
-  findLanguageRecordValue,
+  createDisplayLanguageResolver,
+  findDisplayTranslation,
   resolveInitialDisplayLanguage,
-  resolveOriginalDisplayLanguage,
+  resolveOriginalDisplayText,
+  type DisplayLanguageResolver,
 } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
@@ -57,7 +59,6 @@ import {
   sanitizeSttLanguageSelection,
   sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
-import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -261,56 +262,13 @@ const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
-function normalizeNativePipLanguageKey(rawLanguage: string): string {
-  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
-  if (canonical) return canonical.toLowerCase()
-
-  const sttCanonical = canonicalizeSttLanguageCode(rawLanguage)
-  return sttCanonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
-}
-
-function findNativePipRecordKey<T>(
-  record: Record<string, T> | undefined,
-  language: string,
-): string | null {
-  const targetKey = normalizeNativePipLanguageKey(language)
-  if (!targetKey) return null
-
-  return Object.keys(record || {}).find((candidate) => (
-    normalizeNativePipLanguageKey(candidate) === targetKey
-  )) || null
-}
-
-function findNativePipTranslationText(
-  utterance: Utterance,
-  language: string,
-): string {
-  const matchingLanguage = findNativePipRecordKey(utterance.translations, language)
-  const text = matchingLanguage ? utterance.translations[matchingLanguage] : ''
-  return typeof text === 'string' ? text.trim() : ''
-}
-
-function resolveNativePipOriginalLanguage(
-  utterance: Utterance,
-  roomLanguageOrder: readonly string[] = [],
-): string {
-  return resolveOriginalDisplayLanguage(
-    utterance.originalLang,
-    [
-      ...(utterance.targetLanguages || []),
-      ...Object.keys(utterance.translations || {}),
-      ...Object.keys(utterance.translationFinalized || {}),
-    ],
-    roomLanguageOrder,
-  )
-}
-
+// Native PiP rows use the same display-language keys as ChatBubble, so a
+// generic zh key and its zh-CN/zh-TW alias render as one row with one flag,
+// and the native side only ever receives canonical language codes.
 function resolveNativePipTargetLanguages(
   utterance: Utterance,
-  originalDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
 ): string[] {
-  const originalKey = normalizeNativePipLanguageKey(originalDisplayLanguage)
-  const hasGenericChineseSource = normalizeNativePipLanguageKey(utterance.originalLang) === 'zh'
   const targetLanguages: string[] = []
   const seen = new Set<string>()
   const candidates = [
@@ -321,19 +279,18 @@ function resolveNativePipTargetLanguages(
 
   for (const rawLanguage of candidates) {
     const language = rawLanguage.trim()
-    const languageKey = normalizeNativePipLanguageKey(language)
+    const languageKey = resolver.keyOf(language)
     if (
       !language
       || !languageKey
       || seen.has(languageKey)
-      || languageKey === originalKey
-      || (hasGenericChineseSource && languageKey === 'zh')
+      || languageKey === resolver.originalKey
     ) {
       continue
     }
 
     seen.add(languageKey)
-    targetLanguages.push(language)
+    targetLanguages.push(resolver.displayCodeOf(language, languageKey))
   }
 
   return targetLanguages
@@ -342,38 +299,41 @@ function resolveNativePipTargetLanguages(
 function resolveNativePipDisplayLanguage(
   utterance: Utterance,
   requestedDisplayLanguage: string | null,
-  originalDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
   targetLanguages: readonly string[],
 ): string {
-  const requestedKey = normalizeNativePipLanguageKey(requestedDisplayLanguage || originalDisplayLanguage)
-  if (
-    !requestedKey
-    || requestedKey === normalizeNativePipLanguageKey(originalDisplayLanguage)
-    || requestedKey === normalizeNativePipLanguageKey(utterance.originalLang)
-  ) {
+  const originalDisplayLanguage = resolver.originalLanguage
+  const requestedKey = resolver.keyOf(requestedDisplayLanguage || originalDisplayLanguage)
+  if (!requestedKey || requestedKey === resolver.originalKey) {
     return originalDisplayLanguage
   }
 
   return targetLanguages.find((language) => (
-    normalizeNativePipLanguageKey(language) === requestedKey
+    resolver.keyOf(language) === requestedKey
   )) || originalDisplayLanguage
+}
+
+function findNativePipTranslationText(
+  utterance: Utterance,
+  language: string,
+  resolver: DisplayLanguageResolver,
+): string {
+  return findDisplayTranslation(utterance, language, resolver).text.trim()
 }
 
 function resolveNativePipTranslations(
   utterance: Utterance,
   targetLanguages: readonly string[],
+  resolver: DisplayLanguageResolver,
 ) {
   return targetLanguages.map((language) => {
-    const text = findNativePipTranslationText(utterance, language)
-    const matchingFinalizedKey = findNativePipRecordKey(utterance.translationFinalized, language)
-    const finalized = matchingFinalizedKey
-      ? utterance.translationFinalized?.[matchingFinalizedKey]
-      : undefined
+    const { text, finalized } = findDisplayTranslation(utterance, language, resolver)
+    const trimmedText = text.trim()
 
     return {
       language,
-      text,
-      isInterim: !text || finalized === false,
+      text: trimmedText,
+      isInterim: !trimmedText || finalized === false,
     }
   })
 }
@@ -381,37 +341,73 @@ function resolveNativePipTranslations(
 function resolveNativePipMessageText(
   utterance: Utterance,
   displayMode: LivePhoneDemoBubbleDisplayMode,
-  displayLanguage: string | null,
-  roomLanguageOrder: readonly string[] = [],
+  resolvedDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
+  targetLanguages: readonly string[],
 ): string {
-  const originalText = utterance.originalText.trim()
-  const originalDisplayLanguage = resolveNativePipOriginalLanguage(utterance, roomLanguageOrder)
-  const targetLanguages = resolveNativePipTargetLanguages(utterance, originalDisplayLanguage)
-  const resolvedDisplayLanguage = resolveNativePipDisplayLanguage(
-    utterance,
-    displayLanguage,
-    originalDisplayLanguage,
-    targetLanguages,
-  )
+  const originalText = resolveOriginalDisplayText(utterance).trim()
 
   if (displayMode === 'collapsed') {
-    if (resolvedDisplayLanguage === originalDisplayLanguage) return originalText
+    if (resolvedDisplayLanguage === resolver.originalLanguage) return originalText
     // Keep the live source visible until the selected translation has text.
     // The native renderer uses the original-language badge for this fallback,
     // so an in-progress utterance is never hidden behind a placeholder.
-    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || originalText
+    return findNativePipTranslationText(utterance, resolvedDisplayLanguage, resolver) || originalText
   }
 
   const lines = [originalText]
   const seenTexts = new Set(lines)
   for (const language of targetLanguages) {
-    const text = findNativePipTranslationText(utterance, language)
+    const text = findNativePipTranslationText(utterance, language, resolver)
     if (!text || seenTexts.has(text)) continue
     seenTexts.add(text)
     lines.push(text)
   }
 
   return lines.join('\n')
+}
+
+export function buildNativePipMessage(
+  utterance: Utterance,
+  options: {
+    displayMode: LivePhoneDemoBubbleDisplayMode
+    defaultDisplayLanguage: string | null
+    roomLanguageOrder: readonly string[]
+    viewerUserId?: string | null
+    isInterim: boolean
+  },
+): NativePipState['messages'][number] {
+  const resolver = createDisplayLanguageResolver(utterance, options.roomLanguageOrder)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver)
+  const displayLanguage = resolveNativePipDisplayLanguage(
+    utterance,
+    options.defaultDisplayLanguage,
+    resolver,
+    targetLanguages,
+  )
+
+  return {
+    id: utterance.id,
+    text: resolveNativePipMessageText(
+      utterance,
+      options.displayMode,
+      displayLanguage,
+      resolver,
+      targetLanguages,
+    ),
+    // Display-only on the native side (row text), so it carries the
+    // variant-script rendering of the original.
+    originalText: resolveOriginalDisplayText(utterance).trim(),
+    originalLanguage: resolver.originalLanguage,
+    displayLanguage,
+    translations: resolveNativePipTranslations(utterance, targetLanguages, resolver),
+    isOwn: Boolean(
+      options.viewerUserId
+      && utterance.speakerUserId
+      && utterance.speakerUserId === options.viewerUserId,
+    ),
+    isInterim: options.isInterim,
+  }
 }
 
 type PersistedFeedbackDraft = {
@@ -1390,16 +1386,9 @@ export function buildLatestUtterancePayload(
   defaultDisplayLanguage: string | null | undefined,
   languageOrder: readonly string[],
 ): LatestUtterancePayload | null {
-  const originalDisplayLanguage = resolveOriginalDisplayLanguage(
-    utterance.originalLang,
-    [
-      ...(utterance.targetLanguages || []),
-      ...Object.keys(utterance.translations || {}),
-      ...Object.keys(utterance.translationFinalized || {}),
-    ],
-    languageOrder,
-  )
-  const targetLanguages = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
+  const resolver = createDisplayLanguageResolver(utterance, languageOrder)
+  const originalDisplayLanguage = resolver.originalLanguage
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver)
   const displayLanguage = resolveInitialDisplayLanguage(
     preferredDisplayLanguages?.length
       ? preferredDisplayLanguages
@@ -1408,12 +1397,13 @@ export function buildLatestUtterancePayload(
     originalDisplayLanguage,
     targetLanguages,
     languageOrder,
+    resolver,
   )
-  const isOriginalLanguageSelected = displayLanguage.trim().toLowerCase()
-    === originalDisplayLanguage.trim().toLowerCase()
+  const originalText = resolveOriginalDisplayText(utterance)
+  const isOriginalLanguageSelected = resolver.keyOf(displayLanguage) === resolver.originalKey
   const preview = (isOriginalLanguageSelected
-    ? utterance.originalText
-    : findLanguageRecordValue(utterance.translations, displayLanguage) || utterance.originalText
+    ? originalText
+    : findDisplayTranslation(utterance, displayLanguage, resolver).text || originalText
   ).trim()
   if (!preview) return null
 
@@ -6040,39 +6030,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     messages: displayUtterances
       .filter((utterance) => utterance.originalText.trim())
       .slice(-4)
-      .map((utterance) => {
-        const originalLanguage = resolveNativePipOriginalLanguage(
-          utterance,
-          normalizedDisplayLanguageOptions,
-        )
-        const targetLanguages = resolveNativePipTargetLanguages(utterance, originalLanguage)
-        const displayLanguage = resolveNativePipDisplayLanguage(
-          utterance,
-          resolvedDefaultDisplayLanguage,
-          originalLanguage,
-          targetLanguages,
-        )
-
-        return {
-          id: utterance.id,
-          text: resolveNativePipMessageText(
-            utterance,
-            bubbleDisplayMode,
-            resolvedDefaultDisplayLanguage,
-            normalizedDisplayLanguageOptions,
-          ),
-          originalText: utterance.originalText.trim(),
-          originalLanguage,
-          displayLanguage,
-          translations: resolveNativePipTranslations(utterance, targetLanguages),
-          isOwn: Boolean(
-            viewerUserId
-            && utterance.speakerUserId
-            && utterance.speakerUserId === viewerUserId,
-          ),
-          isInterim: draftUtteranceIds.has(utterance.id),
-        }
-      }),
+      .map((utterance) => buildNativePipMessage(utterance, {
+        displayMode: bubbleDisplayMode,
+        defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
+        roomLanguageOrder: normalizedDisplayLanguageOptions,
+        viewerUserId,
+        isInterim: draftUtteranceIds.has(utterance.id),
+      })),
     }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
 
   nativePipStateRef.current = nativePipState

@@ -4,7 +4,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
-import { MAX_CONVERSATION_MEMBERS } from "@/lib/app-conversations";
+import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";

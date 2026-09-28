@@ -26,6 +26,9 @@ export type PublicSpectateInviter = {
 export type PublicSpectateUtterance = {
   id: string;
   originalText: string;
+  // Display-only rendering of originalText in its Chinese variant's script;
+  // present only when it differs from originalText.
+  originalDisplayText?: string;
   originalLang: string;
   targetLanguages: string[];
   translations: Record<string, string>;
@@ -54,6 +57,7 @@ export type PublicSpectateSnapshot = {
 
 type ShareSnapshotUtteranceInput = {
   originalText: string;
+  originalDisplayText?: string;
   originalLang: string;
   targetLanguages: string[];
   translations: Record<string, string>;
@@ -96,6 +100,9 @@ export function toPublicSpectateUtterances(
       // The viewer only needs a React key; do not expose database message IDs.
       id: `snapshot-message-${index}`,
       originalText: utterance.originalText,
+      ...(utterance.originalDisplayText && utterance.originalDisplayText !== utterance.originalText
+        ? { originalDisplayText: utterance.originalDisplayText }
+        : {}),
       originalLang: utterance.originalLang,
       targetLanguages: utterance.targetLanguages,
       translations: utterance.translations,
