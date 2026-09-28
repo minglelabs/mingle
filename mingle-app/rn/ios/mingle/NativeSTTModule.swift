@@ -236,46 +236,6 @@ final class MingleAudioSessionCoordinator {
     }
 }
 
-// Recovery callbacks outlive the notification that scheduled them. Invalidate
-// them on interruptions, Stop, and new sessions before touching AVAudioEngine.
-final class NativeSTTAudioRecoveryGate {
-    private let lock = NSLock()
-    private var generation: UInt64 = 0
-    private var interrupted = false
-    private var pending: UInt64?
-    private var lastAttemptAt = -Double.infinity
-
-    func reset(interrupted: Bool = false) {
-        lock.lock()
-        defer { lock.unlock() }
-        generation &+= 1
-        self.interrupted = interrupted
-        pending = nil
-        lastAttemptAt = -Double.infinity
-    }
-
-    func beginAttempt(now: TimeInterval) -> UInt64? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !interrupted, pending == nil, now - lastAttemptAt >= 0.5 else { return nil }
-        pending = generation
-        lastAttemptAt = now
-        return generation
-    }
-
-    func isCurrent(_ attempt: UInt64) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return !interrupted && generation == attempt && pending == attempt
-    }
-
-    func finish(_ attempt: UInt64) {
-        lock.lock()
-        defer { lock.unlock() }
-        if generation == attempt && pending == attempt { pending = nil }
-    }
-}
-
 @objc(NativeSTTModule)
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
@@ -290,7 +250,8 @@ class NativeSTTModule: RCTEventEmitter {
     private var lastAppliedAec: Bool? = nil
     private var hasListeners = false
     private var audioObserversInstalled = false
-    private let audioRecoveryGate = NativeSTTAudioRecoveryGate()
+    private var isRestartingAudio = false
+    private var lastAudioRestartAt = Date.distantPast
     private var audioChunkCount: Int64 = 0
     private var wsMessageCount: Int64 = 0
     private var wsPingTimer: DispatchSourceTimer?
@@ -595,39 +556,41 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     private func restartAudioCapture(reason: String) {
-        guard isRunning, !gracefulStopPending else { return }
-        guard let attempt = audioRecoveryGate.beginAttempt(now: ProcessInfo.processInfo.systemUptime) else { return }
+        guard isRunning else { return }
+        let now = Date()
+        if isRestartingAudio {
+            return
+        }
+        if now.timeIntervalSince(lastAudioRestartAt) < 0.5 {
+            return
+        }
 
+        isRestartingAudio = true
+        lastAudioRestartAt = now
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            defer { self.audioRecoveryGate.finish(attempt) }
-            guard self.isRunning, !self.gracefulStopPending,
-                  self.audioRecoveryGate.isCurrent(attempt) else { return }
+            guard self.isRunning else { return }
+            defer {
+                self.isRestartingAudio = false
+            }
 
             do {
                 try self.configureAudioSession(aecEnabled: self.isAecEnabled)
             } catch {
-                guard self.audioRecoveryGate.isCurrent(attempt) else { return }
                 self.emitError("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)")
                 return
             }
-            guard self.isRunning, !self.gracefulStopPending,
-                  self.audioRecoveryGate.isCurrent(attempt) else { return }
 
-            if self.audioEngine.isRunning { self.audioEngine.stop() }
             self.removeTapIfNeeded()
 
             let inputNode = self.audioEngine.inputNode
             if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(self.isAecEnabled) }
             let inputFormat = inputNode.inputFormat(forBus: 0)
-            // A route can still be settling just after interruption-ended.
-            // Wait for the next route/health event instead of installing an
-            // invalid format, which raises an Objective-C exception.
-            guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-                NSLog("[NativeSTTModule] audio recovery deferred: invalid input format reason=%@", reason)
-                return
-            }
             self.installInputTap(format: inputFormat)
+
+            if self.audioEngine.isRunning {
+                self.audioEngine.stop()
+            }
 
             do {
                 self.audioEngine.prepare()
@@ -635,7 +598,6 @@ class NativeSTTModule: RCTEventEmitter {
                 self.emitStatus("running")
                 NSLog("[NativeSTTModule] audio restarted reason=%@", reason)
             } catch {
-                guard self.audioRecoveryGate.isCurrent(attempt) else { return }
                 self.emitError("audio_restart_failed(\(reason)): \(error.localizedDescription)")
             }
         }
@@ -652,21 +614,11 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        guard !gracefulStopPending else { return }
-        NSLog("[NativeSTTModule] audio interruption type=%lu options=%lu",
-              typeValue, (userInfo[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0)
         if type == .began {
-            // The system owns audio temporarily. Health checks and route-change
-            // callbacks must not try setActive until the interruption ends.
-            audioRecoveryGate.reset(interrupted: true)
             emitStatus("interrupted")
             return
         }
 
-        // Preserve the user's existing continuous-recording intent. Resetting
-        // the gate also prevents the 0.5s throttle from losing this recovery.
-        audioRecoveryGate.reset()
-        lastChunkCountSnapshot = audioChunkCount
         restartAudioCapture(reason: "interruption_ended")
     }
 
@@ -701,7 +653,6 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     private func stopAndCleanup(reason: String?) {
-        audioRecoveryGate.reset()
         NSLog("[NativeSTTModule] stopAndCleanup reason=%@ chunks=%lld wsMessages=%lld",
               reason ?? "nil", audioChunkCount, wsMessageCount)
         gracefulStopWorkItem?.cancel()
@@ -744,7 +695,6 @@ class NativeSTTModule: RCTEventEmitter {
     private func beginGracefulStop() {
         guard !gracefulStopPending else { return }
         gracefulStopPending = true
-        audioRecoveryGate.reset()
         stopWsPing()
         stopHealthCheck()
         removeAudioObserversIfNeeded()
@@ -943,7 +893,6 @@ class NativeSTTModule: RCTEventEmitter {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        audioRecoveryGate.reset()
         isAecEnabled = aecEnabled
         activeConversationId = conversationId.isEmpty ? nil : conversationId
         audioChunkCount = 0
