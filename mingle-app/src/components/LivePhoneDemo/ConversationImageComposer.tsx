@@ -7,6 +7,7 @@ import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
+import { captureRestorableFocus, scheduleFocusRestore } from './picker-focus-restore'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -56,6 +57,11 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const attachmentPointerActivationRef = useRef(false)
   const attachmentClickSuppressionRef = useRef(false)
   const attachmentClickSuppressionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Keyboard mode: the text control that owned focus when the menu opened, and
+  // the one to refocus once the native file chooser flow ends.
+  const menuFocusOwnerRef = useRef<ReturnType<typeof captureRestorableFocus>>(null)
+  const pickerFocusRestoreRef = useRef<ReturnType<typeof captureRestorableFocus>>(null)
+  const cancelFocusRestoreRef = useRef<(() => void) | null>(null)
 
   const pushDiag = useCallback((tag: string) => {
     if (!diagT0Ref.current) diagT0Ref.current = Date.now()
@@ -176,6 +182,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       if (attachmentClickSuppressionTimerRef.current) {
         clearTimeout(attachmentClickSuppressionTimerRef.current)
       }
+      cancelFocusRestoreRef.current?.()
     }
   }, [])
   useEffect(() => {
@@ -225,8 +232,39 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     setAnchor(side === 'above'
       ? { side, bottom: window.innerHeight - rect.top + 8, left }
       : { side, top: rect.bottom + 8, left })
+    menuFocusOwnerRef.current = captureRestorableFocus(document)
     setOpen(true)
   }, [diagEnabled, pushDiag])
+
+  const openFilePicker = useCallback(() => {
+    // Only keyboard mode restores focus; voice mode has no text control.
+    pickerFocusRestoreRef.current = onCloseKeyboard
+      ? captureRestorableFocus(document) ?? menuFocusOwnerRef.current
+      : null
+    input.current?.click()
+  }, [onCloseKeyboard])
+
+  const restorePickerFocus = useCallback(() => {
+    const element = pickerFocusRestoreRef.current
+    pickerFocusRestoreRef.current = null
+    if (!element) return
+    cancelFocusRestoreRef.current?.()
+    cancelFocusRestoreRef.current = scheduleFocusRestore(element, { doc: document, timers: window })
+  }, [])
+
+  // Cancelling the chooser fires `cancel` (no `change`); give the keyboard back.
+  useEffect(() => {
+    const node = input.current
+    if (!node) return
+    node.addEventListener('cancel', restorePickerFocus)
+    return () => node.removeEventListener('cancel', restorePickerFocus)
+  }, [restorePickerFocus])
+
+  const closePreview = useCallback(() => {
+    if (request.current) return
+    close()
+    restorePickerFocus()
+  }, [close, restorePickerFocus])
   const handleAttachmentClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     // If a long-press just toggled diag mode, suppress the trailing click.
     if (diagSuppressClickRef.current) {
@@ -248,12 +286,12 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     }
 
     if (!onCloseKeyboard) {
-      input.current?.click()
+      openFilePicker()
       return
     }
 
     openAttachmentMenu(event.currentTarget)
-  }, [onCloseKeyboard, openAttachmentMenu, diagEnabled, pushDiag])
+  }, [onCloseKeyboard, openAttachmentMenu, openFilePicker, diagEnabled, pushDiag])
 
   // ── Diagnostic touch/pointer event handlers ─────────────────────────
   const handleDiagTouchStart = useCallback(() => { pushDiag('TS') }, [pushDiag])
@@ -300,7 +338,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/images`), { method: 'POST', body, signal: controller.signal })
       if (!response.ok) throw new Error('image_send_failed')
       await response.json()
-      if (mounted.current) { setChosen(null); setOpen(false); onSent() }
+      if (mounted.current) { setChosen(null); setOpen(false); onSent(); restorePickerFocus() }
     } catch { if (mounted.current) setError(copy.error) }
     finally { clearTimeout(deadline); request.current = null; if (mounted.current) setPending(false) }
   }
@@ -324,8 +362,9 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
       onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''
-        if (!file) return
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); return }
+        if (!file) { restorePickerFocus(); return }
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); restorePickerFocus(); return }
+        // A valid pick opens the preview; focus returns when that preview closes.
         setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
       }} />
     {open && !chosen && createPortal(
@@ -344,7 +383,9 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
           <button
             type="button"
             aria-label={copy.choose}
-            onClick={event => { event.preventDefault(); event.stopPropagation(); input.current?.click() }}
+            // Like the send button: keep the textarea focused (and the keyboard up) on tap.
+            onPointerDown={event => { if (onCloseKeyboard) event.preventDefault() }}
+            onClick={event => { event.preventDefault(); event.stopPropagation(); openFilePicker() }}
             className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${onCloseKeyboard ? 'rounded-t-2xl' : 'rounded-2xl'}`}
           >
             <span>{copy.choose}</span>
@@ -369,8 +410,8 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       </div>,
       document.body,
     )}
-    {open && chosen && <MessageMediaDialog title={chosen ? copy.preview : copy.attach} onClose={close}>
-      <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{chosen ? copy.preview : copy.attach}</h2><button type="button" disabled={pending} aria-label={copy.close} onClick={close} className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40"><X size={20} /></button></div>
+    {open && chosen && <MessageMediaDialog title={chosen ? copy.preview : copy.attach} onClose={closePreview}>
+      <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{chosen ? copy.preview : copy.attach}</h2><button type="button" disabled={pending} aria-label={copy.close} onClick={closePreview} className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40"><X size={20} /></button></div>
       <>
         {/* Local file URLs are intentionally displayed without the Next image proxy. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
