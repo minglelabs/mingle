@@ -12,9 +12,7 @@ import { prisma } from '@/lib/prisma'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { classifyChineseLanguage, isChineseLanguage, toChineseVariant } from '@/lib/chinese-variant'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
-import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
+import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
   isBlankTranslationJson,
@@ -45,8 +43,6 @@ const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
-const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
-const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
@@ -1680,44 +1676,21 @@ async function synthesizeTtsInline(args: {
   text: string
   language: string
   requestedVoiceId?: string
+  providerOverride?: unknown
 }): Promise<{ audioBase64: string, audioMime: string, voiceId: string } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
-  const authHeader = getInworldAuthHeaderValue()
-  if (!authHeader) return null
+  const result = await synthesizeSpeech({
+    text: args.text,
+    language: args.language,
+    requestedVoiceId: args.requestedVoiceId,
+    providerOverride: args.providerOverride,
+  })
+  if (!result.ok) return null
 
-  const resolvedVoiceId = args.requestedVoiceId?.trim() || await resolveVoiceId(authHeader, args.language)
-  try {
-    const response = await fetch(`${INWORLD_API_BASE}/tts/v1/voice`, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: args.text,
-        voiceId: resolvedVoiceId,
-        modelId: DEFAULT_TTS_MODEL_ID,
-        audioConfig: {
-          speakingRate: Number.isFinite(DEFAULT_TTS_SPEAKING_RATE) && DEFAULT_TTS_SPEAKING_RATE > 0
-            ? DEFAULT_TTS_SPEAKING_RATE
-            : 1.3,
-        },
-      }),
-      cache: 'no-store',
-    })
-
-    if (!response.ok) return null
-    const data = await response.json() as { audioContent?: string }
-    const audioBuffer = decodeAudioContent(data.audioContent)
-    if (!audioBuffer) return null
-
-    return {
-      audioBase64: audioBuffer.toString('base64'),
-      audioMime: detectAudioMime(audioBuffer),
-      voiceId: resolvedVoiceId,
-    }
-  } catch {
-    return null
+  return {
+    audioBase64: result.audio.toString('base64'),
+    audioMime: result.mime,
+    voiceId: result.voiceId,
   }
 }
 
@@ -1732,6 +1705,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
   const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
+  // Optional per-request TTS provider override (inworld | gemini); invalid values are ignored downstream.
+  const ttsProviderOverride = ttsPayload?.provider
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
@@ -1876,6 +1851,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             text: ttsText,
             language: ttsLanguage,
             requestedVoiceId: ttsVoiceId,
+            providerOverride: ttsProviderOverride,
           })
 
           if (ttsResult) {

@@ -9,13 +9,9 @@ import {
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
-import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
+import { resolveTtsProvider, synthesizeSpeech } from '@/server/api/shared/tts-provider'
 
 export const runtime = 'nodejs'
-
-const DEFAULT_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
-const DEFAULT_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 
 function normalizeLanguage(input?: string): string | null {
   if (!input) return null
@@ -32,9 +28,10 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
+  // Optional per-request override; invalid values are ignored.
+  const provider = resolveTtsProvider(body?.provider)
 
-  const authHeader = getInworldAuthHeaderValue()
-  if (!authHeader) {
+  const buildMissingCredentialsResponse = () => {
     const response = NextResponse.json(
       {
         error:
@@ -46,91 +43,94 @@ export async function handleTtsInworldV1(request: NextRequest) {
     return response
   }
 
+  // Inworld path keeps the original check order (credentials, then text).
+  // Gemini can synthesize without Inworld credentials; it only needs them to fall back.
+  if (provider === 'inworld' && !getInworldAuthHeaderValue()) {
+    return buildMissingCredentialsResponse()
+  }
+
   if (!text) {
     const response = NextResponse.json({ error: 'text is required' }, { status: 400 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
 
-  const voiceId = requestedVoiceId || await resolveVoiceId(authHeader, language)
   // Start session verification alongside the upstream TTS request. Auth
   // failure must never delay or fail audio delivery; it only suppresses the
   // optional current-client analytics write.
   const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
   try {
-    const response = await fetch(`${INWORLD_API_BASE}/tts/v1/voice`, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        voiceId,
-        modelId: DEFAULT_MODEL_ID,
-        audioConfig: {
-          speakingRate: Number.isFinite(DEFAULT_SPEAKING_RATE) && DEFAULT_SPEAKING_RATE > 0
-            ? DEFAULT_SPEAKING_RATE
-            : 1.3,
-        },
-      }),
-      cache: 'no-store',
+    const result = await synthesizeSpeech({
+      text,
+      language,
+      requestedVoiceId,
+      providerOverride: provider,
     })
+    const fallbackMetadata = result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      const errorResponse = NextResponse.json(
-        { error: 'inworld_tts_failed', status: response.status, detail: detail.slice(0, 300) },
-        { status: response.status },
-      )
+    if (!result.ok) {
+      if (result.reason === 'missing_credentials') {
+        return buildMissingCredentialsResponse()
+      }
 
-      const tracking = ensureTrackingContext(request, errorResponse, { sessionKeyHint })
-      fireAndForgetDbWrite('tts.inworld.failed', async () => {
-        const userId = await resolveUserIdForTrackedWrite({
-          request,
-          session: await sessionPromise,
-          tracking,
-          clientContext,
+      if (result.reason === 'upstream_error') {
+        const status = result.status ?? 502
+        const errorResponse = NextResponse.json(
+          { error: 'inworld_tts_failed', status, detail: result.detail ?? '' },
+          { status },
+        )
+        if (result.fallbackFrom) errorResponse.headers.set('X-TTS-Fallback-From', result.fallbackFrom)
+
+        const tracking = ensureTrackingContext(request, errorResponse, { sessionKeyHint })
+        fireAndForgetDbWrite('tts.inworld.failed', async () => {
+          const userId = await resolveUserIdForTrackedWrite({
+            request,
+            session: await sessionPromise,
+            tracking,
+            clientContext,
+          })
+          if (!userId) return
+          await createTrackedEventLog({
+            userId,
+            tracking,
+            clientContext,
+            sessionKey: tracking.sessionKey,
+            eventType: 'tts_failed',
+            metadata: {
+              status,
+              language,
+              voiceId: result.voiceId,
+              modelId: result.modelId,
+              textLength: text.length,
+              clientMessageId,
+              provider: result.provider,
+              ...fallbackMetadata,
+            },
+          })
         })
-        if (!userId) return
-        await createTrackedEventLog({
-          userId,
-          tracking,
-          clientContext,
-          sessionKey: tracking.sessionKey,
-          eventType: 'tts_failed',
-          metadata: {
-            status: response.status,
-            language,
-            voiceId,
-            modelId: DEFAULT_MODEL_ID,
-            textLength: text.length,
-            clientMessageId,
-          },
-        })
-      })
 
-      return errorResponse
+        return errorResponse
+      }
+
+      if (result.reason === 'invalid_audio') {
+        const invalidResponse = NextResponse.json({ error: 'invalid_audio_content' }, { status: 502 })
+        ensureTrackingContext(request, invalidResponse, { sessionKeyHint })
+        return invalidResponse
+      }
+
+      throw result.error ?? new Error(`tts_${result.reason}`)
     }
 
-    const data = await response.json() as { audioContent?: string }
-    const audioBuffer = decodeAudioContent(data.audioContent)
-
-    if (!audioBuffer) {
-      const invalidResponse = NextResponse.json({ error: 'invalid_audio_content' }, { status: 502 })
-      ensureTrackingContext(request, invalidResponse, { sessionKeyHint })
-      return invalidResponse
+    const audioBuffer = result.audio
+    const headers: Record<string, string> = {
+      'Content-Type': result.mime,
+      'Cache-Control': 'no-store',
+      'X-TTS-Provider': result.provider,
+      'X-TTS-Voice-Id': result.voiceId,
     }
-
-    const audioResponse = new NextResponse(new Uint8Array(audioBuffer), {
-      headers: {
-        'Content-Type': detectAudioMime(audioBuffer),
-        'Cache-Control': 'no-store',
-        'X-TTS-Provider': 'inworld',
-        'X-TTS-Voice-Id': voiceId,
-      },
-    })
+    if (result.fallbackFrom) headers['X-TTS-Fallback-From'] = result.fallbackFrom
+    const audioResponse = new NextResponse(new Uint8Array(audioBuffer), { headers })
 
     const tracking = ensureTrackingContext(request, audioResponse, { sessionKeyHint })
     fireAndForgetDbWrite('tts.inworld.success', async () => {
@@ -149,11 +149,13 @@ export async function handleTtsInworldV1(request: NextRequest) {
         eventType: 'tts_generated',
         metadata: {
           language,
-          voiceId,
-          modelId: DEFAULT_MODEL_ID,
+          voiceId: result.voiceId,
+          modelId: result.modelId,
           textLength: text.length,
           audioBytes: audioBuffer.byteLength,
           clientMessageId,
+          provider: result.provider,
+          ...fallbackMetadata,
         },
       })
     })
