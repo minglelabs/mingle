@@ -34,14 +34,6 @@ type ShareOverlayState = NativeConversationShareOverlayRequest & {
   requestId: number;
 };
 
-type InviterInfo = {
-  name: string | null;
-  image: string | null;
-  imageCropScale: number | null;
-  imageCropX: number | null;
-  imageCropY: number | null;
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -84,7 +76,6 @@ export default function NativeConversationShareOverlay() {
   const [overlay, setOverlay] = useState<ShareOverlayState | null>(null);
   const overlayRef = useRef<ShareOverlayState | null>(null);
   const requestIdRef = useRef(0);
-  const [inviter, setInviter] = useState<InviterInfo | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState(false);
@@ -116,7 +107,6 @@ export default function NativeConversationShareOverlay() {
     const nextOverlay = { ...request, requestId };
     overlayRef.current = nextOverlay;
     setOverlay(nextOverlay);
-    setInviter(null);
     setJoinError(false);
     postNativeBannerZone("hidden");
 
@@ -229,38 +219,11 @@ export default function NativeConversationShareOverlay() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // The spectate hydration payload only carries sharedByUserId, not the
-  // inviter's display name/avatar (the public /s/ page resolves that
-  // server-side as part of its own render) — fetch it the same way
-  // PublicUserProfileScreen loads any other user's public profile.
-  useEffect(() => {
-    const sharedByUserId = state?.sharedByUserId;
-    if (!sharedByUserId) return;
-
-    let cancelled = false;
-    void fetch(buildClientApiPath(`/users/${encodeURIComponent(sharedByUserId)}`), { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("inviter_load_failed");
-        return await response.json() as Partial<InviterInfo>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setInviter({
-          name: typeof data.name === "string" ? data.name : null,
-          image: typeof data.image === "string" ? data.image : null,
-          imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
-          imageCropX: typeof data.imageCropX === "number" ? data.imageCropX : null,
-          imageCropY: typeof data.imageCropY === "number" ? data.imageCropY : null,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setInviter(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state?.sharedByUserId]);
+  // The spectate payload already carries the sharer's public profile card
+  // (resolved server-side, since the payload deliberately has no account id
+  // for a client to look anyone up with — see
+  // lib/conversation-share-public-payload), so there is nothing to fetch here.
+  const inviter = state?.inviter ?? null;
 
   // A share link is a fixed snapshot fetched once on open (see
   // useConversationSpectate) — utterances only ever change on that single

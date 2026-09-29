@@ -3,14 +3,38 @@ import {
   type ConversationHydrationCursor,
   getConversationHydrationStateForShare,
 } from "@/lib/app-conversations";
+import {
+  type PublicSpectateInviter,
+  toPublicSpectateSnapshot,
+} from "@/lib/conversation-share-public-payload";
+import { getUserProfile } from "@/server/user-profile";
 
 export const runtime = "nodejs";
 
-// Fully public: no getServerSession/auth import anywhere in this file. Gates
-// on the room's shareToken existing (no on/off state) instead of a session,
-// so a viewer never needs a Mingle account. Returns a fixed snapshot —
-// messages up to the share's sharedAt cutoff — not a live feed, so this is
-// a plain single fetch with no realtime channel to mint a token for.
+// The sharer's public profile card, resolved here so the response can carry
+// who shared the room without carrying their account id — see
+// conversation-share-public-payload for why no internal id may leak into a
+// payload anyone with the link can read.
+async function resolvePublicInviter(
+  sharedByUserId: string | null,
+): Promise<PublicSpectateInviter | null> {
+  if (!sharedByUserId) return null;
+
+  const profile = await getUserProfile(sharedByUserId);
+  if (!profile) return null;
+
+  return {
+    name: profile.name,
+    image: profile.image,
+    imageCropScale: profile.imageCropScale,
+    imageCropX: profile.imageCropX,
+    imageCropY: profile.imageCropY,
+  };
+}
+
+// Public response: the lookup requires an enabled share token, and the
+// serializer above excludes the member-only channel identity and notices as
+// well as every internal id.
 
 function readConversationHydrationCursor(
   request: NextRequest,
@@ -55,5 +79,10 @@ export async function getConversationSpectateStateResponse(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  return NextResponse.json(state);
+  const publicState = toPublicSpectateSnapshot(
+    state,
+    await resolvePublicInviter(state.sharedByUserId),
+  );
+
+  return NextResponse.json(publicState);
 }

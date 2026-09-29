@@ -232,7 +232,7 @@ describe('durable message finalization', () => {
   it('never adopts another account, platform, legacy, unknown, or tracking-only job during upgrade', async () => {
     for (const [ownerIdentity, apiNamespace] of [
       ['user:two', 'ios/v2.0.0'], [owner, 'android/v2.0.0'], [owner, 'ios/v1.1.4'],
-      [owner, 'ios/v2.1.0'], ['tracking:tracking-one', 'ios/v2.0.0'],
+      [owner, 'ios/v2.2.0'], ['tracking:tracking-one', 'ios/v2.0.0'],
     ]) jobs.enqueueDurableFinalization({ ...input(), ownerIdentity, apiNamespace })
     await reloadJobs()
     retainOwner(owner, 'ios/v2.0.3')

@@ -29,6 +29,7 @@ describe('room PiP compatibility wiring', () => {
     ['ios/v2.0.2', true, true, true],
     ['ios/v2.0.3', true, true, true],
     ['ios/v2.0.4', true, true, true],
+    ['ios/v2.1.0', true, true, true],
     ['android/v2.0.1', true, false, false],
     ['ios/v2.0.2', false, true, false],
   ])('gates the actual room availability on the native shell (%s, native=%s)', (namespace, native, ios, expected) => {

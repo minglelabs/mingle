@@ -50,19 +50,6 @@ export default async function V110ConversationsEntry({
   const isExplicitNativeTabRoot = initialNativeUi
     && readSearchParamValue(searchParams, "nativeTabRoot") === "1"
     && !initialConversationId;
-  // TEMP DEBUG — remove once the add-members return-flash is confirmed
-  // fixed or its real cause is found. Every hit to this server component
-  // prints here (devbox terminal), so we can tell, with the phone as the
-  // client, whether a server round trip happens at all on the way back from
-  // add-members, and with what params — ground truth Safari Web Inspector
-  // hasn't been able to give us.
-  console.log("[conversations-entry DEBUG]", {
-    conversation: initialConversationId || null,
-    nativeTabRoot: readSearchParamValue(searchParams, "nativeTabRoot"),
-    nativeUi: readSearchParamValue(searchParams, "nativeUi"),
-    isExplicitNativeTabRoot,
-    at: new Date().toISOString(),
-  });
   // Native tab navigation must be able to commit the list route before the
   // Railway database round-trip finishes. The client list performs one
   // identity-aware refresh after mount, so doing the same user lookup and
