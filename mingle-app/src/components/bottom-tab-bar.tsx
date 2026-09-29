@@ -14,6 +14,9 @@ import {
 } from "@/lib/tab-navigation";
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
+// Fallback poll for the unread badge. Push, focus and visibilitychange cover
+// the fast path; this only bounds how stale a visible badge can get.
+export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
 
 type BottomTabBarProps = {
   activeRoute: "conversations" | "connect" | "mypage";
@@ -156,7 +159,9 @@ export default function BottomTabBar({
     };
 
     void loadUnreadConversationMessageCount();
-    const pollTimer = window.setInterval(loadUnreadConversationMessageCount, 20_000);
+    // Each badge refresh reloads the whole conversation list, so poll slowly and
+    // never while hidden; focus/visibilitychange still refresh immediately.
+    const pollTimer = window.setInterval(refreshWhenVisible, UNREAD_BADGE_POLL_INTERVAL_MS);
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 

@@ -4061,9 +4061,18 @@ export default function ConversationList({
         lastRealtimeActivityAt,
         now: Date.now(),
       })) return;
-      void refreshConversationList().catch(() => {
-        // Keep the current local snapshot while realtime recovery is unavailable.
-      });
+      void refreshConversationList()
+        .then(() => {
+          // A successful fallback refresh is as fresh as a push: restart the
+          // idle watchdog so an idle but healthy socket polls about every
+          // 60-80 s instead of every 20 s. A socket that is not OPEN still
+          // polls every interval (shouldRunRealtimeFallbackRefresh ignores this
+          // timestamp then), and a failed refresh keeps retrying.
+          lastRealtimeActivityAt = Date.now();
+        })
+        .catch(() => {
+          // Keep the current local snapshot while realtime recovery is unavailable.
+        });
     }, REALTIME_FALLBACK_POLL_INTERVAL_MS);
 
     return () => {

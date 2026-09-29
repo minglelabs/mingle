@@ -935,41 +935,91 @@ function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<stri
   return value as Record<string, unknown>;
 }
 
+type LatestVisibleMessageRow = {
+  sessionKey: string;
+  id: string;
+  createdAt: Date;
+  sourceLanguage: string;
+  metadata: Prisma.JsonValue | null;
+};
+
+function normalizeLatestMessageSessionKeys(sessionKeys: string[]): string[] {
+  return [...new Set(sessionKeys.filter((sessionKey) => typeof sessionKey === "string" && sessionKey.trim()))];
+}
+
+// Latest visible message per room, one row per session key, computed in SQL.
+// Prisma's `distinct` (without the nativeDistinct preview) fetches every
+// visible message of every requested room and dedups in memory, which was the
+// dominant source of database egress for the conversation list. The LATERAL
+// LIMIT 1 walks app_messages_session_created_at_desc_idx and returns at most
+// one row per key. The visibility predicate mirrors buildVisibleMessageWhere().
+async function listLatestVisibleMessagesBySessionKey(
+  sessionKeys: string[],
+): Promise<LatestVisibleMessageRow[]> {
+  const uniqueSessionKeys = normalizeLatestMessageSessionKeys(sessionKeys);
+  if (uniqueSessionKeys.length === 0) {
+    return [];
+  }
+
+  return prisma.$queryRaw<LatestVisibleMessageRow[]>(Prisma.sql`
+    SELECT
+      k.session_key AS "sessionKey",
+      latest.id AS "id",
+      latest.created_at AS "createdAt",
+      latest.source_language AS "sourceLanguage",
+      latest.metadata AS "metadata"
+    FROM unnest(${uniqueSessionKeys}::text[]) AS k(session_key)
+    CROSS JOIN LATERAL (
+      SELECT m.id, m.created_at, m.source_language, m.metadata
+      FROM app.app_messages AS m
+      WHERE m.session_key = k.session_key
+        AND (m.is_deleted = false OR m.is_deleted IS NULL)
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT 1
+    ) AS latest
+  `);
+}
+
 async function listLatestMessageSummaryBySessionKey(
   sessionKeys: string[],
 ): Promise<Map<string, LatestMessageSummary>> {
-  if (sessionKeys.length === 0) {
+  const latestRows = await listLatestVisibleMessagesBySessionKey(sessionKeys);
+  if (latestRows.length === 0) {
     return new Map();
   }
 
-  const latestMessages = await prisma.appMessage.findMany({
+  const contentRows = await prisma.appMessageContent.findMany({
     where: {
-      sessionKey: {
-        in: sessionKeys,
+      messageId: {
+        in: latestRows.map((row) => row.id),
       },
-      ...buildVisibleMessageWhere(),
+      ...buildVisibleMessageContentWhere(),
     },
-    orderBy: [
-      { sessionKey: "asc" },
-      { createdAt: "desc" },
-    ],
-    distinct: ["sessionKey"],
+    orderBy: { createdAt: "asc" },
     select: {
-      sessionKey: true,
-      createdAt: true,
-      sourceLanguage: true,
-      metadata: true,
-      contents: {
-        where: buildVisibleMessageContentWhere(),
-        orderBy: { createdAt: "asc" },
-        select: {
-          contentType: true,
-          language: true,
-          text: true,
-        },
-      },
+      messageId: true,
+      contentType: true,
+      language: true,
+      text: true,
     },
   });
+  const contentsByMessageId = new Map<string, Array<{ contentType: string; language: string; text: string }>>();
+  for (const content of contentRows) {
+    const bucket = contentsByMessageId.get(content.messageId);
+    const entry = { contentType: content.contentType, language: content.language, text: content.text };
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      contentsByMessageId.set(content.messageId, [entry]);
+    }
+  }
+  const latestMessages = latestRows.map((row) => ({
+    sessionKey: row.sessionKey,
+    createdAt: row.createdAt,
+    sourceLanguage: row.sourceLanguage,
+    metadata: row.metadata,
+    contents: contentsByMessageId.get(row.id) ?? [],
+  }));
 
   const summaryBySessionKey = new Map<string, LatestMessageSummary>();
   for (const message of latestMessages) {
@@ -1019,28 +1069,7 @@ async function listLatestMessageSummaryBySessionKey(
 async function listLatestMessageCreatedAtBySessionKey(
   sessionKeys: string[],
 ): Promise<Map<string, Date>> {
-  const uniqueSessionKeys = [...new Set(sessionKeys.filter((sessionKey) => sessionKey.trim()))];
-  if (uniqueSessionKeys.length === 0) {
-    return new Map();
-  }
-
-  const latestMessages = await prisma.appMessage.findMany({
-    where: {
-      sessionKey: {
-        in: uniqueSessionKeys,
-      },
-      ...buildVisibleMessageWhere(),
-    },
-    orderBy: [
-      { sessionKey: "asc" },
-      { createdAt: "desc" },
-    ],
-    distinct: ["sessionKey"],
-    select: {
-      sessionKey: true,
-      createdAt: true,
-    },
-  });
+  const latestMessages = await listLatestVisibleMessagesBySessionKey(sessionKeys);
 
   const latestCreatedAtBySessionKey = new Map<string, Date>();
   for (const message of latestMessages) {
