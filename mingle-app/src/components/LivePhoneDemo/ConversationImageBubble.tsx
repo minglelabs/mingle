@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
 import { X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
@@ -8,6 +8,7 @@ import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageMediaDialog from './MessageMediaDialog'
 import {
   DIRECTION_SLOP_PX,
+  appendVelocitySample,
   backdropOpacityForProgress,
   dragProgress,
   effectiveVelocity,
@@ -16,10 +17,21 @@ import {
   resolveDragAxis,
   scaleForProgress,
   shouldDismissOnRelease,
+  windowVelocity,
+  type VelocitySample,
 } from './swipe-to-dismiss.logic'
 
 /** How long the animate-out transition runs before the fallback timer fires. */
 const DISMISS_ANIMATION_MS = 260
+
+/** Fallback for the 200ms spring-back transition: clears `settling` even when
+ *  no transition runs (release at offset 0, interrupted transition). */
+const SETTLE_FALLBACK_MS = 260
+
+/** With reduced motion there is no animate-out, but the viewer still stays
+ *  mounted this long after release so the click iOS WKWebView synthesizes
+ *  after touchend lands on the viewer, not on the chat bubble behind it. */
+const REDUCED_MOTION_CLOSE_DELAY_MS = 80
 
 const MIN_IMAGE_SCALE = 1
 const MAX_IMAGE_SCALE = 4
@@ -55,9 +67,9 @@ type DismissDrag = {
   startPoint: PointerPoint
   locked: boolean
   offsetY: number
-  lastY: number
+  /** Recent pointer samples for the windowed release velocity. */
+  samples: VelocitySample[]
   lastTime: number
-  velocityY: number
 }
 
 function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss, onDragProgress, onSettleChange }: {
@@ -79,7 +91,14 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
   // response. A live finger drag also has no transition.
   const [settling, setSettling] = useState(false)
   const closedRef = useRef(false)
+  // True once a release committed to dismissing (animate-out or the deferred
+  // reduced-motion close); new pointerdowns are ignored from then on.
+  const closingRef = useRef(false)
+  // Set when a locked dismiss drag ends, so the matching touchend can cancel
+  // the synthesized click.
+  const suppressClickRef = useRef(false)
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimerRef.current != null) {
@@ -87,6 +106,19 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
       dismissTimerRef.current = null
     }
   }, [])
+
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current != null) {
+      clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+    }
+  }, [])
+
+  // Drop the settle transition now (spring-back finished or interrupted).
+  const endSettle = useCallback(() => {
+    clearSettleTimer()
+    setSettling(false)
+  }, [clearSettleTimer])
 
   // Idempotent: transitionend and the fallback timer both call this, and only
   // the first wins, so the viewer never double-closes.
@@ -97,8 +129,8 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     onDismiss()
   }, [clearDismissTimer, onDismiss])
 
-  // Clear any pending fallback timer if the viewer unmounts first.
-  useEffect(() => clearDismissTimer, [clearDismissTimer])
+  // Clear any pending fallback timers if the viewer unmounts first.
+  useEffect(() => () => { clearDismissTimer(); clearSettleTimer() }, [clearDismissTimer, clearSettleTimer])
 
   // Mirror the settling flag to the parent so the backdrop can fade smoothly
   // during a settle (spring-back / animate-out) but track the finger 1:1 while
@@ -107,10 +139,10 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
 
   const resetDismissDrag = useCallback(() => {
     dismissRef.current = null
-    setSettling(false)
+    endSettle()
     setDismissOffset(0)
     onDragProgress(0)
-  }, [onDragProgress])
+  }, [endSettle, onDragProgress])
 
   const applyDismissOffset = useCallback((offsetY: number) => {
     setDismissOffset(offsetY)
@@ -145,6 +177,10 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    // Once a release committed to dismissing, a re-touch must not grab the
+    // photo mid animate-out (it would jump back under the finger).
+    if (closingRef.current) return
+    suppressClickRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = localPoint(event)
     const pointers = pointersRef.current
@@ -166,20 +202,19 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     // Only base zoom may swipe-to-dismiss; when zoomed the single pointer pans.
     if (current.scale <= MIN_IMAGE_SCALE) {
       // A fresh drag interrupts any in-flight spring-back: drop the transition
-      // so it tracks the finger 1:1 again.
-      if (settling) setSettling(false)
+      // so it tracks the finger 1:1 again (a no-op when not settling).
+      endSettle()
       dismissRef.current = {
         pointerId: event.pointerId,
         startPoint: point,
         locked: false,
         offsetY: 0,
-        lastY: point.y,
+        samples: [{ y: point.y, t: event.timeStamp }],
         lastTime: event.timeStamp,
-        velocityY: 0,
       }
     }
     gestureRef.current = { kind: 'pan', startPoint: point, startTransform: current }
-  }, [localPoint, resetDismissDrag, settling])
+  }, [endSettle, localPoint, resetDismissDrag])
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!pointersRef.current.has(event.pointerId)) return
@@ -195,22 +230,21 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     const dismiss = dismissRef.current
     if (dismiss && points.length === 1 && event.pointerId === dismiss.pointerId) {
       const delta = { dx: point.x - dismiss.startPoint.x, dy: point.y - dismiss.startPoint.y }
+      dismiss.samples = appendVelocitySample(dismiss.samples, { y: point.y, t: event.timeStamp })
+      dismiss.lastTime = event.timeStamp
       if (!dismiss.locked) {
         const axis = resolveDragAxis(delta, DIRECTION_SLOP_PX)
         if (axis === 'horizontal') {
-          // Horizontal wins the direction lock — hand the gesture back so the
-          // app's edge swipe-back is never hijacked; no dismiss this drag.
+          // Horizontal wins the direction lock: stop tracking a dismiss for
+          // this drag and let the pointer fall through to the pan branch below
+          // (a no-op at base zoom). The viewport keeps touch-none and pointer
+          // capture, so the gesture is NOT handed to a native edge swipe.
           dismissRef.current = null
         } else if (isDismissibleDrag(delta, DIRECTION_SLOP_PX)) {
           dismiss.locked = true
         }
       }
       if (dismissRef.current?.locked) {
-        const now = event.timeStamp
-        const dt = now - dismiss.lastTime
-        if (dt > 0) dismiss.velocityY = (point.y - dismiss.lastY) / dt
-        dismiss.lastY = point.y
-        dismiss.lastTime = now
         const offsetY = offsetForDrag(delta.dy)
         dismiss.offsetY = offsetY
         applyDismissOffset(offsetY)
@@ -264,15 +298,25 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
       dismissRef.current = null
       if (dismiss.locked) {
         const viewportHeight = viewportRef.current?.getBoundingClientRect().height ?? window.innerHeight ?? 0
-        const velocityY = effectiveVelocity(dismiss.velocityY, event.timeStamp - dismiss.lastTime)
+        // Windowed release velocity (not the last single move), zeroed when
+        // the finger was held still before lifting.
+        const velocityY = effectiveVelocity(windowVelocity(dismiss.samples), event.timeStamp - dismiss.lastTime)
         const dismissing = shouldDismissOnRelease({
           offsetY: dismiss.offsetY,
           velocityY,
           viewportHeight,
         })
+        // The drag ended on the viewer: cancel the click iOS would synthesize
+        // from this touch (see handleTouchEnd).
+        suppressClickRef.current = true
         if (dismissing) {
+          closingRef.current = true
+          clearDismissTimer()
           if (prefersReducedMotion()) {
-            finishDismiss()
+            // No animation, but do not unmount inside pointerup: keep the
+            // viewer until the synthesized click would have fired, so it
+            // cannot land on the chat bubble behind and reopen the photo.
+            dismissTimerRef.current = setTimeout(finishDismiss, REDUCED_MOTION_CLOSE_DELAY_MS)
           } else {
             // Settle: run the animate-out transition, then close on whichever
             // fires first — transitionend or the fallback timer (which covers
@@ -281,14 +325,16 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
             setAnimateOut(true)
             setDismissOffset(viewportHeight || dismiss.offsetY)
             onDragProgress(1)
-            clearDismissTimer()
             dismissTimerRef.current = setTimeout(finishDismiss, DISMISS_ANIMATION_MS)
           }
           return
         }
-        // Spring back with a transition.
+        // Spring back with a transition. The fallback timer clears `settling`
+        // when no transitionend arrives (offset already 0, interrupted).
         setSettling(true)
         applyDismissOffset(0)
+        clearSettleTimer()
+        settleTimerRef.current = setTimeout(endSettle, SETTLE_FALLBACK_MS)
       }
     }
 
@@ -298,7 +344,18 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     } else if (!remaining.length) {
       gestureRef.current = null
     }
-  }, [applyDismissOffset, clearDismissTimer, finishDismiss, onDragProgress])
+  }, [applyDismissOffset, clearDismissTimer, clearSettleTimer, endSettle, finishDismiss, onDragProgress])
+
+  // React's onTouchEnd is not passive, so preventDefault() here cancels the
+  // mouse/click events WKWebView would synthesize from a touch that ended a
+  // dismiss drag (or landed while the viewer is closing).
+  const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    if (suppressClickRef.current || closingRef.current) {
+      if (event.cancelable) event.preventDefault()
+      if (!event.touches.length) suppressClickRef.current = false
+    }
+  }, [])
 
   const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -342,14 +399,14 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerEnd}
     onPointerCancel={handlePointerCancel} onWheel={handleWheel} onDoubleClick={handleDoubleClick}
     onTouchStart={event => event.stopPropagation()} onTouchMove={event => event.stopPropagation()}
-    onTouchEnd={event => event.stopPropagation()} onTouchCancel={event => event.stopPropagation()}>
+    onTouchEnd={handleTouchEnd} onTouchCancel={event => event.stopPropagation()}>
     {/* The authenticated image endpoint must bypass image optimization and retain cookies. */}
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={src} alt={alt} width={width} height={height} draggable={false} onError={onError}
       onTransitionEnd={event => {
         if (event.propertyName !== 'transform') return
         if (animateOut) finishDismiss()
-        else setSettling(false) // spring-back finished; drop the transition again
+        else endSettle() // spring-back finished; drop the transition again
       }}
       className="max-h-full max-w-full object-contain will-change-transform"
       style={{

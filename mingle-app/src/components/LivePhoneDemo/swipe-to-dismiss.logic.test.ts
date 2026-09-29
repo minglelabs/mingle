@@ -3,9 +3,12 @@ import {
   DISMISS_DISTANCE_MAX_PX,
   DISMISS_VELOCITY_PX_PER_MS,
   DIRECTION_SLOP_PX,
+  FLICK_MIN_DISTANCE_PX,
   MIN_BACKDROP_OPACITY,
   MIN_DRAG_SCALE,
   VELOCITY_STALE_MS,
+  VELOCITY_WINDOW_MS,
+  appendVelocitySample,
   backdropOpacityForProgress,
   dragProgress,
   effectiveVelocity,
@@ -14,6 +17,8 @@ import {
   resolveDragAxis,
   scaleForProgress,
   shouldDismissOnRelease,
+  windowVelocity,
+  type VelocitySample,
 } from './swipe-to-dismiss.logic'
 
 describe('resolveDragAxis — direction lock', () => {
@@ -27,7 +32,7 @@ describe('resolveDragAxis — direction lock', () => {
     expect(resolveDragAxis({ dx: 2, dy: -40 })).toBe('vertical')
   })
 
-  it('locks horizontal for horizontal-dominant or tied movement (edge swipe-back is not hijacked)', () => {
+  it('locks horizontal for horizontal-dominant or tied movement (no dismiss)', () => {
     expect(resolveDragAxis({ dx: 40, dy: 2 })).toBe('horizontal')
     expect(resolveDragAxis({ dx: 30, dy: 30 })).toBe('horizontal')
   })
@@ -97,6 +102,12 @@ describe('shouldDismissOnRelease', () => {
   it('dismisses on a fast downward flick even when short', () => {
     expect(shouldDismissOnRelease({ offsetY: 30, velocityY: DISMISS_VELOCITY_PX_PER_MS, viewportHeight })).toBe(true)
     expect(shouldDismissOnRelease({ offsetY: 30, velocityY: 1.2, viewportHeight })).toBe(true)
+    expect(shouldDismissOnRelease({ offsetY: FLICK_MIN_DISTANCE_PX, velocityY: 1.2, viewportHeight })).toBe(true)
+  })
+
+  it('springs back for a fast flick shorter than the flick minimum distance', () => {
+    expect(shouldDismissOnRelease({ offsetY: DIRECTION_SLOP_PX + 2, velocityY: 3, viewportHeight })).toBe(false)
+    expect(shouldDismissOnRelease({ offsetY: FLICK_MIN_DISTANCE_PX - 1, velocityY: 3, viewportHeight })).toBe(false)
   })
 
   it('never dismisses when there is no downward offset (upward ignored)', () => {
@@ -105,7 +116,7 @@ describe('shouldDismissOnRelease', () => {
   })
 
   it('uses the smaller of the fractional threshold and the absolute cap', () => {
-    // Tall viewport: fraction (0.22 * 400 = 88) is below the 120 cap, so 88 wins.
+    // Short viewport: fraction (0.22 * 400 = 88) is below the 120 cap, so 88 wins.
     expect(shouldDismissOnRelease({ offsetY: 90, velocityY: 0, viewportHeight: 400 })).toBe(true)
     expect(shouldDismissOnRelease({ offsetY: 80, velocityY: 0, viewportHeight: 400 })).toBe(false)
   })
@@ -126,5 +137,65 @@ describe('effectiveVelocity — stale velocity guard', () => {
     const velocityY = effectiveVelocity(1.5, 300) // fast earlier, but held 300ms before release
     expect(velocityY).toBe(0)
     expect(shouldDismissOnRelease({ offsetY: 30, velocityY, viewportHeight: 800 })).toBe(false)
+  })
+})
+
+
+describe('windowVelocity — release velocity over a recent window', () => {
+  const build = (points: Array<[number, number]>): VelocitySample[] =>
+    points.reduce<VelocitySample[]>((samples, [t, y]) => appendVelocitySample(samples, { t, y }), [])
+
+  it('is 0 with fewer than two samples or no elapsed time', () => {
+    expect(windowVelocity([])).toBe(0)
+    expect(windowVelocity([{ t: 0, y: 0 }])).toBe(0)
+    expect(windowVelocity([{ t: 5, y: 0 }, { t: 5, y: 20 }])).toBe(0)
+  })
+
+  it('averages over the samples inside the window instead of the last move alone', () => {
+    // A slow drag with one noisy final sample: last-move velocity would be 20px/2ms = 10px/ms.
+    const samples = build([[0, 0], [16, 4], [32, 8], [48, 12], [64, 16], [66, 36]])
+    expect(windowVelocity(samples)).toBeCloseTo(36 / 66)
+    expect(windowVelocity(samples)).toBeLessThan(10)
+  })
+
+  it('ignores samples older than the window', () => {
+    // Fast early movement, then a slow steady tail inside the window.
+    const samples = build([[0, 0], [10, 100], [100, 110], [140, 114], [180, 118]])
+    expect(windowVelocity(samples)).toBeCloseTo((118 - 110) / 80)
+  })
+
+  it('falls back to the previous sample when the window holds only the newest one', () => {
+    const samples = build([[0, 0], [200, 50]])
+    expect(windowVelocity(samples)).toBeCloseTo(50 / 200)
+  })
+
+  it('reports upward movement as negative velocity', () => {
+    expect(windowVelocity(build([[0, 100], [40, 60]]))).toBeCloseTo(-1)
+  })
+
+  it('keeps only the samples the window needs', () => {
+    const samples = build([[0, 0], [10, 1], [20, 2], [200, 3], [210, 4], [220, 5]])
+    // Newest t=220, cutoff 140: keeps t=20 (the one sample before the window) and later.
+    expect(samples.map(sample => sample.t)).toEqual([20, 200, 210, 220])
+    expect(samples[0].t).toBeLessThan(220 - VELOCITY_WINDOW_MS)
+  })
+
+  it('does not mutate the input array', () => {
+    const samples: VelocitySample[] = [{ t: 0, y: 0 }]
+    appendVelocitySample(samples, { t: 10, y: 5 })
+    expect(samples).toHaveLength(1)
+  })
+
+  it('a tiny quick flick just past the slop springs back end to end', () => {
+    const samples = build([[0, 0], [8, 6], [16, 12]])
+    const velocityY = effectiveVelocity(windowVelocity(samples), 0)
+    expect(velocityY).toBeGreaterThanOrEqual(DISMISS_VELOCITY_PX_PER_MS)
+    expect(shouldDismissOnRelease({ offsetY: 12, velocityY, viewportHeight: 800 })).toBe(false)
+  })
+
+  it('a quick flick that travels past the flick minimum dismisses end to end', () => {
+    const samples = build([[0, 0], [16, 15], [32, 30], [48, 45]])
+    const velocityY = effectiveVelocity(windowVelocity(samples), 0)
+    expect(shouldDismissOnRelease({ offsetY: 45, velocityY, viewportHeight: 800 })).toBe(true)
   })
 })
