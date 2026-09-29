@@ -45,7 +45,7 @@ import {
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
-import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice } from './use-realtime-stt'
+import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice, type SttStopSource } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
@@ -5278,7 +5278,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     switchLiveRoomToastLabel,
   ])
 
-  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean }) => {
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean, stopSource?: SttStopSource }) => {
     if (!isSttSessionRunning && options?.forceNativeStop !== true) return
     if (options?.deferRunningStateChange !== true) {
       onSttSessionRunningChange?.(false)
@@ -5286,6 +5286,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     await stopRecording({
       discardPendingFinalization: options?.discardPendingFinalization,
       forceNativeStop: options?.forceNativeStop,
+      stopSource: options?.stopSource,
     })
     if (options?.deferRunningStateChange === true) {
       onSttSessionRunningChange?.(false)
@@ -5293,14 +5294,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
-  const performMicAction = useCallback(() => {
+  const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
     if (isSttSessionRunning || shouldStopConnectingSession) {
       // A missed native `ready` event can leave the hook in connecting while
       // the native recorder is already active. Keep the control recoverable by
       // allowing the user to cancel that session instead of disabling it.
-      void handleStopRecording({ forceNativeStop: !isSttSessionRunning })
+      void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
     void handleStartRecording()
@@ -5312,7 +5313,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       suppressMicClickUntilRef.current = 0
       return
     }
-    performMicAction()
+    performMicAction('mic_click')
   }, [performMicAction])
 
   const handleMicPointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -5323,7 +5324,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // pointer sequence even though pointerdown prevented focus movement.
     // Activate on pointerup and suppress only that duplicate click.
     suppressMicClickUntilRef.current = Date.now() + 500
-    performMicAction()
+    performMicAction('mic_pointerup')
   }, [performMicAction])
 
   const handleMicPointerCancel = useCallback(() => {
@@ -8417,13 +8418,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     >
                       {showRipple && (
                         <span
-                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          className="pointer-events-none absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
                           style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
                         />
                       )}
 
                       {isReady && (
-                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                        <span className="pointer-events-none absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
                       )}
 
                       <span
@@ -8591,9 +8592,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
                       }}
                     >
+                      {/* The ripple/ping layers scale up to 2x past the button and sit above the
+                          neighbouring photo button, so they must never receive touches: a tap on
+                          the photo icon would otherwise land here and stop STT on pointer-up. */}
                       {showRipple && (
                         <span
-                          className="absolute inset-0 bg-red-400 transition-transform duration-150"
+                          className="pointer-events-none absolute inset-0 bg-red-400 transition-transform duration-150"
                           style={{
                             transform: `scale(${rippleScale})`,
                             opacity: 0.25,
@@ -8604,7 +8608,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {isReady && (
                         <span
-                          className="absolute inset-0 bg-red-500 opacity-20 animate-ping"
+                          className="pointer-events-none absolute inset-0 bg-red-500 opacity-20 animate-ping"
                           style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
                         />
                       )}
