@@ -1985,6 +1985,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           endpointTuningShortLabel={props.dictionary.demo.endpointTuningShortLabel ?? "Short"}
           endpointTuningLongLabel={props.dictionary.demo.endpointTuningLongLabel ?? "Long"}
           translationModelLabel={props.dictionary.demo.translationModelLabel}
+          ttsModelLabel={props.dictionary.demo.ttsModelLabel}
           adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel}
           adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel}
           adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel}

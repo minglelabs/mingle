@@ -2956,3 +2956,11 @@
 - Decision: The server query now returns one row per room (`CROSS JOIN LATERAL ... LIMIT 1` on `app_messages_session_created_at_desc_idx`), with identical list output. On the client, the badge interval is now 60 s and is skipped while the document is hidden; it still refreshes on mount, `focus`, and `visibilitychange`. After a successful fallback refresh the list resets its idle watchdog, so an idle but healthy socket polls about every 60-80 s instead of every 20 s. A socket that is not open still polls every 20 s, and a failed refresh keeps retrying.
 - Trade-off: Without a realtime push, the badge can lag by up to about 60 s while the app stays visible, and an idle list can lag by up to about 80 s. Push frames, focus, and returning to the page still refresh immediately.
 - Verification: Unit tests cover the new query shape, multi-room preview/translation/speaker mapping, Chinese normalization inputs, empty rooms, and the poll cadence. A local-database comparison matched the old and new latest-message results for every session key. No device test yet.
+
+## 2026-09-29 — 설정 메뉴에 TTS 모델 선택 행 추가
+
+- 위치: 대화방 설정 메뉴(`src/components/LivePhoneDemo/LivePhoneDemo.tsx`)의 "번역 모델" 행 바로 아래, "말풍선 표시 방식" 행 위.
+- 추가한 것: "TTS 모델" 행. 옵션은 `src/lib/tts-models.ts`의 `TTS_MODEL_OPTIONS`(`inworld-tts-1.5-mini`, `gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`)이고 라벨은 model id를 그대로 보여 준다. 배지는 없다. 문구 `ttsModelLabel`을 ko/en/ja/de/es/fr/it/pt 사전과 generated 사전(zh-CN, zh-TW, ru, ar, hi, th, vi)에 추가했다(ko "TTS 모델", en "TTS model").
+- 동작: 옵션을 고르면 `handleTtsModelSelect`가 state와 로컬 캐시를 갱신하고 `/api/account/preferences`에 PATCH로 `ttsModel`을 저장한다. 이후 TTS 요청(`/tts/inworld`, finalize의 `tts.ttsModel`)에 선택값이 실린다. 선택하지 않은 사용자는 Inworld를 쓴다. TTS 메뉴를 열면 번역 모델·텍스트 크기·말풍선 표시 방식 메뉴가 닫히고 반대도 같다. 바깥 클릭, Escape(버튼으로 포커스 복귀), 뒤로가기 단계, 메뉴 화면 이동 시에도 번역 모델 메뉴와 똑같이 닫힌다.
+- 결정: 별도 시안 없이 번역 모델 선택 UI를 그대로 복제했다(마크업, 클래스, 애니메이션, listbox/aria, 선택 표시, 체크 아이콘 동일). 번역 모델 행의 렌더 결과가 바뀌지 않도록 공통 컴포넌트로 빼지 않고 복제했다. `LivePhoneDemoLegacy.tsx`(v1.0.11)는 바꾸지 않았다.
+- 검증: 로컬 devbox 웹(모바일 뷰포트 헤드리스 Chrome, 로컬 테스트 계정)에서 닫힌 상태와 TTS 드롭다운이 열린 상태를 확인했다. 두 메뉴의 상호 배타, 선택 후 PATCH body의 `ttsModel`, 새로고침 뒤 선택 유지를 확인했다. 실기기 테스트는 아직 하지 않았다.
