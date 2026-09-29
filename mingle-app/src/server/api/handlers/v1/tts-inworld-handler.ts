@@ -9,7 +9,7 @@ import {
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { resolveTtsProvider, synthesizeSpeech } from '@/server/api/shared/tts-provider'
+import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
 
 export const runtime = 'nodejs'
 
@@ -28,8 +28,8 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
-  // Optional per-request override; invalid values are ignored.
-  const provider = resolveTtsProvider(body?.provider)
+  // User-selected TTS model sent by the client; missing/invalid -> default (Inworld).
+  const ttsSelection = resolveTtsRuntimeSelection(body?.ttsModel)
 
   const buildMissingCredentialsResponse = () => {
     const response = NextResponse.json(
@@ -45,7 +45,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
 
   // Inworld path keeps the original check order (credentials, then text).
   // Gemini can synthesize without Inworld credentials; it only needs them to fall back.
-  if (provider === 'inworld' && !getInworldAuthHeaderValue()) {
+  if (ttsSelection.provider === 'inworld' && !getInworldAuthHeaderValue()) {
     return buildMissingCredentialsResponse()
   }
 
@@ -65,7 +65,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
       text,
       language,
       requestedVoiceId,
-      providerOverride: provider,
+      ttsModel: ttsSelection.value,
     })
     const fallbackMetadata = result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}
 

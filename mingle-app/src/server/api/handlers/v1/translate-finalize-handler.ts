@@ -1676,14 +1676,14 @@ async function synthesizeTtsInline(args: {
   text: string
   language: string
   requestedVoiceId?: string
-  providerOverride?: unknown
+  ttsModel?: unknown
 }): Promise<{ audioBase64: string, audioMime: string, voiceId: string } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
   const result = await synthesizeSpeech({
     text: args.text,
     language: args.language,
     requestedVoiceId: args.requestedVoiceId,
-    providerOverride: args.providerOverride,
+    ttsModel: args.ttsModel,
   })
   if (!result.ok) return null
 
@@ -1705,8 +1705,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
   const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
-  // Optional per-request TTS provider override (inworld | gemini); invalid values are ignored downstream.
-  const ttsProviderOverride = ttsPayload?.provider
+  // User-selected TTS model; missing/invalid values resolve to the default (Inworld) downstream.
+  const ttsModel = ttsPayload?.ttsModel
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
@@ -1851,7 +1851,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             text: ttsText,
             language: ttsLanguage,
             requestedVoiceId: ttsVoiceId,
-            providerOverride: ttsProviderOverride,
+            ttsModel,
           })
 
           if (ttsResult) {

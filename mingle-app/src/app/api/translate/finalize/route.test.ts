@@ -259,7 +259,7 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('uses Gemini TTS for inline audio when tts.provider=gemini and ignores the Inworld voiceId', async () => {
+  it('uses Gemini TTS for inline audio when tts.ttsModel is a Gemini model and ignores the Inworld voiceId', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -284,7 +284,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', provider: 'gemini' },
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
     }) as never)
     const json = await res.json()
 
@@ -294,9 +294,10 @@ describe('/api/translate/finalize route', () => {
     expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
   })
 
-  it('falls back to Inworld inline audio when Gemini TTS fails and ignores an invalid tts.provider', async () => {
+  it('falls back to Inworld inline audio when Gemini TTS fails and resolves an invalid tts.ttsModel to Inworld', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -322,18 +323,19 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', provider: 'gemini' },
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-lite-tts' },
     }) as never)
     const fallbackJson = await fallbackRes.json()
     expect(fallbackJson.ttsAudioMime).toBe('audio/mpeg')
     expect(fallbackJson.ttsVoiceId).toBe('KoVoice')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
     expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.inworld.ai/tts/v1/voice')
 
     const invalidRes = await POST(makeJsonRequest({
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', provider: 'bogus' },
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'bogus' },
     }) as never)
     const invalidJson = await invalidRes.json()
     expect(invalidJson.ttsAudioMime).toBe('audio/mpeg')

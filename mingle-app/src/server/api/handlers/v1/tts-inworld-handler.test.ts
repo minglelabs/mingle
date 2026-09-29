@@ -25,9 +25,7 @@ vi.mock('@/lib/app-analytics', () => ({
 }))
 
 const ENV_KEYS = [
-  'TTS_PROVIDER',
   'GEMINI_API_KEY',
-  'GEMINI_TTS_MODEL',
   'GEMINI_TTS_VOICE',
   'GEMINI_TTS_TIMEOUT_MS',
   'INWORLD_JWT',
@@ -54,6 +52,10 @@ function geminiWavResponse(): Response {
   return jsonResponse({
     steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
   })
+}
+
+function bodyOfCall(call: unknown[]): Record<string, unknown> {
+  return JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>
 }
 
 function makeRequest(body: unknown): Request {
@@ -153,13 +155,17 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('serves Gemini audio/wav when TTS_PROVIDER=gemini', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
+  it('serves Gemini audio/wav when ttsModel=gemini-3.8-flash-tts', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', language: 'en' }) as never)
+    const res = await handler(makeRequest({
+      text: 'hello',
+      voiceId: 'Ashley',
+      language: 'en',
+      ttsModel: 'gemini-3.8-flash-tts',
+    }) as never)
     await flushAsync()
 
     expect(res.status).toBe(200)
@@ -175,17 +181,18 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('honors a body provider override and marks the Inworld fallback', async () => {
+  it('uses the lite Gemini model from body ttsModel and marks the Inworld fallback', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({}, 503))
       .mockResolvedValueOnce(jsonResponse({ audioContent: MP3_BYTES.toString('base64') }))
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', provider: 'gemini' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-lite-tts' }) as never)
     await flushAsync()
 
     expect(res.status).toBe(200)
+    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
     expect(res.headers.get('X-TTS-Provider')).toBe('inworld')
     expect(res.headers.get('X-TTS-Fallback-From')).toBe('gemini')
     expect(createTrackedEventLogMock.mock.calls[0][0].metadata).toMatchObject({
@@ -195,12 +202,12 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('ignores an invalid body provider override', async () => {
+  it('resolves an invalid body ttsModel (and the removed provider field) to Inworld', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ audioContent: MP3_BYTES.toString('base64') }))
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', provider: 'azure' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', ttsModel: 'azure', provider: 'gemini' }) as never)
 
     expect(res.headers.get('X-TTS-Provider')).toBe('inworld')
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -208,12 +215,11 @@ describe('handleTtsInworldV1', () => {
   })
 
   it('returns the existing 500 when Gemini fails and Inworld has no credentials', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     delete process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({}, 500)))
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', ttsModel: 'gemini-3.8-flash-tts' }) as never)
 
     expect(res.status).toBe(500)
     expect((await res.json()).error).toContain('INWORLD_BASIC')

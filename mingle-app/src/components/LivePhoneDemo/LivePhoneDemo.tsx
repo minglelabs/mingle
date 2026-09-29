@@ -97,6 +97,7 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
+  shouldSendTtsModelPreference,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -116,6 +117,10 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_SELECTABLE_TTS_MODEL,
+  type UserSelectableTtsModel,
+} from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
@@ -1979,6 +1984,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   )
+  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel>(
+    initialCachedAccountPreferences?.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL,
+  )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
   )
@@ -2157,9 +2165,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
+  const [ttsModelUserSelectedSinceHydrationStart, setTtsModelUserSelectedSinceHydrationStart] = useState(false)
   const initialAccountHydrationWithoutCacheRef = useRef(false)
   const accountPreferencesHydratedFromServerRef = useRef(false)
   const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
+  const ttsModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2193,6 +2203,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    ttsModel: initialCachedAccountPreferences?.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2208,13 +2219,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel,
+    ttsModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
     bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel, ttsModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2240,6 +2252,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAccountPreferencesSync,
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
+  ])
+  // Sent on every TTS request (no DB lookup on the TTS path). Undefined -> server default (Inworld).
+  const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
+    return shouldSendTtsModelPreference({
+      allowSync: enableAccountPreferencesSync,
+      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
+      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
+      userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
+    }) ? ttsModel : undefined
+  }, [
+    accountPreferencesRequestedHydrationGeneration,
+    accountPreferencesSuccessfulHydrationGeneration,
+    enableAccountPreferencesSync,
+    ttsModel,
+    ttsModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
@@ -2276,6 +2303,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
+    setTtsModel(preferences.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -2762,10 +2790,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialAccountHydrationWithoutCacheRef.current = false
       accountPreferencesHydratedFromServerRef.current = false
       translationModelUserSelectedSinceHydrationStartRef.current = false
+      ttsModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
       setTranslationModelUserSelectedSinceHydrationStart(false)
+      setTtsModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -2780,8 +2810,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
     accountPreferencesHydratedFromServerRef.current = false
     translationModelUserSelectedSinceHydrationStartRef.current = false
+    ttsModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
+    setTtsModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -2812,6 +2844,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
           preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
+          preserveLocalTtsModel: ttsModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
@@ -2904,6 +2937,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
               || accountPreferencesHydratedFromServerRef.current
               || translationModelUserSelectedSinceHydrationStartRef.current,
+            includeTtsModel: !initialAccountHydrationWithoutCacheRef.current
+              || accountPreferencesHydratedFromServerRef.current
+              || ttsModelUserSelectedSinceHydrationStartRef.current,
           })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
@@ -3391,6 +3427,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       accountPreferencesPendingSyncRef.current = true
     }
     setTranslationModel(nextTranslationModel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+
+  // Mirrors handleTranslationModelSelect. Called by the TTS model picker UI (not built yet).
+  const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
+    setTtsModelUserSelectedSinceHydrationStart(true)
+    ttsModelUserSelectedSinceHydrationStartRef.current = true
+    const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      ttsModel: nextTtsModel,
+    })
+    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
+      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
+      accountPreferencesPendingSyncRef.current = true
+    }
+    setTtsModel(nextTtsModel)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
@@ -4329,6 +4383,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    ttsModel: requestTtsModel,
     viewerUserId,
     viewerImage,
   })

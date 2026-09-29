@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const TTS_ENV_KEYS = [
-  'TTS_PROVIDER',
   'GEMINI_API_KEY',
-  'GEMINI_TTS_MODEL',
   'GEMINI_TTS_VOICE',
   'GEMINI_TTS_TIMEOUT_MS',
   'INWORLD_JWT',
@@ -85,28 +83,24 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('resolveTtsProvider', () => {
-  it('defaults to inworld when TTS_PROVIDER is unset or invalid', async () => {
-    const { resolveTtsProvider } = await loadModule()
-    expect(resolveTtsProvider()).toBe('inworld')
-    process.env.TTS_PROVIDER = 'elevenlabs'
-    expect(resolveTtsProvider()).toBe('inworld')
+describe('resolveTtsRuntimeSelection (re-exported from @/lib/tts-models)', () => {
+  it('maps Inworld to the INWORLD_TTS_MODEL_ID runtime model and Gemini to its own id', async () => {
+    const { resolveTtsRuntimeSelection } = await loadModule()
+    expect(resolveTtsRuntimeSelection(undefined)).toEqual({
+      value: 'inworld-tts-1.5-mini', provider: 'inworld', runtimeModel: 'inworld-tts-1.5-mini',
+    })
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-2'
+    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini').runtimeModel).toBe('inworld-tts-2')
+    expect(resolveTtsRuntimeSelection('gemini-3.8-flash-lite-tts')).toEqual({
+      value: 'gemini-3.8-flash-lite-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-lite-tts',
+    })
   })
 
-  it('uses TTS_PROVIDER env and lets a valid override win', async () => {
-    const { resolveTtsProvider } = await loadModule()
-    process.env.TTS_PROVIDER = 'gemini'
-    expect(resolveTtsProvider()).toBe('gemini')
-    expect(resolveTtsProvider('inworld')).toBe('inworld')
-    expect(resolveTtsProvider(' Gemini ')).toBe('gemini')
-  })
-
-  it('ignores invalid overrides', async () => {
-    const { resolveTtsProvider } = await loadModule()
-    expect(resolveTtsProvider('openai')).toBe('inworld')
-    expect(resolveTtsProvider(123)).toBe('inworld')
-    process.env.TTS_PROVIDER = 'gemini'
-    expect(resolveTtsProvider({ provider: 'inworld' })).toBe('gemini')
+  it('resolves invalid values to Inworld', async () => {
+    const { resolveTtsRuntimeSelection } = await loadModule()
+    expect(resolveTtsRuntimeSelection('gemini').provider).toBe('inworld')
+    expect(resolveTtsRuntimeSelection(123).provider).toBe('inworld')
+    expect(resolveTtsRuntimeSelection({ ttsModel: 'gemini-3.8-flash-tts' }).provider).toBe('inworld')
   })
 })
 
@@ -141,7 +135,7 @@ describe('synthesizeSpeech — inworld (default)', () => {
     })
   })
 
-  it('ignores an invalid override and stays on inworld', async () => {
+  it('resolves an invalid ttsModel to inworld', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
@@ -150,7 +144,7 @@ describe('synthesizeSpeech — inworld (default)', () => {
       text: 'hello',
       language: null,
       requestedVoiceId: 'Ashley',
-      providerOverride: 'polly',
+      ttsModel: 'polly',
     })
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', voiceId: 'Ashley' })
@@ -173,13 +167,17 @@ describe('synthesizeSpeech — inworld (default)', () => {
 
 describe('synthesizeSpeech — gemini', () => {
   it('returns WAV as-is from the Interactions API and ignores the client Inworld voiceId', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     const wav = wavBytes()
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: '빠른 답장 감사합니다.', language: 'ko', requestedVoiceId: 'KoVoice' })
+    const result = await synthesizeSpeech({
+      text: '빠른 답장 감사합니다.',
+      language: 'ko',
+      requestedVoiceId: 'KoVoice',
+      ttsModel: 'gemini-3.8-flash-tts',
+    })
 
     expect(result).toMatchObject({
       ok: true,
@@ -205,15 +203,13 @@ describe('synthesizeSpeech — gemini', () => {
   })
 
   it('wraps raw PCM (audio/l16) in a 44-byte WAV header using the declared rate', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
-    process.env.GEMINI_TTS_MODEL = 'gemini-3.8-flash-lite-tts'
     process.env.GEMINI_TTS_VOICE = 'Puck'
     const pcm = Buffer.alloc(4800, 1)
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(pcm, 'audio/l16;codec=pcm;rate=16000'))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
 
     if (!result.ok) throw new Error('expected success')
     expect(result.mime).toBe('audio/wav')
@@ -247,7 +243,7 @@ describe('synthesizeSpeech — gemini', () => {
       text: 'hello',
       language: null,
       requestedVoiceId: 'Ashley',
-      providerOverride: 'gemini',
+      ttsModel: 'gemini-3.8-flash-tts',
     })
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini', voiceId: 'Ashley' })
@@ -256,7 +252,6 @@ describe('synthesizeSpeech — gemini', () => {
   })
 
   it('falls back to Inworld when Gemini times out', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     process.env.GEMINI_TTS_TIMEOUT_MS = '20'
     const fetchMock = vi.fn()
       .mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
@@ -266,50 +261,47 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech, synthesizeWithGemini } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
 
     fetchMock.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
       init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
     }))
-    const direct = await synthesizeWithGemini({ text: 'hello', language: null })
+    const direct = await synthesizeWithGemini({ text: 'hello', language: null, modelId: 'gemini-3.8-flash-tts' })
     expect(direct).toMatchObject({ ok: false, reason: 'timeout' })
   })
 
   it('falls back to Inworld when Gemini returns no audio', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ steps: [{ type: 'model_output', content: [{ type: 'text', text: 'hi' }] }] }))
       .mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
   })
 
   it('falls back to Inworld on a Gemini fetch exception', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
   })
 
   it('falls back without calling Gemini when GEMINI_API_KEY is missing', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     delete process.env.GEMINI_API_KEY
     const fetchMock = vi.fn().mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -317,13 +309,12 @@ describe('synthesizeSpeech — gemini', () => {
   })
 
   it('returns the Inworld failure (with fallbackFrom) when Gemini fails and Inworld has no credentials', async () => {
-    process.env.TTS_PROVIDER = 'gemini'
     delete process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, 500))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
 
     expect(result).toMatchObject({
       ok: false,

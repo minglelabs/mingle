@@ -35,6 +35,7 @@ function buildPreferences(): LivePhoneDemoAccountPreferences {
     sonioxEndpointMaxDelayMs: 2_500,
     sonioxEndpointTuningStep: 4,
     translationModel: 'qwen/qwen3.5-9b',
+    ttsModel: 'inworld-tts-1.5-mini',
     adBannerPosition: 'bottom',
     inputMode: 'text',
     speakerEnabled: false,
@@ -206,6 +207,36 @@ describe('account preferences client cache', () => {
     })).toMatchObject({
       pendingSync: true,
       preferences: { translationModel: 'gemma-4-31b-it' },
+    })
+  })
+
+  it('takes the server TTS model on a new account hydration unless the user picked one', () => {
+    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const }
+    edit(local, { ...local, textSizeLevel: 3 })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: true,
+      preserveLocalTtsModel: false,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { textSizeLevel: 3, ttsModel: 'gemini-3.8-flash-tts', translationModel: 'qwen/qwen3.5-9b' },
+    })
+  })
+
+  it('preserves a TTS model explicitly chosen during a new account hydration', () => {
+    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const, translationModel: 'gpt-6-luna' as const }
+    edit(local, { ...local, ttsModel: 'gemini-3.8-flash-lite-tts' })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: false,
+      preserveLocalTtsModel: true,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { ttsModel: 'gemini-3.8-flash-lite-tts', translationModel: 'gpt-6-luna' },
     })
   })
 
