@@ -10,6 +10,7 @@ const {
   mockAppMessageFindMany,
   mockAppMessageCount,
   mockAppMessageGroupBy,
+  mockAppMessageContentFindMany,
   mockQueryRaw,
   mockAppEventLogFindFirst,
   mockChannelMemberFindMany,
@@ -35,6 +36,7 @@ const {
   mockAppMessageFindMany: vi.fn(),
   mockAppMessageCount: vi.fn(),
   mockAppMessageGroupBy: vi.fn(),
+  mockAppMessageContentFindMany: vi.fn(),
   mockQueryRaw: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockChannelMemberFindMany: vi.fn(),
@@ -89,6 +91,9 @@ vi.mock("@/lib/prisma", () => {
       count: mockAppMessageCount,
       groupBy: mockAppMessageGroupBy,
     },
+    appMessageContent: {
+      findMany: mockAppMessageContentFindMany,
+    },
     appEventLog: {
       findFirst: mockAppEventLogFindFirst,
     },
@@ -103,6 +108,13 @@ vi.mock("@/lib/prisma", () => {
   return { prisma };
 });
 
+// Pass-through spy: lets tests assert what the list-preview mapping feeds the
+// zh-CN/zh-TW normalizer without changing its behavior.
+vi.mock("@/server/chinese-script-conversion", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/chinese-script-conversion")>();
+  return { ...actual, normalizeChineseContent: vi.fn(actual.normalizeChineseContent) };
+});
+
 vi.mock("@/lib/stt-languages", () => ({
   sanitizeSttLanguageSelection: (value: unknown) => Array.isArray(value) ? value : [],
   deriveDefaultSttLanguagesForLocale: (locale: string) => [locale || "en"],
@@ -112,6 +124,7 @@ vi.mock("@/i18n/conversations", () => ({
   formatLocalizedConversationTitle: (sequenceNumber: number, locale: string) => `${locale}:${sequenceNumber}`,
 }));
 
+import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import {
   CONVERSATION_HYDRATION_MESSAGE_LIMIT,
   createConversationChannelForUser,
@@ -140,12 +153,66 @@ import {
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 
+type LatestMessageFixture = {
+  id?: string;
+  sessionKey: string;
+  createdAt: Date;
+  sourceLanguage: string;
+  metadata: Prisma.JsonValue | null;
+  contents?: Array<{ contentType: string; language: string; text: string }>;
+};
+
+function readRawSqlText(query: unknown): string {
+  const sql = query as { sql?: string; strings?: readonly string[] } | undefined;
+  return sql?.sql ?? sql?.strings?.join("?") ?? "";
+}
+
+function isLatestMessageQuery(query: unknown): boolean {
+  return readRawSqlText(query).includes("CROSS JOIN LATERAL");
+}
+
+// Routes the latest-message LATERAL query to `messages` (filtered by the bound
+// session-key array, like the real SQL) and every other $queryRaw (unread
+// counts) to `otherRows`. Contents are served by appMessageContent.findMany.
+function mockLatestMessages(messages: LatestMessageFixture[], otherRows: unknown[] = []) {
+  const withIds = messages.map((message, index) => ({
+    ...message,
+    id: message.id ?? `latest-msg-${index}`,
+  }));
+  mockQueryRaw.mockImplementation(async (query: unknown) => {
+    if (!isLatestMessageQuery(query)) return otherRows;
+    const boundKeys = (query as { values: unknown[] }).values[0] as string[];
+    return withIds
+      .filter((message) => boundKeys.includes(message.sessionKey))
+      .map((message) => ({
+        sessionKey: message.sessionKey,
+        id: message.id,
+        createdAt: message.createdAt,
+        sourceLanguage: message.sourceLanguage,
+        metadata: message.metadata,
+      }));
+  });
+  mockAppMessageContentFindMany.mockImplementation(async (args: { where: { messageId: { in: string[] } } }) =>
+    withIds
+      .filter((message) => args.where.messageId.in.includes(message.id))
+      .flatMap((message) => (message.contents ?? []).map((content) => ({ messageId: message.id, ...content }))),
+  );
+}
+
+function latestMessageQueryCalls() {
+  return mockQueryRaw.mock.calls.filter(([query]) => isLatestMessageQuery(query));
+}
+
 describe("app-conversations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppMessageFindMany.mockReset();
+    mockQueryRaw.mockReset();
+    mockAppMessageContentFindMany.mockReset();
     mockAppMessageFindMany.mockResolvedValue([]);
     mockAppMessageGroupBy.mockResolvedValue([]);
     mockQueryRaw.mockResolvedValue([]);
+    mockAppMessageContentFindMany.mockResolvedValue([]);
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
     mockChannelMemberFindMany.mockResolvedValue([]);
     mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
@@ -1169,7 +1236,7 @@ describe("app-conversations", () => {
         pausedAt: new Date("2026-04-12T10:00:00.000Z"),
       },
     ]);
-    mockAppMessageFindMany.mockResolvedValue([
+    mockLatestMessages([
       {
         sessionKey: "session-a",
         createdAt: new Date("2026-04-12T09:30:00.000Z"),
@@ -1244,7 +1311,7 @@ describe("app-conversations", () => {
       { channelId: "conv-dm", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["it", "ko"], user: { name: "Alice", handle: "alice" } },
       { channelId: "conv-dm", userId: "user-2", displayLanguage: "it", selectedLanguages: ["it", "ko"], user: { name: "Bob", handle: "bob" } },
     ]);
-    mockAppMessageFindMany.mockResolvedValue([
+    mockLatestMessages([
       {
         sessionKey: "session-dm",
         createdAt: new Date("2026-04-12T09:30:00.000Z"),
@@ -1264,6 +1331,171 @@ describe("app-conversations", () => {
     }));
   });
 
+  describe("latest message summaries (one row per room via LATERAL LIMIT 1)", () => {
+    const listRecord = (id: string, sessionKey: string, sequenceNumber: number) => ({
+      id,
+      sequenceNumber,
+      title: `Conversation (${sequenceNumber})`,
+      status: "paused",
+      sessionKey,
+      selectedLanguages: ["en", "ko"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date(`2026-04-1${sequenceNumber}T08:00:00.000Z`),
+      updatedAt: new Date(`2026-04-1${sequenceNumber}T08:00:00.000Z`),
+      pausedAt: null,
+    });
+
+    it("maps preview, translations and speaker identity for several rooms and leaves empty rooms blank", async () => {
+      mockFindConversationMany.mockResolvedValue([
+        listRecord("conv-a", "session-a", 1),
+        listRecord("conv-b", "session-b", 2),
+        listRecord("conv-c", "session-c", 3),
+      ]);
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-a", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["en", "ko"], user: { name: "Viewer", handle: "viewer" } },
+        { channelId: "conv-a", userId: "user-2", displayLanguage: "en", selectedLanguages: ["en", "ko"], user: { name: "Alice", handle: "alice" } },
+      ]);
+      mockLatestMessages([
+        {
+          id: "msg-a",
+          sessionKey: "session-a",
+          createdAt: new Date("2026-05-01T10:00:00.000Z"),
+          sourceLanguage: "en",
+          metadata: {
+            speaker: "top-level-ignored",
+            clientMetadata: { speaker: "Alice", speakerAvatarSeed: "seed-a", speakerAvatarIndex: 3 },
+          },
+          contents: [
+            { contentType: "SOURCE", language: "en", text: "Hello   there" },
+            { contentType: "TRANSLATION_FINAL", language: "ko", text: "안녕  하세요" },
+          ],
+        },
+        {
+          id: "msg-b",
+          sessionKey: "session-b",
+          createdAt: new Date("2026-05-02T10:00:00.000Z"),
+          sourceLanguage: "en",
+          metadata: { speaker: "Bob", speakerAvatarSeed: "seed-b", speakerAvatarIndex: 5 },
+          contents: [{ contentType: "SOURCE", language: "en", text: "Second room" }],
+        },
+      ]);
+
+      const conversations = await listConversationChannelsForUser("user-1");
+      const byId = new Map(conversations.map((conversation) => [conversation.id, conversation]));
+
+      expect(byId.get("conv-a")).toEqual(expect.objectContaining({
+        latestMessagePreview: "안녕 하세요",
+        latestMessageAt: "2026-05-01T10:00:00.000Z",
+        latestSpeaker: "Alice",
+        latestSpeakerAvatarSeed: "seed-a",
+        latestSpeakerAvatarIndex: 3,
+      }));
+      expect(byId.get("conv-b")).toEqual(expect.objectContaining({
+        latestMessagePreview: "Second room",
+        latestMessageAt: "2026-05-02T10:00:00.000Z",
+        latestSpeaker: "Bob",
+        latestSpeakerAvatarSeed: "seed-b",
+        latestSpeakerAvatarIndex: 5,
+      }));
+      expect(byId.get("conv-c")).toEqual(expect.objectContaining({
+        latestMessageAt: null,
+        latestSpeaker: null,
+        latestSpeakerAvatarSeed: null,
+        latestSpeakerAvatarIndex: null,
+      }));
+      expect(byId.get("conv-c")?.latestMessagePreview ?? "").toBe("");
+
+      // Exactly one bounded latest-message query for all rooms, with the
+      // visibility predicate, deterministic tie-break and full metadata.
+      const calls = latestMessageQueryCalls();
+      expect(calls).toHaveLength(1);
+      expect((calls[0][0] as { values: unknown[] }).values[0]).toEqual(["session-a", "session-b", "session-c"]);
+      const sqlText = readRawSqlText(calls[0][0]).replace(/\s+/g, " ");
+      expect(sqlText).toContain("FROM app.app_messages AS m");
+      expect(sqlText).toContain("(m.is_deleted = false OR m.is_deleted IS NULL)");
+      expect(sqlText).toContain("ORDER BY m.created_at DESC, m.id DESC LIMIT 1");
+      expect(sqlText).toContain("m.metadata");
+      expect(mockAppMessageFindMany).not.toHaveBeenCalledWith(expect.objectContaining({
+        distinct: expect.anything(),
+      }));
+
+      // One contents query for the returned message ids only.
+      expect(mockAppMessageContentFindMany).toHaveBeenCalledTimes(1);
+      expect(mockAppMessageContentFindMany).toHaveBeenCalledWith({
+        where: {
+          messageId: { in: ["msg-a", "msg-b"] },
+          OR: [
+            { isDeleted: false },
+            { isDeleted: null },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          messageId: true,
+          contentType: true,
+          language: true,
+          text: true,
+        },
+      });
+    });
+
+    it("still feeds clientMetadata.reason and translationTargetLanguages to the Chinese normalizer", async () => {
+      mockFindConversationMany.mockResolvedValue([listRecord("conv-zh", "session-zh", 1)]);
+      mockLatestMessages([
+        {
+          id: "msg-zh",
+          sessionKey: "session-zh",
+          createdAt: new Date("2026-05-01T10:00:00.000Z"),
+          sourceLanguage: "zh",
+          metadata: {
+            translationTargetLanguages: ["zh-TW", "en"],
+            clientMetadata: { reason: "manual_text_input" },
+          },
+          contents: [
+            { contentType: "SOURCE", language: "zh", text: "我們" },
+            { contentType: "TRANSLATION_FINAL", language: "en", text: "We" },
+          ],
+        },
+      ]);
+
+      await listConversationChannelsForUser("user-1");
+
+      expect(vi.mocked(normalizeChineseContent)).toHaveBeenCalledWith(expect.objectContaining({
+        sourceLanguage: "zh",
+        sourceText: "我們",
+        translations: { en: "We" },
+        targetLanguages: ["zh-TW", "en"],
+        candidates: ["zh-TW", "en"],
+        sourceScriptIsEvidence: true,
+      }));
+    });
+
+    it("runs no latest-message or contents query when there are no rooms", async () => {
+      mockFindConversationMany.mockResolvedValue([]);
+      mockLatestMessages([]);
+
+      const conversations = await listConversationChannelsForUser("user-1");
+
+      expect(conversations).toEqual([]);
+      expect(latestMessageQueryCalls()).toHaveLength(0);
+      expect(mockAppMessageContentFindMany).not.toHaveBeenCalled();
+    });
+
+    it("skips the contents query when no requested room has a visible message", async () => {
+      mockFindConversationMany.mockResolvedValue([listRecord("conv-empty", "session-empty", 1)]);
+      mockLatestMessages([]);
+
+      const conversations = await listConversationChannelsForUser("user-1");
+
+      expect(conversations[0]).toEqual(expect.objectContaining({ id: "conv-empty", latestMessageAt: null }));
+      expect(latestMessageQueryCalls()).toHaveLength(1);
+      expect(mockAppMessageContentFindMany).not.toHaveBeenCalled();
+    });
+  });
+
   it("includes the unread message count returned for each viewer membership", async () => {
     mockFindConversationMany.mockResolvedValue([{
       id: "conv-a",
@@ -1279,7 +1511,7 @@ describe("app-conversations", () => {
       updatedAt: new Date("2026-04-12T12:00:00.000Z"),
       pausedAt: null,
     }]);
-    mockQueryRaw.mockResolvedValue([{ channelId: "conv-a", unreadCount: 3 }]);
+    mockLatestMessages([], [{ channelId: "conv-a", unreadCount: 3 }]);
 
     const conversations = await listConversationChannelsForUser("user-1");
 
@@ -1287,7 +1519,9 @@ describe("app-conversations", () => {
       id: "conv-a",
       unreadMessageCount: 3,
     }));
-    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    // One unread-count query plus one latest-message query.
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2);
+    expect(latestMessageQueryCalls()).toHaveLength(1);
   });
 
   it("hydrates only the latest visible message batch in chronological order", async () => {
@@ -3226,9 +3460,9 @@ describe("app-conversations", () => {
           pausedAt: new Date("2026-05-12T08:00:00.000Z"),
         },
       ]);
-      mockAppMessageFindMany.mockResolvedValueOnce([
-        { sessionKey: "session-older", createdAt: new Date("2026-06-01T08:00:00.000Z") },
-        { sessionKey: "session-newer", createdAt: new Date("2026-07-01T08:00:00.000Z") },
+      mockLatestMessages([
+        { sessionKey: "session-older", createdAt: new Date("2026-06-01T08:00:00.000Z"), sourceLanguage: "en", metadata: null },
+        { sessionKey: "session-newer", createdAt: new Date("2026-07-01T08:00:00.000Z"), sourceLanguage: "en", metadata: null },
       ]);
 
       const result = await findOrCreateDirectConversation({
@@ -3238,14 +3472,55 @@ describe("app-conversations", () => {
 
       expect(result.reused).toBe(true);
       expect(result.conversation.id).toBe("conv-newer");
-      expect(mockAppMessageFindMany).toHaveBeenCalledWith(expect.objectContaining({
-        orderBy: [
-          { sessionKey: "asc" },
-          { createdAt: "desc" },
-        ],
-        distinct: ["sessionKey"],
-        select: { sessionKey: true, createdAt: true },
+      // Recency comes from the one-row-per-room LATERAL query, never from an
+      // unbounded Prisma `distinct` scan of every message.
+      expect(mockAppMessageFindMany).not.toHaveBeenCalledWith(expect.objectContaining({
+        distinct: expect.anything(),
       }));
+      const calls = latestMessageQueryCalls();
+      expect((calls[0][0] as { values: unknown[] }).values[0]).toEqual(["session-older", "session-newer"]);
+    });
+
+    it("falls back to room createdAt when the latest-message query returns no row for a room", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      const baseRecord = {
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        pausedAt: null,
+      };
+      mockFindConversationMany.mockResolvedValue([
+        {
+          ...baseRecord,
+          id: "conv-with-message",
+          sessionKey: "session-with-message",
+          createdAt: new Date("2026-04-01T08:00:00.000Z"),
+          updatedAt: new Date("2026-04-01T08:00:00.000Z"),
+        },
+        {
+          ...baseRecord,
+          id: "conv-empty-newer",
+          sequenceNumber: 2,
+          sessionKey: "session-empty-newer",
+          createdAt: new Date("2026-07-01T08:00:00.000Z"),
+          updatedAt: new Date("2026-07-01T08:00:00.000Z"),
+        },
+      ]);
+      mockLatestMessages([
+        { sessionKey: "session-with-message", createdAt: new Date("2026-06-01T08:00:00.000Z"), sourceLanguage: "en", metadata: null },
+      ]);
+
+      const result = await findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+      });
+
+      expect(result.reused).toBe(true);
+      expect(result.conversation.id).toBe("conv-empty-newer");
     });
 
     it("forces a new 1:1 room without checking existing rooms", async () => {
