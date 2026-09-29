@@ -16,6 +16,8 @@ type FocusableTextControl = {
 
 type FocusDocument = {
   activeElement: unknown
+  body?: unknown
+  documentElement?: unknown
 }
 
 type TimerHost = {
@@ -44,8 +46,17 @@ export function captureRestorableFocus(doc: FocusDocument | null | undefined): F
   return isRestorableTextControl(active) ? active : null
 }
 
+// True when focus sits on a real element other than `element`. The body and
+// the document element count as "nothing focused" (the chooser took focus).
+function focusMovedElsewhere(doc: FocusDocument, element: FocusableTextControl): boolean {
+  const active = doc.activeElement
+  if (!active || active === element) return false
+  return active !== doc.body && active !== doc.documentElement
+}
+
 // Schedules one delayed refocus. Skips it when the element left the DOM (the
-// user switched to voice mode) or already has focus. Returns a cancel function.
+// user switched to voice mode), already has focus, or focus has since moved to
+// another element (the user tapped something else). Returns a cancel function.
 export function scheduleFocusRestore(
   element: FocusableTextControl,
   options: { doc: FocusDocument, timers: TimerHost, delayMs?: number },
@@ -56,6 +67,7 @@ export function scheduleFocusRestore(
     if (cancelled) return
     if (!element.isConnected) return
     if (doc.activeElement === element) return
+    if (focusMovedElsewhere(doc, element)) return
     try {
       element.focus({ preventScroll: true })
     } catch {

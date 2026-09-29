@@ -118,8 +118,10 @@ describe('conversation image composer touch interaction', () => {
       'const openFilePicker = useCallback',
       'const handleAttachmentClick = useCallback',
     )
-    expect(pickerSource).toContain('captureRestorableFocus(document) ?? menuFocusOwnerRef.current')
-    expect(pickerSource).toContain(": null")
+    // Only keyboard mode captures a restore target; voice mode stores none.
+    expect(pickerSource).toMatch(
+      /pickerFocusRestoreRef\.current = onCloseKeyboard\s*\?\s*captureRestorableFocus\(document\) \?\? menuFocusOwnerRef\.current\s*:\s*null/,
+    )
     expect(pickerSource).toContain("node.addEventListener('cancel', restorePickerFocus)")
     expect(pickerSource).toContain('scheduleFocusRestore(element')
 
@@ -127,6 +129,28 @@ describe('conversation image composer touch interaction', () => {
     expect(inputSource).toContain('if (!file) { restorePickerFocus(); return }')
     expect(source).toContain('onClose={closePreview}')
     expect(source).toContain('onSent(); restorePickerFocus()')
+  })
+
+  it('defers the invalid-file focus restore until the error menu closes', () => {
+    const inputSource = sourceBetween('<input ref={input}', '{open && !chosen && createPortal')
+    const invalidBranch = inputSource.slice(inputSource.indexOf('setError(copy.invalid)'))
+    const invalidBranchEnd = invalidBranch.slice(0, invalidBranch.indexOf('return }'))
+    expect(invalidBranchEnd).toContain('errorMenuFocusRestorePendingRef.current = true')
+    expect(invalidBranchEnd).not.toContain('restorePickerFocus()')
+
+    const deferredSource = sourceBetween(
+      'const restorePickerFocus = useCallback',
+      "node.addEventListener('cancel', restorePickerFocus)",
+    )
+    expect(deferredSource).toContain('if (open || !errorMenuFocusRestorePendingRef.current) return')
+    expect(deferredSource).toContain('}, [open, restorePickerFocus])')
+
+    // A new chooser flow (e.g. a valid re-pick whose preview restores on close) clears it.
+    const pickerSource = sourceBetween(
+      'const openFilePicker = useCallback',
+      'const restorePickerFocus = useCallback',
+    )
+    expect(pickerSource).toContain('errorMenuFocusRestorePendingRef.current = false')
   })
 
   it('reports attachment overlay state so native banners can stay behind overlays', () => {

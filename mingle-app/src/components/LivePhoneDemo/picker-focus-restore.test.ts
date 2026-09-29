@@ -81,6 +81,32 @@ describe('scheduleFocusRestore', () => {
     expect(focused.focus).not.toHaveBeenCalled()
   })
 
+  it('skips the refocus when focus already moved to another element', () => {
+    const textarea = makeControl('TEXTAREA')
+    const other = makeControl('INPUT', { type: 'search' })
+    const body = makeControl('BODY')
+    const timers = makeTimers()
+    scheduleFocusRestore(textarea, { doc: { activeElement: other, body }, timers })
+    timers.flush()
+    expect(textarea.focus).not.toHaveBeenCalled()
+  })
+
+  it('still refocuses when only the body or document element holds focus', () => {
+    const body = makeControl('BODY')
+    const documentElement = makeControl('HTML')
+    const timers = makeTimers()
+
+    const fromBody = makeControl('TEXTAREA')
+    scheduleFocusRestore(fromBody, { doc: { activeElement: body, body, documentElement }, timers })
+    timers.flush()
+    expect(fromBody.focus).toHaveBeenCalledWith({ preventScroll: true })
+
+    const fromRoot = makeControl('TEXTAREA')
+    scheduleFocusRestore(fromRoot, { doc: { activeElement: documentElement, body, documentElement }, timers })
+    timers.flush()
+    expect(fromRoot.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
   it('can be cancelled before it fires', () => {
     const textarea = makeControl('TEXTAREA')
     const timers = makeTimers()

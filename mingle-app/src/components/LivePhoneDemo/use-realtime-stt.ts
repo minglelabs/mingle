@@ -1503,12 +1503,14 @@ interface UseRealtimeSTTOptions {
   sttSegmentationMode?: string | null
 }
 
+// Which UI path asked for a stop. Recorded as `source` on the
+// `stt_session_stopped` client event so an unexpected stop can be traced.
+export type SttStopSource = 'mic_click' | 'mic_pointerup'
+
 type StopRecordingOptions = {
   discardPendingFinalization?: boolean
   forceNativeStop?: boolean
-  // Which UI path asked for the stop (e.g. `mic_pointerup`). Recorded on the
-  // `stt_session_stopped` client event so an unexpected stop can be traced.
-  stopSource?: string
+  stopSource?: SttStopSource
 }
 
 interface SubmitExternalUtteranceInput {
@@ -5084,7 +5086,7 @@ export default function useRealtimeSTT({
   const stopRecordingGracefully = useCallback(async (
     notifyLimitReached = false,
     stopReason?: string,
-    options?: { forceNativeStop?: boolean, stopSource?: string },
+    options?: { forceNativeStop?: boolean, stopSource?: SttStopSource },
   ) => {
     if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
       const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250

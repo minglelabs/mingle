@@ -62,6 +62,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const menuFocusOwnerRef = useRef<ReturnType<typeof captureRestorableFocus>>(null)
   const pickerFocusRestoreRef = useRef<ReturnType<typeof captureRestorableFocus>>(null)
   const cancelFocusRestoreRef = useRef<(() => void) | null>(null)
+  // An invalid pick reopens the menu with an error; its focus restore waits for
+  // that menu to close so the keyboard does not rise under a menu positioned
+  // from pre-keyboard coordinates.
+  const errorMenuFocusRestorePendingRef = useRef(false)
 
   const pushDiag = useCallback((tag: string) => {
     if (!diagT0Ref.current) diagT0Ref.current = Date.now()
@@ -237,6 +241,8 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   }, [diagEnabled, pushDiag])
 
   const openFilePicker = useCallback(() => {
+    // A new chooser flow owns the restore (cancel / preview close).
+    errorMenuFocusRestorePendingRef.current = false
     // Only keyboard mode restores focus; voice mode has no text control.
     pickerFocusRestoreRef.current = onCloseKeyboard
       ? captureRestorableFocus(document) ?? menuFocusOwnerRef.current
@@ -251,6 +257,14 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     cancelFocusRestoreRef.current?.()
     cancelFocusRestoreRef.current = scheduleFocusRestore(element, { doc: document, timers: window })
   }, [])
+
+  // Runs the restore deferred by an invalid pick once the error menu closes.
+  // Unmounting does not re-run this effect, so no refocus fires after unmount.
+  useEffect(() => {
+    if (open || !errorMenuFocusRestorePendingRef.current) return
+    errorMenuFocusRestorePendingRef.current = false
+    restorePickerFocus()
+  }, [open, restorePickerFocus])
 
   // Cancelling the chooser fires `cancel` (no `change`); give the keyboard back.
   useEffect(() => {
@@ -363,7 +377,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''
         if (!file) { restorePickerFocus(); return }
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); restorePickerFocus(); return }
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); errorMenuFocusRestorePendingRef.current = true; return }
         // A valid pick opens the preview; focus returns when that preview closes.
         setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
       }} />
