@@ -101,6 +101,58 @@ describe('conversation image composer touch interaction', () => {
     expect(source).toContain('copy.switchToVoiceMode')
   })
 
+  it('keeps the textarea focused when the keyboard-mode photo item is tapped', () => {
+    const menuSource = sourceBetween(
+      '{open && !chosen && createPortal',
+      'document.body,',
+    )
+    const chooseItem = menuSource.slice(0, menuSource.indexOf('copy.switchToVoiceMode'))
+
+    expect(chooseItem).toContain('onPointerDown={event => { if (onCloseKeyboard) event.preventDefault() }}')
+    expect(chooseItem).toContain('openFilePicker()')
+    expect(chooseItem).not.toContain('input.current?.click()')
+  })
+
+  it('restores keyboard focus after the chooser is cancelled or the preview closes', () => {
+    const pickerSource = sourceBetween(
+      'const openFilePicker = useCallback',
+      'const handleAttachmentClick = useCallback',
+    )
+    // Only keyboard mode captures a restore target; voice mode stores none.
+    expect(pickerSource).toMatch(
+      /pickerFocusRestoreRef\.current = onCloseKeyboard\s*\?\s*captureRestorableFocus\(document\) \?\? menuFocusOwnerRef\.current\s*:\s*null/,
+    )
+    expect(pickerSource).toContain("node.addEventListener('cancel', restorePickerFocus)")
+    expect(pickerSource).toContain('scheduleFocusRestore(element')
+
+    const inputSource = sourceBetween('<input ref={input}', '{open && !chosen && createPortal')
+    expect(inputSource).toContain('if (!file) { restorePickerFocus(); return }')
+    expect(source).toContain('onClose={closePreview}')
+    expect(source).toContain('onSent(); restorePickerFocus()')
+  })
+
+  it('defers the invalid-file focus restore until the error menu closes', () => {
+    const inputSource = sourceBetween('<input ref={input}', '{open && !chosen && createPortal')
+    const invalidBranch = inputSource.slice(inputSource.indexOf('setError(copy.invalid)'))
+    const invalidBranchEnd = invalidBranch.slice(0, invalidBranch.indexOf('return }'))
+    expect(invalidBranchEnd).toContain('errorMenuFocusRestorePendingRef.current = true')
+    expect(invalidBranchEnd).not.toContain('restorePickerFocus()')
+
+    const deferredSource = sourceBetween(
+      'const restorePickerFocus = useCallback',
+      "node.addEventListener('cancel', restorePickerFocus)",
+    )
+    expect(deferredSource).toContain('if (open || !errorMenuFocusRestorePendingRef.current) return')
+    expect(deferredSource).toContain('}, [open, restorePickerFocus])')
+
+    // A new chooser flow (e.g. a valid re-pick whose preview restores on close) clears it.
+    const pickerSource = sourceBetween(
+      'const openFilePicker = useCallback',
+      'const restorePickerFocus = useCallback',
+    )
+    expect(pickerSource).toContain('errorMenuFocusRestorePendingRef.current = false')
+  })
+
   it('reports attachment overlay state so native banners can stay behind overlays', () => {
     expect(source).toContain('onMenuOpenChange?: (open: boolean) => void')
     expect(source).toContain('onMenuOpenChange?.(open)')
