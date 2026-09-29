@@ -58,14 +58,26 @@ describe('runtime fallback contract', () => {
     const appSource = readWorkspaceFile('App.tsx');
 
     expect(appSource).toContain(
-      'if (!initialLoadSettledRef.current && activateWebFallback()) return;',
+      'if (!isOffline && !initialLoadSettledRef.current && activateWebFallback()) return;',
     );
     expect(appSource).toContain(
-      '&& !initialLoadSettledRef.current\n      && !isPageReadyRef.current',
+      'if (!isWebViewPageLoadFailureHttpStatus(statusCode) || isPageReadyRef.current) return;',
+    );
+    expect(appSource).toContain(
+      'if (!initialLoadSettledRef.current && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
     );
     expect(appSource).toContain(
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
+  });
+
+  it('covers a killed WebView render process with the same load-error overlay', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+
+    expect(appSource).toContain('onRenderProcessGone={handleRenderProcessGone}');
+    expect(appSource).toContain('onContentProcessDidTerminate={handleContentProcessDidTerminate}');
+    expect(appSource).toContain("setLoadError('webview_render_process_gone');");
+    expect(appSource).toContain("setLoadError('webview_content_process_terminated');");
   });
 
   it('keeps Android panel back handling separate from iOS WebView history state', () => {
