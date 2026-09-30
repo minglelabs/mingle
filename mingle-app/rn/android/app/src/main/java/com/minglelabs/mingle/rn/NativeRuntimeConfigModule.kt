@@ -76,11 +76,12 @@ class NativeRuntimeConfigModule(
 
   // Where this build came from, for the app-update card: Google Play reports
   // com.android.vending as the installer; adb installs (devbox's
-  // `./gradlew installDebug|installRelease`, Android Studio) report none.
+  // `./gradlew installDebug|installRelease`, Android Studio) report none, or
+  // com.android.shell on some Android versions.
   private fun resolveInstallSource(): String {
     val installer = readInstallerPackageName()?.trim().orEmpty()
     return when {
-      installer.isEmpty() -> "local"
+      installer.isEmpty() || installer == ADB_SHELL_INSTALLER_PACKAGE -> "local"
       installer == PLAY_STORE_INSTALLER_PACKAGE -> "play_store"
       else -> "other"
     }
@@ -467,6 +468,7 @@ class NativeRuntimeConfigModule(
     const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
     const val MAX_LAST_KNOWN_AGE_MS = 10 * 60 * 1_000L
     const val PLAY_STORE_INSTALLER_PACKAGE = "com.android.vending"
+    const val ADB_SHELL_INSTALLER_PACKAGE = "com.android.shell"
 
     fun recordIncomingProfileLink(context: Context, rawUrl: String?) {
       val normalizedUrl = rawUrl?.trim() ?: return
