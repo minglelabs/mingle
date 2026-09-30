@@ -166,13 +166,31 @@ function parseSampleRate(mime: string, explicit?: number): number {
   return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_PCM_SAMPLE_RATE
 }
 
+const PCM_MIME_TYPES = new Set(['audio/l16', 'audio/pcm'])
+const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3'])
+
+/** Lowercased MIME type without parameters ("audio/L16;rate=24000" -> "audio/l16"). */
+function baseMimeType(mime: string): string {
+  return mime.split(';')[0].trim().toLowerCase()
+}
+
 /**
  * Container formats (WAV/MP3/OGG) pass through. Headerless PCM
  * (audio/l16, audio/pcm, or unknown bytes) is wrapped in a 44-byte WAV header.
+ *
+ * A declared PCM MIME wins over byte sniffing, and a bare MP3 frame sync is
+ * trusted only when the declared MIME is MP3: 16-bit PCM whose first sample is
+ * -1 starts with ff ff, which detectAudioMime reads as an MP3 frame header.
  */
 export function normalizeGeminiAudio(audio: Buffer, mimeHint: string, sampleRate?: number): { audio: Buffer, mime: string } {
-  const detected = detectAudioMime(audio)
-  if (detected !== 'application/octet-stream') return { audio, mime: detected }
+  const declared = baseMimeType(mimeHint)
+  if (!PCM_MIME_TYPES.has(declared)) {
+    const detected = detectAudioMime(audio)
+    const bareFrameSync = detected === 'audio/mpeg' && audio[0] === 0xff
+    if (detected !== 'application/octet-stream' && (!bareFrameSync || MP3_MIME_TYPES.has(declared))) {
+      return { audio, mime: detected }
+    }
+  }
   const wav = wrapPcm16AsWav(audio, parseSampleRate(mimeHint, sampleRate), 1)
   return { audio: wav, mime: 'audio/wav' }
 }

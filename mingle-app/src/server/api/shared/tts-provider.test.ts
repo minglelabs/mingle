@@ -285,6 +285,47 @@ describe('synthesizeSpeech — gemini', () => {
     expect(out.audio.readUInt32LE(24)).toBe(24000)
   })
 
+  // A first sample of -1 is ff ff, which byte sniffing reads as an MP3 frame sync.
+  function pcmStartingWithMinusOne(samples = 2400): Buffer {
+    const pcm = Buffer.alloc(samples * 2, 0)
+    pcm.writeInt16LE(-1, 0)
+    return pcm
+  }
+
+  it('wraps declared L16 PCM whose first sample is -1 instead of labelling it MP3', async () => {
+    const pcm = pcmStartingWithMinusOne()
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(pcm, 'audio/L16;codec=pcm;rate=24000'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
+
+    if (!result.ok) throw new Error('expected success')
+    expect(result.provider).toBe('gemini')
+    expect(result.mime).toBe('audio/wav')
+    expect(result.audio.subarray(0, 4).toString('ascii')).toBe('RIFF')
+    expect(result.audio.readUInt32LE(24)).toBe(24000)
+    expect(result.audio.subarray(44).equals(pcm)).toBe(true)
+  })
+
+  it('wraps undeclared PCM whose first sample is -1 instead of labelling it MP3', async () => {
+    const { normalizeGeminiAudio } = await loadModule()
+    const pcm = pcmStartingWithMinusOne()
+    const out = normalizeGeminiAudio(pcm, '')
+    expect(out.mime).toBe('audio/wav')
+    expect(out.audio.subarray(44).equals(pcm)).toBe(true)
+  })
+
+  it('still passes real containers through unchanged', async () => {
+    const { normalizeGeminiAudio } = await loadModule()
+    const mp3 = Buffer.from([0xff, 0xfb, 0x90, 0x64, 0x00, 0x00])
+    expect(normalizeGeminiAudio(mp3, 'audio/mpeg')).toEqual({ audio: mp3, mime: 'audio/mpeg' })
+    const id3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00])
+    expect(normalizeGeminiAudio(id3, '')).toEqual({ audio: id3, mime: 'audio/mpeg' })
+    const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WAVE')])
+    expect(normalizeGeminiAudio(wav, '')).toEqual({ audio: wav, mime: 'audio/wav' })
+  })
+
   it('falls back to Inworld on a non-2xx Gemini response', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
