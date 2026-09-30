@@ -7,6 +7,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -62,6 +63,7 @@ class NativeRuntimeConfigModule(
       "apiNamespace" to BuildConfig.MINGLE_API_NAMESPACE,
       "clientVersion" to BuildConfig.MINGLE_CLIENT_VERSION,
       "clientBuild" to BuildConfig.MINGLE_CLIENT_BUILD,
+      "installSource" to resolveInstallSource(),
       "qaBridgeEnabled" to BuildConfig.MINGLE_QA_BRIDGE_ENABLED,
       "adBannerPosition" to BuildConfig.MINGLE_AD_BANNER_POSITION,
       "adBannerHeightPx" to BuildConfig.MINGLE_AD_BANNER_HEIGHT_PX,
@@ -71,6 +73,33 @@ class NativeRuntimeConfigModule(
       "conversationRestoreCreatedAtMs" to restorePrefs.getLong(RESTORE_CREATED_AT_MS_KEY, 0L).toDouble(),
     ),
   )
+
+  // Where this build came from, for the app-update card: Google Play reports
+  // com.android.vending as the installer; adb installs (devbox's
+  // `./gradlew installDebug|installRelease`, Android Studio) report none.
+  private fun resolveInstallSource(): String {
+    val installer = readInstallerPackageName()?.trim().orEmpty()
+    return when {
+      installer.isEmpty() -> "local"
+      installer == PLAY_STORE_INSTALLER_PACKAGE -> "play_store"
+      else -> "other"
+    }
+  }
+
+  private fun readInstallerPackageName(): String? {
+    val packageManager = reactApplicationContext.packageManager
+    val packageName = reactApplicationContext.packageName
+    return try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        packageManager.getInstallSourceInfo(packageName).installingPackageName
+      } else {
+        @Suppress("DEPRECATION")
+        packageManager.getInstallerPackageName(packageName)
+      }
+    } catch (_: Exception) {
+      null
+    }
+  }
 
   @ReactMethod
   fun checkLocationPermission(promise: Promise) {
@@ -437,6 +466,7 @@ class NativeRuntimeConfigModule(
     const val LOCATION_REQUEST_TIMEOUT_MS = 12_000L
     const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
     const val MAX_LAST_KNOWN_AGE_MS = 10 * 60 * 1_000L
+    const val PLAY_STORE_INSTALLER_PACKAGE = "com.android.vending"
 
     fun recordIncomingProfileLink(context: Context, rawUrl: String?) {
       val normalizedUrl = rawUrl?.trim() ?: return

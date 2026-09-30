@@ -1,3 +1,8 @@
+import {
+  normalizeInstallSource,
+  type NativeAppInstallSource,
+} from '../../src/lib/native-app-install-source';
+
 export type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 
 export type NativeAppUpdateSnapshotStatus =
@@ -12,12 +17,32 @@ export type NativeAppUpdateSnapshot = {
   latestVersion: string;
   updateUrl: string;
   updateAvailable: boolean;
+  // Omitted when unknown, so the payload stays exactly what builds without
+  // install-source detection send.
+  installSource?: NativeAppInstallSource;
 };
 
 type VersionTuple = [number, number, number];
 
 export function normalizeClientVersion(raw: string): string {
   return raw.trim().replace(/^v/i, '');
+}
+
+// The install source the snapshots carry: the native runtime config value,
+// except that a __DEV__ (Metro) bundle is always a local build.
+export function resolveRuntimeInstallSource(
+  rawInstallSource: unknown,
+  isDevBuild: boolean,
+): NativeAppInstallSource | undefined {
+  if (isDevBuild) return 'local';
+  return normalizeInstallSource(rawInstallSource);
+}
+
+function withInstallSource(
+  snapshot: NativeAppUpdateSnapshot,
+  installSource: NativeAppInstallSource | undefined,
+): NativeAppUpdateSnapshot {
+  return installSource ? { ...snapshot, installSource } : snapshot;
 }
 
 function parseSemver3(raw: string): VersionTuple | null {
@@ -58,26 +83,34 @@ function hasAvailableUpdate(params: {
 
 export function createCheckingNativeAppUpdateSnapshot(
   clientVersionRaw: string,
+  installSource?: NativeAppInstallSource,
 ): NativeAppUpdateSnapshot {
-  return {
-    status: 'checking',
-    clientVersion: normalizeClientVersion(clientVersionRaw),
-    latestVersion: '',
-    updateUrl: '',
-    updateAvailable: false,
-  };
+  return withInstallSource(
+    {
+      status: 'checking',
+      clientVersion: normalizeClientVersion(clientVersionRaw),
+      latestVersion: '',
+      updateUrl: '',
+      updateAvailable: false,
+    },
+    installSource,
+  );
 }
 
 export function createUnknownNativeAppUpdateSnapshot(
   clientVersionRaw: string,
+  installSource?: NativeAppInstallSource,
 ): NativeAppUpdateSnapshot {
-  return {
-    status: 'unknown',
-    clientVersion: normalizeClientVersion(clientVersionRaw),
-    latestVersion: '',
-    updateUrl: '',
-    updateAvailable: false,
-  };
+  return withInstallSource(
+    {
+      status: 'unknown',
+      clientVersion: normalizeClientVersion(clientVersionRaw),
+      latestVersion: '',
+      updateUrl: '',
+      updateAvailable: false,
+    },
+    installSource,
+  );
 }
 
 export function resolveNativeAppUpdateSnapshot(
@@ -88,6 +121,7 @@ export function resolveNativeAppUpdateSnapshot(
     updateUrl?: string;
   },
   fallbackClientVersionRaw: string,
+  installSource?: NativeAppInstallSource,
 ): NativeAppUpdateSnapshot {
   const fallbackClientVersion = normalizeClientVersion(
     fallbackClientVersionRaw,
@@ -104,11 +138,14 @@ export function resolveNativeAppUpdateSnapshot(
     latestVersion,
   });
 
-  return {
-    status: updateAvailable ? 'available' : 'current',
-    clientVersion,
-    latestVersion,
-    updateUrl,
-    updateAvailable,
-  };
+  return withInstallSource(
+    {
+      status: updateAvailable ? 'available' : 'current',
+      clientVersion,
+      latestVersion,
+      updateUrl,
+      updateAvailable,
+    },
+    installSource,
+  );
 }
