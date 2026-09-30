@@ -557,19 +557,25 @@ export type PhotoTranslationBlockLayout = {
  * the photo's alignment, so "김치찌개" -> "Kimchi Stew" keeps a readable size
  * instead of shrinking to fit the original width.
  */
-export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm, alignments, freeSpans }: {
+export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm, alignments, freeSpans, inlinePaddingPx }: {
   items: readonly { block: ConversationImageTextBlock; text: string }[]
   stage: Size
   language: string
   measure?: TextMeasurer
   alignments?: ReadonlyMap<string, PhotoTranslationTextAlign>
   freeSpans?: ReadonlyMap<string, FreeSpan>
+  /** Fixed CSS inline padding for labels; omitted keeps the photo-proportional inset. */
+  inlinePaddingPx?: number
 }): PhotoTranslationBlockLayout[] {
   if (!(stage.width > 0 && stage.height > 0)) return []
+  const inlineInset = typeof inlinePaddingPx === 'number' && Number.isFinite(inlinePaddingPx)
+    ? Math.max(0, inlinePaddingPx)
+    : null
   const keepAll = language === 'ko'
   const vertical = isVerticalWritingLanguage(language)
   const drafts = items.map(({ block, text }) => {
     let rect = blockPaintRect(block, stage)
+    const fitPadding = inlineInset === null ? rect.padding : inlineInset * 2
     const mode: PhotoTranslationFitMode = block.vertical
       ? vertical ? 'vertical' : 'wrap'
       : block.lines > 1 ? 'wrap' : 'single'
@@ -582,8 +588,8 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     const across = mode === 'wrap' && block.vertical === true
     if (span && !rect.angle && (mode === 'single' || across)) {
       const needed = across
-        ? widestWordEm(shown, { bold, measure }) * rect.textWidth + rect.padding - rect.width
-        : measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + rect.padding - rect.width
+        ? widestWordEm(shown, { bold, measure }) * rect.textWidth + fitPadding - rect.width
+        : measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding - rect.width
       if (needed > 0) {
         const leftRoom = span.left * stage.width
         const rightRoom = span.right * stage.width
@@ -604,12 +610,12 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
         rect = { ...rect, width: rect.width + growLeft + growRight, cx: rect.cx + (growRight - growLeft) / 2 }
       }
     }
-    const fit = { text: shown, mode, lines: block.lines, width: rect.width, height: rect.height, padding: rect.padding, bold, measure }
+    const fit = { text: shown, mode, lines: block.lines, width: rect.width, height: rect.height, padding: fitPadding, bold, measure }
     // Upright columns may break anywhere (as the column estimate does).
     let breakWords = mode === 'vertical'
     let fontSize = fitFontSize({ ...fit, breakWords })
-    if (mode === 'wrap' && !Number.isFinite(wrapLineCount(shown, (rect.width - rect.padding) / fontSize, { bold, measure }))
-      && widestWordEm(shown, { bold, measure }) * fontSize > (rect.width - rect.padding) * (1 + PHOTO_TRANSLATION_WORD_OVERFLOW_TOLERANCE)) {
+    if (mode === 'wrap' && !Number.isFinite(wrapLineCount(shown, (rect.width - fitPadding) / fontSize, { bold, measure }))
+      && widestWordEm(shown, { bold, measure }) * fontSize > (rect.width - fitPadding) * (1 + PHOTO_TRANSLATION_WORD_OVERFLOW_TOLERANCE)) {
       // Whole words do not fit even at the smallest size: break inside words
       // (overflow-wrap:anywhere) rather than spill far past the patch.
       breakWords = true
@@ -643,7 +649,7 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     keepAll,
     bold: draft.bold,
     text: draft.text,
-    inset: round(draft.rect.padding / 2),
+    inset: round(inlineInset ?? draft.rect.padding / 2),
     feather: round(clamp(draft.rect.padding * 0.9, 1, 14)),
     radius: round(Math.min(draft.rect.padding * 1.2, draft.rect.height / 2)),
     blur: round(Math.max(3, draft.rect.textHeight * 0.3)),

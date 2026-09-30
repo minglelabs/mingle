@@ -5,17 +5,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { ConversationImageTextBlock, ConversationImageTextOverlayBlock } from '@/lib/conversation-image-text'
 import {
   PHOTO_TRANSLATION_LINE_HEIGHT,
-  PHOTO_TRANSLATION_SCRIM,
-  cssColor,
   estimateTextWidthEm,
   inferBlockAlignments,
   layoutPhotoTranslationBlocks,
-  resolveBlockPaint,
-  resolveFreeSpans,
-  sampleCanvasSize,
   type PhotoTranslationBlockLayout,
-  type PhotoTranslationPaint,
-  type SampleImage,
   type TextMeasurer,
 } from './photo-translation-geometry.logic'
 
@@ -24,33 +17,7 @@ export const PHOTO_TRANSLATION_FADE_MS = 180
 /** Total stagger when results arrive while the viewer is open (spec §1.7). */
 export const PHOTO_TRANSLATION_STAGGER_MS = 150
 const STAGGER_STEP_MAX_MS = 30
-
-const samples = new WeakMap<HTMLImageElement, SampleImage | null>()
-
-/**
- * The loaded photo downscaled to at most 512 px on an offscreen canvas, read
- * once per img element. The image endpoint is same-origin, so the canvas is
- * readable; anything that throws falls back to the OCR style hints.
- */
-function readSampleImage(image: HTMLImageElement): SampleImage | null {
-  if (samples.has(image)) return samples.get(image) ?? null
-  let sample: SampleImage | null = null
-  try {
-    const size = sampleCanvasSize({ width: image.naturalWidth, height: image.naturalHeight })
-    const canvas = size.width > 0 ? document.createElement('canvas') : null
-    const context = canvas?.getContext('2d', { willReadFrequently: true })
-    if (canvas && context) {
-      canvas.width = size.width
-      canvas.height = size.height
-      context.drawImage(image, 0, 0, size.width, size.height)
-      sample = { width: size.width, height: size.height, data: context.getImageData(0, 0, size.width, size.height).data }
-    }
-  } catch {
-    sample = null
-  }
-  samples.set(image, sample)
-  return sample
-}
+const GLASS_LABEL_INLINE_PADDING_PX = 4
 
 let canvasMeasurer: TextMeasurer | null = null
 
@@ -76,27 +43,25 @@ function textMeasurer(): TextMeasurer {
   return canvasMeasurer
 }
 
-function patchStyle(layout: PhotoTranslationBlockLayout, paint: PhotoTranslationPaint): CSSProperties {
-  const background = cssColor(paint.background, paint.alpha)
-  const blur = paint.kind === 'plate' ? `blur(${layout.blur}px)` : undefined
+function patchStyle(layout: PhotoTranslationBlockLayout): CSSProperties {
   return {
     transform: layout.angle ? `rotate(${layout.angle}deg)` : undefined,
-    backgroundColor: background,
-    borderRadius: layout.radius,
-    // Feather: a soft shadow in the patch color blends the edge into the photo.
-    boxShadow: `0 0 ${layout.feather}px ${layout.feather / 2}px ${background}`,
-    backdropFilter: blur,
-    WebkitBackdropFilter: blur,
+    backgroundColor: 'rgba(12, 14, 18, 0.66)',
+    borderRadius: 5,
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
+    boxSizing: 'border-box',
   }
 }
 
-function textStyle(layout: PhotoTranslationBlockLayout, paint: PhotoTranslationPaint): CSSProperties {
+function textStyle(layout: PhotoTranslationBlockLayout): CSSProperties {
   return {
     fontSize: layout.fontSize,
     lineHeight: PHOTO_TRANSLATION_LINE_HEIGHT,
     fontWeight: layout.bold ? 700 : 500,
-    color: cssColor(paint.text),
+    color: '#fff',
     paddingInline: layout.inset,
+    boxSizing: 'border-box',
     // Physical alignment, as in the photo: the container stays LTR and the
     // inner span resolves the text direction itself (dir="auto").
     direction: 'ltr',
@@ -117,9 +82,7 @@ type PhotoTranslationOverlayProps = {
    */
   width: number
   height: number
-  /** The loaded photo, for color sampling. */
-  image: HTMLImageElement | null
-  /** Every block of the photo; colors are sampled once per photo. */
+  /** All source blocks are used to infer each translation's text alignment. */
   blocks: readonly ConversationImageTextBlock[]
   /** What to paint for `language`: overlayBlocksFor(response, language). */
   painted: readonly ConversationImageTextOverlayBlock[]
@@ -129,20 +92,17 @@ type PhotoTranslationOverlayProps = {
 }
 
 /**
- * Lens-style overlay (spec §4.4): each translated block is painted in place
- * over the photo in the photo's own colors. Pointer events pass through to the
- * viewport, and it lives inside the stage, so it moves with pinch, pan and
- * swipe-to-dismiss. A patch painted in both languages stays solid while only
- * its text cross-fades, so the original never flickers through on a switch.
+ * Glass-label overlay: a translucent dark label with white text sits over
+ * each translated block. It lives inside the image stage, so it moves with
+ * pinch, pan and swipe-to-dismiss. A label painted in both languages stays
+ * solid while only its text cross-fades, so the original never flickers
+ * through on a switch.
  */
-function PhotoTranslationOverlay({ width, height, image, blocks, painted, language, reducedMotion = false }: PhotoTranslationOverlayProps) {
-  const sample = useMemo(() => (image ? readSampleImage(image) : null), [image])
-  const paints = useMemo(() => new Map(blocks.map(block => [block.id, resolveBlockPaint(block, sample)])), [blocks, sample])
+function PhotoTranslationOverlay({ width, height, blocks, painted, language, reducedMotion = false }: PhotoTranslationOverlayProps) {
   const alignments = useMemo(() => inferBlockAlignments(blocks), [blocks])
-  const freeSpans = useMemo(() => resolveFreeSpans(blocks, sample, paints), [blocks, sample, paints])
   const layouts = useMemo(() => (language
-    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer(), alignments, freeSpans })
-    : []), [alignments, freeSpans, painted, width, height, language])
+    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer(), alignments, inlinePaddingPx: GLASS_LABEL_INLINE_PADDING_PX })
+    : []), [alignments, painted, width, height, language])
 
   // Blocks that appear while the language stays the same are arriving
   // results (staggered fade-in); blocks that appear with a language change
@@ -161,18 +121,17 @@ function PhotoTranslationOverlay({ width, height, image, blocks, painted, langua
   return <div data-photo-translation-overlay aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
     <AnimatePresence initial={false}>
       {layouts.map((layout, index) => {
-        const paint = paints.get(layout.id) ?? PHOTO_TRANSLATION_SCRIM
-        return <motion.div key={layout.id} data-photo-translation-block={layout.id} data-photo-translation-paint={paint.kind}
+        return <motion.div key={layout.id} data-photo-translation-block={layout.id} data-photo-translation-paint="glass"
           className="absolute"
           style={{ left: `${layout.rect.left}%`, top: `${layout.rect.top}%`, width: `${layout.rect.width}%`, height: `${layout.rect.height}%` }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { duration: fade, delay: !reducedMotion && arrival ? (index * step) / 1000 : 0 } }}
           exit={{ opacity: 0, transition: { duration: fade } }}>
-          <div className="absolute inset-0" style={patchStyle(layout, paint)}>
+          <div className="absolute inset-0" style={patchStyle(layout)}>
             <AnimatePresence initial={false}>
               <motion.span key={language ?? ''}
                 className="absolute inset-0 flex items-center"
-                style={textStyle(layout, paint)}
+                style={textStyle(layout)}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: { duration: fade } }}
                 exit={{ opacity: 0, transition: { duration: fade } }}>

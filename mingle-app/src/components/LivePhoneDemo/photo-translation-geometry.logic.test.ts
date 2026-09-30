@@ -248,6 +248,27 @@ describe('layoutPhotoTranslationBlocks', () => {
     expect(isVerticalWritingLanguage('en')).toBe(false)
   })
 
+  it('fits the fixed glass-label inset before returning its font size', () => {
+    const block = { id: 'tight', box: [0.1, 0.1, 0.18, 0.12] as const, text: '日本語の看板表示', sourceLanguage: 'ja', angle: 0, lines: 1 }
+    const stage = { width: 1000, height: 1000 }
+    const expectedRect = blockPaintRect(block, stage)
+    const layout = layoutPhotoTranslationBlocks({
+      items: [{ block, text: 'A fairly long English label' }],
+      stage,
+      language: 'en',
+      measure: halfEm,
+      inlinePaddingPx: 4,
+    })[0]
+    expect(layout.inset).toBe(4)
+    expect(layout.fontSize).toBe(fitFontSize({
+      text: 'A fairly long English label', mode: 'single', lines: 1,
+      width: expectedRect.width, height: expectedRect.height, padding: 8, measure: halfEm,
+    }))
+    expect(layout.fontSize).toBeLessThan(layoutPhotoTranslationBlocks({
+      items: [{ block, text: 'A fairly long English label' }], stage, language: 'en', measure: halfEm,
+    })[0].fontSize)
+  })
+
   it('returns nothing before the stage has a size', () => {
     expect(layoutPhotoTranslationBlocks({ items: overlayBlocksFor(photoTranslationReadyResponse, 'ko'), stage: { width: 0, height: 0 }, language: 'ko' })).toEqual([])
   })

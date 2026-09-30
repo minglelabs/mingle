@@ -515,13 +515,13 @@ function PhotoTranslationViewer({ room, image, src, alt, copy, dragProgress, onE
     setSelection(choice)
   }, [memoryKey])
   const renderOverlay = useCallback((stage: ConversationImageStage) => <PhotoTranslationOverlay
-    width={stage.width} height={stage.height} image={stage.image} blocks={blocks} painted={painted}
+    width={stage.width} height={stage.height} blocks={blocks} painted={painted}
     language={language} reducedMotion={reducedMotion} />, [blocks, language, painted, reducedMotion])
   return <>
     <ZoomableConversationImage src={src} alt={alt} width={image.width} height={image.height} onError={onError}
       onDismiss={onDismiss} onDragProgress={onDragProgress} onSettleChange={onSettleChange} renderOverlay={renderOverlay} />
     <AnimatePresence initial={false}>
-      {toggle.visible && <motion.div key="photo-translate" className="absolute bottom-2 right-2 z-10"
+      {toggle.visible && <motion.div key="photo-translate" className="pointer-events-none absolute bottom-5 left-0 right-0 z-10 flex justify-center"
         initial={reducedMotion ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
         exit={reducedMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.96 }}
         transition={{ duration: reducedMotion ? 0 : 0.18, ease: 'easeOut' }}>

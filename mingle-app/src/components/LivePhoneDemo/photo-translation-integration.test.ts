@@ -69,7 +69,8 @@ describe('photo viewer wiring', () => {
     expect(zoomableElement).toContain('renderOverlay={renderOverlay}')
     const control = viewer.slice(viewer.indexOf('<ZoomableConversationImage'))
     expect(control.indexOf('<PhotoTranslateControl')).toBeGreaterThan(control.indexOf('/>'))
-    expect(viewer).toContain('className="absolute bottom-2 right-2 z-10"')
+    expect(viewer).toContain('className="pointer-events-none absolute bottom-5 left-0 right-0 z-10 flex justify-center"')
+    expect(read('./PhotoTranslateControl.tsx')).toContain('className="pointer-events-auto relative"')
     expect(viewer).toContain('disabled={dragProgress > 0}')
   })
 

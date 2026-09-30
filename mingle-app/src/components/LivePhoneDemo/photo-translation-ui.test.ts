@@ -19,7 +19,6 @@ const copy = resolveConversationImageCopy('ko')
 function renderOverlay(language: string | null, response = photoTranslationReadyResponse) {
   return renderToStaticMarkup(createElement(PhotoTranslationOverlay, {
     ...stage,
-    image: null,
     blocks: response.blocks,
     painted: overlayBlocksFor(response, language),
     language,
@@ -67,16 +66,15 @@ describe('PhotoTranslationOverlay', () => {
     expect(english).toContain('lang="en"')
   })
 
-  it('falls back to the style hints, then to the dark scrim, before pixels are sampled', () => {
+  it('uses the selected translucent glass label style for every translated block', () => {
     const html = renderOverlay('ko')
     const sign = blockMarkup(html, 'b2')
-    expect(sign).toContain('data-photo-translation-paint="hint"')
-    expect(sign).toContain('background-color:rgb(27, 127, 59)')
-    expect(sign).toContain('color:rgb(255, 255, 255)')
-    expect(sign).toMatch(/box-shadow:0 0 [\d.]+px [\d.]+px rgb\(27, 127, 59\)/)
-    const noHints = blockMarkup(renderOverlay('en', photoTranslationSettledResponse), 'b5')
-    expect(noHints).toContain('data-photo-translation-paint="scrim"')
-    expect(noHints).toContain('rgba(15, 23, 42, 0.72)')
+    expect(sign).toContain('data-photo-translation-paint="glass"')
+    expect(sign).toContain('background-color:rgba(12, 14, 18, 0.66)')
+    expect(sign).toContain('border-radius:5px')
+    expect(sign).toContain('backdrop-filter:blur(6px)')
+    expect(sign).toContain('color:#fff')
+    expect(sign).toContain('padding-inline:4px')
   })
 
   it('paints nothing for the original photo', () => {
@@ -144,8 +142,11 @@ describe('PhotoTranslateControl', () => {
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('h-11')
     expect(html).toContain('touch-none')
-    expect(html).toContain('bg-white/15')
-    expect(html).toContain('backdrop-blur-md')
+    expect(html).toContain('background-color:rgba(255,255,255,0.16)')
+    expect(html).toContain('backdrop-filter:blur(10px)')
+    expect(html).toContain('data-photo-translate-cycle-dots')
+    expect(html.match(/rounded-full bg-white/g)).toHaveLength(3)
+    expect(html).toContain('flex-col')
     expect(html).not.toContain('role="menu"')
   })
 

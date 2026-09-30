@@ -64,8 +64,8 @@ type PhotoTranslateMenuProps = {
 /**
  * The long-press menu: every room language in toggle order (non-eligible
  * ones disabled; "Same as original" unless the translation failed), a
- * divider, then "Show original". Rendered inside the viewer panel, above the
- * pill: a body portal would sit under the viewer (z 9999 < 10010).
+ * divider, then "Show original". Rendered inside the viewer panel, centered
+ * above the pill: a body portal would sit under the viewer (z 9999 < 10010).
  */
 export function PhotoTranslateMenu({ id, options, choice, highlighted, uiLocale, copy, onSelect, onKeyDown }: PhotoTranslateMenuProps) {
   const row = (value: PhotoTranslationChoice, label: string, enabled: boolean, tag: string | null, pending: boolean) => {
@@ -84,7 +84,7 @@ export function PhotoTranslateMenu({ id, options, choice, highlighted, uiLocale,
     </button>
   }
   return <div id={id} role="menu" aria-label={copy.translate} aria-orientation="vertical" onKeyDown={onKeyDown}
-    className="min-w-[13rem] max-w-[min(18rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain rounded-2xl bg-[rgba(28,28,30,0.94)] py-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-xl"
+    className="min-w-[13rem] max-w-[min(18rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain rounded-xl bg-[rgba(30,30,32,0.95)] py-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-[14px]"
     style={{ maxHeight: 'min(24rem, calc(80dvh - 4.5rem))' }}>
     {options.map(option => row(
       option.language,
@@ -112,11 +112,12 @@ type PhotoTranslateControlProps = {
 }
 
 /**
- * The language pill (option A): a sibling of the zoom viewport, never inside
- * it, since the viewport captures pointers for pan/dismiss. Tap cycles the
- * eligible languages and Original. Long-press (450 ms, 10 px slop) opens the
- * menu; press-drag-release picks the row under the finger, and releasing on
- * the pill keeps the menu open for a tap.
+ * The glass control: a sibling of the zoom viewport, never inside it, since
+ * the viewport captures pointers for pan/dismiss. Tap cycles the eligible
+ * languages and Original; the centered pill shows the current language above
+ * a dot for each cycle choice. Long-press (450 ms, 10 px slop) opens the menu;
+ * press-drag-release picks the row under the finger, and releasing on the pill
+ * keeps the menu open for a tap.
  */
 export default function PhotoTranslateControl({ options, cycle, choice, pending, uiLocale, copy, disabled = false, onSelect }: PhotoTranslateControlProps) {
   const menuId = useId()
@@ -354,14 +355,15 @@ export default function PhotoTranslateControl({ options, cycle, choice, pending,
 
   const label = photoTranslationChoiceLabel(choice, uiLocale, copy)
   const labels = [...new Set([...cycle.map(value => photoTranslationChoiceLabel(value, uiLocale, copy)), label])]
+  const selectedIndex = cycle.indexOf(choice)
   const ariaLabel = `${copy.translate}: ${label}${pending ? `, ${copy.translating}` : ''}. ${copy.translateHint}`
   const fade = reducedMotion ? 'transition-none' : 'transition-opacity duration-[180ms]'
 
-  return <div ref={rootRef} className="relative"
+  return <div ref={rootRef} className="pointer-events-auto relative"
     onPointerDown={stopPropagation} onTouchStart={stopPropagation} onTouchMove={stopPropagation}
     onTouchEnd={stopPropagation} onDoubleClick={stopPropagation}>
     <AnimatePresence>
-      {open && <motion.div ref={menuRef} className="absolute bottom-[calc(100%+0.5rem)] right-0 origin-bottom-right"
+      {open && <motion.div ref={menuRef} className="absolute bottom-[calc(100%+0.5rem)] left-1/2 origin-bottom -translate-x-1/2"
         initial={reducedMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={reducedMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, y: 6, scale: 0.985 }}
@@ -375,16 +377,20 @@ export default function PhotoTranslateControl({ options, cycle, choice, pending,
       onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel} onTouchStart={stopPropagation} onTouchEnd={handleTouchEnd}
       onDoubleClick={stopPropagation} onClick={handleClick} onContextMenu={handleContextMenu} onKeyDown={handleKeyDown}
-      className="flex h-11 max-w-[min(15rem,calc(100vw-7rem))] touch-none select-none items-center gap-1.5 rounded-full bg-white/15 pl-3 pr-3.5 text-[14px] font-semibold text-white backdrop-blur-md transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 active:scale-[0.97] disabled:opacity-60"
-      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
-      <span className="relative flex h-[17px] w-[17px] shrink-0 items-center justify-center" aria-hidden="true">
-        <Languages size={17} className={`absolute ${fade} ${pending ? 'opacity-0' : 'opacity-100'}`} />
-        <Loader2 size={15} className={`absolute animate-spin ${fade} ${pending ? 'opacity-100' : 'opacity-0'}`} />
+      className="flex h-11 max-w-[min(15rem,calc(100vw-3rem))] touch-none select-none flex-col items-center justify-center gap-1 rounded-full px-3 text-[13px] font-semibold text-white transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 active:scale-[0.97] disabled:opacity-60"
+      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', backgroundColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+      <span className="flex min-w-0 items-center justify-center gap-1.5" aria-hidden="true">
+        <span className="relative flex h-[17px] w-[17px] shrink-0 items-center justify-center">
+          <Languages size={17} className={`absolute ${fade} ${pending ? 'opacity-0' : 'opacity-100'}`} />
+          <Loader2 size={15} className={`absolute animate-spin ${fade} ${pending ? 'opacity-100' : 'opacity-0'}`} />
+        </span>
+        {/* Every label shares one grid cell so cycling never shifts the pill. */}
+        <span className="grid min-w-0">
+          {labels.map(text => <span key={text} className={`col-start-1 row-start-1 truncate ${fade} ${text === label ? 'opacity-100' : 'opacity-0'}`}>{text}</span>)}
+        </span>
       </span>
-      {/* Every label shares one grid cell: the pill keeps the widest width, so
-          cycling never makes it jump, and labels cross-fade in place. */}
-      <span className="grid min-w-0" aria-hidden="true">
-        {labels.map(text => <span key={text} className={`col-start-1 row-start-1 truncate ${fade} ${text === label ? 'opacity-100' : 'opacity-0'}`}>{text}</span>)}
+      <span data-photo-translate-cycle-dots aria-hidden="true" className="flex h-1 items-center justify-center gap-[3px]">
+        {cycle.map((value, index) => <span key={value} className={`h-1 w-1 rounded-full bg-white transition-opacity duration-150 ${index === selectedIndex ? 'opacity-100' : 'opacity-30'}`} />)}
       </span>
     </button>
   </div>
