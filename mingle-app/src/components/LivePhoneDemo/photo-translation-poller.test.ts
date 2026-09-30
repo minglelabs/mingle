@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONVERSATION_IMAGE_TEXT_POLL_MS, type ConversationImageTextResponse } from '@/lib/conversation-image-text'
+import { CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS, CONVERSATION_IMAGE_TEXT_MAX_POLL_MS, CONVERSATION_IMAGE_TEXT_POLL_MS, type ConversationImageTextResponse } from '@/lib/conversation-image-text'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 import { PHOTO_TRANSLATION_REQUEST_TIMEOUT_MS, startPhotoTranslationPoller } from './photo-translation-fetch.logic'
-import { PHOTO_TRANSLATION_READY_BODY, photoTranslationSettledResponse } from './photo-translation.fixtures'
+import { PHOTO_TRANSLATION_READY_BODY, photoTranslationPendingResponse, photoTranslationSettledResponse } from './photo-translation.fixtures'
 
 const PENDING_BODY = { status: 'pending', blocks: [], translations: [], retryAfterMs: 2000 }
 const SETTLED_BODY = JSON.parse(JSON.stringify(photoTranslationSettledResponse))
@@ -74,11 +74,34 @@ describe('startPhotoTranslationPoller', () => {
     poller.stop()
   })
 
-  it('gives up after the per-session polling budget', async () => {
+  it('ends the spinner at the polling budget and lets reopening retry the local failure', async () => {
     const { fetchImpl } = fetchQueue(PENDING_BODY)
-    const { poller } = start({ fetchImpl })
-    await vi.advanceTimersByTimeAsync(120_000)
+    const { poller, seen } = start({ fetchImpl })
+    await vi.advanceTimersByTimeAsync(CONVERSATION_IMAGE_TEXT_MAX_POLL_MS + 2_000)
+    expect(fetchImpl).toHaveBeenCalledTimes(CONVERSATION_IMAGE_TEXT_MAX_POLL_MS / 2_000 + 1)
+    expect(seen.at(-1)).toEqual({ status: 'failed', blocks: [], translations: [] })
+    poller.stop()
+
+    const retry = fetchQueue(SETTLED_BODY)
+    const reopened = start({ fetchImpl: retry.fetchImpl, cached: seen.at(-1) })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(retry.fetchImpl).toHaveBeenCalledTimes(1)
+    expect(reopened.seen).toEqual([photoTranslationSettledResponse])
+    reopened.poller.stop()
+  })
+
+  it('continues past 45 seconds for an abandoned claim to expire and recover', async () => {
+    vi.setSystemTime(0)
+    const fetchImpl = vi.fn(async () => Date.now() >= CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS + 42_000 + 18_000
+      ? reply(SETTLED_BODY)
+      : reply(PENDING_BODY))
+    const { poller, seen } = start({ fetchImpl })
+    await vi.advanceTimersByTimeAsync(45_000)
     expect(fetchImpl).toHaveBeenCalledTimes(23)
+    expect(seen.at(-1)).toMatchObject({ status: 'pending' })
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(23)
+    expect(seen.at(-1)).toEqual(photoTranslationSettledResponse)
     poller.stop()
   })
 
@@ -141,6 +164,15 @@ describe('startPhotoTranslationPoller', () => {
     expect(missing.fetchImpl).toHaveBeenCalledTimes(1)
     expect(second.seen).toEqual([])
     second.poller.stop()
+  })
+
+  it('ends pending UI state after repeated network errors', async () => {
+    const { fetchImpl } = fetchQueue({ status: 503 }, { status: 503 }, { status: 503 })
+    const { poller, seen } = start({ fetchImpl, cached: photoTranslationPendingResponse })
+    await vi.advanceTimersByTimeAsync(CONVERSATION_IMAGE_TEXT_POLL_MS * 3)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(seen).toEqual([{ status: 'failed', blocks: [], translations: [] }])
+    poller.stop()
   })
 
   it('treats an unparsable body as a failure', async () => {

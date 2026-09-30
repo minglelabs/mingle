@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { CONVERSATION_IMAGE_TEXT_MAX_POLL_MS, CONVERSATION_IMAGE_TEXT_POLL_MS } from '@/lib/conversation-image-text'
+import { CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS, CONVERSATION_IMAGE_TEXT_MAX_POLL_MS, CONVERSATION_IMAGE_TEXT_POLL_MS } from '@/lib/conversation-image-text'
 import {
   PHOTO_TRANSLATION_MAX_FAILURES,
   isPhotoTranslationSettled,
+  markPendingPhotoTranslationFailed,
   mergePhotoTranslationResponse,
   nextPhotoTranslationPollDelay,
   nextPhotoTranslationRetryDelay,
@@ -29,6 +30,33 @@ describe('nextPhotoTranslationPollDelay', () => {
     expect(nextPhotoTranslationPollDelay(null, 0)).toBeNull()
     expect(nextPhotoTranslationPollDelay(photoTranslationPendingResponse, CONVERSATION_IMAGE_TEXT_MAX_POLL_MS - 2000)).toBe(2000)
     expect(nextPhotoTranslationPollDelay(photoTranslationPendingResponse, CONVERSATION_IMAGE_TEXT_MAX_POLL_MS - 1999)).toBeNull()
+  })
+
+  it('allows time for a lost claim to expire and one bounded recovery attempt', () => {
+    expect(CONVERSATION_IMAGE_TEXT_MAX_POLL_MS).toBe(240_000)
+    expect(CONVERSATION_IMAGE_TEXT_MAX_POLL_MS).toBeGreaterThanOrEqual(CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS + 42_000 + 54_000)
+  })
+})
+
+describe('markPendingPhotoTranslationFailed', () => {
+  it('ends pending OCR locally without making the response settled for a later open', () => {
+    const failed = markPendingPhotoTranslationFailed(photoTranslationPendingResponse)
+    expect(failed).toEqual({ status: 'failed', blocks: [], translations: [] })
+    expect(isPhotoTranslationSettled(failed, ['ko'])).toBe(false)
+  })
+
+  it('preserves ready translations while ending pending indicators', () => {
+    const failed = markPendingPhotoTranslationFailed(photoTranslationReadyResponse)
+    expect(failed).toMatchObject({
+      status: 'ready',
+      translations: [
+        { language: 'ko', status: 'ready' },
+        { language: 'en', status: 'failed', texts: {} },
+        { language: 'ja', status: 'failed', texts: {} },
+      ],
+    })
+    expect(failed?.retryAfterMs).toBeUndefined()
+    expect(isPhotoTranslationSettled(failed, ['ko', 'en'])).toBe(false)
   })
 })
 

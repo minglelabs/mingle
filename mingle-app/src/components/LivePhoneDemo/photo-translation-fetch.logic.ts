@@ -52,6 +52,21 @@ export function nextPhotoTranslationRetryDelay({ failures, httpStatus, elapsedMs
   return elapsedMs + delay > maxPollMs ? null : delay
 }
 
+/** A local terminal view for pending work when this polling session ends. */
+export function markPendingPhotoTranslationFailed(
+  response: ConversationImageTextResponse | null | undefined,
+): ConversationImageTextResponse | null {
+  if (!response || !isConversationImageTextPending(response)) return response ?? null
+  if (response.status === 'pending') return { status: 'failed', blocks: [], translations: [] }
+  return {
+    status: 'ready',
+    blocks: response.blocks,
+    translations: response.translations.map(translation => translation.status === 'pending'
+      ? { ...translation, status: 'failed', texts: {} }
+      : translation),
+  }
+}
+
 /**
  * True when a response can no longer change for these languages: no text, or
  * every language either needs no translation or is translated. Failed or
@@ -138,8 +153,20 @@ export function startPhotoTranslationPoller({
   let failures = 0
   let heldWhileHidden = false
 
+  const stopPending = () => {
+    const terminal = markPendingPhotoTranslationFailed(latest)
+    if (terminal && terminal !== latest) {
+      latest = terminal
+      onResponse(terminal)
+    }
+  }
+
   const schedule = (delay: number | null) => {
-    if (closed || delay == null) return
+    if (closed) return
+    if (delay == null) {
+      stopPending()
+      return
+    }
     timer = setTimer(() => {
       timer = null
       void load()

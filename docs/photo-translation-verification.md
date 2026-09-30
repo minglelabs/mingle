@@ -33,6 +33,12 @@ The fixture room had two active members and Japanese, Korean and English room la
 
 The first English rendering of a narrow Japanese vertical banner split “Today's Special” into short fragments. Non-CJK translations of unrotated vertical blocks now use compact horizontal labels, bounded by photo edges and sibling OCR boxes. An exact-box regression and the relevant geometry/UI tests passed (53 tests); browser recapture confirmed intact “Today's” / “Special” words without overlap. CJK vertical text is unchanged.
 
+## Self-review corrections (2026-09-30 follow-up)
+
+- The viewer's polling budget is now 240 seconds, longer than the server's 90-second image-text job lease. The 12-second request timeout remains separate. This gives an abandoned claim time to expire and be reclaimed; it does not guarantee that the server queue finishes within the client polling window. When polling ends, local pending work becomes failed while already-ready OCR blocks and translations stay available. Reopening retries pending or failed cached work; a fully settled response still skips another request.
+- Response and selection snapshots are keyed by API namespace, viewer account, conversation and message. A render that switches from account A to B now resolves B's cache synchronously, or `null` when B has no cached response, so A's photo text or selection cannot flash. Regression coverage uses distinct A and B response objects and translated text, checks `A !== B`, verifies the uncached-B and same-key snapshot cases, and confirms no extra cache read for the matching key.
+- The six targeted photo-translation test files passed (103 tests); ESLint on the changed regression test and `pnpm exec tsc --noEmit` passed. This follow-up ran no new live API, browser harness, or physical-device tests. The live and visual results above are from the earlier verification run.
+
 ## Local environment and migration
 
 The original devbox process lacked the private conversation image storage settings and returned `image_upload_failed`. A temporary ignored, mode-0600 `mingle-app/.env.local` supplied selected local runtime settings; its database target was checked as `127.0.0.1:5432/mingle`, schema `app`. Devbox was restarted through `scripts/devbox`; no Vault record was changed.

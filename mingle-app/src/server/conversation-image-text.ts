@@ -17,6 +17,7 @@ import { listConversationTranslationLanguagesBySessionKey } from '@/lib/app-conv
 import { getSiblingChineseVariant, toChineseVariant } from '@/lib/chinese-variant'
 import {
   CONVERSATION_IMAGE_TEXT_POLL_MS,
+  CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS,
   blockNeedsTranslation,
   languageHasTextToTranslate,
   normalizeImageTextLanguageList,
@@ -38,8 +39,7 @@ import {
 
 export const CONVERSATION_IMAGE_TEXT_MAX_OCR_ATTEMPTS = 3
 export const CONVERSATION_IMAGE_TEXT_MAX_TRANSLATION_ATTEMPTS = 3
-/** A claim older than this is stale and may be reclaimed. */
-export const CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS = 90_000
+export { CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS }
 /** A failed attempt may be retried after this long. */
 export const CONVERSATION_IMAGE_TEXT_RETRY_DELAY_MS = 5_000
 /** Provider work in flight per process (OCR and translations together). */

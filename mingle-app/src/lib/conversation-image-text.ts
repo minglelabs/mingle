@@ -23,8 +23,16 @@ export const CONVERSATION_IMAGE_TEXT_MAX_BLOCK_CHARS = 500
 export const CONVERSATION_IMAGE_TEXT_MAX_PARSED_CHARS = 2000
 /** Client polling interval while anything requested is pending (the server's retryAfterMs wins). */
 export const CONVERSATION_IMAGE_TEXT_POLL_MS = 1500
-/** The client stops polling one viewer session after this long. */
-export const CONVERSATION_IMAGE_TEXT_MAX_POLL_MS = 45_000
+/** The server's running claim lease; a claim is reclaimable after it expires. */
+export const CONVERSATION_IMAGE_TEXT_JOB_DEADLINE_MS = 90_000
+/**
+ * One viewer session's bounded polling budget: 90s for a lost claim to expire,
+ * about 42s for OCR's two 20s model calls plus retry delay, and 54s for retrying
+ * translation work, with another 54s for queue and request scheduling.
+ * At exhaustion the client marks pending work failed locally; reopening asks
+ * the server again, so this does not persist a failure or suppress a retry.
+ */
+export const CONVERSATION_IMAGE_TEXT_MAX_POLL_MS = 240_000
 /** Block ids are `b0`, `b1`, ... in reading order. */
 export const CONVERSATION_IMAGE_TEXT_BLOCK_ID_PATTERN = /^b\d{1,3}$/
 

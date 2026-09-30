@@ -17,7 +17,9 @@ import {
   buildPhotoTranslationOrder,
   photoTranslationMemoryKey,
   photoTranslationSelections,
+  resolvePhotoTranslationKeyedSnapshot,
   resolvePhotoTranslationToggle,
+  type PhotoTranslationKeyedSnapshot,
   type PhotoTranslationChoice,
 } from './photo-translation-toggle.logic'
 import { usePhotoTranslationText } from './use-photo-translation-text'
@@ -505,14 +507,21 @@ function PhotoTranslationViewer({ room, image, src, alt, copy, dragProgress, onE
   const order = useMemo(() => buildPhotoTranslationOrder(room.roomLanguages, room.defaultLanguage), [room.roomLanguages, room.defaultLanguage])
   const response = usePhotoTranslationText({ conversationId: image.conversationId, messageId: image.messageId, languages: order, viewerUserId: room.viewerUserId })
   const memoryKey = photoTranslationMemoryKey({ apiNamespace: clientApiNamespace, viewerUserId: room.viewerUserId, conversationId: image.conversationId, messageId: image.messageId })
-  const [selection, setSelection] = useState<PhotoTranslationChoice | null>(() => photoTranslationSelections.get(memoryKey) ?? null)
+  const [selectionSnapshot, setSelectionSnapshot] = useState<PhotoTranslationKeyedSnapshot<PhotoTranslationChoice | null>>(
+    () => ({ key: memoryKey, value: photoTranslationSelections.get(memoryKey) ?? null }),
+  )
+  const selection = resolvePhotoTranslationKeyedSnapshot(
+    selectionSnapshot,
+    memoryKey,
+    key => photoTranslationSelections.get(key) ?? null,
+  )
   const toggle = useMemo(() => resolvePhotoTranslationToggle({ order, response, selection }), [order, response, selection])
   const language = toggle.choice === PHOTO_TRANSLATION_OFF ? null : toggle.choice
   const painted = useMemo(() => overlayBlocksFor(response, language), [response, language])
   const blocks = response?.blocks ?? NO_BLOCKS
   const select = useCallback((choice: PhotoTranslationChoice) => {
     photoTranslationSelections.set(memoryKey, choice)
-    setSelection(choice)
+    setSelectionSnapshot({ key: memoryKey, value: choice })
   }, [memoryKey])
   const renderOverlay = useCallback((stage: ConversationImageStage) => <PhotoTranslationOverlay
     width={stage.width} height={stage.height} blocks={blocks} painted={painted}

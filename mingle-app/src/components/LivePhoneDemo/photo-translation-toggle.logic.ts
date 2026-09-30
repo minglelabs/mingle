@@ -18,6 +18,18 @@ export const PHOTO_TRANSLATION_OFF = 'off'
 /** A language key (normalizeImageTextLanguage) or PHOTO_TRANSLATION_OFF. */
 export type PhotoTranslationChoice = string
 
+/** Values captured by a component instance are valid only for their photo/account key. */
+export type PhotoTranslationKeyedSnapshot<T> = { key: string; value: T }
+
+/** Resolve the current key synchronously so a prop change cannot render the previous key's state for one frame. */
+export function resolvePhotoTranslationKeyedSnapshot<T>(
+  snapshot: PhotoTranslationKeyedSnapshot<T> | null | undefined,
+  key: string,
+  read: (key: string) => T,
+): T {
+  return snapshot?.key === key ? snapshot.value : read(key)
+}
+
 /**
  * - ready: a translation exists and changes at least one block (eligible)
  * - pending: the photo has text to translate and the translation is still running (eligible)

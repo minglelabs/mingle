@@ -78,6 +78,8 @@ describe('photo viewer wiring', () => {
     const viewer = between(bubble, 'function PhotoTranslationViewer', 'export default function ConversationImageBubble')
     expect(viewer).toContain('photoTranslationMemoryKey({ apiNamespace: clientApiNamespace, viewerUserId: room.viewerUserId, conversationId: image.conversationId, messageId: image.messageId })')
     expect(viewer).toContain('photoTranslationSelections.set(memoryKey, choice)')
+    expect(viewer).toContain('resolvePhotoTranslationKeyedSnapshot(')
+    expect(read('./use-photo-translation-text.ts')).toContain('resolvePhotoTranslationKeyedSnapshot(')
     expect(viewer).toContain('className="sr-only"')
     expect(viewer).not.toContain('localStorage')
   })

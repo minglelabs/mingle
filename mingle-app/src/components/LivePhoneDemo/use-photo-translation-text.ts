@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { buildConversationImageTextEndpoint, type ConversationImageTextResponse } from '@/lib/conversation-image-text'
 import { photoTranslationResponses, startPhotoTranslationPoller } from './photo-translation-fetch.logic'
-import { photoTranslationMemoryKey } from './photo-translation-toggle.logic'
+import { photoTranslationMemoryKey, resolvePhotoTranslationKeyedSnapshot, type PhotoTranslationKeyedSnapshot } from './photo-translation-toggle.logic'
 
 /**
  * The photo's text and translations while its viewer is open (spec §1.8).
@@ -22,7 +22,16 @@ export function usePhotoTranslationText({ conversationId, messageId, languages, 
 }): ConversationImageTextResponse | null {
   const cacheKey = photoTranslationMemoryKey({ apiNamespace: clientApiNamespace, viewerUserId, conversationId, messageId })
   const languagesKey = languages.join(',')
-  const [response, setResponse] = useState<ConversationImageTextResponse | null>(() => photoTranslationResponses.get(cacheKey) ?? null)
+  const [responseSnapshot, setResponseSnapshot] = useState<PhotoTranslationKeyedSnapshot<ConversationImageTextResponse | null>>(
+    () => ({ key: cacheKey, value: photoTranslationResponses.get(cacheKey) ?? null }),
+  )
+  // Resolve a changed account/photo key during render. Waiting for the polling
+  // effect would briefly expose the prior key's cached OCR and translation.
+  const response = resolvePhotoTranslationKeyedSnapshot(
+    responseSnapshot,
+    cacheKey,
+    key => photoTranslationResponses.get(key) ?? null,
+  )
 
   useEffect(() => {
     const requested = languagesKey ? languagesKey.split(',') : []
@@ -35,7 +44,7 @@ export function usePhotoTranslationText({ conversationId, messageId, languages, 
       cached: photoTranslationResponses.get(cacheKey),
       onResponse: next => {
         photoTranslationResponses.set(cacheKey, next)
-        setResponse(next)
+        setResponseSnapshot({ key: cacheKey, value: next })
       },
     })
     const handleVisibilityChange = () => {

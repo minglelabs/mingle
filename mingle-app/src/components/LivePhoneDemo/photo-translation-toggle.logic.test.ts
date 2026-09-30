@@ -7,11 +7,13 @@ import {
   photoTranslationCycle,
   photoTranslationMemoryKey,
   resolvePhotoTranslationChoice,
+  resolvePhotoTranslationKeyedSnapshot,
   resolvePhotoTranslationLanguageState,
   resolvePhotoTranslationOptions,
   resolvePhotoTranslationToggle,
 } from './photo-translation-toggle.logic'
 import {
+  PHOTO_TRANSLATION_READY_BODY,
   photoTranslationBrandOnlyResponse,
   photoTranslationDisabledResponse,
   photoTranslationEmptyResponse,
@@ -21,6 +23,8 @@ import {
   photoTranslationReadyResponse,
   photoTranslationSettledResponse,
 } from './photo-translation.fixtures'
+import { startPhotoTranslationPoller } from './photo-translation-fetch.logic'
+import { parseConversationImageTextResponse, type ConversationImageTextResponse } from '@/lib/conversation-image-text'
 
 const ORDER = ['ko', 'en', 'ja']
 
@@ -145,5 +149,97 @@ describe('per-photo memory', () => {
     expect(memory.get('b')).toBeUndefined()
     expect(memory.get('c')).toBe('ja')
     expect(memory.size).toBe(2)
+  })
+})
+
+describe('account switch while a photo viewer stays mounted', () => {
+  it('uses the new account photo cache and its remembered Off choice synchronously', () => {
+    const accountA = photoTranslationMemoryKey({ apiNamespace: 'ios/v2.1.0', viewerUserId: 'account-a', conversationId: 'conv-1', messageId: 'msg-1' })
+    const accountB = photoTranslationMemoryKey({ apiNamespace: 'ios/v2.1.0', viewerUserId: 'account-b', conversationId: 'conv-1', messageId: 'msg-1' })
+    const responseMemory = createPhotoTranslationMemory<ConversationImageTextResponse>(2)
+    const selectionMemory = createPhotoTranslationMemory<string>(2)
+    const accountBResponse = parseConversationImageTextResponse({
+      ...PHOTO_TRANSLATION_READY_BODY,
+      translations: [
+        PHOTO_TRANSLATION_READY_BODY.translations[0],
+        { language: 'en', status: 'ready', texts: { b0: 'Account B opening hours', b1: 'Closed on Wednesdays for account B', b2: 'Restrooms this way →', b3: "Today's pick", b5: 'Thank you for visiting' } },
+        PHOTO_TRANSLATION_READY_BODY.translations[2],
+      ],
+    })
+    if (!accountBResponse) throw new Error('invalid account B photo translation fixture')
+    responseMemory.set(accountA, photoTranslationSettledResponse)
+    responseMemory.set(accountB, accountBResponse)
+    selectionMemory.set(accountA, 'en')
+    selectionMemory.set(accountB, PHOTO_TRANSLATION_OFF)
+
+    // The mounted viewer still holds account A's state snapshot when its room
+    // context switches directly to B. B's final cache requires no poll callback.
+    const accountASnapshot = { key: accountA, value: photoTranslationSettledResponse }
+    const selectionASnapshot = { key: accountA, value: 'en' }
+    const response = resolvePhotoTranslationKeyedSnapshot(accountASnapshot, accountB, key => responseMemory.get(key) ?? null)
+    const selection = resolvePhotoTranslationKeyedSnapshot(selectionASnapshot, accountB, key => selectionMemory.get(key) ?? null)
+    const toggle = resolvePhotoTranslationToggle({ order: ['en', 'ko'], response, selection })
+    let fetches = 0
+    let responses = 0
+    const poller = startPhotoTranslationPoller({
+      endpoint: '/api/account-b/photo-text',
+      viewerUserId: 'account-b',
+      languages: ['en', 'ko'],
+      cached: response,
+      fetchImpl: async () => { fetches += 1; throw new Error('settled cache should skip fetch') },
+      onResponse: () => { responses += 1 },
+    })
+
+    expect(accountASnapshot.value).not.toBe(accountBResponse)
+    expect(accountASnapshot.value.translations.find(entry => entry.language === 'en')?.texts.b0).not.toBe(
+      accountBResponse.translations.find(entry => entry.language === 'en')?.texts.b0,
+    )
+    expect(response).toBe(accountBResponse)
+    expect(response).not.toBe(accountASnapshot.value)
+    expect(selection).toBe(PHOTO_TRANSLATION_OFF)
+    expect(toggle.choice).toBe(PHOTO_TRANSLATION_OFF)
+    expect(fetches).toBe(0)
+    expect(responses).toBe(0)
+    poller.stop()
+  })
+
+  it('resolves an uncached account B to null immediately instead of exposing account A state', () => {
+    const accountA = photoTranslationMemoryKey({ apiNamespace: 'ios/v2.1.0', viewerUserId: 'account-a', conversationId: 'conv-1', messageId: 'msg-1' })
+    const accountB = photoTranslationMemoryKey({ apiNamespace: 'ios/v2.1.0', viewerUserId: 'account-b', conversationId: 'conv-1', messageId: 'msg-1' })
+    const accountASnapshot = { key: accountA, value: photoTranslationSettledResponse }
+    const responseMemory = createPhotoTranslationMemory<ConversationImageTextResponse>(2)
+    responseMemory.set(accountA, photoTranslationSettledResponse)
+    let cacheReads = 0
+
+    const response = resolvePhotoTranslationKeyedSnapshot(accountASnapshot, accountB, key => {
+      cacheReads += 1
+      return responseMemory.get(key) ?? null
+    })
+
+    expect(response).toBeNull()
+    expect(cacheReads).toBe(1)
+  })
+
+  it('keeps the current keyed snapshot without rereading its cache', () => {
+    const accountB = photoTranslationMemoryKey({ apiNamespace: 'ios/v2.1.0', viewerUserId: 'account-b', conversationId: 'conv-1', messageId: 'msg-1' })
+    const accountBResponse = parseConversationImageTextResponse({
+      ...PHOTO_TRANSLATION_READY_BODY,
+      translations: [
+        PHOTO_TRANSLATION_READY_BODY.translations[0],
+        { language: 'en', status: 'ready', texts: { b0: 'Account B opening hours' } },
+        PHOTO_TRANSLATION_READY_BODY.translations[2],
+      ],
+    })
+    if (!accountBResponse) throw new Error('invalid account B photo translation fixture')
+    const snapshot = { key: accountB, value: accountBResponse }
+    let cacheReads = 0
+
+    const response = resolvePhotoTranslationKeyedSnapshot(snapshot, accountB, () => {
+      cacheReads += 1
+      return null
+    })
+
+    expect(response).toBe(accountBResponse)
+    expect(cacheReads).toBe(0)
   })
 })
