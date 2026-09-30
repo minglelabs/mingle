@@ -73,6 +73,7 @@ describe('createOperatorAccount', () => {
     expect(data).toMatchObject({
       handle: 'yuki.tnk',
       name: '田中 ゆき',
+      bio: DRAFT.bio,
       isOperator: true,
       isOfficial: false,
       nationality: 'ja',
@@ -87,7 +88,7 @@ describe('createOperatorAccount', () => {
       locationUpdatedAt: NOW,
       operatorAccount: { create: { personaCountry: 'JP', notes: 'travel persona', createdBySessionId: 'sess-1' } },
     })
-    for (const key of ['email', 'passwordHash', 'externalUserId', 'bio', 'pushTokens', 'accounts']) expect(data).not.toHaveProperty(key)
+    for (const key of ['email', 'passwordHash', 'externalUserId', 'pushTokens', 'accounts']) expect(data).not.toHaveProperty(key)
     expect((data.birthDate as Date).getUTCFullYear()).toBe(1998)
 
     expect(mocks.writeAdminAudit).toHaveBeenCalledWith(CTX, expect.objectContaining({
@@ -99,7 +100,7 @@ describe('createOperatorAccount', () => {
     }))
     expect(mocks.ensureSignupWelcomeOnboarding).not.toHaveBeenCalled()
 
-    // The bio is written through bio-versioning in the background, then translated.
+    // The bio survives a restart; background versioning and translation follow.
     await whenOperatorBioQueueIdle()
     expect(mocks.updateProfileWithBio).toHaveBeenCalledWith('op_1', DRAFT.bio, expect.any(Function))
     expect(mocks.txUserUpdate).toHaveBeenCalledWith({ where: { id: 'op_1' }, data: { bio: DRAFT.bio }, select: { id: true } })

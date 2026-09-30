@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Ellipsis, Inbox, Newspaper, UsersRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +26,47 @@ const TAB_ICONS: Record<AdminTabKey, LucideIcon> = {
 export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {
   const pathname = usePathname() ?? "/admin";
   const active = resolveActiveAdminTab(pathname);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+
+  useEffect(() => {
+    let disposed = false;
+    let inFlight = false;
+    const controller = new AbortController();
+    async function refreshUnread() {
+      if (disposed || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const response = await fetch("/admin/inbox/api/summary", {
+          cache: "no-store", signal: controller.signal,
+        });
+        if (response.status === 401) {
+          if (!disposed) setUnreadTotal(0);
+          return;
+        }
+        if (!response.ok) return;
+        const summary: { unreadTotal?: unknown } = await response.json();
+        if (!disposed) setUnreadTotal(normalizeAdminTabBadge(summary.unreadTotal));
+      } catch {
+        // Keep the last count during a temporary network failure.
+      } finally {
+        inFlight = false;
+      }
+    }
+    void refreshUnread();
+    const onRefresh = () => { void refreshUnread(); };
+    const timer = window.setInterval(onRefresh, 20_000);
+    window.addEventListener("focus", onRefresh);
+    window.addEventListener("mingle:admin-inbox-updated", onRefresh);
+    document.addEventListener("visibilitychange", onRefresh);
+    return () => {
+      disposed = true;
+      controller.abort();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onRefresh);
+      window.removeEventListener("mingle:admin-inbox-updated", onRefresh);
+      document.removeEventListener("visibilitychange", onRefresh);
+    };
+  }, [pathname]);
 
   return (
     <nav
@@ -34,7 +76,7 @@ export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {
       <ul className="mx-auto grid w-full max-w-lg grid-cols-4">
         {ADMIN_TABS.map((tab) => (
           <li key={tab.key}>
-            <AdminTabLink tab={tab} active={tab.key === active} badge={badges?.[tab.key]} />
+            <AdminTabLink tab={tab} active={tab.key === active} badge={badges?.[tab.key] ?? (tab.key === "inbox" ? unreadTotal : undefined)} />
           </li>
         ))}
       </ul>

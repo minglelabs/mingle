@@ -14,8 +14,9 @@ import { runBioVersion, updateProfileWithBio } from '@/server/profile-bio'
  * expire untranslated while waiting. Edits write the bio synchronously and
  * queue only the translation, at the front.
  *
- * The queue lives in memory: a restart drops bios still waiting (the account
- * then has no bio until staff save it again). Nothing here throws to callers.
+ * The queue lives in memory: a restart drops translations still waiting. The
+ * approved source bio is already saved when the account is created; staff can
+ * save it again to retry translation. Nothing here throws to callers.
  */
 
 export const OPERATOR_BIO_CONCURRENCY = 2

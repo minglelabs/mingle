@@ -48,8 +48,8 @@ export class OperatorHandleTakenError extends Error {
 }
 
 /**
- * A birth date in `birthYear` (the persona's age is never shown, but the
- * column is stored like any user's). A persona who turns 20 this year gets a
+ * A birth date in `birthYear`, stored like any user's. Public profiles derive
+ * their age from it. A persona who turns 20 this year gets a
  * birthday no later than today, so it is at least 20 on every date.
  */
 export function birthDateFromYear(birthYear: number, now = new Date(), random: Random = Math.random): Date {
@@ -118,6 +118,9 @@ export async function createOperatorAccount(
     data: {
       handle,
       name: draft.name,
+      // Preserve the approved bio even if the process stops before its
+      // translation queue reaches this account. Versioning still runs there.
+      bio: draft.bio || null,
       isOperator: true,
       isOfficial: false,
       translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,

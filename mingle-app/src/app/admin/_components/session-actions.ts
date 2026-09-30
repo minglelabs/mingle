@@ -14,6 +14,7 @@ import {
 } from "@/server/admin/session";
 
 const ADMIN_HOME = "/admin";
+const ADMIN_LANDING = "/admin/inbox";
 /** Throttle bucket for requests that carry no client IP (local dev without a proxy). */
 const UNKNOWN_CLIENT_KEY = "unknown";
 
@@ -22,19 +23,19 @@ type AdminLoginError = "invalid_credentials" | "too_many_attempts" | "not_config
 /** The login page with an error code, keeping an accepted return path for the next attempt. */
 function loginErrorPath(error: AdminLoginError, next: string): string {
   const params = new URLSearchParams({ error });
-  if (next !== ADMIN_HOME) params.set("next", next);
+  if (next !== ADMIN_HOME && next !== ADMIN_LANDING) params.set("next", next);
   return `${ADMIN_HOME}?${params.toString()}`;
 }
 
 /**
  * Login form action. Checks the env credential, throttles per client IP
  * (5 failures / 15 min), starts a DB session and returns to `next` (only an
- * `/admin/**` path accepted by `sanitizeAdminReturnTo`, else `/admin`).
+ * `/admin/**` path accepted by `sanitizeAdminReturnTo`, else `/admin/inbox`).
  * Every failure is audited as `admin.login_failed` with the request's ip; the
  * typed username is never stored.
  */
 export async function loginAdminAction(formData: FormData): Promise<void> {
-  const next = sanitizeAdminReturnTo(formData.get("next"), ADMIN_HOME);
+  const next = sanitizeAdminReturnTo(formData.get("next"), ADMIN_LANDING);
   const meta = await readAdminRequestMeta();
   const requestContext = { sessionId: null, ...meta };
   const throttleKey = meta.ip ?? UNKNOWN_CLIENT_KEY;

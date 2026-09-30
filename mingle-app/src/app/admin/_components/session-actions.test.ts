@@ -75,8 +75,8 @@ describe("loginAdminAction", () => {
     expect(m.audit).toHaveBeenCalledWith({ sessionId: "admin_sess_1", ...META }, { action: "admin.login" });
   });
 
-  it("goes to /admin when there is no next", async () => {
-    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin");
+  it("opens the operator inbox when there is no next", async () => {
+    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin/inbox");
   });
 
   it.each([
@@ -88,7 +88,7 @@ describe("loginAdminAction", () => {
     "/ko/feed",
     "javascript:alert(1)",
   ])("never redirects outside /admin: next=%s", async (next) => {
-    await expect(redirectOf(loginAdminAction(loginForm({ next })))).resolves.toBe("/admin");
+    await expect(redirectOf(loginAdminAction(loginForm({ next })))).resolves.toBe("/admin/inbox");
     expect(m.createSession).toHaveBeenCalledOnce();
   });
 
@@ -121,7 +121,7 @@ describe("loginAdminAction", () => {
 
     // Another ip is not affected.
     m.readMeta.mockResolvedValue({ ip: "198.51.100.4", userAgent: null });
-    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin");
+    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin/inbox");
     expect(m.createSession).toHaveBeenCalledOnce();
   });
 
@@ -133,7 +133,7 @@ describe("loginAdminAction", () => {
       await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin?error=too_many_attempts");
 
       vi.setSystemTime(new Date("2026-09-30T10:15:00Z"));
-      await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin");
+      await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin/inbox");
     } finally {
       vi.useRealTimers();
     }
@@ -141,7 +141,7 @@ describe("loginAdminAction", () => {
 
   it("clears an ip's failures after a successful login", async () => {
     for (let attempt = 0; attempt < 4; attempt += 1) await redirectOf(loginAdminAction(loginForm({ password: "nope" })));
-    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin");
+    await expect(redirectOf(loginAdminAction(loginForm()))).resolves.toBe("/admin/inbox");
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await expect(redirectOf(loginAdminAction(loginForm({ password: "nope" })))).resolves.toBe("/admin?error=invalid_credentials");
     }
