@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConversationImageTextBlock } from '@/lib/conversation-image-text'
+import type { StoredConversationImageText } from './conversation-image-text'
 
 // In-memory stand-in for the two tables, implementing exactly the Prisma
 // operators the service uses (equality, lt, in, OR, increment, skipDuplicates),
@@ -385,7 +386,7 @@ describe('read mapping', () => {
   const now = new Date('2026-09-30T09:00:00Z')
   const later = new Date(now.getTime() + 30_000)
   const earlier = new Date(now.getTime() - 1)
-  const row = (overrides: Record<string, unknown> = {}) => ({ status: 'ready', attemptCount: 1, deadlineAt: earlier, blocks: japaneseSign, translations: [], ...overrides })
+  const row = (overrides: Record<string, unknown> = {}) => ({ status: 'ready', attemptCount: 1, deadlineAt: earlier, blocks: japaneseSign, translations: [], ...overrides }) as unknown as StoredConversationImageText
 
   it.each([
     ['no job yet', null, 'pending', true],
