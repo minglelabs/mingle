@@ -176,6 +176,133 @@ describe('EarphoneAutoReadController watermark', () => {
   })
 })
 
+describe('EarphoneAutoReadController translation pending at the rising edge', () => {
+  it('reads a message committed before the edge whose translation completes after it, in start order', async () => {
+    const h = createHarness()
+    // Own message: committed, its durable translation still pending.
+    const own = message('own', h.now() - 2_000, { speakerUserId: 'viewer' })
+    // Partner message: the source was persisted before the translation.
+    const partner = message('partner', h.now() - 1_000)
+    const partnerUntranslated: Utterance = { ...partner, translations: {}, translationFinalized: {} }
+    h.controller.arm(h.snapshot([incomplete(own), partnerUntranslated]))
+    await h.advance(1)
+    expect(h.requestOrder).toEqual([])
+
+    // A message that starts after the edge completes first: it is prefetched
+    // but waits for the two that started earlier.
+    const fresh = message('fresh', h.now() + 100)
+    h.controller.update(h.snapshot([incomplete(own), partnerUntranslated, fresh]))
+    expect(h.requestOrder).toEqual([key('fresh')])
+    await h.resolveAudio(key('fresh'))
+    expect(h.dispatchedIds()).toEqual([])
+
+    // The own translation lands.
+    h.controller.update(h.snapshot([own, partnerUntranslated, fresh]))
+    await h.resolveAudio(key('own'))
+    expect(h.dispatchedIds()).toEqual(['own'])
+
+    // The partner translation streams (interim), then settles.
+    h.controller.update(h.snapshot([own, { ...partner, translations: { ko: '번역 중' }, translationFinalized: { ko: false } }, fresh]))
+    expect(h.requestOrder).toEqual([key('fresh'), key('own')])
+    h.controller.update(h.snapshot([own, partner, fresh]))
+    await h.resolveAudio(key('partner'))
+    await h.finishPlayback()
+    expect(h.dispatchedIds()).toEqual(['own', 'partner'])
+    await h.finishPlayback()
+    expect(h.dispatchedIds()).toEqual(['own', 'partner', 'fresh'])
+  })
+
+  it('keeps what was readable at the edge existing and never reads what completed while the gate was closed', async () => {
+    const h = createHarness()
+    const readable = message('readable', h.now() - 5_000)
+    h.controller.arm(h.snapshot([readable]))
+    // A later re-translation of an existing message is not a new message.
+    h.controller.update(h.snapshot([{ ...readable, translations: { ko: '다시 번역 readable' } }]))
+    await h.advance(1)
+    expect(h.requestOrder).toEqual([])
+
+    const landedWhileOff = message('landed-while-off', h.now() + 10)
+    const stillPending = message('still-pending', h.now() + 20)
+    h.controller.update(h.snapshot([readable, incomplete(landedWhileOff), incomplete(stillPending)]))
+    // Unplugged: one translation lands while the gate is closed, the other is
+    // still pending when the earphones come back.
+    h.controller.disarm()
+    h.controller.update(h.snapshot([readable, landedWhileOff, incomplete(stillPending)]))
+    h.controller.arm(h.snapshot([readable, landedWhileOff, incomplete(stillPending)]))
+    await h.advance(1)
+    expect(h.requestOrder).toEqual([])
+
+    h.controller.update(h.snapshot([readable, landedWhileOff, stillPending]))
+    expect(h.requestOrder).toEqual([key('still-pending')])
+    await h.resolveAudio(key('still-pending'))
+    expect(h.dispatchedIds()).toEqual(['still-pending'])
+    expect(h.controller.getCandidateStatus('landed-while-off')).toBeUndefined()
+    expect(h.controller.getCandidateStatus('readable')).toBeUndefined()
+  })
+})
+
+describe('EarphoneAutoReadController prefetch slots', () => {
+  it('releases the slots of queued clips that manual taps consume while they synthesize', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.state.engineIdle = false // a clip is playing
+    const rows = [1, 2, 3, 4, 5].map((n) => message(`m${n}`, h.now() + n))
+    h.controller.update(h.snapshot(rows))
+    expect(h.requestOrder).toEqual([key('m1'), key('m2'), key('m3')])
+
+    // The user taps the three bubbles whose auto audio is still synthesizing.
+    for (const id of ['m1', 'm2', 'm3']) h.controller.consumePlaybackKey(key(id))
+    expect(['m1', 'm2', 'm3'].map((id) => h.requests.get(key(id))?.signal.aborted)).toEqual([true, true, true])
+
+    // The manual clip ends: the freed slots go to the next messages at once.
+    await h.finishPlayback()
+    expect(h.requestOrder).toEqual([key('m1'), key('m2'), key('m3'), key('m4'), key('m5')])
+    await h.resolveAudio(key('m4'))
+    expect(h.dispatchedIds()).toEqual(['m4'])
+
+    // A late answer to an aborted request changes nothing.
+    await h.resolveAudio(key('m1'))
+    await h.finishPlayback()
+    expect(h.dispatchedIds()).toEqual(['m4'])
+    expect(h.controller.getCandidateStatus('m1')).toBe('dispatched')
+  })
+
+  it('releases the slot of a message removed while its audio synthesizes', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.state.engineIdle = false
+    const rows = [1, 2, 3, 4].map((n) => message(`m${n}`, h.now() + n))
+    h.controller.update(h.snapshot(rows))
+    expect(h.requestOrder).toEqual([key('m1'), key('m2'), key('m3')])
+
+    h.controller.update(h.snapshot(rows.slice(1)))
+    expect(h.requests.get(key('m1'))?.signal.aborted).toBe(true)
+    expect(h.controller.getCandidateStatus('m1')).toBe('skipped')
+    expect(h.requestOrder).toEqual([key('m1'), key('m2'), key('m3'), key('m4')])
+  })
+
+  it('wakes up at the audio timeout when the head waits for a slot held by hung requests', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const head = message('head', h.now() + 1)
+    const later = [2, 3, 4].map((n) => message(`m${n}`, h.now() + n))
+    // The three later messages complete first and take every slot.
+    h.controller.update(h.snapshot([incomplete(head), ...later]))
+    expect(h.requestOrder).toEqual([key('m2'), key('m3'), key('m4')])
+
+    await h.advance(1_000)
+    h.controller.update(h.snapshot([head, ...later]))
+    expect(h.requestOrder).toEqual([key('m2'), key('m3'), key('m4')])
+
+    // Nothing else happens: the hung requests time out and the head gets a slot.
+    await h.advance(EARPHONE_MODE_AUDIO_TIMEOUT_MS - 1_000)
+    expect(['m2', 'm3', 'm4'].map((id) => h.requests.get(key(id))?.signal.aborted)).toEqual([true, true, true])
+    expect(h.requestOrder).toEqual([key('m2'), key('m3'), key('m4'), key('head')])
+    await h.resolveAudio(key('head'))
+    expect(h.dispatchedIds()).toEqual(['head'])
+  })
+})
+
 describe('EarphoneAutoReadController ordering', () => {
   it('plays in start order when completion order differs, prefetching at completion', async () => {
     const h = createHarness()

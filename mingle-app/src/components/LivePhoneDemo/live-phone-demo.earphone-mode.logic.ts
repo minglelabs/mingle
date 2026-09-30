@@ -163,21 +163,31 @@ type OrderableUtterance = {
 
 export type EarphoneModeWatermark = {
   armedAtMs: number
-  // Committed at the rising edge: never read.
+  // Committed and settled at the rising edge: never read.
   existingIds: ReadonlySet<string>
-  // Still being spoken at the rising edge: read once they complete.
+  // Still being spoken, or committed with a translation still pending, at the
+  // rising edge: read once they complete.
   inFlightIds: ReadonlySet<string>
 }
 
-export function createEarphoneModeWatermark(input: {
-  committed: readonly IdentifiedUtterance[]
+export function createEarphoneModeWatermark<T extends IdentifiedUtterance>(input: {
+  committed: readonly T[]
   drafts: readonly IdentifiedUtterance[]
+  // Whether a committed row already reads as a manual tap would read it (or
+  // can never be read). One whose translation is still pending completes
+  // after the edge, so it counts like a draft.
+  isCommittedSettled: (utterance: T) => boolean
   nowMs: number
 }): EarphoneModeWatermark {
-  const existingIds = new Set(input.committed.map((utterance) => utterance.id))
-  const inFlightIds = new Set(
-    input.drafts.map((utterance) => utterance.id).filter((id) => !existingIds.has(id)),
-  )
+  const existingIds = new Set<string>()
+  const inFlightIds = new Set<string>()
+  for (const utterance of input.committed) {
+    if (input.isCommittedSettled(utterance)) existingIds.add(utterance.id)
+    else inFlightIds.add(utterance.id)
+  }
+  for (const utterance of input.drafts) {
+    if (!existingIds.has(utterance.id)) inFlightIds.add(utterance.id)
+  }
   return { armedAtMs: input.nowMs, existingIds, inFlightIds }
 }
 
@@ -289,6 +299,18 @@ export function classifyEarphoneModeUtterance(input: {
 
   const target = resolveEarphoneModeReadTarget(utterance, input.display)
   return target ? { state: 'ready', target } : { state: 'incomplete' }
+}
+
+// A committed row is settled once it reads as it will (ready) or can never be
+// read (unreadable). One whose translation is still pending or streaming is
+// not settled yet.
+export function isEarphoneModeUtteranceSettled(input: {
+  utterance: Utterance
+  display: EarphoneModeDisplayContext
+  viewerUserId: string | null | undefined
+  readOwnMessages?: boolean
+}): boolean {
+  return classifyEarphoneModeUtterance({ ...input, isDraft: false }).state !== 'incomplete'
 }
 
 // Anything a user could see change on the row counts as progress.

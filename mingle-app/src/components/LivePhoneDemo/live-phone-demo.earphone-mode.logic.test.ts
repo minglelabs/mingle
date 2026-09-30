@@ -12,6 +12,7 @@ import {
   createEarphoneModeWatermark,
   getEarphoneModePreferenceSnapshot,
   isEarphoneModeCandidate,
+  isEarphoneModeUtteranceSettled,
   keepManualTtsQueueItems,
   readEarphoneModeEnabled,
   resetEarphoneModePreferenceForTests,
@@ -136,6 +137,7 @@ describe('watermark', () => {
   const watermark = createEarphoneModeWatermark({
     committed: [{ id: 'old-1' }, { id: 'old-2' }],
     drafts: [{ id: 'speaking-now' }, { id: 'old-2' }],
+    isCommittedSettled: () => true,
     nowMs: armedAtMs,
   })
 
@@ -147,6 +149,25 @@ describe('watermark', () => {
     expect(watermark.inFlightIds.has('speaking-now')).toBe(true)
     expect(watermark.inFlightIds.has('old-2')).toBe(false)
     expect(isEarphoneModeCandidate(watermark, { id: 'speaking-now', createdAtMs: armedAtMs - 60_000 })).toBe(true)
+  })
+
+  it('counts a committed message whose translation is still pending like a draft', () => {
+    const pending = utterance({ id: 'pending', translations: {}, translationFinalized: {}, translationStatus: 'pending' })
+    const untranslated = utterance({ id: 'untranslated', translations: {}, translationFinalized: {} })
+    const streaming = utterance({ id: 'streaming', translationFinalized: { ko: false } })
+    const settled = utterance({ id: 'settled' })
+    const photo = utterance({ id: 'photo', image: { conversationId: 'room-1', messageId: 'photo', width: 10, height: 10 } })
+    const edge = createEarphoneModeWatermark({
+      committed: [pending, untranslated, streaming, settled, photo],
+      drafts: [{ id: 'pending' }, { id: 'settled' }],
+      isCommittedSettled: (row) => isEarphoneModeUtteranceSettled({ utterance: row, display: koViewer, viewerUserId: 'viewer' }),
+      nowMs: armedAtMs,
+    })
+    expect([...edge.existingIds].sort()).toEqual(['photo', 'settled'])
+    expect([...edge.inFlightIds].sort()).toEqual(['pending', 'streaming', 'untranslated'])
+    // Counted even though it started long before the edge.
+    expect(isEarphoneModeCandidate(edge, { id: 'pending', createdAtMs: armedAtMs - 60_000 })).toBe(true)
+    expect(isEarphoneModeCandidate(edge, { id: 'settled', createdAtMs: armedAtMs + 1 })).toBe(false)
   })
 
   it('reads messages that start after the edge', () => {

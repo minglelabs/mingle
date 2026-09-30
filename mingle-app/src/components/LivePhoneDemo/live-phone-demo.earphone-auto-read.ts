@@ -10,6 +10,7 @@ import {
   classifyEarphoneModeUtterance,
   createEarphoneModeWatermark,
   isEarphoneModeCandidate,
+  isEarphoneModeUtteranceSettled,
   type EarphoneModeDisplayContext,
   type EarphoneModeReadTarget,
   type EarphoneModeWatermark,
@@ -70,6 +71,11 @@ function pickOrder(utterance: Utterance): Candidate['order'] {
   }
 }
 
+// Still to be read: waiting to complete, or complete and queued.
+function isOpenCandidate(candidate: Candidate): boolean {
+  return candidate.status === 'waiting' || candidate.status === 'ready'
+}
+
 // Reads every message that completes after a rising edge, in the order the
 // messages STARTED (compareUtteranceOrder, evaluated at dequeue time because
 // the server-reserved start can reach a row late). A candidate that started
@@ -93,14 +99,23 @@ export class EarphoneAutoReadController {
     return this.armed
   }
 
-  // Rising edge: everything committed now is existing and never read.
+  // Rising edge: everything committed and settled now is existing and never
+  // read. A committed row whose translation is still pending counts like a
+  // draft: it is read once it completes.
   arm(snapshot: EarphoneAutoReadSnapshot): void {
     this.resetCandidates()
     this.armed = true
     this.conversationKey = snapshot.conversationKey
+    const readOwnMessages = this.options.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES
     this.watermark = createEarphoneModeWatermark({
       committed: snapshot.committed,
       drafts: snapshot.drafts,
+      isCommittedSettled: (utterance) => isEarphoneModeUtteranceSettled({
+        utterance,
+        display: snapshot.display,
+        viewerUserId: snapshot.viewerUserId,
+        readOwnMessages,
+      }),
       nowMs: this.options.now(),
     })
     this.reconcile(snapshot)
@@ -199,7 +214,9 @@ export class EarphoneAutoReadController {
         // pumps again.
         break
       }
-      // audio 'idle': waiting for a prefetch slot.
+      // audio 'idle': waiting for a prefetch slot. Wake up when the oldest
+      // request in flight times out, so a hung request cannot keep its slot.
+      nextDeadlineMs = this.earliestAudioDeadlineMs(audioTimeoutMs)
       break
     }
 
@@ -283,16 +300,25 @@ export class EarphoneAutoReadController {
 
   private startPrefetches(now: number): void {
     const limit = Math.max(1, this.options.prefetchLimit ?? EARPHONE_MODE_PREFETCH_LIMIT)
-    let inFlight = 0
-    for (const candidate of this.candidates.values()) {
-      if (candidate.audio === 'loading') inFlight += 1
-    }
-    for (const candidate of this.sortedOpenCandidates()) {
+    const open = this.sortedOpenCandidates()
+    // Only open candidates hold a slot: a finished one has aborted its request.
+    let inFlight = open.filter((candidate) => candidate.audio === 'loading').length
+    for (const candidate of open) {
       if (inFlight >= limit) return
       if (candidate.status !== 'ready' || candidate.audio !== 'idle' || !candidate.target) continue
       this.requestAudio(candidate, now)
       inFlight += 1
     }
+  }
+
+  private earliestAudioDeadlineMs(audioTimeoutMs: number): number | null {
+    let earliest: number | null = null
+    for (const candidate of this.candidates.values()) {
+      if (!isOpenCandidate(candidate) || candidate.audio !== 'loading') continue
+      const deadlineMs = candidate.audioRequestedAtMs + audioTimeoutMs
+      if (earliest === null || deadlineMs < earliest) earliest = deadlineMs
+    }
+    return earliest
   }
 
   private requestAudio(candidate: Candidate, now: number): void {
@@ -327,14 +353,17 @@ export class EarphoneAutoReadController {
 
   private finishCandidate(candidate: Candidate, status: 'dispatched' | 'skipped'): void {
     candidate.status = status
+    // Abort a prefetch still in flight and release its slot: a finished
+    // candidate holds neither audio nor a request.
     candidate.abort?.abort()
     candidate.abort = null
+    candidate.audio = 'idle'
     candidate.audioBlob = null
   }
 
   private sortedOpenCandidates(): Candidate[] {
     return [...this.candidates.values()]
-      .filter((candidate) => candidate.status === 'waiting' || candidate.status === 'ready')
+      .filter(isOpenCandidate)
       .sort((left, right) => compareUtteranceOrder(left.order, right.order))
   }
 
