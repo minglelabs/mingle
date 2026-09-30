@@ -31,8 +31,7 @@ export default function AdminPostsScreen({
 
   return (
     <main
-      className="h-svh w-full overflow-y-auto overscroll-contain bg-slate-50 text-slate-900"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      className="min-h-full w-full bg-slate-50 text-slate-900"
     >
       <div
         className="mx-auto w-full max-w-xl px-4 pt-4"
