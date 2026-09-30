@@ -37,6 +37,8 @@ The first English rendering of a narrow Japanese vertical banner split “Today'
 
 The original devbox process lacked the private conversation image storage settings and returned `image_upload_failed`. A temporary ignored, mode-0600 `mingle-app/.env.local` supplied selected local runtime settings; its database target was checked as `127.0.0.1:5432/mingle`, schema `app`. Devbox was restarted through `scripts/devbox`; no Vault record was changed.
 
+After verification, `scripts/devbox down` stopped this worktree's services. Ports 15998, 17998 and 19998 had no listeners, and the temporary environment file was removed. Fixture data and screenshots remain outside the cleanup of runtime settings.
+
 Local `prisma migrate status` reported all 73 migrations applied, including `20260930085059_add_message_image_texts`.
 
 The feature migration was originally generated with `migrate diff` because historical shadow replay fails on `CREATE INDEX CONCURRENTLY`. This continuation independently used a squashed pre-feature baseline in two newly created loopback scratch databases and successfully ran `prisma migrate dev --name add_photo_text_translation`. The generated delta matched the checked-in SQL after removing comments, schema qualification and whitespace. Both scratch databases were dropped; the shared database's migration checksum and checked-in migration were preserved. This verifies the feature delta, not replay of the entire historical migration directory.
