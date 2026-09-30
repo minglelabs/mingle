@@ -207,6 +207,32 @@
   display: none;
 }
 
+/* Bubble TTS "playing" bars. A compositor-only scaleY loop; the static
+   "pending" dots are the same bars resting at 30%. */
+@keyframes mingle-tts-playing-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.mingle-tts-playing-bar {
+  transform: scaleY(0.3);
+  transform-origin: bottom;
+  animation: mingle-tts-playing-bar 0.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Full-height static bars: still distinct from the pending dots. */
+  .mingle-tts-playing-bar {
+    animation: none;
+    transform: none;
+  }
+}
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;

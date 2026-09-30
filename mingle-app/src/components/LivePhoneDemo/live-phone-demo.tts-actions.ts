@@ -8,68 +8,85 @@ import {
 export type LivePhoneDemoTtsActionCopy = {
   playPronunciationLabel: string
   playbackFailedLabel: string
+  // Shown while a bubble's audio is requested, queued or synthesizing.
+  preparingIndicatorLabel: string
 }
 
 const TTS_ACTION_COPY_BY_LOCALE = {
   ko: {
     playPronunciationLabel: '듣기',
     playbackFailedLabel: '이 발화의 오디오를 재생하지 못했습니다.',
+    preparingIndicatorLabel: '음성 준비 중',
   },
   en: {
     playPronunciationLabel: 'Listen',
     playbackFailedLabel: 'Failed to play audio for this message.',
+    preparingIndicatorLabel: 'Preparing audio',
   },
   ja: {
     playPronunciationLabel: '聴く',
     playbackFailedLabel: 'この発話の音声を再生できませんでした。',
+    preparingIndicatorLabel: '音声を準備中',
   },
   'zh-CN': {
     playPronunciationLabel: '播放',
     playbackFailedLabel: '无法播放这条发言的音频。',
+    preparingIndicatorLabel: '正在准备语音',
   },
   'zh-TW': {
     playPronunciationLabel: '播放',
     playbackFailedLabel: '無法播放這則發言的音訊。',
+    preparingIndicatorLabel: '正在準備語音',
   },
   fr: {
     playPronunciationLabel: 'Écouter',
     playbackFailedLabel: 'Impossible de lire l’audio de ce message.',
+    preparingIndicatorLabel: 'Préparation de l’audio',
   },
   de: {
     playPronunciationLabel: 'Anhören',
     playbackFailedLabel: 'Audio fur diese Nachricht konnte nicht abgespielt werden.',
+    preparingIndicatorLabel: 'Audio wird vorbereitet',
   },
   es: {
     playPronunciationLabel: 'Escuchar',
     playbackFailedLabel: 'No se pudo reproducir el audio de este mensaje.',
+    preparingIndicatorLabel: 'Preparando audio',
   },
   pt: {
     playPronunciationLabel: 'Ouvir',
     playbackFailedLabel: 'Nao foi possivel reproduzir o audio desta mensagem.',
+    preparingIndicatorLabel: 'Preparando áudio',
   },
   it: {
     playPronunciationLabel: 'Ascolta',
     playbackFailedLabel: 'Impossibile riprodurre l’audio di questo messaggio.',
+    preparingIndicatorLabel: 'Preparazione audio',
   },
   ru: {
     playPronunciationLabel: 'Слушать',
     playbackFailedLabel: 'Не удалось воспроизвести аудио для этого сообщения.',
+    preparingIndicatorLabel: 'Подготовка аудио',
   },
   ar: {
     playPronunciationLabel: 'استماع',
     playbackFailedLabel: 'تعذر تشغيل الصوت لهذه الرسالة.',
+    preparingIndicatorLabel: 'جارٍ تجهيز الصوت',
   },
   hi: {
     playPronunciationLabel: 'सुनें',
     playbackFailedLabel: 'इस संदेश का ऑडियो नहीं चलाया जा सका।',
+    preparingIndicatorLabel: 'ऑडियो तैयार हो रहा है',
   },
   th: {
     playPronunciationLabel: 'ฟัง',
     playbackFailedLabel: 'ไม่สามารถเล่นเสียงของข้อความนี้ได้',
+    preparingIndicatorLabel: 'กำลังเตรียมเสียง',
   },
   vi: {
     playPronunciationLabel: 'Nghe',
     playbackFailedLabel: 'Khong the phat am thanh cho tin nhan nay.',
+    preparingIndicatorLabel: 'Đang chuẩn bị âm thanh',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoTtsActionCopy>
 
