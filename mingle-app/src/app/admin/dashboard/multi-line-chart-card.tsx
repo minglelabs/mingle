@@ -9,7 +9,6 @@ import {
   formatMetricDisplayValue,
   formatSharePercent,
   resolveChartFrame,
-  resolveTooltipAlignment,
 } from "@/lib/admin-dashboard-metrics";
 import {
   ChartCard,
@@ -30,6 +29,10 @@ import {
 const FRAME = resolveChartFrame(ADMIN_DASHBOARD_WIDE_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
 // The plot is about twice as wide as a half-width card's, so it gets twice its 6 ticks.
 const X_AXIS_MAX_TICKS = 12;
+/** Past this many days the per-day dots of every series crowd into a solid band, so only
+ * the lines are drawn; the hover markers still pin the hovered day's values. */
+export const MULTI_LINE_CHART_MAX_DOTTED_DAYS = 45;
+const HEADER_CLASS_NAME = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1";
 
 export type MultiLineChartSeries = {
   key: string;
@@ -76,57 +79,70 @@ export function MultiLineChartCard(props: {
   const { label, kind, ariaLabel, dayKeys, series, yMax, emptyMessage } = props;
   // With no series there is nothing to hover, so hover is simply never armed.
   const { hoverIndex, handlePointerMove, handlePointerLeave } = useChartHover(FRAME, series[0]?.points.length ?? 0);
+  const showDots = dayKeys.length <= MULTI_LINE_CHART_MAX_DOTTED_DAYS;
+
+  // The layers below depend on the data alone. Built once per data change and reused as
+  // the same elements, so a hover move re-renders only the guide, markers and tooltip.
+  const legend = useMemo(() => (series.length > 0 ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#898781]">
+      {series.map((entry) => (
+        <ChartLegendItem key={entry.key} color={entry.color}>
+          {entry.label}
+          <span className="font-semibold text-[#52514e]" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {formatMetricDisplayValue(entry.total, kind)}
+          </span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>({formatSharePercent(entry.share)})</span>
+        </ChartLegendItem>
+      ))}
+    </div>
+  ) : (
+    <p className="text-xs font-medium text-[#898781]">{emptyMessage}</p>
+  )), [series, kind, emptyMessage]);
+
+  const axes = useMemo(() => (
+    <>
+      <ChartYGrid frame={FRAME} yMax={yMax} />
+      <ChartXAxisLabels frame={FRAME} dayKeys={dayKeys} maxTicks={X_AXIS_MAX_TICKS} />
+    </>
+  ), [yMax, dayKeys]);
+
+  // Paint the last series first so the first legend entry ends up on top ("기타" at the bottom).
+  const lines = useMemo(() => [...series].reverse().map((entry) => (
+    entry.linePath ? <ChartLine key={entry.key} d={entry.linePath} color={entry.color} /> : null
+  )), [series]);
+
+  // A zero-filled day gets no dot: a sparse model would otherwise lay a row of dots along
+  // the baseline under every other series.
+  const dots = useMemo(() => (showDots ? [...series].reverse().flatMap((entry) => entry.points.map((point) => (
+    point.value === null || point.value === 0
+      ? null
+      : <ChartDot key={`${entry.key}-${point.day}`} point={point} color={entry.color} />
+  ))) : null), [series, showDots]);
 
   const hovered = useMemo(
     () => (hoverIndex === null ? null : resolveHoveredDay(series, hoverIndex)),
     [hoverIndex, series],
   );
 
-  // Paint the last series first so the first legend entry ends up on top ("기타" at the bottom).
-  const paintOrder = [...series].reverse();
-
   return (
-    <ChartCard
-      label={label}
-      headerClassName="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
-      headerRight={series.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#898781]">
-          {series.map((entry) => (
-            <ChartLegendItem key={entry.key} color={entry.color}>
-              {entry.label}
-              <span className="font-semibold text-[#52514e]" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {formatMetricDisplayValue(entry.total, kind)}
-              </span>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>({formatSharePercent(entry.share)})</span>
-            </ChartLegendItem>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs font-medium text-[#898781]">{emptyMessage}</p>
-      )}
-    >
+    <ChartCard label={label} headerClassName={HEADER_CLASS_NAME} headerRight={legend}>
       <ChartSvg frame={FRAME} ariaLabel={ariaLabel}>
-        <ChartYGrid frame={FRAME} yMax={yMax} />
-
-        {paintOrder.map((entry) => (entry.linePath ? <ChartLine key={entry.key} d={entry.linePath} color={entry.color} /> : null))}
+        {axes}
+        {lines}
 
         {hovered ? <ChartHoverGuide frame={FRAME} x={hovered.x} /> : null}
 
-        {paintOrder.flatMap((entry) => entry.points.map((point) => (
-          point.value === null ? null : <ChartDot key={`${entry.key}-${point.day}`} point={point} color={entry.color} />
-        )))}
+        {dots}
 
         {hovered ? [...hovered.rows].reverse().map(({ entry, point }) => (
           point.value === null ? null : <ChartHoverMarker key={entry.key} point={point} color={entry.color} />
         )) : null}
 
-        <ChartXAxisLabels frame={FRAME} dayKeys={dayKeys} maxTicks={X_AXIS_MAX_TICKS} />
-
         <ChartHoverTarget frame={FRAME} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} />
       </ChartSvg>
 
       {hovered ? (
-        <ChartTooltip frame={FRAME} x={hovered.x} y={hovered.y} align={resolveTooltipAlignment(hovered.x, FRAME.width)}>
+        <ChartTooltip frame={FRAME} x={hovered.x} y={hovered.y} keepInPlot>
           <div className="text-[#c3c2b7]">{hovered.day}</div>
           {hovered.rows.map(({ entry, point }) => (
             <div key={entry.key} className="flex items-center gap-1.5">
@@ -139,6 +155,51 @@ export function MultiLineChartCard(props: {
           ))}
         </ChartTooltip>
       ) : null}
+    </ChartCard>
+  );
+}
+
+/**
+ * Stands in for a MultiLineChartCard while its data loads, or after loading failed. Same
+ * card, header and plot frame, so it has the same size and nothing shifts when the chart
+ * replaces it; the message sits over the empty plot.
+ */
+export function MultiLineChartCardPlaceholder({
+  label,
+  status,
+  message,
+}: {
+  label: string;
+  status: "loading" | "error";
+  message: string;
+}) {
+  const isLoading = status === "loading";
+  return (
+    <ChartCard label={label} headerClassName={HEADER_CLASS_NAME}>
+      <svg
+        className="w-full"
+        aria-hidden="true"
+        viewBox={`${FRAME.viewMinX} ${FRAME.viewMinY} ${FRAME.viewWidth} ${FRAME.viewHeight}`}
+      >
+        {isLoading ? (
+          <rect x={0} y={0} width={FRAME.width} height={FRAME.height} rx={6} fill="#f4f3ee" className="animate-pulse" />
+        ) : null}
+      </svg>
+      <div
+        role={isLoading ? "status" : "alert"}
+        className={[
+          "absolute inset-0 flex items-center justify-center gap-1.5 text-xs font-medium",
+          isLoading ? "text-[#898781]" : "text-red-600",
+        ].join(" ")}
+      >
+        {isLoading ? (
+          <span
+            aria-hidden="true"
+            className="h-3 w-3 animate-spin rounded-full border-2 border-[#e5e3dc] border-t-[#f59e0b]"
+          />
+        ) : null}
+        {message}
+      </div>
     </ChartCard>
   );
 }

@@ -20,7 +20,7 @@ import {
   resolveChartFrame,
   resolveHoverIndex,
   resolveTodayKey,
-  resolveTooltipAlignment,
+  resolveTooltipShiftPercent,
   resolveUncacheableDayKeys,
   resolveXAxisTicks,
   shiftDayKey,
@@ -398,12 +398,33 @@ describe("chart frame + hover", () => {
     expect(resolveHoverIndex(100, { left: 0, width: 608 }, frame, 1)).toBe(0);
   });
 
-  it("aligns a tooltip inward near the plot edges", () => {
-    expect(resolveTooltipAlignment(0, 1000)).toBe("start");
-    expect(resolveTooltipAlignment(149, 1000)).toBe("start");
-    expect(resolveTooltipAlignment(500, 1000)).toBe("center");
-    expect(resolveTooltipAlignment(851, 1000)).toBe("end");
-    expect(resolveTooltipAlignment(1000, 1000)).toBe("end");
+  it("shifts a tooltip left by its anchor's fraction of the plot width", () => {
+    expect(resolveTooltipShiftPercent(0, 1000)).toBe(0);
+    expect(resolveTooltipShiftPercent(250, 1000)).toBe(25);
+    expect(resolveTooltipShiftPercent(500, 1000)).toBe(50);
+    expect(resolveTooltipShiftPercent(1000, 1000)).toBe(100);
+  });
+
+  it("keeps the shift within 0..100 and centres when there is no plot width", () => {
+    expect(resolveTooltipShiftPercent(-20, 1000)).toBe(0);
+    expect(resolveTooltipShiftPercent(1200, 1000)).toBe(100);
+    expect(resolveTooltipShiftPercent(10, 0)).toBe(50);
+  });
+
+  it("keeps any tooltip narrower than the plot inside it at any rendered width", () => {
+    const wide = resolveChartFrame(1224, 140);
+    for (const containerPx of [320, 768, 1088]) {
+      const pxPerUnit = containerPx / wide.viewWidth;
+      const plotLeft = (0 - wide.viewMinX) * pxPerUnit;
+      const plotRight = (wide.width - wide.viewMinX) * pxPerUnit;
+      const tooltipPx = plotRight - plotLeft - 1;
+      for (const x of [0, 1, 100, 612, 1100, 1223, 1224]) {
+        const anchor = (x - wide.viewMinX) * pxPerUnit;
+        const left = anchor - (resolveTooltipShiftPercent(x, wide.width) / 100) * tooltipPx;
+        expect(left).toBeGreaterThanOrEqual(plotLeft - 1e-9);
+        expect(left + tooltipPx).toBeLessThanOrEqual(plotRight + 1e-9);
+      }
+    }
   });
 });
 

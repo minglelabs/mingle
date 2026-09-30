@@ -1,4 +1,8 @@
-import { TRANSLATION_MODEL_OPTIONS, normalizeSelectableTranslationModel } from "@/lib/translation-models";
+import {
+  TRANSLATION_MODEL_OPTIONS,
+  normalizeSelectableTranslationModel,
+  type UserSelectableTranslationModel,
+} from "@/lib/translation-models";
 
 export const ADMIN_DASHBOARD_DEFAULT_DAYS = 30;
 export const ADMIN_DASHBOARD_MAX_DAYS = 365;
@@ -371,14 +375,15 @@ export function resolveHoverIndex(
   return Math.round(Math.min(pointCount - 1, Math.max(0, t)));
 }
 
-export type TooltipAlignment = "start" | "center" | "end";
-
-/** Keeps a wide tooltip inside the plot near its edges: centred over the hovered day in
- * the middle, left-aligned to it near the left edge and right-aligned near the right. */
-export function resolveTooltipAlignment(x: number, width: number, edgeRatio = 0.15): TooltipAlignment {
-  if (x < width * edgeRatio) return "start";
-  if (x > width * (1 - edgeRatio)) return "end";
-  return "center";
+/**
+ * How far (0..100, in % of its own width) to shift a tooltip left of its anchor: the
+ * anchor's fraction of the plot width. The tooltip's left edge then sits on the anchor at
+ * the plot's left edge and its right edge on the anchor at the right edge, so a tooltip
+ * narrower than the plot stays inside it wherever the anchor is and at any rendered width.
+ */
+export function resolveTooltipShiftPercent(x: number, width: number): number {
+  if (!(width > 0)) return 50;
+  return Math.min(1, Math.max(0, x / width)) * 100;
 }
 
 export function sumSeries(points: readonly DailyPoint[]): number {
@@ -407,12 +412,15 @@ export function averageSeries(points: readonly DailyPoint[]): number | null {
 export const OTHER_TRANSLATION_MODEL_SERIES_KEY = "other";
 export const OTHER_TRANSLATION_MODEL_SERIES_LABEL = "기타";
 
-/** One day's message count for one raw app_messages.translation_model string. */
+/** A selectable model's value, or the "기타" pool. */
+export type TranslationModelSeriesKey = UserSelectableTranslationModel | typeof OTHER_TRANSLATION_MODEL_SERIES_KEY;
+
+/** One day's message count for one reported app_messages.translation_model string, as
+ * the query returns it (case- and space-folded, not yet canonicalized). */
 export type TranslationModelDailyRow = { day: string; model: string; value: number };
 
 export type TranslationModelSeries = {
-  /** A TRANSLATION_MODEL_OPTIONS value, or OTHER_TRANSLATION_MODEL_SERIES_KEY. */
-  key: string;
+  key: TranslationModelSeriesKey;
   label: string;
   points: DailyPoint[];
   /** Messages over the whole range. */
@@ -434,7 +442,7 @@ export function buildTranslationModelSeries(
   dayKeys: readonly string[],
 ): TranslationModelSeries[] {
   const optionKeys = new Set<string>(TRANSLATION_MODEL_OPTIONS.map((option) => option.value));
-  const countsByKey = new Map<string, Map<string, number>>();
+  const countsByKey = new Map<TranslationModelSeriesKey, Map<string, number>>();
   for (const row of rows) {
     const canonical = normalizeSelectableTranslationModel(row.model);
     // A canonical value without an option would otherwise vanish from every series.
@@ -444,10 +452,11 @@ export function buildTranslationModelSeries(
     countsByKey.set(key, countsByDay);
   }
 
-  const series = [
+  const slots: { key: TranslationModelSeriesKey; label: string }[] = [
     ...TRANSLATION_MODEL_OPTIONS.map((option) => ({ key: option.value, label: option.label })),
     { key: OTHER_TRANSLATION_MODEL_SERIES_KEY, label: OTHER_TRANSLATION_MODEL_SERIES_LABEL },
-  ]
+  ];
+  const series = slots
     .map(({ key, label }) => {
       const dailyRows = [...(countsByKey.get(key) ?? new Map<string, number>())]
         .map(([day, value]) => ({ day, value }));

@@ -7,11 +7,11 @@ import {
   type ChartFrame,
   type ChartPoint,
   type MetricKind,
-  type TooltipAlignment,
   formatMetricDisplayValue,
   formatShortDay,
   resolveChartFrame,
   resolveHoverIndex,
+  resolveTooltipShiftPercent,
   resolveXAxisTicks,
 } from "@/lib/admin-dashboard-metrics";
 
@@ -182,33 +182,39 @@ export function ChartHoverTarget({
   );
 }
 
-const TOOLTIP_TRANSLATE_X: Record<TooltipAlignment, string> = {
-  start: "translate-x-0",
-  center: "-translate-x-1/2",
-  end: "-translate-x-full",
-};
+const TOOLTIP_SURFACE_CLASS_NAME = "whitespace-nowrap rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium text-white shadow-lg";
+// Class order matches the markup the single-series cards have always rendered.
+const CENTERED_TOOLTIP_CLASS_NAME = `pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full ${TOOLTIP_SURFACE_CLASS_NAME}`;
+// Positioned by an inline transform instead of translate utilities.
+const IN_PLOT_TOOLTIP_CLASS_NAME = `pointer-events-none absolute z-10 ${TOOLTIP_SURFACE_CLASS_NAME}`;
 
-/** Dark tooltip placed just above an svg point (x, y), positioned in viewBox percentages. */
+/**
+ * Dark tooltip placed just above an svg point (x, y), positioned in viewBox percentages.
+ * By default it is centred on the point. `keepInPlot` instead shifts it left by the
+ * point's fraction of the plot width, so a tooltip narrower than the plot never spills
+ * past either plot edge -- for tooltips too wide to centre safely near the edges.
+ */
 export function ChartTooltip({
   frame,
   x,
   y,
-  align = "center",
+  keepInPlot = false,
   children,
 }: {
   frame: ChartFrame;
   x: number;
   y: number;
-  align?: TooltipAlignment;
+  keepInPlot?: boolean;
   children: ReactNode;
 }) {
+  const left = `${((x - frame.viewMinX) / frame.viewWidth) * 100}%`;
+  const top = `${(((y - frame.viewMinY) - 6) / frame.viewHeight) * 100}%`;
   return (
     <div
-      className={`pointer-events-none absolute z-10 ${TOOLTIP_TRANSLATE_X[align]} -translate-y-full whitespace-nowrap rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium text-white shadow-lg`}
-      style={{
-        left: `${((x - frame.viewMinX) / frame.viewWidth) * 100}%`,
-        top: `${(((y - frame.viewMinY) - 6) / frame.viewHeight) * 100}%`,
-      }}
+      className={keepInPlot ? IN_PLOT_TOOLTIP_CLASS_NAME : CENTERED_TOOLTIP_CLASS_NAME}
+      style={keepInPlot
+        ? { left, top, transform: `translate(${-resolveTooltipShiftPercent(x, frame.width)}%, -100%)` }
+        : { left, top }}
     >
       {children}
     </div>
