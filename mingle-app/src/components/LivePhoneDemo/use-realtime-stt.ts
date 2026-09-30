@@ -21,6 +21,7 @@ import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLan
 import type { ConversationHydrationCursor, ConversationHydrationUtterance } from '@/lib/app-conversations'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
+import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
@@ -1043,6 +1044,7 @@ export function normalizeConversationHydrationUtterances(
           ? { originalDisplayText: record.originalDisplayText }
           : {}),
         originalLang: typeof record.originalLang === 'string' ? record.originalLang : 'unknown',
+        ...pickSourceLanguageBubbleFlags(record),
         targetLanguages: Array.isArray(record.targetLanguages)
           ? record.targetLanguages.filter((language): language is string => typeof language === 'string')
           : [],
@@ -2536,6 +2538,11 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
           translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
           translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
           translationStatus: existingUtterance.translationStatus,
+          // Like the translations: the flags that keep a mixed-language
+          // utterance's same-language row belong to this text. A copy that
+          // lacks them (read before the translation update landed, or stored
+          // by an older server) must not hide the row rendered here.
+          ...pickSourceLanguageBubbleFlags(existingUtterance),
         } : {}),
       }
   const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)

@@ -1750,6 +1750,62 @@ describe("app-conversations", () => {
     expect(state?.conversation.latestMessagePreview).toBe("這個問題很難");
   });
 
+  it("returns the mixed-language flags stored with a message so its same-language row survives a reload", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-mixed",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-mixed",
+      selectedLanguages: ["ko", "ja", "en"],
+      speechLanguages: ["ko"],
+      translationLanguagesLinked: true,
+      pendingInviteeUserIds: [],
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-09-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-09-30T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-mixed", userId: "user-1", displayLanguage: "ko", selectedLanguages: ["ko", "ja", "en"], user: { name: "Alice", handle: "alice" } },
+    ]);
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(3);
+    const message = (id: string, minute: number, metadata: Prisma.JsonObject, sourceText: string, koText: string) => ({
+      id: `msg-${id}`,
+      clientMessageId: `u-${id}`,
+      sourceLanguage: "ko",
+      createdAt: new Date(`2026-09-30T09:${minute}:00.000Z`),
+      metadata: { translationTargetLanguages: ["ko", "ja", "en"], ...metadata },
+      contents: [
+        { contentType: "SOURCE", language: "ko", text: sourceText },
+        { contentType: "TRANSLATION_FINAL", language: "ko", text: koText },
+        { contentType: "TRANSLATION_FINAL", language: "ja", text: "日本語" },
+        { contentType: "TRANSLATION_FINAL", language: "en", text: "English" },
+      ],
+    });
+    // Newest first, as the query returns them.
+    mockAppMessageFindMany.mockResolvedValue([
+      message("plain", 30, { sourceLanguagesMixed: "true" }, "안녕하세요", "안녕하세요"),
+      message("hanja", 20, { sourceLanguagesMixed: false, sourceTextHasForeignScript: true }, "我爱你 라고 말했어", "사랑해 라고 말했어"),
+      message("mixed", 10, { sourceLanguagesMixed: true }, "イザナと 일본어로 잘 인식되는 소니옥스야", "이자나랑 일본어로 잘 인식되는 소니옥스야"),
+    ]);
+
+    const state = await getConversationHydrationStateForUser({ conversationId: "conv-mixed", userId: "user-1" });
+
+    const [mixed, hanja, plain] = state?.utterances ?? [];
+    expect(mixed?.id).toBe("u-mixed");
+    expect(mixed?.sourceLanguagesMixed).toBe(true);
+    expect(mixed).not.toHaveProperty("sourceTextHasForeignScript");
+    expect(mixed?.translations.ko).toBe("이자나랑 일본어로 잘 인식되는 소니옥스야");
+    expect(hanja?.sourceTextHasForeignScript).toBe(true);
+    expect(hanja).not.toHaveProperty("sourceLanguagesMixed");
+    // Only a literal true counts; an ordinary message stays flagless.
+    expect(plain?.id).toBe("u-plain");
+    expect(plain).not.toHaveProperty("sourceLanguagesMixed");
+    expect(plain).not.toHaveProperty("sourceTextHasForeignScript");
+  });
+
   it("populates speakerImage from membership only once the room has 2+ real members", async () => {
     mockFindConversationFirst.mockResolvedValue({
       id: "conv-group",

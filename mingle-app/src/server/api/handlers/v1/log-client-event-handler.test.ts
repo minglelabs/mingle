@@ -269,6 +269,73 @@ describe("handleLogClientEventV1", () => {
     }));
   });
 
+  // Mixed-language speech keeps a same-language row (a fully Korean `ko`
+  // rendering of a `ko` original with Japanese in it) only while its flags
+  // survive. They come from the finalize translation, so they are stored with
+  // the translations and read back by history, share and the realtime frame.
+  const mixedSourceText = "イザナと 일본어로 잘 인식되는 소니옥스야";
+  const mixedTranslationUpdate = (overrides: Record<string, unknown> = {}) => new NextRequest(
+    "https://example.com/api/ios/v2.1.0/log/client-event",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "mixed_1",
+        sourceLanguage: "ko", sourceText: mixedSourceText, targetLanguages: ["ko", "en"],
+        translations: { ko: "이자나랑 일본어로 잘 인식되는 소니옥스야", ja: "イザナと日本語でよく認識されるソニオックスだよ", en: "Soniox recognizes Izana well." },
+        sourceLanguagesMixed: true, sourceTextHasForeignScript: false, translationUpdate: true,
+        ...overrides,
+      }),
+    },
+  );
+
+  it("stores the mixed-language flags with the translation result and publishes them", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    mockAppMessageUpsert.mockImplementation(async args => ({
+      id: "message_123", createdAt: new Date("2026-04-12T09:00:00.000Z"), metadata: args.update.metadata,
+    }));
+
+    const response = await handleLogClientEventV1(mixedTranslationUpdate());
+
+    expect(response.status).toBe(200);
+    const write = mockAppMessageUpsert.mock.calls[0][0];
+    for (const metadata of [write.create.metadata, write.update.metadata]) {
+      expect(metadata.sourceLanguagesMixed).toBe(true);
+      // A false flag is simply absent, as on the client.
+      expect(metadata).not.toHaveProperty("sourceTextHasForeignScript");
+    }
+    const contents = mockAppMessageContentUpsert.mock.calls.map(([args]) => args.create);
+    expect(contents).toContainEqual(expect.objectContaining({ contentType: "TRANSLATION_FINAL", language: "ko" }));
+    const committed = mockNotifyConversationMessage.mock.calls[0][2];
+    expect(committed).toMatchObject({ id: "mixed_1", originalLang: "ko", sourceLanguagesMixed: true });
+    expect(committed).not.toHaveProperty("sourceTextHasForeignScript");
+  });
+
+  it("keeps stored mixed-language flags on a source-only rewrite and lets a new translation result replace them", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    mockAppMessageFindUnique.mockResolvedValue({
+      createdAt: new Date("2026-04-12T09:00:00.000Z"),
+      metadata: { translationTargetLanguages: ["ko", "ja", "en"], sourceTextHasForeignScript: true },
+    });
+    mockAppMessageUpsert.mockImplementation(async args => ({
+      id: "message_123", createdAt: new Date("2026-04-12T09:00:00.000Z"), metadata: args.update.metadata,
+    }));
+
+    // A replayed source delivery carries no translation result.
+    await handleLogClientEventV1(mixedTranslationUpdate({
+      translations: undefined, sourceLanguagesMixed: undefined, sourceTextHasForeignScript: undefined,
+      translationUpdate: undefined, translationPending: true,
+    }));
+    expect(mockAppMessageUpsert.mock.lastCall?.[0].update.metadata.sourceTextHasForeignScript).toBe(true);
+    expect(mockNotifyConversationMessage.mock.lastCall?.[2]).toMatchObject({ sourceTextHasForeignScript: true });
+
+    // A translation result is authoritative for its own flags, including a
+    // client that predates them.
+    await handleLogClientEventV1(mixedTranslationUpdate({ sourceLanguagesMixed: undefined, sourceTextHasForeignScript: undefined }));
+    expect(mockAppMessageUpsert.mock.lastCall?.[0].update.metadata).not.toHaveProperty("sourceTextHasForeignScript");
+    expect(mockAppMessageUpsert.mock.lastCall?.[0].update.metadata).not.toHaveProperty("sourceLanguagesMixed");
+    expect(mockNotifyConversationMessage.mock.lastCall?.[2]).not.toHaveProperty("sourceTextHasForeignScript");
+  });
+
   it("patches translations and refreshes the room without sending a second push", async () => {
     const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.0.1/log/client-event", {
       method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_1", sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true }),
