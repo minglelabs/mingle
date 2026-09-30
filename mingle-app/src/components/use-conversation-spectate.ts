@@ -5,6 +5,7 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import type { PublicSpectateInviter } from '@/lib/conversation-share-public-payload'
 import type { Utterance } from '@/components/LivePhoneDemo/ChatBubble'
 import { canonicalizeUtteranceLanguages } from '@/components/LivePhoneDemo/conversation-live'
+import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 
 export type ConversationSpectateState = {
   roomTitle: string
@@ -54,6 +55,7 @@ export function toUtterance(raw: Record<string, unknown>): Utterance | null {
     originalText,
     ...(originalDisplayText ? { originalDisplayText } : {}),
     originalLang: typeof raw.originalLang === 'string' ? raw.originalLang : 'unknown',
+    ...pickSourceLanguageBubbleFlags(raw),
     translations: typeof raw.translations === 'object' && raw.translations !== null
       ? raw.translations as Record<string, string>
       : {},
