@@ -234,6 +234,32 @@ describe('durable message finalization', () => {
     expect(events.every(event => event.sourceText === '这是中文' && !('sourceDisplayText' in event))).toBe(true)
   })
 
+  it('sends the mixed-language flags with the translation update and keeps them in the warm cache', async () => {
+    const mixedText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
+    const mixed = {
+      ...input('mixed-one'),
+      eventBody: { ...input('mixed-one').eventBody, sourceText: mixedText, sourceLanguage: 'ja', targetLanguages: ['ko', 'en'] },
+      translationBody: { text: mixedText, sourceLanguage: 'ja', targetLanguages: ['ko', 'ja', 'en'] },
+      utterance: { id: 'mixed-one', originalText: mixedText, originalLang: 'ja', translations: {}, targetLanguages: ['ko', 'en'] },
+    }
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json({
+        sourceLanguage: 'ko', sourceLanguagesMixed: true, sourceTextHasForeignScript: false,
+        translations: { ko: '이자나랑 일본어로 잘 인식되는 소니옥스야', ja: '日本語', en: 'English' },
+      })
+      : new Response(null, { status: 204 }))
+    await jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(mixed))
+
+    const cached = JSON.parse(localStorage.getItem(cacheKey)!)[0]
+    expect(cached).toMatchObject({ originalLang: 'ko', sourceLanguagesMixed: true })
+    const events = fetcher.mock.calls.filter(([url]) => String(url).endsWith('log/client-event')).map(([, init]) => bodyOf(init))
+    // The server stores these with the translations of the same update.
+    expect(events.find(event => event.translationUpdate)).toMatchObject({
+      sourceLanguage: 'ko', sourceLanguagesMixed: true, sourceTextHasForeignScript: false,
+      translations: { ko: '이자나랑 일본어로 잘 인식되는 소니옥스야' },
+    })
+  })
+
   it('stops retrying an incomplete response after a small cap and keeps what arrived', async () => {
     const partial = { sourceLanguage: 'ko', translations: { en: 'Hello' } }
     const request = { ...input(), translationBody: { text: '안녕하세요', sourceLanguage: 'ko', targetLanguages: ['ko', 'en', 'ja'] } }

@@ -6,6 +6,7 @@ import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
+import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 
 export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
@@ -92,6 +93,10 @@ export type ConversationHydrationUtterance = {
   // (see normalizeChineseContent). Omitted when it equals originalText.
   originalDisplayText?: string;
   originalLang: string;
+  // Set (only ever to true) when the finalize translation found the original
+  // mixes languages or uses another script; keeps its same-language row.
+  sourceLanguagesMixed?: true;
+  sourceTextHasForeignScript?: true;
   targetLanguages: string[];
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
@@ -3001,6 +3006,7 @@ async function getConversationHydrationStateForRecord(args: {
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",
+      ...pickSourceLanguageBubbleFlags(metadata),
       targetLanguages,
       translations,
       translationFinalized,

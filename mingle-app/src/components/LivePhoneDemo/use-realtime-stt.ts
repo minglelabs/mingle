@@ -21,6 +21,7 @@ import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLan
 import type { ConversationHydrationCursor, ConversationHydrationUtterance } from '@/lib/app-conversations'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
+import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
@@ -1043,6 +1044,7 @@ export function normalizeConversationHydrationUtterances(
           ? { originalDisplayText: record.originalDisplayText }
           : {}),
         originalLang: typeof record.originalLang === 'string' ? record.originalLang : 'unknown',
+        ...pickSourceLanguageBubbleFlags(record),
         targetLanguages: Array.isArray(record.targetLanguages)
           ? record.targetLanguages.filter((language): language is string => typeof language === 'string')
           : [],
@@ -2536,6 +2538,11 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
           translations: { ...existingUtterance.translations, ...normalizedServerUtterance.translations },
           translationFinalized: { ...existingUtterance.translationFinalized, ...normalizedServerUtterance.translationFinalized },
           translationStatus: existingUtterance.translationStatus,
+          // Like the translations: the flags that keep a mixed-language
+          // utterance's same-language row belong to this text. A copy that
+          // lacks them (read before the translation update landed, or stored
+          // by an older server) must not hide the row rendered here.
+          ...pickSourceLanguageBubbleFlags(existingUtterance),
         } : {}),
       }
   const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)
@@ -2756,6 +2763,11 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
   const normalizedSourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage, sourceText, {
     candidates: input.selectedLanguages,
   })
+  // The finalize flags describe this exact text. A final that only confirms
+  // it gets no new finalize translation, so dropping them here would hide the
+  // same-language row for good; a changed text drops them until its own
+  // finalize translation lands.
+  const textUnchanged = sourceText === target.originalText
   const reconciled = normalizedSourceLanguage
     ? reconcileUtteranceTranslationBase({
       utterance: target,
@@ -2763,11 +2775,16 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
       detectedSourceLanguage: normalizedSourceLanguage,
       selectedLanguages: input.selectedLanguages,
       sourceText,
+      ...(textUnchanged ? pickSourceLanguageBubbleFlags(target) : {}),
     })
     : {
       utterance: (() => {
         const next: Utterance = { ...target, originalText: sourceText }
-        if (sourceText !== target.originalText) delete next.originalDisplayText
+        if (!textUnchanged) {
+          delete next.originalDisplayText
+          delete next.sourceLanguagesMixed
+          delete next.sourceTextHasForeignScript
+        }
         return next
       })(),
       priorities: input.store.translationPriorities,

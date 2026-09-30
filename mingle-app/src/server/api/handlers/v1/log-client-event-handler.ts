@@ -22,6 +22,7 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
@@ -188,6 +189,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
   const requestedTargetLanguages = sanitizeTargetLanguages(body.targetLanguages)
   const clientMetadata = sanitizeJsonObject(body.metadata)
+  const requestTranslations = sanitizeTranslations(body.translations, { keepGenericChinese: true })
   // Chinese variants are made consistent on write: the source language is
   // zh-CN or zh-TW, every Chinese translation is in its variant's script, and
   // a requested sibling variant is filled by conversion. The source text is
@@ -195,7 +197,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const normalizedContent = normalizeChineseContent({
     sourceLanguage: declaredSourceLanguage,
     sourceText: sourceText ?? '',
-    translations: sanitizeTranslations(body.translations, { keepGenericChinese: true }),
+    translations: requestTranslations,
     targetLanguages: requestedTargetLanguages,
     candidates: requestedTargetLanguages,
     // Only typed text carries script evidence; the client already marks it.
@@ -203,6 +205,11 @@ export async function handleLogClientEventV1(request: NextRequest) {
   })
   const sourceLanguage = normalizedContent.sourceLanguage || 'unknown'
   const translations = normalizedContent.translations
+  // The mixed-language flags come from the same finalize translation as the
+  // translations sent with them, so only a write that carries a translation
+  // result sets (or clears) them. A source-only write keeps the stored ones.
+  const carriesTranslationResult = Object.keys(requestTranslations).length > 0
+  const sourceLanguageBubbleFlags = pickSourceLanguageBubbleFlags(body)
   const originalDisplayText = normalizedContent.sourceDisplayText
   const translationTargetLanguages = sanitizeTargetLanguages(normalizedContent.targetLanguages)
   const clientContext = parseClientContext(body.clientContext)
@@ -274,6 +281,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         model: model ?? null,
         translationLanguages: Object.keys(translations),
         translationTargetLanguages,
+        ...(carriesTranslationResult ? sourceLanguageBubbleFlags : {}),
       }
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
@@ -326,6 +334,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             const savedOrder = metadata?.orderStartedAtMs
             messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
               ? savedOrder : existing.createdAt.getTime()
+            if (!carriesTranslationResult) Object.assign(messageMetadata, pickSourceLanguageBubbleFlags(metadata))
           }
           return tx.appMessage.upsert({
             where: {
@@ -484,6 +493,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
               ...(originalDisplayText ? { originalDisplayText } : {}),
+              ...pickSourceLanguageBubbleFlags(persistedMetadata ?? messageMetadata),
               translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
               targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,

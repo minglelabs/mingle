@@ -24,6 +24,7 @@ import {
   DEFAULT_NATIVE_APP_UPDATE_DETAIL,
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
+  resolveNativeAppInstallSourceText,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
   type NativeAppUpdateCopy,
@@ -272,9 +273,10 @@ function isNativeAppRuntimeSignalPresent(): boolean {
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
 }
 
-function NativeAppUpdateCard({
+export function NativeAppUpdateCard({
   copy,
   installedVersion,
+  installSource,
   latestVersion,
   statusMessage,
   showUpdateAction,
@@ -282,6 +284,8 @@ function NativeAppUpdateCard({
 }: {
   copy: NativeAppUpdateCopy;
   installedVersion: string;
+  // Display text for the install source; "" (unknown) hides the line.
+  installSource: string;
   latestVersion: string;
   statusMessage: string;
   showUpdateAction: boolean;
@@ -297,6 +301,11 @@ function NativeAppUpdateCard({
           <div className="mt-2 text-sm font-semibold text-gray-900">
             {copy.installedLabel} {installedVersion}
           </div>
+          {installSource ? (
+            <div className="mt-1 text-xs font-medium text-gray-600">
+              {copy.installSourceLabel} {installSource}
+            </div>
+          ) : null}
           {latestVersion ? (
             <div className="mt-1 text-xs font-medium text-gray-600">
               {copy.latestLabel} {latestVersion}
@@ -514,6 +523,7 @@ function ProfileSettingsPanel({
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
   const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
   const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
+  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource);
   const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || "";
   const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === "checking"
     ? nativeAppUpdateCopy.checkingMessage
@@ -959,6 +969,7 @@ function ProfileSettingsPanel({
                 <NativeAppUpdateCard
                   copy={nativeAppUpdateCopy}
                   installedVersion={nativeAppInstalledVersion}
+                  installSource={nativeAppInstallSource}
                   latestVersion={nativeAppLatestVersion}
                   statusMessage={nativeAppUpdateStatusMessage}
                   showUpdateAction={showNativeAppUpdateAction}
