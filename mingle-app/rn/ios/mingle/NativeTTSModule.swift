@@ -4,11 +4,28 @@ import React
 
 @objc(NativeTTSModule)
 class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
+    /// `reason` of the stopped event sent by the earphone guard (contract A.5).
+    private static let earphonesDisconnectedReason = "earphones_disconnected"
+
     private var audioPlayer: AVAudioPlayer?
     private var hasListeners = false
     private var ttsSessionTokenAcquired = false
     private var currentPlaybackId: String?
     private var currentUtteranceId: String?
+    /// Earphone mode (contract A.5): the current clip was played with
+    /// `stopOnEarphoneDisconnect`, so it must never continue on a non-earphone
+    /// output. Main queue only, like `audioPlayer`.
+    private var currentStopsOnEarphoneDisconnect = false
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+    }
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -27,6 +44,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
     }
 
     deinit {
+        NotificationCenter.default.removeObserver(self)
         audioPlayer?.stop()
         audioPlayer = nil
         releaseTtsSessionTokenIfNeeded()
@@ -97,8 +115,15 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         let playbackId = rawPlaybackId.isEmpty
             ? (rawUtteranceId.isEmpty ? UUID().uuidString : rawUtteranceId)
             : rawPlaybackId
+        let stopsOnEarphoneDisconnect = (options["stopOnEarphoneDisconnect"] as? Bool) ?? false
 
-        NSLog("[NativeTTSModule] play playbackId=%@ utteranceId=%@ audioBytes=%d", playbackId, rawUtteranceId, audioData.count)
+        NSLog(
+            "[NativeTTSModule] play playbackId=%@ utteranceId=%@ audioBytes=%d stopOnEarphoneDisconnect=%d",
+            playbackId,
+            rawUtteranceId,
+            audioData.count,
+            stopsOnEarphoneDisconnect ? 1 : 0
+        )
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -109,6 +134,28 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             self.clearCurrentPlaybackIdentity()
             self.currentPlaybackId = playbackId
             self.currentUtteranceId = rawUtteranceId.isEmpty ? nil : rawUtteranceId
+            self.currentStopsOnEarphoneDisconnect = stopsOnEarphoneDisconnect
+
+            // Earphone mode (contract A.5): a flagged clip never starts on a
+            // non-earphone output. Checked before the session is touched, so a
+            // refused clip leaves the audio session exactly as it was.
+            if stopsOnEarphoneDisconnect {
+                let route = MingleAudioRouteClassifier.currentSnapshot()
+                if !route.earphonesConnected {
+                    NSLog(
+                        "[NativeTTSModule] refused playbackId=%@ reason=%@ outputs=[%@]",
+                        playbackId,
+                        Self.earphonesDisconnectedReason,
+                        route.outputTypes.joined(separator: ",")
+                    )
+                    let stoppedPayload = self.playbackPayload(base: ["reason": Self.earphonesDisconnectedReason])
+                    self.clearCurrentPlaybackIdentity()
+                    self.currentStopsOnEarphoneDisconnect = false
+                    self.emit("ttsPlaybackStopped", payload: stoppedPayload)
+                    resolve(["ok": false, "reason": Self.earphonesDisconnectedReason])
+                    return
+                }
+            }
 
             // Ensure .playAndRecord with .default mode for full-volume TTS.
             // After STT stops it may leave the session in .voiceChat mode (quiet).
@@ -161,6 +208,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             } catch {
                 NSLog("[NativeTTSModule] play failed: %@", error.localizedDescription)
                 self.clearCurrentPlaybackIdentity()
+                self.currentStopsOnEarphoneDisconnect = false
                 self.releaseTtsSessionTokenIfNeeded()
                 reject("playback_error", "Failed to play audio: \(error.localizedDescription)", error)
             }
@@ -181,6 +229,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             }
             self.audioPlayer = nil
             self.clearCurrentPlaybackIdentity()
+            self.currentStopsOnEarphoneDisconnect = false
             self.releaseTtsSessionTokenIfNeeded()
             if wasPlaying {
                 NSLog("[NativeTTSModule] stopped playbackId=%@", stoppedPayload["playbackId"] as? String ?? "")
@@ -188,6 +237,38 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             }
             resolve(["ok": true])
         }
+    }
+
+    // MARK: - Earphone guard (contract A.5)
+
+    @objc
+    private func handleAudioRouteChange(_ notification: Notification) {
+        // Posted on an arbitrary thread; the player is main-queue state.
+        DispatchQueue.main.async { [weak self] in
+            self?.stopFlaggedPlaybackIfEarphonesGone()
+        }
+    }
+
+    /// A clip played with `stopOnEarphoneDisconnect` stops at once when a route
+    /// change leaves no earphone output. Other clips behave as before.
+    private func stopFlaggedPlaybackIfEarphonesGone() {
+        guard currentStopsOnEarphoneDisconnect, let player = audioPlayer else { return }
+        let route = MingleAudioRouteClassifier.currentSnapshot()
+        guard !route.earphonesConnected else { return }
+
+        let stoppedPayload = playbackPayload(base: ["reason": Self.earphonesDisconnectedReason])
+        NSLog(
+            "[NativeTTSModule] stopped playbackId=%@ reason=%@ outputs=[%@]",
+            stoppedPayload["playbackId"] as? String ?? "",
+            Self.earphonesDisconnectedReason,
+            route.outputTypes.joined(separator: ",")
+        )
+        player.stop()
+        audioPlayer = nil
+        clearCurrentPlaybackIdentity()
+        currentStopsOnEarphoneDisconnect = false
+        releaseTtsSessionTokenIfNeeded()
+        emit("ttsPlaybackStopped", payload: stoppedPayload)
     }
 
     // MARK: - AVAudioPlayerDelegate
@@ -201,6 +282,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         )
         audioPlayer = nil
         clearCurrentPlaybackIdentity()
+        currentStopsOnEarphoneDisconnect = false
         releaseTtsSessionTokenIfNeeded()
         emit("ttsPlaybackFinished", payload: payload)
     }
@@ -214,6 +296,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         )
         audioPlayer = nil
         clearCurrentPlaybackIdentity()
+        currentStopsOnEarphoneDisconnect = false
         releaseTtsSessionTokenIfNeeded()
         emit("ttsError", payload: payload)
     }
