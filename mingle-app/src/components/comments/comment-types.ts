@@ -12,14 +12,19 @@ export type CommentAuthor = {
   handle: string
   name: string | null
   image: string | null
-  /** Operator / official account; absent means false (same as post authors). */
+  /** The Mingle team's official account; absent means false (same as post authors). */
   isOfficial?: boolean
+  /** An account run by Mingle staff; absent means false (same as post authors). */
+  isOperator?: boolean
 }
 
 export type CommentReplyToUser = {
   id: string
   handle: string
   name: string | null
+  /** Badge flags of the user being replied to; absent means false. */
+  isOfficial?: boolean
+  isOperator?: boolean
 }
 
 /** One comment or reply as the list read returns it. */

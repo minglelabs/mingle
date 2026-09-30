@@ -48,6 +48,22 @@ describe("buildNotificationListResponse", () => {
     expect(items.every((item) => item.actorCount === 1)).toBe(true);
   });
 
+  it("sends each actor's badge flag only when true and drops the other identity columns", () => {
+    const operator = { ...actor("op"), imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true };
+    const official = { ...actor("team"), isOfficial: true, isOperator: false };
+    const member = { ...actor("member"), isOfficial: false, isOperator: false };
+    const { items } = buildNotificationListResponse([
+      row({ id: "1", type: "post_like", postId: "p1", actor: operator }),
+      row({ id: "2", type: "post_like", postId: "p1", actor: official }),
+      row({ id: "3", type: "post_like", postId: "p1", actor: member }),
+    ]);
+    expect(items[0].actors).toEqual([
+      { id: "op", handle: "op.h", name: "op", image: null, isOperator: true },
+      { id: "team", handle: "team.h", name: "team", image: null, isOfficial: true },
+      { id: "member", handle: "member.h", name: "member", image: null },
+    ]);
+  });
+
   it("marks a grouped entry read only when all its rows are read, and counts unread", () => {
     const { items, unreadCount } = buildNotificationListResponse([
       row({ id: "1", type: "post_like", postId: "p1", actor: actor("a1"), readAt: new Date() }),

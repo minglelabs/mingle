@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
+import { serializeListUserIdentity } from "@/server/identity/list-user-identity";
 
 export const runtime = "nodejs";
 
@@ -21,14 +23,8 @@ export async function GET() {
     select: {
       id: true,
       createdAt: true,
-      blocked: {
-        select: {
-          id: true,
-          handle: true,
-          name: true,
-          image: true,
-        },
-      },
+      // Identity + badge flags (official / operator) of the blocked user.
+      blocked: { select: USER_IDENTITY_SELECT },
     },
   });
 
@@ -36,7 +32,7 @@ export async function GET() {
     blocks: blocks.map((block) => ({
       id: block.id,
       createdAt: block.createdAt.toISOString(),
-      user: block.blocked,
+      user: serializeListUserIdentity(block.blocked),
     })),
   }, {
     headers: { "Cache-Control": "private, no-store" },

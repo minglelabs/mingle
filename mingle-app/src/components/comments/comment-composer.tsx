@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
 import { MAX_COMMENT_LENGTH, composerEnterAction } from "./comment-state";
 import type { ReplyTarget, WriteOutcome } from "./use-comment-sheet";
+import AccountBadge from "@/components/posts/account-badge";
+import { resolveAccountBadge } from "@/lib/account-badge";
 
 type Props = {
   locale: string;
@@ -71,8 +73,11 @@ export default function CommentComposer({
     <div className="border-t border-border bg-background px-3 pb-[env(safe-area-inset-bottom)] pt-2">
       {replyTarget && (
         <div className="mb-1 flex items-center justify-between rounded-md bg-muted px-2 py-1 text-[13px] text-muted-foreground">
-          <span className="truncate">
-            {formatCommentsCopy(copy.replyingTo, { name: replyTarget.label })}
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate">
+              {formatCommentsCopy(copy.replyingTo, { name: replyTarget.label })}
+            </span>
+            <AccountBadge kind={resolveAccountBadge(replyTarget.replyToUser)} locale={locale} tone="dark" />
           </span>
           <button
             type="button"

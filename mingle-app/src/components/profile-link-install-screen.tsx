@@ -16,6 +16,8 @@ import {
   getProfileLinkInstallCopy,
   type ProfileLinkInstallLocale,
 } from "@/components/profile-link-install-copy";
+import AccountBadge from "@/components/posts/account-badge";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 
 export type ProfileLinkInstallProfile = {
   name: string | null;
@@ -24,6 +26,9 @@ export type ProfileLinkInstallProfile = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  /** Badge flags; absent means false. */
+  isOfficial?: boolean;
+  isOperator?: boolean;
 };
 
 type ProfileLinkInstallScreenProps = {
@@ -67,6 +72,7 @@ export default function ProfileLinkInstallScreen({
   );
   const launchNonceRef = useRef(0);
   const profileName = profile?.name?.trim() || copy.userFallback;
+  const profileBadge = resolveAccountBadge(profile);
   const profileHandle = formatHandle(profile?.handle);
 
   const handleOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -117,7 +123,7 @@ export default function ProfileLinkInstallScreen({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={profile.image}
-                  alt={profileName}
+                  alt={withAccountBadgeLabel(profileName, profileBadge, locale)}
                   width={72}
                   height={72}
                   className="h-full w-full object-cover"
@@ -134,7 +140,10 @@ export default function ProfileLinkInstallScreen({
               )}
             </div>
             <div className="min-w-0 text-left">
-              <p className="truncate text-lg font-bold tracking-tight text-slate-950">{profileName}</p>
+              <p className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-lg font-bold tracking-tight text-slate-950">{profileName}</span>
+                <AccountBadge kind={profileBadge} locale={locale} tone="dark" />
+              </p>
               {profileHandle ? (
                 <p className="mt-0.5 truncate text-sm font-medium text-slate-500">{profileHandle}</p>
               ) : null}

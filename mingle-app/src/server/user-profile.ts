@@ -1,6 +1,7 @@
 import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export type UserProfileLocation = {
   latitude: number;
@@ -28,7 +29,10 @@ export const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  // Badge flags: `/p/{userId}` (and a shared room's inviter) shows this
+  // profile to other people, so an operator account must stay labeled.
   isOfficial: true,
+  isOperator: true,
   _count: {
     select: {
       followerRelations: {
@@ -61,6 +65,7 @@ type SelectedUserProfile = {
   locationCountryCode: string | null;
   /** Optional so hand-built rows (tests, older selects) still type-check. */
   isOfficial?: boolean | null;
+  isOperator?: boolean | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -83,8 +88,10 @@ export type UserProfile = {
   location: UserProfileLocation | null;
   followersCount: number;
   followingCount: number;
-  /** Operator / official account; present (true) only for official accounts. */
+  /** The Mingle team's official account; present (true) only then. */
   isOfficial?: boolean;
+  /** An account run by Mingle staff; present (true) only then. */
+  isOperator?: boolean;
 };
 
 export function serializeUserProfile(profile: SelectedUserProfile): UserProfile {
@@ -107,6 +114,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     locationCountry,
     locationCountryCode,
     isOfficial,
+    isOperator,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -142,7 +150,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     location,
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
-    ...(isOfficial === true ? { isOfficial: true } : {}),
+    ...identityBadgeFlags({ isOfficial, isOperator }),
   };
 }
 

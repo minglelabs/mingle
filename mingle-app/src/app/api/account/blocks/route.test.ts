@@ -18,6 +18,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { GET } from "@/app/api/account/blocks/route";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
 
 describe("/api/account/blocks route", () => {
   beforeEach(() => {
@@ -49,9 +50,29 @@ describe("/api/account/blocks route", () => {
       select: {
         id: true,
         createdAt: true,
-        blocked: { select: { id: true, handle: true, name: true, image: true } },
+        blocked: { select: USER_IDENTITY_SELECT },
       },
     });
+  });
+
+  it("labels a blocked operator account, and only that one", async () => {
+    mockUserBlockFindMany.mockResolvedValue([
+      {
+        id: "block_1",
+        createdAt: new Date("2026-08-13T00:00:00.000Z"),
+        blocked: { id: "op", handle: "mingle.mina", name: "Mina", image: null, imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true },
+      },
+      {
+        id: "block_2",
+        createdAt: new Date("2026-08-12T00:00:00.000Z"),
+        blocked: { id: "member", handle: "fan", name: "Fan", image: null, imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: false },
+      },
+    ]);
+
+    const { blocks } = await (await GET()).json();
+
+    expect(blocks[0].user).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true });
+    expect(blocks[1].user).toEqual({ id: "member", handle: "fan", name: "Fan", image: null });
   });
 
   it("requires authentication", async () => {

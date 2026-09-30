@@ -24,3 +24,17 @@ describe('serializeUserProfile – official flag (own profile / my page)', () =>
     expect(serializeUserProfile(row)).not.toHaveProperty('isOfficial')
   })
 })
+
+describe('serializeUserProfile – operator flag (/p/{userId} link preview, shared-room inviter)', () => {
+  it('selects the column and passes true through', () => {
+    expect(userProfileSelect.isOperator).toBe(true)
+    const profile = serializeUserProfile({ ...row, isOfficial: false, isOperator: true })
+    expect(profile.isOperator).toBe(true)
+    expect(profile).not.toHaveProperty('isOfficial')
+  })
+
+  it('omits the flag for a regular account', () => {
+    expect(serializeUserProfile({ ...row, isOperator: false })).not.toHaveProperty('isOperator')
+    expect(serializeUserProfile(row)).not.toHaveProperty('isOperator')
+  })
+})

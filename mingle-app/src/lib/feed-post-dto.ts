@@ -33,12 +33,18 @@ export type FeedPostDto = {
     name: string | null
     imageUrl: string | null
     /**
-     * Operator / official account (e.g. the Mingle team account that posts the
-     * initial content). Surfaces render `<OfficialBadge>` next to the name so
-     * operator-made content is never mistaken for a member's post. Optional on
-     * the wire: absent means false.
+     * The Mingle team's own official account (e.g. the account that posts the
+     * initial content). Optional on the wire: absent means false.
      */
     isOfficial?: boolean
+    /**
+     * An account run by Mingle staff (admin operator account). It must be
+     * labeled wherever its name shows. Optional on the wire: absent means
+     * false. Surfaces render `<AccountBadge kind={resolveAccountBadge(author)}>`
+     * next to the name, so staff-made content is never mistaken for a
+     * member's post.
+     */
+    isOperator?: boolean
   }
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string

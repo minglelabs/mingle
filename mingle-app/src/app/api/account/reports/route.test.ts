@@ -18,6 +18,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { GET } from "@/app/api/account/reports/route";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
 
 describe("/api/account/reports route", () => {
   beforeEach(() => {
@@ -63,6 +64,37 @@ describe("/api/account/reports route", () => {
         }],
       }],
     });
+  });
+
+  it("labels a reported operator account and asks the DB for the badge flags", async () => {
+    mockUserReportFindMany.mockResolvedValue([
+      {
+        id: "report_op",
+        reason: "spam",
+        message: null,
+        status: "pending",
+        createdAt: new Date("2026-08-15T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-15T00:00:00.000Z"),
+        reportedUser: { id: "op", handle: "mingle.mina", name: "Mina", image: null, imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true },
+        replies: [],
+      },
+      {
+        id: "report_member",
+        reason: "spam",
+        message: null,
+        status: "pending",
+        createdAt: new Date("2026-08-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-14T00:00:00.000Z"),
+        reportedUser: { id: "member", handle: "fan", name: "Fan", image: null, imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: false },
+        replies: [],
+      },
+    ]);
+
+    const { reports } = await (await GET()).json();
+
+    expect(reports[0].reportedUser).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true });
+    expect(reports[1].reportedUser).toEqual({ id: "member", handle: "fan", name: "Fan", image: null });
+    expect(mockUserReportFindMany.mock.calls[0][0].select.reportedUser).toEqual({ select: USER_IDENTITY_SELECT });
   });
 
   it("requires authentication", async () => {

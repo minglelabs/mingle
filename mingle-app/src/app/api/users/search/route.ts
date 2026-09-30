@@ -11,22 +11,12 @@ import {
 import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { buildSearchAnalyticsProperties } from "@/lib/search-analytics";
 import { captureMingleEvent } from "@/lib/posthog-server";
+import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export const runtime = "nodejs";
 
 const MAX_SEARCH_LENGTH = 80;
 const SEARCH_PAGE_SIZE = 20;
-
-const userSearchSelect = {
-  id: true,
-  handle: true,
-  name: true,
-  image: true,
-  imageCropScale: true,
-  imageCropX: true,
-  imageCropY: true,
-  isOfficial: true,
-} as const;
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -83,7 +73,8 @@ export async function GET(request: NextRequest) {
     ? await prisma.user.findMany({
       where: { id: { in: pageIds } },
       select: {
-        ...userSearchSelect,
+        // Identity (with avatar crop) + badge flags (official / operator).
+        ...USER_IDENTITY_SELECT,
         followerRelations: {
           where: { followerId: userId },
           select: { followerId: true },
@@ -133,8 +124,8 @@ export async function GET(request: NextRequest) {
       imageCropX: user.imageCropX,
       imageCropY: user.imageCropY,
       isFollowing: user.followerRelations.length > 0,
-      // Official (operator) accounts only; absent means false.
-      ...(user.isOfficial === true ? { isOfficial: true } : {}),
+      // Badge flags (official / operator) only when true; absent means false.
+      ...identityBadgeFlags(user),
     })),
     nextCursor,
   }, {

@@ -5,8 +5,10 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
 import SlideSurface from "@/components/slide-surface";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import {
@@ -31,6 +33,9 @@ type FollowListUser = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  /** Badge flags; absent means false. */
+  isOfficial?: boolean;
+  isOperator?: boolean;
   isFollowing: boolean;
   isFollowedBy: boolean;
 };
@@ -359,6 +364,8 @@ export default function FollowListScreen({
             <ul className="border-t border-gray-100">
               {users.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
+                const badge = resolveAccountBadge(user);
+                const nameLabel = withAccountBadgeLabel(name, badge, locale);
                 const profileHref = `/${locale}/users/${encodeURIComponent(user.id)}`;
                 const isMutual = activeTab === "followers"
                   ? user.isFollowing
@@ -367,17 +374,24 @@ export default function FollowListScreen({
                 return (
                   <li key={user.id} className="border-b border-gray-100 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Link
-                        href={profileHref}
-                        onClick={(event) => {
-                          if (!onOpenProfile) return;
-                          event.preventDefault();
-                          onOpenProfile(user.id);
+                      {/* The whole left part opens the profile; the badge next
+                          to the name stays its own button (IdentityRow). */}
+                      <IdentityRow
+                        action={{
+                          kind: "link",
+                          href: profileHref,
+                          onClick: (event) => {
+                            if (!onOpenProfile) return;
+                            event.preventDefault();
+                            onOpenProfile(user.id);
+                          },
                         }}
-                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                        aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
+                        label={user.handle ? `${nameLabel}, ${formatHandle(user.handle)}` : nameLabel}
+                        className="min-w-0 flex-1"
+                        actionClassName="rounded-xl transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                        contentClassName="flex min-w-0 items-center gap-3"
                       >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
                           {user.image ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={user.image} alt="" className="h-full w-full object-cover" />
@@ -386,10 +400,13 @@ export default function FollowListScreen({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                          {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
+                          <p className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[15px] font-semibold text-slate-900" aria-hidden="true">{name}</span>
+                            <AccountBadge kind={badge} locale={locale} tone="dark" />
+                          </p>
+                          {user.handle ? <p className="truncate text-[13px] text-gray-500" aria-hidden="true">{formatHandle(user.handle)}</p> : null}
                         </div>
-                      </Link>
+                      </IdentityRow>
 
                       {activeTab === "followers" && !user.isFollowing ? (
                         <button
