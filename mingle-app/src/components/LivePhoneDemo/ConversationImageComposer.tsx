@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
-import { Image as Photo, Keyboard, Loader2, Plus, X } from 'lucide-react'
+import { Headphones, Image as Photo, Keyboard, Loader2, Plus, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
@@ -33,8 +33,22 @@ function isDiagActiveInitial(): boolean {
   } catch { return false }
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33 }: {
+export type ConversationImageComposerEarphoneMode = {
+  enabled: boolean
+  // On, but no earphones connected: nothing is read yet.
+  waiting: boolean
+  label: string
+  stateLabel: string
+  waitingLabel: string
+  onToggle: () => void
+}
+
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, allowPhoto = true }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
+  // Keyboard mode only: an "earphone mode" row between the photo and voice-mode rows.
+  earphoneMode?: ConversationImageComposerEarphoneMode
+  // false = no photo row (a room without a sendable conversation still gets the menu).
+  allowPhoto?: boolean
 }) {
   const copy = resolveConversationImageCopy(locale)
   const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
@@ -300,12 +314,12 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     }
 
     if (!onCloseKeyboard) {
-      openFilePicker()
+      if (allowPhoto) openFilePicker()
       return
     }
 
     openAttachmentMenu(event.currentTarget)
-  }, [onCloseKeyboard, openAttachmentMenu, openFilePicker, diagEnabled, pushDiag])
+  }, [allowPhoto, onCloseKeyboard, openAttachmentMenu, openFilePicker, diagEnabled, pushDiag])
 
   // ── Diagnostic touch/pointer event handlers ─────────────────────────
   const handleDiagTouchStart = useCallback(() => { pushDiag('TS') }, [pushDiag])
@@ -372,7 +386,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       }}
       onClick={diagEnabled ? handleDiagClick : handleAttachmentClick}
       style={onCloseKeyboard ? undefined : { width: voiceButtonSize, height: voiceButtonSize }}
-      className="inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}</button>
+      className="relative inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}
+      {onCloseKeyboard && earphoneMode?.enabled && (
+        <span aria-hidden="true" data-earphone-mode-dot className="pointer-events-none absolute right-[4px] top-[4px] h-[7px] w-[7px] rounded-full bg-amber-500 ring-2 ring-white" />
+      )}</button>
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
       onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''
@@ -394,6 +411,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
         onPointerDown={event => event.stopPropagation()}
       >
         <div className="max-h-[calc(100dvh-16px)] w-[230px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+          {allowPhoto && (
           <button
             type="button"
             aria-label={copy.choose}
@@ -405,14 +423,41 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
             <span>{copy.choose}</span>
             <Photo className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.15} />
           </button>
+          )}
+          {onCloseKeyboard && earphoneMode && (
+            <>
+              {allowPhoto && <div className="h-px bg-gray-100" />}
+              <button
+                type="button"
+                data-qa="live-demo-earphone-mode-menu-item"
+                aria-label={earphoneMode.waiting ? `${earphoneMode.label}, ${earphoneMode.waitingLabel}` : earphoneMode.label}
+                aria-pressed={earphoneMode.enabled}
+                // Keep the textarea focused; the notice dialog restores focus to it.
+                onPointerDown={event => { event.preventDefault() }}
+                onClick={event => { event.preventDefault(); event.stopPropagation(); close(); earphoneMode.onToggle() }}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${allowPhoto ? '' : 'rounded-t-2xl'}`}
+              >
+                <span>{earphoneMode.label}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span className={`text-[12px] font-semibold ${earphoneMode.enabled ? 'text-amber-600' : 'text-slate-400'}`}>{earphoneMode.stateLabel}</span>
+                  <span className="relative inline-flex">
+                    <Headphones className={`h-4 w-4 shrink-0 ${earphoneMode.enabled ? 'text-amber-500' : 'text-slate-400'}`} strokeWidth={2.15} />
+                    {earphoneMode.waiting && (
+                      <span aria-hidden="true" data-earphone-mode-waiting-dot className="pointer-events-none absolute -right-[3px] -top-[3px] h-[6px] w-[6px] rounded-full bg-gray-400 ring-1 ring-white" />
+                    )}
+                  </span>
+                </span>
+              </button>
+            </>
+          )}
           {onCloseKeyboard && (
             <>
-              <div className="h-px bg-gray-100" />
+              {(allowPhoto || earphoneMode) && <div className="h-px bg-gray-100" />}
               <button
                 type="button"
                 aria-label={copy.switchToVoiceMode}
                 onClick={event => { event.preventDefault(); event.stopPropagation(); close(); onCloseKeyboard() }}
-                className="flex w-full items-center justify-between rounded-b-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode) ? 'rounded-b-2xl' : 'rounded-2xl'}`}
               >
                 <span>{copy.switchToVoiceMode}</span>
                 <Keyboard className="h-4 w-4 shrink-0 text-slate-400" />

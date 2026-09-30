@@ -1,15 +1,50 @@
 'use client'
 
-import ConversationImageComposer from './ConversationImageComposer'
+import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
+import MessageMediaDialog from './MessageMediaDialog'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import {
+  arePlaybackKeyListsEqual,
+  buildOriginalBubblePlaybackKey,
+  buildTranslationBubblePlaybackKey,
+  groupBubbleTtsIndicatorsByUtterance,
+  resolveBubbleTtsIndicatorKeys,
+} from './live-phone-demo.bubble-tts-indicator'
+import {
+  getEarphoneModePreferenceServerSnapshot,
+  getEarphoneModePreferenceSnapshot,
+  keepManualTtsQueueItems,
+  resolveEarphoneModeGate,
+  resolveEarphoneModeToggle,
+  shouldStopCurrentClipOnEarphoneFallingEdge,
+  shouldTreatNativeTtsPostAsStart,
+  subscribeEarphoneModePreference,
+  writeEarphoneModeEnabled,
+} from './live-phone-demo.earphone-mode.logic'
+import {
+  EarphoneAutoReadController,
+  type EarphoneAutoReadDispatchItem,
+  type EarphoneAutoReadSnapshot,
+} from './live-phone-demo.earphone-auto-read'
+import { applyNativeTtsEvent } from './live-phone-demo.native-tts-events'
+import {
+  getNativeAudioRouteServerSnapshot,
+  getNativeAudioRouteSnapshot,
+  isNativeAudioRouteSupported,
+  markNativeAudioRouteDisconnected,
+  requestNativeAudioRoute,
+  subscribeNativeAudioRoute,
+} from '@/lib/native-audio-route'
+import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -237,7 +272,6 @@ const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
-const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
@@ -957,9 +991,18 @@ function useNativeBannerPositionFromSearch(queryKey: string): LivePhoneDemoAdBan
   )
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
+// The earphone-mode gate as the stores report it right now (not as of the last
+// render), for decisions that must not wait for React.
+function isEarphoneAutoReadGateOpenNow(): boolean {
+  const route = getNativeAudioRouteSnapshot()
+  return resolveEarphoneModeGate({
+    supported: isNativeAudioRouteSupported(route),
+    enabled: getEarphoneModePreferenceSnapshot(),
+    earphonesConnected: route.earphonesConnected,
+  }).autoReadActive
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
   let binary = ''
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i])
@@ -1434,6 +1477,8 @@ type TtsQueueItem = {
   audioBlob: Blob | null
   language: string
   kind: 'original' | 'translation'
+  // 'auto' items come from earphone mode (the legacy slot handlers below are
+  // gated by the fixed-off TTS setting and never add any).
   mode: 'auto' | 'manual'
 }
 
@@ -1444,7 +1489,16 @@ type BubbleTtsTarget = {
   kind: 'original' | 'translation'
 }
 
-type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
+// The clip the player is handling. `started` flips when audio really starts
+// (HTML `playing`, native `tts_started`, or the post on older iOS shells), so
+// the bubble can tell "…" (pending) from the animated bars (playing).
+type SpeakingTtsItem = BubbleTtsTarget & {
+  mode: TtsQueueItem['mode']
+  seq: number
+  started: boolean
+}
+
+type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset' | 'earphone_mode_stopped'
 
 type NativeOpenUpdateStoreCommand = {
   type: 'native_open_update_store'
@@ -1492,14 +1546,6 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
 
-function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): string {
-  return `original:${utteranceId}:${language.trim().toLowerCase()}`
-}
-
-function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
-  return `translation:${utteranceId}:${language.trim().toLowerCase()}`
-}
-
 type LivePhoneDemoChatMessageRowProps = {
   utterance: Utterance
   uiLocale: string
@@ -1511,7 +1557,9 @@ type LivePhoneDemoChatMessageRowProps = {
   onPlayOriginal: (utterance: Utterance) => void
   onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName: string
-  speakingPlaybackKey?: string
+  // Only this row's keys; rows with no TTS activity get undefined.
+  pendingPlaybackKeys?: readonly string[]
+  playingPlaybackKey?: string
   shouldAnimateEntrance: boolean
   viewerUserId?: string | null
   onOpenProfile?: (userId: string) => void
@@ -1522,15 +1570,6 @@ function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
   return (typeof utterance.createdAtMs === 'number' && Number.isFinite(utterance.createdAtMs))
     ? String(Math.floor(utterance.createdAtMs))
     : ''
-}
-
-function isPlaybackKeyForUtterance(playbackKey: string | undefined, utteranceId: string): boolean {
-  if (!playbackKey) return false
-
-  return (
-    playbackKey.startsWith(`original:${utteranceId}:`)
-    || playbackKey.startsWith(`translation:${utteranceId}:`)
-  )
 }
 
 function LivePhoneDemoChatMessageRow({
@@ -1544,7 +1583,8 @@ function LivePhoneDemoChatMessageRow({
   onPlayOriginal,
   onPlayTranslation,
   bubbleTextClassName,
-  speakingPlaybackKey,
+  pendingPlaybackKeys,
+  playingPlaybackKey,
   shouldAnimateEntrance,
   viewerUserId,
   onOpenProfile,
@@ -1567,7 +1607,8 @@ function LivePhoneDemoChatMessageRow({
         onPlayOriginal={onPlayOriginal}
         onPlayTranslation={onPlayTranslation}
         bubbleTextClassName={bubbleTextClassName}
-        speakingPlaybackKey={speakingPlaybackKey}
+        pendingPlaybackKeys={pendingPlaybackKeys}
+        playingPlaybackKey={playingPlaybackKey}
         shouldAnimateEntrance={shouldAnimateEntrance}
         viewerUserId={viewerUserId}
         onOpenProfile={onOpenProfile}
@@ -1594,12 +1635,8 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.viewerUserId !== next.viewerUserId) return false
     if (prev.onOpenProfile !== next.onOpenProfile) return false
     if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
-
-    const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
-    const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
-    if (wasSpeakingThisUtterance || isSpeakingThisUtterance) {
-      return prev.speakingPlaybackKey === next.speakingPlaybackKey
-    }
+    if (prev.playingPlaybackKey !== next.playingPlaybackKey) return false
+    if (!arePlaybackKeyListsEqual(prev.pendingPlaybackKeys, next.pendingPlaybackKeys)) return false
 
     return true
   },
@@ -2080,8 +2117,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ttsEnabled: isSoundEnabled,
     aecEnabled,
   } = useTtsSettings()
-  const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
+  const [speakingItem, setSpeakingItem] = useState<SpeakingTtsItem | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
+  // Earphone mode (auto-read). Separate from the fixed-off TTS setting above.
+  const earphoneModeEnabled = useSyncExternalStore(
+    subscribeEarphoneModePreference,
+    getEarphoneModePreferenceSnapshot,
+    getEarphoneModePreferenceServerSnapshot,
+  )
+  const nativeAudioRoute = useSyncExternalStore(
+    subscribeNativeAudioRoute,
+    getNativeAudioRouteSnapshot,
+    getNativeAudioRouteServerSnapshot,
+  )
+  const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const earphoneModeGate = resolveEarphoneModeGate({
+    supported: earphoneModeSupported,
+    enabled: earphoneModeEnabled,
+    earphonesConnected: nativeAudioRoute.earphonesConnected,
+  })
+  const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
+  const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  const [earphoneQueuedPlaybackKeys, setEarphoneQueuedPlaybackKeys] = useState<readonly string[]>([])
+  const earphoneAutoReadArmedRef = useRef(false)
+  const earphoneAutoReadControllerRef = useRef<EarphoneAutoReadController | null>(null)
+  const earphoneAutoReadPumpTimerRef = useRef<number | null>(null)
+  // Bumped whenever the player moves on or is stopped; a handler of an older
+  // clip must not touch the current one.
+  const currentTtsClipSeqRef = useRef(0)
+  const currentTtsItemRef = useRef<{ playbackKey: string, mode: TtsQueueItem['mode'], seq: number } | null>(null)
+  // The manual request (by sequence) still waiting for its audio.
+  const manualTtsPendingSeqRef = useRef<number | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
   const nativePipStateRef = useRef<NativePipState | null>(null)
   const nativePipActiveRef = useRef(false)
@@ -4042,6 +4108,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       player.pause()
       player.onended = null
       player.onerror = null
+      player.onplaying = null
       player.src = ''
       player.load()
     }
@@ -4078,7 +4145,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return `${playbackKey}::${nativeTtsPlaybackSeqRef.current}`
   }, [])
 
-  const armNativeTtsEventTimeout = useCallback((playbackId: string, playbackKey: string) => {
+  // Frees the player if the native end/stop/error event never arrives. The
+  // timeout comes from the clip's own length, so a long clip cannot let the
+  // queue move on while it is still playing.
+  const armNativeTtsEventTimeout = useCallback((playbackId: string, playbackKey: string, timeoutMs: number) => {
     if (!isNativeApp()) return
     clearNativeTtsEventTimer()
     activeNativeTtsPlaybackIdRef.current = playbackId
@@ -4093,16 +4163,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
       nativeTtsEventTimerRef.current = null
+      currentTtsClipSeqRef.current += 1
+      currentTtsItemRef.current = null
       setSpeakingItem(prev => (prev?.playbackKey === playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
-    }, NATIVE_TTS_EVENT_TIMEOUT_MS)
+    }, timeoutMs)
   }, [clearNativeTtsEventTimer])
+
+  // Lets earphone mode hand over its next clip once the player is idle. Always
+  // deferred so the controller is never re-entered from inside a dispatch.
+  const scheduleEarphoneAutoReadPump = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!earphoneAutoReadArmedRef.current) return
+    if (earphoneAutoReadPumpTimerRef.current !== null) return
+    earphoneAutoReadPumpTimerRef.current = window.setTimeout(() => {
+      earphoneAutoReadPumpTimerRef.current = null
+      earphoneAutoReadControllerRef.current?.pump()
+    }, 0)
+  }, [])
 
   const processTtsQueue = useCallback(() => {
     if (isTtsProcessingRef.current) return
-    if (!enableAutoTTS || !isSoundEnabled) {
-      ttsQueueRef.current = ttsQueueRef.current.filter(item => item.mode === 'manual')
+    // Re-checked from the stores on every step (after a native end/stop, an
+    // HTML `ended`, a refused start): React state would lag one render, and an
+    // auto item must never start once the gate is closed.
+    if (!earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()) {
+      ttsQueueRef.current = keepManualTtsQueueItems(ttsQueueRef.current)
     }
 
     const queue = ttsQueueRef.current
@@ -4111,7 +4198,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
+      currentTtsItemRef.current = null
       setSpeakingItem(null)
+      scheduleEarphoneAutoReadPump()
       return
     }
 
@@ -4138,17 +4227,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const audioBlob = next.audioBlob!
     isTtsProcessingRef.current = true
     cleanupCurrentAudio()
+    currentTtsClipSeqRef.current += 1
+    const clipSeq = currentTtsClipSeqRef.current
+    currentTtsItemRef.current = { playbackKey: next.playbackKey, mode: next.mode, seq: clipSeq }
     setSpeakingItem({
       playbackKey: next.playbackKey,
       utteranceId: next.utteranceId,
       language: next.language,
       kind: next.kind,
+      mode: next.mode,
+      seq: clipSeq,
+      started: false,
     })
 
+    const isCurrentClip = () => currentTtsClipSeqRef.current === clipSeq
+
+    // Pending "…" -> animated bars, only once sound really comes out.
+    const markPlaybackStarted = () => {
+      if (!isCurrentClip()) return
+      setSpeakingItem(prev => (prev && prev.seq === clipSeq && !prev.started ? { ...prev, started: true } : prev))
+    }
+
     const onPlaybackDone = () => {
+      if (!isCurrentClip()) return
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
+      currentTtsItemRef.current = null
       setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
@@ -4157,17 +4262,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const playViaNativeBridge = async () => {
       try {
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
-        const audioBase64 = await blobToBase64(audioBlob)
+        const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
+        const contentType = audioBlob.type || 'audio/mpeg'
+        const watchdogTimeoutMs = resolveNativeTtsWatchdogTimeoutMs({
+          durationMs: estimateTtsAudioDurationMs(audioBytes, contentType),
+          byteLength: audioBytes.byteLength,
+        })
+        const audioBase64 = bytesToBase64(audioBytes)
+        // Stopped (falling edge, manual tap, reset) while the clip was read.
+        if (!isCurrentClip()) return
         window.ReactNativeWebView!.postMessage(JSON.stringify({
           type: 'native_tts_play',
           payload: {
             playbackId,
             utteranceId: next.playbackKey,
             audioBase64,
-            contentType: audioBlob.type || 'audio/mpeg',
+            contentType,
+            // Auto clips only: the shell cuts the clip the moment the route
+            // leaves the earphones. Manual clips keep today's behavior.
+            ...(next.mode === 'auto' ? { stopOnEarphoneDisconnect: true } : {}),
           },
         }))
-        armNativeTtsEventTimeout(playbackId, next.playbackKey)
+        armNativeTtsEventTimeout(playbackId, next.playbackKey, watchdogTimeoutMs)
+        // Shells that report audio routes also report `tts_started`.
+        if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
+          markPlaybackStarted()
+        }
       } catch {
         onPlaybackDone()
       }
@@ -4183,10 +4303,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (ctx && ctx.state === 'suspended') {
         try { await ctx.resume() } catch { /* best-effort */ }
       }
+      if (!isCurrentClip()) return
 
       const objectUrl = URL.createObjectURL(audioBlob)
       currentAudioUrlRef.current = objectUrl
       audio.src = objectUrl
+
+      audio.onplaying = () => {
+        markPlaybackStarted()
+      }
 
       audio.onended = () => {
         if (currentAudioUrlRef.current === objectUrl) {
@@ -4205,10 +4330,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       audio.play().catch(() => {
+        // A stop (pause + src reset) also rejects play(); that clip is gone.
+        if (!isCurrentClip()) return
         if (currentAudioUrlRef.current === objectUrl) {
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
         }
+        currentTtsItemRef.current = null
         setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
         ttsNeedsUnlockRef.current = true
         // Re-insert at front of queue so it can be retried after audio unlock
@@ -4223,7 +4351,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       void playViaHtmlAudio()
     }
-  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, enableAutoTTS, ensureAudioPlayer, isSoundEnabled])
+  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, ensureAudioPlayer, scheduleEarphoneAutoReadPump])
 
   useEffect(() => {
     processTtsQueueRef.current = processTtsQueue
@@ -4234,59 +4362,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!isNativeApp()) return
 
     const handleNativeTtsEvent = (event: Event) => {
-      const detail = (event as CustomEvent).detail as {
-        type: string
-        playbackId?: string
-        utteranceId?: string
-        message?: string
-      } | null
-      if (!detail || typeof detail !== 'object') return
-
-      const playbackId = detail.playbackId || ''
-      const utteranceId = detail.utteranceId || ''
-      const isCurrentPlaybackEvent = () => {
-        if (playbackId) {
-          if (activeNativeTtsPlaybackIdRef.current) {
-            return activeNativeTtsPlaybackIdRef.current === playbackId
-          }
-          if (utteranceId && activeNativeTtsUtteranceIdRef.current) {
-            return activeNativeTtsUtteranceIdRef.current === utteranceId
-          }
-          return true
-        }
-        if (utteranceId && activeNativeTtsUtteranceIdRef.current) {
-          return activeNativeTtsUtteranceIdRef.current === utteranceId
-        }
-        return true
-      }
-
-      if (detail.type === 'tts_ended' || detail.type === 'tts_error') {
-        if (!isCurrentPlaybackEvent()) return
-        activeNativeTtsPlaybackIdRef.current = null
-        activeNativeTtsUtteranceIdRef.current = null
-        clearNativeTtsEventTimer()
-        setSpeakingItem(prev => {
-          if (utteranceId && prev?.playbackKey === utteranceId) return null
-          return prev
-        })
-        isTtsProcessingRef.current = false
-        processTtsQueueRef.current()
-        return
-      }
-
-      if (detail.type === 'tts_stopped') {
-        if (!isCurrentPlaybackEvent()) return
-        activeNativeTtsPlaybackIdRef.current = null
-        activeNativeTtsUtteranceIdRef.current = null
-        clearNativeTtsEventTimer()
-        isTtsProcessingRef.current = false
-        setSpeakingItem(prev => {
-          if (!utteranceId) return null
-          if (prev?.playbackKey === utteranceId) return null
-          return prev
-        })
-        processTtsQueueRef.current()
-      }
+      applyNativeTtsEvent((event as CustomEvent<unknown>).detail, {
+        playbackId: activeNativeTtsPlaybackIdRef.current,
+        playbackKey: activeNativeTtsUtteranceIdRef.current,
+      }, {
+        finishCurrentClip: () => {
+          const finishedSeq = currentTtsItemRef.current?.seq ?? null
+          activeNativeTtsPlaybackIdRef.current = null
+          activeNativeTtsUtteranceIdRef.current = null
+          clearNativeTtsEventTimer()
+          currentTtsClipSeqRef.current += 1
+          currentTtsItemRef.current = null
+          isTtsProcessingRef.current = false
+          setSpeakingItem(prev => (finishedSeq === null || prev?.seq === finishedSeq ? null : prev))
+        },
+        markStarted: (playbackKey) => {
+          setSpeakingItem(prev => (
+            prev && !prev.started && prev.playbackKey === playbackKey ? { ...prev, started: true } : prev
+          ))
+        },
+        // The shell stopped, or refused to start (no `tts_started`), an auto
+        // clip because no earphone output is left. Closing the gate here runs
+        // the falling edge synchronously, before the queue step below and
+        // before the route event lands, so no next auto clip reaches the
+        // speaker and the refused clip's "…" clears.
+        markEarphonesDisconnected: markNativeAudioRouteDisconnected,
+        advanceQueue: () => processTtsQueueRef.current(),
+      })
     }
 
     window.addEventListener(NATIVE_TTS_EVENT, handleNativeTtsEvent as EventListener)
@@ -4351,6 +4453,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     playbackKey: string
     text: string
     language: string
+    signal?: AbortSignal
   }): Promise<Blob | null> => {
     const text = input.text.trim()
     const language = input.language.trim()
@@ -4362,6 +4465,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       const response = await fetch(TTS_API_PATH, {
         method: 'POST',
+        signal: input.signal,
         headers: {
           'Content-Type': 'application/json',
           ...buildTrackingRequestHeaders({
@@ -4751,8 +4855,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [ensureAudioPlayer])
 
   const resumeTtsPlayback = useCallback((withPriming = false) => {
-    const hasManualQueueItem = ttsQueueRef.current.some(item => item.mode === 'manual')
-    if ((!enableAutoTTS || !isSoundEnabled) && !hasManualQueueItem) return
+    const hasPlayableQueueItem = ttsQueueRef.current.some(item => (
+      item.mode === 'manual' || earphoneAutoReadArmedRef.current
+    ))
+    if ((!enableAutoTTS || !isSoundEnabled) && !hasPlayableQueueItem) return
     const current = playerAudioRef.current
     if (current && !current.ended && current.paused) {
       void current.play().then(() => {
@@ -4789,7 +4895,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const scheduleTtsResumeAfterStopClick = useCallback(() => {
-    if (!enableAutoTTS || !isSoundEnabled) return
+    if ((!enableAutoTTS || !isSoundEnabled) && !earphoneAutoReadArmedRef.current) return
     resumeTtsPlayback(true)
     const delays = [140, 420]
     for (const delay of delays) {
@@ -4814,6 +4920,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     activeNativeTtsPlaybackIdRef.current = null
     activeNativeTtsUtteranceIdRef.current = null
     ttsQueueRef.current = []
+    currentTtsClipSeqRef.current += 1
+    currentTtsItemRef.current = null
     isTtsProcessingRef.current = false
     ttsNeedsUnlockRef.current = false
     cleanupCurrentAudio()
@@ -4822,6 +4930,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     sendNativeTtsStopCommand(reason)
   }, [cleanupCurrentAudio, clearNativeTtsEventTimer, clearStopClickResumeTimers, clearTtsWaitTimer, sendNativeTtsStopCommand])
+
+  // Earphone-mode falling edge: stop the current AUTO clip at once and drop
+  // queued auto items. A manual clip keeps playing (manual stays as today).
+  const stopEarphoneAutoTtsPlayback = useCallback(() => {
+    ttsQueueRef.current = keepManualTtsQueueItems(ttsQueueRef.current)
+    if (!shouldStopCurrentClipOnEarphoneFallingEdge(currentTtsItemRef.current)) return
+
+    const wasNativeClip = activeNativeTtsPlaybackIdRef.current !== null
+    clearTtsWaitTimer()
+    clearNativeTtsEventTimer()
+    activeNativeTtsPlaybackIdRef.current = null
+    activeNativeTtsUtteranceIdRef.current = null
+    currentTtsClipSeqRef.current += 1
+    currentTtsItemRef.current = null
+    isTtsProcessingRef.current = false
+    cleanupCurrentAudio()
+    if (wasNativeClip) sendNativeTtsStopCommand('earphone_mode_stopped')
+    setSpeakingItem(null)
+    processTtsQueueRef.current()
+  }, [cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, sendNativeTtsStopCommand])
 
   const handleDeleteConversationConfirm = useCallback(async () => {
     if (isDeletingConversation || !conversationId) return
@@ -5144,13 +5272,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const isSameTargetSpeaking = speakingItem?.playbackKey === target.playbackKey
     if (isSameTargetPending || isSameTargetSpeaking) {
       manualTtsRequestSeqRef.current += 1
+      manualTtsPendingSeqRef.current = null
       setPendingManualTtsTarget(null)
       forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      // Stopping the clip being auto-read lets earphone mode go on with the next.
+      scheduleEarphoneAutoReadPump()
       return
     }
 
     manualTtsRequestSeqRef.current += 1
     const requestSeq = manualTtsRequestSeqRef.current
+    // While this is pending, earphone mode holds its next clip; the clip it
+    // interrupts (if any) is dropped, and a queued auto item for this very
+    // bubble is not read again later.
+    manualTtsPendingSeqRef.current = requestSeq
+    earphoneAutoReadControllerRef.current?.consumePlaybackKey(target.playbackKey)
     setPendingManualTtsTarget(target)
     forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
 
@@ -5166,9 +5302,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
     if (manualTtsRequestSeqRef.current !== requestSeq) return
 
+    manualTtsPendingSeqRef.current = null
     setPendingManualTtsTarget(null)
     if (!audioBlob) {
       toast.error(ttsActionCopy.playbackFailedLabel)
+      scheduleEarphoneAutoReadPump()
       return
     }
 
@@ -5186,6 +5324,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pendingManualTtsTarget,
     primeAudioPlayback,
     processTtsQueue,
+    scheduleEarphoneAutoReadPump,
     speakingItem,
     synthesizeBubbleTtsViaApi,
     ttsActionCopy.playbackFailedLabel,
@@ -6135,6 +6274,181 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+
+  // ── Earphone mode (auto-read) ────────────────────────────────────────────
+  const draftUtterances = useMemo(
+    () => liveUtterances.filter((utterance) => !committedUtteranceIds.has(utterance.id)),
+    [committedUtteranceIds, liveUtterances],
+  )
+  const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({
+    conversationKey: `${storageNamespace || ''}|${conversationId?.trim() || ''}`,
+    committed: utterances,
+    drafts: draftUtterances,
+    // Exactly what each bubble row receives, so a message is read in the
+    // language its collapsed bubble shows.
+    display: {
+      preferredDisplayLanguage,
+      preferredDisplayLanguages: normalizedPreferredDisplayLanguages,
+      defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
+      languageOrder: normalizedDisplayLanguageOptions,
+    },
+    viewerUserId,
+  }), [
+    conversationId,
+    draftUtterances,
+    normalizedDisplayLanguageOptions,
+    normalizedPreferredDisplayLanguages,
+    preferredDisplayLanguage,
+    resolvedDefaultDisplayLanguage,
+    storageNamespace,
+    utterances,
+    viewerUserId,
+  ])
+  // Only the visible room reads, and only once its history is in (local cache
+  // and first server hydration): entering a room with the mode on must not
+  // read what was already there.
+  const isEarphoneAutoReadHistoryReady = isStorageHydrated && !isInitialServerHydrationPending
+  const shouldArmEarphoneAutoRead = earphoneModeGate.autoReadActive
+    && isVisible
+    && !isBlockedCounterpart
+    && isEarphoneAutoReadHistoryReady
+  const synthesizeBubbleTtsViaApiRef = useRef(synthesizeBubbleTtsViaApi)
+  useEffect(() => {
+    synthesizeBubbleTtsViaApiRef.current = synthesizeBubbleTtsViaApi
+  }, [synthesizeBubbleTtsViaApi])
+
+  useEffect(() => {
+    const controller = new EarphoneAutoReadController({
+      now: () => Date.now(),
+      setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      clearTimer: (handle) => window.clearTimeout(handle as number),
+      synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
+        playbackKey: target.playbackKey,
+        text: target.text,
+        language: target.language,
+        signal,
+      }),
+      isEngineIdle: () => (
+        !isTtsProcessingRef.current
+        && ttsQueueRef.current.length === 0
+        && !(manualTtsPendingSeqRef.current !== null
+          && manualTtsPendingSeqRef.current === manualTtsRequestSeqRef.current)
+      ),
+      canDispatch: () => earphoneAutoReadArmedRef.current && isEarphoneAutoReadGateOpenNow(),
+      dispatch: (item: EarphoneAutoReadDispatchItem) => {
+        ttsQueueRef.current = [{
+          playbackKey: item.playbackKey,
+          utteranceId: item.utteranceId,
+          audioBlob: item.audioBlob,
+          language: item.language,
+          kind: item.kind,
+          mode: 'auto',
+        }]
+        processTtsQueueRef.current()
+      },
+      onQueuedPlaybackKeysChange: (playbackKeys) => setEarphoneQueuedPlaybackKeys(playbackKeys),
+    })
+    earphoneAutoReadControllerRef.current = controller
+    return () => {
+      earphoneAutoReadArmedRef.current = false
+      controller.disarm()
+      if (earphoneAutoReadControllerRef.current === controller) {
+        earphoneAutoReadControllerRef.current = null
+      }
+      if (earphoneAutoReadPumpTimerRef.current !== null) {
+        window.clearTimeout(earphoneAutoReadPumpTimerRef.current)
+        earphoneAutoReadPumpTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // Rising edge -> new watermark; falling edge -> stop the auto clip and drop
+  // auto items (the toggle keeps its value). Runs after every render because
+  // the synchronous gate listener below may have closed the controller
+  // between two renders that report the same armed value.
+  useEffect(() => {
+    const controller = earphoneAutoReadControllerRef.current
+    if (!controller) return
+    if (shouldArmEarphoneAutoRead) {
+      if (!controller.isArmed()) {
+        earphoneAutoReadArmedRef.current = true
+        controller.arm(earphoneAutoReadSnapshot)
+      }
+      return
+    }
+    if (controller.isArmed() || earphoneAutoReadArmedRef.current) {
+      earphoneAutoReadArmedRef.current = false
+      controller.disarm()
+      stopEarphoneAutoTtsPlayback()
+    }
+  })
+
+  // Completion detector: every change to committed rows, drafts or display
+  // languages (own voice, own typed, counterpart commits, hydration).
+  useEffect(() => {
+    earphoneAutoReadControllerRef.current?.update(earphoneAutoReadSnapshot)
+  }, [earphoneAutoReadSnapshot])
+
+  // An unplug or toggle-off must silence the auto clip before React renders.
+  useEffect(() => {
+    const closeWhenGateCloses = () => {
+      if (!earphoneAutoReadArmedRef.current) return
+      if (isEarphoneAutoReadGateOpenNow()) return
+      earphoneAutoReadArmedRef.current = false
+      earphoneAutoReadControllerRef.current?.disarm()
+      stopEarphoneAutoTtsPlayback()
+    }
+    const unsubscribeRoute = subscribeNativeAudioRoute(closeWhenGateCloses)
+    const unsubscribePreference = subscribeEarphoneModePreference(closeWhenGateCloses)
+    return () => {
+      unsubscribeRoute()
+      unsubscribePreference()
+    }
+  }, [stopEarphoneAutoTtsPlayback])
+
+  // Contract A.4: re-read the route on mount (old shells ignore the message).
+  useEffect(() => {
+    requestNativeAudioRoute()
+  }, [])
+
+  const handleEarphoneModeToggle = useCallback(() => {
+    const toggle = resolveEarphoneModeToggle(getEarphoneModePreferenceSnapshot())
+    writeEarphoneModeEnabled(toggle.nextEnabled)
+    if (toggle.requestRoute) requestNativeAudioRoute()
+    if (toggle.nextEnabled && !(isNativeApp() && isLikelyIOSPlatform())) {
+      // A user gesture: unlock the HTML audio element for clips that start
+      // later without one (Android app, mobile web).
+      void primeAudioPlayback(true)
+    }
+    if (toggle.showNotice) setEarphoneModeNoticeOpen(true)
+  }, [primeAudioPlayback])
+
+  const closeEarphoneModeNotice = useCallback(() => {
+    setEarphoneModeNoticeOpen(false)
+  }, [])
+
+  const isEarphoneModeOn = earphoneModeGate.controlVisible && earphoneModeEnabled
+  const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
+    ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
+    : earphoneModeCopy.label
+  const earphoneModeMenuItem = useMemo<ConversationImageComposerEarphoneMode | undefined>(() => (
+    earphoneModeGate.controlVisible
+      ? {
+          enabled: earphoneModeEnabled,
+          waiting: earphoneModeGate.waitingForEarphones,
+          label: earphoneModeCopy.label,
+          stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
+          waitingLabel: earphoneModeCopy.waitingLabel,
+          onToggle: handleEarphoneModeToggle,
+        }
+      : undefined
+  ), [
+    earphoneModeCopy,
+    earphoneModeEnabled,
+    earphoneModeGate.controlVisible,
+    earphoneModeGate.waitingForEarphones,
+    handleEarphoneModeToggle,
+  ])
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
     displayMode: bubbleDisplayMode,
@@ -6382,7 +6696,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     : null
   const storedMessageCountLabel = formatLivePhoneDemoMessageCount(persistedUtteranceCount)
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
-  const activeBubblePlaybackKey = speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey
+  // "…" while requested / queued / synthesizing (manual and auto), animated
+  // bars only while the current clip's audio is really playing.
+  const bubbleTtsIndicatorsByUtteranceId = useMemo(() => groupBubbleTtsIndicatorsByUtterance(
+    resolveBubbleTtsIndicatorKeys({
+      current: speakingItem ? { playbackKey: speakingItem.playbackKey, started: speakingItem.started } : null,
+      pendingManualPlaybackKey: pendingManualTtsTarget?.playbackKey,
+      queuedAutoPlaybackKeys: earphoneQueuedPlaybackKeys,
+    }),
+  ), [earphoneQueuedPlaybackKeys, pendingManualTtsTarget, speakingItem])
   const scrollDateTop = Math.max(
     16,
     Math.min(
@@ -8193,6 +8515,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   : index > 0
                     ? 'mt-1.5'
                     : ''
+                const bubbleTtsIndicator = item.kind === 'message'
+                  ? bubbleTtsIndicatorsByUtteranceId.get(item.utterance.id)
+                  : undefined
 
                 return (
                   <div
@@ -8233,7 +8558,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onPlayOriginal={handlePlayOriginalBubbleTts}
                         onPlayTranslation={handlePlayTranslationBubbleTts}
                         bubbleTextClassName={chatBubbleTextClassName}
-                        speakingPlaybackKey={activeBubblePlaybackKey}
+                        pendingPlaybackKeys={bubbleTtsIndicator?.pendingPlaybackKeys}
+                        playingPlaybackKey={bubbleTtsIndicator?.playingPlaybackKey}
                         shouldAnimateEntrance={animatedDisplayUtteranceIds.has(item.utterance.id)}
                         viewerUserId={viewerUserId}
                         onOpenProfile={handleOpenProfileForBubble}
@@ -8697,7 +9023,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} /> : (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                      // No sendable conversation: no photo row, but the "+" still
+                      // carries the earphone-mode row and the voice-mode switch.
+                      <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
+                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} />
+                      ) : (
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
                         data-qa="live-demo-keyboard-close"
@@ -8759,17 +9091,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
                   className="grid items-end"
-                  style={{ gridTemplateColumns: '1fr auto 1fr' }}
+                  style={{
+                    // minmax(0, 1fr) keeps Start centered once the left cell
+                    // also holds the earphone button; without it the layout
+                    // stays exactly as before.
+                    gridTemplateColumns: earphoneModeGate.controlVisible ? 'minmax(0, 1fr) auto minmax(0, 1fr)' : '1fr auto 1fr',
+                  }}
                 >
                   <motion.div
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    className="self-end justify-self-start pl-2"
+                    className={earphoneModeGate.controlVisible
+                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-2'
+                      : 'self-end justify-self-start pl-2'}
                   >
-                    <div className="flex h-[33px] flex-col items-start justify-end gap-0">
-                      <div className="flex items-center gap-1.5">
+                    <div className={`flex h-[33px] flex-col items-start justify-end gap-0${earphoneModeGate.controlVisible ? ' min-w-0' : ''}`}>
+                      <div className={`flex items-center gap-1.5${earphoneModeGate.controlVisible ? ' min-w-0 max-w-full' : ''}`}>
                         {isUsageLimited ? (
                           <>
                             <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
@@ -8778,20 +9117,46 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 style={{ width: `${usagePercent}%` }}
                               />
                             </div>
-                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}${earphoneModeGate.controlVisible ? ' shrink-0' : ''}`}>
                               {formatLivePhoneDemoUsageDuration(remainingSec)}
                             </span>
                           </>
                         ) : (
-                          <span className="text-sm leading-4 tabular-nums text-gray-400">
+                          <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' min-w-0 truncate' : ''}`}>
                             {formatLivePhoneDemoUsageDuration(usageSec)}
                           </span>
                         )}
                       </div>
-                      <span className="text-sm leading-4 tabular-nums text-gray-400">
+                      <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' max-w-full truncate' : ''}`}>
                         {storedMessageCountLabel}
                       </span>
                     </div>
+                    {earphoneModeGate.controlVisible && (
+                      <button
+                        type="button"
+                        data-qa="live-demo-earphone-mode-toggle"
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={handleEarphoneModeToggle}
+                        aria-label={earphoneModeControlLabel}
+                        aria-pressed={isEarphoneModeOn}
+                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 ${
+                          isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        style={{
+                          width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                          height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        }}
+                      >
+                        <Headphones size={18} strokeWidth={2.15} />
+                        {earphoneModeGate.waitingForEarphones && (
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-waiting-dot
+                            className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-gray-400 ring-2 ring-white"
+                          />
+                        )}
+                      </button>
+                    )}
                   </motion.div>
 
                   <motion.div className="flex self-end justify-center">
@@ -8888,6 +9253,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
             )}
           </motion.div>
+          {earphoneModeNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>
+              <div data-qa="live-demo-earphone-mode-notice">
+                <p className="text-sm font-semibold text-gray-900">{earphoneModeCopy.label}</p>
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">{earphoneModeCopy.noticeBody}</p>
+                {!nativeAudioRoute.earphonesConnected && (
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{earphoneModeCopy.noticeNotConnectedBody}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={closeEarphoneModeNotice}
+                  className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+                >
+                  {earphoneModeCopy.noticeConfirmLabel}
+                </button>
+              </div>
+            </MessageMediaDialog>
+          )}
         </div>
       </div>
     </PhoneFrame>
