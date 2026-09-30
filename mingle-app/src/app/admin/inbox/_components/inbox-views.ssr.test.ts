@@ -86,6 +86,7 @@ const roomView: InboxRoomViewData = {
     oldestMessageCursor: { createdAtMs: Date.parse('2026-09-30T09:57:00.000Z'), messageId: 'msg_0' },
     leaveNotices: [],
     inviteNotices: [],
+    operatorDisclosure: true,
   },
 }
 
