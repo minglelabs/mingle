@@ -1,3 +1,9 @@
+import {
+  TRANSLATION_MODEL_OPTIONS,
+  normalizeSelectableTranslationModel,
+  type UserSelectableTranslationModel,
+} from "@/lib/translation-models";
+
 export const ADMIN_DASHBOARD_DEFAULT_DAYS = 30;
 export const ADMIN_DASHBOARD_MAX_DAYS = 365;
 // app_messages.created_at etc. are stored as naive UTC instants, so bucket
@@ -24,6 +30,10 @@ export function normalizeDashboardPlatform(value: unknown): AdminDashboardPlatfo
  * always agree -- letting them drift apart would silently break hover positioning. */
 export const ADMIN_DASHBOARD_CHART_WIDTH = 560;
 export const ADMIN_DASHBOARD_CHART_HEIGHT = 140;
+/** Plot width for a full-width card: about two half-width plots plus the grid gap, so on
+ * desktop its axis text renders at the same size as the half-width charts instead of
+ * being scaled up ~2x by the viewBox. Same geometry/hover sharing rule as above. */
+export const ADMIN_DASHBOARD_WIDE_CHART_WIDTH = 1224;
 
 /**
  * 오늘 + 어제는 데이터가 아직 완전히 집계되지 않을 수 있으므로 캐시 대상에서 제외한다.
@@ -191,6 +201,13 @@ export function formatMetricDisplayValue(value: number | null, kind: MetricKind)
   return formatMetricValue(value, kind);
 }
 
+/** A 0..1 share as a one-decimal percentage. A nonzero share too small to show reads
+ * "<0.1%" rather than "0.0%", which would look like the series had no data. */
+export function formatSharePercent(share: number): string {
+  if (share > 0 && share < 0.001) return "<0.1%";
+  return `${(share * 100).toFixed(1)}%`;
+}
+
 export function formatShortDay(dayKey: string): string {
   const [, month, day] = dayKey.split("-");
   return `${month}/${day}`;
@@ -305,6 +322,70 @@ export function buildChartGeometry(
   return { linePath, areaPath, points: projected, yMax, bandWidth };
 }
 
+/**
+ * Geometry for several series drawn on one chart. All of them share one y-scale sized to
+ * the largest value across every series -- scaling each on its own would make a small
+ * series look as tall as a large one, and clip the large one against a shared axis.
+ */
+export function buildSharedScaleChartGeometries(
+  seriesPoints: readonly (readonly DailyPoint[])[],
+  width: number,
+  height: number,
+): { yMax: number; geometries: ChartGeometry[] } {
+  const values = seriesPoints.flatMap((points) => points
+    .map((point) => point.value)
+    .filter((value): value is number => value !== null));
+  const yMax = niceCeil(values.length > 0 ? Math.max(...values) : 0);
+  return {
+    yMax,
+    geometries: seriesPoints.map((points) => buildChartGeometry(points, width, height, yMax)),
+  };
+}
+
+/** A chart's plot area plus the viewBox padding around it: room for the y-axis labels on
+ * the right, the x-axis labels below, and markers/strokes that overhang the edges. */
+export type ChartFrame = {
+  width: number;
+  height: number;
+  viewMinX: number;
+  viewMinY: number;
+  viewWidth: number;
+  viewHeight: number;
+};
+
+export function resolveChartFrame(width: number, height: number): ChartFrame {
+  return { width, height, viewMinX: -4, viewMinY: -8, viewWidth: width + 48, viewHeight: height + 30 };
+}
+
+/**
+ * Maps a pointer's clientX over the rendered svg to the nearest day index. It snaps to a
+ * real day instead of interpolating, so hover only ever shows a measured value. Returns
+ * null when there is nothing to hover or the svg has no layout width yet.
+ */
+export function resolveHoverIndex(
+  clientX: number,
+  svgRect: { left: number; width: number },
+  frame: ChartFrame,
+  pointCount: number,
+): number | null {
+  if (pointCount === 0 || svgRect.width === 0) return null;
+  const svgX = ((clientX - svgRect.left) / svgRect.width) * frame.viewWidth + frame.viewMinX;
+  const bandWidth = pointCount > 1 ? frame.width / (pointCount - 1) : frame.width;
+  const t = svgX / (bandWidth || 1);
+  return Math.round(Math.min(pointCount - 1, Math.max(0, t)));
+}
+
+/**
+ * How far (0..100, in % of its own width) to shift a tooltip left of its anchor: the
+ * anchor's fraction of the plot width. The tooltip's left edge then sits on the anchor at
+ * the plot's left edge and its right edge on the anchor at the right edge, so a tooltip
+ * narrower than the plot stays inside it wherever the anchor is and at any rendered width.
+ */
+export function resolveTooltipShiftPercent(x: number, width: number): number {
+  if (!(width > 0)) return 50;
+  return Math.min(1, Math.max(0, x / width)) * 100;
+}
+
 export function sumSeries(points: readonly DailyPoint[]): number {
   return points.reduce((total, point) => total + (point.value ?? 0), 0);
 }
@@ -324,4 +405,66 @@ export function averageSeries(points: readonly DailyPoint[]): number | null {
     .filter((value): value is number => value !== null);
   if (values.length === 0) return null;
   return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+/** Series key/label pooling every translation_model value no selectable model claims
+ * (retired models, unknown runtime strings). */
+export const OTHER_TRANSLATION_MODEL_SERIES_KEY = "other";
+export const OTHER_TRANSLATION_MODEL_SERIES_LABEL = "기타";
+
+/** A selectable model's value, or the "기타" pool. */
+export type TranslationModelSeriesKey = UserSelectableTranslationModel | typeof OTHER_TRANSLATION_MODEL_SERIES_KEY;
+
+/** One day's message count for one reported app_messages.translation_model string, as
+ * the query returns it (case- and space-folded, not yet canonicalized). */
+export type TranslationModelDailyRow = { day: string; model: string; value: number };
+
+export type TranslationModelSeries = {
+  key: TranslationModelSeriesKey;
+  label: string;
+  points: DailyPoint[];
+  /** Messages over the whole range. */
+  total: number;
+  /** total / every translated message in the range, 0..1. */
+  share: number;
+};
+
+/**
+ * Folds raw per-day translation_model counts into one series per selectable model, in
+ * TRANSLATION_MODEL_OPTIONS order, with every unrecognized value pooled into a trailing
+ * "기타" series. Raw strings are canonicalized here with the app's own normalizer rather
+ * than in SQL, so legacy aliases (e.g. "openai/gpt-6-luna") land on their model. Series
+ * with no message in the range are dropped; the rest are zero-filled over dayKeys, since
+ * a count's missing day is a real zero.
+ */
+export function buildTranslationModelSeries(
+  rows: readonly TranslationModelDailyRow[],
+  dayKeys: readonly string[],
+): TranslationModelSeries[] {
+  const optionKeys = new Set<string>(TRANSLATION_MODEL_OPTIONS.map((option) => option.value));
+  const countsByKey = new Map<TranslationModelSeriesKey, Map<string, number>>();
+  for (const row of rows) {
+    const canonical = normalizeSelectableTranslationModel(row.model);
+    // A canonical value without an option would otherwise vanish from every series.
+    const key = canonical && optionKeys.has(canonical) ? canonical : OTHER_TRANSLATION_MODEL_SERIES_KEY;
+    const countsByDay = countsByKey.get(key) ?? new Map<string, number>();
+    countsByDay.set(row.day, (countsByDay.get(row.day) ?? 0) + row.value);
+    countsByKey.set(key, countsByDay);
+  }
+
+  const slots: { key: TranslationModelSeriesKey; label: string }[] = [
+    ...TRANSLATION_MODEL_OPTIONS.map((option) => ({ key: option.value, label: option.label })),
+    { key: OTHER_TRANSLATION_MODEL_SERIES_KEY, label: OTHER_TRANSLATION_MODEL_SERIES_LABEL },
+  ];
+  const series = slots
+    .map(({ key, label }) => {
+      const dailyRows = [...(countsByKey.get(key) ?? new Map<string, number>())]
+        .map(([day, value]) => ({ day, value }));
+      const points = fillDailySeries(dailyRows, dayKeys, 0);
+      return { key, label, points, total: sumSeries(points) };
+    })
+    .filter((entry) => entry.total > 0);
+
+  const grandTotal = series.reduce((total, entry) => total + entry.total, 0);
+  return series.map((entry) => ({ ...entry, share: grandTotal > 0 ? entry.total / grandTotal : 0 }));
 }
