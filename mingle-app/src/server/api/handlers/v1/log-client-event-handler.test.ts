@@ -14,6 +14,8 @@ const {
   mockNotifyConversationMessage,
   mockSendPushNotificationForConversationMessage,
   mockNotifyOperatorInboxActivity,
+  mockAfter,
+  mockAfterCallbacks,
   mockMaterializePendingConversationInvitees,
   mockIsMessageSenderBlockedInConversation,
   mockListChannelMemberUserIdsBySessionKey,
@@ -33,6 +35,8 @@ const {
   mockNotifyConversationMessage: vi.fn(),
   mockSendPushNotificationForConversationMessage: vi.fn(),
   mockNotifyOperatorInboxActivity: vi.fn(),
+  mockAfter: vi.fn(),
+  mockAfterCallbacks: [] as Array<() => void | Promise<void>>,
   mockMaterializePendingConversationInvitees: vi.fn(),
   mockIsMessageSenderBlockedInConversation: vi.fn(),
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
@@ -44,6 +48,11 @@ const {
 vi.mock("next-auth", () => ({
   getServerSession: mockGetServerSession,
 }));
+
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: mockAfter };
+});
 
 vi.mock("@/lib/auth-options", () => ({
   getAuthOptions: () => ({}),
@@ -112,6 +121,10 @@ describe("handleLogClientEventV1", () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAfterCallbacks.length = 0;
+    mockAfter.mockImplementation((callback: () => void | Promise<void>) => {
+      mockAfterCallbacks.push(callback);
+    });
     mockAppMessageFindUnique.mockResolvedValue(null);
     mockOrderLock.mockResolvedValue([{ locked: true }]);
     mockReserveConversationVoiceOrder.mockImplementation(async scope => mintVoiceOrderReceipt(scope));
@@ -522,8 +535,12 @@ describe("handleLogClientEventV1", () => {
     });
   });
 
-  it("reports a new text message to the operator inbox right after the push", async () => {
+  it("schedules the operator inbox notify after the push without delaying the response", async () => {
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "op_1"]);
+    let releaseNotify: (() => void) | undefined;
+    mockNotifyOperatorInboxActivity.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      releaseNotify = resolve;
+    }));
     const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
       method: "POST",
       body: JSON.stringify({
@@ -532,6 +549,14 @@ describe("handleLogClientEventV1", () => {
       }),
     }));
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(mockAfter).toHaveBeenCalledOnce();
+    expect(mockAfterCallbacks).toHaveLength(1);
+    expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
+
+    const afterCallback = mockAfterCallbacks[0];
+    expect(afterCallback).toBeDefined();
+    const callbackResult = afterCallback?.();
     expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
     expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledWith({
       sessionKey: "sess_123",
@@ -543,6 +568,8 @@ describe("handleLogClientEventV1", () => {
     });
     expect(mockSendPushNotificationForConversationMessage.mock.invocationCallOrder[0])
       .toBeLessThan(mockNotifyOperatorInboxActivity.mock.invocationCallOrder[0]);
+    releaseNotify?.();
+    await callbackResult;
   });
 
   it("does not report a translation update to the operator inbox", async () => {
@@ -554,6 +581,7 @@ describe("handleLogClientEventV1", () => {
       }),
     }));
     expect(response.status).toBe(200);
+    expect(mockAfter).not.toHaveBeenCalled();
     expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
   });
 
@@ -571,8 +599,13 @@ describe("handleLogClientEventV1", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ ok: true });
       expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
-      expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
+      expect(mockAfter).toHaveBeenCalledOnce();
+      expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
       expect(mockCreateTrackedEventLog).toHaveBeenCalledOnce();
+      const afterCallback = mockAfterCallbacks[0];
+      expect(afterCallback).toBeDefined();
+      await afterCallback?.();
+      expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
       expect(error).toHaveBeenCalledWith("Operator inbox notify failed:", expect.any(Error));
     } finally {
       error.mockRestore();
@@ -824,5 +857,53 @@ describe("handleLogClientEventV1", () => {
     await expect(response.json()).resolves.toEqual({ error: "authenticated_user_required" });
     expect(mockAppMessageUpsert).not.toHaveBeenCalled();
     expect(mockCreateTrackedEventLog).not.toHaveBeenCalled();
+  });
+
+  it("labels the live committed utterance of an operator sender with speakerBadge", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    mockAppMessageUpsert.mockResolvedValue({
+      id: "message_123",
+      createdAt: new Date("2026-04-12T09:00:00.000Z"),
+      user: { name: "Mina", image: "https://img.example/mina.jpg", isOfficial: false, isOperator: true },
+    });
+
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.2.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "client_badge_1",
+        sourceLanguage: "pt", sourceText: "Olá", translations: {},
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        user: { select: { name: true, image: true, isOfficial: true, isOperator: true } },
+      }),
+    }));
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
+      id: "client_badge_1", speakerName: "Mina", speakerBadge: "operator",
+    }));
+  });
+
+  it("adds no speakerBadge for a sender without a badge", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
+    mockAppMessageUpsert.mockResolvedValue({
+      id: "message_123",
+      createdAt: new Date("2026-04-12T09:00:00.000Z"),
+      user: { name: "Ana", image: null, isOfficial: false, isOperator: false },
+    });
+
+    await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.2.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "client_badge_2",
+        sourceLanguage: "ko", sourceText: "안녕하세요", translations: {},
+      }),
+    }));
+
+    const utterance = mockNotifyConversationMessage.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(utterance).toMatchObject({ id: "client_badge_2", speakerName: "Ana" });
+    expect(utterance).not.toHaveProperty("speakerBadge");
   });
 });

@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
 import { X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
@@ -419,16 +419,43 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
   </div>
 }
 
-export default function ConversationImageBubble({ image, locale }: { image: ConversationMessageImage; locale: string }) {
+/**
+ * Where a chat photo is loaded from. Default: the member-session image route
+ * of the app API. The admin inbox reads rooms without a member session, so
+ * it supplies its own proxy URL, either per bubble (`src`) or for every
+ * bubble below a provider (the bubbles it renders through ChatBubble).
+ */
+export type ConversationImageSrcResolver = (image: ConversationMessageImage) => string | null | undefined
+
+const ConversationImageSrcContext = createContext<ConversationImageSrcResolver | null>(null)
+
+export function ConversationImageSrcProvider({ resolve, children }: { resolve: ConversationImageSrcResolver; children: ReactNode }) {
+  return <ConversationImageSrcContext.Provider value={resolve}>{children}</ConversationImageSrcContext.Provider>
+}
+
+function withRetryParam(path: string, retry: number): string {
+  if (!retry) return path
+  return `${path}${path.includes('?') ? '&' : '?'}retry=${retry}`
+}
+
+export default function ConversationImageBubble({ image, locale, src: srcOverride }: {
+  image: ConversationMessageImage
+  locale: string
+  /** Optional image URL; defaults to the app API's member image route. */
+  src?: string | null
+}) {
   const copy = resolveConversationImageCopy(locale)
+  const resolveSrc = useContext(ConversationImageSrcContext)
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
   const [dragProgressValue, setDragProgressValue] = useState(0)
   const [backdropSettling, setBackdropSettling] = useState(false)
   const close = useCallback(() => { setDragProgressValue(0); setBackdropSettling(false); setExpanded(false) }, [])
-  const path = buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
-  const src = retry ? `${path}?retry=${retry}` : path
+  const path = srcOverride?.trim()
+    || resolveSrc?.(image)?.trim()
+    || buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
+  const src = withRetryParam(path, retry)
   return <>
     <CopyableBubbleSurface text={typeof window === 'undefined' ? path : new URL(path, window.location.origin).href} copyBubbleLabel={copy.copyLink}
       onActivate={() => { if (!failed) setExpanded(true) }} role="button" aria-label={copy.image}
