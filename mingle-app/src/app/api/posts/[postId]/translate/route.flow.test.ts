@@ -3,7 +3,7 @@
  * and an in-memory translation store; only the LLM call (translateTexts) and
  * the DB post lookup are faked.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 type Row = { postId: string; bodyVersion: number; language: string; status: 'pending' | 'ready' | 'failed'; text: string | null }
@@ -119,5 +119,45 @@ describe('POST /api/posts/{postId}/translate — QA flow', () => {
     const prompt: string = h.translateTexts.mock.calls[0][0].userPromptOverride
     const textLine = prompt.split('\n').find((l) => l.startsWith('text='))!
     expect(JSON.parse(textLine.slice('text='.length))).toBe(h.post.sourceText)
+  })
+})
+
+describe('POST /api/posts/{postId}/translate — Chinese variants', () => {
+  const original = h.post
+
+  beforeEach(() => {
+    h.rows.clear()
+    h.translateTexts.mockReset()
+    __resetRateLimitStore()
+    __testClearInFlightRequests()
+    as('viewer-a')
+  })
+  afterEach(() => {
+    h.post = original
+  })
+
+  it('converts a legacy bare zh Traditional post for a zh-CN viewer, with no model call', async () => {
+    h.post = { sourceText: '這個軟體很好用', sourceLanguage: 'zh', bodyVersion: 1 }
+    const body = await (await POST(req('zh-CN'), ctx)).json()
+    expect(body).toMatchObject({ language: 'zh-CN', status: 'ready', text: '这个软件很好用', sourceLanguage: 'zh' })
+    expect(h.translateTexts).not.toHaveBeenCalled()
+    expect([...h.rows.values()]).toEqual([
+      { postId: 'p1', bodyVersion: 1, language: 'zh-CN', status: 'ready', text: '这个软件很好用' },
+    ])
+  })
+
+  it('serves a legacy bare zh Simplified post as the original for a zh-CN viewer', async () => {
+    h.post = { sourceText: '这个软件很好用', sourceLanguage: 'zh', bodyVersion: 1 }
+    const body = await (await POST(req('zh-CN'), ctx)).json()
+    expect(body).toMatchObject({ language: 'zh-CN', status: 'ready', text: '这个软件很好用' })
+    expect(h.rows.size).toBe(0)
+    expect(h.translateTexts).not.toHaveBeenCalled()
+  })
+
+  it('stores a bare zh request under zh-CN', async () => {
+    h.translateTexts.mockResolvedValue({ translations: { 'zh-CN': '你好' } })
+    const body = await (await POST(req('zh'), ctx)).json()
+    expect(body).toMatchObject({ language: 'zh-CN', status: 'ready', text: '你好' })
+    expect([...h.rows.values()].map((r) => r.language)).toEqual(['zh-CN'])
   })
 })

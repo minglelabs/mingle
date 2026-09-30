@@ -99,6 +99,23 @@ describe('POST /api/comments/{commentId}/translate', () => {
     expect(await res.json()).toMatchObject({ language: 'zh-CN', text: 'translated', sourceText: 'hi', sourceLanguage: 'en' })
   })
 
+  it('translates a legacy bare zh Traditional comment for a zh-CN viewer instead of serving the original', async () => {
+    mockCommentFindFirst.mockResolvedValue({ id: 'c1', bodyVersion: 1, sourceText: '這個軟體很好用', sourceLanguage: 'zh' })
+    const res = await POST(makeReq({ language: 'zh-CN' }), makeCtx('c1'))
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ language: 'zh-CN', sourceLanguage: 'zh' }),
+    )
+    expect(await res.json()).toMatchObject({ status: 'ready', text: 'translated' })
+  })
+
+  it('serves a legacy bare zh Simplified comment as the original for a zh-CN viewer', async () => {
+    mockCommentFindFirst.mockResolvedValue({ id: 'c1', bodyVersion: 1, sourceText: '这个软件很好用', sourceLanguage: 'zh' })
+    const res = await POST(makeReq({ language: 'zh-CN' }), makeCtx('c1'))
+    expect(mockTranslateCommentOnDemand).not.toHaveBeenCalled()
+    expect(await res.json()).toMatchObject({ status: 'ready', text: '这个软件很好用' })
+  })
+
   it('rate-limits with translate_comment', async () => {
     mockCommentFindFirst.mockResolvedValue({ id: 'c1', bodyVersion: 1, sourceText: 'hi', sourceLanguage: 'en' })
     for (let i = 0; i < 60; i++) {
