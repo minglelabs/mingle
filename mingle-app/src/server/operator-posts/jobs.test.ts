@@ -225,7 +225,7 @@ describe('createOperatorPostBatch — queuing', () => {
     expect(m.transactionQueryRaw).toHaveBeenCalledOnce()
     const [strings] = m.transactionQueryRaw.mock.calls[0] as [TemplateStringsArray]
     const lockQuery = Prisma.sql(strings)
-    expect(lockQuery.sql).toContain('pg_advisory_xact_lock(7315305107985148720)')
+    expect(lockQuery.sql).toContain('pg_advisory_xact_lock(7315305107985148720)::text')
     expect(m.jobCount).toHaveBeenCalledOnce()
     expect(m.jobCreateManyAndReturn).toHaveBeenCalledOnce()
   })

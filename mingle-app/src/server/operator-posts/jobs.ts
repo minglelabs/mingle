@@ -232,7 +232,9 @@ export async function createOperatorPostBatch(
   const insertion = await prisma.$transaction(async (tx) => {
     // Serialize batch reservations so simultaneous requests cannot exceed the
     // global queue cap or plan the same operator's spread slots from stale data.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(7315305107985148720)`
+    // Prisma cannot deserialize PostgreSQL's `void` result from the lock
+    // function. Cast it to text while retaining the transaction-scoped lock.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(7315305107985148720)::text`
 
     const waiting = await tx.operatorPostJob.count({ where: { state: { in: WAITING_STATES } } })
     if (waiting + valid.length > OPERATOR_POST_QUEUE_MAX) return { ok: false as const, waiting }

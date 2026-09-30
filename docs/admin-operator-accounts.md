@@ -45,4 +45,13 @@ The worker runs in the Node server process at 60-second intervals. Set `MINGLE_O
 
 Run the web unit/script suites, React Native tests, messaging tests, and type checks on the integrated branch. Verify the migration state on the local database. Code tests do not establish device push delivery, iOS keyboard/photo behavior, image storage, or real AI output quality.
 
+The integrated branch was checked on 2026-09-30:
+
+- Web: 3,832 unit tests and six script tests passed; TypeScript and the production Next.js build passed.
+- React Native: 133 tests passed. Messaging service: 27 tests passed.
+- Real local PostgreSQL: four inbox tests and five post-job tests passed against an isolated schema-only copy of the local database. They cover membership and unread queries, due-job claims, concurrent claims, queue-cap reservations, per-operator scheduling, and cancellation. The fixture database was removed after validation.
+- Local migration `20260930190000_add_admin_operator_accounts` is already applied. No devbox server, remote database migration, deployment, or main-branch merge was performed.
+
+The PostgreSQL checks caught a batch-creation failure that mocked unit tests missed: Prisma cannot deserialize the advisory lock's `void` result. The lock query now casts that result to text while retaining its transaction-scoped lock.
+
 Device acceptance requires two app accounts and a clearly labeled operator account: create/edit its profile, inspect public age and badge disclosures, send text and photos to it, read/reply from admin, verify staff push navigation, publish a batch, cancel a queued item, and check feed/profile ordering. Run this against a development environment before merging and deployment.

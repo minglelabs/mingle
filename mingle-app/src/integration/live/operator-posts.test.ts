@@ -91,7 +91,7 @@ integrationSuite('operator post jobs with a real local PostgreSQL database', () 
     await db.user.createMany({
       data: operatorIds.map((id, index) => ({
         id,
-        handle: `${id}_handle`,
+        handle: `optest_${index}_${suffix.slice(0, 16)}`,
         name: `Operator Posts Test ${index + 1}`,
         isOperator: true,
         primaryLanguages: ['pt'],
