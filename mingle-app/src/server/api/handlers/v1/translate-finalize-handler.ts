@@ -45,8 +45,8 @@ const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 // Gemini Priority inference: top-level `serviceTier` on generateContent. Gemma has no
 // Priority tier, so it is only sent for Gemini models.
 const GEMINI_TRANSLATION_SERVICE_TIER = 'priority'
-// OpenAI Fast mode ('priority' is the same tier under its earlier name). Only sent to the
-// OpenAI API itself, never to OpenRouter.
+// OpenAI Fast mode ('priority' is the same tier under its earlier name). Sent on every
+// request of the `openai` provider (GPT-6 Luna); qwen via OpenRouter never gets it.
 const OPENAI_TRANSLATION_SERVICE_TIER = 'priority'
 const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
@@ -1445,9 +1445,7 @@ async function createOpenAICompatibleCompletion(
   if (config.provider === 'openai') {
     payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
     payload.reasoning_effort = 'none'
-    if (isOpenAIBaseUrl(config.baseUrl)) {
-      payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
-    }
+    payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
   }
 
   if (config.extraBody) {
