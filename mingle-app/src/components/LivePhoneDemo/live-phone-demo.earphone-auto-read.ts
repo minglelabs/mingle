@@ -11,7 +11,7 @@ import {
   createEarphoneModeWatermark,
   isEarphoneModeCandidate,
   isEarphoneModeUtteranceSettled,
-  type EarphoneModeDisplayContext,
+  type EarphoneModeReadContext,
   type EarphoneModeReadTarget,
   type EarphoneModeWatermark,
 } from './live-phone-demo.earphone-mode.logic'
@@ -22,7 +22,8 @@ export type EarphoneAutoReadSnapshot = {
   committed: readonly Utterance[]
   // Rows still being spoken (own pending turns, counterpart previews).
   drafts: readonly Utterance[]
-  display: EarphoneModeDisplayContext
+  // The session's one read language (L): only translations into it are read.
+  read: EarphoneModeReadContext
   viewerUserId: string | null
 }
 
@@ -76,16 +77,22 @@ function isOpenCandidate(candidate: Candidate): boolean {
   return candidate.status === 'waiting' || candidate.status === 'ready'
 }
 
+function readLanguageKeyOf(read: EarphoneModeReadContext): string {
+  return read.readLanguage?.trim().toLowerCase() ?? ''
+}
+
 // Reads every message that completes after a rising edge, in the order the
 // messages STARTED (compareUtteranceOrder, evaluated at dequeue time because
-// the server-reserved start can reach a row late). A candidate that started
-// earlier but is still incomplete holds the ones behind it until it completes,
-// disappears, or shows no progress for the stall timeout. Audio is prefetched
-// as soon as a candidate completes; playback stays strictly in order.
+// the server-reserved start can reach a row late), and only its translation
+// into the session's read language. A candidate that started earlier but is
+// still incomplete holds the ones behind it until it completes, disappears,
+// or shows no progress for the stall timeout. Audio is prefetched as soon as
+// a candidate completes; playback stays strictly in order.
 export class EarphoneAutoReadController {
   private readonly options: EarphoneAutoReadControllerOptions
   private armed = false
   private conversationKey = ''
+  private readLanguageKey = ''
   private watermark: EarphoneModeWatermark | null = null
   private candidates = new Map<string, Candidate>()
   private timer: unknown = null
@@ -106,13 +113,14 @@ export class EarphoneAutoReadController {
     this.resetCandidates()
     this.armed = true
     this.conversationKey = snapshot.conversationKey
+    this.readLanguageKey = readLanguageKeyOf(snapshot.read)
     const readOwnMessages = this.options.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES
     this.watermark = createEarphoneModeWatermark({
       committed: snapshot.committed,
       drafts: snapshot.drafts,
       isCommittedSettled: (utterance) => isEarphoneModeUtteranceSettled({
         utterance,
-        display: snapshot.display,
+        read: snapshot.read,
         viewerUserId: snapshot.viewerUserId,
         readOwnMessages,
       }),
@@ -127,6 +135,7 @@ export class EarphoneAutoReadController {
     this.armed = false
     this.watermark = null
     this.conversationKey = ''
+    this.readLanguageKey = ''
     this.resetCandidates()
     this.emitQueuedPlaybackKeys()
   }
@@ -137,6 +146,7 @@ export class EarphoneAutoReadController {
       this.arm(snapshot)
       return
     }
+    this.applyReadLanguage(snapshot.read)
     this.reconcile(snapshot)
     this.pump()
   }
@@ -278,7 +288,7 @@ export class EarphoneAutoReadController {
       const classified = classifyEarphoneModeUtterance({
         utterance,
         isDraft,
-        display: snapshot.display,
+        read: snapshot.read,
         viewerUserId: snapshot.viewerUserId,
         readOwnMessages: this.options.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES,
       })
@@ -295,6 +305,28 @@ export class EarphoneAutoReadController {
       if ((candidate.status === 'waiting' || candidate.status === 'ready') && !present.has(candidate.utteranceId)) {
         this.finishCandidate(candidate, 'skipped')
       }
+    }
+  }
+
+  // The read language changed (picked in the notice, or fallen back to the
+  // room default): everything still queued is classified again and read in
+  // the new language, or skipped when it has none. What was already read or
+  // skipped stays so.
+  private applyReadLanguage(read: EarphoneModeReadContext): void {
+    const readLanguageKey = readLanguageKeyOf(read)
+    if (readLanguageKey === this.readLanguageKey) return
+    this.readLanguageKey = readLanguageKey
+    const now = this.options.now()
+    for (const candidate of this.candidates.values()) {
+      if (!isOpenCandidate(candidate)) continue
+      candidate.abort?.abort()
+      candidate.abort = null
+      candidate.status = 'waiting'
+      candidate.target = null
+      candidate.audio = 'idle'
+      candidate.audioBlob = null
+      // Waiting for the new language's translation starts now.
+      candidate.lastProgressAtMs = now
     }
   }
 

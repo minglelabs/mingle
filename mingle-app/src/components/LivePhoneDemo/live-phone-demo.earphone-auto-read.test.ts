@@ -6,14 +6,14 @@ import {
   type EarphoneAutoReadDispatchItem,
   type EarphoneAutoReadSnapshot,
 } from './live-phone-demo.earphone-auto-read'
-import { EARPHONE_MODE_AUDIO_TIMEOUT_MS, EARPHONE_MODE_STALL_TIMEOUT_MS } from './live-phone-demo.earphone-mode.logic'
+import {
+  EARPHONE_MODE_AUDIO_TIMEOUT_MS,
+  EARPHONE_MODE_STALL_TIMEOUT_MS,
+  type EarphoneModeReadContext,
+} from './live-phone-demo.earphone-mode.logic'
 
-const display = {
-  preferredDisplayLanguage: 'ko',
-  preferredDisplayLanguages: ['ko'],
-  defaultDisplayLanguage: 'ko',
-  languageOrder: ['ko', 'en'],
-}
+// The session reads Korean unless a test picks another language.
+const koRead: EarphoneModeReadContext = { readLanguage: 'ko', languageOrder: ['ko', 'en', 'ja'] }
 
 function message(id: string, startedAtMs: number, overrides: Partial<Utterance> = {}): Utterance {
   return {
@@ -75,11 +75,16 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     ...options,
   })
 
-  const snapshot = (committed: Utterance[], drafts: Utterance[] = [], conversationKey = 'room-1'): EarphoneAutoReadSnapshot => ({
+  const snapshot = (
+    committed: Utterance[],
+    drafts: Utterance[] = [],
+    conversationKey = 'room-1',
+    read: EarphoneModeReadContext = koRead,
+  ): EarphoneAutoReadSnapshot => ({
     conversationKey,
     committed,
     drafts,
-    display,
+    read,
     viewerUserId: 'viewer',
   })
 
@@ -330,10 +335,10 @@ describe('EarphoneAutoReadController ordering', () => {
     const h = createHarness()
     h.controller.arm(h.snapshot([]))
     h.state.engineIdle = false // a manual clip is playing
-    const own = message('own', h.now() + 100, { originalLang: 'ko', originalText: '네', translations: {}, translationFinalized: {}, speakerUserId: 'viewer' })
+    const own = message('own', h.now() + 100, { speakerUserId: 'viewer' })
     const partner = message('partner', h.now() + 200)
     h.controller.update(h.snapshot([own, partner]))
-    await h.resolveAudio('original:own:ko')
+    await h.resolveAudio(key('own'))
     await h.resolveAudio(key('partner'))
 
     // The server-reserved start of `own` arrives: it actually started after `partner`.
@@ -486,5 +491,92 @@ describe('EarphoneAutoReadController gate and manual preemption', () => {
     await h.finishPlayback()
     expect(h.dispatchedIds()).toEqual(['a', 'b'])
     expect(h.controller.getCandidateStatus('c')).toBe('dispatched')
+  })
+})
+
+describe('EarphoneAutoReadController read language', () => {
+  it('never reads a message spoken in L, and does not hold the queue for it', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const spokenInKorean = {
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translationFinalized: { en: true, ja: true },
+    }
+    const ownKorean = message('own-ko', h.now() + 100, {
+      ...spokenInKorean,
+      originalText: '저는 괜찮아요',
+      translations: { en: "I'm fine", ja: '大丈夫です' },
+      speakerUserId: 'viewer',
+    })
+    const partnerKorean = message('partner-ko', h.now() + 200, {
+      ...spokenInKorean,
+      originalText: '좋아요',
+      translations: { en: 'Good', ja: 'いいね' },
+    })
+    const english = message('english', h.now() + 300)
+    h.controller.update(h.snapshot([incomplete(ownKorean), partnerKorean, english]))
+    expect(h.controller.getCandidateStatus('partner-ko')).toBe('skipped')
+    // Held only while the own message's translation is pending...
+    await h.resolveAudio(key('english'))
+    expect(h.dispatchedIds()).toEqual([])
+
+    // ...and skipped the moment it lands: no stall wait.
+    h.controller.update(h.snapshot([ownKorean, partnerKorean, english]))
+    expect(h.dispatchedIds()).toEqual(['english'])
+    expect(h.controller.getCandidateStatus('own-ko')).toBe('skipped')
+    expect(h.requestOrder).toEqual([key('english')])
+  })
+
+  it('skips a message whose translations finished without L at once', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const withoutKorean = message('without-ko', h.now() + 100, {
+      targetLanguages: ['ko', 'ja'],
+      translations: { ja: 'こんにちは' },
+      translationFinalized: { ja: true },
+    })
+    const next = message('next', h.now() + 200)
+    h.controller.update(h.snapshot([incomplete(withoutKorean), next]))
+    await h.resolveAudio(key('next'))
+    expect(h.dispatchedIds()).toEqual([])
+
+    h.controller.update(h.snapshot([withoutKorean, next]))
+    expect(h.dispatchedIds()).toEqual(['next'])
+    expect(h.controller.getCandidateStatus('without-ko')).toBe('skipped')
+  })
+
+  it('reads what is still queued in a newly picked language', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.state.engineIdle = false // a clip is playing
+    const both = message('both', h.now() + 100, {
+      targetLanguages: ['ko', 'ja'],
+      translations: { ko: '번역 both', ja: '翻訳 both' },
+      translationFinalized: { ko: true, ja: true },
+    })
+    const japanese = message('japanese', h.now() + 200, {
+      originalLang: 'ja',
+      originalText: 'こんにちは',
+      targetLanguages: ['ko', 'en'],
+      translations: { ko: '안녕하세요', en: 'Hello' },
+      translationFinalized: { ko: true, en: true },
+    })
+    h.controller.update(h.snapshot([both, japanese]))
+    expect(h.requestOrder).toEqual([key('both'), key('japanese')])
+
+    // Japanese picked in the notice while both are queued.
+    h.controller.update(h.snapshot([both, japanese], [], 'room-1', { ...koRead, readLanguage: 'ja' }))
+    expect([key('both'), key('japanese')].map((playbackKey) => h.requests.get(playbackKey)?.signal.aborted)).toEqual([true, true])
+    expect(h.requestOrder).toEqual([key('both'), key('japanese'), 'translation:both:ja'])
+    expect(h.queuedKeys.at(-1)).toEqual(['translation:both:ja'])
+    // Spoken in the new language: skipped.
+    expect(h.controller.getCandidateStatus('japanese')).toBe('skipped')
+
+    // A late answer for the old language changes nothing.
+    await h.resolveAudio(key('both'))
+    await h.resolveAudio('translation:both:ja')
+    await h.finishPlayback()
+    expect(h.dispatched.map((item) => [item.utteranceId, item.language, item.text])).toEqual([['both', 'ja', '翻訳 both']])
   })
 })

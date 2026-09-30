@@ -6,7 +6,6 @@ import {
   type Utterance,
 } from './ChatBubble'
 import {
-  buildOriginalBubblePlaybackKey,
   buildTranslationBubblePlaybackKey,
   type BubbleTtsPlaybackKind,
 } from './live-phone-demo.bubble-tts-indicator'
@@ -16,7 +15,9 @@ import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 // Per-device toggle. Deliberately separate from the fixed-off TTS setting
 // (tts-settings.tsx) and from the account's `speakerEnabled` preference.
 export const EARPHONE_MODE_ENABLED_STORAGE_KEY = 'mingle_earphone_mode_enabled'
-// Own messages are read back too (bubble parity). Flip to stop reading them.
+// Own messages are read too, through their translation into the session's
+// read language (one spoken in that language never is). Flip to stop reading
+// them.
 export const EARPHONE_MODE_READ_OWN_MESSAGES = true
 // An earlier-started message that is still incomplete holds the queue until it
 // completes, disappears, or shows no progress for this long.
@@ -201,12 +202,66 @@ export function isEarphoneModeCandidate(
   return utteranceOrderTime(utterance) >= watermark.armedAtMs - historyClockSkewMs
 }
 
-// ── What a message reads as (manual-tap parity) ────────────────────────────
+// ── Read language: ONE language (L) per earphone-mode session ──────────────
 
+// The room's display-language inputs, exactly what each bubble row receives.
 export type EarphoneModeDisplayContext = {
   preferredDisplayLanguage?: string | null
   preferredDisplayLanguages?: readonly string[]
   defaultDisplayLanguage?: string | null
+  languageOrder: readonly string[]
+}
+
+// Default L: the viewer's display language for this room, resolved by the
+// collapsed bubble's own resolver (member / solo-room default, then the
+// viewer's preferred languages, limited to the room's languages, then the
+// first room language) with the room's languages as the available set.
+// null only for a room without languages.
+export function resolveEarphoneModeDefaultReadLanguage(display: EarphoneModeDisplayContext): string | null {
+  const roomLanguages = display.languageOrder.filter((language) => language.trim())
+  if (roomLanguages.length === 0) return null
+  return resolveInitialDisplayLanguage(
+    display.preferredDisplayLanguages?.length
+      ? display.preferredDisplayLanguages
+      : (display.preferredDisplayLanguage ? [display.preferredDisplayLanguage] : []),
+    display.defaultDisplayLanguage,
+    roomLanguages[0],
+    roomLanguages.slice(1),
+    roomLanguages,
+  )
+}
+
+// A language picked in the earphone-mode notice. Session state only: it is
+// never persisted, and the room drops it on every on/off edge.
+export type EarphoneModeReadLanguagePick = {
+  // The room the pick was made in; every other room reads its own default.
+  conversationKey: string
+  language: string
+}
+
+// L right now: the pick, while it belongs to this room and is still one of
+// its languages; otherwise the room's default L.
+export function resolveEarphoneModeReadLanguage(input: {
+  pick: EarphoneModeReadLanguagePick | null
+  conversationKey: string
+  display: EarphoneModeDisplayContext
+}): string | null {
+  const { pick, display } = input
+  if (pick && pick.conversationKey === input.conversationKey) {
+    const pickedKey = pick.language.trim().toLowerCase()
+    const roomLanguage = pickedKey
+      ? display.languageOrder.find((language) => language.trim().toLowerCase() === pickedKey)
+      : undefined
+    if (roomLanguage) return roomLanguage
+  }
+  return resolveEarphoneModeDefaultReadLanguage(display)
+}
+
+// What one earphone-mode session reads: only the translation into
+// `readLanguage`. `languageOrder` keys display languages (Chinese variants)
+// the way the bubbles do.
+export type EarphoneModeReadContext = {
+  readLanguage: string | null
   languageOrder: readonly string[]
 }
 
@@ -218,52 +273,73 @@ export type EarphoneModeReadTarget = {
   text: string
 }
 
-// Mirrors ChatBubble's automatic (collapsed) language choice and the manual
-// tap handlers: an original row reads `originalText` in `originalLang`, a
-// translation row reads that translation in its display language. null while
-// the shown language has nothing final to read.
-export function resolveEarphoneModeReadTarget(
-  utterance: Utterance,
-  display: EarphoneModeDisplayContext,
-): EarphoneModeReadTarget | null {
-  const languageOrder = display.languageOrder
-  const resolver = createDisplayLanguageResolver(utterance, languageOrder)
-  const originalDisplayLanguage = resolver.originalLanguage
-  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver)
-  const displayLanguage = resolveInitialDisplayLanguage(
-    display.preferredDisplayLanguages?.length
-      ? display.preferredDisplayLanguages
-      : (display.preferredDisplayLanguage ? [display.preferredDisplayLanguage] : []),
-    display.defaultDisplayLanguage,
-    originalDisplayLanguage,
-    targetLanguages,
-    languageOrder,
-    resolver,
-  )
+type EarphoneModeReadLanguageInspection = {
+  // The original itself is in L: the viewer already understood it.
+  isSourceLanguage: boolean
+  // The row's translation into L, when L is one of its translation targets.
+  translation: { language: string, text: string, finalized: boolean | undefined } | null
+  // Nothing more will land: the row has no translation targets, or at least
+  // one translation is final and none is still streaming. Translations land
+  // as one batch, so an L translation still missing then never comes.
+  translationsSettled: boolean
+}
 
-  if (resolver.keyOf(displayLanguage) === resolver.originalKey) {
-    const text = utterance.originalText.trim()
-    const language = utterance.originalLang.trim()
-    if (!text || !language) return null
-    return {
-      playbackKey: buildOriginalBubblePlaybackKey(utterance.id, utterance.originalLang),
-      utteranceId: utterance.id,
-      language: utterance.originalLang,
-      kind: 'original',
-      text,
+function inspectEarphoneModeReadLanguage(
+  utterance: Utterance,
+  read: EarphoneModeReadContext,
+): EarphoneModeReadLanguageInspection | null {
+  const readLanguage = read.readLanguage?.trim()
+  if (!readLanguage) return null
+  const resolver = createDisplayLanguageResolver(utterance, read.languageOrder)
+  const readKey = resolver.keyOf(readLanguage)
+  if (!readKey) return null
+
+  // The same rows, keys and texts the bubble renders.
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, read.languageOrder, resolver)
+  let translation: EarphoneModeReadLanguageInspection['translation'] = null
+  let hasFinal = false
+  let hasInterim = false
+  for (const language of targetLanguages) {
+    const { text, finalized } = findDisplayTranslation(utterance, language, resolver)
+    const trimmed = text.trim()
+    if (trimmed && finalized === false) hasInterim = true
+    else if (trimmed) hasFinal = true
+    if (!translation && resolver.keyOf(language) === readKey) {
+      translation = { language, text: trimmed, finalized }
     }
   }
-
-  const translation = findDisplayTranslation(utterance, displayLanguage, resolver)
-  const text = translation.text.trim()
-  if (!text || translation.finalized === false) return null
   return {
-    playbackKey: buildTranslationBubblePlaybackKey(utterance.id, displayLanguage),
-    utteranceId: utterance.id,
-    language: displayLanguage,
-    kind: 'translation',
-    text,
+    isSourceLanguage: readKey === resolver.originalKey,
+    translation,
+    translationsSettled: targetLanguages.length === 0 || (hasFinal && !hasInterim),
   }
+}
+
+function buildEarphoneModeReadTarget(
+  utterance: Utterance,
+  inspection: EarphoneModeReadLanguageInspection,
+): EarphoneModeReadTarget | null {
+  const translation = inspection.translation
+  if (inspection.isSourceLanguage || !translation?.text || translation.finalized === false) return null
+  return {
+    // The key the bubble gives its L translation row, so that row lights up.
+    playbackKey: buildTranslationBubblePlaybackKey(utterance.id, translation.language),
+    utteranceId: utterance.id,
+    language: translation.language,
+    kind: 'translation',
+    text: translation.text,
+  }
+}
+
+// The row's final translation into L, read with the same text, language and
+// playbackKey as a manual tap on that translation row. null while there is
+// nothing final in L, and always for a row whose original is in L.
+export function resolveEarphoneModeReadTarget(
+  utterance: Utterance,
+  read: EarphoneModeReadContext,
+): EarphoneModeReadTarget | null {
+  const inspection = inspectEarphoneModeReadLanguage(utterance, read)
+  return inspection ? buildEarphoneModeReadTarget(utterance, inspection) : null
 }
 
 export function isOwnEarphoneModeUtterance(utterance: Utterance, viewerUserId: string | null | undefined): boolean {
@@ -272,17 +348,29 @@ export function isOwnEarphoneModeUtterance(utterance: Utterance, viewerUserId: s
   return Boolean(viewerUserId) && utterance.speakerUserId === viewerUserId
 }
 
+export type EarphoneModeUnreadableReason =
+  | 'image'
+  | 'own_message'
+  | 'empty'
+  // Spoken in L (own messages included).
+  | 'source_language'
+  // Its translations finished without L, or there is no L at all.
+  | 'missing_language'
+
 export type EarphoneModeUtteranceState =
   | { state: 'incomplete' }
   | { state: 'ready', target: EarphoneModeReadTarget }
-  | { state: 'unreadable', reason: 'image' | 'own_message' | 'empty' }
+  | { state: 'unreadable', reason: EarphoneModeUnreadableReason }
 
 // "Complete" = committed, no longer a draft, translation settled (it may still
-// re-detect the source language), and the shown language has final text.
+// re-detect the source language), and the translation into L is final. A row
+// spoken in L, or whose translations finished without L, is never read and
+// never holds the queue; one whose L translation is still to come waits
+// (stall rules apply).
 export function classifyEarphoneModeUtterance(input: {
   utterance: Utterance
   isDraft: boolean
-  display: EarphoneModeDisplayContext
+  read: EarphoneModeReadContext
   viewerUserId: string | null | undefined
   readOwnMessages?: boolean
 }): EarphoneModeUtteranceState {
@@ -297,8 +385,20 @@ export function classifyEarphoneModeUtterance(input: {
   if (input.isDraft || utterance.translationStatus !== undefined) return { state: 'incomplete' }
   if (!utterance.originalText.trim()) return { state: 'unreadable', reason: 'empty' }
 
-  const target = resolveEarphoneModeReadTarget(utterance, input.display)
-  return target ? { state: 'ready', target } : { state: 'incomplete' }
+  const inspection = inspectEarphoneModeReadLanguage(utterance, input.read)
+  if (!inspection) return { state: 'unreadable', reason: 'missing_language' }
+  if (inspection.isSourceLanguage) {
+    // Decided once the translation has landed: until then the source language
+    // can still be re-detected.
+    return inspection.translationsSettled
+      ? { state: 'unreadable', reason: 'source_language' }
+      : { state: 'incomplete' }
+  }
+  const target = buildEarphoneModeReadTarget(utterance, inspection)
+  if (target) return { state: 'ready', target }
+  return inspection.translationsSettled
+    ? { state: 'unreadable', reason: 'missing_language' }
+    : { state: 'incomplete' }
 }
 
 // A committed row is settled once it reads as it will (ready) or can never be
@@ -306,7 +406,7 @@ export function classifyEarphoneModeUtterance(input: {
 // not settled yet.
 export function isEarphoneModeUtteranceSettled(input: {
   utterance: Utterance
-  display: EarphoneModeDisplayContext
+  read: EarphoneModeReadContext
   viewerUserId: string | null | undefined
   readOwnMessages?: boolean
 }): boolean {

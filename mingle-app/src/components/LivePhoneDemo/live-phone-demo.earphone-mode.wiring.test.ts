@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
+const noticeSource = readFileSync(new URL('./EarphoneModeNotice.tsx', import.meta.url), 'utf8')
+const logicSource = readFileSync(new URL('./live-phone-demo.earphone-mode.logic.ts', import.meta.url), 'utf8')
 const composerSource = readFileSync(new URL('./ConversationImageComposer.tsx', import.meta.url), 'utf8')
 const legacySource = readFileSync(new URL('./LivePhoneDemoLegacy.tsx', import.meta.url), 'utf8')
 const ttsSettingsSource = readFileSync(new URL('../../context/tts-settings.tsx', import.meta.url), 'utf8')
@@ -87,7 +89,45 @@ describe('earphone mode wiring', () => {
     expect(toggle).toContain('if (toggle.requestRoute) requestNativeAudioRoute()')
     expect(toggle).toContain('if (toggle.showNotice) setEarphoneModeNoticeOpen(true)')
     expect(liveDemoSource).toContain('<MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>')
-    expect(liveDemoSource).toContain('{!nativeAudioRoute.earphonesConnected && (')
+    expect(liveDemoSource).toContain('earphonesConnected={nativeAudioRoute.earphonesConnected}')
+    expect(noticeSource).toContain('{!earphonesConnected && (')
+  })
+
+  it('reads one language per session: picked in the notice, React state only, dropped on every edge', () => {
+    expect(liveDemoSource).toContain(
+      'const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)',
+    )
+    const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
+    expect(reset).toContain('setEarphoneModeReadLanguagePick(null)')
+    const select = between(liveDemoSource, 'const handleEarphoneModeReadLanguageSelect = useCallback(', '}, [earphoneModeConversationKey])')
+    expect(select).toContain('setEarphoneModeReadLanguagePick({ conversationKey: earphoneModeConversationKey, language })')
+    expect(select).not.toMatch(/localStorage|sessionStorage|writeEarphoneMode|fetch\(/)
+    const readLanguage = between(liveDemoSource, 'const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({', '})')
+    expect(readLanguage).toContain('pick: earphoneModeReadLanguagePick,')
+    expect(readLanguage).toContain('display: earphoneModeDisplay,')
+    const snapshot = between(liveDemoSource, 'const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({', '}), [')
+    expect(snapshot).toContain('readLanguage: earphoneModeReadLanguage,')
+    expect(snapshot).toContain('languageOrder: normalizedDisplayLanguageOptions,')
+    // The default comes from what every bubble row receives.
+    const display = between(liveDemoSource, 'const earphoneModeDisplay = useMemo<EarphoneModeDisplayContext>(() => ({', '}), [')
+    expect(display).toContain('defaultDisplayLanguage: resolvedDefaultDisplayLanguage,')
+    expect(display).toContain('languageOrder: normalizedDisplayLanguageOptions,')
+    // The only thing earphone mode ever stores is the on/off toggle.
+    expect(logicSource.match(/setItem\(/g)).toHaveLength(1)
+  })
+
+  it('offers the display-language page list, with the same rows, in the notice', () => {
+    const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
+    expect(notice).toContain('languages={normalizedDisplayLanguageOptions}')
+    expect(notice).toContain('readLanguage={earphoneModeReadLanguage}')
+    expect(notice).toContain('onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}')
+    const page = between(liveDemoSource, "open={menuOpen && menuScreen === 'display-language'}", '</SlideSurface>')
+    expect(page).toContain('{normalizedDisplayLanguageOptions.map((language) => (')
+    expect(page).toContain('<LanguageRadioOption')
+    expect(page).toContain('label={getSttLanguageDisplayName(language, uiLocale) || language}')
+    expect(page).toContain('selected={resolvedDefaultDisplayLanguage === language}')
+    expect(noticeSource).toContain('<LanguageRadioOption')
+    expect(noticeSource).toContain('label={getSttLanguageDisplayName(language, uiLocale) || language}')
   })
 
   it('lets a manual tap interrupt auto playback without clearing the auto queue', () => {

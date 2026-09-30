@@ -2,6 +2,8 @@
 
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
+import EarphoneModeNoticeContent from './EarphoneModeNotice'
+import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
@@ -17,11 +19,14 @@ import {
   getEarphoneModePreferenceSnapshot,
   keepManualTtsQueueItems,
   resolveEarphoneModeGate,
+  resolveEarphoneModeReadLanguage,
   resolveEarphoneModeToggle,
   shouldStopCurrentClipOnEarphoneFallingEdge,
   shouldTreatNativeTtsPostAsStart,
   subscribeEarphoneModePreference,
   writeEarphoneModeEnabled,
+  type EarphoneModeDisplayContext,
+  type EarphoneModeReadLanguagePick,
 } from './live-phone-demo.earphone-mode.logic'
 import {
   EarphoneAutoReadController,
@@ -2138,6 +2143,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  // The read language (L) picked in the notice. Session state only: never
+  // persisted, dropped on every on/off edge (see the reset below).
+  const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
   const [earphoneQueuedPlaybackKeys, setEarphoneQueuedPlaybackKeys] = useState<readonly string[]>([])
   const earphoneAutoReadArmedRef = useRef(false)
   const earphoneAutoReadControllerRef = useRef<EarphoneAutoReadController | null>(null)
@@ -6280,27 +6288,42 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => liveUtterances.filter((utterance) => !committedUtteranceIds.has(utterance.id)),
     [committedUtteranceIds, liveUtterances],
   )
-  const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({
-    conversationKey: `${storageNamespace || ''}|${conversationId?.trim() || ''}`,
-    committed: utterances,
-    drafts: draftUtterances,
-    // Exactly what each bubble row receives, so a message is read in the
-    // language its collapsed bubble shows.
-    display: {
-      preferredDisplayLanguage,
-      preferredDisplayLanguages: normalizedPreferredDisplayLanguages,
-      defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
-      languageOrder: normalizedDisplayLanguageOptions,
-    },
-    viewerUserId,
+  const earphoneModeConversationKey = `${storageNamespace || ''}|${conversationId?.trim() || ''}`
+  // Exactly what each bubble row receives: the default read language is the
+  // language the room's collapsed bubbles show.
+  const earphoneModeDisplay = useMemo<EarphoneModeDisplayContext>(() => ({
+    preferredDisplayLanguage,
+    preferredDisplayLanguages: normalizedPreferredDisplayLanguages,
+    defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
+    languageOrder: normalizedDisplayLanguageOptions,
   }), [
-    conversationId,
-    draftUtterances,
     normalizedDisplayLanguageOptions,
     normalizedPreferredDisplayLanguages,
     preferredDisplayLanguage,
     resolvedDefaultDisplayLanguage,
-    storageNamespace,
+  ])
+  // L: the notice pick for this room while it is still a room language,
+  // otherwise the room's display language.
+  const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({
+    pick: earphoneModeReadLanguagePick,
+    conversationKey: earphoneModeConversationKey,
+    display: earphoneModeDisplay,
+  })
+  const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({
+    conversationKey: earphoneModeConversationKey,
+    committed: utterances,
+    drafts: draftUtterances,
+    // Only the translation into L is read.
+    read: {
+      readLanguage: earphoneModeReadLanguage,
+      languageOrder: normalizedDisplayLanguageOptions,
+    },
+    viewerUserId,
+  }), [
+    draftUtterances,
+    earphoneModeConversationKey,
+    earphoneModeReadLanguage,
+    normalizedDisplayLanguageOptions,
     utterances,
     viewerUserId,
   ])
@@ -6405,6 +6428,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       unsubscribePreference()
     }
   }, [stopEarphoneAutoTtsPlayback])
+
+  // A pick lasts one earphone-mode session: any on/off edge, from this room,
+  // another room or another tab, drops it, so the next session starts from
+  // the room's display language again.
+  useEffect(() => subscribeEarphoneModePreference(() => {
+    setEarphoneModeReadLanguagePick(null)
+  }), [])
+
+  const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
+    setEarphoneModeReadLanguagePick({ conversationKey: earphoneModeConversationKey, language })
+  }, [earphoneModeConversationKey])
 
   // Contract A.4: re-read the route on mount (old shells ignore the message).
   useEffect(() => {
@@ -8438,37 +8472,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }}
                       >
                         <div className="space-y-2 px-4 py-4">
-                          {normalizedDisplayLanguageOptions.map((language) => {
-                            const isSelected = resolvedDefaultDisplayLanguage === language
-                            const displayName = getSttLanguageDisplayName(language, uiLocale) || language
-
-                            return (
-                              <button
-                                key={language}
-                                type="button"
-                                role="radio"
-                                aria-checked={isSelected}
-                                onClick={() => handleDefaultDisplayLanguageSelect(language)}
-                                className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                  isSelected
-                                    ? 'border-amber-300 bg-amber-50/70'
-                                    : 'border-gray-200 bg-white hover:bg-gray-50'
-                                }`}
-                              >
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-[1.45rem]">
-                                  <LanguageFlag language={language} className="text-[1.45rem] leading-none" />
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-[0.98rem] font-semibold text-gray-900">
-                                  {displayName}
-                                </span>
-                                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                                  isSelected ? 'bg-amber-500 text-white' : 'bg-gray-100 text-transparent'
-                                }`}>
-                                  <Check size={14} strokeWidth={2.8} />
-                                </span>
-                              </button>
-                            )
-                          })}
+                          {normalizedDisplayLanguageOptions.map((language) => (
+                            <LanguageRadioOption
+                              key={language}
+                              language={language}
+                              label={getSttLanguageDisplayName(language, uiLocale) || language}
+                              selected={resolvedDefaultDisplayLanguage === language}
+                              onSelect={handleDefaultDisplayLanguageSelect}
+                            />
+                          ))}
                         </div>
                       </div>
                     </SlideSurface>
@@ -9255,21 +9267,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </motion.div>
           {earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>
-              <div data-qa="live-demo-earphone-mode-notice">
-                <p className="text-sm font-semibold text-gray-900">{earphoneModeCopy.label}</p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">{earphoneModeCopy.noticeBody}</p>
-                {!nativeAudioRoute.earphonesConnected && (
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{earphoneModeCopy.noticeNotConnectedBody}</p>
-                )}
-                <button
-                  type="button"
-                  onClick={closeEarphoneModeNotice}
-                  className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
-                  style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
-                >
-                  {earphoneModeCopy.noticeConfirmLabel}
-                </button>
-              </div>
+              <EarphoneModeNoticeContent
+                uiLocale={uiLocale}
+                copy={earphoneModeCopy}
+                earphonesConnected={nativeAudioRoute.earphonesConnected}
+                // The list the room's display-language page shows.
+                languages={normalizedDisplayLanguageOptions}
+                readLanguage={earphoneModeReadLanguage}
+                onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                onConfirm={closeEarphoneModeNotice}
+              />
             </MessageMediaDialog>
           )}
         </div>
