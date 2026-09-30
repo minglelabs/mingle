@@ -75,6 +75,28 @@ For `scripts/devbox mobile --device-app-env dev` and `scripts/devbox up --profil
 devbox forces Google's official sample AdMob app IDs and banner unit IDs. This keeps local release verification
 off production inventory even when vault or runtime env files contain production AdMob values.
 
+## Earphone Mode Bridge (Audio Route)
+
+The shell reports whether earphones are the current audio output so the web can gate automatic TTS.
+
+- Native module `NativeAudioRouteModule` (iOS: in `ios/mingle/NativeSTTModule.swift`; Android:
+  `NativeAudioRouteModule.kt` registered in `NativeRuntimeConfigPackage.kt`): `getAudioRoute()` plus the
+  `audioRouteChanged` event. Read-only: it never changes the audio session, mode or routing, and needs no new
+  permission. iOS observes route changes, media-services resets and `didBecomeActive`; Android uses its own
+  `AudioDeviceCallback`, `ACTION_AUDIO_BECOMING_NOISY` and host resume, and judges API 33+ on
+  `getAudioDevicesForAttributes(USAGE_MEDIA)`.
+- Earphones = iOS `headphones`, `bluetoothA2DP`, `bluetoothHFP`, `bluetoothLE`, `usbAudio`; Android wired
+  headset/headphones, Bluetooth A2DP/SCO, BLE headset, USB headset, hearing aid. Only port/device types are
+  reported, never device names.
+- `capabilities` (on `mingle:native-stt`) carries `audioRoute: true` when the module is present.
+- `App.tsx` relays readings (`src/nativeAudioRoute.ts`) as the window event `mingle:native-audio-route`, after
+  assigning the same detail to `window.__MINGLE_LAST_NATIVE_AUDIO_ROUTE`: at every load end right after
+  `capabilities`, on each `earphonesConnected`/`routeKind` change (debounced 250 ms, a disconnect immediately), and
+  in reply to the web command `native_audio_route_request`.
+- `mingle:native-tts` gains `tts_started` (sent when iOS `NativeTTSModule.play` resolves). A `native_tts_play` with
+  `stopOnEarphoneDisconnect: true` is stopped on iOS as soon as no earphone output is left (or is not started
+  without one), reported as `tts_stopped` with `reason: 'earphones_disconnected'`.
+
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
