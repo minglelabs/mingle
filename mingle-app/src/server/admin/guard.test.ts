@@ -19,7 +19,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: { adminSession: { findUnique: m.findUnique, updateMany: m.updateMany } },
 }))
 
-import { getAdminContext, requireAdmin, requireAdminApi } from './guard'
+import { getAdminContext, pickTrustedForwardedHop, requireAdmin, requireAdminApi } from './guard'
 import { hashAdminSessionToken } from './session'
 
 const TOKEN = 'tok_'.padEnd(43, 'x')
@@ -89,6 +89,21 @@ describe('admin guard', () => {
       await expect(getAdminContext()).resolves.toEqual({ sessionId: 'admin_sess_1', ip: '198.51.100.4', userAgent: null })
       m.requestHeaders.current = new Headers()
       await expect(getAdminContext()).resolves.toEqual({ sessionId: 'admin_sess_1', ip: null, userAgent: null })
+    })
+
+    it('ignores client-forged hops: the IP is the hop just before the launcher-appended edge address', async () => {
+      // client forged "1.1.1.1"; the edge appended the real client; the launcher appended the edge
+      m.requestHeaders.current = new Headers({ 'x-forwarded-for': '1.1.1.1, 203.0.113.7, 10.0.0.2' })
+      await expect(getAdminContext()).resolves.toMatchObject({ ip: '203.0.113.7' })
+    })
+  })
+
+  describe('pickTrustedForwardedHop', () => {
+    it('takes the second-to-last hop, the only hop, or null', () => {
+      expect(pickTrustedForwardedHop('9.9.9.9, 8.8.8.8, 203.0.113.7, 10.0.0.2')).toBe('203.0.113.7')
+      expect(pickTrustedForwardedHop(' 127.0.0.1 ')).toBe('127.0.0.1')
+      expect(pickTrustedForwardedHop(' , ')).toBeNull()
+      expect(pickTrustedForwardedHop(null)).toBeNull()
     })
   })
 

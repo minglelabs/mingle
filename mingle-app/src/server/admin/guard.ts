@@ -34,15 +34,30 @@ function clip(value: string | null | undefined, maxLength: number): string | nul
 }
 
 /**
- * Client IP (first `x-forwarded-for` hop, else `x-real-ip`) and user agent of
+ * The client IP as seen by the last trusted proxy. In production the chain is
+ * client -> Railway edge -> our launcher (railway/start-single-service.mjs)
+ * -> app, and the launcher APPENDS its socket peer (the edge) to
+ * `x-forwarded-for`. Everything left of the edge's own entry can be typed by
+ * the client, so the first hop is forgeable and must not key the login
+ * throttle. We take the hop just before the launcher-appended one; with a
+ * single hop (local devbox, no edge) that hop itself.
+ */
+export function pickTrustedForwardedHop(forwardedFor: string | null | undefined): string | null {
+  const hops = (forwardedFor ?? '').split(',').map((hop) => hop.trim()).filter(Boolean)
+  if (hops.length === 0) return null
+  return hops.length >= 2 ? hops[hops.length - 2] : hops[0]
+}
+
+/**
+ * Client IP (see `pickTrustedForwardedHop`, else `x-real-ip`) and user agent of
  * the current request. Needs no admin session, so a failed login can be
  * audited too.
  */
 export async function readAdminRequestMeta(): Promise<Pick<AdminContext, 'ip' | 'userAgent'>> {
   const requestHeaders = await headers()
-  const firstForwardedHop = requestHeaders.get('x-forwarded-for')?.split(',')[0]
+  const trustedHop = pickTrustedForwardedHop(requestHeaders.get('x-forwarded-for'))
   return {
-    ip: clip(firstForwardedHop, MAX_IP_LENGTH) ?? clip(requestHeaders.get('x-real-ip'), MAX_IP_LENGTH),
+    ip: clip(trustedHop, MAX_IP_LENGTH) ?? clip(requestHeaders.get('x-real-ip'), MAX_IP_LENGTH),
     userAgent: clip(requestHeaders.get('user-agent'), MAX_USER_AGENT_LENGTH),
   }
 }
