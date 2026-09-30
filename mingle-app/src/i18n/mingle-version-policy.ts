@@ -18,6 +18,12 @@ export type MingleVersionPolicyCopy = {
   updateNowA11y: string;
   webViewLoadFailedTitle: string;
   unknownVersionLabel: string;
+  offlineTitle: string;
+  offlineMessage: string;
+  genericErrorTitle: string;
+  genericErrorMessage: string;
+  retryButtonLabel: string;
+  retryingMessage: string;
 };
 
 const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVersionPolicyCopy> = {
@@ -33,6 +39,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "지금 업데이트",
     webViewLoadFailedTitle: "WebView 로드 실패",
     unknownVersionLabel: "알 수 없음",
+    offlineTitle: "네트워크 연결이 없습니다",
+    offlineMessage: "인터넷 연결을 확인한 후 다시 시도해주세요.",
+    genericErrorTitle: "일시적인 오류가 발생했습니다",
+    genericErrorMessage: "잠시 후 다시 시도해주세요.",
+    retryButtonLabel: "다시 시도",
+    retryingMessage: "다시 연결하는 중...",
   },
   en: {
     checkingTitle: "Checking version",
@@ -46,6 +58,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Update now",
     webViewLoadFailedTitle: "WebView Load Failed",
     unknownVersionLabel: "unknown",
+    offlineTitle: "No Internet Connection",
+    offlineMessage: "Please check your internet connection and try again.",
+    genericErrorTitle: "Something Went Wrong",
+    genericErrorMessage: "Please try again in a moment.",
+    retryButtonLabel: "Retry",
+    retryingMessage: "Reconnecting...",
   },
   ja: {
     checkingTitle: "バージョン確認中",
@@ -59,6 +77,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "今すぐアップデート",
     webViewLoadFailedTitle: "WebView の読み込みに失敗しました",
     unknownVersionLabel: "不明",
+    offlineTitle: "インターネットに接続されていません",
+    offlineMessage: "インターネット接続を確認して、もう一度お試しください。",
+    genericErrorTitle: "一時的なエラーが発生しました",
+    genericErrorMessage: "しばらくしてからもう一度お試しください。",
+    retryButtonLabel: "再試行",
+    retryingMessage: "再接続しています...",
   },
   "zh-CN": {
     checkingTitle: "正在检查版本",
@@ -72,6 +96,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "立即更新",
     webViewLoadFailedTitle: "WebView 加载失败",
     unknownVersionLabel: "未知",
+    offlineTitle: "无网络连接",
+    offlineMessage: "请检查您的网络连接后重试。",
+    genericErrorTitle: "出现临时错误",
+    genericErrorMessage: "请稍后重试。",
+    retryButtonLabel: "重试",
+    retryingMessage: "正在重新连接...",
   },
   "zh-TW": {
     checkingTitle: "正在檢查版本",
@@ -85,6 +115,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "立即更新",
     webViewLoadFailedTitle: "WebView 載入失敗",
     unknownVersionLabel: "未知",
+    offlineTitle: "無網路連線",
+    offlineMessage: "請檢查您的網路連線後再試一次。",
+    genericErrorTitle: "發生暫時性錯誤",
+    genericErrorMessage: "請稍後再試一次。",
+    retryButtonLabel: "重試",
+    retryingMessage: "正在重新連線...",
   },
   fr: {
     checkingTitle: "Vérification de la version",
@@ -98,6 +134,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Mettre à jour maintenant",
     webViewLoadFailedTitle: "Échec du chargement de WebView",
     unknownVersionLabel: "inconnu",
+    offlineTitle: "Pas de connexion Internet",
+    offlineMessage: "Veuillez vérifier votre connexion Internet et réessayer.",
+    genericErrorTitle: "Une erreur s'est produite",
+    genericErrorMessage: "Veuillez réessayer dans un instant.",
+    retryButtonLabel: "Réessayer",
+    retryingMessage: "Reconnexion en cours...",
   },
   de: {
     checkingTitle: "Version wird überprüft",
@@ -111,6 +153,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Jetzt aktualisieren",
     webViewLoadFailedTitle: "WebView-Laden fehlgeschlagen",
     unknownVersionLabel: "unbekannt",
+    offlineTitle: "Keine Internetverbindung",
+    offlineMessage: "Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+    genericErrorTitle: "Ein Fehler ist aufgetreten",
+    genericErrorMessage: "Bitte versuchen Sie es in Kürze erneut.",
+    retryButtonLabel: "Erneut versuchen",
+    retryingMessage: "Verbindung wird wiederhergestellt...",
   },
   es: {
     checkingTitle: "Comprobando versión",
@@ -124,6 +172,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Actualizar ahora",
     webViewLoadFailedTitle: "Error al cargar WebView",
     unknownVersionLabel: "desconocida",
+    offlineTitle: "Sin conexión a Internet",
+    offlineMessage: "Comprueba tu conexión a Internet e inténtalo de nuevo.",
+    genericErrorTitle: "Se produjo un error",
+    genericErrorMessage: "Vuelve a intentarlo en unos instantes.",
+    retryButtonLabel: "Reintentar",
+    retryingMessage: "Reconectando...",
   },
   pt: {
     checkingTitle: "Verificando versão",
@@ -137,6 +191,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Atualizar agora",
     webViewLoadFailedTitle: "Falha ao carregar o WebView",
     unknownVersionLabel: "desconhecida",
+    offlineTitle: "Sem conexão com a internet",
+    offlineMessage: "Verifique sua conexão com a internet e tente novamente.",
+    genericErrorTitle: "Ocorreu um erro",
+    genericErrorMessage: "Tente novamente em instantes.",
+    retryButtonLabel: "Tentar novamente",
+    retryingMessage: "Reconectando...",
   },
   it: {
     checkingTitle: "Verifica versione in corso",
@@ -150,6 +210,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Aggiorna ora",
     webViewLoadFailedTitle: "Caricamento WebView non riuscito",
     unknownVersionLabel: "sconosciuta",
+    offlineTitle: "Nessuna connessione Internet",
+    offlineMessage: "Controlla la tua connessione Internet e riprova.",
+    genericErrorTitle: "Si è verificato un errore",
+    genericErrorMessage: "Riprova tra poco.",
+    retryButtonLabel: "Riprova",
+    retryingMessage: "Riconnessione in corso...",
   },
   ru: {
     checkingTitle: "Проверка версии",
@@ -163,6 +229,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Обновить сейчас",
     webViewLoadFailedTitle: "Не удалось загрузить WebView",
     unknownVersionLabel: "неизвестно",
+    offlineTitle: "Нет подключения к интернету",
+    offlineMessage: "Проверьте подключение к интернету и повторите попытку.",
+    genericErrorTitle: "Произошла ошибка",
+    genericErrorMessage: "Повторите попытку через некоторое время.",
+    retryButtonLabel: "Повторить",
+    retryingMessage: "Повторное подключение...",
   },
   ar: {
     checkingTitle: "جارٍ التحقق من الإصدار",
@@ -176,6 +248,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "حدّث الآن",
     webViewLoadFailedTitle: "فشل تحميل WebView",
     unknownVersionLabel: "غير معروف",
+    offlineTitle: "لا يوجد اتصال بالإنترنت",
+    offlineMessage: "يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
+    genericErrorTitle: "حدث خطأ ما",
+    genericErrorMessage: "يرجى المحاولة مرة أخرى بعد قليل.",
+    retryButtonLabel: "إعادة المحاولة",
+    retryingMessage: "جارٍ إعادة الاتصال...",
   },
   hi: {
     checkingTitle: "संस्करण जाँचा जा रहा है",
@@ -189,6 +267,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "अभी अपडेट करें",
     webViewLoadFailedTitle: "WebView लोड विफल",
     unknownVersionLabel: "अज्ञात",
+    offlineTitle: "इंटरनेट कनेक्शन नहीं है",
+    offlineMessage: "कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।",
+    genericErrorTitle: "कुछ गड़बड़ हो गई",
+    genericErrorMessage: "कृपया थोड़ी देर बाद पुनः प्रयास करें।",
+    retryButtonLabel: "पुनः प्रयास करें",
+    retryingMessage: "फिर से कनेक्ट किया जा रहा है...",
   },
   th: {
     checkingTitle: "กำลังตรวจสอบเวอร์ชัน",
@@ -202,6 +286,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "อัปเดตตอนนี้",
     webViewLoadFailedTitle: "โหลด WebView ไม่สำเร็จ",
     unknownVersionLabel: "ไม่ทราบ",
+    offlineTitle: "ไม่มีการเชื่อมต่ออินเทอร์เน็ต",
+    offlineMessage: "โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง",
+    genericErrorTitle: "เกิดข้อผิดพลาดชั่วคราว",
+    genericErrorMessage: "โปรดลองอีกครั้งในอีกสักครู่",
+    retryButtonLabel: "ลองอีกครั้ง",
+    retryingMessage: "กำลังเชื่อมต่อใหม่...",
   },
   vi: {
     checkingTitle: "Đang kiểm tra phiên bản",
@@ -215,6 +305,12 @@ const VERSION_POLICY_FALLBACK_COPY_BY_LOCALE: Record<PrimaryUiLocale, MingleVers
     updateNowA11y: "Cập nhật ngay",
     webViewLoadFailedTitle: "Tải WebView thất bại",
     unknownVersionLabel: "không rõ",
+    offlineTitle: "Không có kết nối Internet",
+    offlineMessage: "Vui lòng kiểm tra kết nối Internet và thử lại.",
+    genericErrorTitle: "Đã xảy ra lỗi",
+    genericErrorMessage: "Vui lòng thử lại sau ít phút.",
+    retryButtonLabel: "Thử lại",
+    retryingMessage: "Đang kết nối lại...",
   },
 };
 

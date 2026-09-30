@@ -54,18 +54,94 @@ describe('runtime fallback contract', () => {
     );
   });
 
-  it('does not activate the legacy host after the initial Mingle page settles', () => {
+  it('does not activate the legacy host after a Mingle page has loaded', () => {
     const appSource = readWorkspaceFile('App.tsx');
 
     expect(appSource).toContain(
-      'if (!initialLoadSettledRef.current && activateWebFallback()) return;',
+      'if (!isOffline && mayUseHostFallback && activateWebFallback()) return;',
     );
     expect(appSource).toContain(
-      '&& !initialLoadSettledRef.current\n      && !isPageReadyRef.current',
+      'if (!isWebViewPageLoadFailureHttpStatus(statusCode)) return;',
     );
+    expect(appSource).toContain(
+      'if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
+    );
+    expect(appSource).toContain('hasLoadedPage: loadAttemptTracker.hasLoadedPage(),');
     expect(appSource).toContain(
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
+  });
+
+  it('records a load failure before the fallback switch and ignores onLoadEnd of a failed load', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const sliceHandler = (signature: string) => {
+      const start = appSource.indexOf(signature);
+      const end = appSource.indexOf('\n  }, [', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      return appSource.slice(start, end);
+    };
+
+    // Android sends onLoadEnd BEFORE onError, and both platforms send another
+    // onLoadEnd after the error: success is only committed by the tracker.
+    const loadEndBody = sliceHandler('const handleLoadEnd = useCallback(');
+    expect(loadEndBody).toContain('if (loadAttemptTracker.hasFailed()) return;');
+    expect(loadEndBody).toContain('loadAttemptTracker.loadFinished();');
+    expect(loadEndBody.indexOf('if (loadAttemptTracker.hasFailed()) return;'))
+      .toBeLessThan(loadEndBody.indexOf('isPageReadyRef.current = true;'));
+
+    // Android reports onLoadStart only once a navigation commits (for an HTTP
+    // error page that is after onHttpError), so onLoadStart must not clear a
+    // failure; only a WebView remount starts a fresh attempt.
+    const loadStartBody = sliceHandler('const handleLoadStart = useCallback(');
+    expect(loadStartBody).toContain('loadAttemptTracker.loadStarted();');
+    expect(loadStartBody).not.toContain('beginAttempt');
+    expect(appSource).toContain('if (webViewMountToken > 0) loadAttemptTracker.beginAttempt();');
+
+    for (const signature of [
+      'const handleLoadError = useCallback(',
+      'const handleHttpError = useCallback(',
+    ]) {
+      const body = sliceHandler(signature);
+      expect(body.indexOf('loadAttemptTracker.loadFailed();')).toBeGreaterThanOrEqual(0);
+      expect(body.indexOf('loadAttemptTracker.loadFailed();'))
+        .toBeLessThan(body.indexOf('activateWebFallback()'));
+    }
+
+    // After the startup splash is gone for good, the fallback switch keeps the
+    // neutral loading overlay over the remounting WebView, and it drops a
+    // retry's primary-host URL so the new WebView starts on the fallback host.
+    const fallbackBody = sliceHandler('const activateWebFallback = useCallback(');
+    expect(fallbackBody).toContain('setIsRetryingLoad(initialLoadSettledRef.current);');
+    expect(fallbackBody).toContain("setDebugRemountWebUrl('');");
+
+    // A retried/fallback load that never reports back must not trap the user
+    // behind the spinner.
+    expect(appSource).toContain('}, WEBVIEW_RETRY_STALL_TIMEOUT_MS);');
+    expect(appSource).toContain("setLoadError((current) => current ?? 'webview_load_stalled');");
+  });
+
+  it('retries the load at the page the user was on instead of the initial list', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const retryStart = appSource.indexOf('const handleRetryLoad = useCallback(() => {');
+    const retryEnd = appSource.indexOf('}, [baseWebUrl, webUrl]);', retryStart);
+
+    expect(retryStart).toBeGreaterThanOrEqual(0);
+    expect(retryEnd).toBeGreaterThan(retryStart);
+    const retryBody = appSource.slice(retryStart, retryEnd);
+    expect(retryBody).toContain(
+      'resolveWebViewRetryUrl([lastWebViewUrlRef.current, webUrl, baseWebUrl])',
+    );
+    expect(retryBody).toContain('setDebugRemountWebUrl(retryUrl)');
+  });
+
+  it('covers a killed WebView render process with the same load-error overlay', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+
+    expect(appSource).toContain('onRenderProcessGone={handleRenderProcessGone}');
+    expect(appSource).toContain('onContentProcessDidTerminate={handleContentProcessDidTerminate}');
+    expect(appSource).toContain("setLoadError('webview_render_process_gone');");
+    expect(appSource).toContain("setLoadError('webview_content_process_terminated');");
   });
 
   it('keeps Android panel back handling separate from iOS WebView history state', () => {
