@@ -1,3 +1,8 @@
+import {
+  normalizeInstallSource,
+  type NativeAppInstallSource,
+} from "@/lib/native-app-install-source";
+
 export const NATIVE_APP_UPDATE_EVENT = "mingle:native-app-update";
 
 export type NativeAppUpdateDetailStatus =
@@ -12,6 +17,9 @@ export interface NativeAppUpdateDetail {
   latestVersion: string;
   updateUrl: string;
   updateAvailable: boolean;
+  // Absent when the build does not report it (every build up to 2.1.0) or
+  // reports a value outside the known list: the UI then shows nothing.
+  installSource?: NativeAppInstallSource;
 }
 
 export interface NativeAppTrackingContext {
@@ -24,6 +32,8 @@ export interface NativeAppUpdateCopy {
   sectionLabel: string;
   installedLabel: string;
   latestLabel: string;
+  installSourceLabel: string;
+  installSourceValues: Record<NativeAppInstallSource, string>;
   unknownVersionLabel: string;
   checkingMessage: string;
   availableMessage: string;
@@ -81,13 +91,25 @@ export function parseNativeAppUpdateDetail(
     return null;
   }
 
+  const installSource = normalizeInstallSource(payload.installSource);
+
   return {
     status,
     clientVersion: readString(payload.clientVersion),
     latestVersion: readString(payload.latestVersion),
     updateUrl: readString(payload.updateUrl),
     updateAvailable: payload.updateAvailable === true,
+    ...(installSource ? { installSource } : {}),
   };
+}
+
+// The install-source line's value, or "" (line hidden) when the source is
+// unknown, whatever the update status is.
+export function resolveNativeAppInstallSourceText(
+  copy: NativeAppUpdateCopy,
+  installSource: NativeAppInstallSource | undefined,
+): string {
+  return installSource ? copy.installSourceValues[installSource] : "";
 }
 
 export function resolveNativeAppTrackingContext(args: {
@@ -120,11 +142,24 @@ export function resolveNativeAppTrackingContext(args: {
   };
 }
 
+// Store names are brand names and stay in English in every locale.
+const STORE_INSTALL_SOURCE_NAMES = {
+  app_store: "App Store",
+  testflight: "TestFlight",
+  play_store: "Google Play",
+} as const;
+
 const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
   ko: {
     sectionLabel: "앱 업데이트",
     installedLabel: "현재 버전",
     latestLabel: "최신 버전",
+    installSourceLabel: "설치 경로",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "로컬 빌드 (devbox)",
+      other: "기타 경로",
+    },
     unknownVersionLabel: "확인 불가",
     checkingMessage: "업데이트를 확인하고 있습니다.",
     availableMessage: "설치 가능한 업데이트가 있습니다.",
@@ -136,6 +171,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "App Update",
     installedLabel: "Installed",
     latestLabel: "Latest",
+    installSourceLabel: "Installed from",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Local build (devbox)",
+      other: "Other source",
+    },
     unknownVersionLabel: "Unknown",
     checkingMessage: "Checking for updates.",
     availableMessage: "An update is available.",
@@ -147,6 +188,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "アプリ更新",
     installedLabel: "現在のバージョン",
     latestLabel: "最新バージョン",
+    installSourceLabel: "インストール元",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "ローカルビルド (devbox)",
+      other: "その他の経路",
+    },
     unknownVersionLabel: "不明",
     checkingMessage: "アップデートを確認しています。",
     availableMessage: "利用可能なアップデートがあります。",
@@ -158,6 +205,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "应用更新",
     installedLabel: "当前版本",
     latestLabel: "最新版本",
+    installSourceLabel: "安装来源",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "本地构建 (devbox)",
+      other: "其他来源",
+    },
     unknownVersionLabel: "未知",
     checkingMessage: "正在检查更新。",
     availableMessage: "有可用更新。",
@@ -169,6 +222,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "App 更新",
     installedLabel: "目前版本",
     latestLabel: "最新版本",
+    installSourceLabel: "安裝來源",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "本機建置 (devbox)",
+      other: "其他來源",
+    },
     unknownVersionLabel: "未知",
     checkingMessage: "正在檢查更新。",
     availableMessage: "有可用更新。",
@@ -180,6 +239,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Mise à jour de l'app",
     installedLabel: "Version installée",
     latestLabel: "Dernière version",
+    installSourceLabel: "Source d'installation",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Build local (devbox)",
+      other: "Autre source",
+    },
     unknownVersionLabel: "Inconnue",
     checkingMessage: "Vérification des mises à jour.",
     availableMessage: "Une mise à jour est disponible.",
@@ -191,6 +256,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "App-Update",
     installedLabel: "Installiert",
     latestLabel: "Neueste Version",
+    installSourceLabel: "Installiert über",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Lokaler Build (devbox)",
+      other: "Andere Quelle",
+    },
     unknownVersionLabel: "Unbekannt",
     checkingMessage: "Suche nach Updates.",
     availableMessage: "Ein Update ist verfügbar.",
@@ -202,6 +273,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Actualización de la app",
     installedLabel: "Versión instalada",
     latestLabel: "Última versión",
+    installSourceLabel: "Origen de instalación",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Compilación local (devbox)",
+      other: "Otro origen",
+    },
     unknownVersionLabel: "Desconocida",
     checkingMessage: "Buscando actualizaciones.",
     availableMessage: "Hay una actualización disponible.",
@@ -213,6 +290,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Atualização do app",
     installedLabel: "Versão instalada",
     latestLabel: "Versão mais recente",
+    installSourceLabel: "Origem da instalação",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Build local (devbox)",
+      other: "Outra origem",
+    },
     unknownVersionLabel: "Desconhecida",
     checkingMessage: "Verificando atualizações.",
     availableMessage: "Há uma atualização disponível.",
@@ -224,6 +307,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Aggiornamento dell'app",
     installedLabel: "Versione installata",
     latestLabel: "Ultima versione",
+    installSourceLabel: "Origine dell'installazione",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Build locale (devbox)",
+      other: "Altra origine",
+    },
     unknownVersionLabel: "Sconosciuta",
     checkingMessage: "Controllo aggiornamenti in corso.",
     availableMessage: "E disponibile un aggiornamento.",
@@ -235,6 +324,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Обновление приложения",
     installedLabel: "Текущая версия",
     latestLabel: "Последняя версия",
+    installSourceLabel: "Источник установки",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Локальная сборка (devbox)",
+      other: "Другой источник",
+    },
     unknownVersionLabel: "Неизвестно",
     checkingMessage: "Проверяем обновления.",
     availableMessage: "Доступно обновление.",
@@ -246,6 +341,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "تحديث التطبيق",
     installedLabel: "الإصدار الحالي",
     latestLabel: "أحدث إصدار",
+    installSourceLabel: "مصدر التثبيت",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "نسخة محلية (devbox)",
+      other: "مصدر آخر",
+    },
     unknownVersionLabel: "غير معروف",
     checkingMessage: "جار فحص التحديثات.",
     availableMessage: "يوجد تحديث متاح.",
@@ -257,6 +358,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "ऐप अपडेट",
     installedLabel: "वर्तमान संस्करण",
     latestLabel: "नवीनतम संस्करण",
+    installSourceLabel: "इंस्टॉल का स्रोत",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "लोकल बिल्ड (devbox)",
+      other: "अन्य स्रोत",
+    },
     unknownVersionLabel: "अज्ञात",
     checkingMessage: "अपडेट की जांच हो रही है.",
     availableMessage: "एक अपडेट उपलब्ध है.",
@@ -268,6 +375,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "อัปเดตแอป",
     installedLabel: "เวอร์ชันปัจจุบัน",
     latestLabel: "เวอร์ชันล่าสุด",
+    installSourceLabel: "แหล่งที่ติดตั้ง",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "บิลด์ในเครื่อง (devbox)",
+      other: "แหล่งอื่น",
+    },
     unknownVersionLabel: "ไม่ทราบ",
     checkingMessage: "กำลังตรวจสอบอัปเดต",
     availableMessage: "มีอัปเดตให้ติดตั้ง",
@@ -279,6 +392,12 @@ const COPY_BY_LOCALE: Record<string, NativeAppUpdateCopy> = {
     sectionLabel: "Cập nhật ứng dụng",
     installedLabel: "Phiên bản hiện tại",
     latestLabel: "Phiên bản mới nhất",
+    installSourceLabel: "Nguồn cài đặt",
+    installSourceValues: {
+      ...STORE_INSTALL_SOURCE_NAMES,
+      local: "Bản dựng cục bộ (devbox)",
+      other: "Nguồn khác",
+    },
     unknownVersionLabel: "Không rõ",
     checkingMessage: "Đang kiểm tra cập nhật.",
     availableMessage: "Đã có bản cập nhật mới.",

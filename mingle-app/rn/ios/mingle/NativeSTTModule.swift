@@ -1267,6 +1267,24 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
         ]
     }
 
+    // Where this build came from, for the app-update card. Development and
+    // ad-hoc builds (Xcode, devbox's `xcodebuild` + `devicectl device install`)
+    // embed a provisioning profile; App Store and TestFlight builds are
+    // re-signed by Apple without one, and only TestFlight carries a sandbox receipt.
+    private static func readInstallSource() -> String {
+        #if targetEnvironment(simulator)
+        return "local"
+        #else
+        if Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil {
+            return "local"
+        }
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            return "testflight"
+        }
+        return "app_store"
+        #endif
+    }
+
     private static func runtimeConfigPayload() -> [String: Any] {
         [
             "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
@@ -1284,6 +1302,7 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
+            "installSource": readInstallSource(),
             "qaBridgeEnabled": NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled"),
             "adBannerPosition": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerPosition"),
             "adBannerHeightPx": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerHeightPx"),
