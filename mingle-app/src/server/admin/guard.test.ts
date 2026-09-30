@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({
   cookieGet: vi.fn(),
-  verify: vi.fn(),
+  findUnique: vi.fn(),
+  updateMany: vi.fn(),
   requestHeaders: { current: new Headers() },
   redirect: vi.fn((url: string): never => {
     throw new Error(`NEXT_REDIRECT:${url}`)
@@ -14,16 +15,29 @@ vi.mock('next/headers', () => ({
   headers: async () => m.requestHeaders.current,
 }))
 vi.mock('next/navigation', () => ({ redirect: m.redirect }))
-vi.mock('@/lib/admin-auth', () => ({
-  ADMIN_SESSION_COOKIE_NAME: 'admin_session',
-  verifyAdminSessionToken: m.verify,
+vi.mock('@/lib/prisma', () => ({
+  prisma: { adminSession: { findUnique: m.findUnique, updateMany: m.updateMany } },
 }))
 
 import { getAdminContext, requireAdmin, requireAdminApi } from './guard'
+import { hashAdminSessionToken } from './session'
+
+const TOKEN = 'tok_'.padEnd(43, 'x')
+const LIVE_SESSION = {
+  id: 'admin_sess_1',
+  createdAt: new Date(Date.now() - 60_000),
+  lastSeenAt: new Date(),
+  expiresAt: new Date(Date.now() + 86_400_000),
+  revokedAt: null,
+}
+
+function withCookie(value: string | undefined) {
+  m.cookieGet.mockReturnValue(value === undefined ? undefined : { value })
+}
 
 function signedIn(valid: boolean) {
-  m.cookieGet.mockReturnValue(valid ? { value: 'token' } : undefined)
-  m.verify.mockReturnValue(valid)
+  withCookie(valid ? TOKEN : undefined)
+  m.findUnique.mockResolvedValue(valid ? LIVE_SESSION : null)
 }
 
 describe('admin guard', () => {
@@ -34,37 +48,53 @@ describe('admin guard', () => {
       'x-real-ip': '10.0.0.9',
       'user-agent': 'Mozilla/5.0 (iPhone)',
     })
+    m.updateMany.mockResolvedValue({ count: 1 })
     signedIn(true)
   })
 
   describe('getAdminContext', () => {
-    it('returns null without a valid admin session cookie', async () => {
+    it('returns null without an admin session cookie, and never queries the DB', async () => {
       signedIn(false)
       await expect(getAdminContext()).resolves.toBeNull()
-      expect(m.cookieGet).toHaveBeenCalledWith('admin_session')
-      expect(m.verify).toHaveBeenCalledWith(undefined)
+      expect(m.cookieGet).toHaveBeenCalledWith('mingle_admin_session')
+      expect(m.findUnique).not.toHaveBeenCalled()
     })
 
-    it('has no session id yet and takes the first forwarded hop as the ip', async () => {
+    it('refuses a legacy deterministic v1 token without a DB lookup (one re-login after deploy)', async () => {
+      withCookie(`v1.${'a'.repeat(43)}`)
+      await expect(getAdminContext()).resolves.toBeNull()
+      expect(m.findUnique).not.toHaveBeenCalled()
+    })
+
+    it('carries the DB session id and takes the first forwarded hop as the ip', async () => {
       await expect(getAdminContext()).resolves.toEqual({
-        sessionId: null,
+        sessionId: 'admin_sess_1',
         ip: '203.0.113.7',
         userAgent: 'Mozilla/5.0 (iPhone)',
       })
-      expect(m.verify).toHaveBeenCalledWith('token')
+      expect(m.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { tokenHash: hashAdminSessionToken(TOKEN) } }))
+    })
+
+    it('returns null for an unknown, revoked or expired session', async () => {
+      m.findUnique.mockResolvedValueOnce(null)
+      await expect(getAdminContext()).resolves.toBeNull()
+      m.findUnique.mockResolvedValueOnce({ ...LIVE_SESSION, revokedAt: new Date() })
+      await expect(getAdminContext()).resolves.toBeNull()
+      m.findUnique.mockResolvedValueOnce({ ...LIVE_SESSION, expiresAt: new Date(Date.now() - 1) })
+      await expect(getAdminContext()).resolves.toBeNull()
     })
 
     it('falls back to x-real-ip, and to null when neither header is present', async () => {
       m.requestHeaders.current = new Headers({ 'x-real-ip': '198.51.100.4' })
-      await expect(getAdminContext()).resolves.toEqual({ sessionId: null, ip: '198.51.100.4', userAgent: null })
+      await expect(getAdminContext()).resolves.toEqual({ sessionId: 'admin_sess_1', ip: '198.51.100.4', userAgent: null })
       m.requestHeaders.current = new Headers()
-      await expect(getAdminContext()).resolves.toEqual({ sessionId: null, ip: null, userAgent: null })
+      await expect(getAdminContext()).resolves.toEqual({ sessionId: 'admin_sess_1', ip: null, userAgent: null })
     })
   })
 
   describe('requireAdmin', () => {
     it('returns the context without redirecting when signed in', async () => {
-      await expect(requireAdmin('/admin/inbox')).resolves.toMatchObject({ sessionId: null, ip: '203.0.113.7' })
+      await expect(requireAdmin('/admin/inbox')).resolves.toMatchObject({ sessionId: 'admin_sess_1', ip: '203.0.113.7' })
       expect(m.redirect).not.toHaveBeenCalled()
     })
 
@@ -72,6 +102,12 @@ describe('admin guard', () => {
       signedIn(false)
       await expect(requireAdmin()).rejects.toThrow('NEXT_REDIRECT:/admin')
       expect(m.redirect).toHaveBeenCalledWith('/admin')
+    })
+
+    it('redirects a revoked session to the login page', async () => {
+      m.findUnique.mockResolvedValue({ ...LIVE_SESSION, revokedAt: new Date() })
+      await expect(requireAdmin('/admin/reports')).rejects.toThrow()
+      expect(m.redirect).toHaveBeenCalledWith(`/admin?next=${encodeURIComponent('/admin/reports')}`)
     })
 
     it('carries an accepted admin return path as an encoded next parameter', async () => {
@@ -98,7 +134,7 @@ describe('admin guard', () => {
     it('returns the context when signed in', async () => {
       await expect(requireAdminApi()).resolves.toEqual({
         ok: true,
-        ctx: { sessionId: null, ip: '203.0.113.7', userAgent: 'Mozilla/5.0 (iPhone)' },
+        ctx: { sessionId: 'admin_sess_1', ip: '203.0.113.7', userAgent: 'Mozilla/5.0 (iPhone)' },
       })
     })
 

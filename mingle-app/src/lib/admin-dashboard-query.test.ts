@@ -48,6 +48,28 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
+  it.each(["all", "android"] as const)(
+    "leaves operator accounts out of signups, DAU, messages and latency (%s)",
+    async (platform) => {
+      const today = resolveTodayKey(new Date());
+      setRawMetricResults(today);
+
+      await loadAdminDashboardMetrics(makeRange([today]), { platform });
+
+      const queries = mocks.queryRawUnsafe.mock.calls.map(([sql]) => sql as string);
+      const operatorSender = 'and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")';
+      expect(queries[0]).toContain('"app"."app_users" as u');
+      expect(queries[0]).toContain('and u."is_operator" = false');
+      for (const index of [1, 2, 4, 5]) {
+        expect(queries[index]).toContain('from "app"."app_messages" as m');
+        expect(queries[index]).toContain(operatorSender);
+      }
+      // Messages without a sender stay in the count: NOT EXISTS, never NOT IN.
+      expect(queries.join("\n")).not.toMatch(/not in \(/i);
+      // Usage comes from client event logs, which operators never write.
+      expect(queries[3]).not.toContain("is_operator");
+    },
+  );
   it("uses one indexed pre-range usage snapshot per active session instead of scanning all history", async () => {
     const today = resolveTodayKey(new Date());
     setRawMetricResults(today);

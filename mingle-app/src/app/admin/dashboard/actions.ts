@@ -1,8 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import {
   ADMIN_DASHBOARD_MAX_DAYS,
   ADMIN_DASHBOARD_TIME_ZONE,
@@ -12,18 +10,13 @@ import {
   type AdminDashboardPlatform,
 } from "@/lib/admin-dashboard-metrics";
 import { clearAdminDashboardCache } from "@/lib/admin-dashboard-query";
+import { requireAdmin } from "@/server/admin/guard";
 
 export async function clearDashboardCacheAction(
   days: number,
   platform: AdminDashboardPlatform = "all",
 ): Promise<{ success: boolean; error?: string }> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value;
-  const isAuthenticated = verifyAdminSessionToken(token);
-
-  if (!isAuthenticated) {
-    return { success: false, error: "관리자 인증이 필요합니다." };
-  }
+  await requireAdmin("/admin/dashboard");
 
   const safeDays = Math.min(ADMIN_DASHBOARD_MAX_DAYS, Math.max(1, Math.round(Number(days) || 30)));
   const safePlatform = normalizeDashboardPlatform(platform);
