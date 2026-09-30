@@ -2,32 +2,49 @@
 //
 // onLoadEnd alone cannot tell success from failure, because the callback order
 // for a failed load differs per platform (react-native-webview 13.x):
-// - iOS: onError (or onHttpError) arrives first, then onLoadEnd.
+// - iOS: onLoadStart when the navigation begins; for a failure onError (or
+//   onHttpError) arrives first, then onLoadEnd.
 // - Android: RNCWebViewClient.onReceivedError dispatches a "loading finish"
 //   event BEFORE the error event (to mimic iOS), so JS sees
 //   onLoadEnd -> onError -> onLoadEnd for one failed load. Both events come out
 //   of that single native callback back to back, so the error always reaches
 //   JS right behind the premature onLoadEnd.
+// - Android also emits onLoadStart only from doUpdateVisitedHistory, i.e. when
+//   a navigation COMMITS (same-document history changes included). For an
+//   HTTP error page that is after onHttpError, and a failed load's error page
+//   commits after onError.
 //
-// Android also emits onLoadStart from doUpdateVisitedHistory, i.e. only once
-// a navigation commits (same-document history changes included), so a failed
-// load may have no onLoadStart before its onLoadEnd at all.
-//
-// So a finished load is only committed as a success once it is clear no error
-// followed it: after a short settle window, or as soon as any later load event
-// (onLoadStart or another onLoadEnd) arrives. Only a failure cancels it.
+// Hence:
+// - a finished load is only committed as a success once it is clear no error
+//   followed it: after a short settle window, or as soon as any later load
+//   event arrives (only the error Android dispatches right behind a premature
+//   onLoadEnd can disprove it);
+// - a failure sticks until the next attempt, which is a WebView remount
+//   (retry / fallback switch). onLoadStart must not clear it: on Android it
+//   belongs to the very load that failed, and after any failure the error
+//   overlay covers the WebView until the user retries anyway.
 export const WEBVIEW_LOAD_SUCCESS_SETTLE_MS = 300;
+
+// How long a retried / fallback load may stay silent before the "reconnecting"
+// spinner turns back into the error overlay with its retry button. Some loads
+// never report back at all (iOS drops failures after the navigation committed,
+// since react-native-webview has no didFailNavigation handler; a hung
+// connection), and the spinner must not trap the user. A late success still
+// clears the overlay through the tracker.
+export const WEBVIEW_RETRY_STALL_TIMEOUT_MS = 30_000;
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 export type WebViewLoadAttemptTracker = {
-  /** onLoadStart: a new navigation attempt began. */
-  start: () => void;
-  /** onLoadEnd: the attempt finished — a success only if no error follows. */
-  finish: () => void;
-  /** onError / onHttpError / render-process death for the current attempt. */
-  fail: () => void;
-  /** Whether the current attempt has already reported a failure. */
+  /** A new WebView instance mounted (retry, fallback switch, debug remount). */
+  beginAttempt: () => void;
+  /** onLoadStart. Confirms a pending finish; does NOT clear a failure. */
+  loadStarted: () => void;
+  /** onLoadEnd. A success only if no error follows. */
+  loadFinished: () => void;
+  /** onError / onHttpError / render-process death. Sticks until beginAttempt(). */
+  loadFailed: () => void;
+  /** Whether the current attempt has reported a failure. */
   hasFailed: () => boolean;
   /** Whether any attempt so far has been committed as a success. */
   hasLoadedPage: () => boolean;
@@ -61,19 +78,17 @@ export function createWebViewLoadAttemptTracker(options: {
     options.onSuccess();
   };
 
-  // The only thing that can disprove a pending finish is the error Android
-  // dispatches right behind it. Any other load event arriving first means that
-  // error is not coming, so the finish was a real success.
   const confirmPendingCommit = () => {
     if (pendingCommit !== null) commitSuccess();
   };
 
   return {
-    start: () => {
+    beginAttempt: () => {
       confirmPendingCommit();
       attemptFailed = false;
     },
-    finish: () => {
+    loadStarted: confirmPendingCommit,
+    loadFinished: () => {
       if (attemptFailed) return;
       confirmPendingCommit();
       pendingCommit = setTimer(() => {
@@ -81,7 +96,7 @@ export function createWebViewLoadAttemptTracker(options: {
         commitSuccess();
       }, settleMs);
     },
-    fail: () => {
+    loadFailed: () => {
       attemptFailed = true;
       cancelPendingCommit();
     },
