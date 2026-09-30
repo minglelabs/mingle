@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
+import { GoogleGenerativeAI, SchemaType, type GenerateContentRequest, type ResponseSchema } from '@google/generative-ai'
 import {
   ensureTrackingContext,
   sanitizeNonNegativeInt,
@@ -40,6 +40,14 @@ import {
 export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
+// Translation is on the live conversation path, so both providers always run on their fast
+// tier. There is deliberately no switch back to the standard tier.
+// Gemini Priority inference: top-level `serviceTier` on generateContent. Gemma has no
+// Priority tier, so it is only sent for Gemini models.
+const GEMINI_TRANSLATION_SERVICE_TIER = 'priority'
+// OpenAI Fast mode ('priority' is the same tier under its earlier name). Only sent to the
+// OpenAI API itself, never to OpenRouter.
+const OPENAI_TRANSLATION_SERVICE_TIER = 'priority'
 const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
@@ -133,6 +141,23 @@ type GeminiUsageMetadata = {
   promptTokenCount?: unknown
   candidatesTokenCount?: unknown
   totalTokenCount?: unknown
+  /** Tier the request actually ran on; Priority is downgraded to standard under load. */
+  serviceTier?: unknown
+}
+
+/** The SDK's request type predates service tiers; it forwards the extra field verbatim. */
+type GeminiTranslationRequest = GenerateContentRequest & {
+  serviceTier?: typeof GEMINI_TRANSLATION_SERVICE_TIER
+}
+
+function buildGeminiTranslationRequest(
+  userPrompt: string,
+  provider: GeminiTranslationProviderConfig['provider'],
+): GeminiTranslationRequest {
+  return {
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    ...(provider === 'gemini' ? { serviceTier: GEMINI_TRANSLATION_SERVICE_TIER } : {}),
+  }
 }
 
 type SessionUserIdentity = {
@@ -154,6 +179,8 @@ type GeminiResponseLike = {
 
 type OpenAICompatibleResponseLike = {
   model?: unknown
+  /** Tier the request actually ran on ('default' when Fast mode was downgraded). */
+  service_tier?: unknown
   choices?: Array<{
     finish_reason?: unknown
     message?: {
@@ -1154,9 +1181,10 @@ async function translateWithGemini(
     },
   })
 
+  const request = buildGeminiTranslationRequest(userPrompt, config.provider)
   const generateContentWithRetry = async () => {
     try {
-      return await model.generateContent(userPrompt)
+      return await model.generateContent(request)
     } catch (error) {
       if (!isRetryableGeminiError(error)) throw error
       const retryInMs = resolveProviderRetryDelayMs(error)
@@ -1180,7 +1208,7 @@ async function translateWithGemini(
       })
 
       await sleep(retryInMs)
-      return await model.generateContent(userPrompt)
+      return await model.generateContent(request)
     }
   }
 
@@ -1214,6 +1242,7 @@ async function translateWithGemini(
       output_tokens: completionTokens,
       total_tokens: totalTokens,
     },
+    serviceTier: usageMetadata?.serviceTier ?? null,
     promptFeedback: response.promptFeedback ?? null,
     candidates: candidateMeta,
   }
@@ -1416,6 +1445,9 @@ async function createOpenAICompatibleCompletion(
   if (config.provider === 'openai') {
     payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
     payload.reasoning_effort = 'none'
+    if (isOpenAIBaseUrl(config.baseUrl)) {
+      payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
+    }
   }
 
   if (config.extraBody) {
@@ -1557,6 +1589,7 @@ async function translateWithOpenAICompatible(
       reasoning_tokens: reasoningTokens,
       total_tokens: totalTokens,
     },
+    serviceTier: responsePayload.service_tier ?? null,
     finishReason: responsePayload.choices?.[0]?.finish_reason ?? null,
   }
 
