@@ -108,13 +108,26 @@ function buildMessageUserJoin(platform: AdminDashboardPlatform, messageAlias = "
 }
 
 /**
+ * Operator accounts (`is_operator`) are staff-run personas, so what they send
+ * is not product usage: every app_messages metric drops their rows. NOT EXISTS
+ * (not NOT IN) keeps messages whose user_id is null, which the message count
+ * includes. Usage seconds need no filter: operators have no client sessions,
+ * so they never write app_event_logs.
+ */
+function excludeOperatorSenders(messageAlias = "m"): string {
+  return `\n       and not exists (select 1 from "app"."app_users" as op where op."id" = ${messageAlias}."user_id" and op."is_operator")`;
+}
+
+/**
  * upsertTrackedUser (src/lib/app-analytics.ts) creates an app_users row keyed only by
  * externalUserId for anyone who fires a tracked client event, before they ever sign up
  * -- counting every row here would report anonymous demo visitors as 가입자/signups.
  * A real account always has either a password (email/password signup) or a linked
  * auth_accounts row (Google/Apple OAuth, including the native bridge flow, which both
  * go through the same NextAuth PrismaAdapter user-creation path); anonymous tracking
- * rows have neither.
+ * rows have neither. Operator accounts are excluded explicitly as well (they are
+ * created without a password or auth account today, so this only guards a future
+ * path that gives them one).
  */
 async function querySignups(
   range: AdminDashboardDateRange,
@@ -124,6 +137,7 @@ async function querySignups(
     `select ${DAY_BUCKET_EXPR("u")} as day, count(*) as value
      from "app"."app_users" as u
      where u."created_at" >= $1 and u."created_at" < $2
+       and u."is_operator" = false
        and (
          u."password_hash" is not null
          or exists (select 1 from "app"."auth_accounts" as a where a."user_id" = u."id")
@@ -153,7 +167,7 @@ async function queryDau(
      from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
        and m."user_id" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -169,7 +183,7 @@ async function queryMessageCount(
     `select ${DAY_BUCKET_EXPR("m")} as day, count(*) as value
      from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -309,7 +323,7 @@ async function querySttLatency(
      from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
        and m."stt_duration_ms" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -337,7 +351,7 @@ async function queryTranslationLatency(
        and m."stt_duration_ms" is not null
        and m."total_duration_ms" >= m."stt_duration_ms"
        and m."translation_provider" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),

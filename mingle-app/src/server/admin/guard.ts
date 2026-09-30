@@ -1,8 +1,9 @@
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { NextResponse } from 'next/server'
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from '@/lib/admin-auth'
+import { ADMIN_SESSION_COOKIE_NAME } from '@/lib/admin-auth'
 import { sanitizeAdminReturnTo } from '@/lib/admin-return-to'
+import { verifyAdminSessionCookie } from '@/server/admin/session'
 
 /**
  * Admin auth seam (contract §2). The first line of every admin page / server
@@ -10,13 +11,12 @@ import { sanitizeAdminReturnTo } from '@/lib/admin-return-to'
  * starts with `const auth = await requireAdminApi(); if (!auth.ok) return
  * auth.response`. Layouts never do auth.
  *
- * Phase 0 internals: the existing shared-credential cookie checked with
- * `verifyAdminSessionToken`, so `sessionId` is always null. W1 replaces the
- * internals with per-login DB sessions (app_admin_sessions); these
- * signatures do not change.
+ * The admin cookie carries a per-login session token, checked against
+ * app_admin_sessions (`verifyAdminSessionCookie`): unknown, revoked and
+ * expired sessions have no admin context.
  */
 export type AdminContext = {
-  /** app_admin_sessions.id of the current login; null in Phase 0. */
+  /** app_admin_sessions.id of the current login (null only for a request with no session, e.g. a failed login). */
   sessionId: string | null
   ip: string | null
   userAgent: string | null
@@ -50,8 +50,9 @@ export async function readAdminRequestMeta(): Promise<Pick<AdminContext, 'ip' | 
 /** The admin context of the current request, or null when it has no valid admin session. */
 export async function getAdminContext(): Promise<AdminContext | null> {
   const cookieStore = await cookies()
-  if (!verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value)) return null
-  return { sessionId: null, ...(await readAdminRequestMeta()) }
+  const session = await verifyAdminSessionCookie(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value)
+  if (!session) return null
+  return { sessionId: session.id, ...(await readAdminRequestMeta()) }
 }
 
 /** `/admin`, plus `?next=` only when `sanitizeAdminReturnTo` accepts the return path. */
