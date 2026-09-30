@@ -67,12 +67,16 @@ export function pcm16ToMonoFloat(samples: Int16Array, channels: number): Float32
   return out
 }
 
-/** Float32 -> little-endian 16-bit PCM bytes (clipped). */
+/**
+ * Float32 -> little-endian 16-bit PCM bytes (clipped). Uses the same 32768
+ * scale as `pcm16ToMonoFloat`, so mono PCM that is only trimmed round-trips
+ * bit-exactly.
+ */
 export function floatToPcm16Buffer(samples: Float32Array): Buffer {
   const out = Buffer.alloc(samples.length * 2)
   for (let i = 0; i < samples.length; i++) {
-    const v = Math.max(-1, Math.min(1, samples[i]))
-    out.writeInt16LE(Math.round(v < 0 ? v * 32768 : v * 32767), i * 2)
+    const value = Math.round(samples[i] * 32768)
+    out.writeInt16LE(Math.max(-32768, Math.min(32767, value)), i * 2)
   }
   return out
 }

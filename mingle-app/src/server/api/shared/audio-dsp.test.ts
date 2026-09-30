@@ -100,6 +100,12 @@ describe('parsePcm16Wav', () => {
     const bytes = floatToPcm16Buffer(Float32Array.from([0.5, -1, 2]))
     expect([bytes.readInt16LE(0), bytes.readInt16LE(2), bytes.readInt16LE(4)]).toEqual([16384, -32768, 32767])
   })
+
+  it('round-trips mono PCM16 bit-exactly through float', () => {
+    const pcm = Int16Array.from([-32768, -16385, -1, 0, 1, 16383, 16384, 32767])
+    const bytes = floatToPcm16Buffer(pcm16ToMonoFloat(pcm, 1))
+    expect(Array.from({ length: pcm.length }, (_, i) => bytes.readInt16LE(i * 2))).toEqual(Array.from(pcm))
+  })
 })
 
 describe('trimSilence', () => {

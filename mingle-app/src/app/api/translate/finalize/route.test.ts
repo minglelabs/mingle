@@ -292,13 +292,14 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.ttsAudioMime).toBe('audio/wav')
     // Korean inline audio uses the male Korean Gemini voice.
-    expect(json.ttsVoiceId).toBe('ko-kr-csagent-11')
+    expect(json.ttsVoiceId).toBe('ko-kr-csagent-8')
     expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
     const geminiBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
     expect(geminiBody.model).toBe('gemini-3.8-flash-tts')
-    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-11' }] })
+    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
+    expect(geminiBody.input[0].content[0].annotations).toEqual([{ type: 'speech_metadata', style: 'speaking rapidly' }])
   })
 
   it('uses the gemini-3.8-flash-tts default for inline audio when tts.ttsModel is missing', async () => {
