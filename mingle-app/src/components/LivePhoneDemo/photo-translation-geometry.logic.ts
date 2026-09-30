@@ -366,6 +366,8 @@ export type PhotoTranslationBlockLayout = {
   keepAll: boolean
   bold: boolean
   text: string
+  /** Side margin of the text along its lines (half the padding), px. */
+  inset: number
   /** Feather (box-shadow blur), corner radius and plate blur in stage pixels. */
   feather: number
   radius: number
@@ -424,6 +426,7 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     keepAll,
     bold: draft.bold,
     text: draft.text,
+    inset: round(draft.rect.padding / 2),
     feather: round(clamp(draft.rect.padding * 0.9, 1, 14)),
     radius: round(Math.min(draft.rect.padding * 1.2, draft.rect.height / 2)),
     blur: round(Math.max(3, draft.rect.textHeight * 0.3)),
