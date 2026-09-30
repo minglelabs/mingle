@@ -193,6 +193,63 @@ export function toPercentRect(rect: PaintRect, size: Size): PercentRect {
   }
 }
 
+/**
+ * A vertical source banner translated into a horizontal-writing language
+ * needs a horizontal label. Keep that label to the original glyph-column
+ * height, and widen it only inside the photo and clear of neighboring OCR
+ * boxes. This keeps English words intact without laying a tall black panel
+ * over unrelated parts of the photo.
+ */
+function horizontalLabelRect(
+  source: ConversationImageTextBlock,
+  blocks: readonly ConversationImageTextBlock[],
+  stage: Size,
+  rect: PaintRect,
+  desiredWidth: number,
+): PaintRect {
+  if (rect.angle !== 0) return rect
+
+  const centerX = rect.cx
+  const centerY = rect.cy
+  const labelHeight = rect.width
+  const labelTop = centerY - labelHeight / 2
+  const labelBottom = centerY + labelHeight / 2
+  const edgeGap = 4
+  const neighborGap = Math.max(2, rect.padding)
+  let leftBound = edgeGap
+  let rightBound = stage.width - edgeGap
+
+  for (const block of blocks) {
+    if (block.id === source.id) continue
+    const neighbor = blockPaintRect(block, stage)
+    const radians = Math.abs(neighbor.angle) * DEG
+    const halfWidth = (Math.abs(Math.cos(radians)) * neighbor.width + Math.abs(Math.sin(radians)) * neighbor.height) / 2
+    const halfHeight = (Math.abs(Math.sin(radians)) * neighbor.width + Math.abs(Math.cos(radians)) * neighbor.height) / 2
+    const neighborTop = neighbor.cy - halfHeight
+    const neighborBottom = neighbor.cy + halfHeight
+    if (neighborBottom <= labelTop || neighborTop >= labelBottom) continue
+
+    const neighborLeft = neighbor.cx - halfWidth
+    const neighborRight = neighbor.cx + halfWidth
+    if (neighborRight <= centerX) leftBound = Math.max(leftBound, neighborRight + neighborGap)
+    else if (neighborLeft >= centerX) rightBound = Math.min(rightBound, neighborLeft - neighborGap)
+    else return rect
+  }
+
+  const symmetricWidth = Math.max(0, 2 * Math.min(centerX - leftBound, rightBound - centerX))
+  if (symmetricWidth < rect.width) return rect
+  const width = Math.max(rect.width, Math.min(desiredWidth, symmetricWidth))
+  if (width <= rect.width) return rect
+
+  return {
+    ...rect,
+    width,
+    height: labelHeight,
+    textWidth: Math.max(1, width - 2 * rect.padding),
+    textHeight: rect.textWidth,
+  }
+}
+
 // ── Text fitting ─────────────────────────────────────────────────────────
 
 /** Width of `text` in em at the given weight. */
@@ -557,13 +614,15 @@ export type PhotoTranslationBlockLayout = {
  * the photo's alignment, so "김치찌개" -> "Kimchi Stew" keeps a readable size
  * instead of shrinking to fit the original width.
  */
-export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm, alignments, freeSpans, inlinePaddingPx }: {
+export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm, alignments, freeSpans, sourceBlocks, inlinePaddingPx }: {
   items: readonly { block: ConversationImageTextBlock; text: string }[]
   stage: Size
   language: string
   measure?: TextMeasurer
   alignments?: ReadonlyMap<string, PhotoTranslationTextAlign>
   freeSpans?: ReadonlyMap<string, FreeSpan>
+  /** All OCR boxes, including blocks that are not currently painted. */
+  sourceBlocks?: readonly ConversationImageTextBlock[]
   /** Fixed CSS inline padding for labels; omitted keeps the photo-proportional inset. */
   inlinePaddingPx?: number
 }): PhotoTranslationBlockLayout[] {
@@ -586,10 +645,14 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     // Growable: one-line text (aiming at the box's line size) and vertical
     // banners written across (aiming at the column's glyph size for the widest word).
     const across = mode === 'wrap' && block.vertical === true
-    if (span && !rect.angle && (mode === 'single' || across)) {
-      const needed = across
-        ? widestWordEm(shown, { bold, measure }) * rect.textWidth + fitPadding - rect.width
-        : measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding - rect.width
+    if (across) {
+      const blocks = sourceBlocks ?? items.map(item => item.block)
+      const desiredWidth = measure(shown.replace(/\s*\n\s*/g, ' ').trim(), bold)
+        * (rect.textWidth / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding
+      rect = horizontalLabelRect(block, blocks, stage, rect, desiredWidth)
+    }
+    if (span && !rect.angle && mode === 'single') {
+      const needed = measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding - rect.width
       if (needed > 0) {
         const leftRoom = span.left * stage.width
         const rightRoom = span.right * stage.width
@@ -621,7 +684,7 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
       breakWords = true
       fontSize = fitFontSize({ ...fit, breakWords: true })
     }
-    const crossSize = block.vertical ? rect.textWidth : rect.textHeight
+    const crossSize = across ? rect.textHeight : block.vertical ? rect.textWidth : rect.textHeight
     return {
       id: block.id,
       rect,

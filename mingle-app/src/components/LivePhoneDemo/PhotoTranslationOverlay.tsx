@@ -101,8 +101,8 @@ type PhotoTranslationOverlayProps = {
 function PhotoTranslationOverlay({ width, height, blocks, painted, language, reducedMotion = false }: PhotoTranslationOverlayProps) {
   const alignments = useMemo(() => inferBlockAlignments(blocks), [blocks])
   const layouts = useMemo(() => (language
-    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer(), alignments, inlinePaddingPx: GLASS_LABEL_INLINE_PADDING_PX })
-    : []), [alignments, painted, width, height, language])
+    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer(), alignments, sourceBlocks: blocks, inlinePaddingPx: GLASS_LABEL_INLINE_PADDING_PX })
+    : []), [alignments, blocks, painted, width, height, language])
 
   // Blocks that appear while the language stays the same are arriving
   // results (staggered fade-in); blocks that appear with a language change

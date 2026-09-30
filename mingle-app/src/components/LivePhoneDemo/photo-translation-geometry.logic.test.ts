@@ -248,6 +248,68 @@ describe('layoutPhotoTranslationBlocks', () => {
     expect(isVerticalWritingLanguage('en')).toBe(false)
   })
 
+  it('keeps the live Japanese vertical banner readable in English without overlapping neighboring OCR', () => {
+    // Exact b1 and sibling boxes from s2_ja_sign_live.json; source photo is 1000x750.
+    const blocks = [
+      { id: 'b0', box: [0.11, 0.146, 0.347, 0.222], text: '営業時間', sourceLanguage: 'ja', angle: 0, lines: 1 },
+      { id: 'b1', box: [0.856, 0.146, 0.903, 0.591], text: '本日のおすすめ', sourceLanguage: 'ja', angle: 0, lines: 1, vertical: true, style: { bold: true } },
+      { id: 'b2', box: [0.111, 0.395, 0.431, 0.439], text: '定休日:毎週水曜日', sourceLanguage: 'ja', angle: 0, lines: 1 },
+      { id: 'b3', box: [0.112, 0.486, 0.465, 0.513], text: '※ラストオーダーは閉店30分前です', sourceLanguage: 'ja', angle: 0, lines: 1 },
+      { id: 'b4', box: [0.151, 0.624, 0.503, 0.672], text: 'お手洗いはこちら →', sourceLanguage: 'ja', angle: 0, lines: 1 },
+      { id: 'b5', box: [0.112, 0.792, 0.498, 0.829], text: 'ご来店ありがとうございます', sourceLanguage: 'ja', angle: 0, lines: 1 },
+    ] as const
+    const banner = blocks[1]
+    const photo = { width: 1000, height: 750 }
+    const originalRect = blockPaintRect(banner, photo)
+    const english = layoutPhotoTranslationBlocks({
+      items: [{ block: banner, text: "Today's Special" }],
+      stage: photo,
+      language: 'en',
+      alignments: inferBlockAlignments(blocks),
+      sourceBlocks: blocks,
+      inlinePaddingPx: 4,
+    })[0]
+
+    expect(english.mode).toBe('wrap')
+    expect(english.breakWords).toBe(false)
+    expect(english.angle).toBe(0)
+    expect(english.align).toBe('center')
+    expect(english.rect.width).toBeGreaterThan(15)
+    expect(english.rect.width).toBeLessThan(30)
+    expect(english.rect.left).toBeGreaterThan(0)
+    expect(english.rect.left + english.rect.width).toBeLessThan(100)
+    expect(english.rect.height * photo.height / 100).toBeCloseTo(originalRect.width, 2)
+    expect(wrapLineCount(english.text, (english.rect.width * photo.width / 100 - 8) / english.fontSize, {
+      bold: true,
+      measure: estimateTextWidthEm,
+    })).toBeLessThanOrEqual(2)
+
+    const label = {
+      left: english.rect.left * photo.width / 100,
+      right: (english.rect.left + english.rect.width) * photo.width / 100,
+      top: english.rect.top * photo.height / 100,
+      bottom: (english.rect.top + english.rect.height) * photo.height / 100,
+    }
+    for (const neighbor of blocks.filter(block => block.id !== banner.id)) {
+      const rect = blockPaintRect(neighbor, photo)
+      const radians = Math.abs(rect.angle) * DEG
+      const halfWidth = (Math.abs(Math.cos(radians)) * rect.width + Math.abs(Math.sin(radians)) * rect.height) / 2
+      const halfHeight = (Math.abs(Math.sin(radians)) * rect.width + Math.abs(Math.cos(radians)) * rect.height) / 2
+      const overlaps = label.left < rect.cx + halfWidth && label.right > rect.cx - halfWidth
+        && label.top < rect.cy + halfHeight && label.bottom > rect.cy - halfHeight
+      expect(overlaps, `English label must not cover ${neighbor.id}`).toBe(false)
+    }
+
+    const korean = layoutPhotoTranslationBlocks({
+      items: [{ block: banner, text: '오늘의 추천' }],
+      stage: photo,
+      language: 'ko',
+      sourceBlocks: blocks,
+    })[0]
+    expect(korean.mode).toBe('vertical')
+    expect(korean.rect).toEqual(toPercentRect(originalRect, photo))
+  })
+
   it('fits the fixed glass-label inset before returning its font size', () => {
     const block = { id: 'tight', box: [0.1, 0.1, 0.18, 0.12] as const, text: '日本語の看板表示', sourceLanguage: 'ja', angle: 0, lines: 1 }
     const stage = { width: 1000, height: 1000 }
