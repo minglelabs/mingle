@@ -1,11 +1,28 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { buildClientApiPath } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
-import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
+import { overlayBlocksFor, type ConversationImageTextBlock } from '@/lib/conversation-image-text'
+import { resolveConversationImageCopy, type ConversationImageCopy } from '@/i18n/conversation-image-copy'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageMediaDialog from './MessageMediaDialog'
+import PhotoTranslateControl from './PhotoTranslateControl'
+import PhotoTranslationOverlay from './PhotoTranslationOverlay'
+import { usePhotoTranslationRoom, type PhotoTranslationRoom } from './photo-translation-context'
+import { containFit, type Size } from './photo-translation-geometry.logic'
+import {
+  PHOTO_TRANSLATION_OFF,
+  buildPhotoTranslationOrder,
+  photoTranslationMemoryKey,
+  photoTranslationSelections,
+  resolvePhotoTranslationKeyedSnapshot,
+  resolvePhotoTranslationToggle,
+  type PhotoTranslationKeyedSnapshot,
+  type PhotoTranslationChoice,
+} from './photo-translation-toggle.logic'
+import { usePhotoTranslationText } from './use-photo-translation-text'
 import {
   DIRECTION_SLOP_PX,
   appendVelocitySample,
@@ -72,15 +89,28 @@ type DismissDrag = {
   lastTime: number
 }
 
-function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss, onDragProgress, onSettleChange }: {
+/** The painted photo inside the viewer: its contain-fit size in px and the loaded img. */
+export type ConversationImageStage = Size & { image: HTMLImageElement }
+
+export function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss, onDragProgress, onSettleChange, renderOverlay }: {
   src: string; alt: string; width: number; height: number; onError: () => void
   onDismiss: () => void; onDragProgress: (progress: number) => void; onSettleChange: (settling: boolean) => void
+  /** Content painted over the photo; it shares the stage transform (pinch, pan, dismiss). */
+  renderOverlay?: (stage: ConversationImageStage) => ReactNode
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerPoint>>(new Map())
   const gestureRef = useRef<GestureState | null>(null)
   const transformRef = useRef<ImageTransform>(INITIAL_IMAGE_TRANSFORM)
   const [transform, setTransform] = useState<ImageTransform>(INITIAL_IMAGE_TRANSFORM)
+  // The stage is the photo's contain-fit rect in px, so an overlay placed in
+  // percent lines up with the painted pixels. An object-contain img box does
+  // not: tall photos letterbox INSIDE the img box (R3 §1 probe).
+  const [viewportSize, setViewportSize] = useState<Size | null>(null)
+  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null)
+  // True while any pointer is down; with `settling` it scopes will-change so
+  // zoomed text re-rasterizes crisp once the gesture ends.
+  const [interacting, setInteracting] = useState(false)
   // Swipe-down-to-dismiss drag state (base zoom only).
   const dismissRef = useRef<DismissDrag | null>(null)
   const [dismissOffset, setDismissOffset] = useState(0)
@@ -132,6 +162,25 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
   // Clear any pending fallback timers if the viewer unmounts first.
   useEffect(() => () => { clearDismissTimer(); clearSettleTimer() }, [clearDismissTimer, clearSettleTimer])
 
+  // Size the stage before the first paint, then follow viewport resizes
+  // (rotation, the desktop window).
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const measure = () => {
+      const next = { width: viewport.clientWidth, height: viewport.clientHeight }
+      setViewportSize(current => current?.width === next.width && current.height === next.height ? current : next)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [])
+
   // Mirror the settling flag to the parent so the backdrop can fade smoothly
   // during a settle (spring-back / animate-out) but track the finger 1:1 while
   // dragging.
@@ -158,8 +207,8 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     const scale = Math.max(MIN_IMAGE_SCALE, Math.min(MAX_IMAGE_SCALE, next.scale))
     const rect = viewportRef.current?.getBoundingClientRect()
     // Keep the image available for panning without allowing it to drift
-    // completely out of the viewport. The image's object-contain bounds are
-    // no larger than the viewport, so this is a safe upper bound for either axis.
+    // completely out of the viewport. The contain-fit stage is no larger than
+    // the viewport, so this is a safe upper bound for either axis.
     const maxX = rect ? Math.max(0, rect.width * (scale - 1) / 2) : 0
     const maxY = rect ? Math.max(0, rect.height * (scale - 1) / 2) : 0
     return {
@@ -185,6 +234,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     const point = localPoint(event)
     const pointers = pointersRef.current
     pointers.set(event.pointerId, point)
+    setInteracting(true)
     const points = [...pointers.values()]
     const current = transformRef.current
     if (points.length >= 2) {
@@ -291,6 +341,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     event.preventDefault()
     event.stopPropagation()
     pointersRef.current.delete(event.pointerId)
+    if (!pointersRef.current.size) setInteracting(false)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
 
     const dismiss = dismissRef.current
@@ -361,6 +412,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     event.preventDefault()
     event.stopPropagation()
     pointersRef.current.delete(event.pointerId)
+    if (!pointersRef.current.size) setInteracting(false)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (dismissRef.current?.pointerId === event.pointerId) resetDismissDrag()
     if (!pointersRef.current.size) gestureRef.current = null
@@ -393,6 +445,7 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
 
   const dragScale = scaleForProgress(dragProgress(Math.max(0, dismissOffset)))
   const composedTransform = `translate3d(${transform.x}px, ${transform.y + dismissOffset}px, 0) scale(${transform.scale * dragScale})`
+  const stage = viewportSize ? containFit({ width, height }, viewportSize) : null
 
   return <div ref={viewportRef} role="img" aria-label={alt} tabIndex={0}
     className="relative flex h-full w-full touch-none select-none items-center justify-center overflow-hidden bg-black"
@@ -400,27 +453,104 @@ function ZoomableConversationImage({ src, alt, width, height, onError, onDismiss
     onPointerCancel={handlePointerCancel} onWheel={handleWheel} onDoubleClick={handleDoubleClick}
     onTouchStart={event => event.stopPropagation()} onTouchMove={event => event.stopPropagation()}
     onTouchEnd={handleTouchEnd} onTouchCancel={event => event.stopPropagation()}>
-    {/* The authenticated image endpoint must bypass image optimization and retain cookies. */}
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={src} alt={alt} width={width} height={height} draggable={false} onError={onError}
+    {/* The stage carries the transform so the photo and its overlay move as one. */}
+    <div data-conversation-image-stage className="relative shrink-0"
       onTransitionEnd={event => {
-        if (event.propertyName !== 'transform') return
+        // Only the stage's own transform; a transition bubbling up from the
+        // overlay must not finish a dismiss or end a settle.
+        if (event.target !== event.currentTarget || event.propertyName !== 'transform') return
         if (animateOut) finishDismiss()
         else endSettle() // spring-back finished; drop the transition again
       }}
-      className="max-h-full max-w-full object-contain will-change-transform"
       style={{
+        width: stage?.width ?? 0,
+        height: stage?.height ?? 0,
         transform: composedTransform,
         transformOrigin: 'center',
         // Transition ONLY while settling a released drag; pinch, pan and
         // double-click zoom keep the original 1:1, no-transition behavior.
         transition: settling ? 'transform 200ms ease-out' : undefined,
-      }} />
+        // Composite only while moving: a permanent layer keeps zoomed text
+        // rasterized at the base scale (blurry at 4x).
+        willChange: interacting || settling ? 'transform' : undefined,
+      }}>
+      {/* The authenticated image endpoint must bypass image optimization and retain cookies. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} width={width} height={height} draggable={false} onError={onError}
+        onLoad={event => setLoadedImage(event.currentTarget)}
+        className="block h-full w-full" />
+      {renderOverlay && stage && stage.width > 0 && loadedImage
+        ? renderOverlay({ width: stage.width, height: stage.height, image: loadedImage })
+        : null}
+    </div>
   </div>
+}
+
+const NO_BLOCKS: readonly ConversationImageTextBlock[] = []
+
+type ViewerCallbacks = {
+  onError: () => void
+  onDismiss: () => void
+  onDragProgress: (progress: number) => void
+  onSettleChange: (settling: boolean) => void
+}
+
+/**
+ * The viewer with photo text translation (spec §4): the data hook runs only
+ * while this is mounted (the viewer is open), the overlay rides the stage,
+ * and the pill sits beside the viewport, never inside it.
+ */
+function PhotoTranslationViewer({ room, image, src, alt, copy, dragProgress, onError, onDismiss, onDragProgress, onSettleChange }: ViewerCallbacks & {
+  room: PhotoTranslationRoom; image: ConversationMessageImage; src: string; alt: string; copy: ConversationImageCopy; dragProgress: number
+}) {
+  const reducedMotion = useReducedMotion() ?? false
+  const order = useMemo(() => buildPhotoTranslationOrder(room.roomLanguages, room.defaultLanguage), [room.roomLanguages, room.defaultLanguage])
+  const response = usePhotoTranslationText({ conversationId: image.conversationId, messageId: image.messageId, languages: order, viewerUserId: room.viewerUserId })
+  const memoryKey = photoTranslationMemoryKey({ apiNamespace: clientApiNamespace, viewerUserId: room.viewerUserId, conversationId: image.conversationId, messageId: image.messageId })
+  const [selectionSnapshot, setSelectionSnapshot] = useState<PhotoTranslationKeyedSnapshot<PhotoTranslationChoice | null>>(
+    () => ({ key: memoryKey, value: photoTranslationSelections.get(memoryKey) ?? null }),
+  )
+  const selection = resolvePhotoTranslationKeyedSnapshot(
+    selectionSnapshot,
+    memoryKey,
+    key => photoTranslationSelections.get(key) ?? null,
+  )
+  const toggle = useMemo(() => resolvePhotoTranslationToggle({ order, response, selection }), [order, response, selection])
+  const language = toggle.choice === PHOTO_TRANSLATION_OFF ? null : toggle.choice
+  const painted = useMemo(() => overlayBlocksFor(response, language), [response, language])
+  const blocks = response?.blocks ?? NO_BLOCKS
+  const select = useCallback((choice: PhotoTranslationChoice) => {
+    photoTranslationSelections.set(memoryKey, choice)
+    setSelectionSnapshot({ key: memoryKey, value: choice })
+  }, [memoryKey])
+  const renderOverlay = useCallback((stage: ConversationImageStage) => <PhotoTranslationOverlay
+    width={stage.width} height={stage.height} blocks={blocks} painted={painted}
+    language={language} reducedMotion={reducedMotion} />, [blocks, language, painted, reducedMotion])
+  return <>
+    <ZoomableConversationImage src={src} alt={alt} width={image.width} height={image.height} onError={onError}
+      onDismiss={onDismiss} onDragProgress={onDragProgress} onSettleChange={onSettleChange} renderOverlay={renderOverlay} />
+    <AnimatePresence initial={false}>
+      {toggle.visible && <motion.div key="photo-translate" className="pointer-events-none absolute bottom-5 left-0 right-0 z-10 flex justify-center"
+        initial={reducedMotion ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+        exit={reducedMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.96 }}
+        transition={{ duration: reducedMotion ? 0 : 0.18, ease: 'easeOut' }}>
+        <PhotoTranslateControl options={toggle.options} cycle={toggle.cycle} choice={toggle.choice} pending={toggle.pending}
+          uiLocale={room.uiLocale} copy={copy} disabled={dragProgress > 0} onSelect={select} />
+      </motion.div>}
+    </AnimatePresence>
+    {/* The viewport is role="img", which hides the overlay from assistive tech; read the translation here. */}
+    {painted.length > 0 && <div className="sr-only" lang={language ?? undefined}>
+      {painted.map(({ block, text }) => <p key={block.id} dir="auto">{text}</p>)}
+    </div>}
+  </>
 }
 
 export default function ConversationImageBubble({ image, locale }: { image: ConversationMessageImage; locale: string }) {
   const copy = resolveConversationImageCopy(locale)
+  // Only the LivePhoneDemo chat list provides a room; share, spectate and
+  // legacy screens get no pill and no request.
+  const room = usePhotoTranslationRoom()
+  const translationRoom = room?.conversationId === image.conversationId ? room : null
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -429,6 +559,12 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
   const close = useCallback(() => { setDragProgressValue(0); setBackdropSettling(false); setExpanded(false) }, [])
   const path = buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
   const src = retry ? `${path}?retry=${retry}` : path
+  const viewerCallbacks: ViewerCallbacks = {
+    onError: () => { setFailed(true); setExpanded(false) },
+    onDismiss: close,
+    onDragProgress: setDragProgressValue,
+    onSettleChange: setBackdropSettling,
+  }
   return <>
     <CopyableBubbleSurface text={typeof window === 'undefined' ? path : new URL(path, window.location.origin).href} copyBubbleLabel={copy.copyLink}
       onActivate={() => { if (!failed) setExpanded(true) }} role="button" aria-label={copy.image}
@@ -443,9 +579,10 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
       backdropOpacity={0.95 * backdropOpacityForProgress(dragProgressValue)} backdropTransition={backdropSettling}>
       <div className="relative h-[80dvh] min-h-[240px] w-full overflow-hidden">
         <button type="button" aria-label={copy.close} onClick={close} className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15"><X size={22} /></button>
-        <ZoomableConversationImage src={src} alt={copy.image} width={image.width} height={image.height}
-          onError={() => { setFailed(true); setExpanded(false) }}
-          onDismiss={close} onDragProgress={setDragProgressValue} onSettleChange={setBackdropSettling} />
+        {translationRoom
+          ? <PhotoTranslationViewer room={translationRoom} image={image} src={src} alt={copy.image} copy={copy}
+            dragProgress={dragProgressValue} {...viewerCallbacks} />
+          : <ZoomableConversationImage src={src} alt={copy.image} width={image.width} height={image.height} {...viewerCallbacks} />}
       </div>
     </MessageMediaDialog>}
   </>
