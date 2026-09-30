@@ -30,9 +30,11 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
  * permission. Device product names are never read, only device TYPES.
  *
  * API 33+: judged on getAudioDevicesForAttributes(USAGE_MEDIA), i.e. where the
- * WebView's `<audio>` TTS would really play. API 29-32: any counted type among
- * getDevices(GET_DEVICES_OUTPUTS). RN JS dedupes and debounces before anything
- * reaches the WebView, so every reading is emitted as is.
+ * WebView's `<audio>` TTS would really play. API 29-32 has no such query:
+ * getDevices(GET_DEVICES_OUTPUTS) lists every CONNECTED output, so only earphone
+ * types that carry media there are counted (see legacyMediaOutputTypes). RN JS
+ * dedupes and debounces before anything reaches the WebView, so every reading
+ * is emitted as is.
  */
 class NativeAudioRouteModule(
   reactContext: ReactApplicationContext,
@@ -109,8 +111,10 @@ class NativeAudioRouteModule(
     val callback = object : AudioDeviceCallback() {
       override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
         // A newly added earphone output is a real (re)connect: it ends a
-        // becoming-noisy hold early.
-        if (addedDevices.any { it.isSink && it.type in EARPHONE_TYPES }) {
+        // becoming-noisy hold early. Only a type that can count on this API
+        // level does (on API 29-32 an SCO or BLE headset output never counts).
+        val countableTypes = countableEarphoneTypes()
+        if (addedDevices.any { it.isSink && it.type in countableTypes }) {
           clearBecomingNoisyHold()
         }
         emitCurrentRoute("devices_added")
@@ -193,11 +197,39 @@ class NativeAudioRouteModule(
     mainHandler.removeCallbacks(becomingNoisyHoldExpired)
   }
 
-  private fun currentMediaOutputTypes(): List<Int> =
+  private fun currentMediaOutputTypes(): List<Int> {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      audioManager.getAudioDevicesForAttributes(MEDIA_ATTRIBUTES).map { it.type }
-    } else {
-      audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }
+      return audioManager.getAudioDevicesForAttributes(MEDIA_ATTRIBUTES).map { it.type }
+    }
+    val connectedTypes = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }
+    val bluetoothA2dpOn = readBluetoothA2dpOn()
+    val audioMode = audioManager.mode
+    val mediaTypes = legacyMediaOutputTypes(
+      connectedTypes,
+      bluetoothA2dpOn = bluetoothA2dpOn,
+      inCallAudioMode = audioMode == AudioManager.MODE_IN_CALL ||
+        audioMode == AudioManager.MODE_IN_COMMUNICATION,
+    )
+    if (mediaTypes.size != connectedTypes.size) {
+      Log.i(
+        TAG,
+        "api<33 connected=${connectedTypes.distinct().map { typeName(it) }} " +
+          "a2dpOn=$bluetoothA2dpOn mode=$audioMode",
+      )
+    }
+    return mediaTypes
+  }
+
+  // Deprecated since API 26, where it only reports whether an A2DP output is
+  // connected (not that media is routed to it). It is the cross-check a listed
+  // A2DP output must also pass on API 29-32; a failed read counts as off.
+  @Suppress("DEPRECATION")
+  private fun readBluetoothA2dpOn(): Boolean =
+    try {
+      audioManager.isBluetoothA2dpOn
+    } catch (error: Throwable) {
+      Log.w(TAG, "isBluetoothA2dpOn failed", error)
+      false
     }
 
   private fun readRoutePayload(reason: String?): WritableMap {
@@ -263,6 +295,49 @@ class NativeAudioRouteModule(
       AudioDeviceInfo.TYPE_USB_HEADSET,
       AudioDeviceInfo.TYPE_HEARING_AID,
     )
+
+    /**
+     * API 29-32: the earphone types that carry media when listed (A2DP only
+     * while isBluetoothA2dpOn()). TYPE_BLUETOOTH_SCO is call audio: a headset
+     * with "Media audio" off, or a call-only headset, is listed as SCO while
+     * media plays on the speaker. TYPE_BLE_HEADSET is left to the API 33+ path.
+     */
+    private val LEGACY_MEDIA_EARPHONE_TYPES: Set<Int> = setOf(
+      AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+      AudioDeviceInfo.TYPE_WIRED_HEADSET,
+      AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+      AudioDeviceInfo.TYPE_USB_HEADSET,
+      AudioDeviceInfo.TYPE_HEARING_AID,
+    )
+
+    /** Earphone types that can count on this device's API level. */
+    private fun countableEarphoneTypes(): Set<Int> =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) EARPHONE_TYPES else LEGACY_MEDIA_EARPHONE_TYPES
+
+    /**
+     * API 29-32: keeps, out of the CONNECTED outputs getDevices() lists, the
+     * ones that can carry media. Non-earphone outputs are all kept, so
+     * routeKind still names the fallback (usually the speaker). An earphone
+     * output is kept only if it is in LEGACY_MEDIA_EARPHONE_TYPES, A2DP only
+     * while `bluetoothA2dpOn`. In a call mode (MODE_IN_CALL /
+     * MODE_IN_COMMUNICATION) the audio policy routes media along the call
+     * route instead (A2DP is skipped, a speakerphone call takes media to the
+     * speaker even with wired earphones), which the list cannot show, so no
+     * earphone output is kept. A missed earphone only skips auto TTS; a false
+     * one could play it on the speaker.
+     */
+    fun legacyMediaOutputTypes(
+      connectedTypes: List<Int>,
+      bluetoothA2dpOn: Boolean,
+      inCallAudioMode: Boolean,
+    ): List<Int> = connectedTypes.filter { type ->
+      when {
+        type !in EARPHONE_TYPES -> true
+        inCallAudioMode || type !in LEGACY_MEDIA_EARPHONE_TYPES -> false
+        type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> bluetoothA2dpOn
+        else -> true
+      }
+    }
 
     private val TYPE_NAMES: Map<Int, String> = mapOf(
       AudioDeviceInfo.TYPE_BUILTIN_EARPIECE to "TYPE_BUILTIN_EARPIECE",

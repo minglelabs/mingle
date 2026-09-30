@@ -86,8 +86,12 @@ The shell reports whether earphones are the current audio output so the web can 
   `AudioDeviceCallback`, `ACTION_AUDIO_BECOMING_NOISY` and host resume, and judges API 33+ on
   `getAudioDevicesForAttributes(USAGE_MEDIA)`.
 - Earphones = iOS `headphones`, `bluetoothA2DP`, `bluetoothHFP`, `bluetoothLE`, `usbAudio`; Android wired
-  headset/headphones, Bluetooth A2DP/SCO, BLE headset, USB headset, hearing aid. Only port/device types are
-  reported, never device names.
+  headset/headphones, Bluetooth A2DP/SCO, BLE headset, USB headset, hearing aid among the API 33+ media devices.
+  Android API 29-32 has no media-route query and `getDevices(GET_DEVICES_OUTPUTS)` lists every connected output,
+  so only outputs that carry media count there: wired headset/headphones, USB headset, hearing aid, and Bluetooth
+  A2DP while `isBluetoothA2dpOn()`. Bluetooth SCO (call audio, e.g. a headset with "Media audio" off) and BLE
+  headset never count on API 29-32, and nothing counts in `MODE_IN_CALL`/`MODE_IN_COMMUNICATION` (media follows
+  the call route). Only port/device types are reported, never device names.
 - `capabilities` (on `mingle:native-stt`) carries `audioRoute: true` when the module is present.
 - `App.tsx` relays readings (`src/nativeAudioRoute.ts`) as the window event `mingle:native-audio-route`, after
   assigning the same detail to `window.__MINGLE_LAST_NATIVE_AUDIO_ROUTE`: at every load end right after
