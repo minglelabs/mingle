@@ -1,4 +1,5 @@
 import {
+  canUseWebHostFallbackForLoadFailure,
   isWebViewPageLoadFailureHttpStatus,
   normalizeHttpBaseUrl,
   normalizeWsUrl,
@@ -70,5 +71,15 @@ describe('fallbackTargets', () => {
     // would fail the same way, so don't bother switching.
     expect(shouldTryFallbackVersionPolicy(true, 404)).toBe(false);
     expect(shouldTryFallbackVersionPolicy(true, 401)).toBe(false);
+  });
+
+  it('lets a failed page load switch hosts until the current host has served a page', () => {
+    // First load still in flight.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: false, hasLoadedPage: false })).toBe(true);
+    // First load failed and the user pressed retry — the primary host has
+    // never served a page, so the retry may still fall back.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: true, hasLoadedPage: false })).toBe(true);
+    // A page already loaded from the current host — never switch mid-session.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: true, hasLoadedPage: true })).toBe(false);
   });
 });

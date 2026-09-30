@@ -79,6 +79,7 @@ import {
   readPreferredRuntimeValue,
 } from './src/runtimeConfig';
 import {
+  canUseWebHostFallbackForLoadFailure,
   isWebViewPageLoadFailureHttpStatus,
   normalizeHttpBaseUrl,
   normalizeWsUrl,
@@ -86,7 +87,7 @@ import {
   shouldFallbackHttpStatus,
   shouldTryFallbackVersionPolicy,
 } from './src/fallbackTargets';
-import { isOfflineWebViewLoadError } from './src/webViewLoadErrors';
+import { isOfflineWebViewLoadError, resolveWebViewRetryUrl } from './src/webViewLoadErrors';
 import {
   extractAndroidIntentBrowserFallbackUrl,
   shouldOpenNativeExternalUrl,
@@ -1445,6 +1446,10 @@ function AppInner(): React.JSX.Element {
   // error, so handleLoadEnd knows whether reaching "load finished" actually
   // means success. Reset at the start of every attempt in handleLoadStart.
   const loadAttemptHadErrorRef = useRef(false);
+  // Becomes true once any page load finishes without an error. Until then a
+  // failed load (including one triggered by "retry" after a failed first
+  // load) may still switch to the fallback host.
+  const hasLoadedWebPageRef = useRef(false);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
   const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
@@ -3833,8 +3838,13 @@ function AppInner(): React.JSX.Element {
     // handleLoadEnd clears everything once this attempt actually succeeds
     // (see loadAttemptHadErrorRef), and a fresh error just replaces the copy.
     setIsRetryingLoad(true);
+    // Remount at the page the user was on (e.g. the open conversation room),
+    // not the initial conversation-list URL — otherwise retrying after a
+    // killed render process drops the user out of their room.
+    const retryUrl = resolveWebViewRetryUrl([lastWebViewUrlRef.current, webUrl, baseWebUrl]);
+    if (retryUrl) setDebugRemountWebUrl(retryUrl);
     setWebViewMountToken((current) => current + 1);
-  }, []);
+  }, [baseWebUrl, webUrl]);
 
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     const sourceUrl = typeof (event.nativeEvent as { url?: unknown }).url === 'string'
@@ -4514,6 +4524,7 @@ function AppInner(): React.JSX.Element {
     // or onHttpError, otherwise a retry-after-failure would flash the error
     // overlay away right as the same broken response finishes rendering.
     if (!loadAttemptHadErrorRef.current) {
+      hasLoadedWebPageRef.current = true;
       setLoadError(null);
       setIsOfflineLoadError(false);
       setIsRetryingLoad(false);
@@ -4596,12 +4607,18 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     const isOffline = isOfflineWebViewLoadError(event.nativeEvent);
-    // A genuinely offline device can never be fixed by switching which
+    // A device that is itself offline can never be fixed by switching which
     // backend host we point at, so don't burn the one-shot fallback on it —
     // doing so used to permanently pin the WebView to the legacy fallback
     // host for the rest of the app's life the moment a cold launch raced a
-    // dead network, breaking every retry after reconnecting.
-    if (!isOffline && !initialLoadSettledRef.current && activateWebFallback()) return;
+    // dead network, breaking every retry after reconnecting. Timeouts / DNS
+    // failures are NOT classified as offline (they can mean only the primary
+    // host is down), so they still fall back.
+    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
+      initialLoadSettled: initialLoadSettledRef.current,
+      hasLoadedPage: hasLoadedWebPageRef.current,
+    });
+    if (!isOffline && mayUseHostFallback && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -4625,7 +4642,11 @@ function AppInner(): React.JSX.Element {
     // Switching hosting domains only ever makes sense for a genuine 5xx
     // (shouldFallbackHttpStatus) — a stray 404 doesn't mean the primary host
     // itself is broken.
-    if (!initialLoadSettledRef.current && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;
+    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
+      initialLoadSettled: initialLoadSettledRef.current,
+      hasLoadedPage: hasLoadedWebPageRef.current,
+    });
+    if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;

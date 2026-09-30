@@ -54,21 +54,36 @@ describe('runtime fallback contract', () => {
     );
   });
 
-  it('does not activate the legacy host after the initial Mingle page settles', () => {
+  it('does not activate the legacy host after a Mingle page has loaded', () => {
     const appSource = readWorkspaceFile('App.tsx');
 
     expect(appSource).toContain(
-      'if (!isOffline && !initialLoadSettledRef.current && activateWebFallback()) return;',
+      'if (!isOffline && mayUseHostFallback && activateWebFallback()) return;',
     );
     expect(appSource).toContain(
       'if (!isWebViewPageLoadFailureHttpStatus(statusCode) || isPageReadyRef.current) return;',
     );
     expect(appSource).toContain(
-      'if (!initialLoadSettledRef.current && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
+      'if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
     );
+    expect(appSource).toContain('hasLoadedWebPageRef.current = true;');
     expect(appSource).toContain(
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
+  });
+
+  it('retries the load at the page the user was on instead of the initial list', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const retryStart = appSource.indexOf('const handleRetryLoad = useCallback(() => {');
+    const retryEnd = appSource.indexOf('}, [baseWebUrl, webUrl]);', retryStart);
+
+    expect(retryStart).toBeGreaterThanOrEqual(0);
+    expect(retryEnd).toBeGreaterThan(retryStart);
+    const retryBody = appSource.slice(retryStart, retryEnd);
+    expect(retryBody).toContain(
+      'resolveWebViewRetryUrl([lastWebViewUrlRef.current, webUrl, baseWebUrl])',
+    );
+    expect(retryBody).toContain('setDebugRemountWebUrl(retryUrl)');
   });
 
   it('covers a killed WebView render process with the same load-error overlay', () => {

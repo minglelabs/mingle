@@ -70,3 +70,17 @@ export function shouldTryFallbackVersionPolicy(hasFallbackUrl: boolean, errorSta
   if (typeof errorStatus === 'number') return shouldFallbackHttpStatus(errorStatus);
   return true;
 }
+
+// Decides whether a failed WebView page load may still switch to the fallback
+// host. Normally that only happens during the very first load, but when the
+// first load failed and the user presses "retry", the primary host has still
+// never served a page — so the retry must be allowed to fall back too,
+// otherwise a primary-only outage leaves the user stuck on the error overlay
+// even though the fallback host is healthy. Once any page has loaded from the
+// current host, later failures never switch hosts mid-session.
+export function canUseWebHostFallbackForLoadFailure(state: {
+  initialLoadSettled: boolean;
+  hasLoadedPage: boolean;
+}): boolean {
+  return !state.initialLoadSettled || !state.hasLoadedPage;
+}
