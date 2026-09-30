@@ -66,10 +66,47 @@ describe('runtime fallback contract', () => {
     expect(appSource).toContain(
       'if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
     );
-    expect(appSource).toContain('hasLoadedWebPageRef.current = true;');
+    expect(appSource).toContain('hasLoadedPage: loadAttemptTracker.hasLoadedPage(),');
     expect(appSource).toContain(
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
+  });
+
+  it('records a load failure before the fallback switch and ignores onLoadEnd of a failed load', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const sliceHandler = (signature: string) => {
+      const start = appSource.indexOf(signature);
+      const end = appSource.indexOf('\n  }, [', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      return appSource.slice(start, end);
+    };
+
+    // Android sends onLoadEnd BEFORE onError, and both platforms send another
+    // onLoadEnd right after onError: success is only committed by the tracker.
+    const loadEndBody = sliceHandler('const handleLoadEnd = useCallback(');
+    expect(loadEndBody).toContain('if (loadAttemptTracker.hasFailed()) return;');
+    expect(loadEndBody).toContain('loadAttemptTracker.finish();');
+    expect(loadEndBody.indexOf('if (loadAttemptTracker.hasFailed()) return;'))
+      .toBeLessThan(loadEndBody.indexOf('isPageReadyRef.current = true;'));
+    // Android only reports onLoadStart once a navigation commits, so every
+    // remount starts a fresh attempt on its own.
+    expect(appSource).toContain('if (webViewMountToken > 0) loadAttemptTracker.start();');
+
+    for (const signature of [
+      'const handleLoadError = useCallback(',
+      'const handleHttpError = useCallback(',
+    ]) {
+      const body = sliceHandler(signature);
+      expect(body.indexOf('loadAttemptTracker.fail();')).toBeGreaterThanOrEqual(0);
+      expect(body.indexOf('loadAttemptTracker.fail();'))
+        .toBeLessThan(body.indexOf('activateWebFallback()'));
+    }
+
+    // After the startup splash is gone for good, the fallback switch keeps the
+    // neutral loading overlay over the remounting WebView.
+    const fallbackBody = sliceHandler('const activateWebFallback = useCallback(');
+    expect(fallbackBody).toContain('setIsRetryingLoad(initialLoadSettledRef.current);');
   });
 
   it('retries the load at the page the user was on instead of the initial list', () => {
