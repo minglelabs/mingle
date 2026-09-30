@@ -211,7 +211,7 @@ describe('/api/translate/finalize route', () => {
     vi.unstubAllGlobals()
   })
 
-  it('returns translations and inline TTS audio when finalize succeeds', async () => {
+  it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -245,6 +245,7 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
+        ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
     const json = await res.json()
@@ -257,6 +258,127 @@ describe('/api/translate/finalize route', () => {
     expect(typeof json.ttsAudioBase64).toBe('string')
     expect(json.ttsAudioMime).toBe('audio/mpeg')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses Gemini TTS for inline audio when tts.ttsModel is a Gemini model and ignores the Inworld voiceId', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    expect(json.ttsVoiceId).toBe('Kore')
+    expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+  })
+
+  it('uses the gemini-3.8-flash-tts default for inline audio when tts.ttsModel is missing', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+  })
+
+  it('falls back to Inworld inline audio when Gemini TTS fails and resolves an invalid tts.ttsModel to the Gemini default', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const fallbackRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-lite-tts' },
+    }) as never)
+    const fallbackJson = await fallbackRes.json()
+    expect(fallbackJson.ttsAudioMime).toBe('audio/mpeg')
+    expect(fallbackJson.ttsVoiceId).toBe('KoVoice')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.inworld.ai/tts/v1/voice')
+
+    const invalidRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'bogus' },
+    }) as never)
+    const invalidJson = await invalidRes.json()
+    expect(invalidJson.ttsAudioMime).toBe('audio/mpeg')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+    expect(String(fetchMock.mock.calls[3][0])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
   it('uses previous-state fallback when provider returns empty response', async () => {
@@ -297,6 +419,7 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
+        ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
     const json = await res.json()

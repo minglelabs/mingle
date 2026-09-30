@@ -12,6 +12,9 @@ import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
 } from "@/lib/translation-models";
+import {
+  normalizeSelectableTtsModel,
+} from "@/lib/tts-models";
 import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
 
 export const runtime = "nodejs";
@@ -40,6 +43,7 @@ type PreferencesBody = {
   sonioxEndpointMaxDelayMs?: unknown;
   sonioxEndpointTuningStep?: unknown;
   translationModel?: unknown;
+  ttsModel?: unknown;
   adBannerPosition?: unknown;
   bubbleDisplayMode?: unknown;
   sttSegmentationMode?: unknown;
@@ -59,6 +63,7 @@ type UserPreferencesRecord = {
   demoEndpointMaxDelayMs: number | null;
   demoEndpointTuningStep: number | null;
   translationModel: string | null;
+  ttsModel: string | null;
   adBannerPosition: string | null;
   demoBubbleDisplayMode: string | null;
   sttSegmentationMode: string | null;
@@ -258,6 +263,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoEndpointMaxDelayMs: true,
     demoEndpointTuningStep: true,
     translationModel: true,
+    ttsModel: true,
     adBannerPosition: true,
     demoBubbleDisplayMode: true,
     sttSegmentationMode: true,
@@ -369,6 +375,8 @@ export async function GET(request: Request) {
     sonioxEndpointTuningStep: preferences?.demoEndpointTuningStep ?? DEFAULT_ENDPOINT_TUNING_STEP,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
+    // NULL = the user never picked a model; the client then follows the server default.
+    ttsModel: normalizeSelectableTtsModel(preferences?.ttsModel),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
     bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
       ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -435,6 +443,7 @@ export async function PATCH(request: Request) {
     MAX_ENDPOINT_TUNING_STEP,
   );
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
+  const nextTtsModel = normalizeSelectableTtsModel(body.ttsModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
   const nextBubbleDisplayMode = normalizeBubbleDisplayMode(body.bubbleDisplayMode);
   const nextSttSegmentationMode = normalizeSttSegmentationMode(body.sttSegmentationMode);
@@ -445,6 +454,7 @@ export async function PATCH(request: Request) {
     && nextEndpointMaxDelayMs === null
     && nextEndpointTuningStep === null
     && nextTranslationModel === null
+    && nextTtsModel === null
     && nextAdBannerPosition === null
     && nextBubbleDisplayMode === null
     && !hasNextSttSegmentationMode
@@ -458,6 +468,7 @@ export async function PATCH(request: Request) {
     ...(nextEndpointMaxDelayMs !== null ? { demoEndpointMaxDelayMs: nextEndpointMaxDelayMs } : {}),
     ...(nextEndpointTuningStep !== null ? { demoEndpointTuningStep: nextEndpointTuningStep } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
+    ...(nextTtsModel !== null ? { ttsModel: nextTtsModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
     ...(nextBubbleDisplayMode !== null ? { demoBubbleDisplayMode: nextBubbleDisplayMode } : {}),
     ...(hasNextSttSegmentationMode ? { sttSegmentationMode: nextSttSegmentationMode } : {}),
@@ -476,6 +487,7 @@ export async function PATCH(request: Request) {
         endpointMaxDelayMs: nextEndpointMaxDelayMs,
         endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
+        ttsModel: nextTtsModel,
         adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
@@ -495,6 +507,7 @@ export async function PATCH(request: Request) {
         endpointMaxDelayMs: nextEndpointMaxDelayMs,
         endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
+        ttsModel: nextTtsModel,
         adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
@@ -518,6 +531,7 @@ export async function PATCH(request: Request) {
         endpointMaxDelayMs: nextEndpointMaxDelayMs,
         endpointTuningStep: nextEndpointTuningStep,
         translationModel: nextTranslationModel,
+        ttsModel: nextTtsModel,
         adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
@@ -544,6 +558,7 @@ export async function PATCH(request: Request) {
           endpointMaxDelayMs: nextEndpointMaxDelayMs,
           endpointTuningStep: nextEndpointTuningStep,
           translationModel: nextTranslationModel,
+          ttsModel: nextTtsModel,
           adBannerPosition: nextAdBannerPosition,
         });
         return NextResponse.json({ ok: true });
@@ -576,6 +591,7 @@ export async function PATCH(request: Request) {
       endpointMaxDelayMs: nextEndpointMaxDelayMs,
       endpointTuningStep: nextEndpointTuningStep,
       translationModel: nextTranslationModel,
+      ttsModel: nextTtsModel,
       adBannerPosition: nextAdBannerPosition,
     });
     const response = NextResponse.json({ ok: true });

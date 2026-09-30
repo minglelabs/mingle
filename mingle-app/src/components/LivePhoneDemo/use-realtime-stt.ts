@@ -46,6 +46,7 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
+import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -1492,6 +1493,8 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  // User-selected TTS model, sent with every TTS request. Undefined -> server default (gemini-3.8-flash-tts).
+  ttsModel?: UserSelectableTtsModel
   // The signed-in viewer's own account id, stamped onto every locally
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
   // room has more than one real member. Unused by solo rooms.
@@ -2965,6 +2968,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  ttsModel,
   viewerUserId = null,
   viewerImage = null,
   sttSegmentationMode,
@@ -4397,7 +4401,11 @@ export default function useRealtimeSTT({
       }
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang && options?.isFinal !== true) {
-        body.tts = { language: normalizedTtsLang, enabled: options?.enableTts === true }
+        body.tts = {
+          language: normalizedTtsLang,
+          enabled: options?.enableTts === true,
+          ...(ttsModel ? { ttsModel } : {}),
+        }
       }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
@@ -4444,7 +4452,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, ttsModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
@@ -4609,6 +4617,7 @@ export default function useRealtimeSTT({
           language: normalizedLang,
           sessionKey: ensureSessionKey(),
           clientContext: buildClientContextPayload(usageSec),
+          ...(ttsModel ? { ttsModel } : {}),
         }),
       })
       if (!res.ok) return null
@@ -4619,7 +4628,7 @@ export default function useRealtimeSTT({
     } catch {
       return null
     }
-  }, [ensureSessionKey, usageSec])
+  }, [ensureSessionKey, ttsModel, usageSec])
 
   const requestTtsForRenderedTranslation = useCallback((
     utteranceId: string,
