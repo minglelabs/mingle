@@ -17,10 +17,18 @@ export type NativePushTapRequest = {
 
 export type NativePushTapNavigation =
   | { kind: "conversation"; conversationListHref: string; conversationId: string }
-  | { kind: "route"; href: string };
+  | { kind: "route"; href: string }
+  /** A page outside the locale app (the admin console): open with a full-page load. */
+  | { kind: "document"; href: string };
 
 const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const THROWAWAY_ORIGIN = "https://mingle.invalid";
+
+/**
+ * First path segment of the admin console (`/admin/...`, no locale). Staff
+ * alert pushes open `/admin/inbox/{conversationId}` there.
+ */
+const ADMIN_ROUTE_ROOT = "admin";
 
 /** First path segment (after the locale) of every posting-feed screen (all gated on v2.2.0+). */
 const POSTING_ROUTE_ROOTS = new Set(["feed", "posts", "compose", "notifications"]);
@@ -74,6 +82,9 @@ function isPostingRoute(segments: string[]): boolean {
  *   route, but only when the client supports posting; an older client is sent
  *   to the conversation list instead of a screen whose API would 404.
  * - Any other same-origin route (e.g. `/{locale}/users/{id}`) → that route.
+ * - An admin console path (`/admin/...`, no locale; staff alert pushes) → a
+ *   full-page load of exactly that path, without the native shell query: the
+ *   admin console is a separate app with its own login.
  *
  * The native shell's query (apiNamespace, platform, insets, ...) from the
  * current page is carried over so the destination keeps the app context.
@@ -89,6 +100,11 @@ export function resolveNativePushTapNavigation(
   if (!isSafeRelativeAppPath(path)) return null;
   const target = new URL(path, THROWAWAY_ORIGIN);
   const segments = target.pathname.split("/").filter(Boolean);
+  // Checked on the parsed pathname, so an encoded dot segment such as
+  // `/admin/%2e%2e/api` is judged by where it really leads.
+  if (segments[0] === ADMIN_ROUTE_ROOT) {
+    return { kind: "document", href: `${target.pathname}${target.search}${target.hash}` };
+  }
   const locale = resolveSupportedLocaleTag(segments[0] ?? "");
   if (!locale || locale !== segments[0]) return null;
 
@@ -134,6 +150,8 @@ export type NativePushTapHandlerDeps = {
   clearPendingRequest: () => void;
   pushRoute: (href: string) => void;
   openConversation: (conversationListHref: string, conversationId: string) => void;
+  /** Full-page load (`window.location.assign`), for admin console paths. */
+  loadDocument: (href: string) => void;
 };
 
 /**
@@ -157,6 +175,10 @@ export function createNativePushTapHandler(deps: NativePushTapHandlerDeps): (raw
     if (!navigation) return;
     if (navigation.kind === "conversation") {
       deps.openConversation(navigation.conversationListHref, navigation.conversationId);
+      return;
+    }
+    if (navigation.kind === "document") {
+      deps.loadDocument(navigation.href);
       return;
     }
     deps.pushRoute(navigation.href);
