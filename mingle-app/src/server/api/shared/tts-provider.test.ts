@@ -6,6 +6,9 @@ const TTS_ENV_KEYS = [
   'GEMINI_TTS_VOICE_KO',
   'GEMINI_TTS_VOICE_JA',
   'GEMINI_TTS_SPEED',
+  'GEMINI_TTS_STYLE',
+  'GEMINI_TTS_STYLE_KO',
+  'GEMINI_TTS_STYLE_JA',
   'GEMINI_TTS_TIMEOUT_MS',
   'INWORLD_JWT',
   'INWORLD_BASIC',
@@ -239,7 +242,7 @@ describe('synthesizeSpeech — gemini', () => {
       ok: true,
       provider: 'gemini',
       mime: 'audio/wav',
-      voiceId: 'ko-kr-csagent-11',
+      voiceId: 'ko-kr-csagent-8',
       modelId: 'gemini-3.8-flash-tts',
     })
     if (!result.ok) throw new Error('expected success')
@@ -252,11 +255,47 @@ describe('synthesizeSpeech — gemini', () => {
     const body = bodyOf(fetchMock.mock.calls[0])
     expect(body.model).toBe('gemini-3.8-flash-tts')
     expect(body.response_format).toEqual({ type: 'audio' })
-    expect(body.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-11' }] })
-    // Text is verbatim — no style prefix, no speech_metadata annotation.
-    expect(body.input).toEqual([
-      { type: 'user_input', content: [{ type: 'text', text: '빠른 답장 감사합니다.' }] },
+    expect(body.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
+    // Text is verbatim; pace rides in the structured (never spoken) style annotation.
+    expect(body.input).toEqual([{
+      type: 'user_input',
+      content: [{
+        type: 'text',
+        text: '빠른 답장 감사합니다.',
+        annotations: [{ type: 'speech_metadata', style: 'speaking rapidly' }],
+      }],
+    }])
+  })
+
+  it('sends the text without any annotation when GEMINI_TTS_STYLE=none', async () => {
+    process.env.GEMINI_TTS_STYLE = 'none'
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wavBytes(), 'audio/wav'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', voiceId: 'Kore' })
+    expect(bodyOf(fetchMock.mock.calls[0]).input).toEqual([
+      { type: 'user_input', content: [{ type: 'text', text: 'hello' }] },
     ])
+  })
+
+  it('sends the milder built-in style for Japanese', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wavBytes(), 'audio/wav'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    await synthesizeSpeech({ text: '明日の会議は何時からですか？', language: 'ja-JP' })
+
+    expect(bodyOf(fetchMock.mock.calls[0]).input).toEqual([{
+      type: 'user_input',
+      content: [{
+        type: 'text',
+        text: '明日の会議は何時からですか？',
+        annotations: [{ type: 'speech_metadata', style: 'slightly faster than normal pace' }],
+      }],
+    }])
   })
 
   it('wraps raw PCM (audio/l16) in a 44-byte WAV header using the declared rate', async () => {
@@ -456,9 +495,9 @@ function wavSeconds(wav: Buffer): number {
 describe('getGeminiTtsVoice — per-language voice', () => {
   it('uses the male Korean voice for ko (any region/case) and Kore elsewhere', async () => {
     const { getGeminiTtsVoice } = await loadModule()
-    expect(getGeminiTtsVoice('ko')).toBe('ko-kr-csagent-11')
-    expect(getGeminiTtsVoice('ko-KR')).toBe('ko-kr-csagent-11')
-    expect(getGeminiTtsVoice('KO_kr')).toBe('ko-kr-csagent-11')
+    expect(getGeminiTtsVoice('ko')).toBe('ko-kr-csagent-8')
+    expect(getGeminiTtsVoice('ko-KR')).toBe('ko-kr-csagent-8')
+    expect(getGeminiTtsVoice('KO_kr')).toBe('ko-kr-csagent-8')
     expect(getGeminiTtsVoice('en')).toBe('Kore')
     expect(getGeminiTtsVoice('ja')).toBe('Kore')
     expect(getGeminiTtsVoice(null)).toBe('Kore')
@@ -470,7 +509,7 @@ describe('getGeminiTtsVoice — per-language voice', () => {
     const { getGeminiTtsVoice } = await loadModule()
     expect(getGeminiTtsVoice('en')).toBe('Puck')
     expect(getGeminiTtsVoice(null)).toBe('Puck')
-    expect(getGeminiTtsVoice('ko')).toBe('ko-kr-csagent-11')
+    expect(getGeminiTtsVoice('ko')).toBe('ko-kr-csagent-8')
   })
 
   it('GEMINI_TTS_VOICE_<LANG> overrides one language', async () => {
@@ -484,10 +523,10 @@ describe('getGeminiTtsVoice — per-language voice', () => {
 })
 
 describe('getGeminiTtsSpeed', () => {
-  it('defaults to 1.4 for Korean and 1 for other languages', async () => {
+  it('defaults to 1 (no time-stretch) for every language', async () => {
     const { getGeminiTtsSpeed } = await loadModule()
-    expect(getGeminiTtsSpeed('ko')).toBe(1.4)
-    expect(getGeminiTtsSpeed('ko-KR')).toBe(1.4)
+    expect(getGeminiTtsSpeed('ko')).toBe(1)
+    expect(getGeminiTtsSpeed('ko-KR')).toBe(1)
     expect(getGeminiTtsSpeed('en')).toBe(1)
     expect(getGeminiTtsSpeed('ja')).toBe(1)
     expect(getGeminiTtsSpeed(null)).toBe(1)
@@ -503,22 +542,76 @@ describe('getGeminiTtsSpeed', () => {
     expect(mod.getGeminiTtsSpeed('en')).toBe(2)
     process.env.GEMINI_TTS_SPEED = 'fast'
     mod = await loadModule()
-    expect(mod.getGeminiTtsSpeed('ko')).toBe(1.4)
+    expect(mod.getGeminiTtsSpeed('ko')).toBe(1)
   })
 
   it('accepts a per-language list with a * default', async () => {
     process.env.GEMINI_TTS_SPEED = 'ja=1.1, *=1.05, en=bad'
     const { getGeminiTtsSpeed } = await loadModule()
     expect(getGeminiTtsSpeed('ja')).toBe(1.1)
+    // Invalid or unlisted -> *.
     expect(getGeminiTtsSpeed('en')).toBe(1.05)
-    // Not mentioned -> built-in table first, then *.
-    expect(getGeminiTtsSpeed('ko')).toBe(1.4)
-    expect(getGeminiTtsSpeed('fr')).toBe(1.05)
+    expect(getGeminiTtsSpeed('ko')).toBe(1.05)
+    expect(getGeminiTtsSpeed(null)).toBe(1.05)
+  })
+
+  it('uses 1 for unlisted languages when the list has no *', async () => {
+    process.env.GEMINI_TTS_SPEED = 'ko=1.1'
+    const { getGeminiTtsSpeed } = await loadModule()
+    expect(getGeminiTtsSpeed('ko-KR')).toBe(1.1)
+    expect(getGeminiTtsSpeed('en')).toBe(1)
+  })
+})
+
+describe('getGeminiTtsStyle', () => {
+  it('asks every language to speak fast, Japanese with a milder wording', async () => {
+    const { getGeminiTtsStyle } = await loadModule()
+    expect(getGeminiTtsStyle('ko')).toBe('speaking rapidly')
+    expect(getGeminiTtsStyle('en-US')).toBe('speaking rapidly')
+    expect(getGeminiTtsStyle('zh-CN')).toBe('speaking rapidly')
+    expect(getGeminiTtsStyle(null)).toBe('speaking rapidly')
+    expect(getGeminiTtsStyle()).toBe('speaking rapidly')
+    expect(getGeminiTtsStyle('ja')).toBe('slightly faster than normal pace')
+    expect(getGeminiTtsStyle('JA_jp')).toBe('slightly faster than normal pace')
+  })
+
+  it('GEMINI_TTS_STYLE replaces the built-in style for every language', async () => {
+    process.env.GEMINI_TTS_STYLE = '  speaking very fast  '
+    const { getGeminiTtsStyle } = await loadModule()
+    expect(getGeminiTtsStyle('ko')).toBe('speaking very fast')
+    expect(getGeminiTtsStyle('ja')).toBe('speaking very fast')
+    expect(getGeminiTtsStyle(null)).toBe('speaking very fast')
+  })
+
+  it('GEMINI_TTS_STYLE=none (any case) turns the style off everywhere', async () => {
+    process.env.GEMINI_TTS_STYLE = 'NONE'
+    const { getGeminiTtsStyle } = await loadModule()
+    expect(getGeminiTtsStyle('ko')).toBeNull()
+    expect(getGeminiTtsStyle('ja')).toBeNull()
+    expect(getGeminiTtsStyle(null)).toBeNull()
+  })
+
+  it('GEMINI_TTS_STYLE_<LANG> overrides or disables one language', async () => {
+    process.env.GEMINI_TTS_STYLE = 'none'
+    process.env.GEMINI_TTS_STYLE_KO = 'speaking very fast'
+    process.env.GEMINI_TTS_STYLE_JA = ' '
+    let mod = await loadModule()
+    expect(mod.getGeminiTtsStyle('ko-KR')).toBe('speaking very fast')
+    // Blank per-language value falls through to the global setting.
+    expect(mod.getGeminiTtsStyle('ja')).toBeNull()
+    expect(mod.getGeminiTtsStyle('en')).toBeNull()
+
+    delete process.env.GEMINI_TTS_STYLE
+    delete process.env.GEMINI_TTS_STYLE_JA
+    process.env.GEMINI_TTS_STYLE_KO = 'none'
+    mod = await loadModule()
+    expect(mod.getGeminiTtsStyle('ko')).toBeNull()
+    expect(mod.getGeminiTtsStyle('en')).toBe('speaking rapidly')
   })
 })
 
 describe('synthesizeSpeech — gemini post-processing', () => {
-  it('trims silence and speeds Korean up 1.4x, reporting the voice it used', async () => {
+  it('only trims silence for Korean by default and keeps the samples bit-exact', async () => {
     // 300 ms silence + 2.8 s tone + 300 ms silence.
     const wav = toneWav(24000, 2800, 300)
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
@@ -528,13 +621,31 @@ describe('synthesizeSpeech — gemini post-processing', () => {
     const result = await synthesizeSpeech({ text: '안녕하세요', language: 'ko' })
 
     if (!result.ok) throw new Error('expected success')
-    expect(result).toMatchObject({ provider: 'gemini', mime: 'audio/wav', voiceId: 'ko-kr-csagent-11' })
+    expect(result).toMatchObject({ provider: 'gemini', mime: 'audio/wav', voiceId: 'ko-kr-csagent-8' })
+    // 2.8 s tone + 2 x 80 ms padding: no time-stretch.
+    expect(wavSeconds(result.audio)).toBeCloseTo(2.96, 1)
+    // The kept span is a byte-for-byte slice of the input PCM.
+    const out = result.audio.subarray(44)
+    const start = (300 - 80) * 24 * 2
+    expect(out.equals(wav.subarray(44 + start, 44 + start + out.length))).toBe(true)
+    expect(bodyOf(fetchMock.mock.calls[0]).generation_config).toEqual({
+      speech_config: [{ voice: 'ko-kr-csagent-8' }],
+    })
+  })
+
+  it('time-stretches only when GEMINI_TTS_SPEED asks for it', async () => {
+    process.env.GEMINI_TTS_SPEED = 'ko=1.4'
+    const wav = toneWav(24000, 2800, 300)
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: '안녕하세요', language: 'ko' })
+
+    if (!result.ok) throw new Error('expected success')
     // (2.8 s + 2 x 80 ms padding) / 1.4 = ~2.11 s.
     expect(wavSeconds(result.audio)).toBeGreaterThan(2.0)
     expect(wavSeconds(result.audio)).toBeLessThan(2.2)
-    expect(bodyOf(fetchMock.mock.calls[0]).generation_config).toEqual({
-      speech_config: [{ voice: 'ko-kr-csagent-11' }],
-    })
   })
 
   it('only trims silence for English (speed 1) and keeps the default voice', async () => {
@@ -562,8 +673,7 @@ describe('synthesizeSpeech — gemini post-processing', () => {
 
     if (!result.ok) throw new Error('expected success')
     expect(result.mime).toBe('audio/wav')
-    // (1.4 s + 0.16 s) / 1.4 = ~1.11 s.
-    expect(wavSeconds(result.audio)).toBeGreaterThan(1.05)
-    expect(wavSeconds(result.audio)).toBeLessThan(1.17)
+    // 1.4 s tone + 2 x 80 ms padding.
+    expect(wavSeconds(result.audio)).toBeCloseTo(1.56, 1)
   })
 })
