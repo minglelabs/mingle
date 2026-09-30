@@ -10,7 +10,7 @@ import {
   resolveEditTargetLanguages,
   translatePostBodySettled,
 } from '@/server/translation/post-translation-service'
-import { serializePostsPage } from '@/server/feed/feed-post-loader'
+import { feedPostRowSelect, serializePostsPage } from '@/server/feed/feed-post-loader'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { parseImageKeyInput } from '@/server/posts/post-image-keys'
 import { imageDimensionColumns, parseImageDimensions } from '@/server/posts/post-image-dimensions'
@@ -54,23 +54,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const post = await prisma.post.findFirst({
     where: readablePostWhere(postId, viewerId),
-    select: {
-      id: true,
-      authorId: true,
-      bodyVersion: true,
-      sourceText: true,
-      sourceLanguage: true,
-      backgroundKey: true,
-      imageObjectKey: true,
-      imageWidth: true,
-      imageHeight: true,
-      visibility: true,
-      deletedAt: true,
-      likeCount: true,
-      commentCount: true,
-      publishedAt: true,
-      author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
-    },
+    // Same columns as every post list (author identity + badge flags included).
+    select: feedPostRowSelect,
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 

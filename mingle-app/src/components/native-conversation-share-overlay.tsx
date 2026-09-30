@@ -4,6 +4,9 @@ import { ChevronLeft, Loader2, Smartphone } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
+import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
+import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import SlideSurface from "@/components/slide-surface";
 import {
   formatConversationSpectateInvite,
@@ -238,6 +241,8 @@ export default function NativeConversationShareOverlay() {
   const isOpen = Boolean(overlay);
   const roomTitle = state?.roomTitle || "";
   const inviterName = inviter?.name?.trim() || copy.userFallback;
+  // The invite line is one sentence, so the sharer's badge is plain text.
+  const labeledInviterName = labelNameWithAccountBadge(inviterName, resolveAccountBadge(inviter), spectateLocale);
   const isNotFound = status === "not_found";
 
   return (
@@ -298,7 +303,7 @@ export default function NativeConversationShareOverlay() {
               )}
             </div>
             <p className="min-w-0 flex-1 text-[14px] leading-5 text-slate-700">
-              {roomTitle ? formatConversationSpectateInvite(copy, inviterName, roomTitle) : inviterName}
+              {roomTitle ? formatConversationSpectateInvite(copy, labeledInviterName, roomTitle) : labeledInviterName}
             </p>
           </div>
 
@@ -307,6 +312,8 @@ export default function NativeConversationShareOverlay() {
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             style={{ touchAction: "pan-y" }}
           >
+            {/* Shown before the viewer decides to join a room with a Mingle-run member. */}
+            {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={spectateLocale} /> : null}
             {status === "loading" ? (
               <div className="flex h-full items-center justify-center text-slate-400">
                 <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />

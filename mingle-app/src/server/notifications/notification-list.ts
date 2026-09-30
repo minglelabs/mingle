@@ -10,14 +10,18 @@
  *
  * This is pure so it can be unit-tested without Prisma; the route feeds it a
  * page of rows already ordered newest-first and already visibility-filtered.
+ * Each actor goes out as a list identity: an operator (or official) actor
+ * carries its badge flag so the panel labels it.
  */
 
-export type NotificationActor = {
-  id: string;
-  handle: string | null;
-  name: string | null;
-  image: string | null;
-};
+import {
+  serializeListUserIdentity,
+  type ListUserIdentity,
+  type ListUserIdentityRow,
+} from "@/server/identity/list-user-identity";
+
+/** An actor on the wire: badge flags (official / operator) only when true. */
+export type NotificationActor = ListUserIdentity<string | null>;
 
 export type RawNotificationRow = {
   id: string;
@@ -26,7 +30,8 @@ export type RawNotificationRow = {
   commentId: string | null;
   readAt: Date | string | null;
   createdAt: Date | string;
-  actor: NotificationActor;
+  /** Selected with `USER_IDENTITY_SELECT`; extra columns are dropped. */
+  actor: ListUserIdentityRow<string | null>;
 };
 
 export type NotificationListItem = {
@@ -53,6 +58,10 @@ export type NotificationListItem = {
 };
 
 const GROUPED_TYPES = new Set(["post_like", "comment_like"]);
+
+function serializeActor(actor: RawNotificationRow["actor"]): NotificationActor {
+  return serializeListUserIdentity(actor);
+}
 const MAX_ACTORS_PER_GROUP = 3;
 
 function toIso(value: Date | string): string {
@@ -91,7 +100,7 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
       order.push(key);
       groups.set(key, {
         newest: row,
-        actors: [row.actor],
+        actors: [serializeActor(row.actor)],
         actorIds: new Set([row.actor.id]),
         anyUnread: isUnread,
       });
@@ -102,7 +111,7 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
     if (!existing.actorIds.has(row.actor.id)) {
       existing.actorIds.add(row.actor.id);
       if (existing.actors.length < MAX_ACTORS_PER_GROUP) {
-        existing.actors.push(row.actor);
+        existing.actors.push(serializeActor(row.actor));
       }
     }
     if (isUnread) existing.anyUnread = true;

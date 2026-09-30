@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client/index'
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
@@ -22,11 +22,13 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { resolveAccountBadge } from '@/lib/account-badge'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import {
   isMessageSenderBlockedInConversation,
   listChannelMemberUserIdsBySessionKey,
@@ -370,7 +372,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
               id: true,
               createdAt: true,
               metadata: true,
-              user: { select: { name: true, image: true } },
+              user: { select: { name: true, image: true, isOfficial: true, isOperator: true } },
             },
           })
         })
@@ -481,6 +483,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
               OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
           }).then(count => count >= 2).catch(() => false)
           if (sharedAtMessage) {
+            // An operator / official sender stays labeled on the live bubble
+            // too (`speakerBadge`, only present when the sender has a badge).
+            const speakerBadge = resolveAccountBadge(message.user)
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
               ...(originalDisplayText ? { originalDisplayText } : {}),
@@ -488,6 +493,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
               targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
               speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+              ...(speakerBadge ? { speakerBadge } : {}),
             })
           } else {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds)
@@ -505,6 +511,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
           }
         }
         if (messageId && body.translationUpdate !== true) {
+          const committedMessageId = messageId
           try {
             await sendPushNotificationForConversationMessage({
               messageId,
@@ -516,6 +523,22 @@ export async function handleLogClientEventV1(request: NextRequest) {
           } catch (error) {
             console.error('Conversation message push failed:', error)
           }
+          // Staff alerts run after the response so their realtime publication
+          // cannot delay the sender. Keep the existing push and title timing.
+          after(async () => {
+            try {
+              await notifyOperatorInboxActivity({
+                sessionKey: tracking.sessionKey,
+                senderUserId: userId,
+                memberUserIds,
+                messageId: committedMessageId,
+                preview: sourceText,
+                kind: 'text',
+              })
+            } catch (error) {
+              console.error('Operator inbox notify failed:', error)
+            }
+          })
         }
       }
     }

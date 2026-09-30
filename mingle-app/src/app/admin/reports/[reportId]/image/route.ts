@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { requireAdminApi } from "@/server/admin/guard";
 import { isOwnedPostImageKey } from "@/server/posts/post-image-keys";
 import { getPostImage } from "@/server/posts/post-image-storage";
 
@@ -19,10 +18,8 @@ function json(payload: object, status: number): NextResponse {
  * points at (never an arbitrary key).
  */
 export async function GET(_request: Request, context: { params: Promise<{ reportId: string }> }) {
-  const store = await cookies();
-  if (!verifyAdminSessionToken(store.get(ADMIN_SESSION_COOKIE_NAME)?.value)) {
-    return json({ error: "unauthorized" }, 401);
-  }
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const { reportId } = await context.params;
   const report = await prisma.userReport.findUnique({

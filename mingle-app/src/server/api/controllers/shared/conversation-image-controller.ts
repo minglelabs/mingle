@@ -9,6 +9,7 @@ import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { putConversationImage, getConversationImage, deleteConversationImage } from '@/server/conversation-image-storage'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 
 async function authorize(conversationId: string) {
   const session = await getServerSession(getAuthOptions())
@@ -78,14 +79,25 @@ export async function postConversationImage(request: NextRequest, conversationId
   if (created) {
     const messageId = message.id
     after(async () => {
+      let memberUserIds: string[] = []
       try {
-        const memberUserIds = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)
+        memberUserIds = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)
         await sendPushNotificationForConversationMessage({
           messageId, sessionKey: scope.sessionKey, senderUserId: scope.userId,
           sourceText: '📷 Photo', memberUserIds,
         })
       } catch (error) {
         console.error('[conversation-image] push failed', error instanceof Error ? error.name : 'unknown')
+      }
+      // Staff alerts for rooms with an operator account; a failure must never
+      // affect the committed photo.
+      try {
+        await notifyOperatorInboxActivity({
+          sessionKey: scope.sessionKey, conversationId, senderUserId: scope.userId,
+          memberUserIds, messageId, preview: null, kind: 'photo',
+        })
+      } catch (error) {
+        console.error('[conversation-image] operator inbox notify failed', error instanceof Error ? error.name : 'unknown')
       }
     })
   }

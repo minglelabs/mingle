@@ -32,6 +32,10 @@ import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
+import ChatAccountBadge from './ChatAccountBadge'
+import ConversationOperatorDisclosure from './ConversationOperatorDisclosure'
+import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
+import { resolveAccountBadge } from '@/lib/account-badge'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
 import {
   mergeConversationMemberProfiles,
@@ -1618,6 +1622,8 @@ function LivePhoneDemoLeaveNoticeRow({
 }) {
   const displayName = notice.name?.trim() || (notice.handle ? `@${notice.handle.trim()}` : '')
   if (!displayName) return null
+  // Plain-text label ("Mina (운영 계정)"): the name sits inside a sentence.
+  const labeledName = labelNameWithAccountBadge(displayName, resolveAccountBadge(notice), uiLocale)
 
   return (
     <div
@@ -1626,7 +1632,7 @@ function LivePhoneDemoLeaveNoticeRow({
       className="flex justify-center py-1"
     >
       <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
-        {formatLivePhoneDemoLeaveNoticeText(uiLocale, displayName)}
+        {formatLivePhoneDemoLeaveNoticeText(uiLocale, labeledName)}
       </span>
     </div>
   )
@@ -1657,7 +1663,11 @@ function LivePhoneDemoInviteNoticeRow({
       className="flex justify-center py-1"
     >
       <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
-        {formatLivePhoneDemoInviteNoticeText(uiLocale, inviterName, inviteeName)}
+        {formatLivePhoneDemoInviteNoticeText(
+          uiLocale,
+          labelNameWithAccountBadge(inviterName, notice.invitedByBadge, uiLocale),
+          labelNameWithAccountBadge(inviteeName, notice.inviteeBadge, uiLocale),
+        )}
       </span>
     </div>
   )
@@ -1845,6 +1855,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       : []
     return mergeConversationMemberProfiles(otherMemberProfiles, viewerProfile)
   }, [initialOtherMembers, session?.user?.name, viewerImage, viewerUserId])
+  // Header label for the room: its other members' strongest account badge
+  // (a room with a Mingle-run member reads "운영 계정" next to its title).
+  const conversationTitleBadge = useMemo(
+    () => resolveRoomAccountBadge(initialOtherMembers),
+    [initialOtherMembers],
+  )
   const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     userId: viewerUserId,
@@ -4415,6 +4431,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     // Demo animation states
@@ -6729,16 +6746,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               >
                 <ChevronLeft size={24} strokeWidth={2.4} />
               </button>
-              <div className="min-w-0 flex-1">
+              <div className={conversationTitleBadge ? 'flex min-w-0 flex-1 items-center gap-1.5' : 'min-w-0 flex-1'}>
                 <button
                   type="button"
                   onClick={openRenameConversationDialog}
                   disabled={!conversationId || isRenamingConversation}
                   aria-label={roomManagementCopy.renameButtonLabel}
-                  className="block w-full truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100"
+                  className={`block truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100 ${
+                    conversationTitleBadge ? 'min-w-0' : 'w-full'
+                  }`}
                 >
                   {displayConversationTitle || ''}
                 </button>
+                {/* The title is a renamable plain string, so the room's account
+                    label sits beside it (outside the rename button), never in it. */}
+                {conversationTitleBadge ? (
+                  <span data-live-demo-title-account-badge className="inline-flex shrink-0 items-center">
+                    <ChatAccountBadge kind={conversationTitleBadge} locale={uiLocale} tone="dark" />
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -8178,6 +8204,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   style={{ height: `${nativeChatTopSpacerPx}px` }}
                 />
               )}
+              {operatorDisclosure ? (
+                <ConversationOperatorDisclosure
+                  locale={uiLocale}
+                  stickyTopPx={nativeChatTopSpacerPx}
+                  className="mb-2"
+                />
+              ) : null}
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}

@@ -11,7 +11,11 @@ import { ChevronLeft, Loader2, RotateCcw, UserPlus, UserRound } from "lucide-rea
 import { useSession } from "next-auth/react";
 import { DEFAULT_LOCALE, resolveSupportedLocaleTag } from "@/i18n/config";
 import { getPrimaryUiCopy } from "@/i18n/primary-ui-copy";
+import { resolveAccountBadge, withAccountBadgeLabel, type AccountBadgeKind } from "@/lib/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ChatAccountBadge from "./ChatAccountBadge";
+import { readAccountBadgeFlags } from "./chat-account-badge.logic";
 
 type ConversationParticipantsPanelProps = {
   active: boolean;
@@ -44,6 +48,9 @@ type ParticipantProfile = {
   nationality: string | null;
   primaryLanguages: string[];
   blocked: boolean;
+  // Another member's account badge ('operator' = run by Mingle staff), from
+  // the members API flags. Always null for the signed-in user's own row.
+  accountBadge: AccountBadgeKind | null;
 };
 
 type ProfileLoadState = "idle" | "loading" | "ready" | "error";
@@ -80,6 +87,7 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
     blocked: false,
+    accountBadge: null,
   };
 }
 
@@ -103,6 +111,7 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
     blocked: value.blocked === true,
+    accountBadge: resolveAccountBadge(readAccountBadgeFlags(value)),
   };
 }
 
@@ -129,6 +138,7 @@ function buildSessionFallbackProfile(
     nationality: null,
     primaryLanguages: [],
     blocked: false,
+    accountBadge: null,
   };
 }
 
@@ -136,11 +146,13 @@ function ParticipantRow({
   member,
   fallbackName,
   badgeLabel,
+  locale,
   onOpenProfile,
 }: {
   member: ParticipantProfile;
   fallbackName: string;
   badgeLabel?: string;
+  locale: string;
   onOpenProfile?: (userId: string) => void;
 }) {
   // Blocking hides the photo and stops profile taps, but the name/handle
@@ -153,55 +165,86 @@ function ParticipantRow({
   );
   const displayHandle = formatHandle(member.handle);
   const resolvedOnOpenProfile = member.blocked ? undefined : onOpenProfile;
+  const hasProfileAction = Boolean(resolvedOnOpenProfile);
+  const rowLabel = [
+    withAccountBadgeLabel(displayName, member.accountBadge, locale),
+    displayHandle,
+    badgeLabel,
+  ].filter(Boolean).join(", ");
+  const content = (
+    <>
+      <div
+        aria-hidden={hasProfileAction || undefined}
+        className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100"
+      >
+        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+          {member.image && !member.blocked ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={member.image}
+              alt=""
+              width={56}
+              height={56}
+              className="h-full w-full object-cover"
+              style={{
+                transform: buildProfileImageTransform(56, {
+                  scale: member.imageCropScale,
+                  x: member.imageCropX,
+                  y: member.imageCropY,
+                }),
+              }}
+            />
+          ) : (
+            <UserRound size={28} className="text-gray-400" aria-hidden="true" />
+          )}
+        </div>
+        {displayLanguages.length > 0 ? (
+          <ProfileLanguageFlagStack languages={displayLanguages} size={56} />
+        ) : null}
+      </div>
 
-  return (
-    <button
-      type="button"
-      onClick={() => resolvedOnOpenProfile?.(member.id)}
-      disabled={!resolvedOnOpenProfile}
-      className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
-    >
-      <div className="flex items-center gap-3">
-        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
-          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-            {member.image && !member.blocked ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={member.image}
-                alt={displayName}
-                width={56}
-                height={56}
-                className="h-full w-full object-cover"
-                style={{
-                  transform: buildProfileImageTransform(56, {
-                    scale: member.imageCropScale,
-                    x: member.imageCropX,
-                    y: member.imageCropY,
-                  }),
-                }}
-              />
-            ) : (
-              <UserRound size={28} className="text-gray-400" aria-hidden="true" />
-            )}
-          </div>
-          {displayLanguages.length > 0 ? (
-            <ProfileLanguageFlagStack languages={displayLanguages} size={56} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p aria-hidden={hasProfileAction || undefined} className="min-w-0 truncate text-[0.98rem] font-semibold text-gray-950">
+            {displayName}
+          </p>
+          {member.accountBadge ? (
+            <span data-participant-account-badge className="inline-flex shrink-0 items-center">
+              <ChatAccountBadge kind={member.accountBadge} locale={locale} tone="dark" />
+            </span>
+          ) : null}
+          {badgeLabel ? (
+            <span aria-hidden={hasProfileAction || undefined} className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
+              {badgeLabel}
+            </span>
           ) : null}
         </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
-            {badgeLabel ? (
-              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
-                {badgeLabel}
-              </span>
-            ) : null}
-          </div>
-          {displayHandle ? <p className="mt-0.5 truncate text-[0.82rem] text-gray-500">{displayHandle}</p> : null}
-        </div>
+        {displayHandle ? (
+          <p aria-hidden={hasProfileAction || undefined} className="mt-0.5 truncate text-[0.82rem] text-gray-500">
+            {displayHandle}
+          </p>
+        ) : null}
       </div>
-    </button>
+    </>
+  );
+  const contentClassName = "flex items-center gap-3 rounded-2xl px-3.5 py-3.5";
+  const rowClassName = "w-full rounded-2xl border border-gray-200 bg-white text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)]";
+  const actionClassName = "rounded-2xl transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400";
+
+  if (!resolvedOnOpenProfile) {
+    return <div className={rowClassName}><div className={contentClassName}>{content}</div></div>;
+  }
+
+  return (
+    <IdentityRow
+      action={{ kind: "button", onClick: () => resolvedOnOpenProfile(member.id) }}
+      label={rowLabel}
+      className={rowClassName}
+      actionClassName={actionClassName}
+      contentClassName={contentClassName}
+    >
+      {content}
+    </IdentityRow>
   );
 }
 
@@ -328,6 +371,7 @@ export default function ConversationParticipantsPanel({
               member={profile}
               fallbackName={fallbackName}
               badgeLabel={selfLabel}
+              locale={uiLocale}
               onOpenProfile={onOpenProfile}
             />
           ) : null}
@@ -337,6 +381,7 @@ export default function ConversationParticipantsPanel({
               key={member.id}
               member={member}
               fallbackName={fallbackName}
+              locale={uiLocale}
               onOpenProfile={onOpenProfile}
             />
           ))}

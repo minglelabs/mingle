@@ -29,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { GET, PATCH } from "@/app/api/notifications/route";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
 
 function actor(id: string) {
   return { id, handle: `${id}.h`, name: id, image: null };
@@ -144,6 +145,27 @@ describe("/api/notifications route", () => {
     const body = await (await GET(new NextRequest("https://example.com/api/notifications"))).json();
     expect(body.notifications[0].groupKey).toBe("post_like:p1");
     expect(body.notifications[0].actorIds).toEqual(["a2", "a1"]);
+  });
+
+  it("labels an operator actor (and asks the DB for the badge flags), never an ordinary one", async () => {
+    mockNotificationFindMany.mockResolvedValue([
+      {
+        id: "n2", type: "follow", postId: null, commentId: null, readAt: null,
+        createdAt: new Date("2026-08-15T11:00:00.000Z"),
+        actor: { ...actor("op"), imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true },
+      },
+      {
+        id: "n1", type: "follow", postId: null, commentId: null, readAt: null,
+        createdAt: new Date("2026-08-15T10:00:00.000Z"),
+        actor: { ...actor("member"), imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: false },
+      },
+    ]);
+
+    const body = await (await GET(new NextRequest("https://example.com/api/notifications"))).json();
+
+    expect(body.notifications[0].actors).toEqual([{ id: "op", handle: "op.h", name: "op", image: null, isOperator: true }]);
+    expect(body.notifications[1].actors).toEqual([{ id: "member", handle: "member.h", name: "member", image: null }]);
+    expect(mockNotificationFindMany.mock.calls[0][0].select.actor).toEqual({ select: USER_IDENTITY_SELECT });
   });
 
   it("requires an authenticated viewer when marking read", async () => {

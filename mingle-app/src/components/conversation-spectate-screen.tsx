@@ -3,6 +3,9 @@
 import { Play, Smartphone } from "lucide-react";
 import { useEffect, useRef, type MouseEvent } from "react";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
+import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
+import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import {
   buildConversationShareAppUrl,
   CONVERSATION_SHARE_APP_SCHEME,
@@ -22,6 +25,9 @@ export type ConversationSpectateInviter = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  // Badge flags, each present only when true (see identityBadgeFlags).
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 type ConversationSpectateScreenProps = {
@@ -110,6 +116,8 @@ export default function ConversationSpectateScreen({
 
   const roomTitle = state?.roomTitle || initialRoomTitle;
   const inviterName = inviter?.name?.trim() || copy.userFallback;
+  // The banner is one sentence, so the sharer's badge is a plain-text label.
+  const labeledInviterName = labelNameWithAccountBadge(inviterName, resolveAccountBadge(inviter), locale);
   const isNotFound = !isValidToken || status === "not_found";
 
   // One click, straight to the launch attempt — same shape as the App
@@ -172,7 +180,7 @@ export default function ConversationSpectateScreen({
           )}
         </div>
         <p className="min-w-0 text-left text-base font-semibold text-white drop-shadow-sm">
-          {roomTitle ? formatConversationSpectateInvite(copy, inviterName, roomTitle) : inviterName}
+          {roomTitle ? formatConversationSpectateInvite(copy, labeledInviterName, roomTitle) : labeledInviterName}
         </p>
       </div>
 
@@ -182,6 +190,7 @@ export default function ConversationSpectateScreen({
           className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-6"
           style={{ touchAction: "pan-y" }}
         >
+          {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={locale} /> : null}
           {status === "loading" ? (
             <div className="flex h-full items-center justify-center text-slate-400">
               <Smartphone className="h-6 w-6 animate-pulse" aria-hidden="true" />

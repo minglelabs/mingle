@@ -14,6 +14,7 @@
  */
 
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { identityBadgeFlags } from '@/server/identity/user-identity-select'
 import type {
   FeedPostDto,
   FeedPostImageDto,
@@ -31,10 +32,12 @@ export type SerializerAuthorRow = {
   name: string | null
   image: string | null
   /**
-   * Operator / official account flag. Optional so a caller whose `select`
-   * predates the column still type-checks; missing reads as not official.
+   * Badge flags: the Mingle team's official account / an account run by Mingle
+   * staff (operator). Optional so a caller whose `select` predates a column
+   * still type-checks; missing reads as false.
    */
   isOfficial?: boolean | null
+  isOperator?: boolean | null
 }
 
 /**
@@ -226,8 +229,8 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
       handle: post.author.handle,
       name: post.author.name,
       imageUrl: post.author.image,
-      // Only official accounts carry the flag; absent on the wire means false.
-      ...(post.author.isOfficial === true ? { isOfficial: true } : {}),
+      // Badge flags only when true; absent on the wire means false.
+      ...identityBadgeFlags(post.author),
     },
     sourceText: post.sourceText ?? '',
     sourceLanguage: post.sourceLanguage,

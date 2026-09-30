@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import { mintRealtimeToken, readRealtimeSecret, signRealtimeToken } from "@/lib/realtime-token";
 import { verifyVoiceOrderReceipt } from "@/lib/voice-order-receipt";
 
@@ -19,9 +20,27 @@ export async function reserveConversationVoiceOrder(scope: { userId: string; ses
 
 // Separate short-lived capability; legacy room/list subscription tokens never
 // authorize writing. Renewing this requires the app's membership/block checks.
-export function mintConversationLiveWriterToken(sessionKey: string, userId: string, name: string | null): string | null {
+// `badge` is the sender's account badge (resolveAccountBadge over their own
+// flags, read server-side): mingle-messaging copies it onto every live
+// preview frame as `speakerBadge`, so an operator's in-progress speech bubble
+// is labeled before the message is committed. Omitted from the claim when
+// the sender has no badge. The values are AccountBadgeKind's
+// (@/lib/account-badge).
+export function mintConversationLiveWriterToken(
+  sessionKey: string,
+  userId: string,
+  name: string | null,
+  badge?: "official" | "operator" | null,
+): string | null {
   const secret = readRealtimeSecret();
-  return secret ? signRealtimeToken({ sessionKey, userId, exp: Date.now() + 30_000, liveWriter: { name } }, secret) : null;
+  return secret
+    ? signRealtimeToken({
+        sessionKey,
+        userId,
+        exp: Date.now() + 30_000,
+        liveWriter: { name, ...(badge ? { badge } : {}) },
+      }, secret)
+    : null;
 }
 
 /**
@@ -92,6 +111,136 @@ export function mintConversationRealtimeToken(args: {
  */
 export function buildConversationListEventKey(userId: string): string {
   return `list:${userId}`;
+}
+
+// Must match buildConversationListEventKey above.
+const CONVERSATION_LIST_EVENT_KEY_PREFIX = "list:";
+const ADMIN_INBOX_EVENT_KEY_PREFIX = "admin:";
+const ADMIN_INBOX_EVENT_KEY_CONTEXT = "admin-inbox:v1";
+const ADMIN_INBOX_REALTIME_USER_ID = "admin";
+const ADMIN_INBOX_PUBLISH_TIMEOUT_MS = 3_000;
+const CONVERSATION_EVENTS_WS_PATH = "/conversation-events";
+
+/**
+ * True for a bus key that is NOT a room: a user's conversation-list topic
+ * (`list:<userId>`) or the admin inbox topic (`admin:<hmac>`). A room whose
+ * sessionKey carried one of these prefixes would let its members mint a
+ * subscription token for that topic, so a client-supplied key with such a
+ * prefix never becomes a room's sessionKey (see postConversationResponse).
+ */
+export function isReservedRealtimeEventKey(key: string): boolean {
+  const normalized = key.trim().toLowerCase();
+  return normalized.startsWith(CONVERSATION_LIST_EVENT_KEY_PREFIX)
+    || normalized.startsWith(ADMIN_INBOX_EVENT_KEY_PREFIX);
+}
+
+/**
+ * The admin inbox topic: `admin:` + the first 32 hex characters of
+ * HMAC-SHA256(MINGLE_REALTIME_SECRET, "admin-inbox:v1"). Stable for a given
+ * secret and not computable without it. It only ever receives content-free
+ * invalidations (publishAdminInboxEvent sends it through `keys`), and no room
+ * can be keyed with its prefix (isReservedRealtimeEventKey). Null when
+ * realtime is unconfigured.
+ */
+export function buildAdminInboxEventKey(): string | null {
+  const secret = readRealtimeSecret();
+  if (!secret) return null;
+  const digest = createHmac("sha256", secret).update(ADMIN_INBOX_EVENT_KEY_CONTEXT).digest("hex");
+  return `${ADMIN_INBOX_EVENT_KEY_PREFIX}${digest.slice(0, 32)}`;
+}
+
+/**
+ * One-hour subscription token for the admin inbox topic. Only admin route
+ * handlers may call this, after `requireAdminApi`.
+ */
+export function mintAdminInboxRealtimeToken(): string | null {
+  const secret = readRealtimeSecret();
+  const sessionKey = buildAdminInboxEventKey();
+  if (!secret || !sessionKey) return null;
+  return mintRealtimeToken({ sessionKey, userId: ADMIN_INBOX_REALTIME_USER_ID, secret });
+}
+
+/**
+ * Tells an open admin inbox that a room with an operator account changed.
+ * Content-free: the key goes in `keys` with no `sessionKey`, so the socket
+ * only receives `{ type: "message", sessionKey: <admin key> }` and refetches.
+ * Best-effort and bounded by a timeout; never throws.
+ */
+export async function publishAdminInboxEvent(options?: { timeoutMs?: number }): Promise<void> {
+  const secret = readRealtimeSecret();
+  const publishUrl = resolveConversationEventsPublishUrl();
+  const key = buildAdminInboxEventKey();
+  if (!secret || !publishUrl || !key) return;
+
+  try {
+    const response = await fetch(publishUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ keys: [key] }),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? ADMIN_INBOX_PUBLISH_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      console.warn("[conversation-realtime] admin_publish_failed", { status: response.status });
+    }
+  } catch (error) {
+    // The admin inbox also polls, so a dropped event only delays the refresh.
+    console.warn("[conversation-realtime] admin_publish_error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function firstHeaderValue(headers: Headers, name: string): string {
+  return (headers.get(name) || "").split(",")[0].trim();
+}
+
+const PUBLIC_HOST_PATTERN = /^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(?::\d{1,5})?$/;
+
+/**
+ * The conversation-events WebSocket URL a browser on this request's page
+ * should open, resolved like the client's `getConversationEventsWsUrl`: the
+ * configured messaging URL, else the origin of the configured speech socket,
+ * else the page's own origin (the request's public origin behind the proxy)
+ * + `/conversation-events`. Null when no usable URL can be built.
+ */
+export function resolveConversationEventsWsUrl(request: { url: string; headers: Headers }): string | null {
+  const configuredMessagingUrl = (process.env.NEXT_PUBLIC_MESSAGING_WS_URL || "").trim();
+  if (configuredMessagingUrl) {
+    try {
+      const url = new URL(configuredMessagingUrl);
+      if (url.pathname === "/" || url.pathname === "") url.pathname = CONVERSATION_EVENTS_WS_PATH;
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  const configuredSpeechUrl = (process.env.NEXT_PUBLIC_WS_URL || "").trim();
+  if (configuredSpeechUrl) {
+    try {
+      return `${new URL(configuredSpeechUrl).origin}${CONVERSATION_EVENTS_WS_PATH}`;
+    } catch {
+      return null;
+    }
+  }
+
+  let requestUrl: URL;
+  try {
+    requestUrl = new URL(request.url);
+  } catch {
+    return null;
+  }
+  const forwardedProto = firstHeaderValue(request.headers, "x-forwarded-proto").toLowerCase();
+  const secure = forwardedProto ? forwardedProto === "https" : requestUrl.protocol === "https:";
+  const host = [
+    firstHeaderValue(request.headers, "x-forwarded-host"),
+    firstHeaderValue(request.headers, "host"),
+    requestUrl.host,
+  ].find((candidate) => candidate && PUBLIC_HOST_PATTERN.test(candidate));
+  return host ? `${secure ? "wss" : "ws"}://${host}${CONVERSATION_EVENTS_WS_PATH}` : null;
 }
 
 /**

@@ -74,8 +74,10 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
-  /// Operator / official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts.
+  /// The Mingle team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
   isOfficial                   Boolean   @default(false) @map("is_official")
+  /// Operator account run by Mingle staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
+  isOperator                   Boolean   @default(false) @map("is_operator")
   firstSeenAt                  DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt                   DateTime  @default(now()) @map("last_seen_at")
   createdAt                    DateTime  @default(now()) @map("created_at")
@@ -111,9 +113,13 @@ model User {
   postDrafts              PostDraft[]
   recentSearches          RecentSearch[]
   repliedToComments       PostComment[]                  @relation("PostCommentReplyToUser")
+  operatorAccount         OperatorAccount?
+  adminNotifyTarget       AdminNotifyTarget?
+  operatorPostJobs        OperatorPostJob[]
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
+  @@index([isOperator], map: "app_users_is_operator_idx")
   @@map("app_users")
 }
 
@@ -871,4 +877,99 @@ model RecentSearch {
   @@unique([userId, query], map: "app_recent_searches_user_query_uidx")
   @@index([userId, searchedAt], map: "app_recent_searches_user_searched_at_idx")
   @@map("app_recent_searches")
+}
+
+// ---------------------------------------------------------------------------
+// Admin operator accounts (Phase 0). Staff-only tables: nothing here is ever
+// serialized to another user. Admin pages and endpoints live under /admin/**.
+// ---------------------------------------------------------------------------
+
+/// Staff-only record of an operator account (`User.isOperator` = true).
+model OperatorAccount {
+  userId             String   @id @map("user_id")
+  /// ISO 3166-1 alpha-2 country of the persona. Staff-only; never shown to users.
+  personaCountry     String?  @map("persona_country")
+  notes              String?  @db.Text
+  createdBySessionId String?  @map("created_by_session_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("app_operator_accounts")
+}
+
+/// One admin login. Only the SHA-256 hex of the random session token is stored.
+model AdminSession {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique(map: "app_admin_sessions_token_hash_key") @map("token_hash")
+  label      String?
+  ip         String?
+  userAgent  String?   @map("user_agent") @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  @@index([expiresAt], map: "app_admin_sessions_expires_at_idx")
+  @@map("app_admin_sessions")
+}
+
+/// Append-only admin audit trail. Deliberately has NO foreign keys, so a row
+/// outlives the session, user or object it mentions.
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  sessionId      String?  @map("session_id")
+  action         String
+  operatorUserId String?  @map("operator_user_id")
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  metadata       Json?
+  ip             String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "app_admin_audit_logs_created_at_idx")
+  @@index([operatorUserId, createdAt], map: "app_admin_audit_logs_operator_user_id_created_at_idx")
+  @@map("app_admin_audit_logs")
+}
+
+/// A scheduled operator post. The post row itself is created only when the job
+/// is due, through the unchanged `publishPost` (never a future `published_at`).
+model OperatorPostJob {
+  id                 String   @id @default(cuid())
+  batchId            String   @map("batch_id")
+  operatorUserId     String   @map("operator_user_id")
+  /// `op-<batchId>-<n>`; passed to publishPost as the clientPostId, so a retried publish is idempotent.
+  clientPostId       String   @unique(map: "app_operator_post_jobs_client_post_id_key") @map("client_post_id")
+  text               String?  @db.Text
+  imageObjectKey     String?  @map("image_object_key")
+  imageWidth         Int?     @map("image_width")
+  imageHeight        Int?     @map("image_height")
+  backgroundKey      String?  @map("background_key")
+  publishAt          DateTime @map("publish_at")
+  /// queued | publishing | published | duplicate | conflict | failed | cancelled
+  state              String   @default("queued")
+  postId             String?  @map("post_id")
+  error              String?  @db.Text
+  attempts           Int      @default(0)
+  createdBySessionId String?  @map("created_by_session_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  operatorUser User @relation(fields: [operatorUserId], references: [id], onDelete: Cascade)
+
+  @@index([state, publishAt], map: "app_operator_post_jobs_state_publish_at_idx")
+  @@index([batchId], map: "app_operator_post_jobs_batch_id_idx")
+  @@map("app_operator_post_jobs")
+}
+
+/// A staff member's OWN Mingle account that receives operator-inbox pushes.
+model AdminNotifyTarget {
+  userId             String   @id @map("user_id")
+  createdBySessionId String?  @map("created_by_session_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("app_admin_notify_targets")
 }

@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import sharp from 'sharp'
-const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), push: vi.fn(), after: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn() }))
+const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), push: vi.fn(), inboxNotify: vi.fn(), after: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn() }))
 vi.mock('next/server', async importOriginal => ({ ...await importOriginal<typeof import('next/server')>(), after: m.after }))
 vi.mock('@/server/push-notifications', () => ({ sendPushNotificationForConversationMessage: m.push }))
+vi.mock('@/server/operator-inbox/notify', () => ({ notifyOperatorInboxActivity: m.inboxNotify }))
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/lib/prisma', () => ({ prisma: { appMessage: { findUnique: m.findUnique, findFirst: m.findFirst, create: m.create } } }))
@@ -87,6 +88,38 @@ describe('conversation images', () => {
     expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
     await m.after.mock.calls[0][0]()
     expect(m.push).toHaveBeenCalledWith(expect.objectContaining({ memberUserIds: ['alice', 'new-member'] }))
+  })
+  it('reports a new photo to the operator inbox inside the same after()', async () => {
+    expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+    expect(m.inboxNotify).not.toHaveBeenCalled()
+    await m.after.mock.calls[0][0]()
+    expect(m.inboxNotify).toHaveBeenCalledWith({ sessionKey: 'session', conversationId: 'room', senderUserId: 'alice', memberUserIds: ['alice', 'bob'], messageId: 'db-image', preview: null, kind: 'photo' })
+  })
+  it('keeps a committed photo successful when the operator inbox notify rejects', async () => {
+    m.inboxNotify.mockRejectedValue(new Error('inbox_unavailable'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+      await expect(m.after.mock.calls[0][0]()).resolves.toBeUndefined()
+      expect(m.push).toHaveBeenCalledTimes(1); expect(m.inboxNotify).toHaveBeenCalledTimes(1)
+      expect(m.remove).not.toHaveBeenCalled()
+      expect(error).toHaveBeenCalledWith('[conversation-image] operator inbox notify failed', 'Error')
+    } finally { error.mockRestore() }
+  })
+  it('still reports to the operator inbox when the push fails', async () => {
+    m.push.mockRejectedValue(new Error('push_unavailable'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+      await expect(m.after.mock.calls[0][0]()).resolves.toBeUndefined()
+      expect(m.inboxNotify).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'db-image', memberUserIds: ['alice', 'bob'], kind: 'photo' }))
+    } finally { error.mockRestore() }
+  })
+  it('does not report a reused upload to the operator inbox again', async () => {
+    const bytes = await png()
+    m.findUnique.mockResolvedValue({ id: 'db-image', userId: 'alice', createdAt: new Date(), metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: createHash('sha256').update(bytes).digest('hex'), width: 32, height: 64 } } })
+    expect((await postConversationImage(upload(bytes), 'room')).status).toBe(201)
+    expect(m.after).not.toHaveBeenCalled(); expect(m.inboxNotify).not.toHaveBeenCalled()
   })
   it('cannot reuse another sender message identifier', async () => {
     m.findUnique.mockResolvedValue({ id: 'db-image', userId: 'bob' })

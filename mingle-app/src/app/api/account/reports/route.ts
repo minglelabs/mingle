@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
+import { serializeListUserIdentity } from "@/server/identity/list-user-identity";
 
 export const runtime = "nodejs";
 
@@ -25,14 +27,8 @@ export async function GET() {
       status: true,
       createdAt: true,
       updatedAt: true,
-      reportedUser: {
-        select: {
-          id: true,
-          handle: true,
-          name: true,
-          image: true,
-        },
-      },
+      // Identity + badge flags (official / operator) of the reported user.
+      reportedUser: { select: USER_IDENTITY_SELECT },
       replies: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -48,6 +44,7 @@ export async function GET() {
   return NextResponse.json({
     reports: reports.map((report) => ({
       ...report,
+      reportedUser: serializeListUserIdentity(report.reportedUser),
       createdAt: report.createdAt.toISOString(),
       updatedAt: report.updatedAt.toISOString(),
       replies: report.replies.map((reply) => ({

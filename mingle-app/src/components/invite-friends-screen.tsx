@@ -6,6 +6,9 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { showRouteTransitionCurtain } from "@/lib/route-transition-curtain";
@@ -49,6 +52,9 @@ type InviteFriendsUser = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  /** Badge flags; absent means false. */
+  isOfficial?: boolean;
+  isOperator?: boolean;
 };
 
 const INVITE_FRIENDS_TRANSITION = {
@@ -441,14 +447,15 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
               </div>
               {selectedUsers.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
-                return (
+                const badge = resolveAccountBadge(user);
+                const chip = (
                   <button
                     key={user.id}
                     type="button"
                     onClick={() => toggleUser(user)}
                     className="flex flex-col items-center gap-1"
                     style={{ width: 56 }}
-                    aria-label={name}
+                    aria-label={withAccountBadgeLabel(name, badge, locale)}
                   >
                     <div className="relative rounded-full border-2 border-amber-400 p-0.5">
                       <AvatarCircle image={user.image} size={48} />
@@ -458,6 +465,15 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
                     </div>
                     <span className="max-w-[56px] truncate text-[11px] text-gray-500">{name}</span>
                   </button>
+                );
+                if (!badge) return chip;
+                // The picked chip shows the name too, so the badge goes right
+                // under it (a sibling: the chip itself removes the pick).
+                return (
+                  <div key={user.id} className="flex min-w-[56px] flex-col items-center gap-1">
+                    {chip}
+                    <AccountBadge kind={badge} locale={locale} tone="dark" />
+                  </div>
                 );
               })}
             </div>
@@ -546,29 +562,38 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
             <ul className="border-t border-gray-100">
               {visibleUsers.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
+                const badge = resolveAccountBadge(user);
+                const nameLabel = withAccountBadgeLabel(name, badge, locale);
                 const isSelected = selectedIds.has(user.id);
                 return (
                   <li key={user.id} className="border-b border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => toggleUser(user)}
-                      className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition active:bg-gray-50"
-                      aria-pressed={isSelected}
-                      aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
+                    {/* The whole row toggles the pick; the badge next to the
+                        name stays its own button (IdentityRow). */}
+                    <IdentityRow
+                      action={{ kind: "button", onClick: () => toggleUser(user), pressed: isSelected }}
+                      label={user.handle ? `${nameLabel}, ${formatHandle(user.handle)}` : nameLabel}
+                      actionClassName="transition active:bg-gray-50"
+                      contentClassName="flex w-full min-w-0 items-center gap-3 px-4 py-3"
                     >
-                      <AvatarCircle image={user.image} size={44} />
+                      <div aria-hidden="true">
+                        <AvatarCircle image={user.image} size={44} />
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                        {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
+                        <p className="flex min-w-0 items-center gap-1">
+                          <span className="truncate text-[15px] font-semibold text-slate-900" aria-hidden="true">{name}</span>
+                          <AccountBadge kind={badge} locale={locale} tone="dark" />
+                        </p>
+                        {user.handle ? <p className="truncate text-[13px] text-gray-500" aria-hidden="true">{formatHandle(user.handle)}</p> : null}
                       </div>
                       <span
                         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
                           isSelected ? "border-amber-500 bg-amber-500" : "border-gray-300 bg-white"
                         }`}
+                        aria-hidden="true"
                       >
                         {isSelected ? <Check size={14} strokeWidth={3} className="text-white" aria-hidden="true" /> : null}
                       </span>
-                    </button>
+                    </IdentityRow>
                   </li>
                 );
               })}

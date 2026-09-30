@@ -1,6 +1,7 @@
 "use client";
 
 import ProfileBio from "@/components/profile-bio";
+import ProfileAge from "@/components/profile-age";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -17,7 +18,8 @@ import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
-import OfficialBadge from "@/components/posts/official-badge";
+import AccountBadge from "@/components/posts/account-badge";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { isDuplicateReportBody } from "@/components/reports/report-response";
 import { reportCopy } from "@/i18n/report-copy";
 import {
@@ -72,6 +74,7 @@ type PublicUserProfile = {
   imageCropX: number | null;
   imageCropY: number | null;
   bio: string | null;
+  age?: number;
   nationality: string | null;
   primaryLanguages: string[];
   location: ProfileLocationRecord | null;
@@ -79,8 +82,10 @@ type PublicUserProfile = {
   followingCount: number;
   isFollowing: boolean;
   isBlocked: boolean;
-  /** Operator / official account; absent means false. */
+  /** The Mingle team's official account; absent means false. */
   isOfficial?: boolean;
+  /** An account run by Mingle staff; absent means false. */
+  isOperator?: boolean;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
@@ -479,6 +484,13 @@ export default function PublicUserProfileScreen({
   }, [isOwnProfile, profile, reportMessage, reportPending, reportReason]);
 
   const name = profile?.name?.trim() || copy.userFallback;
+  const badge = resolveAccountBadge(profile);
+  // The name as screen readers hear it: with the badge label.
+  const nameLabel = withAccountBadgeLabel(name, badge, locale);
+  // The title bar and the photo preview repeat the name, and an operator
+  // account must be labeled wherever its name shows (the name line below
+  // scrolls away). The official chip stays where it always was: the name line.
+  const repeatedNameBadge = badge === "operator" ? badge : null;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
   const primaryLanguages = sanitizeSttLanguageSelection(
     profile?.primaryLanguages,
@@ -509,7 +521,7 @@ export default function PublicUserProfileScreen({
       <SlideSurface
         open={open}
         onClose={navigateBack}
-        ariaLabel={name}
+        ariaLabel={nameLabel}
         nativeBackPriority={40}
         className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
         style={{ touchAction: "pan-y" }}
@@ -529,7 +541,10 @@ export default function PublicUserProfileScreen({
         >
           <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
         </button>
-        <h1 className="truncate text-center text-[17px] font-bold">{name}</h1>
+        <h1 className="flex min-w-0 items-center justify-center gap-1.5 text-[17px] font-bold">
+          <span className="truncate">{name}</span>
+          <AccountBadge kind={repeatedNameBadge} locale={locale} tone="dark" />
+        </h1>
         <div aria-hidden="true" />
       </header>
 
@@ -545,7 +560,7 @@ export default function PublicUserProfileScreen({
             <ProfileImagePreview
               open={showProfileImagePreview}
               image={profile.image}
-              alt={name}
+              alt={nameLabel}
               crop={{
                 scale: profile.imageCropScale,
                 x: profile.imageCropX,
@@ -553,6 +568,7 @@ export default function PublicUserProfileScreen({
               }}
               language={languageOption?.code}
               name={name}
+              nameBadge={repeatedNameBadge}
               handle={profile.handle}
               bio={bio}
               bioUserId={profile.id}
@@ -567,7 +583,7 @@ export default function PublicUserProfileScreen({
                 <div className="flex shrink-0 flex-col items-center">
                   <ProfileAvatar
                     image={profile.image}
-                    label={name}
+                    label={nameLabel}
                     languages={primaryLanguages}
                     crop={{
                       scale: profile.imageCropScale,
@@ -592,9 +608,10 @@ export default function PublicUserProfileScreen({
               <div className="mt-4 pl-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
                   <span className="truncate">{name}</span>
-                  {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+                  <AccountBadge kind={badge} locale={locale} tone="dark" />
                 </p>
                 {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+                <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-[13px] text-gray-500" />
                 {!isOwnProfile ? (
                   <ProfileLocation
                     profileLocation={profile.location}

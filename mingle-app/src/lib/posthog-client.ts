@@ -1,6 +1,6 @@
 "use client";
 
-import posthog, { type Properties } from "posthog-js";
+import posthog, { type CaptureResult, type Properties } from "posthog-js";
 import { clientApiNamespace } from "@/lib/api-contract";
 import type { FeedEventName } from "@/lib/feed-analytics";
 import { getOrCreateTrackingUserId, resetTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -23,6 +23,43 @@ export type MingleClientEvent =
 type SafeEventProperty = string | number | boolean | null | undefined;
 
 let initialized = false;
+/** Session replay was running when an admin screen opened, so it resumes on leaving admin. */
+let recordingPausedForAdmin = false;
+
+/**
+ * Admin screens (`/admin`, `/admin/**`) show real users' messages and staff
+ * tools, so nothing is sent to PostHog from them: no pageview, autocapture,
+ * custom event or session replay.
+ */
+export function isPostHogExcludedPath(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+function isOnExcludedPath(): boolean {
+  return typeof window !== "undefined" && isPostHogExcludedPath(window.location.pathname);
+}
+
+function pathnameOf(url: string): string {
+  try {
+    return new URL(url, "https://mingle.invalid").pathname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * First `before_send` hook: drops any event captured on an admin screen,
+ * judged by the live location and by the event's own `$current_url`. Replay
+ * snapshots go through `before_send` too, so a buffer flushed there is dropped.
+ */
+export function dropAdminCaptureResult(captureResult: CaptureResult | null): CaptureResult | null {
+  if (!captureResult) return null;
+  if (isOnExcludedPath()) return null;
+  const currentUrl = captureResult.properties?.$current_url;
+  if (typeof currentUrl === "string" && isPostHogExcludedPath(pathnameOf(currentUrl))) return null;
+  return captureResult;
+}
 
 function resolveRuntimeProperties(): Properties {
   const apiNamespace = clientApiNamespace;
@@ -42,11 +79,16 @@ function resolveRuntimeProperties(): Properties {
   };
 }
 
+/**
+ * Starts PostHog once per page load. Returns whether it is running, so the
+ * caller can retry on a later route: it never starts on an admin screen.
+ */
 export function initializeMinglePostHog(args: {
   projectToken: string;
   host: string;
-}): void {
-  if (initialized || typeof window === "undefined") return;
+}): boolean {
+  if (initialized) return true;
+  if (typeof window === "undefined" || isOnExcludedPath()) return false;
 
   const distinctId = getOrCreateTrackingUserId();
   posthog.init(args.projectToken, {
@@ -105,11 +147,32 @@ export function initializeMinglePostHog(args: {
     save_campaign_params: false,
     respect_dnt: true,
     tracing_headers: [window.location.hostname],
-    before_send: sanitizePostHogCaptureResult,
+    before_send: [dropAdminCaptureResult, sanitizePostHogCaptureResult],
   });
   posthog.identify(distinctId, resolveRuntimeProperties());
   posthog.register(resolveRuntimeProperties());
   initialized = true;
+  return true;
+}
+
+/**
+ * Call on every route change. Entering an admin screen pauses a running
+ * session replay; leaving admin resumes it. A replay that was not running
+ * (sampling, remote config) is never started here.
+ */
+export function syncMinglePostHogRoute(pathname: string): void {
+  if (!initialized) return;
+  if (isPostHogExcludedPath(pathname)) {
+    if (!recordingPausedForAdmin && posthog.sessionRecordingStarted()) {
+      posthog.stopSessionRecording();
+      recordingPausedForAdmin = true;
+    }
+    return;
+  }
+  if (recordingPausedForAdmin) {
+    recordingPausedForAdmin = false;
+    posthog.startSessionRecording();
+  }
 }
 
 export function identifyMinglePostHogAccount(isAuthenticated: boolean): void {
@@ -126,7 +189,7 @@ export function captureMingleClientEvent(
   event: MingleClientEvent,
   properties?: Record<string, SafeEventProperty>,
 ): void {
-  if (!initialized) return;
+  if (!initialized || isOnExcludedPath()) return;
   posthog.capture(event, {
     ...resolveRuntimeProperties(),
     ...properties,
