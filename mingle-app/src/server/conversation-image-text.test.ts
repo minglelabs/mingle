@@ -367,6 +367,30 @@ describe('translations', () => {
     expect(state.translateLanguages).toEqual([])
   })
 
+  it('runs at most 4 provider tasks at once in one process', async () => {
+    await readyPhoto([block('b0', '営業時間', 'ja')])
+    let active = 0
+    let peak = 0
+    const gates: Array<() => void> = []
+    m.translate.mockImplementation(async (blocks: ConversationImageTextBlock[], language: string) => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise<void>(resolve => { gates.push(resolve) })
+      active -= 1
+      return echoTranslation(blocks, language)
+    })
+    const run = service.runConversationImageTextTranslations({ messageId: 'msg-1', languages: ['ko', 'en', 'fr', 'de', 'es', 'it'] })
+    await vi.waitFor(() => expect(gates).toHaveLength(4))
+    for (let released = 0; released < 6; released += 1) {
+      await vi.waitFor(() => expect(gates.length).toBeGreaterThan(0))
+      gates.shift()?.()
+    }
+    await run
+    expect(peak).toBe(4)
+    expect(m.translate).toHaveBeenCalledTimes(6)
+    expect([...db.translations.values()].every(row => row.status === 'ready')).toBe(true)
+  })
+
   it('does not translate before OCR is ready', async () => {
     db.images.set('msg-1', { messageId: 'msg-1', status: 'running', attemptCount: 1, deadlineAt: new Date(Date.now() + 60_000) })
     await service.runConversationImageTextTranslations({ messageId: 'msg-1', languages: ['ko'] })
