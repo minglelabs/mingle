@@ -26,7 +26,7 @@ export function PhotoTranslationProvider({ conversationId, roomLanguages, defaul
   defaultLanguage?: string | null
   uiLocale: string
   viewerUserId?: string | null
-  children: ReactNode
+  children?: ReactNode
 }) {
   const value = useMemo<PhotoTranslationRoom | null>(() => (conversationId && viewerUserId
     ? { conversationId, roomLanguages, defaultLanguage: defaultLanguage ?? null, uiLocale, viewerUserId }

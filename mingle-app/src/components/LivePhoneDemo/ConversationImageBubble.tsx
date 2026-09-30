@@ -1,12 +1,26 @@
 'use client'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { buildClientApiPath } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
-import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
+import { overlayBlocksFor, type ConversationImageTextBlock } from '@/lib/conversation-image-text'
+import { resolveConversationImageCopy, type ConversationImageCopy } from '@/i18n/conversation-image-copy'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageMediaDialog from './MessageMediaDialog'
+import PhotoTranslateControl from './PhotoTranslateControl'
+import PhotoTranslationOverlay from './PhotoTranslationOverlay'
+import { usePhotoTranslationRoom, type PhotoTranslationRoom } from './photo-translation-context'
 import { containFit, type Size } from './photo-translation-geometry.logic'
+import {
+  PHOTO_TRANSLATION_OFF,
+  buildPhotoTranslationOrder,
+  photoTranslationMemoryKey,
+  photoTranslationSelections,
+  resolvePhotoTranslationToggle,
+  type PhotoTranslationChoice,
+} from './photo-translation-toggle.logic'
+import { usePhotoTranslationText } from './use-photo-translation-text'
 import {
   DIRECTION_SLOP_PX,
   appendVelocitySample,
@@ -470,8 +484,64 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
   </div>
 }
 
+const NO_BLOCKS: readonly ConversationImageTextBlock[] = []
+
+type ViewerCallbacks = {
+  onError: () => void
+  onDismiss: () => void
+  onDragProgress: (progress: number) => void
+  onSettleChange: (settling: boolean) => void
+}
+
+/**
+ * The viewer with photo text translation (spec §4): the data hook runs only
+ * while this is mounted (the viewer is open), the overlay rides the stage,
+ * and the pill sits beside the viewport, never inside it.
+ */
+function PhotoTranslationViewer({ room, image, src, alt, copy, dragProgress, onError, onDismiss, onDragProgress, onSettleChange }: ViewerCallbacks & {
+  room: PhotoTranslationRoom; image: ConversationMessageImage; src: string; alt: string; copy: ConversationImageCopy; dragProgress: number
+}) {
+  const reducedMotion = useReducedMotion() ?? false
+  const order = useMemo(() => buildPhotoTranslationOrder(room.roomLanguages, room.defaultLanguage), [room.roomLanguages, room.defaultLanguage])
+  const response = usePhotoTranslationText({ conversationId: image.conversationId, messageId: image.messageId, languages: order, viewerUserId: room.viewerUserId })
+  const memoryKey = photoTranslationMemoryKey({ apiNamespace: clientApiNamespace, viewerUserId: room.viewerUserId, conversationId: image.conversationId, messageId: image.messageId })
+  const [selection, setSelection] = useState<PhotoTranslationChoice | null>(() => photoTranslationSelections.get(memoryKey) ?? null)
+  const toggle = useMemo(() => resolvePhotoTranslationToggle({ order, response, selection }), [order, response, selection])
+  const language = toggle.choice === PHOTO_TRANSLATION_OFF ? null : toggle.choice
+  const painted = useMemo(() => overlayBlocksFor(response, language), [response, language])
+  const blocks = response?.blocks ?? NO_BLOCKS
+  const select = useCallback((choice: PhotoTranslationChoice) => {
+    photoTranslationSelections.set(memoryKey, choice)
+    setSelection(choice)
+  }, [memoryKey])
+  const renderOverlay = useCallback((stage: ConversationImageStage) => <PhotoTranslationOverlay
+    width={stage.width} height={stage.height} image={stage.image} blocks={blocks} painted={painted}
+    language={language} reducedMotion={reducedMotion} />, [blocks, language, painted, reducedMotion])
+  return <>
+    <ZoomableConversationImage src={src} alt={alt} width={image.width} height={image.height} onError={onError}
+      onDismiss={onDismiss} onDragProgress={onDragProgress} onSettleChange={onSettleChange} renderOverlay={renderOverlay} />
+    <AnimatePresence initial={false}>
+      {toggle.visible && <motion.div key="photo-translate" className="absolute bottom-2 right-2 z-10"
+        initial={reducedMotion ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+        exit={reducedMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.96 }}
+        transition={{ duration: reducedMotion ? 0 : 0.18, ease: 'easeOut' }}>
+        <PhotoTranslateControl options={toggle.options} cycle={toggle.cycle} choice={toggle.choice} pending={toggle.pending}
+          uiLocale={room.uiLocale} copy={copy} disabled={dragProgress > 0} onSelect={select} />
+      </motion.div>}
+    </AnimatePresence>
+    {/* The viewport is role="img", which hides the overlay from assistive tech; read the translation here. */}
+    {painted.length > 0 && <div className="sr-only" lang={language ?? undefined}>
+      {painted.map(({ block, text }) => <p key={block.id} dir="auto">{text}</p>)}
+    </div>}
+  </>
+}
+
 export default function ConversationImageBubble({ image, locale }: { image: ConversationMessageImage; locale: string }) {
   const copy = resolveConversationImageCopy(locale)
+  // Only the LivePhoneDemo chat list provides a room; share, spectate and
+  // legacy screens get no pill and no request.
+  const room = usePhotoTranslationRoom()
+  const translationRoom = room?.conversationId === image.conversationId ? room : null
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -480,6 +550,12 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
   const close = useCallback(() => { setDragProgressValue(0); setBackdropSettling(false); setExpanded(false) }, [])
   const path = buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
   const src = retry ? `${path}?retry=${retry}` : path
+  const viewerCallbacks: ViewerCallbacks = {
+    onError: () => { setFailed(true); setExpanded(false) },
+    onDismiss: close,
+    onDragProgress: setDragProgressValue,
+    onSettleChange: setBackdropSettling,
+  }
   return <>
     <CopyableBubbleSurface text={typeof window === 'undefined' ? path : new URL(path, window.location.origin).href} copyBubbleLabel={copy.copyLink}
       onActivate={() => { if (!failed) setExpanded(true) }} role="button" aria-label={copy.image}
@@ -494,9 +570,10 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
       backdropOpacity={0.95 * backdropOpacityForProgress(dragProgressValue)} backdropTransition={backdropSettling}>
       <div className="relative h-[80dvh] min-h-[240px] w-full overflow-hidden">
         <button type="button" aria-label={copy.close} onClick={close} className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15"><X size={22} /></button>
-        <ZoomableConversationImage src={src} alt={copy.image} width={image.width} height={image.height}
-          onError={() => { setFailed(true); setExpanded(false) }}
-          onDismiss={close} onDragProgress={setDragProgressValue} onSettleChange={setBackdropSettling} />
+        {translationRoom
+          ? <PhotoTranslationViewer room={translationRoom} image={image} src={src} alt={copy.image} copy={copy}
+            dragProgress={dragProgressValue} {...viewerCallbacks} />
+          : <ZoomableConversationImage src={src} alt={copy.image} width={image.width} height={image.height} {...viewerCallbacks} />}
       </div>
     </MessageMediaDialog>}
   </>

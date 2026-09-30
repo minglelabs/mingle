@@ -26,6 +26,8 @@ export function usePhotoTranslationText({ conversationId, messageId, languages, 
 
   useEffect(() => {
     const requested = languagesKey ? languagesKey.split(',') : []
+    // No room language means nothing could be shown: ask nothing.
+    if (!requested.length) return
     const poller = startPhotoTranslationPoller({
       endpoint: buildClientApiPath(buildConversationImageTextEndpoint(conversationId, messageId, requested) as `/${string}`),
       viewerUserId,
