@@ -20,9 +20,27 @@ export async function reserveConversationVoiceOrder(scope: { userId: string; ses
 
 // Separate short-lived capability; legacy room/list subscription tokens never
 // authorize writing. Renewing this requires the app's membership/block checks.
-export function mintConversationLiveWriterToken(sessionKey: string, userId: string, name: string | null): string | null {
+// `badge` is the sender's account badge (resolveAccountBadge over their own
+// flags, read server-side): mingle-messaging copies it onto every live
+// preview frame as `speakerBadge`, so an operator's in-progress speech bubble
+// is labeled before the message is committed. Omitted from the claim when
+// the sender has no badge. The values are AccountBadgeKind's
+// (@/lib/account-badge).
+export function mintConversationLiveWriterToken(
+  sessionKey: string,
+  userId: string,
+  name: string | null,
+  badge?: "official" | "operator" | null,
+): string | null {
   const secret = readRealtimeSecret();
-  return secret ? signRealtimeToken({ sessionKey, userId, exp: Date.now() + 30_000, liveWriter: { name } }, secret) : null;
+  return secret
+    ? signRealtimeToken({
+        sessionKey,
+        userId,
+        exp: Date.now() + 30_000,
+        liveWriter: { name, ...(badge ? { badge } : {}) },
+      }, secret)
+    : null;
 }
 
 /**

@@ -7,7 +7,11 @@ export const MESSAGE_REACTIONS = [
 ] as const
 export type MessageReactionKind = typeof MESSAGE_REACTIONS[number]['kind']
 export type MessageReactionSummary = { kind: MessageReactionKind; count: number; mine: boolean }
-export type MessageReactionParticipant = { id: string; name: string | null; handle: string; mine: boolean }
+export type MessageReactionParticipant = {
+  id: string; name: string | null; handle: string; mine: boolean
+  // Account badge flags (only when true); the list shows names, so they carry the label.
+  isOfficial?: true; isOperator?: true
+}
 export type MessageReactionParticipantsPage = { participants: MessageReactionParticipant[]; nextCursor: string | null }
 export const MESSAGE_REACTIONS_REFRESH_EVENT = 'mingle:message-reactions-refresh'
 export function isMessageReactionKind(value: unknown): value is MessageReactionKind {

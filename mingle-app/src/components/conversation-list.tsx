@@ -39,6 +39,9 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import { resolveLivePhoneDemoConversationLeaveCopy } from "@/components/LivePhoneDemo/live-phone-demo.leave-copy";
+import ChatAccountBadge from "@/components/LivePhoneDemo/ChatAccountBadge";
+import { resolveRoomAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import type { AccountBadgeKind } from "@/lib/account-badge";
 import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
@@ -285,6 +288,10 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
+  // Account label shown next to the title (a room with a Mingle-run member
+  // reads "운영 계정"); the title itself is a renamable plain string.
+  titleAccountBadge: AccountBadgeKind | null;
+  titleAccountBadgeLocale: string;
   isBlockedCounterpart: boolean;
   // Whether the delete-vs-leave row menu action applies: a solo room keeps
   // "delete" (deletes for the owner, the only real member), a 2+-member
@@ -1040,6 +1047,8 @@ function mapConversationSummaryToItem(
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
+    titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
+    titleAccountBadgeLocale: locale,
     isBlockedCounterpart: conversation.isBlockedCounterpart,
     isMultiMember: conversation.isMultiMember,
     sequenceNumber: conversation.sequenceNumber,
@@ -1465,6 +1474,13 @@ function ConversationRow({
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
+            {/* Inside the row button, so the chip stays non-interactive; its
+                sr-only description joins the row's accessible name. */}
+            {item.titleAccountBadge ? (
+              <span data-conversation-row-account-badge className="-ml-1 inline-flex shrink-0 items-center">
+                <ChatAccountBadge kind={item.titleAccountBadge} locale={item.titleAccountBadgeLocale} tone="dark" />
+              </span>
+            ) : null}
             {item.languageCodes.length > 0 ? (
               <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
                 {item.languageCodes.map((language, index) => (

@@ -11,7 +11,10 @@ import { ChevronLeft, Loader2, RotateCcw, UserPlus, UserRound } from "lucide-rea
 import { useSession } from "next-auth/react";
 import { DEFAULT_LOCALE, resolveSupportedLocaleTag } from "@/i18n/config";
 import { getPrimaryUiCopy } from "@/i18n/primary-ui-copy";
+import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ChatAccountBadge from "./ChatAccountBadge";
+import { readAccountBadgeFlags } from "./chat-account-badge.logic";
 
 type ConversationParticipantsPanelProps = {
   active: boolean;
@@ -44,6 +47,9 @@ type ParticipantProfile = {
   nationality: string | null;
   primaryLanguages: string[];
   blocked: boolean;
+  // Another member's account badge ('operator' = run by Mingle staff), from
+  // the members API flags. Always null for the signed-in user's own row.
+  accountBadge: AccountBadgeKind | null;
 };
 
 type ProfileLoadState = "idle" | "loading" | "ready" | "error";
@@ -80,6 +86,7 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
     blocked: false,
+    accountBadge: null,
   };
 }
 
@@ -103,6 +110,7 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     nationality: primaryLanguages[0] ?? nationality,
     primaryLanguages,
     blocked: value.blocked === true,
+    accountBadge: resolveAccountBadge(readAccountBadgeFlags(value)),
   };
 }
 
@@ -129,6 +137,7 @@ function buildSessionFallbackProfile(
     nationality: null,
     primaryLanguages: [],
     blocked: false,
+    accountBadge: null,
   };
 }
 
@@ -136,11 +145,13 @@ function ParticipantRow({
   member,
   fallbackName,
   badgeLabel,
+  locale,
   onOpenProfile,
 }: {
   member: ParticipantProfile;
   fallbackName: string;
   badgeLabel?: string;
+  locale: string;
   onOpenProfile?: (userId: string) => void;
 }) {
   // Blocking hides the photo and stops profile taps, but the name/handle
@@ -191,7 +202,14 @@ function ParticipantRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
+            <p className="min-w-0 truncate text-[0.98rem] font-semibold text-gray-950">{displayName}</p>
+            {/* Inside the row's profile button: non-interactive chip; its
+                sr-only description joins the button's accessible name. */}
+            {member.accountBadge ? (
+              <span data-participant-account-badge className="inline-flex shrink-0 items-center">
+                <ChatAccountBadge kind={member.accountBadge} locale={locale} tone="dark" />
+              </span>
+            ) : null}
             {badgeLabel ? (
               <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-700">
                 {badgeLabel}
@@ -328,6 +346,7 @@ export default function ConversationParticipantsPanel({
               member={profile}
               fallbackName={fallbackName}
               badgeLabel={selfLabel}
+              locale={uiLocale}
               onOpenProfile={onOpenProfile}
             />
           ) : null}
@@ -337,6 +356,7 @@ export default function ConversationParticipantsPanel({
               key={member.id}
               member={member}
               fallbackName={fallbackName}
+              locale={uiLocale}
               onOpenProfile={onOpenProfile}
             />
           ))}
