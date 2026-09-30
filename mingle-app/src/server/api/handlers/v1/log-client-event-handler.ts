@@ -27,6 +27,7 @@ import { maybeGenerateConversationTitleForSession } from '@/server/conversation-
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import {
   isMessageSenderBlockedInConversation,
   listChannelMemberUserIdsBySessionKey,
@@ -515,6 +516,20 @@ export async function handleLogClientEventV1(request: NextRequest) {
             })
           } catch (error) {
             console.error('Conversation message push failed:', error)
+          }
+          // Staff alerts for rooms with an operator account. Isolated like the
+          // push above: a failure here must never affect the send.
+          try {
+            await notifyOperatorInboxActivity({
+              sessionKey: tracking.sessionKey,
+              senderUserId: userId,
+              memberUserIds,
+              messageId,
+              preview: sourceText,
+              kind: 'text',
+            })
+          } catch (error) {
+            console.error('Operator inbox notify failed:', error)
           }
         }
       }

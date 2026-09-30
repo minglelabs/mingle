@@ -13,6 +13,7 @@ const {
   mockMaybeGenerateConversationTitleForSession,
   mockNotifyConversationMessage,
   mockSendPushNotificationForConversationMessage,
+  mockNotifyOperatorInboxActivity,
   mockMaterializePendingConversationInvitees,
   mockIsMessageSenderBlockedInConversation,
   mockListChannelMemberUserIdsBySessionKey,
@@ -31,6 +32,7 @@ const {
   mockMaybeGenerateConversationTitleForSession: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
   mockSendPushNotificationForConversationMessage: vi.fn(),
+  mockNotifyOperatorInboxActivity: vi.fn(),
   mockMaterializePendingConversationInvitees: vi.fn(),
   mockIsMessageSenderBlockedInConversation: vi.fn(),
   mockListChannelMemberUserIdsBySessionKey: vi.fn(),
@@ -91,6 +93,10 @@ vi.mock("@/server/conversation-realtime", () => ({
 
 vi.mock("@/server/push-notifications", () => ({
   sendPushNotificationForConversationMessage: mockSendPushNotificationForConversationMessage,
+}));
+
+vi.mock("@/server/operator-inbox/notify", () => ({
+  notifyOperatorInboxActivity: mockNotifyOperatorInboxActivity,
 }));
 
 vi.mock("@/lib/app-conversations", () => ({
@@ -514,6 +520,63 @@ describe("handleLogClientEventV1", () => {
       senderUserId: "user_123",
       memberUserIds: ["user_123", "user_456"],
     });
+  });
+
+  it("reports a new text message to the operator inbox right after the push", async () => {
+    mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "op_1"]);
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "client_inbox_1",
+        sourceLanguage: "ko", sourceText: "안녕하세요", translations: { pt: "Olá" },
+      }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
+    expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledWith({
+      sessionKey: "sess_123",
+      senderUserId: "user_123",
+      memberUserIds: ["user_123", "op_1"],
+      messageId: "message_123",
+      preview: "안녕하세요",
+      kind: "text",
+    });
+    expect(mockSendPushNotificationForConversationMessage.mock.invocationCallOrder[0])
+      .toBeLessThan(mockNotifyOperatorInboxActivity.mock.invocationCallOrder[0]);
+  });
+
+  it("does not report a translation update to the operator inbox", async () => {
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "client_inbox_2",
+        sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true,
+      }),
+    }));
+    expect(response.status).toBe(200);
+    expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
+  });
+
+  it("keeps the send successful when the operator inbox notify rejects", async () => {
+    mockNotifyOperatorInboxActivity.mockRejectedValueOnce(new Error("inbox_unavailable"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.0/log/client-event", {
+        method: "POST",
+        body: JSON.stringify({
+          eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "client_inbox_3",
+          sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" },
+        }),
+      }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+      expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+      expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
+      expect(mockCreateTrackedEventLog).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith("Operator inbox notify failed:", expect.any(Error));
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it("uses the committed first-message membership set for realtime and push fan-out", async () => {
