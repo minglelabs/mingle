@@ -1688,3 +1688,196 @@ class NativePushNotificationModule: RCTEventEmitter {
         }
     }
 }
+
+// MARK: - Audio route (earphone mode)
+
+/// One classified reading of the current audio OUTPUT route (earphone mode
+/// bridge contract A.2). Only port TYPE identifiers are kept: port names are
+/// often personal ("홍길동의 AirPods") and never leave this file.
+struct MingleAudioRouteSnapshot {
+    let earphonesConnected: Bool
+    let routeKind: String
+    let outputTypes: [String]
+}
+
+enum MingleAudioRouteClassifier {
+    /// Outputs that count as earphones. Everything else (built-in speaker or
+    /// receiver, CarPlay, AirPlay, HDMI, line out, ...) does not.
+    static let earphonePorts: Set<AVAudioSession.Port> = [
+        .headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .usbAudio,
+    ]
+
+    /// Reads the shared session's current route. Never changes the session.
+    static func currentSnapshot() -> MingleAudioRouteSnapshot {
+        classify(outputPorts: AVAudioSession.sharedInstance().currentRoute.outputs.map { $0.portType })
+    }
+
+    static func classify(outputPorts: [AVAudioSession.Port]) -> MingleAudioRouteSnapshot {
+        var outputTypes: [String] = []
+        for port in outputPorts where !outputTypes.contains(port.rawValue) {
+            outputTypes.append(port.rawValue)
+        }
+        let earphonePort = outputPorts.first { earphonePorts.contains($0) }
+        let routeKind: String
+        if let port = earphonePort ?? outputPorts.first {
+            routeKind = kind(of: port)
+        } else {
+            routeKind = "none"
+        }
+        return MingleAudioRouteSnapshot(
+            earphonesConnected: earphonePort != nil,
+            routeKind: routeKind,
+            outputTypes: outputTypes
+        )
+    }
+
+    static func kind(of port: AVAudioSession.Port) -> String {
+        switch port {
+        case .headphones:
+            return "wired"
+        case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE:
+            return "bluetooth"
+        case .usbAudio:
+            return "usb"
+        case .builtInSpeaker:
+            return "speaker"
+        case .builtInReceiver:
+            return "receiver"
+        case .carAudio:
+            return "car"
+        case .airPlay:
+            return "airplay"
+        case .HDMI:
+            return "hdmi"
+        default:
+            return "other"
+        }
+    }
+}
+
+/// Reports the current audio output route (`getAudioRoute`) and every change
+/// to it (`audioRouteChanged`) for the web's earphone mode. Read-only: it never
+/// calls setCategory/setActive, so MingleAudioSessionCoordinator and the STT
+/// capture restarts are unaffected. Observers live from init, independent of
+/// STT/TTS; RN JS decides what reaches the WebView (dedupe, debounce).
+@objc(NativeAudioRouteModule)
+class NativeAudioRouteModule: RCTEventEmitter {
+    private static let routeChangedEvent = "audioRouteChanged"
+
+    private var hasListeners = false
+
+    override init() {
+        super.init()
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(handleRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleMediaServicesReset(_:)), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleDidBecomeActive(_:)), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override static func requiresMainQueueSetup() -> Bool {
+        false
+    }
+
+    override func supportedEvents() -> [String]! {
+        [Self.routeChangedEvent]
+    }
+
+    override func startObserving() {
+        hasListeners = true
+    }
+
+    override func stopObserving() {
+        hasListeners = false
+    }
+
+    /// Main queue only: every reading (event or getAudioRoute) is taken there,
+    /// so readings are ordered and `monotonicMs` never goes backwards.
+    private static func readPayload(reason: String?) -> [String: Any] {
+        let snapshot = MingleAudioRouteClassifier.currentSnapshot()
+        var payload: [String: Any] = [
+            "earphonesConnected": snapshot.earphonesConnected,
+            "routeKind": snapshot.routeKind,
+            "outputTypes": snapshot.outputTypes,
+            // Lets JS drop a reading older than one it already holds.
+            "monotonicMs": ProcessInfo.processInfo.systemUptime * 1000,
+        ]
+        if let reason, !reason.isEmpty {
+            payload["reason"] = reason
+        }
+        NSLog(
+            "[NativeAudioRoute] reason=%@ earphones=%d kind=%@ outputs=[%@]",
+            reason ?? "read",
+            snapshot.earphonesConnected ? 1 : 0,
+            snapshot.routeKind,
+            snapshot.outputTypes.joined(separator: ",")
+        )
+        return payload
+    }
+
+    private func emitCurrentRoute(reason: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let payload = Self.readPayload(reason: reason)
+            guard self.hasListeners else { return }
+            self.sendEvent(withName: Self.routeChangedEvent, body: payload)
+        }
+    }
+
+    private static func routeChangeReasonLabel(_ notification: Notification) -> String {
+        guard
+            let rawValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: rawValue)
+        else {
+            return "route_change"
+        }
+        switch reason {
+        case .newDeviceAvailable:
+            return "new_device_available"
+        case .oldDeviceUnavailable:
+            return "old_device_unavailable"
+        case .categoryChange:
+            return "category_change"
+        case .override:
+            return "override"
+        case .wakeFromSleep:
+            return "wake_from_sleep"
+        case .noSuitableRouteForCategory:
+            return "no_suitable_route_for_category"
+        case .routeConfigurationChange:
+            return "route_configuration_change"
+        case .unknown:
+            return "route_change"
+        @unknown default:
+            return "route_change"
+        }
+    }
+
+    @objc
+    private func handleRouteChange(_ notification: Notification) {
+        emitCurrentRoute(reason: Self.routeChangeReasonLabel(notification))
+    }
+
+    @objc
+    private func handleMediaServicesReset(_ notification: Notification) {
+        emitCurrentRoute(reason: "media_services_reset")
+    }
+
+    @objc
+    private func handleDidBecomeActive(_ notification: Notification) {
+        emitCurrentRoute(reason: "did_become_active")
+    }
+
+    @objc(getAudioRoute:rejecter:)
+    func getAudioRoute(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async {
+            resolve(Self.readPayload(reason: nil))
+        }
+    }
+}
