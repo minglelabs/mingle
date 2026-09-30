@@ -116,11 +116,36 @@ describe('other chat surfaces', () => {
     const panelBadge = findElements(panel, 'ChatAccountBadge')[0]
     expect(enclosingFunctionName(panelBadge)).toBe('ParticipantRow')
     expect(attributeText(panelBadge, 'kind')).toBe('{member.accountBadge}')
+    const participantRow = functionBody(panel, 'ParticipantRow')
+    expect(participantRow).toContain('<IdentityRow')
+    expect(participantRow).toContain('withAccountBadgeLabel(displayName, member.accountBadge, locale)')
 
     const reactions = parse('./MessageReactionParticipants.tsx')
     const reactionBadge = findElements(reactions, 'ChatAccountBadge')[0]
     expect(enclosingFunctionName(reactionBadge)).toBe('ParticipantList')
     expect(jsxAncestors(reactionBadge).map(tagNameOf)).not.toContain('button')
+    expect(reactions.getText()).toContain('activeDialog !== panel.current')
+  })
+
+  it('keeps room selection beneath the list content and out of the badge tap', () => {
+    const tree = parse('../conversation-list.tsx')
+    const row = functionBody(tree, 'ConversationRow')
+    const badge = findElements(tree, 'ChatAccountBadge')
+      .find((node) => attributeText(node, 'kind') === '{item.titleAccountBadge}')
+    expect(badge).toBeDefined()
+    expect(jsxAncestors(badge!).map(tagNameOf)).not.toContain('button')
+    expect(row).toContain('<IdentityRow')
+    expect(row).toContain('withAccountBadgeLabel(item.title, item.titleAccountBadge, item.titleAccountBadgeLocale)')
+    expect(row).toContain('isAccountBadgeTarget(event.target)')
+  })
+
+  it('keeps the bubble speaker badge as a separate interactive target beside the name', () => {
+    const tree = parse('./ChatBubble.tsx')
+    const badge = findElements(tree, 'ChatAccountBadge')[0]
+    expect(badge).toBeDefined()
+    expect(jsxAncestors(badge).map(tagNameOf)).not.toContain('button')
+    expect(tree.getText()).toContain('data-chat-speaker-name')
+    expect(tree.getText()).toContain('data-chat-speaker-badge')
   })
 
   it.each(['../conversation-spectate-screen.tsx', '../native-conversation-share-overlay.tsx'])(

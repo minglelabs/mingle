@@ -20,6 +20,14 @@ export default function MessageReactionParticipants({ endpoint, messageId, initi
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeButton.current?.focus({ preventScroll: true })
     const handleKey = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement
+      const activeDialog = activeElement instanceof HTMLElement
+        ? activeElement.closest('[role="dialog"][aria-modal="true"]')
+        : null
+      // A tappable account badge opens its own higher-level explanation
+      // sheet. Let that modal handle Escape and focus trapping while it owns
+      // focus instead of closing this participant list underneath it.
+      if (activeDialog && activeDialog !== panel.current) return
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
       if (event.key !== 'Tab') return
       const buttons = [...(panel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])]

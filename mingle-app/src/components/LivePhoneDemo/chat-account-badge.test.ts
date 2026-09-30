@@ -69,20 +69,24 @@ describe('wire readers', () => {
 })
 
 describe('ChatAccountBadge', () => {
-  it('renders the operator label with a screen-reader description, in the viewer locale', () => {
+  it('adapts the operator badge to the shared explanation button and 44px target', () => {
     const html = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'operator', locale: 'ko' }))
     expect(html).toContain('data-account-badge="operator"')
     expect(html).toContain(ko.operator)
-    expect(html).toContain(`<span class="sr-only">${ko.operatorDescription}</span>`)
-    expect(html).not.toContain('<button')
+    expect(html).toContain('<button')
+    expect(html).toContain('aria-haspopup="dialog"')
+    expect(html).toContain(`aria-label="${ko.operator}, ${ko.operatorDescription}"`)
+    expect(html).toContain('before:h-11')
     const english = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'operator', locale: 'en-US' }))
     expect(english).toContain(en.operator)
+    expect(english).toContain(en.operatorDescription)
   })
 
-  it('renders the official label for the Mingle team account', () => {
+  it('keeps the official badge informational and non-interactive', () => {
     const html = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'official', locale: 'ja' }))
     expect(html).toContain('data-account-badge="official"')
     expect(html).toContain(accountBadgeCopy('ja').official)
+    expect(html).not.toContain('<button')
   })
 })
 

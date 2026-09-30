@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-09-30 - Make operator badges tappable across chat surfaces
+
+- Surface: Operator names in chat bubbles, room headers and lists, participant rows, and reaction-participant lists.
+- Issue: W4's chat badge was a static span, so it could not open the W3 explanation sheet. Putting the shared button inside the existing full-row profile or room buttons would also create nested buttons and steal the badge tap.
+- Resolution: `ChatAccountBadge` now adapts the shared `AccountBadge`, including its localized explanation sheet and 44px hit area. Participant and conversation rows use `IdentityRow` so the profile/room action stays under the row content and the badge remains its own button. Conversation-row long-press handling ignores badge touches. The reaction list yields Escape and focus handling while the badge sheet is active.
+- Verification: Focused badge tests and the integrated web unit suite passed. Final type and local database checks are recorded in the operator runbook. No server or physical-device run was performed.
+
 ## 2026-09-28 - Voice-mode photo tap stopped STT; keyboard-mode photo pick closed the keyboard
 
 - Report: On iPhone (devbox build 2.1.0 (108)), tapping the voice-mode photo icon while STT was running stopped recognition as the WKWebView upload menu (Take Photo / Photo Library / Choose File) appeared, before anything was chosen. In keyboard mode with the keyboard open, `+` -> photo closed the keyboard. Branch `fix/voice-photo-ux-stt`, PR #236.
