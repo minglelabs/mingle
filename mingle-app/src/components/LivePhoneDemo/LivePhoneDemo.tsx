@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
+import { PhotoTranslationProvider } from './photo-translation-context'
 import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
 import {
   buildTargetLanguagesForUtterance,
@@ -8161,6 +8162,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             className="relative min-h-0 flex-1 bg-gray-50/50"
             style={CHAT_SCROLL_SURFACE_STYLE}
           >
+            {/* Photo viewers in this list translate the photo's text; it renders no DOM. */}
+            <PhotoTranslationProvider
+              conversationId={conversationId}
+              roomLanguages={normalizedDisplayLanguageOptions}
+              defaultLanguage={resolvedDefaultDisplayLanguage}
+              uiLocale={uiLocale}
+              viewerUserId={viewerUserId}
+            >
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"
@@ -8316,6 +8325,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               )}
             </div>
+            </PhotoTranslationProvider>
 
             <AnimatePresence>
               {scrollUiVisible && scrollMetrics.scrollable && (

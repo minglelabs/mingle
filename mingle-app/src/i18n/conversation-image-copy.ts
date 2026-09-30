@@ -20,6 +20,17 @@ export type ConversationImageCopy = {
   invalid: string
   loadError: string
   retry: string
+  /** Photo translation pill: its name, used in the accessible label and the menu. */
+  translate: string
+  /** Pill label while nothing is painted over the photo. */
+  original: string
+  /** Menu row that turns the translation off. */
+  showOriginal: string
+  translating: string
+  /** Tag on menu rows whose language needs no translation in this photo. */
+  sameAsOriginal: string
+  /** Accessible hint: tap cycles, touch and hold opens the language menu. */
+  translateHint: string
 }
 
 const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
@@ -38,6 +49,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: '10MB 이하의 JPG, PNG, WebP 이미지를 선택해 주세요.',
     loadError: '사진을 불러오지 못했습니다.',
     retry: '다시 시도',
+    translate: '사진 번역',
+    original: '원문',
+    showOriginal: '원문 보기',
+    translating: '번역 중…',
+    sameAsOriginal: '원문과 같음',
+    translateHint: '탭하면 언어가 바뀌고, 길게 누르면 모든 언어를 볼 수 있습니다.',
   },
   en: {
     attach: 'Attach',
@@ -54,6 +71,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Choose a JPG, PNG, or WebP image up to 10MB.',
     loadError: 'Could not load the photo.',
     retry: 'Try again',
+    translate: 'Photo translation',
+    original: 'Original',
+    showOriginal: 'Show original',
+    translating: 'Translating…',
+    sameAsOriginal: 'Same as original',
+    translateHint: 'Tap to switch languages. Touch and hold to see all languages.',
   },
   ja: {
     attach: '添付',
@@ -70,6 +93,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: '10MB以下のJPG、PNG、WebP画像を選んでください。',
     loadError: '写真を読み込めませんでした。',
     retry: '再試行',
+    translate: '写真の翻訳',
+    original: '原文',
+    showOriginal: '原文を表示',
+    translating: '翻訳中…',
+    sameAsOriginal: '原文と同じ',
+    translateHint: 'タップで言語を切り替え、長押しですべての言語を表示します。',
   },
   'zh-CN': {
     attach: '附件',
@@ -86,6 +115,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: '请选择不超过 10MB 的 JPG、PNG 或 WebP 图片。',
     loadError: '无法加载照片。',
     retry: '重试',
+    translate: '照片翻译',
+    original: '原文',
+    showOriginal: '显示原文',
+    translating: '翻译中…',
+    sameAsOriginal: '与原文相同',
+    translateHint: '轻点切换语言，长按查看所有语言。',
   },
   'zh-TW': {
     attach: '附件',
@@ -102,6 +137,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: '請選擇不超過 10MB 的 JPG、PNG 或 WebP 圖片。',
     loadError: '無法載入照片。',
     retry: '重試',
+    translate: '照片翻譯',
+    original: '原文',
+    showOriginal: '顯示原文',
+    translating: '翻譯中…',
+    sameAsOriginal: '與原文相同',
+    translateHint: '輕點切換語言，長按查看所有語言。',
   },
   fr: {
     attach: 'Joindre',
@@ -118,6 +159,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Choisissez une image JPG, PNG ou WebP de 10 Mo maximum.',
     loadError: 'Impossible de charger la photo.',
     retry: 'Réessayer',
+    translate: 'Traduction de la photo',
+    original: 'Original',
+    showOriginal: 'Afficher l’original',
+    translating: 'Traduction…',
+    sameAsOriginal: 'Identique à l’original',
+    translateHint: 'Touchez pour changer de langue. Maintenez appuyé pour voir toutes les langues.',
   },
   de: {
     attach: 'Anhängen',
@@ -134,6 +181,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Wählen Sie ein JPG-, PNG- oder WebP-Bild bis 10 MB aus.',
     loadError: 'Foto konnte nicht geladen werden.',
     retry: 'Erneut versuchen',
+    translate: 'Fotoübersetzung',
+    original: 'Original',
+    showOriginal: 'Original anzeigen',
+    translating: 'Wird übersetzt…',
+    sameAsOriginal: 'Wie im Original',
+    translateHint: 'Tippen, um die Sprache zu wechseln. Gedrückt halten, um alle Sprachen zu sehen.',
   },
   es: {
     attach: 'Adjuntar',
@@ -150,6 +203,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Elige una imagen JPG, PNG o WebP de hasta 10 MB.',
     loadError: 'No se pudo cargar la foto.',
     retry: 'Reintentar',
+    translate: 'Traducción de la foto',
+    original: 'Original',
+    showOriginal: 'Ver original',
+    translating: 'Traduciendo…',
+    sameAsOriginal: 'Igual que el original',
+    translateHint: 'Toca para cambiar de idioma. Mantén pulsado para ver todos los idiomas.',
   },
   pt: {
     attach: 'Anexar',
@@ -166,6 +225,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Escolha uma imagem JPG, PNG ou WebP de até 10 MB.',
     loadError: 'Não foi possível carregar a foto.',
     retry: 'Tentar novamente',
+    translate: 'Tradução da foto',
+    original: 'Original',
+    showOriginal: 'Mostrar original',
+    translating: 'A traduzir…',
+    sameAsOriginal: 'Igual ao original',
+    translateHint: 'Toque para mudar de idioma. Mantenha premido para ver todos os idiomas.',
   },
   it: {
     attach: 'Allega',
@@ -182,6 +247,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Scegli un’immagine JPG, PNG o WebP fino a 10 MB.',
     loadError: 'Impossibile caricare la foto.',
     retry: 'Riprova',
+    translate: 'Traduzione della foto',
+    original: 'Originale',
+    showOriginal: 'Mostra originale',
+    translating: 'Traduzione in corso…',
+    sameAsOriginal: 'Uguale all’originale',
+    translateHint: 'Tocca per cambiare lingua. Tieni premuto per vedere tutte le lingue.',
   },
   ru: {
     attach: 'Вложение',
@@ -198,6 +269,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Выберите изображение JPG, PNG или WebP размером до 10 МБ.',
     loadError: 'Не удалось загрузить фото.',
     retry: 'Повторить',
+    translate: 'Перевод фото',
+    original: 'Оригинал',
+    showOriginal: 'Показать оригинал',
+    translating: 'Переводим…',
+    sameAsOriginal: 'Как в оригинале',
+    translateHint: 'Нажмите, чтобы сменить язык. Удерживайте, чтобы увидеть все языки.',
   },
   ar: {
     attach: 'إرفاق',
@@ -214,6 +291,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'اختر صورة JPG أو PNG أو WebP بحجم يصل إلى 10 ميغابايت.',
     loadError: 'تعذر تحميل الصورة.',
     retry: 'إعادة المحاولة',
+    translate: 'ترجمة الصورة',
+    original: 'الأصل',
+    showOriginal: 'عرض الأصل',
+    translating: 'جارٍ الترجمة…',
+    sameAsOriginal: 'مطابق للأصل',
+    translateHint: 'اضغط لتغيير اللغة، واضغط مطولًا لعرض كل اللغات.',
   },
   hi: {
     attach: 'अटैच करें',
@@ -230,6 +313,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: '10 MB तक की JPG, PNG या WebP इमेज चुनें।',
     loadError: 'फ़ोटो लोड नहीं हो सकी।',
     retry: 'फिर से कोशिश करें',
+    translate: 'फ़ोटो अनुवाद',
+    original: 'मूल',
+    showOriginal: 'मूल दिखाएँ',
+    translating: 'अनुवाद हो रहा है…',
+    sameAsOriginal: 'मूल जैसा',
+    translateHint: 'भाषा बदलने के लिए टैप करें। सभी भाषाएँ देखने के लिए दबाकर रखें।',
   },
   th: {
     attach: 'แนบไฟล์',
@@ -246,6 +335,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'เลือกรูป JPG, PNG หรือ WebP ขนาดไม่เกิน 10MB',
     loadError: 'โหลดรูปภาพไม่สำเร็จ',
     retry: 'ลองอีกครั้ง',
+    translate: 'แปลรูปภาพ',
+    original: 'ต้นฉบับ',
+    showOriginal: 'แสดงต้นฉบับ',
+    translating: 'กำลังแปล…',
+    sameAsOriginal: 'เหมือนต้นฉบับ',
+    translateHint: 'แตะเพื่อเปลี่ยนภาษา แตะค้างไว้เพื่อดูทุกภาษา',
   },
   vi: {
     attach: 'Đính kèm',
@@ -262,6 +357,12 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     invalid: 'Chọn ảnh JPG, PNG hoặc WebP không quá 10MB.',
     loadError: 'Không thể tải ảnh.',
     retry: 'Thử lại',
+    translate: 'Dịch ảnh',
+    original: 'Bản gốc',
+    showOriginal: 'Xem bản gốc',
+    translating: 'Đang dịch…',
+    sameAsOriginal: 'Giống bản gốc',
+    translateHint: 'Chạm để đổi ngôn ngữ. Chạm và giữ để xem tất cả ngôn ngữ.',
   },
 } satisfies Record<LegalDocumentLocale, ConversationImageCopy>
 
