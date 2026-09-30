@@ -224,6 +224,7 @@ model AppMessage {
   reactions AppMessageReaction[]
   contents  AppMessageContent[]
   eventLogs AppEventLog[]
+  imageText AppMessageImageText?
 
   @@unique([sessionKey, clientMessageId], map: "app_messages_session_client_message_uidx")
   @@index([userId, createdAt], map: "app_messages_user_created_at_idx")
@@ -644,4 +645,63 @@ model ProfileBioTranslation {
 
   @@id([versionId, language])
   @@map("profile_bio_translations")
+}
+
+// OCR job + result for one photo message (photo text translation overlay).
+// Kept out of AppMessage.metadata/contents so hydration never loads it.
+model AppMessageImageText {
+  messageId        String   @id @map("message_id")
+  // = metadata.image.sha256 of the message.
+  imageSha256      String   @map("image_sha256")
+  // queued | running | ready | empty | failed
+  status           String   @default("queued")
+  attemptId        String?  @map("attempt_id")
+  attemptCount     Int      @default(0) @map("attempt_count")
+  deadlineAt       DateTime @map("deadline_at")
+  // Language with the most text among the blocks (zh is always zh-CN or zh-TW).
+  sourceLanguage   String?  @map("source_language")
+  // ConversationImageTextBlock[] (src/lib/conversation-image-text.ts), boxes relative to the stored JPEG.
+  blocks           Json?
+  provider         String?
+  model            String?
+  promptTokens     Int?     @map("prompt_tokens")
+  // Output plus thinking tokens (both billed as output).
+  completionTokens Int?     @map("completion_tokens")
+  errorCode        String?  @map("error_code")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  message      AppMessage                       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  translations AppMessageImageTextTranslation[]
+
+  @@index([status, deadlineAt], map: "app_message_image_texts_status_deadline_idx")
+  @@map("app_message_image_texts")
+}
+
+// Translation of one photo's text blocks into one language.
+model AppMessageImageTextTranslation {
+  messageId        String   @map("message_id")
+  // Catalog code; Chinese is always zh-CN or zh-TW.
+  language         String
+  // running | ready | failed
+  status           String   @default("running")
+  attemptId        String   @map("attempt_id")
+  attemptCount     Int      @default(0) @map("attempt_count")
+  deadlineAt       DateTime @map("deadline_at")
+  // { [blockId]: translated text }
+  texts            Json?
+  // Set when converted from the other Chinese variant's translation instead of translated.
+  derivedFrom      String?  @map("derived_from")
+  provider         String?
+  model            String?
+  promptTokens     Int?     @map("prompt_tokens")
+  completionTokens Int?     @map("completion_tokens")
+  errorCode        String?  @map("error_code")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  imageText AppMessageImageText @relation(fields: [messageId], references: [messageId], onDelete: Cascade)
+
+  @@id([messageId, language])
+  @@map("app_message_image_text_translations")
 }

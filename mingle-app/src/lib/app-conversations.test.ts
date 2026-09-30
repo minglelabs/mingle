@@ -143,6 +143,7 @@ import {
   listConversationChannelsForExternalUserId,
   listConversationMembersForUser,
   listConversationChannelsForUser,
+  listConversationTranslationLanguagesBySessionKey,
   markConversationChannelRead,
   materializePendingConversationInvitees,
   refreshConversationShareSnapshot,
@@ -4583,5 +4584,55 @@ describe("app-conversations", () => {
         where: expect.objectContaining({ shareToken: "old-revoked-token", shareEnabled: true }),
       }));
     });
+  });
+});
+
+describe("listConversationTranslationLanguagesBySessionKey", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChannelMemberFindMany.mockResolvedValue([]);
+    mockUserFindMany.mockResolvedValue([]);
+  });
+
+  it("returns the channel-wide languages and display language for a solo room", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-solo", selectedLanguages: ["ko", "en"], defaultDisplayLanguage: "ko", pendingInviteeUserIds: [],
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-solo", userId: "user-1", selectedLanguages: ["ja"], displayLanguage: "ja", user: {} },
+    ]);
+
+    await expect(listConversationTranslationLanguagesBySessionKey("session-solo", "user-1"))
+      .resolves.toEqual({ languages: ["ko", "en"], viewerDisplayLanguage: "ko" });
+    expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { sessionKey: "session-solo", OR: [{ isDeleted: false }, { isDeleted: null }] },
+    }));
+  });
+
+  it("returns the shared-room union around the viewer, including pending invitees, plus the viewer's display language", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-group", selectedLanguages: ["en"], defaultDisplayLanguage: "en", pendingInviteeUserIds: ["user-3"],
+    });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-group", userId: "user-1", selectedLanguages: ["ko", "en"], displayLanguage: "ko", user: {} },
+      { channelId: "conv-group", userId: "user-2", selectedLanguages: ["ja", "en"], displayLanguage: "ja", user: {} },
+      { channelId: "conv-group", userId: "user-4", selectedLanguages: ["fr"], displayLanguage: "fr", leftAt: new Date(), user: {} },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { id: "user-3", defaultConversationLanguages: ["zh-TW"], defaultDisplayLanguage: "zh-TW", primaryLanguages: [] },
+    ]);
+
+    await expect(listConversationTranslationLanguagesBySessionKey("session-group", "user-2"))
+      .resolves.toEqual({ languages: ["ja", "en", "ko", "zh-TW"], viewerDisplayLanguage: "ja" });
+    // Without a viewer (the upload job) the union keeps discovery order.
+    await expect(listConversationTranslationLanguagesBySessionKey("session-group"))
+      .resolves.toEqual({ languages: ["ko", "en", "ja", "zh-TW"], viewerDisplayLanguage: null });
+  });
+
+  it("returns nothing for an unknown or deleted room", async () => {
+    mockFindConversationFirst.mockResolvedValue(null);
+    await expect(listConversationTranslationLanguagesBySessionKey("missing", "user-1"))
+      .resolves.toEqual({ languages: [], viewerDisplayLanguage: null });
+    expect(mockChannelMemberFindMany).not.toHaveBeenCalled();
   });
 });
