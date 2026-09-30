@@ -72,6 +72,7 @@ import {
   createUnknownNativeAppUpdateSnapshot,
   normalizeClientVersion,
   resolveNativeAppUpdateSnapshot,
+  resolveRuntimeInstallSource,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
 import {
@@ -132,6 +133,8 @@ type NativeRuntimeConfig = {
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
+  // app_store | testflight | play_store | local | other, detected natively.
+  installSource?: string;
   qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
@@ -1088,6 +1091,10 @@ function resolveRuntimeClientInfo(): RuntimeClientInfo {
 }
 
 const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
+const RUNTIME_INSTALL_SOURCE = resolveRuntimeInstallSource(
+  NATIVE_RUNTIME_CONFIG.installSource,
+  __DEV__,
+);
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -1460,7 +1467,7 @@ function AppInner(): React.JSX.Element {
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
   const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
-    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
+    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
@@ -2468,7 +2475,7 @@ function AppInner(): React.JSX.Element {
     const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
     const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
-    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
+    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion, RUNTIME_INSTALL_SOURCE));
 
     const fallbackToReady = (reason: string, details?: string) => {
       if (!active || settled) return;
@@ -2476,7 +2483,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[VersionPolicy] bypass (${reason})${details ? `: ${details}` : ''}`);
       }
-      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion));
+      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion, RUNTIME_INSTALL_SOURCE));
       setVersionGate({ status: 'ready' });
     };
 
@@ -2535,7 +2542,7 @@ function AppInner(): React.JSX.Element {
 
         if (!active || settled) return;
         setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
-        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
+        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion, RUNTIME_INSTALL_SOURCE));
 
         if (policy.action === 'force_update') {
           settled = true;
