@@ -6,18 +6,23 @@ import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
+  ADMIN_DASHBOARD_WIDE_CHART_WIDTH,
   normalizeDashboardPlatform,
   ADMIN_DASHBOARD_PRESET_OPTIONS,
   type DashboardMetric,
+  type TranslationModelSeries,
   buildChartGeometry,
   buildCumulativeSeries,
+  buildSharedScaleChartGeometries,
   formatMetricDisplayValue,
   normalizeDashboardDays,
   resolveAdminDashboardRange,
 } from "@/lib/admin-dashboard-metrics";
-import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
+import { loadAdminDashboardMetrics, loadTranslationModelMessageSeries } from "@/lib/admin-dashboard-query";
+import { TRANSLATION_MODEL_OPTIONS } from "@/lib/translation-models";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
+import { MultiLineChartCard } from "./multi-line-chart-card";
 import { RangeNav } from "./range-nav";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +34,10 @@ export const metadata: Metadata = {
 const CHART_COLOR = "#2a78d6";
 const SECONDARY_COLOR = "#eb6834";
 const CUMULATIVE_COLOR = "#1baf7a";
+/** Indexed by a model's slot in TRANSLATION_MODEL_OPTIONS, not by its position among the
+ * series present, so a model keeps its colour when another drops out of the range. */
+const TRANSLATION_MODEL_COLORS = [CHART_COLOR, SECONDARY_COLOR, CUMULATIVE_COLOR, "#8b5cf6"] as const;
+const OTHER_TRANSLATION_MODEL_COLOR = "#898781";
 
 type DashboardPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -48,14 +57,11 @@ async function isAdminAuthenticated(): Promise<boolean> {
 function DailyChart({ metric }: { metric: DashboardMetric }) {
   // Both series share one y-scale (same unit, e.g. ms) -- computed together so
   // p95 (always >= avg) doesn't get clipped against a scale sized only for avg.
-  const combinedForScale = metric.secondarySeries
-    ? [...metric.points, ...metric.secondarySeries.points]
-    : metric.points;
-  const scaleGeometry = buildChartGeometry(combinedForScale, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
-  const geometry = buildChartGeometry(metric.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax);
-  const secondaryGeometry = metric.secondarySeries
-    ? buildChartGeometry(metric.secondarySeries.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax)
-    : null;
+  const { geometries: [geometry, secondaryGeometry] } = buildSharedScaleChartGeometries(
+    metric.secondarySeries ? [metric.points, metric.secondarySeries.points] : [metric.points],
+    ADMIN_DASHBOARD_CHART_WIDTH,
+    ADMIN_DASHBOARD_CHART_HEIGHT,
+  );
 
   return (
     <LineChartCard
@@ -99,6 +105,40 @@ function CumulativeChart({ metric }: { metric: DashboardMetric }) {
   );
 }
 
+function resolveTranslationModelColor(key: string): string {
+  const index = TRANSLATION_MODEL_OPTIONS.findIndex((option) => option.value === key);
+  return index < 0 ? OTHER_TRANSLATION_MODEL_COLOR : TRANSLATION_MODEL_COLORS[index % TRANSLATION_MODEL_COLORS.length];
+}
+
+function TranslationModelChart({ series, dayKeys }: { series: TranslationModelSeries[]; dayKeys: string[] }) {
+  // One y-scale across every model so their line heights compare directly.
+  const { yMax, geometries } = buildSharedScaleChartGeometries(
+    series.map((entry) => entry.points),
+    ADMIN_DASHBOARD_WIDE_CHART_WIDTH,
+    ADMIN_DASHBOARD_CHART_HEIGHT,
+  );
+
+  return (
+    <MultiLineChartCard
+      label="번역 모델별 메시지수"
+      kind="count"
+      ariaLabel="번역 모델별 메시지수 일별 추이"
+      dayKeys={dayKeys}
+      yMax={yMax}
+      emptyMessage="번역된 메시지 없음"
+      series={series.map((entry, index) => ({
+        key: entry.key,
+        label: entry.label,
+        color: resolveTranslationModelColor(entry.key),
+        points: geometries[index].points,
+        linePath: geometries[index].linePath,
+        total: entry.total,
+        share: entry.share,
+      }))}
+    />
+  );
+}
+
 
 export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
   if (!(await isAdminAuthenticated())) {
@@ -110,7 +150,10 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   const platform = normalizeDashboardPlatform(takeFirst(params.platform));
   const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
   const range = resolveAdminDashboardRange(new Date(), days);
-  const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
+  const [metrics, translationModelSeries] = await Promise.all([
+    loadAdminDashboardMetrics(range, { forceRefresh, platform }),
+    loadTranslationModelMessageSeries(range, { platform }),
+  ]);
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
   return (
@@ -140,6 +183,11 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
             <DailyChart key={metric.key} metric={metric} />
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto mt-8 w-full max-w-6xl px-4">
+        <h2 className="mb-2 text-sm font-semibold text-[#52514e]">번역 모델별 추이</h2>
+        <TranslationModelChart series={translationModelSeries} dayKeys={range.dayKeys} />
       </section>
 
       <section className="mx-auto mt-8 w-full max-w-6xl px-4">

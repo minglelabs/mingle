@@ -3,6 +3,7 @@ import {
   ADMIN_DASHBOARD_TIME_ZONE,
   type AdminDashboardDateRange,
   type AdminDashboardPlatform,
+  buildTranslationModelSeries,
   type DailyRow,
   type DashboardMetric,
   fillDailySeries,
@@ -11,6 +12,8 @@ import {
   resolveUncacheableDayKeys,
   shiftDayKey,
   startOfDayUtc,
+  type TranslationModelDailyRow,
+  type TranslationModelSeries,
 } from "@/lib/admin-dashboard-metrics";
 
 /**
@@ -22,6 +25,7 @@ const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_
 const USAGE_METRIC_VERSION = 2;
 
 type RawDayCount = { day: Date; value: bigint | number };
+type RawDayModelCount = { day: Date; model: string; value: bigint | number };
 type RawDayLatency = { day: Date; avg_ms: number | null; p95_ms: number | null };
 
 type DailyMetricSnapshot = {
@@ -175,6 +179,41 @@ async function queryMessageCount(
     ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
+}
+
+/**
+ * Messages per day per raw translation_model, with queryMessageCount's filters. The
+ * column holds the runtime model the finalize response actually used and is NULL when
+ * the turn was not translated, so untranslated messages drop out here.
+ */
+async function queryTranslationModelMessageCounts(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<TranslationModelDailyRow[]> {
+  const rows = await prisma.$queryRawUnsafe<RawDayModelCount[]>(
+    `select ${DAY_BUCKET_EXPR("m")} as day, m."translation_model" as model, count(*) as value
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."translation_model" is not null
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+     group by day, m."translation_model"
+     order by day, model`,
+    ...buildQueryParams(range, platform),
+  );
+  return rows.map((row) => ({ day: dayKeyFromRaw(row.day), model: row.model, value: Number(row.value) }));
+}
+
+/**
+ * Daily message counts per translation model for the range. Always a live query, never
+ * the adminDashboardDailyMetric cache: that table has no per-model columns, and adding
+ * them would need a production migration, which is applied by hand.
+ */
+export async function loadTranslationModelMessageSeries(
+  range: AdminDashboardDateRange,
+  options?: Pick<LoadAdminDashboardOptions, "platform">,
+): Promise<TranslationModelSeries[]> {
+  const rows = await queryTranslationModelMessageCounts(range, options?.platform ?? "all");
+  return buildTranslationModelSeries(rows, range.dayKeys);
 }
 
 /**
