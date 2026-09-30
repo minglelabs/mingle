@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreLocation
 import Foundation
+import os
 import React
 import UIKit
 import UserNotifications
@@ -239,6 +240,8 @@ final class MingleAudioSessionCoordinator {
 @objc(NativeSTTModule)
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
+    private let audioDiagnostics = Logger(subsystem: "com.minglelabs.mingle.rn", category: "STTAudio")
+    private var declaredStreamSampleRate = 0
     private let wsQueue = DispatchQueue(label: "NativeSTTModule.wsQueue")
 
     private var webSocketSession: URLSession?
@@ -439,6 +442,10 @@ class NativeSTTModule: RCTEventEmitter {
         try? audioSession.setPreferredSampleRate(48_000)
         try? audioSession.setPreferredIOBufferDuration(0.02)
         try audioSession.setActive(true, options: [])
+        // Port types and numeric audio metadata only; never log device names or speech.
+        let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
+        let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        audioDiagnostics.notice("session input=\(inputs, privacy: .public) output=\(outputs, privacy: .public) hardwareRate=\(audioSession.sampleRate) mode=\(mode.rawValue, privacy: .public) aec=\(aecEnabled)")
         NSLog("[NativeSTTModule] audioSession active mode=%@ sampleRate=%.0f ioBufferDuration=%.4f",
               mode.rawValue, audioSession.sampleRate, audioSession.ioBufferDuration)
     }
@@ -529,6 +536,11 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func installInputTap(format: AVAudioFormat) {
         let inputNode = audioEngine.inputNode
+        let declaredRate = declaredStreamSampleRate
+        audioDiagnostics.notice("tap declaredRate=\(declaredRate) tapRate=\(format.sampleRate) channels=\(format.channelCount)")
+        var energy: Double = 0
+        var peak: Float = 0
+        var diagnosticFrames = 0
         NSLog("[NativeSTTModule] installTap format=%@ channels=%d sampleRate=%.0f",
               format.description, format.channelCount, format.sampleRate)
         inputNode.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
@@ -538,6 +550,22 @@ class NativeSTTModule: RCTEventEmitter {
 
             self.audioChunkCount += 1
             let count = self.audioChunkCount
+            if let samples = buffer.floatChannelData?[0] {
+                for index in 0 ..< Int(buffer.frameLength) {
+                    let sample = samples[index]
+                    energy += Double(sample) * Double(sample)
+                    peak = max(peak, abs(sample))
+                }
+                diagnosticFrames += Int(buffer.frameLength)
+            }
+            if count == 1 || count % 20 == 0 {
+                let rms = sqrt(energy / Double(max(1, diagnosticFrames)))
+                let dbfs = 20 * log10(max(rms, 1e-9))
+                self.audioDiagnostics.notice("pcm chunk=\(count) declaredRate=\(declaredRate) bufferRate=\(buffer.format.sampleRate) frames=\(buffer.frameLength) windowFrames=\(diagnosticFrames) rmsDbfs=\(dbfs) peak=\(peak) engineRunning=\(self.audioEngine.isRunning)")
+                energy = 0
+                peak = 0
+                diagnosticFrames = 0
+            }
             if count == 1 || count % 200 == 0 {
                 NSLog("[NativeSTTModule] audioChunk #%lld frames=%d engineRunning=%d",
                       count, buffer.frameLength, self.audioEngine.isRunning ? 1 : 0)
@@ -939,6 +967,8 @@ class NativeSTTModule: RCTEventEmitter {
         if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(isAecEnabled) }
         let inputFormat = inputNode.inputFormat(forBus: 0)
         let sampleRate = Int(inputFormat.sampleRate.rounded())
+        declaredStreamSampleRate = sampleRate
+        audioDiagnostics.notice("config sampleRate=\(sampleRate) aec=\(aecEnabled)")
         NSLog("[NativeSTTModule] inputFormat=%@ sampleRate=%d", inputFormat.description, sampleRate)
 
         let configuration = URLSessionConfiguration.default
