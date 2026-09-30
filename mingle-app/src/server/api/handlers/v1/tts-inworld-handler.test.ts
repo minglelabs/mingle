@@ -99,12 +99,17 @@ afterEach(() => {
 })
 
 describe('handleTtsInworldV1', () => {
-  it('keeps the default Inworld response and event log shape', async () => {
+  it('keeps the Inworld response and event log shape when Inworld is chosen', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ audioContent: MP3_BYTES.toString('base64') }))
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', clientMessageId: 'm1' }) as never)
+    const res = await handler(makeRequest({
+      text: 'hello',
+      voiceId: 'Ashley',
+      clientMessageId: 'm1',
+      ttsModel: 'inworld-tts-1.5-mini',
+    }) as never)
     await flushAsync()
 
     expect(res.status).toBe(200)
@@ -129,12 +134,14 @@ describe('handleTtsInworldV1', () => {
     expect(createTrackedEventLogMock.mock.calls[0][0].metadata).not.toHaveProperty('fallbackFrom')
   })
 
-  it('keeps the existing 500 when Inworld credentials are missing on the default path', async () => {
+  it('keeps the existing 500 when Inworld credentials are missing on the Inworld path', async () => {
     delete process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL
-    vi.stubGlobal('fetch', vi.fn())
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', ttsModel: 'inworld-tts-1.5-mini' }) as never)
+    expect(fetchMock).not.toHaveBeenCalled()
 
     expect(res.status).toBe(500)
     expect((await res.json()).error).toContain('INWORLD_BASIC')
@@ -144,7 +151,7 @@ describe('handleTtsInworldV1', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('bad voice', { status: 400 })))
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Nope' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Nope', ttsModel: 'inworld-tts-1.5-mini' }) as never)
     await flushAsync()
 
     expect(res.status).toBe(400)
@@ -202,16 +209,39 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('resolves an invalid body ttsModel (and the removed provider field) to Inworld', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ audioContent: MP3_BYTES.toString('base64') }))
+  it('serves the gemini-3.8-flash-tts default when the body has no ttsModel', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', ttsModel: 'azure', provider: 'gemini' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', language: 'en' }) as never)
+    await flushAsync()
 
+    expect(res.status).toBe(200)
+    expect(res.headers.get('X-TTS-Provider')).toBe('gemini')
+    expect(res.headers.get('X-TTS-Fallback-From')).toBeNull()
+    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
+    expect(createTrackedEventLogMock.mock.calls[0][0].metadata).toMatchObject({
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-tts',
+    })
+  })
+
+  it('resolves an invalid body ttsModel (and the removed provider field) to the Gemini default with Inworld fallback', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({}, 503))
+      .mockResolvedValueOnce(jsonResponse({ audioContent: MP3_BYTES.toString('base64') }))
+    vi.stubGlobal('fetch', fetchMock)
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', ttsModel: 'azure', provider: 'inworld' }) as never)
+
+    expect(res.status).toBe(200)
+    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
     expect(res.headers.get('X-TTS-Provider')).toBe('inworld')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.inworld.ai/tts/v1/voice')
+    expect(res.headers.get('X-TTS-Fallback-From')).toBe('gemini')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
   it('returns the existing 500 when Gemini fails and Inworld has no credentials', async () => {

@@ -13,7 +13,6 @@ import {
   resolveDefaultSelectableTranslationModel,
 } from "@/lib/translation-models";
 import {
-  DEFAULT_SELECTABLE_TTS_MODEL,
   normalizeSelectableTtsModel,
 } from "@/lib/tts-models";
 import { requestAllowsLegacyAnonymousUser } from "@/lib/request-user-identity";
@@ -376,7 +375,8 @@ export async function GET(request: Request) {
     sonioxEndpointTuningStep: preferences?.demoEndpointTuningStep ?? DEFAULT_ENDPOINT_TUNING_STEP,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
-    ttsModel: normalizeSelectableTtsModel(preferences?.ttsModel) ?? DEFAULT_SELECTABLE_TTS_MODEL,
+    // NULL = the user never picked a model; the client then follows the server default.
+    ttsModel: normalizeSelectableTtsModel(preferences?.ttsModel),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
     bubbleDisplayMode: normalizeBubbleDisplayMode(preferences?.demoBubbleDisplayMode)
       ?? DEFAULT_BUBBLE_DISPLAY_MODE,

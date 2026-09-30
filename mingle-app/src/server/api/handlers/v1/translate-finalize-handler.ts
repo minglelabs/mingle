@@ -1705,7 +1705,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
   const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
-  // User-selected TTS model; missing/invalid values resolve to the default (Inworld) downstream.
+  // User-selected TTS model; missing/invalid values resolve to the default (gemini-3.8-flash-tts) downstream.
   const ttsModel = ttsPayload?.ttsModel
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true

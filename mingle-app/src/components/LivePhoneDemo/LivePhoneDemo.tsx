@@ -97,7 +97,7 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
-  shouldSendTtsModelPreference,
+  resolveRequestTtsModel,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -1988,8 +1988,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   )
-  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel>(
-    initialCachedAccountPreferences?.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL,
+  // null = never picked; the settings row shows the effective default instead.
+  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
+    initialCachedAccountPreferences?.ttsModel ?? null,
   )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -2210,7 +2211,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    ttsModel: initialCachedAccountPreferences?.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL,
+    ttsModel: initialCachedAccountPreferences?.ttsModel ?? null,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2246,9 +2247,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
+  // What the server will actually use: the explicit choice, else the default.
+  const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
   const selectedTtsModelOption = useMemo(
-    () => TTS_MODEL_OPTIONS.find((option) => option.value === ttsModel) || TTS_MODEL_OPTIONS[0],
-    [ttsModel],
+    () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
+    [effectiveTtsModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
@@ -2264,14 +2267,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
   ])
-  // Sent on every TTS request (no DB lookup on the TTS path). Undefined -> server default (Inworld).
+  // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
+  // a model. Undefined -> server default (gemini-3.8-flash-tts).
   const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
-    return shouldSendTtsModelPreference({
+    return resolveRequestTtsModel(ttsModel, {
       allowSync: enableAccountPreferencesSync,
       requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
       successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
       userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
-    }) ? ttsModel : undefined
+    })
   }, [
     accountPreferencesRequestedHydrationGeneration,
     accountPreferencesSuccessfulHydrationGeneration,
@@ -2314,7 +2318,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
-    setTtsModel(preferences.ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL)
+    setTtsModel(preferences.ttsModel ?? null)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -3449,6 +3453,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
+  // Any tap is an explicit choice, including the option shown as the default:
+  // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
   const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
     setTtsModelMenuOpen(false)
     setTtsModelUserSelectedSinceHydrationStart(true)
@@ -7342,7 +7348,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                             className="space-y-1.5 p-2.5"
                                           >
                                             {TTS_MODEL_OPTIONS.map((option) => {
-                                              const isSelected = option.value === ttsModel
+                                              const isSelected = option.value === effectiveTtsModel
 
                                               return (
                                                 <button

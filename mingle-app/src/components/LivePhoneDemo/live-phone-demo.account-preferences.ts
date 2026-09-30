@@ -21,7 +21,6 @@ import {
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 import {
-  DEFAULT_SELECTABLE_TTS_MODEL,
   normalizeSelectableTtsModel,
   type UserSelectableTtsModel,
 } from '@/lib/tts-models'
@@ -63,9 +62,11 @@ export interface LivePhoneDemoAccountPreferences {
   sonioxEndpointMaxDelayMs: number
   sonioxEndpointTuningStep: number
   translationModel: UserSelectableTranslationModel
-  // Optional so LivePhoneDemoLegacy (older namespaces, no TTS model choice)
-  // keeps compiling unchanged; buildHydratedAccountPreferences always sets it.
-  ttsModel?: UserSelectableTtsModel
+  // null = the user never picked a model in the TTS model menu, so requests and
+  // PATCHes omit it and the server default applies. Optional so
+  // LivePhoneDemoLegacy (older namespaces, no TTS model choice) keeps compiling
+  // unchanged; buildHydratedAccountPreferences always sets it.
+  ttsModel?: UserSelectableTtsModel | null
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
@@ -274,7 +275,8 @@ export function buildHydratedAccountPreferences(
       ? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP
       : normalizeSonioxEndpointTuningStepPreference(body?.sonioxEndpointTuningStep),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    ttsModel: normalizeSelectableTtsModel(body?.ttsModel) || DEFAULT_SELECTABLE_TTS_MODEL,
+    // No default fallback: null must survive hydration and the local cache.
+    ttsModel: normalizeSelectableTtsModel(body?.ttsModel),
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
@@ -405,7 +407,8 @@ export function shouldApplyAccountPreferencesHydration(args: {
 export function buildAccountPreferencesPatchBody(
   preferences: LivePhoneDemoAccountPreferences,
   // ttsModel is opt-in (unlike translationModel) so LivePhoneDemoLegacy, which
-  // passes no options, never writes a TTS model it cannot show.
+  // passes no options, never writes a TTS model it cannot show. A null ttsModel
+  // (never picked) is always omitted so the stored value stays NULL.
   options?: { includeTranslationModel?: boolean, includeTtsModel?: boolean },
 ): AccountPreferencesPatchBody {
   return {
@@ -476,6 +479,17 @@ export function shouldSendTtsModelPreference(
   args: Parameters<typeof shouldSendTranslationModelPreference>[0],
 ): boolean {
   return shouldSendTranslationModelPreference(args)
+}
+
+// The model to put on a TTS request (/tts/inworld `ttsModel`, finalize
+// `tts.ttsModel`). A never-picked (null) model is omitted so the server default
+// applies; an explicit choice follows shouldSendTtsModelPreference.
+export function resolveRequestTtsModel(
+  ttsModel: UserSelectableTtsModel | null | undefined,
+  args: Parameters<typeof shouldSendTranslationModelPreference>[0],
+): UserSelectableTtsModel | undefined {
+  if (!ttsModel) return undefined
+  return shouldSendTtsModelPreference(args) ? ttsModel : undefined
 }
 
 export function shouldSendTranslationModelPreference(args: {

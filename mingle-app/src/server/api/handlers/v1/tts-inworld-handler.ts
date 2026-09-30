@@ -28,7 +28,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
-  // User-selected TTS model sent by the client; missing/invalid -> default (Inworld).
+  // User-selected TTS model sent by the client; missing/invalid -> default (gemini-3.8-flash-tts).
   const ttsSelection = resolveTtsRuntimeSelection(body?.ttsModel)
 
   const buildMissingCredentialsResponse = () => {

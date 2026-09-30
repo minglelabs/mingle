@@ -1493,7 +1493,7 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
-  // User-selected TTS model, sent with every TTS request. Undefined -> server default (Inworld).
+  // User-selected TTS model, sent with every TTS request. Undefined -> server default (gemini-3.8-flash-tts).
   ttsModel?: UserSelectableTtsModel
   // The signed-in viewer's own account id, stamped onto every locally
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a

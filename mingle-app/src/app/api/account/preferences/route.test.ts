@@ -128,7 +128,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -161,7 +161,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -302,7 +302,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 1900,
       sonioxEndpointTuningStep: 1,
       translationModel: "qwen/qwen3.5-9b",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -351,7 +351,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -548,7 +548,48 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("falls back to the Inworld TTS model when the stored value is invalid", async () => {
+  it("returns a null TTS model when the stored value is NULL so the client follows the server default", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue({
+      id: "user_123",
+      translationModel: "gemma-4-31b-it",
+      ttsModel: null,
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toHaveProperty("ttsModel", null);
+  });
+
+  it("leaves the stored TTS model untouched when a PATCH omits ttsModel", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    for (const body of [{ speakerEnabled: true }, { textSizeLevel: 4 }, { speakerEnabled: false, ttsModel: null }]) {
+      const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }));
+      expect(response.status).toBe(200);
+    }
+    for (const [call] of mockUserUpdateMany.mock.calls) {
+      expect(call.data).not.toHaveProperty("ttsModel");
+    }
+  });
+
+  it("returns a null TTS model when the stored value is invalid", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -565,7 +606,7 @@ describe("/api/account/preferences route", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.ttsModel).toBe("inworld-tts-1.5-mini");
+    expect(json.ttsModel).toBeNull();
     expect(json.translationModel).toBe("gemma-4-31b-it");
   });
 
@@ -708,7 +749,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 2200,
       sonioxEndpointTuningStep: 0,
       translationModel: "qwen/qwen3.5-9b",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "top",
       inputMode: "text",
       speakerEnabled: true,
@@ -795,7 +836,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 1500,
       sonioxEndpointTuningStep: 3,
       translationModel: "qwen/qwen3.5-9b",
-      ttsModel: "inworld-tts-1.5-mini",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,

@@ -4,7 +4,7 @@
  *
  * - The client sends the user's selected TTS model per request (`ttsModel` /
  *   `tts.ttsModel`). Missing or invalid values resolve to the default
- *   (Inworld) via `@/lib/tts-models`. No DB lookup on the TTS path.
+ *   (gemini-3.8-flash-tts) via `@/lib/tts-models`. No DB lookup on the TTS path.
  * - Gemini failures (non-2xx, timeout, missing audio, exception, missing key)
  *   fall back to Inworld automatically.
  *
@@ -252,7 +252,7 @@ export async function synthesizeWithGemini(
 }
 
 /**
- * Synthesize with the model the user selected (`ttsModel`, default Inworld).
+ * Synthesize with the model the user selected (`ttsModel`, default gemini-3.8-flash-tts).
  * Gemini failures fall back to Inworld; the Inworld result (success or
  * failure) is then returned with `fallbackFrom: 'gemini'`.
  */
