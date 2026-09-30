@@ -14,6 +14,13 @@
 
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { decodeAudioContent, detectAudioMime, wrapPcm16AsWav } from '@/server/api/shared/audio-utils'
+import {
+  floatToPcm16Buffer,
+  parsePcm16Wav,
+  pcm16ToMonoFloat,
+  timeStretchWsola,
+  trimSilence,
+} from '@/server/api/shared/audio-dsp'
 import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
 import {
   getInworldTtsModelId,
@@ -26,6 +33,24 @@ export { getInworldTtsModelId, resolveTtsRuntimeSelection }
 
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 const DEFAULT_GEMINI_TTS_VOICE = 'Kore'
+/**
+ * Built-in per-language Gemini voices. Korean uses a male Seoul-Korean voice
+ * from the Extended Voice Library (median F0 ~130 Hz measured); every other
+ * language keeps the default voice.
+ */
+const GEMINI_TTS_LANGUAGE_VOICES: Readonly<Record<string, string>> = {
+  ko: 'ko-kr-csagent-11',
+}
+/**
+ * Built-in per-language tempo factors (pitch-preserving). Measured against
+ * Inworld at speakingRate 1.3: Gemini Korean speech ran ~1.4x longer; English
+ * and Japanese were already at or above Inworld's pace, so they stay at 1.
+ */
+const GEMINI_TTS_LANGUAGE_SPEEDS: Readonly<Record<string, number>> = {
+  ko: 1.4,
+}
+const MIN_GEMINI_TTS_SPEED = 0.5
+const MAX_GEMINI_TTS_SPEED = 2
 const DEFAULT_GEMINI_TTS_TIMEOUT_MS = 8000
 const DEFAULT_PCM_SAMPLE_RATE = 24000
 
@@ -34,8 +59,62 @@ function getInworldSpeakingRate(): number {
   return Number.isFinite(rate) && rate > 0 ? rate : 1.3
 }
 
-export function getGeminiTtsVoice(): string {
+function baseLanguage(language: string | null | undefined): string | null {
+  const normalized = (language || '').trim().replace(/_/g, '-').toLowerCase().split('-')[0]
+  return normalized || null
+}
+
+/**
+ * Gemini voice for a language, first match wins:
+ * 1. `GEMINI_TTS_VOICE_<LANG>` (e.g. `GEMINI_TTS_VOICE_KO`) — per-language override.
+ * 2. The built-in per-language voice (Korean -> a male voice).
+ * 3. `GEMINI_TTS_VOICE` — default for every language without a per-language voice.
+ * 4. `Kore`.
+ */
+export function getGeminiTtsVoice(language?: string | null): string {
+  const lang = baseLanguage(language)
+  if (lang) {
+    const override = (process.env[`GEMINI_TTS_VOICE_${lang.toUpperCase()}`] || '').trim()
+    if (override) return override
+    const builtIn = GEMINI_TTS_LANGUAGE_VOICES[lang]
+    if (builtIn) return builtIn
+  }
   return (process.env.GEMINI_TTS_VOICE || '').trim() || DEFAULT_GEMINI_TTS_VOICE
+}
+
+function clampSpeed(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null
+  return Math.min(MAX_GEMINI_TTS_SPEED, Math.max(MIN_GEMINI_TTS_SPEED, value))
+}
+
+/**
+ * Pitch-preserving tempo factor applied to Gemini audio (1 = unchanged,
+ * 1.4 = 40% faster). `GEMINI_TTS_SPEED` is either one number for every
+ * language (`1.2`) or a per-language list (`ko=1.4,ja=1.1,*=1`, where `*`
+ * is the default). Languages it does not mention use the built-in table.
+ * Values are clamped to [0.5, 2]; invalid entries are ignored.
+ */
+export function getGeminiTtsSpeed(language?: string | null): number {
+  const lang = baseLanguage(language)
+  const raw = (process.env.GEMINI_TTS_SPEED || '').trim()
+  if (raw) {
+    if (!raw.includes('=')) {
+      const single = clampSpeed(Number(raw))
+      if (single !== null) return single
+    } else {
+      const entries = new Map<string, number>()
+      for (const part of raw.split(',')) {
+        const [key, value] = part.split('=').map((token) => token.trim().toLowerCase())
+        const speed = clampSpeed(Number(value))
+        if (key && speed !== null) entries.set(key, speed)
+      }
+      if (lang && entries.has(lang)) return entries.get(lang) as number
+      if (lang && GEMINI_TTS_LANGUAGE_SPEEDS[lang]) return GEMINI_TTS_LANGUAGE_SPEEDS[lang]
+      if (entries.has('*')) return entries.get('*') as number
+      return 1
+    }
+  }
+  return (lang && GEMINI_TTS_LANGUAGE_SPEEDS[lang]) || 1
 }
 
 function getGeminiTtsTimeoutMs(): number {
@@ -196,14 +275,31 @@ export function normalizeGeminiAudio(audio: Buffer, mimeHint: string, sampleRate
 }
 
 /**
- * Gemini synthesis. The text is sent verbatim — no style instruction is
- * prepended (Gemini 3.8 TTS may read inline directions aloud).
+ * Trim leading/trailing silence (keeping ~80 ms) and apply the tempo factor
+ * with pitch-preserving WSOLA. Only 16-bit PCM WAV is processed; anything
+ * else (MP3/OGG, other bit depths) is returned unchanged. Output is mono WAV.
+ */
+export function postProcessGeminiAudio(audio: Buffer, speed: number): Buffer {
+  const wav = parsePcm16Wav(audio)
+  if (!wav || wav.samples.length === 0) return audio
+  const mono = pcm16ToMonoFloat(wav.samples, wav.channels)
+  const trimmed = trimSilence(mono, wav.sampleRate)
+  const stretched = timeStretchWsola(trimmed, wav.sampleRate, speed)
+  return wrapPcm16AsWav(floatToPcm16Buffer(stretched), wav.sampleRate, 1)
+}
+
+/**
+ * Gemini synthesis. The text is sent verbatim: Gemini 3.8 TTS treats `text`
+ * as a verbatim transcript, `system_instruction` is refused for TTS models,
+ * and a `speech_metadata.style` pace hint overshoots (0.55-0.9x Inworld's
+ * duration) and raises pitch. Pace is instead matched after synthesis by
+ * `postProcessGeminiAudio`.
  */
 export async function synthesizeWithGemini(
   input: TtsSynthesisInput & { modelId: string },
 ): Promise<TtsSynthesisResult> {
   const modelId = input.modelId
-  const voiceId = getGeminiTtsVoice()
+  const voiceId = getGeminiTtsVoice(input.language)
   const apiKey = (process.env.GEMINI_API_KEY || '').trim()
   if (!apiKey) {
     return { ok: false, provider: 'gemini', reason: 'missing_credentials', modelId, voiceId }
@@ -260,7 +356,10 @@ export async function synthesizeWithGemini(
       audioItem.mime_type || audioItem.mimeType || '',
       audioItem.sample_rate,
     )
-    return { ok: true, provider: 'gemini', audio: normalized.audio, mime: normalized.mime, voiceId, modelId }
+    const audio = normalized.mime === 'audio/wav'
+      ? postProcessGeminiAudio(normalized.audio, getGeminiTtsSpeed(input.language))
+      : normalized.audio
+    return { ok: true, provider: 'gemini', audio, mime: normalized.mime, voiceId, modelId }
   } catch (error) {
     const aborted = controller.signal.aborted
     return { ok: false, provider: 'gemini', reason: aborted ? 'timeout' : 'exception', error, voiceId, modelId }
