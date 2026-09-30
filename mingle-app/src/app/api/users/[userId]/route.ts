@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { calculateProfileAge } from "@/server/user-profile";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,7 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
 const userProfileSelect = {
   // Identity + badge flags (official / operator).
   ...USER_IDENTITY_SELECT,
+  birthDate: true,
   bio: true,
   nationality: true,
   primaryLanguages: true,
@@ -122,6 +124,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropScale: user.imageCropScale,
     imageCropX: user.imageCropX,
     imageCropY: user.imageCropY,
+    age: calculateProfileAge(user.birthDate),
     bio: await getPublishedBioText(user.id, user.bio),
     nationality: user.nationality,
     primaryLanguages: sanitizeSttLanguageSelection(

@@ -21,6 +21,7 @@ export const userProfileSelect = {
   imageCropY: true,
   handle: true,
   bio: true,
+  birthDate: true,
   nationality: true,
   primaryLanguages: true,
   defaultConversationLanguages: true,
@@ -55,6 +56,7 @@ type SelectedUserProfile = {
   imageCropY: number | null;
   handle: string | null;
   bio: string | null;
+  birthDate?: Date | null;
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
@@ -82,6 +84,8 @@ export type UserProfile = {
   imageCropY: number | null;
   handle: string | null;
   bio: string | null;
+  /** Current age in whole years; the original birth date is never serialized. */
+  age?: number;
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
@@ -94,7 +98,37 @@ export type UserProfile = {
   isOperator?: boolean;
 };
 
-export function serializeUserProfile(profile: SelectedUserProfile): UserProfile {
+export function calculateProfileAge(
+  birthDate: Date | null | undefined,
+  now: Date = new Date(),
+): number | undefined {
+  if (
+    !(birthDate instanceof Date)
+    || !Number.isFinite(birthDate.getTime())
+    || !(now instanceof Date)
+    || !Number.isFinite(now.getTime())
+  ) {
+    return undefined;
+  }
+
+  const birthYear = birthDate.getUTCFullYear();
+  const birthMonth = birthDate.getUTCMonth();
+  const birthDay = birthDate.getUTCDate();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const currentDay = now.getUTCDate();
+  const birthDateIsFuture = birthYear > currentYear
+    || (birthYear === currentYear && birthMonth > currentMonth)
+    || (birthYear === currentYear && birthMonth === currentMonth && birthDay > currentDay);
+
+  if (birthDateIsFuture) return undefined;
+
+  const birthdayHasPassed = currentMonth > birthMonth
+    || (currentMonth === birthMonth && currentDay >= birthDay);
+  return currentYear - birthYear - (birthdayHasPassed ? 0 : 1);
+}
+
+export function serializeUserProfile(profile: SelectedUserProfile, now: Date = new Date()): UserProfile {
   const {
     _count,
     id,
@@ -105,6 +139,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     imageCropY,
     handle,
     bio,
+    birthDate,
     nationality,
     primaryLanguages,
     defaultConversationLanguages,
@@ -135,6 +170,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     primaryLanguages,
     normalizedNationality ? [normalizedNationality] : [],
   );
+  const age = calculateProfileAge(birthDate, now);
   return {
     id,
     name,
@@ -144,6 +180,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     imageCropY,
     handle,
     bio,
+    ...(age !== undefined ? { age } : {}),
     nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
     primaryLanguages: normalizedPrimaryLanguages,
     defaultConversationLanguages: sanitizeSttLanguageSelection(defaultConversationLanguages),

@@ -165,6 +165,36 @@ describe("/api/users/[userId] route", () => {
     expect(memberProfile).not.toHaveProperty("isOfficial");
   });
 
+  it("returns only the calculated age on an ordinary public profile", async () => {
+    mockUserFindUnique.mockReset();
+    mockUserFindUnique.mockResolvedValueOnce({
+      id: "user_456",
+      handle: "mina.song",
+      image: null,
+      name: "미나",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      birthDate: new Date("1990-01-01T00:00:00.000Z"),
+      isOfficial: false,
+      isOperator: false,
+      _count: { followerRelations: 0, followingRelations: 0 },
+      followerRelations: [],
+    });
+
+    const response = await GET(new NextRequest("https://example.com/ko/users/user_456"), {
+      params: Promise.resolve({ userId: "user_456" }),
+    });
+    const profile = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockUserFindUnique.mock.calls[0][0].select.birthDate).toBe(true);
+    expect(Number.isSafeInteger(profile.age)).toBe(true);
+    expect(profile).not.toHaveProperty("birthDate");
+    expect(profile).not.toHaveProperty("isOperator");
+    expect(profile).not.toHaveProperty("isOfficial");
+  });
+
   it("continues to resolve legacy internal user IDs", async () => {
     const response = await GET(new NextRequest("https://example.com/ko/users/user_456"), {
       params: Promise.resolve({ userId: "user_456" }),

@@ -1,6 +1,7 @@
 "use client";
 
 import ProfileBio from "@/components/profile-bio";
+import ProfileAge from "@/components/profile-age";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -73,6 +74,7 @@ type PublicUserProfile = {
   imageCropX: number | null;
   imageCropY: number | null;
   bio: string | null;
+  age?: number;
   nationality: string | null;
   primaryLanguages: string[];
   location: ProfileLocationRecord | null;
@@ -609,6 +611,7 @@ export default function PublicUserProfileScreen({
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
                 </p>
                 {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+                <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-[13px] text-gray-500" />
                 {!isOwnProfile ? (
                   <ProfileLocation
                     profileLocation={profile.location}

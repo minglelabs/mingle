@@ -39,6 +39,7 @@ export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) 
           imageCropScale: userProfile.imageCropScale,
           imageCropX: userProfile.imageCropX,
           imageCropY: userProfile.imageCropY,
+          age: userProfile.age,
           // The preview shows the name to anyone with the link: keep the badge.
           ...identityBadgeFlags(userProfile),
         };

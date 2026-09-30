@@ -4,6 +4,7 @@ import {
   Play,
   Smartphone,
 } from "lucide-react";
+import ProfileAge from "@/components/profile-age";
 import { useMemo, useRef, type MouseEvent } from "react";
 import {
   buildProfileAppUrl,
@@ -26,6 +27,7 @@ export type ProfileLinkInstallProfile = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  age?: number;
   /** Badge flags; absent means false. */
   isOfficial?: boolean;
   isOperator?: boolean;
@@ -147,6 +149,7 @@ export default function ProfileLinkInstallScreen({
               {profileHandle ? (
                 <p className="mt-0.5 truncate text-sm font-medium text-slate-500">{profileHandle}</p>
               ) : null}
+              <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-sm font-medium text-slate-500" />
             </div>
           </div>
         ) : (
