@@ -114,6 +114,34 @@ describe("resolveNativePushTapNavigation", () => {
     const navigation = resolve("/ko/feed?postId=p1", true, "");
     expect(navigation).toEqual({ kind: "route", href: "/ko/feed?postId=p1" });
   });
+
+  it("opens an admin console path (no locale) as a full-page load, without the native query", () => {
+    expect(resolve("/admin/inbox/conv_1")).toEqual({ kind: "document", href: "/admin/inbox/conv_1" });
+    expect(resolve("/admin/inbox/conv_1?as=op_1#latest", false)).toEqual({
+      kind: "document",
+      href: "/admin/inbox/conv_1?as=op_1#latest",
+    });
+    expect(resolve("/admin")).toEqual({ kind: "document", href: "/admin" });
+  });
+
+  it("still rejects unsafe or look-alike admin paths", () => {
+    for (const target of [
+      "https://evil.example.com/admin/inbox/conv_1",
+      "//evil.example.com/admin/inbox/conv_1",
+      "/admin/../api/users",
+      "/\\evil.example.com/admin",
+      "javascript:alert(1)",
+      "/admin/in\nbox",
+    ]) {
+      expect(parseNativePushTapRequest({ path: target })).toBeNull();
+      expect(resolve(target)).toBeNull();
+    }
+    // An encoded dot segment is judged by where it really leads.
+    expect(resolve("/admin/%2e%2e/api/users")).toBeNull();
+    expect(resolve("/administrator/x")).toBeNull();
+    expect(resolve("/Admin/inbox/conv_1")).toBeNull();
+    expect(resolve("/ko/admin/inbox/conv_1")?.kind).toBe("route");
+  });
 });
 
 describe("createNativePushTapHandler", () => {
@@ -124,9 +152,20 @@ describe("createNativePushTapHandler", () => {
       clearPendingRequest: vi.fn(),
       pushRoute: vi.fn(),
       openConversation: vi.fn(),
+      loadDocument: vi.fn(),
     };
     return { deps, handle: createNativePushTapHandler(deps) };
   }
+
+  it("loads a staff alert's admin inbox room as a new document", () => {
+    const { deps, handle } = setup(false);
+    handle({ path: "/admin/inbox/conv_7", sequence: 1 });
+    expect(deps.loadDocument).toHaveBeenCalledWith("/admin/inbox/conv_7");
+    expect(deps.pushRoute).not.toHaveBeenCalled();
+    expect(deps.openConversation).not.toHaveBeenCalled();
+    handle({ path: "https://evil.example.com/admin/inbox/conv_7", sequence: 2 });
+    expect(deps.loadDocument).toHaveBeenCalledTimes(1);
+  });
 
   it("routes a feed tap and clears the pending slot", () => {
     const { deps, handle } = setup();

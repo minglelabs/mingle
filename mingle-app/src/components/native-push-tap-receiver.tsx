@@ -36,6 +36,9 @@ export default function NativePushTapReceiver() {
       openConversation: (conversationListHref, conversationId) => {
         replaceWithConversationListThenPush(router, conversationListHref, conversationId);
       },
+      loadDocument: (href) => {
+        window.location.assign(href);
+      },
     });
 
     const handleEvent = (event: Event) => {
