@@ -202,6 +202,14 @@ describe('PhotoTranslateControl event contract', () => {
     expect(source).toContain('setPointerCapture')
   })
 
+  it('cancels the long-press timer before a released press is dropped, so a tap never opens the menu', () => {
+    for (const [start, end] of [['const handlePointerUp = useCallback', 'const handlePointerCancel'], ['const handlePointerCancel = useCallback', 'const handleTouchEnd']]) {
+      const handler = sourceBetween(start, end)
+      expect(handler.indexOf('clearPressTimer()')).toBeGreaterThan(0)
+      expect(handler.indexOf('clearPressTimer()')).toBeLessThan(handler.indexOf('pressRef.current = null'))
+    }
+  })
+
   it('closes on Escape via window capture, outside taps and Android back above the viewer', () => {
     expect(source).toContain("window.addEventListener('keydown', handleKeyDown, true)")
     expect(source).toContain("window.addEventListener('pointerdown', handlePointerDown, true)")

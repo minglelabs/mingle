@@ -260,8 +260,10 @@ export default function PhotoTranslateControl({ options, cycle, choice, pending,
     event.stopPropagation()
     const press = pressRef.current
     if (!press || press.pointerId !== event.pointerId) return
-    pressRef.current = null
+    // Cancel the long-press timer before dropping the press: a tap must not
+    // open the menu 450 ms later.
     clearPressTimer()
+    pressRef.current = null
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (press.longPressed || open) {
       // Press-drag-release: the row under the finger wins.
