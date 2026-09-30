@@ -22,9 +22,11 @@ import type { Utterance } from './ChatBubble'
 import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
 import {
   buildTargetLanguagesForUtterance,
-  findLanguageRecordValue,
+  createDisplayLanguageResolver,
+  findDisplayTranslation,
   resolveInitialDisplayLanguage,
-  resolveOriginalDisplayLanguage,
+  resolveOriginalDisplayText,
+  type DisplayLanguageResolver,
 } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
@@ -43,7 +45,7 @@ import {
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
-import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice } from './use-realtime-stt'
+import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice, type SttStopSource } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
@@ -57,7 +59,6 @@ import {
   sanitizeSttLanguageSelection,
   sanitizeSttLanguageUnion,
 } from '@/lib/stt-languages'
-import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -96,6 +97,7 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
+  resolveRequestTtsModel,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -115,6 +117,11 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_SELECTABLE_TTS_MODEL,
+  TTS_MODEL_OPTIONS,
+  type UserSelectableTtsModel,
+} from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
@@ -261,56 +268,13 @@ const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
-function normalizeNativePipLanguageKey(rawLanguage: string): string {
-  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
-  if (canonical) return canonical.toLowerCase()
-
-  const sttCanonical = canonicalizeSttLanguageCode(rawLanguage)
-  return sttCanonical || rawLanguage.trim().replace(/_/g, '-').toLowerCase().split('-')[0] || ''
-}
-
-function findNativePipRecordKey<T>(
-  record: Record<string, T> | undefined,
-  language: string,
-): string | null {
-  const targetKey = normalizeNativePipLanguageKey(language)
-  if (!targetKey) return null
-
-  return Object.keys(record || {}).find((candidate) => (
-    normalizeNativePipLanguageKey(candidate) === targetKey
-  )) || null
-}
-
-function findNativePipTranslationText(
-  utterance: Utterance,
-  language: string,
-): string {
-  const matchingLanguage = findNativePipRecordKey(utterance.translations, language)
-  const text = matchingLanguage ? utterance.translations[matchingLanguage] : ''
-  return typeof text === 'string' ? text.trim() : ''
-}
-
-function resolveNativePipOriginalLanguage(
-  utterance: Utterance,
-  roomLanguageOrder: readonly string[] = [],
-): string {
-  return resolveOriginalDisplayLanguage(
-    utterance.originalLang,
-    [
-      ...(utterance.targetLanguages || []),
-      ...Object.keys(utterance.translations || {}),
-      ...Object.keys(utterance.translationFinalized || {}),
-    ],
-    roomLanguageOrder,
-  )
-}
-
+// Native PiP rows use the same display-language keys as ChatBubble, so a
+// generic zh key and its zh-CN/zh-TW alias render as one row with one flag,
+// and the native side only ever receives canonical language codes.
 function resolveNativePipTargetLanguages(
   utterance: Utterance,
-  originalDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
 ): string[] {
-  const originalKey = normalizeNativePipLanguageKey(originalDisplayLanguage)
-  const hasGenericChineseSource = normalizeNativePipLanguageKey(utterance.originalLang) === 'zh'
   const targetLanguages: string[] = []
   const seen = new Set<string>()
   const candidates = [
@@ -321,19 +285,18 @@ function resolveNativePipTargetLanguages(
 
   for (const rawLanguage of candidates) {
     const language = rawLanguage.trim()
-    const languageKey = normalizeNativePipLanguageKey(language)
+    const languageKey = resolver.keyOf(language)
     if (
       !language
       || !languageKey
       || seen.has(languageKey)
-      || languageKey === originalKey
-      || (hasGenericChineseSource && languageKey === 'zh')
+      || languageKey === resolver.originalKey
     ) {
       continue
     }
 
     seen.add(languageKey)
-    targetLanguages.push(language)
+    targetLanguages.push(resolver.displayCodeOf(language, languageKey))
   }
 
   return targetLanguages
@@ -342,38 +305,41 @@ function resolveNativePipTargetLanguages(
 function resolveNativePipDisplayLanguage(
   utterance: Utterance,
   requestedDisplayLanguage: string | null,
-  originalDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
   targetLanguages: readonly string[],
 ): string {
-  const requestedKey = normalizeNativePipLanguageKey(requestedDisplayLanguage || originalDisplayLanguage)
-  if (
-    !requestedKey
-    || requestedKey === normalizeNativePipLanguageKey(originalDisplayLanguage)
-    || requestedKey === normalizeNativePipLanguageKey(utterance.originalLang)
-  ) {
+  const originalDisplayLanguage = resolver.originalLanguage
+  const requestedKey = resolver.keyOf(requestedDisplayLanguage || originalDisplayLanguage)
+  if (!requestedKey || requestedKey === resolver.originalKey) {
     return originalDisplayLanguage
   }
 
   return targetLanguages.find((language) => (
-    normalizeNativePipLanguageKey(language) === requestedKey
+    resolver.keyOf(language) === requestedKey
   )) || originalDisplayLanguage
+}
+
+function findNativePipTranslationText(
+  utterance: Utterance,
+  language: string,
+  resolver: DisplayLanguageResolver,
+): string {
+  return findDisplayTranslation(utterance, language, resolver).text.trim()
 }
 
 function resolveNativePipTranslations(
   utterance: Utterance,
   targetLanguages: readonly string[],
+  resolver: DisplayLanguageResolver,
 ) {
   return targetLanguages.map((language) => {
-    const text = findNativePipTranslationText(utterance, language)
-    const matchingFinalizedKey = findNativePipRecordKey(utterance.translationFinalized, language)
-    const finalized = matchingFinalizedKey
-      ? utterance.translationFinalized?.[matchingFinalizedKey]
-      : undefined
+    const { text, finalized } = findDisplayTranslation(utterance, language, resolver)
+    const trimmedText = text.trim()
 
     return {
       language,
-      text,
-      isInterim: !text || finalized === false,
+      text: trimmedText,
+      isInterim: !trimmedText || finalized === false,
     }
   })
 }
@@ -381,37 +347,73 @@ function resolveNativePipTranslations(
 function resolveNativePipMessageText(
   utterance: Utterance,
   displayMode: LivePhoneDemoBubbleDisplayMode,
-  displayLanguage: string | null,
-  roomLanguageOrder: readonly string[] = [],
+  resolvedDisplayLanguage: string,
+  resolver: DisplayLanguageResolver,
+  targetLanguages: readonly string[],
 ): string {
-  const originalText = utterance.originalText.trim()
-  const originalDisplayLanguage = resolveNativePipOriginalLanguage(utterance, roomLanguageOrder)
-  const targetLanguages = resolveNativePipTargetLanguages(utterance, originalDisplayLanguage)
-  const resolvedDisplayLanguage = resolveNativePipDisplayLanguage(
-    utterance,
-    displayLanguage,
-    originalDisplayLanguage,
-    targetLanguages,
-  )
+  const originalText = resolveOriginalDisplayText(utterance).trim()
 
   if (displayMode === 'collapsed') {
-    if (resolvedDisplayLanguage === originalDisplayLanguage) return originalText
+    if (resolvedDisplayLanguage === resolver.originalLanguage) return originalText
     // Keep the live source visible until the selected translation has text.
     // The native renderer uses the original-language badge for this fallback,
     // so an in-progress utterance is never hidden behind a placeholder.
-    return findNativePipTranslationText(utterance, resolvedDisplayLanguage) || originalText
+    return findNativePipTranslationText(utterance, resolvedDisplayLanguage, resolver) || originalText
   }
 
   const lines = [originalText]
   const seenTexts = new Set(lines)
   for (const language of targetLanguages) {
-    const text = findNativePipTranslationText(utterance, language)
+    const text = findNativePipTranslationText(utterance, language, resolver)
     if (!text || seenTexts.has(text)) continue
     seenTexts.add(text)
     lines.push(text)
   }
 
   return lines.join('\n')
+}
+
+export function buildNativePipMessage(
+  utterance: Utterance,
+  options: {
+    displayMode: LivePhoneDemoBubbleDisplayMode
+    defaultDisplayLanguage: string | null
+    roomLanguageOrder: readonly string[]
+    viewerUserId?: string | null
+    isInterim: boolean
+  },
+): NativePipState['messages'][number] {
+  const resolver = createDisplayLanguageResolver(utterance, options.roomLanguageOrder)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver)
+  const displayLanguage = resolveNativePipDisplayLanguage(
+    utterance,
+    options.defaultDisplayLanguage,
+    resolver,
+    targetLanguages,
+  )
+
+  return {
+    id: utterance.id,
+    text: resolveNativePipMessageText(
+      utterance,
+      options.displayMode,
+      displayLanguage,
+      resolver,
+      targetLanguages,
+    ),
+    // Display-only on the native side (row text), so it carries the
+    // variant-script rendering of the original.
+    originalText: resolveOriginalDisplayText(utterance).trim(),
+    originalLanguage: resolver.originalLanguage,
+    displayLanguage,
+    translations: resolveNativePipTranslations(utterance, targetLanguages, resolver),
+    isOwn: Boolean(
+      options.viewerUserId
+      && utterance.speakerUserId
+      && utterance.speakerUserId === options.viewerUserId,
+    ),
+    isInterim: options.isInterim,
+  }
 }
 
 type PersistedFeedbackDraft = {
@@ -1302,6 +1304,7 @@ interface LivePhoneDemoProps {
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
   translationModelLabel: string
+  ttsModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
   adBannerPositionBottomLabel: string
@@ -1390,16 +1393,9 @@ export function buildLatestUtterancePayload(
   defaultDisplayLanguage: string | null | undefined,
   languageOrder: readonly string[],
 ): LatestUtterancePayload | null {
-  const originalDisplayLanguage = resolveOriginalDisplayLanguage(
-    utterance.originalLang,
-    [
-      ...(utterance.targetLanguages || []),
-      ...Object.keys(utterance.translations || {}),
-      ...Object.keys(utterance.translationFinalized || {}),
-    ],
-    languageOrder,
-  )
-  const targetLanguages = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
+  const resolver = createDisplayLanguageResolver(utterance, languageOrder)
+  const originalDisplayLanguage = resolver.originalLanguage
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver)
   const displayLanguage = resolveInitialDisplayLanguage(
     preferredDisplayLanguages?.length
       ? preferredDisplayLanguages
@@ -1408,12 +1404,13 @@ export function buildLatestUtterancePayload(
     originalDisplayLanguage,
     targetLanguages,
     languageOrder,
+    resolver,
   )
-  const isOriginalLanguageSelected = displayLanguage.trim().toLowerCase()
-    === originalDisplayLanguage.trim().toLowerCase()
+  const originalText = resolveOriginalDisplayText(utterance)
+  const isOriginalLanguageSelected = resolver.keyOf(displayLanguage) === resolver.originalKey
   const preview = (isOriginalLanguageSelected
-    ? utterance.originalText
-    : findLanguageRecordValue(utterance.translations, displayLanguage) || utterance.originalText
+    ? originalText
+    : findDisplayTranslation(utterance, displayLanguage, resolver).text || originalText
   ).trim()
   if (!preview) return null
 
@@ -1769,6 +1766,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   endpointTuningShortLabel,
   endpointTuningLongLabel,
   translationModelLabel,
+  ttsModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
   adBannerPositionBottomLabel,
@@ -1970,6 +1968,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
+  const [ttsModelMenuOpen, setTtsModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(
     initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
@@ -1988,6 +1987,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  )
+  // null = never picked; the settings row shows the effective default instead.
+  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
+    initialCachedAccountPreferences?.ttsModel ?? null,
   )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -2129,6 +2132,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const ttsModelDropdownRef = useRef<HTMLDivElement | null>(null)
+  const ttsModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
@@ -2167,9 +2172,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
+  const [ttsModelUserSelectedSinceHydrationStart, setTtsModelUserSelectedSinceHydrationStart] = useState(false)
   const initialAccountHydrationWithoutCacheRef = useRef(false)
   const accountPreferencesHydratedFromServerRef = useRef(false)
   const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
+  const ttsModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2177,6 +2184,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
+  const ttsModelListboxId = useId()
   const bubbleDisplayModeListboxId = useId()
   const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
@@ -2203,6 +2211,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    ttsModel: initialCachedAccountPreferences?.ttsModel ?? null,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2218,13 +2227,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel,
+    ttsModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
     bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel, ttsModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2236,6 +2246,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
+  )
+  // What the server will actually use: the explicit choice, else the default.
+  const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
+  const selectedTtsModelOption = useMemo(
+    () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
+    [effectiveTtsModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
@@ -2250,6 +2266,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAccountPreferencesSync,
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
+  ])
+  // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
+  // a model. Undefined -> server default (gemini-3.8-flash-tts).
+  const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
+    return resolveRequestTtsModel(ttsModel, {
+      allowSync: enableAccountPreferencesSync,
+      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
+      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
+      userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
+    })
+  }, [
+    accountPreferencesRequestedHydrationGeneration,
+    accountPreferencesSuccessfulHydrationGeneration,
+    enableAccountPreferencesSync,
+    ttsModel,
+    ttsModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
@@ -2286,6 +2318,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
+    setTtsModel(preferences.ttsModel ?? null)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -2772,10 +2805,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialAccountHydrationWithoutCacheRef.current = false
       accountPreferencesHydratedFromServerRef.current = false
       translationModelUserSelectedSinceHydrationStartRef.current = false
+      ttsModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
       setTranslationModelUserSelectedSinceHydrationStart(false)
+      setTtsModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -2790,8 +2825,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
     accountPreferencesHydratedFromServerRef.current = false
     translationModelUserSelectedSinceHydrationStartRef.current = false
+    ttsModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
+    setTtsModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -2822,6 +2859,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
           preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
+          preserveLocalTtsModel: ttsModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
@@ -2914,6 +2952,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
               || accountPreferencesHydratedFromServerRef.current
               || translationModelUserSelectedSinceHydrationStartRef.current,
+            includeTtsModel: !initialAccountHydrationWithoutCacheRef.current
+              || accountPreferencesHydratedFromServerRef.current
+              || ttsModelUserSelectedSinceHydrationStartRef.current,
           })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
@@ -3109,6 +3150,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
+    setTtsModelMenuOpen(false)
     setBubbleDisplayModeMenuOpen(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
     setMenuScreenDirection(nextDirection)
@@ -3270,6 +3312,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
+    if (ttsModelMenuOpen) {
+      setTtsModelMenuOpen(false)
+      return false
+    }
+
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return false
@@ -3290,7 +3337,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     return true
-  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
 
   const requestCloseTopmostOverlay = useCallback(() => (
     !handleMenuSurfaceRequestClose()
@@ -3401,6 +3448,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       accountPreferencesPendingSyncRef.current = true
     }
     setTranslationModel(nextTranslationModel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+
+  // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
+  // Any tap is an explicit choice, including the option shown as the default:
+  // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
+  const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
+    setTtsModelMenuOpen(false)
+    setTtsModelUserSelectedSinceHydrationStart(true)
+    ttsModelUserSelectedSinceHydrationStartRef.current = true
+    const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      ttsModel: nextTtsModel,
+    })
+    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
+      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
+      accountPreferencesPendingSyncRef.current = true
+    }
+    setTtsModel(nextTtsModel)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
@@ -3670,6 +3738,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
+      if (ttsModelMenuOpen) {
+        setTtsModelMenuOpen(false)
+        try {
+          ttsModelButtonRef.current?.focus({ preventScroll: true })
+        } catch {
+          ttsModelButtonRef.current?.focus()
+        }
+        return
+      }
       if (bubbleDisplayModeMenuOpen) {
         setBubbleDisplayModeMenuOpen(false)
         try {
@@ -3686,7 +3763,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -3726,6 +3803,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!ttsModelMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      if (ttsModelDropdownRef.current?.contains(event.target)) return
+      setTtsModelMenuOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [ttsModelMenuOpen])
 
   useEffect(() => {
     if (!bubbleDisplayModeMenuOpen) return
@@ -3813,6 +3905,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
+    if (ttsModelMenuOpen) {
+      setTtsModelMenuOpen(false)
+      return true
+    }
+
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return true
@@ -3852,6 +3949,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     requestMenuBackStep,
     textSizeMenuOpen,
     translationModelMenuOpen,
+    ttsModelMenuOpen,
     bubbleDisplayModeMenuOpen,
   ])
 
@@ -4277,6 +4375,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
+          // Same model as auto TTS; omitted while the user has not picked one (server default).
+          ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
       if (!response.ok) return null
@@ -4288,7 +4388,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate, resolveConversationSessionKey])
+  }, [nativeAppUpdate, requestTtsModel, resolveConversationSessionKey])
 
   const {
     utterances,
@@ -4339,6 +4439,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    ttsModel: requestTtsModel,
     viewerUserId,
     viewerImage,
   })
@@ -5288,7 +5389,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     switchLiveRoomToastLabel,
   ])
 
-  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean }) => {
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean, forceNativeStop?: boolean, stopSource?: SttStopSource }) => {
     if (!isSttSessionRunning && options?.forceNativeStop !== true) return
     if (options?.deferRunningStateChange !== true) {
       onSttSessionRunningChange?.(false)
@@ -5296,6 +5397,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     await stopRecording({
       discardPendingFinalization: options?.discardPendingFinalization,
       forceNativeStop: options?.forceNativeStop,
+      stopSource: options?.stopSource,
     })
     if (options?.deferRunningStateChange === true) {
       onSttSessionRunningChange?.(false)
@@ -5303,14 +5405,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
-  const performMicAction = useCallback(() => {
+  const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
     if (isSttSessionRunning || shouldStopConnectingSession) {
       // A missed native `ready` event can leave the hook in connecting while
       // the native recorder is already active. Keep the control recoverable by
       // allowing the user to cancel that session instead of disabling it.
-      void handleStopRecording({ forceNativeStop: !isSttSessionRunning })
+      void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
     void handleStartRecording()
@@ -5322,7 +5424,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       suppressMicClickUntilRef.current = 0
       return
     }
-    performMicAction()
+    performMicAction('mic_click')
   }, [performMicAction])
 
   const handleMicPointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -5333,7 +5435,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // pointer sequence even though pointerdown prevented focus movement.
     // Activate on pointerup and suppress only that duplicate click.
     suppressMicClickUntilRef.current = Date.now() + 500
-    performMicAction()
+    performMicAction('mic_pointerup')
   }, [performMicAction])
 
   const handleMicPointerCancel = useCallback(() => {
@@ -6040,39 +6142,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     messages: displayUtterances
       .filter((utterance) => utterance.originalText.trim())
       .slice(-4)
-      .map((utterance) => {
-        const originalLanguage = resolveNativePipOriginalLanguage(
-          utterance,
-          normalizedDisplayLanguageOptions,
-        )
-        const targetLanguages = resolveNativePipTargetLanguages(utterance, originalLanguage)
-        const displayLanguage = resolveNativePipDisplayLanguage(
-          utterance,
-          resolvedDefaultDisplayLanguage,
-          originalLanguage,
-          targetLanguages,
-        )
-
-        return {
-          id: utterance.id,
-          text: resolveNativePipMessageText(
-            utterance,
-            bubbleDisplayMode,
-            resolvedDefaultDisplayLanguage,
-            normalizedDisplayLanguageOptions,
-          ),
-          originalText: utterance.originalText.trim(),
-          originalLanguage,
-          displayLanguage,
-          translations: resolveNativePipTranslations(utterance, targetLanguages),
-          isOwn: Boolean(
-            viewerUserId
-            && utterance.speakerUserId
-            && utterance.speakerUserId === viewerUserId,
-          ),
-          isInterim: draftUtteranceIds.has(utterance.id),
-        }
-      }),
+      .map((utterance) => buildNativePipMessage(utterance, {
+        displayMode: bubbleDisplayMode,
+        defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
+        roomLanguageOrder: normalizedDisplayLanguageOptions,
+        viewerUserId,
+        isInterim: draftUtteranceIds.has(utterance.id),
+      })),
     }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
 
   nativePipStateRef.current = nativePipState
@@ -6815,6 +6891,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTranslationModelMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
                                       setTextSizeMenuOpen((open) => !open)
                                     }}
@@ -7113,6 +7190,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setTranslationModelMenuOpen((open) => !open)
                                     }}
                                     aria-label={translationModelLabel}
@@ -7211,6 +7289,110 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{ttsModelLabel}</span>
+                                <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
+                                  <button
+                                    ref={ttsModelButtonRef}
+                                    type="button"
+                                    onClick={() => {
+                                      setTextSizeMenuOpen(false)
+                                      setTranslationModelMenuOpen(false)
+                                      setBubbleDisplayModeMenuOpen(false)
+                                      setTtsModelMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={ttsModelLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={ttsModelMenuOpen}
+                                    aria-controls={ttsModelListboxId}
+                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                  >
+                                    <div className="min-w-0 flex-1 text-center">
+                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                        {selectedTtsModelOption.label}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                        ttsModelMenuOpen
+                                          ? 'bg-transparent text-amber-700'
+                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
+                                      }`}
+                                    >
+                                      <ChevronDown
+                                        size={16}
+                                        strokeWidth={2.3}
+                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          ttsModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {ttsModelMenuOpen && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      >
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div
+                                            id={ttsModelListboxId}
+                                            role="listbox"
+                                            aria-label={ttsModelLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {TTS_MODEL_OPTIONS.map((option) => {
+                                              const isSelected = option.value === effectiveTtsModel
+
+                                              return (
+                                                <button
+                                                  key={option.value}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleTtsModelSelect(option.value)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                    isSelected
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                  }`}
+                                                >
+                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                    <span className="truncate text-[0.94rem] font-semibold">
+                                                      {option.label}
+                                                    </span>
+                                                  </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="block">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-1.5 font-semibold">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
@@ -7220,6 +7402,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setTranslationModelMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen((open) => !open)
                                     }}
                                     aria-label={bubbleDisplayCopy.displayModeLabel}
@@ -8453,13 +8636,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     >
                       {showRipple && (
                         <span
-                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          className="pointer-events-none absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
                           style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
                         />
                       )}
 
                       {isReady && (
-                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                        <span className="pointer-events-none absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
                       )}
 
                       <span
@@ -8627,9 +8810,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
                       }}
                     >
+                      {/* The ripple/ping layers scale up to 2x past the button and sit above the
+                          neighbouring photo button, so they must never receive touches: a tap on
+                          the photo icon would otherwise land here and stop STT on pointer-up. */}
                       {showRipple && (
                         <span
-                          className="absolute inset-0 bg-red-400 transition-transform duration-150"
+                          className="pointer-events-none absolute inset-0 bg-red-400 transition-transform duration-150"
                           style={{
                             transform: `scale(${rippleScale})`,
                             opacity: 0.25,
@@ -8640,7 +8826,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {isReady && (
                         <span
-                          className="absolute inset-0 bg-red-500 opacity-20 animate-ping"
+                          className="pointer-events-none absolute inset-0 bg-red-500 opacity-20 animate-ping"
                           style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
                         />
                       )}

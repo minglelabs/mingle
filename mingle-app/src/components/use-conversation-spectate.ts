@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import type { PublicSpectateInviter } from '@/lib/conversation-share-public-payload'
 import type { Utterance } from '@/components/LivePhoneDemo/ChatBubble'
+import { canonicalizeUtteranceLanguages } from '@/components/LivePhoneDemo/conversation-live'
 
 export type ConversationSpectateState = {
   roomTitle: string
@@ -40,14 +41,18 @@ function toInviter(raw: unknown): PublicSpectateInviter | null {
   }
 }
 
-function toUtterance(raw: Record<string, unknown>): Utterance | null {
+export function toUtterance(raw: Record<string, unknown>): Utterance | null {
   const id = typeof raw.id === 'string' ? raw.id : null
   const originalText = typeof raw.originalText === 'string' ? raw.originalText : null
   if (!id || !originalText) return null
+  const originalDisplayText = typeof raw.originalDisplayText === 'string' && raw.originalDisplayText.trim()
+    && raw.originalDisplayText !== originalText ? raw.originalDisplayText : undefined
 
-  return {
+  // Share snapshots can hold legacy rows keyed with a bare `zh`.
+  return canonicalizeUtteranceLanguages({
     id,
     originalText,
+    ...(originalDisplayText ? { originalDisplayText } : {}),
     originalLang: typeof raw.originalLang === 'string' ? raw.originalLang : 'unknown',
     translations: typeof raw.translations === 'object' && raw.translations !== null
       ? raw.translations as Record<string, string>
@@ -69,7 +74,7 @@ function toUtterance(raw: Record<string, unknown>): Utterance | null {
     // branch simply never fires here.
     speakerUserId: typeof raw.speakerAlias === 'string' ? raw.speakerAlias : null,
     speakerImage: typeof raw.speakerImage === 'string' ? raw.speakerImage : null,
-  }
+  })
 }
 
 // A share link is a fixed snapshot (messages up to the share's sharedAt

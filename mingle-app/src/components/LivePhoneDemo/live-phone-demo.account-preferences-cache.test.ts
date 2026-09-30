@@ -35,6 +35,7 @@ function buildPreferences(): LivePhoneDemoAccountPreferences {
     sonioxEndpointMaxDelayMs: 2_500,
     sonioxEndpointTuningStep: 4,
     translationModel: 'qwen/qwen3.5-9b',
+    ttsModel: 'inworld-tts-1.5-mini',
     adBannerPosition: 'bottom',
     inputMode: 'text',
     speakerEnabled: false,
@@ -207,6 +208,79 @@ describe('account preferences client cache', () => {
       pendingSync: true,
       preferences: { translationModel: 'gemma-4-31b-it' },
     })
+  })
+
+  it('takes the server TTS model on a new account hydration unless the user picked one', () => {
+    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const }
+    edit(local, { ...local, textSizeLevel: 3 })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: true,
+      preserveLocalTtsModel: false,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { textSizeLevel: 3, ttsModel: 'gemini-3.8-flash-tts', translationModel: 'qwen/qwen3.5-9b' },
+    })
+  })
+
+  it('preserves a TTS model explicitly chosen during a new account hydration', () => {
+    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const, translationModel: 'gpt-6-luna' as const }
+    edit(local, { ...local, ttsModel: 'gemini-3.8-flash-lite-tts' })
+
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTranslationModel: false,
+      preserveLocalTtsModel: true,
+    })).toMatchObject({
+      pendingSync: true,
+      preferences: { ttsModel: 'gemini-3.8-flash-lite-tts', translationModel: 'gpt-6-luna' },
+    })
+  })
+
+  it('keeps a never-picked (null) TTS model null through the cache and a reload', async () => {
+    const original = { ...buildPreferences(), ttsModel: null }
+    preferencesModule.writeCachedAccountPreferences(identity, original)
+    edit(original, { ...original, speakerEnabled: true })
+    expect(snapshot()).toMatchObject({ pendingSync: true, preferences: { speakerEnabled: true, ttsModel: null } })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await flush(send)
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ speakerEnabled: true, ttsModel: null }))
+    vi.resetModules()
+    const reloaded = await import('./live-phone-demo.account-preferences')
+    expect(reloaded.readCachedAccountPreferencesSnapshot(identity, false)?.preferences.ttsModel).toBeNull()
+  })
+
+  it('treats picking the displayed default from null as an edit and retries it until it syncs', async () => {
+    const original = { ...buildPreferences(), ttsModel: null }
+    preferencesModule.writeCachedAccountPreferences(identity, original)
+    edit(original, { ...original, ttsModel: 'gemini-3.8-flash-tts' })
+    expect(snapshot()).toMatchObject({ pendingSync: true, preferences: { ttsModel: 'gemini-3.8-flash-tts' } })
+
+    const send = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined)
+    await expect(flush(send)).rejects.toThrow('offline')
+    vi.resetModules()
+    const reloaded = await import('./live-phone-demo.account-preferences')
+    expect(reloaded.readCachedAccountPreferencesSnapshot(identity, false)).toMatchObject({
+      pendingSync: true,
+      preferences: { ttsModel: 'gemini-3.8-flash-tts' },
+    })
+    await reloaded.flushCachedAccountPreferences({ identity, isLegacyNamespace: false, send })
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ ttsModel: 'gemini-3.8-flash-tts' }))
+    expect(reloaded.buildAccountPreferencesPatchBody(send.mock.lastCall![0], { includeTtsModel: true }).ttsModel)
+      .toBe('gemini-3.8-flash-tts')
+    expect(reloaded.readCachedAccountPreferencesSnapshot(identity, false)?.pendingSync).toBe(false)
+  })
+
+  it('takes a null server TTS model on a new account hydration unless the user picked one', () => {
+    const local = { ...buildPreferences(), ttsModel: null }
+    edit(local, { ...local, textSizeLevel: 3 })
+    expect(preferencesModule.reconcileAccountPreferencesHydration({
+      identity, preferences: { ...local, ttsModel: null }, startedSavedAt: null, isLegacyNamespace: false,
+      preserveLocalTtsModel: false,
+    }).preferences.ttsModel).toBeNull()
   })
 
   it('does not share an active writer across accounts', async () => {

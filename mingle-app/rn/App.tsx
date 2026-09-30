@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   AppState,
   BackHandler,
@@ -78,11 +79,20 @@ import {
   readPreferredRuntimeValue,
 } from './src/runtimeConfig';
 import {
+  canUseWebHostFallbackForLoadFailure,
+  isWebViewPageLoadFailureHttpStatus,
   normalizeHttpBaseUrl,
   normalizeWsUrl,
   resolveDistinctFallbackTarget,
   shouldFallbackHttpStatus,
+  shouldTryFallbackVersionPolicy,
 } from './src/fallbackTargets';
+import { isOfflineWebViewLoadError, resolveWebViewRetryUrl } from './src/webViewLoadErrors';
+import {
+  WEBVIEW_RETRY_STALL_TIMEOUT_MS,
+  createWebViewLoadAttemptTracker,
+  type WebViewLoadAttemptTracker,
+} from './src/webViewLoadAttempt';
 import {
   extractAndroidIntentBrowserFallbackUrl,
   shouldOpenNativeExternalUrl,
@@ -122,7 +132,7 @@ import {
 } from './src/conversationShareLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
-type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
+type WebViewLoadErrorEvent = { nativeEvent: { description?: string; code?: number; domain?: string } };
 type WebViewHttpStatusEvent = { nativeEvent: { statusCode: number } };
 type NativeRuntimeConfig = {
   webAppBaseUrl?: string;
@@ -1455,6 +1465,16 @@ export function NativeAdBanner(props: {
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  // Becomes true once the startup load has either shown a page or surfaced an
+  // error, after which the startup splash never comes back.
+  const initialLoadSettledRef = useRef(false);
+  // Tracks the in-flight load attempt: whether it already hit an error, and
+  // whether ANY attempt so far really succeeded (which ends host-fallback
+  // eligibility). A finished load is only committed as a success once no
+  // error can follow it anymore, because Android emits onLoadEnd BEFORE
+  // onError for a failed load — see src/webViewLoadAttempt.ts. Created below,
+  // once the overlay state setters it clears on success exist.
+  const loadAttemptTrackerRef = useRef<WebViewLoadAttemptTracker | null>(null);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
   const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
@@ -1462,7 +1482,31 @@ function AppInner(): React.JSX.Element {
   );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
-  const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
+  // Static build/config problem (e.g. missing env vars) — never cleared by a
+  // WebView retry, since retrying can't fix a misconfigured build. Kept as a
+  // raw technical message; this only ever fires on a broken dev/CI build.
+  const [configError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
+  // Actual WebView load failure (network/server/etc). Rendered as a single
+  // friendly overlay; `isOfflineLoadError` only swaps which copy is shown.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOfflineLoadError, setIsOfflineLoadError] = useState(false);
+  // True from the moment "다시 시도" is pressed (or the app switches to the
+  // fallback host) until that attempt either succeeds or hits a fresh error.
+  // Keeps the overlay up (showing a neutral loading state instead of the error
+  // copy) so the newly-remounted, still-blank WebView is never exposed
+  // underneath.
+  const [isRetryingLoad, setIsRetryingLoad] = useState(false);
+  if (!loadAttemptTrackerRef.current) {
+    loadAttemptTrackerRef.current = createWebViewLoadAttemptTracker({
+      onSuccess: () => {
+        setLoadError(null);
+        setIsOfflineLoadError(false);
+        setIsRetryingLoad(false);
+      },
+    });
+  }
+  const loadAttemptTracker = loadAttemptTrackerRef.current;
+  useEffect(() => () => loadAttemptTracker.dispose(), [loadAttemptTracker]);
   const [versionGate, setVersionGate] = useState<VersionGateState>(() => (
     (Platform.OS === 'ios' || Platform.OS === 'android') && WEB_APP_BASE_URL && !REQUIRED_CONFIG_ERROR
       ? { status: 'checking' }
@@ -1576,6 +1620,27 @@ function AppInner(): React.JSX.Element {
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
+  // Every remount (retry, fallback switch, debug remount) is a brand-new load
+  // attempt, and it is the only thing that clears a previous failure: until
+  // then the error overlay covers the WebView anyway. A layout effect runs
+  // after the old WebView's trailing onLoadEnd and before the new native
+  // WebView can deliver any event.
+  useLayoutEffect(() => {
+    if (webViewMountToken > 0) loadAttemptTracker.beginAttempt();
+  }, [loadAttemptTracker, webViewMountToken]);
+  // Never leave the "reconnecting" spinner up forever when a retried or
+  // fallback load reports neither success nor failure: fall back to the error
+  // overlay so the retry button is reachable again. Restarts on every remount,
+  // so a fallback switch during a retry gets its own full window.
+  useEffect(() => {
+    if (!isRetryingLoad) return;
+    const stallTimer = setTimeout(() => {
+      setIsRetryingLoad(false);
+      setLoadError((current) => current ?? 'webview_load_stalled');
+    }, WEBVIEW_RETRY_STALL_TIMEOUT_MS);
+    return () => clearTimeout(stallTimer);
+  }, [isRetryingLoad, webViewMountToken]);
+  const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
   const webFallbackActivatedRef = useRef(false);
   const activateWebFallback = useCallback((): boolean => {
     if (
@@ -1590,6 +1655,18 @@ function AppInner(): React.JSX.Element {
     webFallbackActivatedRef.current = true;
     isPageReadyRef.current = false;
     setLoadError(null);
+    setIsOfflineLoadError(false);
+    // Until the startup load has settled, the fallback's onLoadStart brings
+    // the startup splash back over the remounting WebView. After that (on a
+    // retry, or on Android where the premature onLoadEnd of the failed load
+    // already settled it) the splash is gone for good, so keep the neutral
+    // loading overlay up instead until the fallback page really loads (the
+    // load-attempt tracker clears it) or fails.
+    setIsRetryingLoad(initialLoadSettledRef.current);
+    // A retry may have pinned the remount URL to the primary host; drop it in
+    // the same render so the new WebView starts on the fallback host instead
+    // of briefly loading the dead primary again.
+    setDebugRemountWebUrl('');
     setActiveWebAppBaseUrl(FALLBACK_WEB_APP_BASE_URL);
     setWebViewMountToken((current) => current + 1);
     return true;
@@ -1618,7 +1695,6 @@ function AppInner(): React.JSX.Element {
       clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
     });
   }, [activeWebAppBaseUrl, defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
-  const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
   const initialConversationRestorePayloadRef = useRef<NativeConversationRestorePayload | null>(
     readNativeConversationRestorePayload(NATIVE_RUNTIME_CONFIG),
   );
@@ -2227,7 +2303,6 @@ function AppInner(): React.JSX.Element {
   }, [webUrl]);
   const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
-  const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
@@ -2560,12 +2635,11 @@ function AppInner(): React.JSX.Element {
     };
 
     const shouldTryFallbackPolicy = (error: unknown): boolean => {
-      if (!FALLBACK_WEB_APP_BASE_URL) return false;
       const status = (error as { status?: unknown })?.status;
-      if (typeof status === 'number') {
-        return shouldFallbackHttpStatus(status);
-      }
-      return true;
+      return shouldTryFallbackVersionPolicy(
+        !!FALLBACK_WEB_APP_BASE_URL,
+        typeof status === 'number' ? status : undefined,
+      );
     };
 
     void (async () => {
@@ -3925,8 +3999,27 @@ function AppInner(): React.JSX.Element {
       : '';
     isPageReadyRef.current = false;
     setLoadError(null);
+    setIsOfflineLoadError(false);
     setIsNativeMenuOverlayOpen(false);
     setDebugRemountWebUrl(preservedUrl || lastWebViewUrlRef.current || webUrl || baseWebUrl);
+    setWebViewMountToken((current) => current + 1);
+  }, [baseWebUrl, webUrl]);
+
+  const handleRetryLoad = useCallback(() => {
+    isPageReadyRef.current = false;
+    // Deliberately do NOT clear loadError/isOfflineLoadError here. A brand
+    // new WebView is about to mount with nothing painted yet, so hiding the
+    // overlay now would expose a blank white gap until it finishes loading.
+    // isRetryingLoad swaps the overlay to a neutral loading state instead;
+    // the load-attempt tracker clears everything once this attempt actually
+    // succeeds (see src/webViewLoadAttempt.ts), and a fresh error just
+    // replaces the copy.
+    setIsRetryingLoad(true);
+    // Remount at the page the user was on (e.g. the open conversation room),
+    // not the initial conversation-list URL — otherwise retrying after a
+    // killed render process drops the user out of their room.
+    const retryUrl = resolveWebViewRetryUrl([lastWebViewUrlRef.current, webUrl, baseWebUrl]);
+    if (retryUrl) setDebugRemountWebUrl(retryUrl);
     setWebViewMountToken((current) => current + 1);
   }, [baseWebUrl, webUrl]);
 
@@ -4531,6 +4624,10 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
+    // Not a new attempt: on Android onLoadStart only arrives once a navigation
+    // commits, which for an HTTP error page is AFTER onHttpError. It only
+    // confirms that the previous onLoadEnd was not followed by an error.
+    loadAttemptTracker.loadStarted();
     // A fresh navigation starting means whatever page the last onLoadEnd
     // just settled on is about to be replaced — cancel any flush that was
     // waiting out its quiet period against that soon-to-be-gone page so it
@@ -4544,7 +4641,7 @@ function AppInner(): React.JSX.Element {
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
-  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, loadAttemptTracker, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const replayNativeSttStatusToWeb = useCallback((nextUrl: string) => {
     const roomPayload = resolveConversationRestorePayloadFromUrl(nextUrl);
@@ -4596,11 +4693,23 @@ function AppInner(): React.JSX.Element {
   }, [emitToWeb]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
+    // react-native-webview still delivers onLoadEnd for a failed load: on iOS
+    // right after onError/onHttpError; on Android once more right after
+    // onError, and after an HTTP error page has committed. Once this attempt
+    // has failed, treating it as a loaded page would mark the error page
+    // ready, flush queued native events into it, and hide the startup splash
+    // while the fallback host is still loading.
+    if (loadAttemptTracker.hasFailed()) return;
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
+    // onLoadEnd is NOT proof of success: on Android it fires BEFORE onError
+    // for a failed load. The tracker only commits success (clearing the
+    // overlay and ending host-fallback eligibility) once a short settle window
+    // passes, or the next load event arrives, with no error for this attempt.
+    loadAttemptTracker.loadFinished();
     const nextUrl = event?.nativeEvent?.url || webUrl;
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
@@ -4678,29 +4787,105 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
-    if (!initialLoadSettledRef.current && activateWebFallback()) return;
+    // Record the failure before anything else, including the fallback switch
+    // below: react-native-webview calls onLoadEnd right after this handler,
+    // and that call must not be mistaken for a successful load. On Android
+    // the premature onLoadEnd that preceded this error also marked the page
+    // ready; nothing usable is loaded, so take that back.
+    loadAttemptTracker.loadFailed();
+    isPageReadyRef.current = false;
+    const isOffline = isOfflineWebViewLoadError(event.nativeEvent);
+    // A device that is itself offline can never be fixed by switching which
+    // backend host we point at, so don't burn the one-shot fallback on it —
+    // doing so used to permanently pin the WebView to the legacy fallback
+    // host for the rest of the app's life the moment a cold launch raced a
+    // dead network, breaking every retry after reconnecting. Timeouts / DNS
+    // failures are NOT classified as offline (they can mean only the primary
+    // host is down), so they still fall back.
+    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
+      initialLoadSettled: initialLoadSettledRef.current,
+      hasLoadedPage: loadAttemptTracker.hasLoadedPage(),
+    });
+    if (!isOffline && mayUseHostFallback && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
     const description = event.nativeEvent.description || 'webview_load_failed';
+    setIsRetryingLoad(false);
+    setIsOfflineLoadError(isOffline);
     setLoadError(formatWebViewLoadError(description, webUrl));
-  }, [activateWebFallback, webUrl]);
+  }, [activateWebFallback, loadAttemptTracker, webUrl]);
 
   const handleHttpError = useCallback((event: WebViewHttpStatusEvent) => {
-    if (
-      shouldFallbackHttpStatus(event.nativeEvent.statusCode)
-      && !initialLoadSettledRef.current
-      && !isPageReadyRef.current
-      && activateWebFallback()
-    ) {
-      return;
+    const statusCode = event.nativeEvent.statusCode;
+    // Both native sides only report the main document here (Android
+    // request.isForMainFrame(), iOS navigationResponse.forMainFrame), never a
+    // sub-resource, so any 4xx/5xx is a failed page load — including a later
+    // navigation on Android, whose onLoadStart only arrives after this.
+    if (!isWebViewPageLoadFailureHttpStatus(statusCode)) return;
+    // The bad response still "finishes loading" afterwards (onLoadEnd), so
+    // record the failure first — also before a fallback switch — so that
+    // onLoadEnd is not mistaken for a successful load.
+    loadAttemptTracker.loadFailed();
+    isPageReadyRef.current = false;
+
+    // Switching hosting domains only ever makes sense for a genuine 5xx
+    // (shouldFallbackHttpStatus) — a stray 404 doesn't mean the primary host
+    // itself is broken.
+    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
+      initialLoadSettled: initialLoadSettledRef.current,
+      hasLoadedPage: loadAttemptTracker.hasLoadedPage(),
+    });
+    if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;
+
+    if (!initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
     }
-  }, [activateWebFallback]);
+    // The host (or something intercepting the request — a captive portal, a
+    // stale DNS entry right after reconnecting, Railway's own outage page,
+    // etc.) responded, just not with our page. WebView treats any completed
+    // response as a successful load, so without this that raw response would
+    // render inside the app untouched. Cover it with the same friendly
+    // overlay as a true connection failure.
+    setIsRetryingLoad(false);
+    setIsOfflineLoadError(false);
+    setLoadError(`http_${statusCode}`);
+  }, [activateWebFallback, loadAttemptTracker]);
+
+  // The WebView's underlying render process can be killed by the OS (mostly
+  // under memory pressure) without going through onError/onHttpError at all
+  // — left unhandled, the screen just freezes on whatever was last on
+  // screen. Cover it with the same overlay as any other load failure; the
+  // retry button already remounts the WebView from scratch.
+  const handleRenderProcessGone = useCallback(() => {
+    isPageReadyRef.current = false;
+    if (!initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
+    }
+    loadAttemptTracker.loadFailed();
+    setIsRetryingLoad(false);
+    setIsOfflineLoadError(false);
+    setLoadError('webview_render_process_gone');
+  }, [loadAttemptTracker]);
+
+  const handleContentProcessDidTerminate = useCallback(() => {
+    isPageReadyRef.current = false;
+    if (!initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
+    }
+    loadAttemptTracker.loadFailed();
+    setIsRetryingLoad(false);
+    setIsOfflineLoadError(false);
+    setLoadError('webview_content_process_terminated');
+  }, [loadAttemptTracker]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     rememberCurrentWebUrl(navigationState.url);
@@ -4783,6 +4968,8 @@ function AppInner(): React.JSX.Element {
             onLoadEnd={handleLoadEnd}
             onError={handleLoadError}
             onHttpError={handleHttpError}
+            onRenderProcessGone={handleRenderProcessGone}
+            onContentProcessDidTerminate={handleContentProcessDidTerminate}
             onNavigationStateChange={handleNavigationStateChange}
             style={[styles.webView, { backgroundColor: safeAreaPalette.webViewColor }]}
           />
@@ -4811,10 +4998,42 @@ function AppInner(): React.JSX.Element {
             </Pressable>
           </View>
         ) : null}
-        {versionGate.status !== 'force_update' && loadError ? (
+        {versionGate.status !== 'force_update' && configError ? (
           <View style={styles.errorOverlay}>
             <Text style={styles.errorTitle}>{versionPolicyFallback.webViewLoadFailedTitle}</Text>
-            <Text style={styles.errorDescription}>{loadError}</Text>
+            <Text style={styles.errorDescription}>{configError}</Text>
+          </View>
+        ) : null}
+        {versionGate.status !== 'force_update' && !configError && (loadError || isRetryingLoad) ? (
+          <View style={styles.loadErrorOverlay}>
+            {isRetryingLoad ? (
+              <>
+                <ActivityIndicator size="large" color="#f59e0b" style={styles.retryingIndicator} />
+                <Text style={styles.loadErrorMessage}>{versionPolicyFallback.retryingMessage}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.loadErrorTitle}>
+                  {isOfflineLoadError ? versionPolicyFallback.offlineTitle : versionPolicyFallback.genericErrorTitle}
+                </Text>
+                <Text style={styles.loadErrorMessage}>
+                  {isOfflineLoadError
+                    ? versionPolicyFallback.offlineMessage
+                    : versionPolicyFallback.genericErrorMessage}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={versionPolicyFallback.retryButtonLabel}
+                  onPress={handleRetryLoad}
+                  style={({ pressed }) => [
+                    styles.retryButton,
+                    pressed ? styles.retryButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.retryButtonText}>{versionPolicyFallback.retryButtonLabel}</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         ) : null}
       </View>
@@ -4964,6 +5183,44 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 12,
     lineHeight: 16,
+  },
+  loadErrorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: '#ffffff',
+  },
+  loadErrorTitle: {
+    color: '#111827',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  retryingIndicator: {
+    marginBottom: 12,
+  },
+  loadErrorMessage: {
+    color: '#6b7280',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  retryButtonPressed: {
+    opacity: 0.85,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   versionOverlay: {
     position: 'absolute',

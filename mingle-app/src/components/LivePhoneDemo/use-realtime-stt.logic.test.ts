@@ -21,6 +21,8 @@ import {
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   mergeServerHydrationUtteranceIntoStoreState,
+  mergeServerHydrationUtteranceWithRoomLanguages,
+  normalizeConversationHydrationUtterances,
   LOCAL_UTTERANCE_CACHE_LIMIT,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
@@ -605,7 +607,7 @@ describe('use-realtime-stt pure logic', () => {
     expect(parsed?.finalizeSource).toBe('server_idle_snapshot')
   })
 
-  it('promotes generic Chinese transcript language to zh-CN by default', () => {
+  it('resolves a generic Chinese transcript without room context by its script (Simplified -> zh-CN)', () => {
     const parsed = parseSttTranscriptMessage({
       type: 'transcript',
       data: {
@@ -673,7 +675,7 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
-  it('treats generic Chinese source as zh-CN so zh-CN target bubbles do not duplicate', () => {
+  it('resolves generic Chinese STT to zh-CN in a both-variant room from Simplified text, keeping zh-TW as a target', () => {
     const built = buildFinalizedUtterancePayload({
       speaker: 'speaker-2',
       rawText: '这是简体中文',
@@ -2339,7 +2341,7 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe(-1)
   })
 
-  it('keeps Chinese variants distinct while treating generic zh as zh-CN for recent matching', () => {
+  it('keeps Chinese variants distinct while resolving generic zh for recent matching', () => {
     const utterances = [
       {
         id: 'u-1',
@@ -2361,11 +2363,20 @@ describe('use-realtime-stt pure logic', () => {
       sourceLanguage: 'zh-TW',
     })).toBe(0)
 
+    // No room context and ambiguous text: the default variant.
     expect(findRecentMatchingUtteranceIndex({
       utterances,
       sourceText: '你好',
       sourceLanguage: 'zh',
     })).toBe(1)
+
+    // A Taiwan-only room decides a generic zh.
+    expect(findRecentMatchingUtteranceIndex({
+      utterances,
+      sourceText: '你好',
+      sourceLanguage: 'zh',
+      roomLanguages: ['ko', 'zh-TW'],
+    })).toBe(0)
   })
 
   it('accepts partial translation responses for the matching pending utterance only', () => {
@@ -2517,5 +2528,193 @@ describe('use-realtime-stt pure logic', () => {
       speakerAvatarSeed: 'otter',
       speakerAvatarIndex: 7,
     })
+  })
+})
+
+describe('Chinese variant resolution in the client pipeline', () => {
+  const soniox = (text: string) => ({
+    type: 'transcript',
+    data: { is_final: true, utterance: { text, language: 'zh', speaker: 'speaker-1' } },
+  })
+
+  it('resolves Soniox zh to zh-TW in a Taiwan-only room and never makes zh-TW a target', () => {
+    expect(parseSttTranscriptMessage(soniox('这是简体中文'), ['ko', 'zh-TW'])?.language).toBe('zh-TW')
+
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-1',
+      rawText: '这是简体中文',
+      rawLanguage: 'zh',
+      languages: ['ko', 'zh-TW'],
+      partialTranslations: { ko: '중국어입니다', 'zh-TW': '這是簡體中文' },
+      utteranceSerial: 1,
+      nowMs: 1700000000100,
+    })
+    expect(built?.utterance.originalLang).toBe('zh-TW')
+    expect(built?.utterance.targetLanguages).toEqual(['ko'])
+    expect(built?.utterance.translations).toEqual({ ko: '중국어입니다' })
+  })
+
+  it('resolves Simplified STT to zh-CN in a room with both variants', () => {
+    expect(parseSttTranscriptMessage(soniox('这是简体中文'), ['ko', 'zh-CN', 'zh-TW'])?.language).toBe('zh-CN')
+  })
+
+  it('lets the script of typed Traditional text decide the source variant', () => {
+    const store = createUtteranceStoreState([{
+      id: 'typed', originalText: '這是繁體中文', originalLang: 'unknown', targetLanguages: ['zh-CN', 'ko'], translations: {},
+    }])
+    const next = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'typed',
+      translations: { 'zh-CN': '这是繁体中文', ko: '번체 중국어입니다' },
+      priority: { kind: 'final', seq: 1 },
+      markFinalized: true,
+      detectedSourceLanguage: 'zh',
+      selectedLanguages: ['zh-CN', 'ko'],
+      sourceText: '這是繁體中文',
+      preferSourceScript: true,
+    })
+    const utterance = next.utterances[0]
+    expect(utterance.originalLang).toBe('zh-TW')
+    expect(utterance.targetLanguages).toEqual(['zh-CN', 'ko'])
+    expect(utterance.translations).toEqual({ 'zh-CN': '这是繁体中文', ko: '번체 중국어입니다' })
+  })
+
+  it('normalizes a detected generic zh once so reconcile, strip and filter agree', () => {
+    // Soniox said en, so both variants were targets; the server redetects zh.
+    const store = createUtteranceStoreState([{
+      id: 'u-zh', originalText: '这是简体中文', originalLang: 'en', targetLanguages: ['zh-CN', 'zh-TW'], translations: {},
+    }])
+    const next = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'u-zh',
+      translations: { 'zh-CN': '这是简体中文', 'zh-TW': '這是簡體中文' },
+      priority: { kind: 'final', seq: 1 },
+      markFinalized: true,
+      detectedSourceLanguage: 'zh',
+      selectedLanguages: ['en', 'zh-CN', 'zh-TW'],
+      sourceText: '这是简体中文',
+    })
+    const utterance = next.utterances[0]
+    expect(utterance.originalLang).toBe('zh-CN')
+    expect(utterance.targetLanguages).toEqual(['en', 'zh-TW'])
+    expect(utterance.translations).toEqual({ 'zh-TW': '這是簡體中文' })
+    expect(Object.keys(utterance.translationFinalized || {})).not.toContain('zh-CN')
+  })
+
+  it('keeps both variants when the server redetects the sibling of the local guess', () => {
+    const store = createUtteranceStoreState([{
+      id: 'u-tw', originalText: '你好', originalLang: 'zh-CN', targetLanguages: ['zh-TW', 'ko'], translations: {},
+    }])
+    const next = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'u-tw',
+      translations: { 'zh-CN': '你好', ko: '안녕' },
+      priority: { kind: 'final', seq: 1 },
+      markFinalized: true,
+      detectedSourceLanguage: 'zh-TW',
+      // The full room selection, not the utterance's own target snapshot.
+      selectedLanguages: ['zh-CN', 'zh-TW', 'ko'],
+      sourceText: '你好',
+    })
+    const utterance = next.utterances[0]
+    expect(utterance.originalLang).toBe('zh-TW')
+    expect(utterance.targetLanguages).toEqual(['zh-CN', 'ko'])
+    expect(utterance.translations).toEqual({ 'zh-CN': '你好', ko: '안녕' })
+  })
+
+  it('canonicalizes legacy zh keys on hydration without duplicate targets', () => {
+    const [taiwan, korean] = normalizeConversationHydrationUtterances([
+      {
+        id: 'legacy-a', originalText: '这是中文', originalLang: 'zh',
+        targetLanguages: ['zh-TW', 'ko', 'zh'], translations: { zh: '這是中文', ko: '중국어' },
+        translationFinalized: { zh: true, ko: true },
+      },
+      {
+        id: 'legacy-b', originalText: '안녕하세요', originalLang: 'ko',
+        targetLanguages: ['zh-CN', 'zh-TW', 'zh'], translations: { zh: '你们好', 'zh-TW': '你們好' },
+      },
+    ], ['ko', 'zh-TW'])
+    expect(taiwan.originalLang).toBe('zh-TW')
+    expect(taiwan.targetLanguages).toEqual(['zh-TW', 'ko'])
+    expect(taiwan.translations).toEqual({ 'zh-TW': '這是中文', ko: '중국어' })
+    expect(taiwan.translationFinalized).toEqual({ 'zh-TW': true, ko: true })
+
+    expect(korean.targetLanguages).toEqual(['zh-CN', 'zh-TW'])
+    expect(korean.translations).toEqual({ 'zh-TW': '你們好', 'zh-CN': '你们好' })
+    for (const utterance of [taiwan, korean]) {
+      expect([...(utterance.targetLanguages || []), ...Object.keys(utterance.translations), utterance.originalLang])
+        .not.toContain('zh')
+    }
+  })
+
+  it('merges a socket commit keyed zh into the local zh-CN translation as one key', () => {
+    const local = {
+      id: 'u-merge', originalText: '안녕하세요', originalLang: 'ko', targetLanguages: ['zh-CN'],
+      translations: { 'zh-CN': '你好' }, translationFinalized: { 'zh-CN': true }, createdAtMs: 1700000000000,
+    }
+    const server = normalizeConversationHydrationUtterances([{
+      id: 'u-merge', originalText: '안녕하세요', originalLang: 'ko', targetLanguages: ['zh-CN', 'zh'],
+      translations: { zh: '你好呀' }, translationFinalized: { zh: true }, createdAtMs: 1700000000500,
+    }])[0]
+    for (const next of [
+      mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([local]), server),
+      mergeServerHydrationUtteranceWithRoomLanguages(createUtteranceStoreState([local]), server, ['ko', 'zh-CN']),
+    ]) {
+      const utterance = next.utterances[0]
+      expect(utterance.targetLanguages).toEqual(['zh-CN'])
+      expect(utterance.translations).toEqual({ 'zh-CN': '你好呀' })
+      expect(Object.keys(utterance.translationFinalized || {})).toEqual(['zh-CN'])
+    }
+  })
+
+  it('applies sourceDisplayText as display-only text and ignores it once the text changed', () => {
+    const base = { id: 'u-display', originalLang: 'zh-TW', targetLanguages: ['ko'], translations: {} }
+    const apply = (originalText: string) => applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([{ ...base, originalText }]),
+      utteranceId: 'u-display',
+      translations: { ko: '중국어' },
+      priority: { kind: 'final', seq: 1 },
+      markFinalized: true,
+      detectedSourceLanguage: 'zh-TW',
+      selectedLanguages: ['zh-TW', 'ko'],
+      sourceDisplayText: '這是中文',
+      requestSourceText: '这是中文',
+    }).utterances[0]
+
+    const applied = apply('这是中文')
+    expect(applied.originalText).toBe('这是中文')
+    expect(applied.originalDisplayText).toBe('這是中文')
+    expect(apply('这是中文了').originalDisplayText).toBeUndefined()
+
+    // A later source replacement drops the stale rendering.
+    const replaced = replaceFinalizedUtteranceSourceInStoreState({
+      store: createUtteranceStoreState([applied]),
+      utteranceId: 'u-display',
+      sourceText: '这是新的中文',
+      sourceLanguage: 'zh-TW',
+      selectedLanguages: ['zh-TW', 'ko'],
+    }).utterances[0]
+    expect(replaced.originalDisplayText).toBeUndefined()
+  })
+
+  it('carries originalDisplayText through hydration only when it differs', () => {
+    const [withDisplay, same] = normalizeConversationHydrationUtterances([
+      { id: 'd-1', originalText: '这是中文', originalDisplayText: '這是中文', originalLang: 'zh-TW', translations: {} },
+      { id: 'd-2', originalText: '这是中文', originalDisplayText: '这是中文', originalLang: 'zh-CN', translations: {} },
+    ])
+    expect(withDisplay.originalDisplayText).toBe('這是中文')
+    expect(same).not.toHaveProperty('originalDisplayText')
+  })
+
+  it('shows a partial response display text only while the live text is unchanged', () => {
+    const pendingTurn = {
+      utteranceId: 'live', createdAtMs: 1, speaker: 's', speakerAvatarSeed: 'a', speakerAvatarIndex: 0, language: 'zh-TW',
+      originalDisplayText: { source: '这是中文', text: '這是中文' },
+    }
+    const live = (partialTranscript: string) => buildLiveUtterance({
+      pendingTurn, partialTranscript, partialTranslations: {}, languages: ['zh-TW', 'ko'],
+    })
+    expect(live('这是中文')?.originalDisplayText).toBe('這是中文')
+    expect(live('这是中文吧')).not.toHaveProperty('originalDisplayText')
   })
 })

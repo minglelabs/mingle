@@ -128,6 +128,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -161,6 +162,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -213,6 +215,7 @@ describe("/api/account/preferences route", () => {
       demoEndpointMaxDelayMs: 1800,
       demoEndpointTuningStep: 4,
       translationModel: "qwen/qwen3.5-9b",
+      ttsModel: "gemini-3.8-flash-tts",
       adBannerPosition: "bottom",
       demoInputMode: "text",
       demoSpeakerEnabled: true,
@@ -231,6 +234,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 1800,
       sonioxEndpointTuningStep: 4,
       translationModel: "qwen/qwen3.5-9b",
+      ttsModel: "gemini-3.8-flash-tts",
       adBannerPosition: "bottom",
       inputMode: "text",
       speakerEnabled: true,
@@ -248,6 +252,7 @@ describe("/api/account/preferences route", () => {
         demoEndpointMaxDelayMs: true,
         demoEndpointTuningStep: true,
         translationModel: true,
+        ttsModel: true,
         adBannerPosition: true,
         demoInputMode: true,
         demoSpeakerEnabled: true,
@@ -301,6 +306,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 1900,
       sonioxEndpointTuningStep: 1,
       translationModel: "qwen/qwen3.5-9b",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -350,6 +356,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
       translationModel: "gemini-2.5-flash-lite",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -496,6 +503,119 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists a supported TTS model through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    for (const ttsModel of ["gemini-3.8-flash-lite-tts", " Gemini-3.8-Flash-TTS ", "inworld-tts-1.5-mini"]) {
+      const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ ttsModel }),
+      }));
+      expect(response.status).toBe(200);
+    }
+    expect(mockUserUpdateMany.mock.calls.map((call) => call[0])).toEqual([
+      { where: { id: "user_123" }, data: { ttsModel: "gemini-3.8-flash-lite-tts" } },
+      { where: { id: "user_123" }, data: { ttsModel: "gemini-3.8-flash-tts" } },
+      { where: { id: "user_123" }, data: { ttsModel: "inworld-tts-1.5-mini" } },
+    ]);
+  });
+
+  it("ignores an invalid TTS model through PATCH the same way as an invalid translation model", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const invalidOnly = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ ttsModel: "gemini" }),
+    }));
+    expect(invalidOnly.status).toBe(400);
+    expect(await invalidOnly.json()).toEqual({ error: "no_valid_fields" });
+    expect(mockUserUpdateMany).not.toHaveBeenCalled();
+
+    const mixed = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ ttsModel: 42, translationModel: "gemma-4-31b-it" }),
+    }));
+    expect(mixed.status).toBe(200);
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: { translationModel: "gemma-4-31b-it" },
+    });
+  });
+
+  it("returns a null TTS model when the stored value is NULL so the client follows the server default", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue({
+      id: "user_123",
+      translationModel: "gemma-4-31b-it",
+      ttsModel: null,
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toHaveProperty("ttsModel", null);
+  });
+
+  it("leaves the stored TTS model untouched when a PATCH omits ttsModel", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    for (const body of [{ speakerEnabled: true }, { textSizeLevel: 4 }, { speakerEnabled: false, ttsModel: null }]) {
+      const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }));
+      expect(response.status).toBe(200);
+    }
+    for (const [call] of mockUserUpdateMany.mock.calls) {
+      expect(call.data).not.toHaveProperty("ttsModel");
+    }
+  });
+
+  it("returns a null TTS model when the stored value is invalid", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue({
+      id: "user_123",
+      translationModel: "gemma-4-31b-it",
+      ttsModel: "elevenlabs-v3",
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.ttsModel).toBeNull();
+    expect(json.translationModel).toBe("gemma-4-31b-it");
+  });
+
   it("persists a supported ad banner position through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
@@ -635,6 +755,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 2200,
       sonioxEndpointTuningStep: 0,
       translationModel: "qwen/qwen3.5-9b",
+      ttsModel: null,
       adBannerPosition: "top",
       inputMode: "text",
       speakerEnabled: true,
@@ -652,6 +773,7 @@ describe("/api/account/preferences route", () => {
         demoEndpointMaxDelayMs: true,
         demoEndpointTuningStep: true,
         translationModel: true,
+        ttsModel: true,
         adBannerPosition: true,
         demoInputMode: true,
         demoSpeakerEnabled: true,
@@ -722,6 +844,7 @@ describe("/api/account/preferences route", () => {
       sonioxEndpointMaxDelayMs: 1500,
       sonioxEndpointTuningStep: 3,
       translationModel: "qwen/qwen3.5-9b",
+      ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -747,6 +870,7 @@ describe("/api/account/preferences route", () => {
         demoEndpointMaxDelayMs: true,
         demoEndpointTuningStep: true,
         translationModel: true,
+        ttsModel: true,
         adBannerPosition: true,
         demoInputMode: true,
         demoSpeakerEnabled: true,

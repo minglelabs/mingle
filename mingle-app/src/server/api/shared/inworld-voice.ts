@@ -5,6 +5,14 @@
 const INWORLD_API_BASE = 'https://api.inworld.ai'
 const DEFAULT_VOICE_ID = process.env.INWORLD_TTS_DEFAULT_VOICE_ID || 'Ashley'
 const VOICE_CACHE_TTL_MS = 1000 * 60 * 30
+/**
+ * Preferred voice per language, used when the language's voice list contains
+ * it. Korean pins the male "Seojun" (median F0 ~100 Hz measured) instead of
+ * relying on the list order; other languages take the first listed voice.
+ */
+const PREFERRED_VOICE_BY_LANGUAGE: Readonly<Record<string, string>> = {
+  ko: 'Seojun',
+}
 
 interface InworldVoiceItem {
   id?: string
@@ -42,9 +50,11 @@ export async function resolveVoiceId(authHeader: string, language: string | null
 
     const data = await response.json() as { voices?: InworldVoiceItem[], items?: InworldVoiceItem[] }
     const voices = Array.isArray(data.voices) ? data.voices : (Array.isArray(data.items) ? data.items : [])
-    const resolved = voices
+    const ids = voices
       .map(pickVoiceId)
-      .find((id): id is string => Boolean(id))
+      .filter((id): id is string => Boolean(id))
+    const preferred = PREFERRED_VOICE_BY_LANGUAGE[language]
+    const resolved = (preferred && ids.includes(preferred) ? preferred : ids[0])
     const voiceId = resolved || DEFAULT_VOICE_ID
     voiceCache.set(language, { voiceId, expiresAt: now + VOICE_CACHE_TTL_MS })
     return voiceId

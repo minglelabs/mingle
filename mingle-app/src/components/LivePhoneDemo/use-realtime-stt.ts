@@ -7,13 +7,20 @@ import { parseSttServerError } from '@/lib/stt-server-error'
 import { compareUtteranceOrder } from './utterance-order'
 import { reserveVoiceOrder, rememberLiveVoiceOrder, getVoiceOrderReceipt } from './voice-order-reservation'
 import { nativeStopIntent } from './native-stop-intent'
-import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
+import {
+  canonicalizeUtteranceLanguages,
+  LivePreviewSender,
+  RemotePreviews,
+  type LanguageCandidates,
+  type PreviewEvent,
+} from './conversation-live'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import type { ConversationHydrationCursor, ConversationHydrationUtterance } from '@/lib/app-conversations'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
 import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
@@ -39,6 +46,7 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
+import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -65,7 +73,9 @@ import {
   discardDurableFinalizations,
   enqueueDurableFinalization,
   flushDurableFinalizations,
+  isTypedDurableFinalization,
   readDurableFinalizations,
+  resolveDurableFinalizationSelectedLanguages,
   restoreDurableFinalizationCache,
   subscribeDurableFinalizations,
 } from './durable-message-finalization'
@@ -770,15 +780,22 @@ function inferUtteranceCreatedAtMs(utterance: Pick<Utterance, 'id' | 'createdAtM
   return Math.floor(parsed)
 }
 
-function normalizeStoredUtterance(utterance: Utterance): Utterance {
+// Stored and hydrated utterances keep explicit variants; a legacy generic `zh`
+// (source, translation or target key) is resolved against the utterance's own
+// languages, the room's languages and the text.
+function normalizeStoredUtterance(utterance: Utterance, roomLanguages?: LanguageCandidates | null): Utterance {
   const createdAtMs = inferUtteranceCreatedAtMs(utterance)
-  const normalizedOriginalLang = normalizeIncomingSourceLanguage(
-    utterance.originalLang,
-    utterance.originalText,
-  )
-  if (createdAtMs === null && normalizedOriginalLang === utterance.originalLang) return utterance
+  const canonical = canonicalizeUtteranceLanguages(utterance, { roomLanguages })
+  const normalizedOriginalLang = classifyChineseLanguage(canonical.originalLang)
+    ? canonical.originalLang
+    : normalizeIncomingSourceLanguage(canonical.originalLang)
+  if (
+    canonical === utterance
+    && (createdAtMs === null || createdAtMs === utterance.createdAtMs)
+    && normalizedOriginalLang === utterance.originalLang
+  ) return utterance
   return {
-    ...utterance,
+    ...canonical,
     ...(createdAtMs !== null ? { createdAtMs } : {}),
     originalLang: normalizedOriginalLang,
   }
@@ -793,7 +810,7 @@ function normalizeStoredUtteranceList(utterances: Utterance[]): Utterance[] {
       seen.add(utterance.id)
       return true
     })
-    .map(normalizeStoredUtterance)
+    .map((utterance) => normalizeStoredUtterance(utterance))
 }
 
 function parseStoredUtterances(rawValue: string): Utterance[] {
@@ -1007,7 +1024,10 @@ function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationH
   }
 }
 
-export function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utterance[] {
+export function normalizeConversationHydrationUtterances(
+  rawUtterances: unknown,
+  roomLanguages?: LanguageCandidates | null,
+): Utterance[] {
   if (!Array.isArray(rawUtterances)) return []
 
   return rawUtterances
@@ -1018,6 +1038,10 @@ export function normalizeConversationHydrationUtterances(rawUtterances: unknown)
         id: typeof record.id === 'string' ? record.id : '',
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
+        ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
+          && record.originalDisplayText !== record.originalText
+          ? { originalDisplayText: record.originalDisplayText }
+          : {}),
         originalLang: typeof record.originalLang === 'string' ? record.originalLang : 'unknown',
         targetLanguages: Array.isArray(record.targetLanguages)
           ? record.targetLanguages.filter((language): language is string => typeof language === 'string')
@@ -1058,7 +1082,7 @@ export function normalizeConversationHydrationUtterances(rawUtterances: unknown)
         ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
           ? { speakerImage: record.speakerImage.trim() }
           : {}),
-      })
+      }, roomLanguages)
     })
     .filter((utterance) => utterance.id && utterance.originalText.trim())
 }
@@ -1101,23 +1125,50 @@ function normalizeTranslationLanguageKey(rawLanguage: string): string {
   return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
 }
 
-function normalizeSourceLanguageMatchKey(rawLanguage: string): string {
-  const normalizedTranslationKey = normalizeTranslationLanguageKey(rawLanguage)
-  if (normalizedTranslationKey === 'zh') return 'zh-cn'
-  if (normalizedTranslationKey === 'zh-cn' || normalizedTranslationKey === 'zh-tw') {
-    return normalizedTranslationKey
+export interface SourceLanguageContext {
+  /** The room's languages; a single Chinese variant among them decides a generic `zh`. */
+  candidates?: LanguageCandidates | null
+  /**
+   * The text was typed, so its script is evidence. Leave false for speech
+   * recognition output: the recognizer writes Simplified for every speaker.
+   */
+  preferScript?: boolean
+}
+
+function normalizeSourceLanguageMatchKey(rawLanguage: string, rawText = '', context: SourceLanguageContext = {}): string {
+  if (classifyChineseLanguage(rawLanguage)) {
+    return normalizeIncomingSourceLanguage(rawLanguage, rawText, context).toLowerCase()
   }
   return normalizeLangForCompare(rawLanguage)
 }
 
-function normalizeIncomingSourceLanguage(rawLanguage: string, rawText = ''): string {
-  void rawText
-  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
-  if (canonical === 'zh') {
-    return 'zh-CN'
+// Chinese is always resolved to zh-CN or zh-TW, never forced to one of them:
+// a generic `zh` (Soniox and models often only say that) is decided by the
+// room's Chinese variant and, for typed text or a room with both, the script.
+function normalizeIncomingSourceLanguage(rawLanguage: string, rawText = '', context: SourceLanguageContext = {}): string {
+  if (classifyChineseLanguage(rawLanguage)) {
+    return resolveChineseVariant({
+      language: rawLanguage,
+      text: rawText,
+      candidates: context.candidates,
+      preferScript: context.preferScript === true,
+    })
   }
-  if (canonical === 'zh-CN' || canonical === 'zh-TW') return canonical
   return (rawLanguage || '').trim().replace(/_/g, '-')
+}
+
+/** Rewrites a translation record's keys to canonical codes (a generic `zh` included). */
+export function canonicalizeTranslationKeys(
+  translationsRaw: Record<string, string>,
+  context: { candidates?: LanguageCandidates | null, sourceLanguage?: string } = {},
+): Record<string, string> {
+  const canonical = canonicalizeUtteranceLanguages({
+    id: '',
+    originalText: '',
+    originalLang: context.sourceLanguage || 'unknown',
+    translations: translationsRaw,
+  }, { roomLanguages: context.candidates })
+  return canonical.translations
 }
 
 function shouldKeepSourceLanguageBubble(options?: {
@@ -1268,10 +1319,11 @@ export function buildCurrentTurnPreviousStatePayload(
   sourceLanguageRaw: string,
   sourceTextRaw: string,
   translationsRaw: Record<string, string>,
+  context: SourceLanguageContext = {},
 ): CurrentTurnPreviousStatePayload | null {
   const sourceText = normalizeSttTurnText(sourceTextRaw)
   if (!sourceText) return null
-  const sourceLanguage = normalizeIncomingSourceLanguage(sourceLanguageRaw, sourceText) || 'unknown'
+  const sourceLanguage = normalizeIncomingSourceLanguage(sourceLanguageRaw, sourceText, context) || 'unknown'
 
   const translations = stripSourceLanguageFromTranslations(translationsRaw, sourceLanguage)
 
@@ -1293,6 +1345,7 @@ export interface ParsedSttTranscriptMessage {
 
 export function parseSttTranscriptMessage(
   message: Record<string, unknown>,
+  roomLanguages?: LanguageCandidates | null,
 ): ParsedSttTranscriptMessage | null {
   if (message.type !== 'transcript') return null
   if (typeof message.data !== 'object' || message.data === null) return null
@@ -1303,9 +1356,12 @@ export function parseSttTranscriptMessage(
   const utterance = data.utterance as Record<string, unknown>
   const rawText = typeof utterance.text === 'string' ? utterance.text : ''
   const text = normalizeSttTurnText(rawText)
+  // Speech recognition text: the room decides the Chinese variant, not the
+  // script (the recognizer writes Simplified for everyone).
   const language = normalizeIncomingSourceLanguage(
     typeof utterance.language === 'string' ? utterance.language : 'unknown',
     text || rawText,
+    { candidates: roomLanguages },
   ) || 'unknown'
   const isFinal = data.is_final === true
   const finalizeSource = typeof data.finalize_source === 'string' && data.finalize_source.trim()
@@ -1363,7 +1419,7 @@ export function buildFinalizedUtterancePayload(
   input: BuildFinalizedUtterancePayloadInput,
 ): BuildFinalizedUtterancePayloadResult | null {
   const text = normalizeSttTurnText(input.rawText)
-  const language = normalizeIncomingSourceLanguage(input.rawLanguage, text) || 'unknown'
+  const language = normalizeIncomingSourceLanguage(input.rawLanguage, text, { candidates: input.languages }) || 'unknown'
   if (!text) return null
 
   const createdAtMs = typeof input.createdAtMs === 'number' && Number.isFinite(input.createdAtMs)
@@ -1373,7 +1429,10 @@ export function buildFinalizedUtterancePayload(
     : Date.now()
 
   const priorTranslations = stripSourceLanguageFromTranslations(
-    input.currentTurnPreviousTranslations ?? input.partialTranslations,
+    canonicalizeTranslationKeys(input.currentTurnPreviousTranslations ?? input.partialTranslations, {
+      candidates: input.languages,
+      sourceLanguage: language,
+    }),
     language,
   )
   const seedTranslations = input.seedUtteranceTranslations === false ? {} : priorTranslations
@@ -1387,6 +1446,7 @@ export function buildFinalizedUtterancePayload(
     input.previousStateSourceLanguage ?? input.rawLanguage,
     input.previousStateSourceText ?? input.rawText,
     priorTranslations,
+    { candidates: input.languages },
   )
 
   const utteranceId = input.utteranceId || buildUtteranceId(createdAtMs, input.utteranceSerial)
@@ -1433,6 +1493,8 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  // User-selected TTS model, sent with every TTS request. Undefined -> server default (gemini-3.8-flash-tts).
+  ttsModel?: UserSelectableTtsModel
   // The signed-in viewer's own account id, stamped onto every locally
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
   // room has more than one real member. Unused by solo rooms.
@@ -1444,9 +1506,14 @@ interface UseRealtimeSTTOptions {
   sttSegmentationMode?: string | null
 }
 
+// Which UI path asked for a stop. Recorded as `source` on the
+// `stt_session_stopped` client event so an unexpected stop can be traced.
+export type SttStopSource = 'mic_click' | 'mic_pointerup'
+
 type StopRecordingOptions = {
   discardPendingFinalization?: boolean
   forceNativeStop?: boolean
+  stopSource?: SttStopSource
 }
 
 interface SubmitExternalUtteranceInput {
@@ -1480,6 +1547,9 @@ interface PendingSpeakerTurn {
   partialTranslationPriorities: Map<string, TranslationPriority>
   currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
   updatedAtMs: number
+  // Display-only script rendering of `source` from the latest partial
+  // translation response. Ignored once the turn text moves on.
+  originalDisplayText?: { source: string, text: string }
 }
 
 type PendingSpeakerTurnSnapshot = Pick<
@@ -1567,7 +1637,8 @@ function reservePendingSpeakerTurnIdentity(
 }
 
 export function buildLiveUtterance(input: {
-  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language'> | null
+  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language'>
+    & Partial<Pick<PendingSpeakerTurn, 'originalDisplayText'>> | null
   partialTranscript: string
   partialLang?: string | null
   partialTranslations: Record<string, string>
@@ -1583,6 +1654,7 @@ export function buildLiveUtterance(input: {
   const sourceLanguage = normalizeIncomingSourceLanguage(
     input.partialLang || input.pendingTurn.language || 'unknown',
     transcript,
+    { candidates: input.languages },
   ) || 'unknown'
   const targetLanguages = buildTurnTargetLanguagesSnapshot(
     input.languages,
@@ -1590,11 +1662,18 @@ export function buildLiveUtterance(input: {
   )
   const translations = filterTranslationsToTargetLanguages(
     stripSourceLanguageFromTranslations(
-      input.partialTranslations,
+      canonicalizeTranslationKeys(input.partialTranslations, { candidates: input.languages, sourceLanguage }),
       sourceLanguage,
     ),
     targetLanguages,
   )
+  // Display-only: valid only while the preview text is still the text the
+  // server converted.
+  const displayText = input.pendingTurn.originalDisplayText
+  const originalDisplayText = displayText && displayText.source === transcript
+    && displayText.text !== input.partialTranscript
+    ? displayText.text
+    : undefined
 
   return {
     id: input.pendingTurn.utteranceId,
@@ -1604,6 +1683,7 @@ export function buildLiveUtterance(input: {
     speakerUserId: input.viewerUserId,
     speakerImage: input.viewerImage,
     originalText: input.partialTranscript,
+    ...(originalDisplayText ? { originalDisplayText } : {}),
     originalLang: sourceLanguage,
     targetLanguages,
     translations,
@@ -1615,7 +1695,8 @@ export function buildLiveUtterance(input: {
 }
 
 export function buildLiveUtterances(input: {
-  pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>>
+  pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>
+    & Partial<Pick<PendingSpeakerTurn, 'originalDisplayText'>>>
   languages: string[]
   viewerUserId?: string | null
   viewerImage?: string | null
@@ -1802,6 +1883,7 @@ export function classifyRecentFinalizedUtteranceMatch(input: {
   text: string
   language: string
   speaker?: string | null
+  roomLanguages?: LanguageCandidates | null
 }): RecentFinalizedUtteranceMatch {
   if (input.pendingUtteranceId) return { kind: 'none' }
   const candidates = input.recentFinalizedUtterances?.length
@@ -1810,7 +1892,11 @@ export function classifyRecentFinalizedUtteranceMatch(input: {
   for (const recentFinalizedUtterance of [...candidates].reverse()) {
     if (input.nowMs >= recentFinalizedUtterance.expiresAt) continue
     if (!isRecentFinalizedSpeakerCompatible(recentFinalizedUtterance, input.speaker)) continue
-    if (normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language) !== normalizeSourceLanguageMatchKey(input.language)) {
+    const matchContext = { candidates: input.roomLanguages }
+    if (
+      normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language, recentFinalizedUtterance.text, matchContext)
+      !== normalizeSourceLanguageMatchKey(input.language, input.text, matchContext)
+    ) {
       continue
     }
     if (recentFinalizedUtterance.id === input.finalizedUtteranceId) continue
@@ -1888,15 +1974,17 @@ export function findRecentMatchingUtteranceIndex(input: {
   utterances: Utterance[]
   sourceText: string
   sourceLanguage: string
+  roomLanguages?: LanguageCandidates | null
 }): number {
   const normalizedText = normalizeSttTurnText(input.sourceText)
-  const normalizedLanguage = normalizeSourceLanguageMatchKey(input.sourceLanguage)
+  const matchContext = { candidates: input.roomLanguages }
+  const normalizedLanguage = normalizeSourceLanguageMatchKey(input.sourceLanguage, normalizedText, matchContext)
   if (!normalizedText || !normalizedLanguage) return -1
 
   for (let index = input.utterances.length - 1; index >= 0; index -= 1) {
     const utterance = input.utterances[index]
     if (normalizeSttTurnText(utterance.originalText) !== normalizedText) continue
-    if (normalizeSourceLanguageMatchKey(utterance.originalLang) !== normalizedLanguage) continue
+    if (normalizeSourceLanguageMatchKey(utterance.originalLang, normalizedText, matchContext) !== normalizedLanguage) continue
     return index
   }
 
@@ -1951,10 +2039,15 @@ function buildSeedTranslationState(
   sourceLanguageRaw: string,
   translationsRaw: Record<string, string>,
   prioritiesRaw: Map<string, TranslationPriority>,
+  sourceText = '',
 ): SeedTranslationState {
-  const targetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguagesRaw, sourceLanguageRaw)
+  const sourceLanguage = normalizeIncomingSourceLanguage(sourceLanguageRaw, sourceText, { candidates: targetLanguagesRaw })
+  const targetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguagesRaw, sourceLanguage)
   const translations = filterTranslationsToTargetLanguages(
-    stripSourceLanguageFromTranslations(translationsRaw, sourceLanguageRaw),
+    stripSourceLanguageFromTranslations(
+      canonicalizeTranslationKeys(translationsRaw, { candidates: targetLanguagesRaw, sourceLanguage }),
+      sourceLanguage,
+    ),
     targetLanguages,
   )
   const priorities = new Map<string, TranslationPriority>()
@@ -1998,7 +2091,14 @@ function reconcileUtteranceTranslationBase(input: {
   selectedLanguages?: string[]
   sourceText?: string
 }): { utterance: Utterance, priorities: Map<string, TranslationPriority> } {
-  const normalizedDetectedSourceLanguage = normalizeTranslationLanguageCode(input.detectedSourceLanguage || '')
+  // Callers pass an already resolved source; a generic `zh` from an older
+  // queued update is resolved here with the same candidates.
+  const detectedSourceLanguageRaw = input.detectedSourceLanguage || ''
+  const normalizedDetectedSourceLanguage = classifyChineseLanguage(detectedSourceLanguageRaw)
+    ? normalizeIncomingSourceLanguage(detectedSourceLanguageRaw, input.sourceText || input.utterance.originalText, {
+      candidates: [...(input.selectedLanguages || []), ...(input.utterance.targetLanguages || [])],
+    })
+    : normalizeTranslationLanguageCode(detectedSourceLanguageRaw)
   const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
     sourceLanguagesMixed: input.sourceLanguagesMixed,
     sourceTextHasForeignScript: input.sourceTextHasForeignScript,
@@ -2046,6 +2146,8 @@ function reconcileUtteranceTranslationBase(input: {
   const nextUtterance: Utterance = { ...input.utterance }
   delete nextUtterance.sourceLanguagesMixed
   delete nextUtterance.sourceTextHasForeignScript
+  // The display rendering belongs to the old text.
+  if (nextOriginalText !== input.utterance.originalText) delete nextUtterance.originalDisplayText
   nextUtterance.originalText = nextOriginalText
   nextUtterance.originalLang = normalizedDetectedSourceLanguage
   if (input.sourceLanguagesMixed === true) {
@@ -2156,6 +2258,7 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
     && left.image?.width === right.image?.width
     && left.image?.height === right.image?.height
     && left.originalText === right.originalText
+    && left.originalDisplayText === right.originalDisplayText
     && left.originalLang === right.originalLang
     && left.sourceLanguagesMixed === right.sourceLanguagesMixed
     && left.sourceTextHasForeignScript === right.sourceTextHasForeignScript
@@ -2375,8 +2478,22 @@ export function mergeServerHydrationUtteranceIntoStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
 ): UtteranceStoreState {
-  const normalizedServerUtterance = normalizeStoredUtterance(utterance)
-  const existingUtterance = store.utterances.find((item) => item.id === normalizedServerUtterance.id)
+  return mergeServerHydrationUtteranceWithRoomLanguages(store, utterance, null)
+}
+
+/** Same as mergeServerHydrationUtteranceIntoStoreState, resolving legacy `zh` keys with the room's languages. */
+export function mergeServerHydrationUtteranceWithRoomLanguages(
+  store: UtteranceStoreState,
+  utterance: Utterance,
+  roomLanguages: LanguageCandidates | null,
+): UtteranceStoreState {
+  const existingRaw = store.utterances.find((item) => item.id === utterance.id)
+  const normalizedServerUtterance = normalizeStoredUtterance(utterance, [
+    ...(existingRaw?.targetLanguages || []),
+    ...(existingRaw && existingRaw.originalText === utterance.originalText ? [existingRaw.originalLang] : []),
+    ...(roomLanguages || []),
+  ])
+  const existingUtterance = existingRaw ? normalizeStoredUtterance(existingRaw, roomLanguages) : undefined
   const existingCreatedAtMs = existingUtterance
     ? inferUtteranceCreatedAtMs(existingUtterance)
     : null
@@ -2398,9 +2515,14 @@ export function mergeServerHydrationUtteranceIntoStoreState(
           ? { serverMessageId: existingUtterance.serverMessageId } : {}),
         // Source delivery is now independent of translation. A raw server
         // snapshot must not erase the final translation already rendered here.
+        // Both sides are canonical here, so the merge is by canonical key and
+        // the server's (newer) value wins.
         ...(existingUtterance?.originalText === normalizedServerUtterance.originalText ? {
           originalLang: normalizedServerUtterance.originalLang === 'unknown'
             ? existingUtterance.originalLang : normalizedServerUtterance.originalLang,
+          ...((normalizedServerUtterance.originalDisplayText ?? existingUtterance.originalDisplayText)
+            ? { originalDisplayText: normalizedServerUtterance.originalDisplayText ?? existingUtterance.originalDisplayText }
+            : {}),
           targetLanguages: normalizeTranslationTargets({
             targetLanguages: [
               ...(existingUtterance.targetLanguages || []),
@@ -2467,30 +2589,50 @@ export function applyTranslationToUtteranceStoreState(input: {
   sourceTextHasForeignScript?: boolean
   selectedLanguages?: string[]
   sourceText?: string
+  /** The source was typed, so its script decides a generic Chinese source. */
+  preferSourceScript?: boolean
+  /** Source text in its Chinese variant's script (translate-finalize `sourceDisplayText`). */
+  sourceDisplayText?: string
+  /** The source text the request carried; `sourceDisplayText` only applies while it is unchanged. */
+  requestSourceText?: string
 }): UtteranceStoreState {
+  const existingIndex = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
+  const existingTarget = existingIndex >= 0 ? input.store.utterances[existingIndex] : undefined
+  const languageCandidates = [
+    ...(input.selectedLanguages || []),
+    ...(existingTarget?.targetLanguages || []),
+    ...(existingTarget ? [existingTarget.originalLang] : []),
+  ]
+  // Resolve the detected source once; reconcile, strip and filter all use it.
   const normalizedDetectedSourceLanguage = normalizeIncomingSourceLanguage(
     input.detectedSourceLanguage || '',
-    input.sourceText || '',
+    input.sourceText || existingTarget?.originalText || '',
+    { candidates: languageCandidates, preferScript: input.preferSourceScript === true },
   )
+  const incomingTranslations = canonicalizeTranslationKeys(input.translations, {
+    candidates: languageCandidates,
+    sourceLanguage: normalizedDetectedSourceLanguage || existingTarget?.originalLang,
+  })
   const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
     sourceLanguagesMixed: input.sourceLanguagesMixed,
     sourceTextHasForeignScript: input.sourceTextHasForeignScript,
   })
-  let idx = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
+  let idx = existingIndex
   if (idx < 0 && input.fallbackMatch) {
     idx = findRecentMatchingUtteranceIndex({
       utterances: input.store.utterances,
       sourceText: input.fallbackMatch.sourceText,
       sourceLanguage: input.fallbackMatch.sourceLanguage,
+      roomLanguages: input.selectedLanguages,
     })
   }
 
   if (idx < 0) {
     const queuedTranslations = normalizedDetectedSourceLanguage
-      ? stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
+      ? stripSourceLanguageFromTranslations(incomingTranslations, normalizedDetectedSourceLanguage, {
         keepSourceLanguage: keepSourceLanguageBubble,
       })
-      : input.translations
+      : incomingTranslations
     const existingPending = input.store.pendingTranslationUpdates.get(input.utteranceId)
     const mergedPending = mergeTranslationsByPriority({
       utteranceId: input.utteranceId,
@@ -2505,7 +2647,8 @@ export function applyTranslationToUtteranceStoreState(input: {
     const nextPendingTranslationUpdates = new Map(input.store.pendingTranslationUpdates)
     nextPendingTranslationUpdates.set(input.utteranceId, {
       ...mergedPending,
-      detectedSourceLanguage: input.detectedSourceLanguage ?? existingPending?.detectedSourceLanguage,
+      detectedSourceLanguage: (input.detectedSourceLanguage ? normalizedDetectedSourceLanguage : undefined)
+        ?? existingPending?.detectedSourceLanguage,
       sourceLanguagesMixed: input.sourceLanguagesMixed ?? existingPending?.sourceLanguagesMixed,
       sourceTextHasForeignScript: input.sourceTextHasForeignScript ?? existingPending?.sourceTextHasForeignScript,
       selectedLanguages: input.selectedLanguages ?? existingPending?.selectedLanguages,
@@ -2522,7 +2665,7 @@ export function applyTranslationToUtteranceStoreState(input: {
   const reconciled = reconcileUtteranceTranslationBase({
     utterance: target,
     currentPriorities: input.store.translationPriorities,
-    detectedSourceLanguage: input.detectedSourceLanguage,
+    detectedSourceLanguage: normalizedDetectedSourceLanguage,
     sourceLanguagesMixed: input.sourceLanguagesMixed,
     sourceTextHasForeignScript: input.sourceTextHasForeignScript,
     selectedLanguages: input.selectedLanguages,
@@ -2531,12 +2674,12 @@ export function applyTranslationToUtteranceStoreState(input: {
   const baseTarget = reconciled.utterance
   const nextTranslations = normalizedDetectedSourceLanguage
     ? filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
+      stripSourceLanguageFromTranslations(incomingTranslations, normalizedDetectedSourceLanguage, {
         keepSourceLanguage: keepSourceLanguageBubble,
       }),
       baseTarget.targetLanguages || [],
     )
-    : input.translations
+    : incomingTranslations
   const merged = mergeTranslationsByPriority({
     utteranceId: baseTarget.id,
     currentTranslations: baseTarget.translations,
@@ -2560,6 +2703,18 @@ export function applyTranslationToUtteranceStoreState(input: {
     targetLanguages: settledState?.targetLanguages || baseTarget.targetLanguages,
     translations: settledState?.translations || merged.translations,
     translationFinalized: settledState?.translationFinalized || merged.translationFinalized,
+  }
+  // Display-only script rendering. It applies only while the utterance still
+  // holds the exact text that was sent; the recognized text is never replaced.
+  const sourceDisplayText = (input.sourceDisplayText || '').trim() ? input.sourceDisplayText : undefined
+  if (
+    sourceDisplayText
+    && input.requestSourceText !== undefined
+    && target.originalText === input.requestSourceText
+    && nextTarget.originalText === input.requestSourceText
+    && sourceDisplayText !== nextTarget.originalText
+  ) {
+    nextTarget.originalDisplayText = sourceDisplayText
   }
 
   const nextUtterances = [
@@ -2598,7 +2753,9 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
   if (idx < 0) return input.store
 
   const target = input.store.utterances[idx]
-  const normalizedSourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage, sourceText)
+  const normalizedSourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage, sourceText, {
+    candidates: input.selectedLanguages,
+  })
   const reconciled = normalizedSourceLanguage
     ? reconcileUtteranceTranslationBase({
       utterance: target,
@@ -2608,10 +2765,11 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
       sourceText,
     })
     : {
-      utterance: {
-        ...target,
-        originalText: sourceText,
-      },
+      utterance: (() => {
+        const next: Utterance = { ...target, originalText: sourceText }
+        if (sourceText !== target.originalText) delete next.originalDisplayText
+        return next
+      })(),
       priorities: input.store.translationPriorities,
     }
 
@@ -2631,6 +2789,8 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
 interface TranslateApiResult {
   translations: Record<string, string>
   sourceLanguage?: string
+  // Present only when it differs from the text that was sent.
+  sourceDisplayText?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
   ttsLanguage?: string
@@ -2808,6 +2968,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  ttsModel,
   viewerUserId = null,
   viewerImage = null,
   sttSegmentationMode,
@@ -3435,11 +3596,12 @@ export default function useRealtimeSTT({
     utterancesFromServer: Utterance[],
   ): UtteranceStoreState => {
     let nextStore = store
+    const roomLanguages = getCurrentTargetLanguages()
     for (const utterance of utterancesFromServer) {
-      nextStore = mergeServerHydrationUtteranceIntoStoreState(nextStore, remotePreviews.mergeCommitted(utterance))
+      nextStore = mergeServerHydrationUtteranceWithRoomLanguages(nextStore, remotePreviews.mergeCommitted(utterance), roomLanguages)
     }
     return nextStore
-  }, [remotePreviews])
+  }, [getCurrentTargetLanguages, remotePreviews])
 
   const reportConversationHydrationOrderConflicts = useCallback((
     trigger: ConversationHydrationRefreshTrigger,
@@ -3548,7 +3710,7 @@ export default function useRealtimeSTT({
       hasOlderServerUtterancesRef.current = payload.hasMoreUtterances === true && nextServerCursor !== null
       serverOlderCursorRef.current = nextServerCursor
 
-      const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances)
+      const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances, getCurrentTargetLanguages())
       if (utterancesFromServer.length === 0) {
         setHasOlderUtterances(hasOlderUtterancesFromRefs())
         return false
@@ -3571,6 +3733,7 @@ export default function useRealtimeSTT({
     }
   }, [
     buildConversationHydrationHeaders,
+    getCurrentTargetLanguages,
     buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
@@ -3679,7 +3842,7 @@ export default function useRealtimeSTT({
         const nextServerCursor = normalizeConversationHydrationCursor(payload.oldestMessageCursor)
         hasOlderServerUtterancesRef.current = payload.hasMoreUtterances === true && nextServerCursor !== null
         serverOlderCursorRef.current = nextServerCursor
-        const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances)
+        const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances, getCurrentTargetLanguages())
 
         if (utterancesFromServer.length === 0) {
           setHasOlderUtterances(hasOlderUtterancesFromRefs())
@@ -3704,6 +3867,7 @@ export default function useRealtimeSTT({
       })
   }, [
     buildConversationHydrationHeaders,
+    getCurrentTargetLanguages,
     buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
@@ -3851,10 +4015,13 @@ export default function useRealtimeSTT({
               return
             }
             if (frame.type === 'utterance_committed') {
-              const incoming = normalizeConversationHydrationUtterances([frame.utterance])[0]
+              const roomLanguages = getCurrentTargetLanguages()
+              const incoming = normalizeConversationHydrationUtterances([frame.utterance], roomLanguages)[0]
               if (incoming) {
                 livePreviewSender.committed(incoming.id)
-                setUtteranceStore(current => mergeServerHydrationUtteranceIntoStoreState(current, remotePreviews.mergeCommitted(incoming)))
+                setUtteranceStore(current => mergeServerHydrationUtteranceWithRoomLanguages(
+                  current, remotePreviews.mergeCommitted(incoming), roomLanguages,
+                ))
                 return
               }
             }
@@ -3930,7 +4097,7 @@ export default function useRealtimeSTT({
         socket.close()
       }
     }
-  }, [buildConversationHydrationHeaders, conversationId, refreshFromServerHydration, livePreviewSender, remotePreviews, viewerUserId, clientMessageOutboxOwnerIdentity, finalizationApiNamespace])
+  }, [buildConversationHydrationHeaders, conversationId, getCurrentTargetLanguages, refreshFromServerHydration, livePreviewSender, remotePreviews, viewerUserId, clientMessageOutboxOwnerIdentity, finalizationApiNamespace])
 
   useEffect(() => {
     utterancesRef.current = utterances
@@ -4234,7 +4401,11 @@ export default function useRealtimeSTT({
       }
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang && options?.isFinal !== true) {
-        body.tts = { language: normalizedTtsLang, enabled: options?.enableTts === true }
+        body.tts = {
+          language: normalizedTtsLang,
+          enabled: options?.enableTts === true,
+          ...(ttsModel ? { ttsModel } : {}),
+        }
       }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
@@ -4250,11 +4421,22 @@ export default function useRealtimeSTT({
       }
       const data = await res.json()
       const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
+      const responseSourceLanguage = typeof data.sourceLanguage === 'string'
+        ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
+        : undefined
+      const rawTranslations = data.translations && typeof data.translations === 'object' && !Array.isArray(data.translations)
+        ? Object.fromEntries(Object.entries(data.translations as Record<string, unknown>)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+        : {}
       return {
-        translations: (data.translations || {}) as Record<string, string>,
-        sourceLanguage: typeof data.sourceLanguage === 'string'
-          ? normalizeIncomingSourceLanguage(data.sourceLanguage, text)
-          : undefined,
+        translations: canonicalizeTranslationKeys(rawTranslations, {
+          candidates: targetLanguages,
+          sourceLanguage: responseSourceLanguage || sourceLanguage,
+        }),
+        sourceLanguage: responseSourceLanguage,
+        ...(typeof data.sourceDisplayText === 'string' && data.sourceDisplayText.trim() && data.sourceDisplayText !== text
+          ? { sourceDisplayText: data.sourceDisplayText }
+          : {}),
         sourceLanguagesMixed: data.sourceLanguagesMixed === true,
         sourceTextHasForeignScript: data.sourceTextHasForeignScript === true,
         ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,
@@ -4270,7 +4452,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, ttsModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
@@ -4435,6 +4617,7 @@ export default function useRealtimeSTT({
           language: normalizedLang,
           sessionKey: ensureSessionKey(),
           clientContext: buildClientContextPayload(usageSec),
+          ...(ttsModel ? { ttsModel } : {}),
         }),
       })
       if (!res.ok) return null
@@ -4445,7 +4628,7 @@ export default function useRealtimeSTT({
     } catch {
       return null
     }
-  }, [ensureSessionKey, usageSec])
+  }, [ensureSessionKey, ttsModel, usageSec])
 
   const requestTtsForRenderedTranslation = useCallback((
     utteranceId: string,
@@ -4525,6 +4708,9 @@ export default function useRealtimeSTT({
         pendingFinalizedTtsUtteranceIdsRef.current.add(record.utterance.id)
       }
       const seq = ++translateSeqRef.current
+      // The full room selection at finalize time (it still contains the local
+      // source guess), so a redetected sibling Chinese variant keeps both.
+      const selectedLanguages = resolveDurableFinalizationSelectedLanguages(record, getCurrentTargetLanguages())
       setUtteranceStore(prev => {
         let next = { ...prev, utterances: appendOrReplaceUtterance(prev.utterances, record.utterance) }
         if (record.result) next = applyTranslationToUtteranceStoreState({
@@ -4533,15 +4719,18 @@ export default function useRealtimeSTT({
           detectedSourceLanguage: record.result.sourceLanguage,
           sourceLanguagesMixed: record.result.sourceLanguagesMixed,
           sourceTextHasForeignScript: record.result.sourceTextHasForeignScript,
-          selectedLanguages: record.utterance.targetLanguages,
+          selectedLanguages,
           sourceText: record.utterance.originalText,
+          preferSourceScript: isTypedDurableFinalization(record),
+          sourceDisplayText: record.result.sourceDisplayText,
+          requestSourceText: typeof record.translationBody?.text === 'string' ? record.translationBody.text : undefined,
         })
         return next
       })
     }
     for (const record of readDurableFinalizations(clientMessageOutboxOwnerIdentity, finalizationApiNamespace)) apply(record)
     return subscribeDurableFinalizations(({ record }) => apply(record))
-  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, storageNamespace])
+  }, [clientMessageOutboxOwnerIdentity, finalizationApiNamespace, getCurrentTargetLanguages, storageNamespace])
 
   const finalizePendingLocally = useCallback((
     rawText: string,
@@ -4574,6 +4763,7 @@ export default function useRealtimeSTT({
       rawLang,
       options?.partialTranslations ?? partialTranslationsRef.current,
       options?.partialTranslationPriorities ?? new Map(),
+      text,
     )
     const localPayload = buildFinalizedUtterancePayload({
       speaker: options?.speaker,
@@ -4767,7 +4957,11 @@ export default function useRealtimeSTT({
     if (!text) return null
 
     const speaker = (input.speaker || '').trim() || 'manual'
-    const sourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage || '', text) || 'unknown'
+    // Typed text: its script is real evidence for the Chinese variant.
+    const sourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage || '', text, {
+      candidates: getCurrentTargetLanguages(),
+      preferScript: true,
+    }) || 'unknown'
     const speakerAvatar = ensureSpeakerAvatarAssignment(speaker)
     const localFinalizeResult = finalizePendingLocally(text, sourceLanguage, {
       speaker,
@@ -4787,7 +4981,7 @@ export default function useRealtimeSTT({
     })
 
     return localFinalizeResult.utteranceId
-  }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
+  }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation, getCurrentTargetLanguages])
 
   const clearConversationHistory = useCallback((options?: { preservePendingDelivery?: boolean }) => {
     livePreviewSender.clear()
@@ -4866,7 +5060,7 @@ export default function useRealtimeSTT({
         seen.add(item.id)
         return true
       })
-      .map(normalizeStoredUtterance)
+      .map((utterance) => normalizeStoredUtterance(utterance))
 
     const cached = options?.loadAll ? normalized : buildLocalUtteranceCache(normalized)
     storedUtterancesRef.current = cached
@@ -4901,7 +5095,7 @@ export default function useRealtimeSTT({
   const stopRecordingGracefully = useCallback(async (
     notifyLimitReached = false,
     stopReason?: string,
-    options?: { forceNativeStop?: boolean },
+    options?: { forceNativeStop?: boolean, stopSource?: SttStopSource },
   ) => {
     if (isStoppingRef.current || pendingNativeStopCompletionRef.current) {
       const deadline = Date.now() + NATIVE_STOP_ACK_TIMEOUT_MS + 250
@@ -5006,6 +5200,7 @@ export default function useRealtimeSTT({
             eventType: 'stt_session_stopped',
             metadata: {
               reason: resolvedStopReason,
+              ...(options?.stopSource ? { source: options.stopSource } : {}),
             },
             keepalive: true,
           })
@@ -5079,6 +5274,7 @@ export default function useRealtimeSTT({
         eventType: 'stt_session_stopped',
         metadata: {
           reason: resolvedStopReason,
+          ...(options?.stopSource ? { source: options.stopSource } : {}),
         },
         keepalive: true,
       })
@@ -5113,6 +5309,7 @@ export default function useRealtimeSTT({
     }
     await stopRecordingGracefully(false, undefined, {
       forceNativeStop: options?.forceNativeStop,
+      stopSource: options?.stopSource,
     })
   }, [prepareForDeletion, stopRecordingGracefully])
 
@@ -5440,7 +5637,7 @@ export default function useRealtimeSTT({
       return
     }
 
-    const transcript = parseSttTranscriptMessage(message)
+    const transcript = parseSttTranscriptMessage(message, getCurrentTargetLanguages())
     if (transcript) {
       const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
       logSttDebug('transcript.received', {
@@ -5481,6 +5678,7 @@ export default function useRealtimeSTT({
           lang,
           options.partialTranslations,
           options.partialTranslationPriorities,
+          text,
         )
         const finalizedPayload = buildFinalizedUtterancePayload({
           speaker,
@@ -5529,6 +5727,7 @@ export default function useRealtimeSTT({
           text: finalizedPayload.text,
           language: finalizedPayload.language,
           speaker,
+          roomLanguages: targetLanguages,
         })
         if (recentFinalizedMatch.kind === 'skip_duplicate_server') {
           logSttDebug('finalize.skip_duplicate_server', {
@@ -6710,6 +6909,9 @@ export default function useRealtimeSTT({
 
         const updatedPendingTurn: PendingSpeakerTurn = {
           ...latestPendingTurn,
+          originalDisplayText: result.sourceDisplayText
+            ? { source: trimmed, text: result.sourceDisplayText }
+            : undefined,
           partialTranslations: nextTranslations,
           partialTranslationPriorities: nextPriorities,
           currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(

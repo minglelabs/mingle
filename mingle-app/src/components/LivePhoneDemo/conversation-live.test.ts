@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ChatBubble from './ChatBubble'
 import { describe, expect, it, vi } from 'vitest'
-import { LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
+import { canonicalizeUtteranceLanguages, LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
 import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances } from './use-realtime-stt'
 import { LiveUtterances } from '../../../../mingle-messaging/live-utterances'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
@@ -165,5 +165,32 @@ describe('remote live message lifecycle', () => {
       expect(verifyVoiceOrderReceipt(frame.orderReceipt, { userId: 'alice', sessionKey: 'room', clientMessageId: 'voice' })).toBe(frame.utterance.createdAtMs)
       expect(verifyVoiceOrderReceipt(frame.orderReceipt, { userId: 'bob', sessionKey: 'room', clientMessageId: 'voice' })).toBeNull()
     } finally { vi.unstubAllEnvs() }
+  })
+})
+
+describe('canonical Chinese keys on remote previews', () => {
+  it('resolves a bare zh from an old client preview before it is shown or merged', () => {
+    const remote = new RemotePreviews()
+    expect(remote.accept({
+      ...preview(1),
+      utterance: {
+        ...utterance, originalText: '안녕', originalLang: 'ko', targetLanguages: ['zh-TW', 'zh'], translations: { zh: '你好嗎' },
+      },
+    })).toBe(true)
+    const [visible] = remote.visible([], 'bob')
+    expect(visible.targetLanguages).toEqual(['zh-TW'])
+    expect(visible.translations).toEqual({ 'zh-TW': '你好嗎' })
+
+    const committed = remote.mergeCommitted({
+      ...utterance, originalText: '안녕', originalLang: 'ko', targetLanguages: ['zh-TW'], translations: { 'zh-TW': '你好嗎？' },
+    })
+    expect(committed.translations).toEqual({ 'zh-TW': '你好嗎？' })
+    expect(committed.targetLanguages).toEqual(['zh-TW'])
+    expect(Object.keys(committed.translationFinalized || {})).toEqual(['zh-TW'])
+  })
+
+  it('returns the same object when every key is already canonical', () => {
+    const canonical = { ...utterance, originalLang: 'zh-TW', targetLanguages: ['ko'], translations: { ko: '안녕' } }
+    expect(canonicalizeUtteranceLanguages(canonical)).toBe(canonical)
   })
 })

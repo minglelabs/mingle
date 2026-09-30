@@ -8,6 +8,7 @@
 
 import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
+import { isChineseLanguage, toChineseVariant } from '@/lib/chinese-variant'
 import {
   resolveTranslationRuntimeSelection,
   type TranslationInfrastructureProvider,
@@ -643,6 +644,24 @@ function formatSingleTurnForPromptWithOptions(
   ].join('\n')
 }
 
+const CHINESE_VARIANT_SCRIPT_NOTES = {
+  'zh-CN': 'Simplified Chinese as used in mainland China (simplified characters only)',
+  'zh-TW': 'Traditional Chinese as used in Taiwan (traditional characters and Taiwan wording, never simplified characters)',
+} as const
+
+const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-CN']}; zh-TW = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-TW']}. zh-CN and zh-TW are different targets.`
+
+const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
+
+function describeChineseVariantScript(language: string): string | null {
+  const variant = toChineseVariant(language)
+  return variant ? CHINESE_VARIANT_SCRIPT_NOTES[variant] : null
+}
+
+function involvesChinese(ctx: Pick<TranslateContext, 'sourceLanguage' | 'targetLanguages'>): boolean {
+  return isChineseLanguage(ctx.sourceLanguage) || ctx.targetLanguages.some((language) => isChineseLanguage(language))
+}
+
 export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt: string } {
   if (ctx.systemPromptOverride && ctx.userPromptOverride) {
     return { systemPrompt: ctx.systemPromptOverride, userPrompt: ctx.userPromptOverride }
@@ -651,6 +670,8 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
   const includeSourceLanguage = !ctx.shouldRedetectSourceLanguage
   const targetLangCodes = ctx.targetLanguages.join(', ')
+  // Only prompts that involve Chinese carry the glossary, so others stay byte-identical.
+  const chineseGlossaryLines = involvesChinese(ctx) ? [CHINESE_VARIANT_GLOSSARY_LINE] : []
   const userPromptLines = ctx.shouldRedetectSourceLanguage
     ? [
       'Current turn:',
@@ -685,10 +706,12 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
         'You are an expert live-conversation translator.',
         'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, sourceTextHasForeignScript, and the requested language codes.',
         'No explanations, no markdown, no extra keys.',
+        'Each requested language code holds the ENTIRE current text written in that language. When the current text mixes languages, the sourceLanguage key holds the full rendering in the source language.',
         'Treat language_hints as reference-only hints, not a constraint. If the current text clearly indicates a different source language, choose that language even when it is not included in language_hints.',
         'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
-        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script.',
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script. Simplified and Traditional Chinese characters are the same script: never set sourceTextHasForeignScript=true only because of Simplified/Traditional differences.',
         'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text. For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',
+        ...chineseGlossaryLines,
       ].join('\n')
       : [
         'You are an expert live-conversation translator.',
@@ -697,6 +720,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
         'Always translate the ENTIRE current text as a standalone translation for each target language.',
         'Never return only a suffix, delta, patch, completion fragment, or continuation.',
         'If is_final=yes, translate the full final text from scratch, not an incremental update.',
+        ...chineseGlossaryLines,
       ].join('\n')),
     userPrompt: ctx.userPromptOverride || userPromptLines.join('\n'),
   }
@@ -713,7 +737,7 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
   if (options?.shouldRedetectSourceLanguage) {
     properties.sourceLanguage = {
       type: SchemaType.STRING,
-      description: 'Detected source language code for the current text.',
+      description: `Detected source language code for the current text. ${SOURCE_LANGUAGE_CODE_RULE}`,
     }
     properties.sourceLanguagesMixed = {
       type: SchemaType.BOOLEAN,
@@ -731,11 +755,22 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
   for (const language of targetLanguages) {
     properties[language] = {
       type: SchemaType.STRING,
-      description: `Translated text in ${getTranslationLanguageName(language) || language}.`,
+      description: describeGeminiTargetLanguage(language),
     }
   }
 
   return { type: SchemaType.OBJECT, properties, required }
+}
+
+function describeGeminiTargetLanguage(language: string): string {
+  const name = getTranslationLanguageName(language) || language
+  const script = describeChineseVariantScript(language)
+  return script ? `Translated text in ${name}: ${script}.` : `Translated text in ${name}.`
+}
+
+function describeOpenAICompatibleTargetLanguage(language: string): string {
+  const script = describeChineseVariantScript(language)
+  return script ? `Translated text for ${language}: ${script}.` : `Translated text for ${language}.`
 }
 
 // ─── Token normalization ────────────────────────────────────────────────────
@@ -915,13 +950,13 @@ function buildOpenRouterQwenJsonSchemaResponseFormat(ctx: TranslateContext): Rec
   const properties: Record<string, unknown> = {}
   const required: string[] = []
   if (ctx.shouldRedetectSourceLanguage) {
-    properties.sourceLanguage = { type: 'string', description: 'Detected source language code.' }
+    properties.sourceLanguage = { type: 'string', description: `Detected source language code. ${SOURCE_LANGUAGE_CODE_RULE}` }
     properties.sourceLanguagesMixed = { type: 'boolean', description: 'Whether the current utterance meaningfully mixes multiple source languages.' }
     properties.sourceTextHasForeignScript = { type: 'boolean', description: 'Whether the current utterance contains substantive foreign script for the detected source language.' }
     required.push('sourceLanguage', 'sourceLanguagesMixed', 'sourceTextHasForeignScript')
   }
   for (const language of ctx.targetLanguages) {
-    properties[language] = { type: 'string', description: `Translated text for ${language}.` }
+    properties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
     required.push(language)
   }
   return {

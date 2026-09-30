@@ -8,9 +8,9 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { requestAllowsLegacyAnonymousUser } from '@/lib/request-user-identity'
 import { EXPECTED_ACCOUNT_HEADER, matchesExpectedAccount } from '@/lib/request-account-guard'
 import { prisma } from '@/lib/prisma'
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
-import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
+import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { normalizeChineseContent } from '@/server/chinese-script-conversion'
+import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
   normalizeLang,
@@ -43,8 +43,6 @@ import {
 
 export const runtime = 'nodejs'
 
-const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
-const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 
 type FinalizeTestFaultMode = 'provider_empty' | 'target_miss' | 'provider_error'
@@ -342,44 +340,21 @@ async function synthesizeTtsInline(args: {
   text: string
   language: string
   requestedVoiceId?: string
+  ttsModel?: unknown
 }): Promise<{ audioBase64: string, audioMime: string, voiceId: string } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
-  const authHeader = getInworldAuthHeaderValue()
-  if (!authHeader) return null
+  const result = await synthesizeSpeech({
+    text: args.text,
+    language: args.language,
+    requestedVoiceId: args.requestedVoiceId,
+    ttsModel: args.ttsModel,
+  })
+  if (!result.ok) return null
 
-  const resolvedVoiceId = args.requestedVoiceId?.trim() || await resolveVoiceId(authHeader, args.language)
-  try {
-    const response = await fetch(`${INWORLD_API_BASE}/tts/v1/voice`, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: args.text,
-        voiceId: resolvedVoiceId,
-        modelId: DEFAULT_TTS_MODEL_ID,
-        audioConfig: {
-          speakingRate: Number.isFinite(DEFAULT_TTS_SPEAKING_RATE) && DEFAULT_TTS_SPEAKING_RATE > 0
-            ? DEFAULT_TTS_SPEAKING_RATE
-            : 1.3,
-        },
-      }),
-      cache: 'no-store',
-    })
-
-    if (!response.ok) return null
-    const data = await response.json() as { audioContent?: string }
-    const audioBuffer = decodeAudioContent(data.audioContent)
-    if (!audioBuffer) return null
-
-    return {
-      audioBase64: audioBuffer.toString('base64'),
-      audioMime: detectAudioMime(audioBuffer),
-      voiceId: resolvedVoiceId,
-    }
-  } catch {
-    return null
+  return {
+    audioBase64: result.audio.toString('base64'),
+    audioMime: result.mime,
+    voiceId: result.voiceId,
   }
 }
 
@@ -396,6 +371,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
   const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
+  // User-selected TTS model; missing/invalid values resolve to the default (gemini-3.8-flash-tts) downstream.
+  const ttsModel = ttsPayload?.ttsModel
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
@@ -496,6 +473,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         model: string
         usage?: TranslationUsage
         sourceLanguage?: string
+        sourceDisplayText?: string | null
         sourceLanguagesMixed?: boolean
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
@@ -509,6 +487,9 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
       if (meta.sourceLanguage) {
         responsePayload.sourceLanguage = meta.sourceLanguage
+      }
+      if (meta.sourceDisplayText) {
+        responsePayload.sourceDisplayText = meta.sourceDisplayText
       }
       if (typeof meta.sourceLanguagesMixed === 'boolean') {
         responsePayload.sourceLanguagesMixed = meta.sourceLanguagesMixed
@@ -536,6 +517,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             text: ttsText,
             language: ttsLanguage,
             requestedVoiceId: ttsVoiceId,
+            ttsModel,
           })
 
           if (ttsResult) {
@@ -673,10 +655,30 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       totalTokens: selectedResult.usage?.totalTokens ?? 'unknown',
     })
 
+    // Chinese variants: resolve a generic model `zh`, put every zh-CN/zh-TW
+    // value in its script, and fill the sibling variant by conversion, before
+    // deciding which targets are missing.
+    const modelSourceLanguage = selectedResult.sourceLanguage || ''
+    const modelDetectedChinese = classifyChineseLanguage(modelSourceLanguage) !== ''
+    const normalizedContent = normalizeChineseContent({
+      sourceLanguage: modelSourceLanguage
+        ? (modelDetectedChinese ? 'zh' : modelSourceLanguage)
+        : sourceLanguage,
+      sourceText: text,
+      translations: selectedResult.translations,
+      targetLanguages,
+      candidates: targetLanguages,
+      ...(modelDetectedChinese
+        ? { sourceHint: sourceLanguage, sourceFallback: modelSourceLanguage }
+        : {}),
+    })
+    const normalizedSourceLanguage = normalizedContent.sourceLanguage
+    const sourceDisplayText = normalizedContent.sourceDisplayText
+
     const translations: Record<string, string> = {}
     for (const lang of targetLanguages) {
-      if (selectedResult.translations[lang]) {
-        translations[lang] = selectedResult.translations[lang]
+      if (normalizedContent.translations[lang]) {
+        translations[lang] = normalizedContent.translations[lang]
       }
     }
 
@@ -718,6 +720,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             infrastructureProvider: selectedResult.infrastructureProvider,
             model: selectedResult.model,
             usage: selectedResult.usage,
+            sourceDisplayText,
             usedFallbackFromPreviousState: true,
           })
         }
@@ -760,7 +763,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       infrastructureProvider: selectedResult.infrastructureProvider,
       model: selectedResult.model,
       usage: selectedResult.usage,
-      sourceLanguage: selectedResult.sourceLanguage,
+      sourceLanguage: selectedResult.sourceLanguage ? normalizedSourceLanguage : undefined,
+      sourceDisplayText,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
     })

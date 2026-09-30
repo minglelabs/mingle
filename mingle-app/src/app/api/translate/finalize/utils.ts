@@ -1,3 +1,4 @@
+import { classifyChineseLanguage } from "@/lib/chinese-variant"
 import { canonicalizeTranslationLanguageCode } from "@/lib/translation-languages"
 
 export type RecentTurnContext = {
@@ -68,7 +69,18 @@ export function normalizeSelectedLanguages(raw: unknown[]): string[] {
 }
 
 export function normalizeTargetLanguages(raw: unknown[], sourceLanguage: string): string[] {
-  return normalizeSelectedLanguages(raw).filter((language) => language !== sourceLanguage)
+  // Compare canonical codes: a zh-TW source excludes only zh-TW, never zh-CN.
+  const sourceKey = normalizeLang(sourceLanguage) || sourceLanguage
+  return normalizeSelectedLanguages(raw).filter((language) => language !== sourceKey)
+}
+
+/**
+ * Canonical code for a model-provided language, accepting the Chinese names
+ * and aliases models answer with ('Chinese', 'Mandarin', 'cmn', 'zh-Hant').
+ * Generic Chinese comes back as `zh` and is resolved to a variant later.
+ */
+export function normalizeModelLanguage(input: string): string {
+  return classifyChineseLanguage(input) || normalizeLang(input)
 }
 
 function parseTranslationJson(raw: string): ParsedTranslationJson | null {
@@ -104,7 +116,7 @@ export function parseTranslations(raw: string): Record<string, string> {
 
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value !== 'string') continue
-    const normalizedKey = normalizeLang(key)
+    const normalizedKey = normalizeModelLanguage(key)
     if (!normalizedKey) continue
     const cleaned = sanitizeMarkerText(value)
     if (!cleaned) continue
@@ -146,7 +158,7 @@ export function parseDetectedSourceLanguage(raw: string): string {
         : ''
   )
 
-  return normalizeLang(directCandidate)
+  return normalizeModelLanguage(directCandidate)
 }
 
 export function parseSourceLanguagesMixed(raw: string): boolean {

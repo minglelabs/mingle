@@ -211,7 +211,7 @@ describe('/api/translate/finalize route', () => {
     vi.unstubAllGlobals()
   })
 
-  it('returns translations and inline TTS audio when finalize succeeds', async () => {
+  it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -245,6 +245,7 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
+        ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
     const json = await res.json()
@@ -257,6 +258,130 @@ describe('/api/translate/finalize route', () => {
     expect(typeof json.ttsAudioBase64).toBe('string')
     expect(json.ttsAudioMime).toBe('audio/mpeg')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses Gemini TTS for inline audio when tts.ttsModel is a Gemini model and ignores the Inworld voiceId', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    // Korean inline audio uses the male Korean Gemini voice.
+    expect(json.ttsVoiceId).toBe('ko-kr-csagent-11')
+    expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+    const geminiBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
+    expect(geminiBody.model).toBe('gemini-3.8-flash-tts')
+    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-11' }] })
+  })
+
+  it('uses the gemini-3.8-flash-tts default for inline audio when tts.ttsModel is missing', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+  })
+
+  it('falls back to Inworld inline audio when Gemini TTS fails and resolves an invalid tts.ttsModel to the Gemini default', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const fallbackRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-lite-tts' },
+    }) as never)
+    const fallbackJson = await fallbackRes.json()
+    expect(fallbackJson.ttsAudioMime).toBe('audio/mpeg')
+    expect(fallbackJson.ttsVoiceId).toBe('KoVoice')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.inworld.ai/tts/v1/voice')
+
+    const invalidRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'bogus' },
+    }) as never)
+    const invalidJson = await invalidRes.json()
+    expect(invalidJson.ttsAudioMime).toBe('audio/mpeg')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+    expect(String(fetchMock.mock.calls[3][0])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
   it('uses previous-state fallback when provider returns empty response', async () => {
@@ -297,6 +422,7 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
+        ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
     const json = await res.json()
@@ -1309,7 +1435,7 @@ describe('/api/translate/finalize route', () => {
           properties: {
             sourceLanguage: {
               type: 'string',
-              description: 'Detected source language code.',
+              description: 'Detected source language code. Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.',
             },
             sourceLanguagesMixed: {
               type: 'boolean',
@@ -1750,6 +1876,13 @@ describe('/api/translate/finalize route', () => {
       expect(modelConfig.systemInstruction).not.toContain(
         'Because is_final=yes in this mode, translate the full final text from scratch.',
       )
+      expect(modelConfig.systemInstruction).toContain(
+        'Each requested language code holds the ENTIRE current text written in that language. When the current text mixes languages, the sourceLanguage key holds the full rendering in the source language.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'Simplified and Traditional Chinese characters are the same script: never set sourceTextHasForeignScript=true only because of Simplified/Traditional differences.',
+      )
+      expect(modelConfig.systemInstruction).not.toContain('Chinese language codes:')
       expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
         'sourceLanguage',
         'sourceLanguagesMixed',
@@ -1929,5 +2062,198 @@ describe('/api/translate/finalize route', () => {
     const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
     expect(userPrompt).not.toContain('Immediate previous turn')
     expect(userPrompt).not.toContain('turn without age')
+  })
+
+  describe('Chinese variants', () => {
+    const simplifiedText = '这个问题很难'
+
+    async function loadRedetectRoute() {
+      vi.resetModules()
+      setGeminiTranslateEnv()
+      const { POST } = await import('@/app/api/ios/v1.0.6/translate/finalize/route')
+      return POST
+    }
+
+    const redetectUrl = 'http://localhost:3000/api/ios/v1.0.6/translate/finalize'
+
+    it('fills the sibling variant by conversion when the model copies the Chinese source', async () => {
+      const { localizeChineseText } = await import('@/server/chinese-script-conversion')
+      mockGenerateContent.mockResolvedValue({
+        response: {
+          text: () => JSON.stringify({
+            sourceLanguage: 'Chinese',
+            sourceLanguagesMixed: false,
+            sourceTextHasForeignScript: false,
+            'zh-CN': simplifiedText,
+            'zh-TW': simplifiedText,
+            en: 'This problem is hard',
+          }),
+          usageMetadata: {},
+        },
+      })
+      vi.stubGlobal('fetch', vi.fn())
+      const POST = await loadRedetectRoute()
+
+      const res = await POST(makeJsonRequest({
+        text: simplifiedText,
+        sourceLanguage: 'zh-CN',
+        targetLanguages: ['zh-CN', 'zh-TW', 'en'],
+        isFinal: true,
+      }, undefined, redetectUrl) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('zh-CN')
+      expect(json.sourceDisplayText).toBeUndefined()
+      expect(json.translations).toEqual({
+        'zh-CN': simplifiedText,
+        'zh-TW': localizeChineseText(simplifiedText, 'zh-TW'),
+        en: 'This problem is hard',
+      })
+      expect(json.translations['zh-TW']).not.toBe(simplifiedText)
+
+      const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
+        systemInstruction?: string
+        generationConfig?: { responseSchema?: { properties?: Record<string, { description?: string }> } }
+      }
+      expect(modelConfig.systemInstruction).toContain(
+        'Chinese language codes: zh-CN = Simplified Chinese as used in mainland China (simplified characters only); zh-TW = Traditional Chinese as used in Taiwan (traditional characters and Taiwan wording, never simplified characters). zh-CN and zh-TW are different targets.',
+      )
+      const properties = modelConfig.generationConfig?.responseSchema?.properties || {}
+      expect(properties['zh-TW']?.description).toContain('Traditional Chinese as used in Taiwan')
+      expect(properties['zh-CN']?.description).toContain('Simplified Chinese as used in mainland China')
+      expect(properties.en?.description).toBe('Translated text in English.')
+      expect(properties.sourceLanguage?.description).toContain('never zh')
+    })
+
+    it('resolves a generic model zh from the room variant and returns the source in its script', async () => {
+      const { convertChineseScript } = await import('@/server/chinese-script-conversion')
+      mockGenerateContent.mockResolvedValue({
+        response: {
+          text: () => JSON.stringify({
+            sourceLanguage: 'zh',
+            sourceLanguagesMixed: false,
+            sourceTextHasForeignScript: false,
+            ko: '이 문제는 어렵다',
+          }),
+          usageMetadata: {},
+        },
+      })
+      vi.stubGlobal('fetch', vi.fn())
+      const POST = await loadRedetectRoute()
+
+      const res = await POST(makeJsonRequest({
+        text: simplifiedText,
+        targetLanguages: ['zh-TW', 'ko'],
+        isFinal: true,
+      }, undefined, redetectUrl) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('zh-TW')
+      expect(json.sourceDisplayText).toBe(convertChineseScript(simplifiedText, 'zh-TW'))
+      expect(json.translations).toEqual({
+        ko: '이 문제는 어렵다',
+      })
+    })
+
+    it('uses the request variant hint when the model only says Chinese', async () => {
+      const { localizeChineseText } = await import('@/server/chinese-script-conversion')
+      mockGenerateContent.mockResolvedValue({
+        response: {
+          text: () => JSON.stringify({
+            sourceLanguage: 'Mandarin',
+            sourceLanguagesMixed: false,
+            sourceTextHasForeignScript: false,
+            'zh-TW': simplifiedText,
+            ko: '이 문제는 어렵다',
+          }),
+          usageMetadata: {},
+        },
+      })
+      vi.stubGlobal('fetch', vi.fn())
+      const POST = await loadRedetectRoute()
+
+      const res = await POST(makeJsonRequest({
+        text: simplifiedText,
+        sourceLanguage: 'zh-TW',
+        targetLanguages: ['zh-CN', 'zh-TW', 'ko'],
+        isFinal: true,
+      }, undefined, redetectUrl) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('zh-TW')
+      expect(json.sourceDisplayText).toBeTruthy()
+      expect(json.translations['zh-CN']).toBe(localizeChineseText(json.translations['zh-TW'], 'zh-CN'))
+      expect(json.translations['zh-TW']).not.toBe(simplifiedText)
+      expect(json.translations.ko).toBe('이 문제는 어렵다')
+    })
+
+    it('fixes a wrong-script variant for a non-Chinese source', async () => {
+      const { convertChineseScript } = await import('@/server/chinese-script-conversion')
+      mockGenerateContent.mockResolvedValue({
+        response: {
+          text: () => JSON.stringify({ 'zh-CN': simplifiedText, 'zh-TW': simplifiedText }),
+          usageMetadata: {},
+        },
+      })
+      vi.stubGlobal('fetch', vi.fn())
+      const POST = await importRouteWithEnv()
+
+      const res = await POST(makeJsonRequest({
+        text: '이 문제는 어렵다',
+        sourceLanguage: 'ko',
+        targetLanguages: ['zh-CN', 'zh-TW'],
+        isFinal: true,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBeUndefined()
+      expect(json.sourceDisplayText).toBeUndefined()
+      expect(json.translations).toEqual({
+        'zh-CN': simplifiedText,
+        'zh-TW': convertChineseScript(simplifiedText, 'zh-TW'),
+      })
+    })
+
+    it('converts the source for an omitted sibling variant on non-redetect requests', async () => {
+      const { localizeChineseText } = await import('@/server/chinese-script-conversion')
+      mockGenerateContent.mockResolvedValue({
+        response: {
+          text: () => JSON.stringify({ en: 'This problem is hard' }),
+          usageMetadata: {},
+        },
+      })
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.stubGlobal('fetch', vi.fn())
+      const POST = await importRouteWithEnv()
+
+      try {
+        const res = await POST(makeJsonRequest({
+          text: simplifiedText,
+          sourceLanguage: 'zh-CN',
+          targetLanguages: ['zh-CN', 'zh-TW', 'en'],
+          isFinal: true,
+        }) as never)
+        const json = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(json.translations).toEqual({
+          'zh-TW': localizeChineseText(simplifiedText, 'zh-TW'),
+          en: 'This problem is hard',
+        })
+        expect(consoleErrorSpy).not.toHaveBeenCalled()
+        const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
+          generationConfig?: { responseSchema?: { required?: string[] } }
+          systemInstruction?: string
+        }
+        expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['zh-TW', 'en'])
+        expect(modelConfig.systemInstruction).toContain('Chinese language codes:')
+      } finally {
+        consoleErrorSpy.mockRestore()
+      }
+    })
   })
 })

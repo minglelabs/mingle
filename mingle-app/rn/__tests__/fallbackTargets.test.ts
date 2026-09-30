@@ -1,8 +1,11 @@
 import {
+  canUseWebHostFallbackForLoadFailure,
+  isWebViewPageLoadFailureHttpStatus,
   normalizeHttpBaseUrl,
   normalizeWsUrl,
   resolveDistinctFallbackTarget,
   shouldFallbackHttpStatus,
+  shouldTryFallbackVersionPolicy,
 } from '../src/fallbackTargets';
 
 describe('fallbackTargets', () => {
@@ -39,5 +42,44 @@ describe('fallbackTargets', () => {
     expect(shouldFallbackHttpStatus(503)).toBe(true);
     expect(shouldFallbackHttpStatus(404)).toBe(false);
     expect(shouldFallbackHttpStatus(401)).toBe(false);
+  });
+
+  it('treats any client or server error as a WebView page load failure worth covering', () => {
+    expect(isWebViewPageLoadFailureHttpStatus(404)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(401)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(500)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(503)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(200)).toBe(false);
+    expect(isWebViewPageLoadFailureHttpStatus(304)).toBe(false);
+  });
+
+  it('never retries the version-policy check on a fallback host that is not configured', () => {
+    expect(shouldTryFallbackVersionPolicy(false, undefined)).toBe(false);
+    expect(shouldTryFallbackVersionPolicy(false, 500)).toBe(false);
+    expect(shouldTryFallbackVersionPolicy(false, 404)).toBe(false);
+  });
+
+  it('retries the version-policy check on the fallback host only when it could plausibly help', () => {
+    // No status at all means the primary host never responded (network
+    // error/timeout/DNS) — trying the other host is worth it.
+    expect(shouldTryFallbackVersionPolicy(true, undefined)).toBe(true);
+    // The primary host responded but is itself broken (5xx) — worth trying
+    // the other host.
+    expect(shouldTryFallbackVersionPolicy(true, 500)).toBe(true);
+    expect(shouldTryFallbackVersionPolicy(true, 503)).toBe(true);
+    // The primary host responded with a client error — the fallback host
+    // would fail the same way, so don't bother switching.
+    expect(shouldTryFallbackVersionPolicy(true, 404)).toBe(false);
+    expect(shouldTryFallbackVersionPolicy(true, 401)).toBe(false);
+  });
+
+  it('lets a failed page load switch hosts until the current host has served a page', () => {
+    // First load still in flight.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: false, hasLoadedPage: false })).toBe(true);
+    // First load failed and the user pressed retry — the primary host has
+    // never served a page, so the retry may still fall back.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: true, hasLoadedPage: false })).toBe(true);
+    // A page already loaded from the current host — never switch mid-session.
+    expect(canUseWebHostFallbackForLoadFailure({ initialLoadSettled: true, hasLoadedPage: true })).toBe(false);
   });
 });

@@ -4,13 +4,13 @@ import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
+import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 
+export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
 export const CONVERSATION_HYDRATION_MESSAGE_LIMIT = 100;
-// Total people in a room, including the creator — matches the invite
-// picker's selection cap.
-export const MAX_CONVERSATION_MEMBERS = 10;
 
 export type AppConversationChannelStatus =
   | typeof APP_CONVERSATION_STATUS_ACTIVE
@@ -88,6 +88,9 @@ export type ConversationHydrationUtterance = {
   serverMessageId?: string;
   id: string;
   originalText: string;
+  // Display-only rendering of originalText in its Chinese variant's script
+  // (see normalizeChineseContent). Omitted when it equals originalText.
+  originalDisplayText?: string;
   originalLang: string;
   targetLanguages: string[];
   translations: Record<string, string>;
@@ -932,41 +935,91 @@ function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<stri
   return value as Record<string, unknown>;
 }
 
+type LatestVisibleMessageRow = {
+  sessionKey: string;
+  id: string;
+  createdAt: Date;
+  sourceLanguage: string;
+  metadata: Prisma.JsonValue | null;
+};
+
+function normalizeLatestMessageSessionKeys(sessionKeys: string[]): string[] {
+  return [...new Set(sessionKeys.filter((sessionKey) => typeof sessionKey === "string" && sessionKey.trim()))];
+}
+
+// Latest visible message per room, one row per session key, computed in SQL.
+// Prisma's `distinct` (without the nativeDistinct preview) fetches every
+// visible message of every requested room and dedups in memory, which was the
+// dominant source of database egress for the conversation list. The LATERAL
+// LIMIT 1 walks app_messages_session_created_at_desc_idx and returns at most
+// one row per key. The visibility predicate mirrors buildVisibleMessageWhere().
+async function listLatestVisibleMessagesBySessionKey(
+  sessionKeys: string[],
+): Promise<LatestVisibleMessageRow[]> {
+  const uniqueSessionKeys = normalizeLatestMessageSessionKeys(sessionKeys);
+  if (uniqueSessionKeys.length === 0) {
+    return [];
+  }
+
+  return prisma.$queryRaw<LatestVisibleMessageRow[]>(Prisma.sql`
+    SELECT
+      k.session_key AS "sessionKey",
+      latest.id AS "id",
+      latest.created_at AS "createdAt",
+      latest.source_language AS "sourceLanguage",
+      latest.metadata AS "metadata"
+    FROM unnest(${uniqueSessionKeys}::text[]) AS k(session_key)
+    CROSS JOIN LATERAL (
+      SELECT m.id, m.created_at, m.source_language, m.metadata
+      FROM app.app_messages AS m
+      WHERE m.session_key = k.session_key
+        AND (m.is_deleted = false OR m.is_deleted IS NULL)
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT 1
+    ) AS latest
+  `);
+}
+
 async function listLatestMessageSummaryBySessionKey(
   sessionKeys: string[],
 ): Promise<Map<string, LatestMessageSummary>> {
-  if (sessionKeys.length === 0) {
+  const latestRows = await listLatestVisibleMessagesBySessionKey(sessionKeys);
+  if (latestRows.length === 0) {
     return new Map();
   }
 
-  const latestMessages = await prisma.appMessage.findMany({
+  const contentRows = await prisma.appMessageContent.findMany({
     where: {
-      sessionKey: {
-        in: sessionKeys,
+      messageId: {
+        in: latestRows.map((row) => row.id),
       },
-      ...buildVisibleMessageWhere(),
+      ...buildVisibleMessageContentWhere(),
     },
-    orderBy: [
-      { sessionKey: "asc" },
-      { createdAt: "desc" },
-    ],
-    distinct: ["sessionKey"],
+    orderBy: { createdAt: "asc" },
     select: {
-      sessionKey: true,
-      createdAt: true,
-      sourceLanguage: true,
-      metadata: true,
-      contents: {
-        where: buildVisibleMessageContentWhere(),
-        orderBy: { createdAt: "asc" },
-        select: {
-          contentType: true,
-          language: true,
-          text: true,
-        },
-      },
+      messageId: true,
+      contentType: true,
+      language: true,
+      text: true,
     },
   });
+  const contentsByMessageId = new Map<string, Array<{ contentType: string; language: string; text: string }>>();
+  for (const content of contentRows) {
+    const bucket = contentsByMessageId.get(content.messageId);
+    const entry = { contentType: content.contentType, language: content.language, text: content.text };
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      contentsByMessageId.set(content.messageId, [entry]);
+    }
+  }
+  const latestMessages = latestRows.map((row) => ({
+    sessionKey: row.sessionKey,
+    createdAt: row.createdAt,
+    sourceLanguage: row.sourceLanguage,
+    metadata: row.metadata,
+    contents: contentsByMessageId.get(row.id) ?? [],
+  }));
 
   const summaryBySessionKey = new Map<string, LatestMessageSummary>();
   for (const message of latestMessages) {
@@ -974,17 +1027,29 @@ async function listLatestMessageSummaryBySessionKey(
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
       || null;
-    const preview = normalizeConversationPreview(sourceContent?.text);
-    const translations: Record<string, string> = {};
+    const storedTranslations: Record<string, string> = {};
     for (const content of message.contents) {
       if (content.contentType !== "TRANSLATION_FINAL") continue;
       const language = content.language.trim();
       const text = normalizeConversationPreview(content.text);
       if (!language || !text) continue;
-      translations[language] = text;
+      storedTranslations[language] = text;
     }
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
+    const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
+    // Same repair as hydration: canonical Chinese keys (legacy `zh` rows) in
+    // their variant's script, so a zh-TW viewer's preview finds its text.
+    const normalizedContent = normalizeChineseContent({
+      sourceLanguage: (message.sourceLanguage || "").trim() || "unknown",
+      sourceText: sourceContent?.text?.trim() || "",
+      translations: storedTranslations,
+      targetLanguages: storedTargetLanguages,
+      candidates: storedTargetLanguages,
+      sourceScriptIsEvidence: clientMetadata?.reason === "manual_text_input",
+    });
+    const preview = normalizeConversationPreview(normalizedContent.sourceDisplayText ?? sourceContent?.text);
+    const translations = normalizedContent.translations;
     if (!message.sessionKey) continue;
     summaryBySessionKey.set(message.sessionKey, {
       preview,
@@ -1004,28 +1069,7 @@ async function listLatestMessageSummaryBySessionKey(
 async function listLatestMessageCreatedAtBySessionKey(
   sessionKeys: string[],
 ): Promise<Map<string, Date>> {
-  const uniqueSessionKeys = [...new Set(sessionKeys.filter((sessionKey) => sessionKey.trim()))];
-  if (uniqueSessionKeys.length === 0) {
-    return new Map();
-  }
-
-  const latestMessages = await prisma.appMessage.findMany({
-    where: {
-      sessionKey: {
-        in: uniqueSessionKeys,
-      },
-      ...buildVisibleMessageWhere(),
-    },
-    orderBy: [
-      { sessionKey: "asc" },
-      { createdAt: "desc" },
-    ],
-    distinct: ["sessionKey"],
-    select: {
-      sessionKey: true,
-      createdAt: true,
-    },
-  });
+  const latestMessages = await listLatestVisibleMessagesBySessionKey(sessionKeys);
 
   const latestCreatedAtBySessionKey = new Map<string, Date>();
   for (const message of latestMessages) {
@@ -2900,32 +2944,48 @@ async function getConversationHydrationStateForRecord(args: {
     membersByChannelId,
   );
   const blockedCounterpartUserId = blockedCounterpartByChannelId.get(conversationRecord.id) ?? null;
+  // Decides a generic/legacy `zh` when a message's text cannot.
+  const conversationLanguages = [
+    ...conversationRecord.selectedLanguages,
+    ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
+  ];
 
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
       || null;
-    const translations: Record<string, string> = {};
-    const translationFinalized: Record<string, boolean> = {};
+    const storedTranslations: Record<string, string> = {};
 
     for (const content of message.contents) {
       if (content.contentType !== "TRANSLATION_FINAL") continue;
       const language = content.language.trim();
       const text = content.text.trim();
       if (!language || !text) continue;
-      translations[language] = text;
-      translationFinalized[language] = true;
+      storedTranslations[language] = text;
     }
 
     const metadata = readJsonObject(message.metadata);
-    const targetLanguages = [...new Set([
-      ...readStringArray(metadata?.translationTargetLanguages),
-      ...Object.keys(translations),
-    ])];
+    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
+    const originalText = sourceContent?.text?.trim() || "";
+    const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
+    // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
+    // value in its variant's script. The stored source text is never changed.
+    const normalizedContent = normalizeChineseContent({
+      sourceLanguage: (message.sourceLanguage || "").trim() || "unknown",
+      sourceText: originalText,
+      translations: storedTranslations,
+      targetLanguages: storedTargetLanguages,
+      candidates: [...conversationLanguages, ...storedTargetLanguages],
+      sourceScriptIsEvidence: clientMetadata?.reason === "manual_text_input",
+    });
+    const translations = normalizedContent.translations;
+    const translationFinalized = Object.fromEntries(
+      Object.keys(translations).map((language) => [language, true]),
+    );
+    const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
-    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -2938,8 +2998,9 @@ async function getConversationHydrationStateForRecord(args: {
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
       ...(image ? { image } : {}),
-      originalText: sourceContent?.text?.trim() || "",
-      originalLang: (message.sourceLanguage || "").trim() || "unknown",
+      originalText,
+      ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
+      originalLang: normalizedContent.sourceLanguage || "unknown",
       targetLanguages,
       translations,
       translationFinalized,
