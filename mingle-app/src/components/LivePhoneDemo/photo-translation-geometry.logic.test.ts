@@ -14,18 +14,22 @@ import {
   estimateTextWidthEm,
   fitFontSize,
   harmonizeFontSizes,
+  inferBlockAlignments,
   isVerticalWritingLanguage,
   layoutPhotoTranslationBlocks,
   medianColor,
   parseHexColor,
   recoverRotatedSize,
   resolveBlockPaint,
+  resolveFreeSpans,
   ringVariation,
   sampleCanvasSize,
   sampleRingColors,
   sampleTextColor,
+  solveRotatedSizeFromAspect,
   toPercentRect,
   verticalColumnCount,
+  widestWordEm,
   wrapLineCount,
   type Rgb,
   type SampleImage,
@@ -127,6 +131,34 @@ describe('block rectangles', () => {
     expect(rect.padding).toBeCloseTo(6, 6)
     expect(rect.angle).toBe(10)
     expect(rect.cx).toBeCloseTo(500, 6)
+    // Still the spec inversion when the line is plausible for its text.
+    const withText = blockPaintRect({ box: [x0, y0, 1 - x0, 1 - y0], angle: 10, text: 'Kimchi stew 9,000 won' }, { width: 1000, height: 1000 })
+    expect(withText.textHeight).toBeCloseTo(40, 6)
+    expect(withText.angle).toBe(10)
+  })
+
+  it('solves the rotation from the box shape and the text aspect', () => {
+    const box = enclosingBox(500, 26, 11)
+    const solved = solveRotatedSizeFromAspect(box.width, box.height, 500 / 26, -1)
+    expect(solved?.width).toBeCloseTo(500, 3)
+    expect(solved?.height).toBeCloseTo(26, 3)
+    expect(solved?.angle).toBeCloseTo(-11, 2)
+    expect(solveRotatedSizeFromAspect(250, 10, 500 / 26, 1)).toBeNull()
+    expect(solveRotatedSizeFromAspect(100, 100, 500 / 26, 1)).toBeNull()
+  })
+
+  it('re-solves an implausibly thin rotated line instead of painting a sliver (R2 probe sticker)', () => {
+    // s5_rotated_zh: the model said 13 degrees for a 489x120 px box, which the
+    // plain inversion turns into a 500x7 px line over 26 px tall text.
+    const size = { width: 1000, height: 820 }
+    const block = { box: [0.46, 0.2, 0.949, 0.2 + 120 / 820] as const, angle: 13, text: 'FRAGILE - HANDLE WITH CARE' }
+    expect(recoverRotatedSize(489, 120, 13).height).toBeLessThan(8)
+    const rect = blockPaintRect(block, size)
+    expect(rect.angle).toBeGreaterThan(10)
+    expect(rect.angle).toBeLessThan(12)
+    expect(rect.textHeight).toBeGreaterThan(20)
+    expect(rect.textHeight).toBeLessThan(35)
+    expect(rect.textWidth).toBeGreaterThan(480)
   })
 })
 
@@ -151,9 +183,11 @@ describe('text fitting', () => {
     expect(wrapLineCount('abcdefgh', 2, { measure: halfEm, breakWords: true })).toBe(2)
   })
 
-  it('counts upright columns for vertical text', () => {
-    expect(verticalColumnCount('本日のおすすめ', 4)).toBe(2)
-    expect(verticalColumnCount('本日\nおすすめ', 4)).toBe(2)
+  it('counts upright columns with the measured 1.2 em vertical advance', () => {
+    expect(verticalColumnCount('本日のおすすめ', 4)).toBe(3)
+    expect(verticalColumnCount('本日\nおすすめ', 4)).toBe(3)
+    expect(verticalColumnCount('오늘의 추천', 7.2)).toBe(1)
+    expect(verticalColumnCount('오늘의 추천', 6)).toBe(2)
     expect(verticalColumnCount('本日', 0.5)).toBe(Infinity)
   })
 
@@ -173,7 +207,8 @@ describe('text fitting', () => {
   })
 
   it('fits upright vertical text into one column when it can', () => {
-    expect(fitFontSize({ text: '오늘의 추천', mode: 'vertical', lines: 1, width: 60, height: 300, padding: 9 })).toBe(48.5)
+    // 6 upright advances (space included) of 1.2 em in a 291 px column.
+    expect(fitFontSize({ text: '오늘의 추천', mode: 'vertical', lines: 1, width: 60, height: 300, padding: 9 })).toBe(40.42)
   })
 
   it('harmonizes blocks whose line size is within 12% to the smallest fitted size', () => {
@@ -215,6 +250,84 @@ describe('layoutPhotoTranslationBlocks', () => {
 
   it('returns nothing before the stage has a size', () => {
     expect(layoutPhotoTranslationBlocks({ items: overlayBlocksFor(photoTranslationReadyResponse, 'ko'), stage: { width: 0, height: 0 }, language: 'ko' })).toEqual([])
+  })
+})
+
+describe('room for longer translations', () => {
+  const block = (id: string, box: readonly [number, number, number, number], extra: object = {}) =>
+    ({ id, box, text: 'x', sourceLanguage: 'ko', angle: 0, lines: 1, ...extra }) as const
+
+  it('measures the widest unbreakable word', () => {
+    expect(widestWordEm("Today's Special", { measure: halfEm })).toBe(3.5)
+    expect(widestWordEm('本日のおすすめ')).toBe(1)
+  })
+
+  it('infers menu columns: left-aligned items, right-aligned prices, centered headings', () => {
+    const alignments = inferBlockAlignments([
+      block('heading', [0.3, 0.05, 0.7, 0.1]),
+      block('item1', [0.1, 0.2, 0.3, 0.23]), block('item2', [0.1, 0.3, 0.35, 0.33]), block('item3', [0.101, 0.4, 0.25, 0.43]),
+      block('price1', [0.75, 0.2, 0.9, 0.23]), block('price2', [0.78, 0.3, 0.9, 0.33]), block('price3', [0.77, 0.4, 0.899, 0.43]),
+      block('tilted', [0.1, 0.6, 0.3, 0.7], { angle: 8 }), block('banner', [0.1, 0.7, 0.13, 0.95], { vertical: true }),
+    ])
+    expect(Object.fromEntries(alignments)).toEqual({
+      heading: 'center', item1: 'left', item2: 'left', item3: 'left',
+      price1: 'right', price2: 'right', price3: 'right', tilted: 'center', banner: 'center',
+    })
+    expect(inferBlockAlignments([block('a', [0.2, 0.1, 0.4, 0.15]), block('b', [0.2005, 0.3, 0.6, 0.35])]).get('a')).toBe('left')
+  })
+
+  function menuRow() {
+    const image = solidImage(200, 60, WHITE)
+    for (let y = 20; y <= 40; y += 1) for (let x = 120; x <= 125; x += 1) paint(image, x, y, INK)
+    return image
+  }
+
+  it('finds free background beside a flat patch up to the next ink, less one padding', () => {
+    const image = menuRow()
+    const item = block('item', [0.1, 0.4, 0.3, 0.6])
+    const spans = resolveFreeSpans([item], image, new Map([['item', resolveBlockPaint(item, image)]]))
+    expect(spans.get('item')!.right * 200).toBeCloseTo(58 - 1.8, 6)
+    expect(spans.get('item')!.left * 200).toBeCloseTo(18 - 1.8, 6)
+  })
+
+  it('gives no room to busy, rotated or neighbor-blocked patches', () => {
+    const image = menuRow()
+    const item = block('item', [0.1, 0.4, 0.3, 0.6])
+    const neighbor = block('neighbor', [0.4, 0.45, 0.5, 0.55])
+    const tilted = block('tilted', [0.1, 0.1, 0.3, 0.3], { angle: 5, text: 'Handle with care' })
+    const paints = new Map([
+      ['item', resolveBlockPaint(item, image)],
+      ['neighbor', resolveBlockPaint(neighbor, image)],
+      ['tilted', resolveBlockPaint(tilted, image)],
+    ])
+    const spans = resolveFreeSpans([item, neighbor, tilted], image, paints)
+    expect(spans.get('item')!.right * 200).toBeLessThan(80 - 61)
+    expect(spans.has('tilted')).toBe(false)
+    const plate = new Map([['item', { ...paints.get('item')!, kind: 'plate' as const }]])
+    expect(resolveFreeSpans([item], image, plate).has('item')).toBe(false)
+    expect(resolveFreeSpans([item], null, paints).size).toBe(0)
+  })
+
+  it('grows a long single line into free space along its alignment before shrinking it', () => {
+    const stage = { width: 200, height: 60 }
+    const item = { ...block('item', [0.1, 0.4, 0.3, 0.6]), text: '김치찌개' }
+    const items = [{ block: item, text: 'Kimchi Stew' }]
+    const freeSpans = new Map([['item', { left: 16.2 / 200, right: 56.2 / 200 }]])
+    const layout = (align?: 'left' | 'right' | 'center', withRoom = true) => layoutPhotoTranslationBlocks({
+      items, stage, language: 'en', measure: halfEm, freeSpans: withRoom ? freeSpans : undefined, alignments: align ? new Map([['item', align]]) : undefined,
+    })[0]
+    const boxed = layout('left', false)
+    expect(boxed.fontSize).toBeCloseTo(7.6, 1)
+    const left = layout('left')
+    expect(left.fontSize).toBe(13)
+    expect(left.rect.left).toBe(boxed.rect.left)
+    expect(left.align).toBe('left')
+    const right = layout('right')
+    expect(right.fontSize).toBeCloseTo(10.55, 1)
+    expect(right.rect.left + right.rect.width).toBeCloseTo(boxed.rect.left + boxed.rect.width, 2)
+    const centered = layout()
+    expect(centered.fontSize).toBe(13)
+    expect(centered.rect.left + centered.rect.width / 2).toBeCloseTo(boxed.rect.left + boxed.rect.width / 2, 2)
   })
 })
 

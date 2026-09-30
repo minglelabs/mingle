@@ -8,13 +8,14 @@ import {
   PHOTO_TRANSLATION_SCRIM,
   cssColor,
   estimateTextWidthEm,
+  inferBlockAlignments,
   layoutPhotoTranslationBlocks,
   resolveBlockPaint,
+  resolveFreeSpans,
   sampleCanvasSize,
   type PhotoTranslationBlockLayout,
   type PhotoTranslationPaint,
   type SampleImage,
-  type Size,
   type TextMeasurer,
 } from './photo-translation-geometry.logic'
 
@@ -96,6 +97,11 @@ function textStyle(layout: PhotoTranslationBlockLayout, paint: PhotoTranslationP
     fontWeight: layout.bold ? 700 : 500,
     color: cssColor(paint.text),
     paddingInline: layout.inset,
+    // Physical alignment, as in the photo: the container stays LTR and the
+    // inner span resolves the text direction itself (dir="auto").
+    direction: 'ltr',
+    justifyContent: layout.align === 'left' ? 'flex-start' : layout.align === 'right' ? 'flex-end' : 'center',
+    textAlign: layout.align,
     whiteSpace: layout.mode === 'single' ? 'nowrap' : 'pre-line',
     wordBreak: layout.keepAll ? 'keep-all' : 'normal',
     overflowWrap: layout.breakWords ? 'anywhere' : 'normal',
@@ -105,8 +111,12 @@ function textStyle(layout: PhotoTranslationBlockLayout, paint: PhotoTranslationP
 }
 
 type PhotoTranslationOverlayProps = {
-  /** The stage (contain-fit photo) size in px. */
-  stage: Size
+  /**
+   * The stage (contain-fit photo) size in px. Numbers, not an object: the
+   * viewer re-renders on every pointermove, and memo must see equal props.
+   */
+  width: number
+  height: number
   /** The loaded photo, for color sampling. */
   image: HTMLImageElement | null
   /** Every block of the photo; colors are sampled once per photo. */
@@ -125,13 +135,14 @@ type PhotoTranslationOverlayProps = {
  * swipe-to-dismiss. A patch painted in both languages stays solid while only
  * its text cross-fades, so the original never flickers through on a switch.
  */
-function PhotoTranslationOverlay({ stage, image, blocks, painted, language, reducedMotion = false }: PhotoTranslationOverlayProps) {
-  const { width, height } = stage
+function PhotoTranslationOverlay({ width, height, image, blocks, painted, language, reducedMotion = false }: PhotoTranslationOverlayProps) {
   const sample = useMemo(() => (image ? readSampleImage(image) : null), [image])
   const paints = useMemo(() => new Map(blocks.map(block => [block.id, resolveBlockPaint(block, sample)])), [blocks, sample])
+  const alignments = useMemo(() => inferBlockAlignments(blocks), [blocks])
+  const freeSpans = useMemo(() => resolveFreeSpans(blocks, sample, paints), [blocks, sample, paints])
   const layouts = useMemo(() => (language
-    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer() })
-    : []), [painted, width, height, language])
+    ? layoutPhotoTranslationBlocks({ items: painted, stage: { width, height }, language, measure: textMeasurer(), alignments, freeSpans })
+    : []), [alignments, freeSpans, painted, width, height, language])
 
   // Blocks that appear while the language stays the same are arriving
   // results (staggered fade-in); blocks that appear with a language change
@@ -159,13 +170,13 @@ function PhotoTranslationOverlay({ stage, image, blocks, painted, language, redu
           exit={{ opacity: 0, transition: { duration: fade } }}>
           <div className="absolute inset-0" style={patchStyle(layout, paint)}>
             <AnimatePresence initial={false}>
-              <motion.span key={language ?? ''} lang={language ?? undefined} dir="auto"
-                className="absolute inset-0 flex items-center justify-center text-center"
+              <motion.span key={language ?? ''}
+                className="absolute inset-0 flex items-center"
                 style={textStyle(layout, paint)}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: { duration: fade } }}
                 exit={{ opacity: 0, transition: { duration: fade } }}>
-                {layout.text}
+                <span lang={language ?? undefined} dir="auto">{layout.text}</span>
               </motion.span>
             </AnimatePresence>
           </div>

@@ -18,7 +18,7 @@ const copy = resolveConversationImageCopy('ko')
 
 function renderOverlay(language: string | null, response = photoTranslationReadyResponse) {
   return renderToStaticMarkup(createElement(PhotoTranslationOverlay, {
-    stage,
+    ...stage,
     image: null,
     blocks: response.blocks,
     painted: overlayBlocksFor(response, language),
@@ -48,11 +48,12 @@ describe('PhotoTranslationOverlay', () => {
   it('places blocks in percent of the stage and marks the text language', () => {
     const block = blockMarkup(renderOverlay('ko'), 'b0')
     expect(block).toMatch(/left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;height:[\d.]+%/)
-    expect(block).toContain('lang="ko"')
-    expect(block).toContain('dir="auto"')
+    expect(block).toContain('<span lang="ko" dir="auto">영업시간</span>')
     expect(block).toMatch(/font-size:[\d.]+px/)
     expect(block).toContain('white-space:nowrap')
     expect(block).toContain('word-break:keep-all')
+    expect(block).toContain('direction:ltr')
+    expect(block).toMatch(/justify-content:(center|flex-start|flex-end)/)
   })
 
   it('rotates rotated blocks and writes vertical blocks top to bottom for CJK targets', () => {

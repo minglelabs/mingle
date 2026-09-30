@@ -104,7 +104,57 @@ export type PaintRect = {
   angle: number
 }
 
-type BlockGeometry = Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical'>
+type BlockGeometry = Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical'> & { text?: string }
+
+/** A recovered text height below this fraction of width/em is implausible for the text it holds. */
+export const PHOTO_TRANSLATION_MIN_PLAUSIBLE_HEIGHT_RATIO = 0.45
+/** Typical glyph-box height of a line, in em of its font size. */
+const TYPICAL_GLYPH_HEIGHT_EM = 0.85
+
+/**
+ * Rotation from the box shape when the model's angle is off: for a rect of
+ * aspect `aspect` (w/h) rotated by t, the enclosing box has aspect
+ * (aspect cos t + sin t) / (aspect sin t + cos t), which falls from `aspect`
+ * at 0 to 1 at 45 degrees, so t is found by bisection. Null when no angle up
+ * to PHOTO_TRANSLATION_MAX_ROTATION_DEG produces the box.
+ */
+export function solveRotatedSizeFromAspect(boxWidth: number, boxHeight: number, aspect: number, sign: number): RotatedSize | null {
+  const target = boxWidth / boxHeight
+  const enclosing = (t: number) => (aspect * Math.cos(t) + Math.sin(t)) / (aspect * Math.sin(t) + Math.cos(t))
+  const max = PHOTO_TRANSLATION_MAX_ROTATION_DEG * DEG
+  if (!(aspect > 1 && boxWidth > 0 && boxHeight > 0) || target > aspect || target < enclosing(max)) return null
+  let low = 0
+  let high = max
+  for (let step = 0; step < 40; step += 1) {
+    const middle = (low + high) / 2
+    if (enclosing(middle) > target) low = middle
+    else high = middle
+  }
+  const t = (low + high) / 2
+  const height = boxHeight / (aspect * Math.sin(t) + Math.cos(t))
+  const angle = round((sign < 0 ? -t : t) / DEG, 2)
+  return height > 0 && angle !== 0 ? { width: aspect * height, height, angle } : null
+}
+
+/**
+ * The text rectangle inside a block's box, in pixels: the spec's inversion
+ * with the model's angle, unless that leaves a line far too thin (or
+ * non-positive) for the text it holds. Long lines make the inversion
+ * ill-conditioned (at 13 degrees a 1 degree error takes a 26 px line to 7 px),
+ * so then the angle is re-solved from the box shape and the text's expected
+ * aspect; if that fails too, the box is used unrotated.
+ */
+function blockTextRect(block: BlockGeometry, boxWidth: number, boxHeight: number): RotatedSize {
+  const unrotated = { width: boxWidth, height: boxHeight, angle: 0 }
+  if (!block.angle || Math.abs(block.angle) > PHOTO_TRANSLATION_MAX_ROTATION_DEG) return unrotated
+  const recovered = recoverRotatedSize(boxWidth, boxHeight, block.angle)
+  const textWidthEm = block.text && !block.vertical ? estimateTextWidthEm(block.text.replace(/\s*\n\s*/g, ' ')) : 0
+  if (!(textWidthEm > 0)) return recovered
+  const plausible = recovered.angle !== 0
+    && recovered.height >= PHOTO_TRANSLATION_MIN_PLAUSIBLE_HEIGHT_RATIO * (recovered.width / textWidthEm)
+  if (plausible) return recovered
+  return solveRotatedSizeFromAspect(boxWidth, boxHeight, textWidthEm / TYPICAL_GLYPH_HEIGHT_EM, Math.sign(block.angle)) ?? unrotated
+}
 
 /**
  * The patch rectangle of a block on a surface of `size` pixels: the text
@@ -115,7 +165,7 @@ export function blockPaintRect(block: BlockGeometry, size: Size, paddingFraction
   const [x0, y0, x1, y1] = block.box
   const boxWidth = (x1 - x0) * size.width
   const boxHeight = (y1 - y0) * size.height
-  const rotated = recoverRotatedSize(boxWidth, boxHeight, block.angle)
+  const rotated = blockTextRect(block, boxWidth, boxHeight)
   const crossSize = block.vertical ? rotated.width : rotated.height
   const padding = crossSize * paddingFraction
   return {
@@ -251,16 +301,35 @@ export function wrapLineCount(text: string, maxWidthEm: number, {
   return lines
 }
 
-/** Columns needed for upright vertical text, with `perColumn` characters per column. */
-export function verticalColumnCount(text: string, perColumn: number): number {
-  if (!(perColumn >= 1)) return Infinity
-  let columns = 0
+/**
+ * Upright vertical advance per character in em, spaces included: measured in
+ * Chrome with the app font stack (1.19 em for Hangul, kana, kanji, Latin and a
+ * space alike), not the 1 em a horizontal CJK glyph takes.
+ */
+export const PHOTO_TRANSLATION_VERTICAL_ADVANCE_EM = 1.2
+
+/**
+ * A whole word may overflow its line by this fraction at the smallest size
+ * before words are broken by character ("Special" in a narrow banner reads
+ * better slightly wide than as "Sp/eci/al").
+ */
+export const PHOTO_TRANSLATION_WORD_OVERFLOW_TOLERANCE = 0.2
+
+/** Width in em of the widest unbreakable segment of `text`. */
+export function widestWordEm(text: string, { bold = false, measure = estimateTextWidthEm }: { bold?: boolean; measure?: TextMeasurer } = {}): number {
+  let widest = 0
   for (const line of text.split('\n')) {
-    let length = 0
-    for (const character of line) length += /\s/.test(character) ? 0.5 : 1
-    columns += Math.max(1, Math.ceil(length / Math.floor(perColumn)))
+    for (const segment of segmentLine(line)) widest = Math.max(widest, measure(segment.text, bold))
   }
-  return columns
+  return widest
+}
+
+const verticalAdvance: TextMeasurer = text => [...text].length * PHOTO_TRANSLATION_VERTICAL_ADVANCE_EM
+
+/** Columns upright vertical text needs in a column `columnHeightEm` tall, with the same break rules as lines. */
+export function verticalColumnCount(text: string, columnHeightEm: number): number {
+  if (!(columnHeightEm >= PHOTO_TRANSLATION_VERTICAL_ADVANCE_EM)) return Infinity
+  return wrapLineCount(text, columnHeightEm, { breakWords: true, measure: verticalAdvance })
 }
 
 export type PhotoTranslationFitMode = 'single' | 'wrap' | 'vertical'
@@ -354,11 +423,117 @@ export function isVerticalWritingLanguage(language: string | null | undefined): 
   return language === 'ko' || language === 'ja' || language === 'zh' || language === 'zh-CN' || language === 'zh-TW'
 }
 
+// ── Room for longer translations ─────────────────────────────────────────
+
+export type PhotoTranslationTextAlign = 'left' | 'center' | 'right'
+
+/** Block edges within this fraction of the photo width count as aligned. */
+export const PHOTO_TRANSLATION_ALIGN_TOLERANCE = 0.012
+/** One sibling alone proves an alignment only when its edge is this close. */
+export const PHOTO_TRANSLATION_ALIGN_TIGHT_TOLERANCE = 0.004
+/** A patch grows at most this many times its own width into free space. */
+export const PHOTO_TRANSLATION_MAX_GROWTH = 3
+/**
+ * Growth stops at the first column that differs from the patch color by more
+ * than this (RGB): other text, a price, a chip or card edge. A flat patch
+ * grown over a different color would show.
+ */
+export const PHOTO_TRANSLATION_GROWTH_COLOR_DISTANCE = 24
+
+function alignedEdge(box: ConversationImageTextBlock['box'], align: PhotoTranslationTextAlign): number {
+  return align === 'left' ? box[0] : align === 'right' ? box[2] : (box[0] + box[2]) / 2
+}
+
+/**
+ * How each block's text is aligned in the photo, from its siblings: the edge
+ * (left, center or right) that the most other blocks share, as a column of
+ * menu items shares left edges and a price column right edges. An edge counts
+ * with two or more siblings, or one very close sibling; ties go to the
+ * tightest edge. Anything else, and rotated or vertical text, is centered.
+ */
+export function inferBlockAlignments(blocks: readonly Pick<ConversationImageTextBlock, 'id' | 'box' | 'angle' | 'vertical'>[]): Map<string, PhotoTranslationTextAlign> {
+  const output = new Map<string, PhotoTranslationTextAlign>()
+  const horizontal = blocks.filter(block => !block.vertical && !block.angle)
+  for (const block of blocks) {
+    if (block.vertical || block.angle) {
+      output.set(block.id, 'center')
+      continue
+    }
+    const candidates = (['left', 'center', 'right'] as const).map(align => {
+      const edge = alignedEdge(block.box, align)
+      const deviations = horizontal
+        .filter(other => other.id !== block.id)
+        .map(other => Math.abs(alignedEdge(other.box, align) - edge))
+        .filter(deviation => deviation <= PHOTO_TRANSLATION_ALIGN_TOLERANCE)
+      return { align, count: deviations.length, spread: deviations.reduce((sum, value) => sum + value, 0), tight: deviations.some(value => value <= PHOTO_TRANSLATION_ALIGN_TIGHT_TOLERANCE) }
+    }).filter(candidate => candidate.count >= 2 || candidate.tight)
+      .sort((first, second) => second.count - first.count || first.spread - second.spread)
+    output.set(block.id, candidates[0]?.align ?? 'center')
+  }
+  return output
+}
+
+export type FreeSpan = { left: number; right: number }
+
+/**
+ * Free background beside each unrotated block, as fractions of the photo
+ * width: scanning outward from the padded patch in the downscaled photo, the
+ * space ends at the first column whose pixels depart from the block's patch
+ * color (other text, prices, graphics, a chip or card edge) or at another
+ * block's patch, less one padding of gap. Only flat patches get room; a busy
+ * background or a missing sample gets none, so a patch never covers
+ * something it cannot see.
+ */
+export function resolveFreeSpans(
+  blocks: readonly ConversationImageTextBlock[],
+  image: SampleImage | null,
+  paints: ReadonlyMap<string, PhotoTranslationPaint>,
+): Map<string, FreeSpan> {
+  const output = new Map<string, FreeSpan>()
+  if (!image || !(image.width > 0 && image.height > 0)) return output
+  const rects = new Map(blocks.map(block => [block.id, blockPaintRect(block, image)]))
+  for (const block of blocks) {
+    const rect = rects.get(block.id)!
+    const paint = paints.get(block.id)
+    if (rect.angle || paint?.kind !== 'flat') continue
+    const top = Math.max(0, Math.floor(rect.cy - rect.height / 2))
+    const bottom = Math.min(image.height - 1, Math.ceil(rect.cy + rect.height / 2))
+    // JPEG noise and a stray anti-aliased pixel are not an edge.
+    const allowedOff = Math.max(1, Math.floor((bottom - top + 1) * 0.05))
+    const leftEdge = rect.cx - rect.width / 2
+    const rightEdge = rect.cx + rect.width / 2
+    const obstacles = blocks.filter(other => other.id !== block.id).map(other => rects.get(other.id)!)
+      .filter(other => other.cy + other.height / 2 > top && other.cy - other.height / 2 < bottom)
+    const blocked = (x: number) => {
+      if (x < 0 || x >= image.width) return true
+      if (obstacles.some(other => x >= other.cx - other.width / 2 && x <= other.cx + other.width / 2)) return true
+      let off = 0
+      for (let y = top; y <= bottom; y += 1) {
+        const pixel = readPixel(image, x, y)
+        if (pixel && colorDistance(pixel, paint.background) > PHOTO_TRANSLATION_GROWTH_COLOR_DISTANCE && ++off > allowedOff) return true
+      }
+      return false
+    }
+    const limit = rect.width * PHOTO_TRANSLATION_MAX_GROWTH
+    let right = 0
+    while (right < limit && !blocked(Math.ceil(rightEdge) + right)) right += 1
+    let left = 0
+    while (left < limit && !blocked(Math.floor(leftEdge) - 1 - left)) left += 1
+    output.set(block.id, {
+      left: Math.max(0, left - rect.padding) / image.width,
+      right: Math.max(0, right - rect.padding) / image.width,
+    })
+  }
+  return output
+}
+
 export type PhotoTranslationBlockLayout = {
   id: string
   rect: PercentRect
   angle: number
   mode: PhotoTranslationFitMode
+  /** Where the text sits in its patch, following the photo's own alignment. */
+  align: PhotoTranslationTextAlign
   fontSize: number
   /** Allow breaking inside words (only when whole words cannot fit). */
   breakWords: boolean
@@ -377,28 +552,66 @@ export type PhotoTranslationBlockLayout = {
 /**
  * Everything the overlay needs to paint `language` on a stage of `stage`
  * pixels: patch placement, rotation, the fitting mode and a harmonized font
- * size per block.
+ * size per block. A single-line translation longer than its box first grows
+ * its patch into free background (`freeSpans`, verified in the pixels) along
+ * the photo's alignment, so "김치찌개" -> "Kimchi Stew" keeps a readable size
+ * instead of shrinking to fit the original width.
  */
-export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm }: {
+export function layoutPhotoTranslationBlocks({ items, stage, language, measure = estimateTextWidthEm, alignments, freeSpans }: {
   items: readonly { block: ConversationImageTextBlock; text: string }[]
   stage: Size
   language: string
   measure?: TextMeasurer
+  alignments?: ReadonlyMap<string, PhotoTranslationTextAlign>
+  freeSpans?: ReadonlyMap<string, FreeSpan>
 }): PhotoTranslationBlockLayout[] {
   if (!(stage.width > 0 && stage.height > 0)) return []
   const keepAll = language === 'ko'
   const vertical = isVerticalWritingLanguage(language)
   const drafts = items.map(({ block, text }) => {
-    const rect = blockPaintRect(block, stage)
+    let rect = blockPaintRect(block, stage)
     const mode: PhotoTranslationFitMode = block.vertical
       ? vertical ? 'vertical' : 'wrap'
       : block.lines > 1 ? 'wrap' : 'single'
+    const align = mode === 'vertical' ? 'center' : alignments?.get(block.id) ?? 'center'
     const bold = block.style?.bold === true
     const shown = mode === 'single' ? text.replace(/\s*\n\s*/g, ' ').trim() : text
+    const span = freeSpans?.get(block.id)
+    // Growable: one-line text (aiming at the box's line size) and vertical
+    // banners written across (aiming at the column's glyph size for the widest word).
+    const across = mode === 'wrap' && block.vertical === true
+    if (span && !rect.angle && (mode === 'single' || across)) {
+      const needed = across
+        ? widestWordEm(shown, { bold, measure }) * rect.textWidth + rect.padding - rect.width
+        : measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + rect.padding - rect.width
+      if (needed > 0) {
+        const leftRoom = span.left * stage.width
+        const rightRoom = span.right * stage.width
+        let growLeft = 0
+        let growRight = 0
+        if (align === 'left') growRight = Math.min(needed, rightRoom)
+        else if (align === 'right') growLeft = Math.min(needed, leftRoom)
+        else {
+          // Centered: grow evenly, then let the side with room take the rest
+          // (a label against the photo edge grows inward).
+          growLeft = Math.min(needed / 2, leftRoom)
+          growRight = Math.min(needed / 2, rightRoom)
+          const rest = needed - growLeft - growRight
+          const extraLeft = Math.min(rest, leftRoom - growLeft)
+          growLeft += extraLeft
+          growRight += Math.min(rest - extraLeft, rightRoom - growRight)
+        }
+        rect = { ...rect, width: rect.width + growLeft + growRight, cx: rect.cx + (growRight - growLeft) / 2 }
+      }
+    }
     const fit = { text: shown, mode, lines: block.lines, width: rect.width, height: rect.height, padding: rect.padding, bold, measure }
-    let breakWords = false
-    let fontSize = fitFontSize(fit)
-    if (mode === 'wrap' && !Number.isFinite(wrapLineCount(shown, (rect.width - rect.padding) / fontSize, { bold, measure }))) {
+    // Upright columns may break anywhere (as the column estimate does).
+    let breakWords = mode === 'vertical'
+    let fontSize = fitFontSize({ ...fit, breakWords })
+    if (mode === 'wrap' && !Number.isFinite(wrapLineCount(shown, (rect.width - rect.padding) / fontSize, { bold, measure }))
+      && widestWordEm(shown, { bold, measure }) * fontSize > (rect.width - rect.padding) * (1 + PHOTO_TRANSLATION_WORD_OVERFLOW_TOLERANCE)) {
+      // Whole words do not fit even at the smallest size: break inside words
+      // (overflow-wrap:anywhere) rather than spill far past the patch.
       breakWords = true
       fontSize = fitFontSize({ ...fit, breakWords: true })
     }
@@ -407,12 +620,15 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
       id: block.id,
       rect,
       mode,
+      align,
       bold,
       text: shown,
       breakWords,
       fontSize,
       lineSize: crossSize / Math.max(1, block.lines),
-      group: mode === 'vertical' ? 'vertical' : 'horizontal',
+      // By the source orientation: a vertical banner written across (non-CJK
+      // targets) must not shrink a horizontal heading of similar size.
+      group: block.vertical ? 'vertical' : 'horizontal',
     }
   })
   const harmonized = harmonizeFontSizes(drafts)
@@ -421,6 +637,7 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     rect: toPercentRect(draft.rect, stage),
     angle: draft.rect.angle,
     mode: draft.mode,
+    align: draft.align,
     fontSize: harmonized.get(draft.id) ?? draft.fontSize,
     breakWords: draft.breakWords,
     keepAll,
@@ -590,7 +807,7 @@ export function sampleTextColor(image: SampleImage, rect: PaintRect, background:
  * then the dark scrim.
  */
 export function resolveBlockPaint(
-  block: Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical' | 'style'>,
+  block: Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical' | 'style'> & { text?: string },
   image: SampleImage | null,
 ): PhotoTranslationPaint {
   if (image && image.width > 0 && image.height > 0) {
