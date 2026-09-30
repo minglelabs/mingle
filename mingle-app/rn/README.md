@@ -83,20 +83,29 @@ The shell reports whether earphones are the current audio output so the web can 
   `NativeAudioRouteModule.kt` registered in `NativeRuntimeConfigPackage.kt`): `getAudioRoute()` plus the
   `audioRouteChanged` event. Read-only: it never changes the audio session, mode or routing, and needs no new
   permission. iOS observes route changes, media-services resets and `didBecomeActive`; Android uses its own
-  `AudioDeviceCallback`, `ACTION_AUDIO_BECOMING_NOISY` and host resume, and judges API 33+ on
-  `getAudioDevicesForAttributes(USAGE_MEDIA)`.
+  `AudioDeviceCallback`, `ACTION_AUDIO_BECOMING_NOISY` and host resume, and polls every 250 ms while the host
+  is resumed. Polling stops on pause, destroy or module invalidation. Pause immediately reports a disconnected,
+  unknown route, and reads while paused fail closed; resume performs a fresh read. API 33+ reads
+  `getAudioDevicesForAttributes(USAGE_MEDIA)` and polls output-selection and audio-mode changes that do not add
+  or remove a device.
 - Earphones = iOS `headphones`, `bluetoothA2DP`, `bluetoothHFP`, `bluetoothLE`, `usbAudio`; Android wired
   headset/headphones, Bluetooth A2DP/SCO, BLE headset, USB headset, hearing aid among the API 33+ media devices.
   Android API 29-32 has no media-route query and `getDevices(GET_DEVICES_OUTPUTS)` lists every connected output,
   so only outputs that carry media count there: wired headset/headphones, USB headset, hearing aid, and Bluetooth
-  A2DP while `isBluetoothA2dpOn()`. Bluetooth SCO (call audio, e.g. a headset with "Media audio" off) and BLE
-  headset never count on API 29-32, and nothing counts in `MODE_IN_CALL`/`MODE_IN_COMMUNICATION` (media follows
-  the call route). Only port/device types are reported, never device names.
-- `capabilities` (on `mingle:native-stt`) carries `audioRoute: true` when the module is present.
+  A2DP while `isBluetoothA2dpOn()`. API 29-32 cannot prove which connected output is selected for media, so
+  `audioRoute` capability stays false there and automatic earphone-gated clips are unavailable. Bluetooth SCO
+  (call audio, e.g. a headset with "Media audio" off) and BLE headset never count in the legacy diagnostic query,
+  and nothing counts in `MODE_IN_CALL`/`MODE_IN_COMMUNICATION` (media follows the call route). Only port/device
+  types are reported, never device names.
+- `capabilities` (on `mingle:native-stt`) carries `audioRoute: true` when supported: on iOS with the module,
+  and on Android API 33+ with the module.
 - `App.tsx` relays readings (`src/nativeAudioRoute.ts`) as the window event `mingle:native-audio-route`, after
   assigning the same detail to `window.__MINGLE_LAST_NATIVE_AUDIO_ROUTE`: at every load end right after
   `capabilities`, on each `earphonesConnected`/`routeKind` change (debounced 250 ms, a disconnect immediately), and
   in reply to the web command `native_audio_route_request`.
+- Android automatic clips request a fresh route immediately before HTML playback. The request and response carry
+  an optional `requestId`; missing, malformed or failed replies do not authorize playback. Manual clips do not
+  require this check. A refused autoplay attempt is retried through the queue with a new route query.
 - `mingle:native-tts` gains `tts_started` (sent when iOS `NativeTTSModule.play` resolves). A `native_tts_play` with
   `stopOnEarphoneDisconnect: true` is stopped on iOS as soon as no earphone output is left (or is not started
   without one), reported as `tts_stopped` with `reason: 'earphones_disconnected'`.

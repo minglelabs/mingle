@@ -22,6 +22,63 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
+internal data class ForegroundRouteSample<K, V>(val key: K, val value: V)
+
+/** A Handler-backed route sampler whose lifetime is explicitly tied to host resume. */
+internal class ForegroundRoutePoller<K, V>(
+  private val intervalMs: Long,
+  private val schedule: (Runnable, Long) -> Unit,
+  private val cancel: (Runnable) -> Unit,
+  private val sample: () -> ForegroundRouteSample<K, V>?,
+  private val onChange: (V) -> Unit,
+) {
+  private var active = false
+  private var disposed = false
+  private var hasLastKey = false
+  private var lastKey: K? = null
+
+  private val task = object : Runnable {
+    override fun run() {
+      if (!active || disposed) return
+      try {
+        val reading = sample()
+        if (reading != null && (!hasLastKey || reading.key != lastKey)) {
+          hasLastKey = true
+          lastKey = reading.key
+          onChange(reading.value)
+        }
+      } catch (_: Throwable) {
+        // A later foreground sample can recover from a transient route-query failure.
+      }
+      if (active && !disposed) schedule(this, intervalMs)
+    }
+  }
+
+  fun start(initialKey: K? = null) {
+    if (disposed) return
+    active = true
+    hasLastKey = initialKey != null
+    lastKey = initialKey
+    cancel(task)
+    schedule(task, intervalMs)
+  }
+
+  fun observe(key: K) {
+    hasLastKey = true
+    lastKey = key
+  }
+
+  fun stop() {
+    active = false
+    cancel(task)
+  }
+
+  fun dispose() {
+    stop()
+    disposed = true
+  }
+}
+
 /**
  * Read-only reporter of the current media output route for the web's earphone
  * mode (bridge contract A.2): `getAudioRoute()` plus `audioRouteChanged` events.
@@ -32,9 +89,10 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
  * API 33+: judged on getAudioDevicesForAttributes(USAGE_MEDIA), i.e. where the
  * WebView's `<audio>` TTS would really play. API 29-32 has no such query:
  * getDevices(GET_DEVICES_OUTPUTS) lists every CONNECTED output, so only earphone
- * types that carry media there are counted (see legacyMediaOutputTypes). RN JS
- * dedupes and debounces before anything reaches the WebView, so every reading
- * is emitted as is.
+ * types that carry media there are counted (see legacyMediaOutputTypes). Since
+ * there is no public route-selection callback, the active host is polled and
+ * only state changes from polling are emitted. RN JS still dedupes/debounces
+ * readings before anything reaches the WebView.
  */
 class NativeAudioRouteModule(
   reactContext: ReactApplicationContext,
@@ -51,6 +109,23 @@ class NativeAudioRouteModule(
   private val mainHandler = Handler(Looper.getMainLooper())
   private var audioDeviceCallback: AudioDeviceCallback? = null
   private var becomingNoisyReceiver: BroadcastReceiver? = null
+  @Volatile private var hostIsResumed = false
+  @Volatile private var moduleInvalidated = false
+  private val foregroundRoutePoller = ForegroundRoutePoller<ReportedRouteState, RouteReading>(
+    intervalMs = ROUTE_POLL_INTERVAL_MS,
+    schedule = { task, delayMs -> mainHandler.postDelayed(task, delayMs) },
+    cancel = { task -> mainHandler.removeCallbacks(task) },
+    sample = {
+      if (!hostIsResumed || moduleInvalidated) {
+        null
+      } else {
+        val reading = readRouteSafely("foreground_poll", logFailure = false)
+          ?: unknownRouteReading("foreground_poll_unavailable")
+        ForegroundRouteSample(reading.state, reading)
+      }
+    },
+    onChange = { emitRouteReading("foreground_poll", it) },
+  )
 
   // Main thread only (device callback, receiver, host resume and getAudioRoute
   // all run there), which also keeps readings and `monotonicMs` in order.
@@ -67,7 +142,9 @@ class NativeAudioRouteModule(
   }
 
   override fun invalidate() {
+    moduleInvalidated = true
     reactApplicationContext.removeLifecycleEventListener(this)
+    foregroundRoutePoller.dispose()
     mainHandler.removeCallbacks(becomingNoisyHoldExpired)
     unregisterAudioDeviceCallback()
     unregisterBecomingNoisyReceiver()
@@ -89,7 +166,10 @@ class NativeAudioRouteModule(
     // Read on the main thread like every event, so readings stay ordered.
     mainHandler.post {
       try {
-        promise.resolve(readRoutePayload(reason = null))
+        val reading = readRoutePayload(reason = null)
+        logRouteReading(reason = null, reading)
+        foregroundRoutePoller.observe(reading.state)
+        promise.resolve(reading.payload)
       } catch (error: Throwable) {
         promise.reject("audio_route_unavailable", error.message ?: "audio route read failed", error)
       }
@@ -97,14 +177,31 @@ class NativeAudioRouteModule(
   }
 
   override fun onHostResume() {
+    if (moduleInvalidated) return
     // Device callbacks can be deferred while the app is cached; re-read on
-    // return, like iOS does on didBecomeActive.
-    emitCurrentRoute("host_resume")
+    // return, like iOS does on didBecomeActive. The route query has no public
+    // callback for output-selection changes, so poll only while resumed.
+    hostIsResumed = true
+    val reading = readRouteSafely("host_resume") ?: unknownRouteReading("host_resume_unavailable")
+    emitRouteReading("host_resume", reading)
+    if (moduleInvalidated) {
+      hostIsResumed = false
+      return
+    }
+    foregroundRoutePoller.start(reading.state)
   }
 
-  override fun onHostPause() = Unit
+  override fun onHostPause() {
+    hostIsResumed = false
+    foregroundRoutePoller.stop()
+    emitCurrentRoute("host_pause")
+  }
 
-  override fun onHostDestroy() = Unit
+  override fun onHostDestroy() {
+    hostIsResumed = false
+    foregroundRoutePoller.stop()
+    emitCurrentRoute("host_destroyed")
+  }
 
   private fun registerAudioDeviceCallback() {
     if (audioDeviceCallback != null) return
@@ -210,13 +307,6 @@ class NativeAudioRouteModule(
       inCallAudioMode = audioMode == AudioManager.MODE_IN_CALL ||
         audioMode == AudioManager.MODE_IN_COMMUNICATION,
     )
-    if (mediaTypes.size != connectedTypes.size) {
-      Log.i(
-        TAG,
-        "api<33 connected=${connectedTypes.distinct().map { typeName(it) }} " +
-          "a2dpOn=$bluetoothA2dpOn mode=$audioMode",
-      )
-    }
     return mediaTypes
   }
 
@@ -232,15 +322,23 @@ class NativeAudioRouteModule(
       false
     }
 
-  private fun readRoutePayload(reason: String?): WritableMap {
+  private data class ReportedRouteState(
+    val earphonesConnected: Boolean,
+    val routeKind: String,
+  )
+
+  private data class RouteReading(
+    val payload: WritableMap,
+    val state: ReportedRouteState,
+    val outputTypes: List<String>,
+    val noisyHold: Boolean,
+  )
+
+  private fun readRoutePayload(reason: String?): RouteReading {
+    if (!hostIsResumed || moduleInvalidated) return unknownRouteReading(reason ?: "host_paused")
     val holdActive = SystemClock.elapsedRealtime() < becomingNoisyHoldUntilMs
     val classification = classifyOutputTypes(currentMediaOutputTypes(), excludeEarphones = holdActive)
-    Log.i(
-      TAG,
-      "reason=${reason ?: "read"} earphones=${classification.earphonesConnected} " +
-        "kind=${classification.routeKind} outputs=${classification.outputTypes} noisyHold=$holdActive",
-    )
-    return Arguments.createMap().apply {
+    val payload = Arguments.createMap().apply {
       putBoolean("earphonesConnected", classification.earphonesConnected)
       putString("routeKind", classification.routeKind)
       putArray(
@@ -251,6 +349,48 @@ class NativeAudioRouteModule(
       putDouble("monotonicMs", SystemClock.elapsedRealtimeNanos() / 1_000_000.0)
       if (!reason.isNullOrEmpty()) putString("reason", reason)
     }
+    return RouteReading(
+      payload = payload,
+      state = ReportedRouteState(classification.earphonesConnected, classification.routeKind),
+      outputTypes = classification.outputTypes,
+      noisyHold = holdActive,
+    )
+  }
+
+  private fun logRouteReading(reason: String?, reading: RouteReading) {
+    Log.i(
+      TAG,
+      "reason=${reason ?: "read"} earphones=${reading.state.earphonesConnected} " +
+        "kind=${reading.state.routeKind} outputs=${reading.outputTypes} noisyHold=${reading.noisyHold}",
+    )
+  }
+
+  private fun readRouteSafely(reason: String, logFailure: Boolean = true): RouteReading? = try {
+    readRoutePayload(reason)
+  } catch (error: Throwable) {
+    if (logFailure) Log.w(TAG, "audio route read failed reason=$reason", error)
+    null
+  }
+
+  private fun unknownRouteReading(reason: String): RouteReading {
+    val classification = RouteClassification(
+      earphonesConnected = false,
+      routeKind = "none",
+      outputTypes = emptyList(),
+    )
+    val payload = Arguments.createMap().apply {
+      putBoolean("earphonesConnected", false)
+      putString("routeKind", "none")
+      putArray("outputTypes", Arguments.createArray())
+      putDouble("monotonicMs", SystemClock.elapsedRealtimeNanos() / 1_000_000.0)
+      putString("reason", reason)
+    }
+    return RouteReading(
+      payload = payload,
+      state = ReportedRouteState(classification.earphonesConnected, classification.routeKind),
+      outputTypes = classification.outputTypes,
+      noisyHold = false,
+    )
   }
 
   private fun emitCurrentRoute(reason: String) {
@@ -258,19 +398,20 @@ class NativeAudioRouteModule(
       mainHandler.post { emitCurrentRoute(reason) }
       return
     }
-    val payload = try {
-      readRoutePayload(reason)
-    } catch (error: Throwable) {
-      Log.w(TAG, "audio route read failed reason=$reason", error)
-      return
-    }
+    val reading = readRouteSafely(reason) ?: return
+    emitRouteReading(reason, reading)
+  }
+
+  private fun emitRouteReading(reason: String, reading: RouteReading) {
     // DeviceEventEmitter drops an event nobody listens to, which is fine: RN
     // reads the initial route with getAudioRoute() right after subscribing.
     if (!reactApplicationContext.hasActiveReactInstance()) return
+    logRouteReading(reason, reading)
     try {
       reactApplicationContext
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-        .emit(EVENT_ROUTE_CHANGED, payload)
+        .emit(EVENT_ROUTE_CHANGED, reading.payload)
+      foregroundRoutePoller.observe(reading.state)
     } catch (error: Throwable) {
       Log.w(TAG, "audio route emit failed reason=$reason", error)
     }
@@ -281,6 +422,7 @@ class NativeAudioRouteModule(
     private const val TAG = "NativeAudioRoute"
     private const val EVENT_ROUTE_CHANGED = "audioRouteChanged"
     private const val BECOMING_NOISY_HOLD_MS = 2_500L
+    private const val ROUTE_POLL_INTERVAL_MS = 250L
 
     private val MEDIA_ATTRIBUTES: AudioAttributes =
       AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()

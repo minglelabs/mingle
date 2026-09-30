@@ -4221,7 +4221,10 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log('[Web→NativeAudioRoute] request');
       }
-      void nativeAudioRouteRelayRef.current?.handleRequest();
+      const rawRequestId = parsed.payload?.requestId;
+      const requestId = typeof rawRequestId === 'string' && rawRequestId.trim()
+        ? rawRequestId.trim().slice(0, 128) : undefined;
+      void nativeAudioRouteRelayRef.current?.handleRequest(requestId);
       return;
     }
 

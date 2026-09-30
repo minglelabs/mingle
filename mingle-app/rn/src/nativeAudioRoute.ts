@@ -57,6 +57,8 @@ export type NativeAudioRouteEventDetail = {
   outputTypes: string[];
   reason?: string;
   atMs: number;
+  /** Correlates a fresh pre-playback query; absent on unsolicited reports. */
+  requestId?: string;
 };
 
 type NativeAudioRouteModuleType = {
@@ -134,7 +136,10 @@ function resolveNativeAudioRouteEmitter(module: NativeAudioRouteModuleType): Nat
 
 /** True when this shell can report earphones (drives `capabilities.audioRoute`). */
 export function isNativeAudioRouteAvailable(): boolean {
-  return resolveNativeAudioRoutePlatform() !== null && readNativeAudioRouteModule() !== null;
+  // Earlier Android versions only expose connected outputs, which cannot
+  // establish that media is routed away from the phone speaker.
+  return (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
+    && resolveNativeAudioRoutePlatform() !== null && readNativeAudioRouteModule() !== null;
 }
 
 /** Reads the current route, or null when the module is missing or the reading is malformed. */
@@ -204,7 +209,7 @@ export type NativeAudioRouteRelay = {
   /** Reads the route once at mount and applies the change rules (the first reading is sent at once). */
   syncInitial: () => Promise<void>;
   /** Reply to `native_audio_route_request`: re-read now and always send (contract A.2c / A.4). */
-  handleRequest: () => Promise<void>;
+  handleRequest: (requestId?: string) => Promise<void>;
   /** Re-send the latest reading unconditionally: every WebView load end, right after capabilities (A.2a). */
   replayLatest: () => void;
   getLatest: () => NativeAudioRouteEventDetail | null;
@@ -310,14 +315,20 @@ export function createNativeAudioRouteRelay(options: NativeAudioRouteRelayOption
       if (!accept(snapshot, snapshot.reason || 'initial')) return;
       applyChangeRules();
     },
-    handleRequest: async () => {
+    handleRequest: async (requestId) => {
       const snapshot = await readSafely();
       if (disposed) return;
-      // A stale or failed re-read still answers, with the newest reading held.
+      // Correlated playback checks fail closed when a fresh query fails.
+      // Legacy route requests retain the existing replay behavior.
       if (snapshot) accept(snapshot, 'request');
+      if (requestId && !snapshot) {
+        latest = buildNativeAudioRouteEventDetail({
+          earphonesConnected: false, routeKind: 'none', outputTypes: [], reason: 'request_failed',
+        }, options.platform, now());
+      }
       if (!latest) return;
       cancelPending();
-      deliver(latest);
+      deliver(requestId ? { ...latest, requestId } : latest);
     },
     replayLatest: () => {
       if (disposed || !latest) return;

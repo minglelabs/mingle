@@ -30,6 +30,7 @@ type NativeListener = { eventName: string; handler: (payload: unknown) => void }
 
 const ReactNative = jest.requireMock('react-native') as {
   NativeModules: Record<string, unknown> & { NativeTTSModule: { play: jest.Mock } };
+  Platform: { OS: string; Version: string | number };
   NativeEventEmitter: { prototype: { addListener: (...args: unknown[]) => unknown } };
 };
 
@@ -221,6 +222,26 @@ describe('App earphone-mode bridge wiring', () => {
     });
   });
 
+  it('correlates fresh route requests and refuses stale connected state on read failure', async () => {
+    routeReads.push({ earphonesConnected: true, routeKind: 'bluetooth', outputTypes: ['BluetoothA2DP'], monotonicMs: 10 });
+    const { renderer, webView } = await renderApp();
+    await ReactTestRenderer.act(async () => {
+      webView.props.onLoadEnd({ nativeEvent: { url: PAGE_URL } });
+    });
+    routeReads.push({ earphonesConnected: false, routeKind: 'speaker', outputTypes: ['Speaker'], monotonicMs: 20 });
+    await postFromWeb(webView, { type: 'native_audio_route_request', payload: { requestId: 'check-1' } });
+    const events = () => dispatchedEvents(mockInjectedScripts, 'mingle:native-audio-route').map((event) => event.detail);
+    expect(events().pop()).toMatchObject({ requestId: 'check-1', earphonesConnected: false, reason: 'request' });
+    // A later failed query must not replay a previously connected route as fresh.
+    await ReactTestRenderer.act(async () => {
+      nativeListener('audioRouteChanged')({ earphonesConnected: true, routeKind: 'bluetooth', outputTypes: ['BluetoothA2DP'], monotonicMs: 30 });
+      jest.advanceTimersByTime(250);
+    });
+    await postFromWeb(webView, { type: 'native_audio_route_request', payload: { requestId: 'check-2' } });
+    expect(events().pop()).toMatchObject({ requestId: 'check-2', earphonesConnected: false, reason: 'request_failed' });
+    await ReactTestRenderer.act(async () => { renderer.unmount(); });
+  });
+
   it('passes stopOnEarphoneDisconnect, emits tts_started and forwards the stop reason', async () => {
     const { renderer, webView } = await renderApp();
     await ReactTestRenderer.act(async () => {
@@ -272,6 +293,25 @@ describe('App earphone-mode bridge wiring', () => {
     await ReactTestRenderer.act(async () => {
       renderer.unmount();
     });
+  });
+
+  it('hides earphone mode on Android versions that cannot query the media output', async () => {
+    const { OS, Version } = ReactNative.Platform;
+    ReactNative.Platform.OS = 'android';
+    ReactNative.Platform.Version = 32;
+    try {
+      routeReads.push({ earphonesConnected: true, routeKind: 'bluetooth', outputTypes: ['BluetoothA2DP'] });
+      const { renderer, webView } = await renderApp();
+      await ReactTestRenderer.act(async () => { webView.props.onLoadEnd({ nativeEvent: { url: PAGE_URL } }); });
+      const capabilities = dispatchedEvents(mockInjectedScripts, 'mingle:native-stt')
+        .map((event) => event.detail).filter((event) => event.type === 'capabilities');
+      expect(capabilities).toEqual([{ type: 'capabilities', openAppSettings: true, audioRoute: false }]);
+      expect(dispatchedEvents(mockInjectedScripts, 'mingle:native-audio-route')).toEqual([]);
+      await ReactTestRenderer.act(async () => { renderer.unmount(); });
+    } finally {
+      ReactNative.Platform.OS = OS;
+      ReactNative.Platform.Version = Version;
+    }
   });
 
   it('reports no capability and sends no route events without the native module', async () => {

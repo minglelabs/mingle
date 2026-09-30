@@ -35,6 +35,7 @@ import {
 } from './live-phone-demo.earphone-auto-read'
 import { applyNativeTtsEvent } from './live-phone-demo.native-tts-events'
 import {
+  confirmNativeEarphonesConnected,
   getNativeAudioRouteServerSnapshot,
   getNativeAudioRouteSnapshot,
   isNativeAudioRouteSupported,
@@ -4313,6 +4314,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         try { await ctx.resume() } catch { /* best-effort */ }
       }
       if (!isCurrentClip()) return
+      if (next.mode === 'auto' && isNativeApp()) {
+        const connected = await confirmNativeEarphonesConnected()
+        if (!isCurrentClip()) return
+        if (!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()) {
+          onPlaybackDone()
+          return
+        }
+      }
 
       const objectUrl = URL.createObjectURL(audioBlob)
       currentAudioUrlRef.current = objectUrl
@@ -4346,6 +4355,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           currentAudioUrlRef.current = null
         }
         currentTtsItemRef.current = null
+        // A rejected clip is retried through the queue (and fresh route check),
+        // never by resuming a stale audio element after an output change.
+        cleanupCurrentAudio()
         setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
         ttsNeedsUnlockRef.current = true
         // Re-insert at front of queue so it can be retried after audio unlock
@@ -4869,7 +4881,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ))
     if ((!enableAutoTTS || !isSoundEnabled) && !hasPlayableQueueItem) return
     const current = playerAudioRef.current
-    if (current && !current.ended && current.paused) {
+    if (current && isTtsProcessingRef.current && currentTtsItemRef.current
+      && current.getAttribute('src') && !current.ended && current.paused) {
+      if (currentTtsItemRef.current.mode === 'auto' && !isEarphoneAutoReadGateOpenNow()) return
       void current.play().then(() => {
         ttsNeedsUnlockRef.current = false
       }).catch(() => {

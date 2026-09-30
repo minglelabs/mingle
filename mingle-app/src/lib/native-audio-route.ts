@@ -39,6 +39,7 @@ export type NativeAudioRouteDetail = {
   outputTypes: string[]
   reason?: string
   atMs: number
+  requestId?: string
 }
 
 export type NativeAudioRouteParseResult =
@@ -111,6 +112,8 @@ export function parseNativeAudioRouteEvent(detail: unknown): NativeAudioRoutePar
         ? { reason: reason.trim().slice(0, MAX_REASON_LENGTH) }
         : {}),
       atMs,
+      ...(typeof detail.requestId === 'string' && detail.requestId.trim()
+        ? { requestId: detail.requestId.trim().slice(0, 128) } : {}),
     },
   }
 }
@@ -276,6 +279,36 @@ export function requestNativeAudioRoute(): boolean {
   } catch {
     return false
   }
+}
+
+// Android HTML audio has no native per-clip guard. A cached connected route
+// cannot authorize a new clip after the system media output was changed.
+let routeRequestSequence = 0
+export function confirmNativeEarphonesConnected(): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  const bridge = (window as NativeAudioRouteWindow).ReactNativeWebView
+  if (typeof bridge?.postMessage !== 'function') return Promise.resolve(false)
+  const requestId = `earphone-check-${Date.now()}-${++routeRequestSequence}`
+  return new Promise((resolve) => {
+    const finish = (connected: boolean) => {
+      clearTimeout(timer)
+      window.removeEventListener(NATIVE_AUDIO_ROUTE_EVENT, handleReply)
+      resolve(connected)
+    }
+    const handleReply = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (!isRecord(detail) || detail.requestId !== requestId) return
+      const parsed = parseNativeAudioRouteEvent(detail)
+      finish(parsed.kind === 'route' && parsed.detail.earphonesConnected)
+    }
+    const timer = setTimeout(() => finish(false), 1500)
+    window.addEventListener(NATIVE_AUDIO_ROUTE_EVENT, handleReply)
+    try {
+      bridge.postMessage!(JSON.stringify({ type: NATIVE_AUDIO_ROUTE_REQUEST_TYPE, payload: { requestId } }))
+    } catch {
+      finish(false)
+    }
+  })
 }
 
 export function resetNativeAudioRouteStoreForTests(): void {

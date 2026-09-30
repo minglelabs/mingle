@@ -68,6 +68,23 @@ describe('earphone mode wiring', () => {
     expect(htmlPlay).toContain('markPlaybackStarted()')
   })
 
+  it('awaits a fresh route before Android auto audio and leaves manual audio unchanged', () => {
+    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// NativeTTSModule은 iOS 전용')
+    expect(htmlPlay).toContain("if (next.mode === 'auto' && isNativeApp())")
+    expect(htmlPlay).toContain('const connected = await confirmNativeEarphonesConnected()')
+    expect(htmlPlay).toContain('!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()')
+    expect(htmlPlay.indexOf('await confirmNativeEarphonesConnected()')).toBeLessThan(htmlPlay.indexOf('audio.play()'))
+  })
+
+  it('retries rejected autoplay through the queue instead of resuming the stale element', () => {
+    const rejectedPlay = between(liveDemoSource, 'audio.play().catch(() => {', '// NativeTTSModule은 iOS 전용')
+    expect(rejectedPlay).toContain('cleanupCurrentAudio()')
+    expect(rejectedPlay).toContain('ttsQueueRef.current.unshift(next)')
+    const resume = between(liveDemoSource, 'const resumeTtsPlayback = useCallback', 'const clearStopClickResumeTimers')
+    expect(resume).toContain('isTtsProcessingRef.current && currentTtsItemRef.current')
+    expect(resume).toContain("current.getAttribute('src')")
+  })
+
   it('closes the gate on a native earphone stop before the queue moves', () => {
     const listener = between(liveDemoSource, 'const handleNativeTtsEvent = (event: Event) => {', 'window.addEventListener(NATIVE_TTS_EVENT')
     expect(listener).toContain('applyNativeTtsEvent(')

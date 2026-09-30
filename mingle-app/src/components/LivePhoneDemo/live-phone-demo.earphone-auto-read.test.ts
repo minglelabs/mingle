@@ -47,6 +47,11 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
   let nextTimerId = 1
   const timers = new Map<number, { at: number, callback: () => void }>()
   const requests = new Map<string, { resolve: (blob: Blob | null) => void, signal: AbortSignal }>()
+  const audioRequests: Array<{
+    playbackKey: string
+    resolve: (blob: Blob | null) => void
+    signal: AbortSignal
+  }> = []
   const requestOrder: string[] = []
   const dispatched: EarphoneAutoReadDispatchItem[] = []
   const queuedKeys: string[][] = []
@@ -63,6 +68,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     clearTimer: (handle) => { timers.delete(handle as number) },
     synthesize: (target, signal) => new Promise((resolve) => {
       requests.set(target.playbackKey, { resolve, signal })
+      audioRequests.push({ playbackKey: target.playbackKey, resolve, signal })
       requestOrder.push(target.playbackKey)
     }),
     isEngineIdle: () => state.engineIdle,
@@ -94,6 +100,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     dispatched,
     queuedKeys,
     requests,
+    audioRequests,
     requestOrder,
     snapshot,
     now: () => now,
@@ -109,6 +116,12 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     async resolveAudio(playbackKey: string, blob: Blob | null = new Blob(['audio'])) {
       const request = requests.get(playbackKey)
       if (!request) throw new Error(`no request for ${playbackKey}`)
+      request.resolve(blob)
+      await flushAsync()
+    },
+    async resolveAudioRequest(index: number, blob: Blob | null = new Blob(['audio'])) {
+      const request = audioRequests[index]
+      if (!request) throw new Error(`no audio request at index ${index}`)
       request.resolve(blob)
       await flushAsync()
     },
@@ -495,6 +508,122 @@ describe('EarphoneAutoReadController gate and manual preemption', () => {
 })
 
 describe('EarphoneAutoReadController read language', () => {
+  it('cancels stale pending audio when a same-ID translation is revised', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const original = message('revision', h.now() + 100)
+    h.controller.update(h.snapshot([original]))
+
+    h.controller.update(h.snapshot([{
+      ...original,
+      translations: { ko: '수정된 번역' },
+    }]))
+
+    expect(h.requestOrder).toEqual([key('revision'), key('revision')])
+    expect(h.audioRequests[0]?.signal.aborted).toBe(true)
+    expect(h.audioRequests[1]?.signal.aborted).toBe(false)
+    await h.resolveAudioRequest(0, new Blob(['stale audio']))
+    expect(h.dispatchedIds()).toEqual([])
+
+    await h.resolveAudioRequest(1, new Blob(['current audio']))
+    expect(h.dispatched[0]).toMatchObject({ text: '수정된 번역' })
+    expect(await h.dispatched[0]!.audioBlob.text()).toBe('current audio')
+  })
+
+  it('re-synthesizes a revised ready prefetch while it waits behind an earlier message', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const earlier = incomplete(message('earlier', h.now() + 100))
+    const original = message('prefetched', h.now() + 200)
+    h.controller.update(h.snapshot([earlier, original]))
+    await h.resolveAudio(key('prefetched'), new Blob(['stale audio']))
+    expect(h.dispatchedIds()).toEqual([])
+
+    const revised = { ...original, translations: { ko: '최신 번역' } }
+    h.controller.update(h.snapshot([earlier, revised]))
+    expect(h.requestOrder).toEqual([key('prefetched'), key('prefetched')])
+
+    const completedEarlier = message('earlier', earlier.createdAtMs!, { translations: { ko: '먼저' } })
+    h.controller.update(h.snapshot([completedEarlier, revised]))
+    await h.resolveAudio(key('earlier'))
+    expect(h.dispatchedIds()).toEqual(['earlier'])
+
+    await h.resolveAudioRequest(1, new Blob(['current audio']))
+    await h.finishPlayback()
+    expect(h.dispatched[1]).toMatchObject({ utteranceId: 'prefetched', text: '최신 번역' })
+    expect(await h.dispatched[1]!.audioBlob.text()).toBe('current audio')
+  })
+
+  it('discards a pending translation when a same-ID message is reclassified as spoken in the read language', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const translated = message('source-change', h.now() + 100)
+    h.controller.update(h.snapshot([translated]))
+
+    const nowSpokenInKorean = {
+      ...translated,
+      originalLang: 'ko',
+      translations: { ko: '번역 source-change', en: 'English source-change' },
+      translationFinalized: { ko: true, en: true },
+    }
+    h.controller.update(h.snapshot([nowSpokenInKorean]))
+
+    expect(h.audioRequests[0]?.signal.aborted).toBe(true)
+    expect(h.controller.getCandidateStatus('source-change')).toBe('skipped')
+    await h.resolveAudioRequest(0)
+    expect(h.dispatchedIds()).toEqual([])
+  })
+
+  it('cancels ready audio while source expansion makes the translation incomplete', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const original = message('expanding', h.now() + 100)
+    h.controller.update(h.snapshot([original]))
+
+    const expanding = {
+      ...original,
+      originalText: `${original.originalText} with more source text`,
+      translationStatus: 'pending' as const,
+    }
+    h.controller.update(h.snapshot([expanding]))
+
+    expect(h.audioRequests[0]?.signal.aborted).toBe(true)
+    expect(h.controller.getCandidateStatus('expanding')).toBe('waiting')
+    expect(h.dispatchedIds()).toEqual([])
+
+    const finalized = {
+      ...expanding,
+      translationStatus: undefined,
+      translations: { ko: '확장된 최종 번역' },
+      translationFinalized: { ko: true },
+    }
+    h.controller.update(h.snapshot([finalized]))
+    expect(h.requestOrder).toEqual([key('expanding'), key('expanding')])
+
+    await h.resolveAudioRequest(0, new Blob(['stale audio']))
+    expect(h.dispatchedIds()).toEqual([])
+    await h.resolveAudioRequest(1, new Blob(['final audio']))
+    expect(h.dispatched[0]).toMatchObject({ text: '확장된 최종 번역' })
+    expect(await h.dispatched[0]!.audioBlob.text()).toBe('final audio')
+  })
+
+  it('keeps pending audio when a row changes but resolves to the same immutable read target', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const original = message('same-target', h.now() + 100)
+    h.controller.update(h.snapshot([original]))
+
+    h.controller.update(h.snapshot([{
+      ...original,
+      originalText: 'corrected source text',
+    }]))
+
+    expect(h.requestOrder).toEqual([key('same-target')])
+    expect(h.audioRequests[0]?.signal.aborted).toBe(false)
+    await h.resolveAudio(key('same-target'))
+    expect(h.dispatched[0]).toMatchObject({ text: '번역 same-target' })
+  })
+
   it('never reads a message spoken in L, and does not hold the queue for it', async () => {
     const h = createHarness()
     h.controller.arm(h.snapshot([]))

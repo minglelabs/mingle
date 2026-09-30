@@ -16,11 +16,12 @@ import { buildNativeShellCapabilities } from '../src/nativeCapabilities';
 
 type MutableReactNative = {
   NativeModules: Record<string, unknown>;
-  Platform: { OS: string };
+  Platform: { OS: string; Version: string | number };
   NativeEventEmitter: { prototype: { addListener: (...args: unknown[]) => unknown } };
 };
 
 const ReactNative = jest.requireMock('react-native') as MutableReactNative;
+const INITIAL_PLATFORM = { OS: ReactNative.Platform.OS, Version: ReactNative.Platform.Version };
 
 const CONTRACT_DETAIL_KEYS = [
   'atMs',
@@ -121,7 +122,8 @@ describe('capabilities message (contract A.1)', () => {
 describe('native audio route module access', () => {
   afterEach(() => {
     delete ReactNative.NativeModules.NativeAudioRouteModule;
-    ReactNative.Platform.OS = 'ios';
+    ReactNative.Platform.OS = INITIAL_PLATFORM.OS;
+    ReactNative.Platform.Version = INITIAL_PLATFORM.Version;
     jest.restoreAllMocks();
   });
 
@@ -140,7 +142,14 @@ describe('native audio route module access', () => {
     };
     expect(isNativeAudioRouteAvailable()).toBe(true);
     ReactNative.Platform.OS = 'android';
+    ReactNative.Platform.Version = 33;
     expect(isNativeAudioRouteAvailable()).toBe(true);
+    ReactNative.Platform.Version = 32;
+    expect(isNativeAudioRouteAvailable()).toBe(false);
+    ReactNative.Platform.Version = 29;
+    expect(isNativeAudioRouteAvailable()).toBe(false);
+    ReactNative.Platform.Version = Number.NaN;
+    expect(isNativeAudioRouteAvailable()).toBe(false);
     ReactNative.Platform.OS = 'web';
     expect(isNativeAudioRouteAvailable()).toBe(false);
   });
@@ -303,6 +312,27 @@ describe('route relay (contract A.2 a-c)', () => {
 
     tick(1_000);
     expect(delivered).toHaveLength(2);
+  });
+
+  it('sends a speaker switch found by foreground polling immediately', async () => {
+    const { relay, delivered } = createHarness();
+    await relay.syncInitial();
+
+    // The Bluetooth device may stay connected while Android selects the
+    // speaker for media, so the media-route query no longer lists Bluetooth.
+    relay.handleSnapshot(snapshot({
+      earphonesConnected: false,
+      routeKind: 'speaker',
+      outputTypes: ['Speaker'],
+      reason: 'foreground_poll',
+    }));
+
+    expect(delivered).toHaveLength(2);
+    expect(delivered[1]).toMatchObject({
+      earphonesConnected: false,
+      routeKind: 'speaker',
+      reason: 'foreground_poll',
+    });
   });
 
   it('sends nothing for a flap back to the delivered state or an unchanged kind', async () => {

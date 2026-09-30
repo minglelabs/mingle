@@ -81,6 +81,14 @@ function readLanguageKeyOf(read: EarphoneModeReadContext): string {
   return read.readLanguage?.trim().toLowerCase() ?? ''
 }
 
+function isSameReadTarget(left: EarphoneModeReadTarget, right: EarphoneModeReadTarget): boolean {
+  return left.playbackKey === right.playbackKey
+    && left.utteranceId === right.utteranceId
+    && left.language === right.language
+    && left.kind === right.kind
+    && left.text === right.text
+}
+
 // Reads every message that completes after a rising edge, in the order the
 // messages STARTED (compareUtteranceOrder, evaluated at dequeue time because
 // the server-reserved start can reach a row late), and only its translation
@@ -283,7 +291,6 @@ export class EarphoneAutoReadController {
         candidate.signature = signature
         candidate.lastProgressAtMs = now
       }
-      if (candidate.status !== 'waiting') continue
 
       const classified = classifyEarphoneModeUtterance({
         utterance,
@@ -293,8 +300,18 @@ export class EarphoneAutoReadController {
         readOwnMessages: this.options.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES,
       })
       if (classified.state === 'ready') {
+        if (candidate.status === 'ready' && candidate.target && !isSameReadTarget(candidate.target, classified.target)) {
+          this.discardPrefetch(candidate)
+        }
         candidate.status = 'ready'
         candidate.target = classified.target
+      } else if (classified.state === 'incomplete') {
+        if (candidate.status === 'ready') {
+          this.discardPrefetch(candidate)
+          candidate.lastProgressAtMs = now
+        }
+        candidate.status = 'waiting'
+        candidate.target = null
       } else if (classified.state === 'unreadable') {
         this.finishCandidate(candidate, 'skipped')
       }
@@ -387,6 +404,13 @@ export class EarphoneAutoReadController {
     candidate.status = status
     // Abort a prefetch still in flight and release its slot: a finished
     // candidate holds neither audio nor a request.
+    candidate.abort?.abort()
+    candidate.abort = null
+    candidate.audio = 'idle'
+    candidate.audioBlob = null
+  }
+
+  private discardPrefetch(candidate: Candidate): void {
     candidate.abort?.abort()
     candidate.abort = null
     candidate.audio = 'idle'

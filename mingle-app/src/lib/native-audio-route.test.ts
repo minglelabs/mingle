@@ -11,6 +11,7 @@ import {
   parseNativeAudioRouteEvent,
   reduceNativeAudioRouteSnapshot,
   requestNativeAudioRoute,
+  confirmNativeEarphonesConnected,
   resetNativeAudioRouteStoreForTests,
   subscribeNativeAudioRoute,
 } from './native-audio-route'
@@ -149,6 +150,7 @@ describe('page-wide store', () => {
 
   afterEach(() => {
     resetNativeAudioRouteStoreForTests()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -201,4 +203,57 @@ describe('page-wide store', () => {
     expect(requestNativeAudioRoute()).toBe(true)
     expect(JSON.parse(postMessage.mock.calls[0][0])).toEqual({ type: 'native_audio_route_request', payload: {} })
   })
+
+  it('checks the fresh speaker route instead of the cached Bluetooth route before playback', async () => {
+    target[NATIVE_AUDIO_ROUTE_STATE_KEY] = route({ platform: 'android' })
+    expect(getNativeAudioRouteSnapshot().earphonesConnected).toBe(true)
+    const postMessage = vi.fn()
+    target.ReactNativeWebView = { postMessage }
+    const check = confirmNativeEarphonesConnected()
+    const { payload } = JSON.parse(postMessage.mock.calls[0][0])
+    expect(payload.requestId).toEqual(expect.any(String))
+    // An unrelated poll/older reply cannot authorize playback.
+    target.dispatchEvent(new CustomEvent(NATIVE_AUDIO_ROUTE_EVENT, { detail: route() }))
+    target.dispatchEvent(new CustomEvent(NATIVE_AUDIO_ROUTE_EVENT, {
+      detail: route({ requestId: 'older-check' }),
+    }))
+    target.dispatchEvent(new CustomEvent(NATIVE_AUDIO_ROUTE_EVENT, {
+      detail: route({ requestId: payload.requestId, platform: 'android', earphonesConnected: false, routeKind: 'speaker' }),
+    }))
+    expect(await check).toBe(false)
+  })
+
+  it('authorizes playback only on its matching fresh connected reply and cleans up', async () => {
+    vi.useFakeTimers()
+    const postMessage = vi.fn()
+    target.ReactNativeWebView = { postMessage }
+    const remove = vi.spyOn(target, 'removeEventListener')
+    const check = confirmNativeEarphonesConnected()
+    const { payload } = JSON.parse(postMessage.mock.calls[0][0])
+    target.dispatchEvent(new CustomEvent(NATIVE_AUDIO_ROUTE_EVENT, {
+      detail: route({ requestId: payload.requestId, platform: 'android' }),
+    }))
+    expect(await check).toBe(true)
+    expect(remove).toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('refuses playback when the fresh route is malformed or the shell cannot reply', async () => {
+    vi.useFakeTimers()
+    const postMessage = vi.fn()
+    target.ReactNativeWebView = { postMessage }
+    const check = confirmNativeEarphonesConnected()
+    const { payload } = JSON.parse(postMessage.mock.calls[0][0])
+    target.dispatchEvent(new CustomEvent(NATIVE_AUDIO_ROUTE_EVENT, {
+      detail: route({ requestId: payload.requestId, earphonesConnected: 'yes' }),
+    }))
+    expect(await check).toBe(false)
+    const missingReply = confirmNativeEarphonesConnected()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(await missingReply).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    delete target.ReactNativeWebView
+    expect(await confirmNativeEarphonesConnected()).toBe(false)
+  })
+
 })
