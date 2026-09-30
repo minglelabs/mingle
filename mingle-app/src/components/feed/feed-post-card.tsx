@@ -2,7 +2,8 @@
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import type { FeedCopy } from "@/i18n/feed-copy";
-import OfficialBadge from "@/components/posts/official-badge";
+import AccountBadge from "@/components/posts/account-badge";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { feedEvents, trackFeedEvent, type FeedPostContext } from "@/lib/feed-analytics";
 import { moderationCopy } from "@/i18n/moderation-copy";
 import {
@@ -109,6 +110,9 @@ export default function FeedPostCard({
   const isSignedIn = Boolean(viewerId);
   const hasImage = Boolean(post.image?.url);
   const displayName = post.author.name?.trim() || `@${post.author.handle}`;
+  const authorBadge = resolveAccountBadge(post.author);
+  // What screen readers hear for the author: the name plus the badge label.
+  const authorLabel = withAccountBadgeLabel(displayName, authorBadge, locale);
 
   const tone = postForegroundTone(post.backgroundKey, hasImage);
   const fg = foregroundTokens(tone);
@@ -444,7 +448,7 @@ export default function FeedPostCard({
     translate.toggle();
   }, [isSignedIn, translate, track]);
 
-  const ariaLabel = `${displayName}: ${previewText}`;
+  const ariaLabel = `${authorLabel}: ${previewText}`;
 
   const iconStyle = fg.iconFilter ? { filter: fg.iconFilter } : undefined;
 
@@ -455,7 +459,7 @@ export default function FeedPostCard({
         data-feed-action
         onClick={() => onOpenAuthor(post.author.id)}
         className="flex min-w-0 items-center gap-2 rounded-full transition active:opacity-70"
-        aria-label={displayName}
+        aria-label={authorLabel}
       >
         {post.author.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -475,8 +479,13 @@ export default function FeedPostCard({
         <span className={`max-w-[9rem] truncate text-sm font-semibold ${fg.textClass}`}>
           {displayName}
         </span>
-        {post.author.isOfficial ? <OfficialBadge locale={locale} tone={tone} /> : null}
+        {/* The official chip is plain content of the profile button (a tap on
+            it opens the profile, as before). */}
+        {authorBadge === "official" ? <AccountBadge kind={authorBadge} locale={locale} tone={tone} /> : null}
       </button>
+      {/* The operator badge is its own button, so it sits next to the profile
+          button, never inside it: a tap on it opens the badge sheet only. */}
+      {authorBadge === "operator" ? <AccountBadge kind={authorBadge} locale={locale} tone={tone} /> : null}
 
       <time className={`shrink-0 text-[11px] font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
         {formatPostTime(post.publishedAt, locale)}

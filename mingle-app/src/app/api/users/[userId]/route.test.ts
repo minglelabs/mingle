@@ -119,6 +119,52 @@ describe("/api/users/[userId] route", () => {
     expect(mockUserFindUnique.mock.calls[0][0].select.isOfficial).toBe(true);
   });
 
+  it("marks an operator account's public profile, and never an ordinary one", async () => {
+    mockUserFindUnique.mockReset();
+    mockUserFindUnique.mockResolvedValueOnce({
+      id: "op",
+      handle: "mingle.mina",
+      image: null,
+      name: "Mina",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      isOfficial: false,
+      isOperator: true,
+      _count: { followerRelations: 0, followingRelations: 0 },
+      followerRelations: [],
+    });
+
+    const operatorProfile = await (await GET(new NextRequest("https://example.com/ko/users/op"), {
+      params: Promise.resolve({ userId: "op" }),
+    })).json();
+
+    expect(operatorProfile.isOperator).toBe(true);
+    expect(operatorProfile).not.toHaveProperty("isOfficial");
+    expect(mockUserFindUnique.mock.calls[0][0].select).toMatchObject({ isOperator: true, isOfficial: true });
+
+    // The default fixture (an ordinary member) carries neither flag.
+    mockUserFindUnique.mockReset();
+    mockUserFindUnique.mockResolvedValueOnce({
+      id: "user_456",
+      handle: "mina.song",
+      image: null,
+      name: "미나",
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      isOfficial: false,
+      isOperator: false,
+      _count: { followerRelations: 0, followingRelations: 0 },
+      followerRelations: [],
+    });
+    const memberProfile = await (await GET(new NextRequest("https://example.com/ko/users/user_456"), {
+      params: Promise.resolve({ userId: "user_456" }),
+    })).json();
+    expect(memberProfile).not.toHaveProperty("isOperator");
+    expect(memberProfile).not.toHaveProperty("isOfficial");
+  });
+
   it("continues to resolve legacy internal user IDs", async () => {
     const response = await GET(new NextRequest("https://example.com/ko/users/user_456"), {
       params: Promise.resolve({ userId: "user_456" }),

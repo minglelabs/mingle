@@ -9,7 +9,9 @@ import { buildSearchAnalyticsProperties, digestAnalyticsValue, type SearchAnalyt
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
-import OfficialBadge from "@/components/posts/official-badge";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel, type AccountBadgeFlags } from "@/lib/account-badge";
 
 /** Request headers the legacy connect search sent, for PostHog attribution. */
 export function buildConnectTrackingHeaders(): Record<string, string> {
@@ -127,8 +129,8 @@ export function PersonRow({
   trailing,
   locale,
 }: {
-  /** `isOfficial` rides along from `/api/users/search` (absent means false). */
-  person: ConnectSearchResult & { isOfficial?: boolean };
+  /** Badge flags ride along from `/api/users/search` (absent means false). */
+  person: ConnectSearchResult & AccountBadgeFlags;
   labels: PersonRowLabels;
   onOpen: (userId: string) => void;
   canFollow: boolean;
@@ -136,7 +138,7 @@ export function PersonRow({
   onToggleFollow: () => void;
   className?: string;
   trailing?: ReactNode;
-  /** UI locale for the official-account badge label. */
+  /** UI locale for the account badge label. */
   locale: string;
 }) {
   const profileName = person.name?.trim() || "";
@@ -145,17 +147,22 @@ export function PersonRow({
   const name = profileName || rawHandle || labels.userFallback;
   const showHandle = Boolean(formattedHandle && profileName
     && profileName.replace(/^@/, "").toLocaleLowerCase() !== rawHandle.toLocaleLowerCase());
+  const badge = resolveAccountBadge(person);
+  const nameLabel = withAccountBadgeLabel(name, badge, locale);
 
   return (
     <li className={className}>
       <div className="flex min-w-0 items-center gap-3">
-        <button
-          type="button"
-          onClick={() => onOpen(person.id)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-          aria-label={showHandle ? `${name}, ${formattedHandle}` : name}
+        {/* The whole left part opens the profile; the badge next to the name
+            stays its own button (IdentityRow). */}
+        <IdentityRow
+          action={{ kind: "button", onClick: () => onOpen(person.id) }}
+          label={showHandle ? `${nameLabel}, ${formattedHandle}` : nameLabel}
+          className="min-w-0 flex-1"
+          actionClassName="rounded-xl transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+          contentClassName="flex min-w-0 items-center gap-3"
         >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
             {person.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -174,12 +181,12 @@ export function PersonRow({
           </span>
           <span className="min-w-0">
             <span className="flex min-w-0 items-center gap-1">
-              <span className="block truncate text-[15px] font-semibold text-slate-900">{name}</span>
-              {person.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+              <span className="block truncate text-[15px] font-semibold text-slate-900" aria-hidden="true">{name}</span>
+              <AccountBadge kind={badge} locale={locale} tone="dark" />
             </span>
-            {showHandle ? <span className="block truncate text-[13px] text-gray-500">{formattedHandle}</span> : null}
+            {showHandle ? <span className="block truncate text-[13px] text-gray-500" aria-hidden="true">{formattedHandle}</span> : null}
           </span>
-        </button>
+        </IdentityRow>
         {trailing ?? (canFollow ? (
           <button
             type="button"

@@ -2,24 +2,19 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
+import { serializeListUserIdentity, type ListUserIdentity } from "@/server/identity/list-user-identity";
 
 const MAX_SEARCH_LENGTH = 80;
 const MAX_RESULTS = 100;
 
-const userSelect = {
-  id: true,
-  handle: true,
-  name: true,
-  image: true,
-} as const;
-
 type FollowListDirection = "followers" | "following";
 
-type FollowListUser = {
-  id: string;
-  handle: string | null;
-  name: string | null;
-  image: string | null;
+/**
+ * One row of the viewer's followers / following list (also the invite, new
+ * group and add-members pickers): identity with badge flags only when true.
+ */
+type FollowListUser = ListUserIdentity & {
   isFollowing: boolean;
   isFollowedBy: boolean;
 };
@@ -80,7 +75,7 @@ export async function getProfileFollowList(
       },
       orderBy: { createdAt: "desc" },
       take: MAX_RESULTS,
-      select: { follower: { select: userSelect } },
+      select: { follower: { select: USER_IDENTITY_SELECT } },
     });
 
     const users = relations.map((relation) => relation.follower);
@@ -97,7 +92,7 @@ export async function getProfileFollowList(
     const reciprocalUserIds = new Set(reciprocalRelations.map((relation) => relation.followingId));
 
     const responseUsers: FollowListUser[] = users.map((user) => ({
-      ...user,
+      ...serializeListUserIdentity(user),
       isFollowing: reciprocalUserIds.has(user.id),
       isFollowedBy: true,
     }));
@@ -111,7 +106,7 @@ export async function getProfileFollowList(
     },
     orderBy: { createdAt: "desc" },
     take: MAX_RESULTS,
-    select: { following: { select: userSelect } },
+    select: { following: { select: USER_IDENTITY_SELECT } },
   });
 
   const users = relations.map((relation) => relation.following);
@@ -128,7 +123,7 @@ export async function getProfileFollowList(
   const reciprocalUserIds = new Set(reciprocalRelations.map((relation) => relation.followerId));
 
   const responseUsers: FollowListUser[] = users.map((user) => ({
-    ...user,
+    ...serializeListUserIdentity(user),
     isFollowing: true,
     isFollowedBy: reciprocalUserIds.has(user.id),
   }));

@@ -91,7 +91,9 @@ import {
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import { composeCopy } from "@/i18n/compose-copy";
-import OfficialBadge from "@/components/posts/official-badge";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -221,6 +223,9 @@ type BlockedUserRecord = {
     handle: string | null;
     name: string | null;
     image: string | null;
+    /** Badge flags; absent means false. */
+    isOfficial?: boolean;
+    isOperator?: boolean;
   };
 };
 
@@ -236,6 +241,9 @@ type ReportRecord = {
     handle: string | null;
     name: string | null;
     image: string | null;
+    /** Badge flags; absent means false. */
+    isOfficial?: boolean;
+    isOperator?: boolean;
   };
   replies: Array<{
     id: string;
@@ -1380,7 +1388,10 @@ function ProfileSettingsPanel({
                       <li key={block.id} className="flex items-center gap-3 px-3 py-3">
                         <UserMiniAvatar image={block.user.image} label={name} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[14px] font-semibold">{name}</p>
+                          <p className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[14px] font-semibold">{name}</span>
+                            <AccountBadge kind={resolveAccountBadge(block.user)} locale={locale} tone="dark" />
+                          </p>
                           {handle ? <p className="truncate text-[12px] text-gray-500">{handle}</p> : null}
                         </div>
                         <button
@@ -1415,18 +1426,31 @@ function ProfileSettingsPanel({
                         ? (dictionary.profile.reportStatusInReview ?? "In review")
                         : copy.pending;
                   const expanded = expandedReportId === report.id;
+                  const badge = resolveAccountBadge(report.reportedUser);
+                  const reasonLabel = copy.reasonLabels[report.reason] ?? report.reason;
                   return (
                     <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                      <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[14px] font-semibold">{name}</p>
-                            {handle ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{handle}</p> : null}
-                            <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
+                      {/* The header expands the report; the badge next to the
+                          name stays its own button (IdentityRow). */}
+                      <IdentityRow
+                        action={{
+                          kind: "button",
+                          onClick: () => setExpandedReportId(expanded ? null : report.id),
+                          expanded,
+                        }}
+                        label={[withAccountBadgeLabel(name, badge, locale), handle, reasonLabel, statusLabel].filter(Boolean).join(", ")}
+                        contentClassName="flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[14px] font-semibold" aria-hidden="true">{name}</span>
+                            <AccountBadge kind={badge} locale={locale} tone="dark" />
+                          </p>
+                          {handle ? <p className="mt-0.5 truncate text-[12px] text-gray-500" aria-hidden="true">{handle}</p> : null}
+                          <p className="mt-1 text-[12px] text-gray-500" aria-hidden="true">{reasonLabel}</p>
                         </div>
-                      </button>
+                        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600" aria-hidden="true">{statusLabel}</span>
+                      </IdentityRow>
                       {expanded ? (
                         <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
                           {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
@@ -2425,7 +2449,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           <div className="mt-4 pl-2">
             <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
               <span className="truncate">{name}</span>
-              {profile.isOfficial === true ? <OfficialBadge locale={locale} tone="dark" /> : null}
+              <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
             </p>
             {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
             <ProfileLocation

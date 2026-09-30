@@ -18,6 +18,7 @@ import {
   type SerializerTranslationRow,
 } from '@/server/posts/feed-post-serializer'
 import type { FeedPostDto } from '@/lib/feed-post-dto'
+import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
 
 /**
  * Prisma `select` producing exactly a `SerializerPostRow`. Every list endpoint
@@ -38,7 +39,9 @@ export const feedPostRowSelect = {
   likeCount: true,
   commentCount: true,
   publishedAt: true,
-  author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
+  // Identity + badge flags (official / operator), so every post list labels
+  // an operator author the same way.
+  author: { select: USER_IDENTITY_SELECT },
 } as const
 
 export type LoadContextOptions = {

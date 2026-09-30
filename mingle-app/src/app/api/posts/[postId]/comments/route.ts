@@ -17,6 +17,8 @@ import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages
 import { resolveDisplayLanguage } from '@/server/posts/feed-post-serializer'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { markPostViewedQuietly } from '@/server/feed/post-view'
+import { USER_IDENTITY_SELECT, identityBadgeFlags } from '@/server/identity/user-identity-select'
+import { serializeListUserIdentity } from '@/server/identity/list-user-identity'
 
 export const runtime = 'nodejs'
 
@@ -65,8 +67,9 @@ export async function GET(request: NextRequest, context: Ctx) {
     where: visibleCommentsWhere(postId, userId),
     orderBy: { createdAt: 'asc' },
     include: {
-      author: { select: { id: true, handle: true, name: true, image: true, isOfficial: true } },
-      replyToUser: { select: { id: true, handle: true, name: true } },
+      // Identity + badge flags for the author AND the "replying to" user.
+      author: { select: USER_IDENTITY_SELECT },
+      replyToUser: { select: USER_IDENTITY_SELECT },
       _count: { select: { replies: true } },
       translations: {
         where: { status: 'ready' },
@@ -181,15 +184,16 @@ export async function GET(request: NextRequest, context: Ctx) {
       edited: !isDeleted && c.bodyVersion > 1,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
-      author: {
-        id: c.author.id,
-        handle: c.author.handle,
-        name: c.author.name,
-        image: c.author.image,
-        // Official (operator) accounts only; absent means false, as on posts.
-        ...(c.author.isOfficial === true ? { isOfficial: true } : {}),
-      },
-      replyToUser: c.replyToUser ? { id: c.replyToUser.id, handle: c.replyToUser.handle, name: c.replyToUser.name } : null,
+      // Badge flags (official / operator) only when true, as on posts.
+      author: serializeListUserIdentity(c.author),
+      replyToUser: c.replyToUser
+        ? {
+            id: c.replyToUser.id,
+            handle: c.replyToUser.handle,
+            name: c.replyToUser.name,
+            ...identityBadgeFlags(c.replyToUser),
+          }
+        : null,
       // Live replies only: this drives the "N replies" affordance, so counting
       // deleted rows would promise replies the client never receives.
       replyCount: (liveReplyMap.get(c.id) ?? []).length,

@@ -8,6 +8,9 @@ import { formatHandle } from "@/lib/handles";
 import SlideSurface from "@/components/slide-surface";
 import { mergeNotificationPage } from "@/components/notifications/notification-pages";
 import { markNotificationsReadOptimistically } from "@/components/notifications/notification-read-sync";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -40,6 +43,9 @@ type NotificationActor = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  /** Badge flags; absent means false. */
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 type NotificationRecord = {
@@ -90,6 +96,8 @@ function parseActor(value: unknown): NotificationActor | null {
     handle: nullableString(value.handle),
     name: nullableString(value.name),
     image: nullableString(value.image),
+    ...(value.isOfficial === true ? { isOfficial: true as const } : {}),
+    ...(value.isOperator === true ? { isOperator: true as const } : {}),
   };
 }
 
@@ -423,6 +431,9 @@ export default function NotificationPanel({
   const renderNotification = (notification: NotificationRecord) => {
     const primaryActor = notification.actors[0] ?? null;
     const actorName = resolveActorName(primaryActor);
+    // Only the primary actor is named (grouped likes add a count), so only
+    // that actor carries a badge.
+    const actorBadge = resolveAccountBadge(primaryActor);
     const actorHandle = primaryActor?.handle ? formatHandle(primaryActor.handle) : "";
     const isPending = pendingFollowIds.has(notification.id);
     const message = resolveMessage(notification);
@@ -435,7 +446,7 @@ export default function NotificationPanel({
 
     const label = isReportResolved
       ? message
-      : `${actorName}${groupedSuffix} ${message}`;
+      : `${withAccountBadgeLabel(actorName, actorBadge, locale)}${groupedSuffix} ${message}`;
 
     return (
       <li
@@ -443,38 +454,44 @@ export default function NotificationPanel({
         className={`border-b border-gray-100 px-4 py-3 ${notification.isRead ? "bg-white" : "bg-amber-50/60"}`}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleOpenNotification(notification)}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-100"
-            aria-label={label}
+          {/* The whole row opens the notification; the actor's badge stays its
+              own button (IdentityRow). */}
+          <IdentityRow
+            action={{ kind: "button", onClick: () => handleOpenNotification(notification) }}
+            label={label}
+            className="min-w-0 flex-1"
+            actionClassName="rounded-xl transition active:bg-gray-100"
+            contentClassName="flex min-w-0 items-center gap-3"
           >
             {isReportResolved ? (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100" aria-hidden="true">
                 <Check size={22} className="text-slate-500" aria-hidden="true" />
               </div>
             ) : (
-              <NotificationAvatar image={primaryActor?.image ?? null} label={actorName} />
+              <div className="shrink-0" aria-hidden="true">
+                <NotificationAvatar image={primaryActor?.image ?? null} label={actorName} />
+              </div>
             )}
             <span className="min-w-0 flex-1">
               <span className="line-clamp-2 block break-words text-[14px] leading-5 text-slate-900">
                 {isReportResolved ? (
-                  <span>{message}</span>
+                  <span aria-hidden="true">{message}</span>
                 ) : (
                   <>
-                    <strong className="font-semibold">{actorName}</strong>
-                    {groupedSuffix ? <span>{groupedSuffix}</span> : null}{" "}
-                    <span>{message}</span>
+                    <strong className="font-semibold" aria-hidden="true">{actorName}</strong>
+                    <AccountBadge kind={actorBadge} locale={locale} tone="dark" className="ml-1 align-[1px]" />
+                    {groupedSuffix ? <span aria-hidden="true">{groupedSuffix}</span> : null}{" "}
+                    <span aria-hidden="true">{message}</span>
                   </>
                 )}
               </span>
-              <span className="mt-0.5 block truncate text-[12px] text-gray-500">
+              <span className="mt-0.5 block truncate text-[12px] text-gray-500" aria-hidden="true">
                 {actorHandle || "\u00A0"}
                 {actorHandle ? " · " : ""}
                 {formatNotificationTime(notification.createdAt, locale, copy)}
               </span>
             </span>
-          </button>
+          </IdentityRow>
 
           {isFollow && primaryActor ? (
             <button

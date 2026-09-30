@@ -5,6 +5,7 @@ import { getPublishedBioText } from "@/server/profile-bio";
 import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export const runtime = "nodejs";
 
@@ -29,13 +30,8 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
 }
 
 const userProfileSelect = {
-  id: true,
-  handle: true,
-  name: true,
-  image: true,
-  imageCropScale: true,
-  imageCropX: true,
-  imageCropY: true,
+  // Identity + badge flags (official / operator).
+  ...USER_IDENTITY_SELECT,
   bio: true,
   nationality: true,
   primaryLanguages: true,
@@ -44,7 +40,6 @@ const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
-  isOfficial: true,
   _count: {
     select: {
       followerRelations: {
@@ -149,7 +144,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     followingCount: user._count.followingRelations,
     isFollowing: user.followerRelations.length > 0,
     isBlocked: block?.blockerId === viewerId,
-    // Official (operator) accounts only; absent means false.
-    ...(user.isOfficial === true ? { isOfficial: true } : {}),
+    // Badge flags (official / operator) only when true; absent means false.
+    ...identityBadgeFlags(user),
   });
 }

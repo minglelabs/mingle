@@ -149,6 +149,40 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(mockCommentFindMany.mock.calls[0][0].include.author.select.isOfficial).toBe(true)
   })
 
+  it('labels an operator comment author and "replying to" user, and nobody else', async () => {
+    const operator = {
+      id: 'op', handle: 'mingle.mina', name: 'Mina', image: null,
+      imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true,
+    }
+    const member = {
+      id: 'u2', handle: 'h2', name: 'd2', image: null,
+      imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: false,
+    }
+    mockCommentFindMany.mockResolvedValue([
+      {
+        id: 'c1', postId: 'post-1', authorId: 'op', parentId: null,
+        replyToUserId: null, bodyVersion: 1, sourceText: 'Hello', sourceLanguage: 'en',
+        likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: operator, replyToUser: null, _count: { replies: 1 }, translations: [],
+      },
+      {
+        id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
+        replyToUserId: 'op', bodyVersion: 1, sourceText: 'Reply', sourceLanguage: 'en',
+        likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: member, replyToUser: operator, _count: { replies: 0 }, translations: [],
+      },
+    ])
+    const body = await (await GET(makeRequest(), makeCtx('post-1'))).json()
+
+    expect(body.comments[0].author).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina', image: null, isOperator: true })
+    const reply = body.comments[0].replies[0]
+    expect(reply.author).toEqual({ id: 'u2', handle: 'h2', name: 'd2', image: null })
+    expect(reply.replyToUser).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina', isOperator: true })
+    const include = mockCommentFindMany.mock.calls[0][0].include
+    expect(include.author.select).toMatchObject({ isOperator: true, isOfficial: true })
+    expect(include.replyToUser.select).toMatchObject({ isOperator: true, isOfficial: true })
+  })
+
   it('returns threaded comments with deleted parent sourceText=null', async () => {
     mockCommentFindMany.mockResolvedValue([
       {

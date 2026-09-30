@@ -230,7 +230,14 @@ export default function CommentSheet(props: CommentSheetProps) {
       const target: NonNullable<ReplyTarget> = {
         parentId: comment.parentId ?? comment.id,
         replyToUserId: comment.authorId,
-        replyToUser: { id: comment.author.id, handle: comment.author.handle, name: comment.author.name },
+        replyToUser: {
+          id: comment.author.id,
+          handle: comment.author.handle,
+          name: comment.author.name,
+          // Keep the badge on the optimistic reply's "@name" and the composer banner.
+          ...(comment.author.isOfficial === true ? { isOfficial: true } : {}),
+          ...(comment.author.isOperator === true ? { isOperator: true } : {}),
+        },
         label: comment.author.name ?? comment.author.handle,
       };
       sheet.startReply(target);

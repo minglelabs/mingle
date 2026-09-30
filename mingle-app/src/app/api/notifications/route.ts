@@ -10,6 +10,7 @@ import {
   buildNotificationListResponse,
   type RawNotificationRow,
 } from "@/server/notifications/notification-list";
+import { USER_IDENTITY_SELECT } from "@/server/identity/user-identity-select";
 
 export const runtime = "nodejs";
 
@@ -70,9 +71,8 @@ export async function GET(request: NextRequest) {
       commentId: true,
       readAt: true,
       createdAt: true,
-      actor: {
-        select: { id: true, handle: true, name: true, image: true },
-      },
+      // Identity + badge flags (official / operator) of the actor.
+      actor: { select: USER_IDENTITY_SELECT },
     },
   });
 

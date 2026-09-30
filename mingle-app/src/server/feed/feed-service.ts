@@ -31,6 +31,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
+import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
 import {
   type FeedCandidate,
   type FeedCursor,
@@ -69,6 +70,9 @@ export interface FeedResultPost {
     name: string | null
     image: string | null
     imageObjectKey: string | null
+    /** Badge flags (official / operator); the serializer sends them only when true. */
+    isOfficial?: boolean
+    isOperator?: boolean
   }
 }
 
@@ -205,7 +209,8 @@ async function loadRankedSnapshot(
 // Page
 // ---------------------------------------------------------------------------
 
-const PAGE_SELECT = {
+/** Page rows: the serializer's post columns plus the author identity + badge flags. */
+export const FEED_PAGE_SELECT = {
   id: true,
   authorId: true,
   bodyVersion: true,
@@ -222,12 +227,8 @@ const PAGE_SELECT = {
   publishedAt: true,
   author: {
     select: {
-      id: true,
-      handle: true,
-      name: true,
-      image: true,
+      ...USER_IDENTITY_SELECT,
       imageObjectKey: true,
-      isOfficial: true,
     },
   },
 } as const
@@ -309,7 +310,7 @@ async function loadPageRows(viewerId: string | null, ids: string[]) {
   if (ids.length === 0) return []
   const found = await prisma.post.findMany({
     where: { ...visiblePostWhere(viewerId), id: { in: ids } },
-    select: PAGE_SELECT,
+    select: FEED_PAGE_SELECT,
   })
   const byId = new Map(found.map((p) => [p.id, p]))
   return ids.flatMap((id) => {

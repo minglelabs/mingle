@@ -142,6 +142,20 @@ describe('serializeFeedPost', () => {
     expect(serializeFeedPost(makePost(), makeCtx()).author).not.toHaveProperty('isOfficial')
   })
 
+  it('sets author.isOperator only for operator accounts and omits it otherwise', () => {
+    const operator = serializeFeedPost(
+      makePost({ author: { id: 'author-1', handle: 'mingle.mina', name: 'Mina', image: null, isOfficial: false, isOperator: true } }),
+      makeCtx(),
+    )
+    expect(operator.author).toEqual({ id: 'author-1', handle: 'mingle.mina', name: 'Mina', imageUrl: null, isOperator: true })
+    const member = serializeFeedPost(
+      makePost({ author: { id: 'author-1', handle: 'alice', name: 'Alice', image: null, isOfficial: false, isOperator: false } }),
+      makeCtx(),
+    )
+    expect(member.author).not.toHaveProperty('isOperator')
+    expect(serializeFeedPost(makePost(), makeCtx()).author).not.toHaveProperty('isOperator')
+  })
+
   it('does not change counts or order for an official author', () => {
     const rows = [
       makePost({ id: 'a', likeCount: 1, author: { id: 'o', handle: 'mingle_team', name: null, image: null, isOfficial: true } }),
