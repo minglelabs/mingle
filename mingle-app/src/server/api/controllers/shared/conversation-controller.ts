@@ -30,6 +30,7 @@ import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -361,8 +362,16 @@ export async function getConversationRealtimeTokenResponse(
   let writerToken: string | null = null;
   if (request.nextUrl.searchParams.get('live') === '1'
     && !(await isMessageSenderBlockedInConversation({ sessionKey, userId: resolvedUser.userId }))) {
-    const sender = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
-    writerToken = mintConversationLiveWriterToken(sessionKey, resolvedUser.userId, sender?.name ?? null);
+    const sender = await prisma.user.findUnique({
+      where: { id: resolvedUser.userId },
+      select: { name: true, isOfficial: true, isOperator: true },
+    });
+    writerToken = mintConversationLiveWriterToken(
+      sessionKey,
+      resolvedUser.userId,
+      sender?.name ?? null,
+      resolveAccountBadge(sender),
+    );
   }
   // Realtime push is unconfigured in this environment — not an error the
   // caller needs to see, since the client falls back to polling.

@@ -389,6 +389,8 @@ describe("app-conversations", () => {
         defaultDisplayLanguage: true,
         nationality: true,
         primaryLanguages: true,
+        isOfficial: true,
+        isOperator: true,
       },
     });
     expect(state?.conversation.title).toBe("Bob");
