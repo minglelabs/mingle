@@ -8,6 +8,7 @@ import {
   translatePostOnDemand,
 } from '@/server/translation/post-translation-service'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { resolvePostSourceLanguage } from '@/server/translation/post-chinese-variants'
 import { onDemandTranslationDeps } from '@/server/translation/on-demand-translation-deps'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
@@ -78,7 +79,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const original = { sourceText: post.sourceText, sourceLanguage }
 
   // Already in the requested language: the original is the answer, no LLM.
-  if (normalizeRequestedTranslationLanguage(sourceLanguage) === language) {
+  // A legacy bare `zh` source is compared as its script's variant, so a
+  // Traditional post is never served as its own zh-CN translation.
+  if (normalizeRequestedTranslationLanguage(resolvePostSourceLanguage(sourceLanguage, post.sourceText)) === language) {
     return json({ postId, language, text: post.sourceText, status: 'ready', ...original })
   }
 

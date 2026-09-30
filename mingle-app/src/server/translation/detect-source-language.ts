@@ -11,10 +11,16 @@
  *
  * Undetectable input (empty, whitespace-only, or emoji/punctuation/digits
  * only) resolves to null without ever calling the provider.
+ *
+ * Chinese always resolves to zh-CN or zh-TW, never a bare `zh`: the typed
+ * script decides, the author's Chinese display language (the client hint)
+ * only breaks a tie when the script is ambiguous, and the model's variant
+ * guess is the weakest fallback (then zh-CN).
  */
 
 import { translateTexts, type TranslateTextsInput } from './translate-texts'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { isChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
 import { DEFAULT_POST_TRANSLATION_LANGUAGES } from './post-translation-service'
 
 export type DetectSourceLanguageArgs = {
@@ -38,6 +44,26 @@ export function isUndetectableText(text: string): boolean {
   // Marks (\p{M}) accompany letters in some scripts (e.g. Indic), so a run of
   // marks alone is not a letter and stays undetectable.
   return !/\p{L}/u.test(text)
+}
+
+/**
+ * zh-CN or zh-TW for Chinese text. The hint is a candidate, not a `hint`:
+ * as a hint it would override the script.
+ */
+function resolveChineseSourceVariant(text: string, clientHint: string, modelLanguage?: string): string {
+  return resolveChineseVariant({
+    language: 'zh',
+    text,
+    preferScript: true,
+    candidates: [clientHint],
+    fallback: modelLanguage,
+  })
+}
+
+/** The client hint as a last resort; a Chinese hint still gets its variant from the script. */
+function fallbackToClientHint(text: string, canonicalHint: string): string | null {
+  if (!canonicalHint) return null
+  return isChineseLanguage(canonicalHint) ? resolveChineseSourceVariant(text, canonicalHint) : canonicalHint
 }
 
 /**
@@ -69,19 +95,20 @@ export async function detectSourceLanguage(args: DetectSourceLanguageArgs): Prom
       modelSelection: args.modelSelection,
     })
 
-    const detected = result.detectedSourceLanguage
-      ? canonicalizeTranslationLanguageCode(result.detectedSourceLanguage)
-      : ''
+    const rawDetected = result.detectedSourceLanguage || ''
+    if (isChineseLanguage(rawDetected)) return resolveChineseSourceVariant(text, canonicalHint, rawDetected)
+
+    const detected = rawDetected ? canonicalizeTranslationLanguageCode(rawDetected) : ''
 
     if (detected) return detected
 
     // Detection produced nothing usable — fall back to the client hint only if
     // it canonicalizes to a real language.
-    return canonicalHint || null
+    return fallbackToClientHint(text, canonicalHint)
   } catch {
     // Provider failure must not block publishing. Fall back to the client hint
     // when it is a real language, else null (post stays untranslated; the user
     // can request a translation later, which re-detects).
-    return canonicalHint || null
+    return fallbackToClientHint(text, canonicalHint)
   }
 }
