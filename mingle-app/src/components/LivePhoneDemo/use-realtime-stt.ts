@@ -2763,6 +2763,11 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
   const normalizedSourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage, sourceText, {
     candidates: input.selectedLanguages,
   })
+  // The finalize flags describe this exact text. A final that only confirms
+  // it gets no new finalize translation, so dropping them here would hide the
+  // same-language row for good; a changed text drops them until its own
+  // finalize translation lands.
+  const textUnchanged = sourceText === target.originalText
   const reconciled = normalizedSourceLanguage
     ? reconcileUtteranceTranslationBase({
       utterance: target,
@@ -2770,11 +2775,16 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
       detectedSourceLanguage: normalizedSourceLanguage,
       selectedLanguages: input.selectedLanguages,
       sourceText,
+      ...(textUnchanged ? pickSourceLanguageBubbleFlags(target) : {}),
     })
     : {
       utterance: (() => {
         const next: Utterance = { ...target, originalText: sourceText }
-        if (sourceText !== target.originalText) delete next.originalDisplayText
+        if (!textUnchanged) {
+          delete next.originalDisplayText
+          delete next.sourceLanguagesMixed
+          delete next.sourceTextHasForeignScript
+        }
         return next
       })(),
       priorities: input.store.translationPriorities,

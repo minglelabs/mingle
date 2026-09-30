@@ -10,6 +10,7 @@ import {
   mergeDisplayUtterances,
   mergeServerHydrationUtteranceWithRoomLanguages,
   normalizeConversationHydrationUtterances,
+  replaceFinalizedUtteranceSourceInStoreState,
   type UtteranceStoreState,
 } from './use-realtime-stt'
 
@@ -202,6 +203,36 @@ describe.each(SCENARIOS)('same-language row of $name', (scenario) => {
     const merged = mergeServerCopy(store, sourceOnly)
     expect(renderedUtterance(merged)?.[scenario.flag]).toBe(true)
     expect(visibleRows(renderedUtterance(merged))).toContain('ko')
+  })
+
+  it('survives a speech-recognition final that only confirms the finalized text', () => {
+    const { store } = finalizeLocally(scenario)
+    // reuse_local: the recognizer's own final matched the local stop-finalize.
+    // The same text is not translated again, so nothing re-applies the flags.
+    const confirmed = replaceFinalizedUtteranceSourceInStoreState({
+      store,
+      utteranceId: UTTERANCE_ID,
+      sourceText: scenario.text,
+      sourceLanguage: scenario.result.sourceLanguage,
+      selectedLanguages: ROOM_LANGUAGES,
+    })
+
+    expect(renderedUtterance(confirmed)?.[scenario.flag]).toBe(true)
+    expect(visibleRows(renderedUtterance(confirmed))).toContain('ko')
+  })
+
+  it('drops the flags when a speech-recognition final changes the text', () => {
+    const { store } = finalizeLocally(scenario)
+    const changed = replaceFinalizedUtteranceSourceInStoreState({
+      store,
+      utteranceId: UTTERANCE_ID,
+      sourceText: `${scenario.text} 진짜로`,
+      sourceLanguage: scenario.result.sourceLanguage,
+      selectedLanguages: ROOM_LANGUAGES,
+    })
+
+    expect(renderedUtterance(changed)).not.toHaveProperty(scenario.flag)
+    expect(visibleRows(renderedUtterance(changed))).not.toContain('ko')
   })
 
   it('is rendered from the server copy alone (room reload, another device, another member)', () => {
