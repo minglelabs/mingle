@@ -189,6 +189,8 @@ describe("getDictionary", () => {
       expect(dictionary.livePhoneDemo.feedback.categoryLabels.feedback).toBeTruthy();
       expect(dictionary.livePhoneDemo.ttsAction.playPronunciationLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.nativeAppUpdate.updateButtonLabel).toBeTruthy();
+      expect(dictionary.livePhoneDemo.nativeAppUpdate.installSourceLabel).toBeTruthy();
+      expect(dictionary.livePhoneDemo.nativeAppUpdate.installSourceValues.local).toBeTruthy();
       expect(dictionary.livePhoneDemo.silenceSliderUpgrade.buttonLabel).toBeTruthy();
       expect(dictionary.versionPolicy.checkingTitle).toBeTruthy();
       expect(dictionary.versionPolicy.updateButtonLabel).toBeTruthy();

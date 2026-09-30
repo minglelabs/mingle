@@ -172,6 +172,7 @@ import {
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
   readRequestedApiNamespaceFromSearch,
+  resolveNativeAppInstallSourceText,
   resolveNativeAppTrackingContext,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
@@ -5912,6 +5913,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
   const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
+  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource)
   const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || ''
   const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === 'checking'
     ? nativeAppUpdateCopy.checkingMessage
@@ -7584,6 +7586,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   <div className="mt-2 text-sm font-semibold text-gray-900">
                                     {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
                                   </div>
+                                  {nativeAppInstallSource ? (
+                                    <div className="mt-1 text-xs font-medium text-gray-600">
+                                      {nativeAppUpdateCopy.installSourceLabel} {nativeAppInstallSource}
+                                    </div>
+                                  ) : null}
                                   {nativeAppLatestVersion ? (
                                     <div className="mt-1 text-xs font-medium text-gray-600">
                                       {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}

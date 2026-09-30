@@ -3,6 +3,8 @@ import {
   averageSeries,
   buildChartGeometry,
   buildCumulativeSeries,
+  buildSharedScaleChartGeometries,
+  buildTranslationModelSeries,
   enumerateDayKeys,
   fillDailySeries,
   formatCompactNumber,
@@ -10,11 +12,15 @@ import {
   formatMetricDisplayValue,
   formatMetricValue,
   formatSecondsAsDuration,
+  formatSharePercent,
   formatShortDay,
   niceCeil,
   normalizeDashboardPlatform,
   normalizeDashboardDays,
+  resolveChartFrame,
+  resolveHoverIndex,
   resolveTodayKey,
+  resolveTooltipShiftPercent,
   resolveUncacheableDayKeys,
   resolveXAxisTicks,
   shiftDayKey,
@@ -311,5 +317,197 @@ describe("buildCumulativeSeries", () => {
       { day: "2026-08-04", value: 5 },
     ]);
     expect(cumulative.map((point) => point.value)).toEqual([10, 10, 15]);
+  });
+});
+
+describe("formatSharePercent", () => {
+  it("renders a one-decimal percentage", () => {
+    expect(formatSharePercent(0.4234)).toBe("42.3%");
+    expect(formatSharePercent(1)).toBe("100.0%");
+    expect(formatSharePercent(0.001)).toBe("0.1%");
+  });
+
+  it("does not show a nonzero share as 0.0%", () => {
+    expect(formatSharePercent(0.0004)).toBe("<0.1%");
+    expect(formatSharePercent(0)).toBe("0.0%");
+  });
+});
+
+describe("buildSharedScaleChartGeometries", () => {
+  const avg = [
+    { day: "2026-08-02", value: 120 },
+    { day: "2026-08-03", value: null },
+    { day: "2026-08-04", value: 180 },
+  ];
+  const p95 = [
+    { day: "2026-08-02", value: 340 },
+    { day: "2026-08-03", value: null },
+    { day: "2026-08-04", value: 410 },
+  ];
+
+  it("sizes one y-scale to the largest value across every series", () => {
+    const { yMax, geometries } = buildSharedScaleChartGeometries([avg, p95], 100, 50);
+    expect(yMax).toBe(500);
+    expect(geometries.map((geometry) => geometry.yMax)).toEqual([500, 500]);
+    // 180 against the shared 500 sits well below the top, unlike a per-series scale.
+    expect(geometries[0].points[2].y).toBeCloseTo(50 - (180 / 500) * 50);
+  });
+
+  it("matches the combined-scale geometry the daily charts computed inline", () => {
+    const scale = buildChartGeometry([...avg, ...p95], 560, 140);
+    const { geometries } = buildSharedScaleChartGeometries([avg, p95], 560, 140);
+    expect(geometries[0]).toEqual(buildChartGeometry(avg, 560, 140, scale.yMax));
+    expect(geometries[1]).toEqual(buildChartGeometry(p95, 560, 140, scale.yMax));
+    expect(buildSharedScaleChartGeometries([avg], 560, 140).geometries[0]).toEqual(buildChartGeometry(avg, 560, 140));
+  });
+
+  it("falls back to the default scale when there is no series", () => {
+    expect(buildSharedScaleChartGeometries([], 100, 50)).toEqual({ yMax: 1, geometries: [] });
+  });
+});
+
+describe("chart frame + hover", () => {
+  const frame = resolveChartFrame(560, 140);
+
+  it("pads the plot for the axis labels the same way for every width", () => {
+    expect(frame).toEqual({ width: 560, height: 140, viewMinX: -4, viewMinY: -8, viewWidth: 608, viewHeight: 170 });
+    expect(resolveChartFrame(1224, 140)).toMatchObject({ viewMinX: -4, viewWidth: 1272 });
+  });
+
+  it("snaps the pointer to the nearest day and clamps past the plot edges", () => {
+    // Rendered at viewBox scale, so client px == svg units offset by viewMinX.
+    const rect = { left: 0, width: frame.viewWidth };
+    const clientXForSvgX = (svgX: number) => svgX - frame.viewMinX;
+    // 3 points -> x at 0, 280, 560.
+    expect(resolveHoverIndex(clientXForSvgX(0), rect, frame, 3)).toBe(0);
+    expect(resolveHoverIndex(clientXForSvgX(139), rect, frame, 3)).toBe(0);
+    expect(resolveHoverIndex(clientXForSvgX(141), rect, frame, 3)).toBe(1);
+    expect(resolveHoverIndex(clientXForSvgX(560), rect, frame, 3)).toBe(2);
+    expect(resolveHoverIndex(clientXForSvgX(-50), rect, frame, 3)).toBe(0);
+    expect(resolveHoverIndex(clientXForSvgX(600), rect, frame, 3)).toBe(2);
+  });
+
+  it("scales the pointer from rendered pixels into svg units", () => {
+    // Rendered at half size: client x 142 -> svg x 280 -> the middle of 3 points.
+    expect(resolveHoverIndex(142, { left: 0, width: frame.viewWidth / 2 }, frame, 3)).toBe(1);
+  });
+
+  it("has nothing to hover without points or before layout", () => {
+    expect(resolveHoverIndex(100, { left: 0, width: 608 }, frame, 0)).toBeNull();
+    expect(resolveHoverIndex(100, { left: 0, width: 0 }, frame, 3)).toBeNull();
+    expect(resolveHoverIndex(100, { left: 0, width: 608 }, frame, 1)).toBe(0);
+  });
+
+  it("shifts a tooltip left by its anchor's fraction of the plot width", () => {
+    expect(resolveTooltipShiftPercent(0, 1000)).toBe(0);
+    expect(resolveTooltipShiftPercent(250, 1000)).toBe(25);
+    expect(resolveTooltipShiftPercent(500, 1000)).toBe(50);
+    expect(resolveTooltipShiftPercent(1000, 1000)).toBe(100);
+  });
+
+  it("keeps the shift within 0..100 and centres when there is no plot width", () => {
+    expect(resolveTooltipShiftPercent(-20, 1000)).toBe(0);
+    expect(resolveTooltipShiftPercent(1200, 1000)).toBe(100);
+    expect(resolveTooltipShiftPercent(10, 0)).toBe(50);
+  });
+
+  it("keeps any tooltip narrower than the plot inside it at any rendered width", () => {
+    const wide = resolveChartFrame(1224, 140);
+    for (const containerPx of [320, 768, 1088]) {
+      const pxPerUnit = containerPx / wide.viewWidth;
+      const plotLeft = (0 - wide.viewMinX) * pxPerUnit;
+      const plotRight = (wide.width - wide.viewMinX) * pxPerUnit;
+      const tooltipPx = plotRight - plotLeft - 1;
+      for (const x of [0, 1, 100, 612, 1100, 1223, 1224]) {
+        const anchor = (x - wide.viewMinX) * pxPerUnit;
+        const left = anchor - (resolveTooltipShiftPercent(x, wide.width) / 100) * tooltipPx;
+        expect(left).toBeGreaterThanOrEqual(plotLeft - 1e-9);
+        expect(left + tooltipPx).toBeLessThanOrEqual(plotRight + 1e-9);
+      }
+    }
+  });
+});
+
+describe("buildTranslationModelSeries", () => {
+  const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
+
+  it("maps legacy aliases onto their canonical model and sums them per day", () => {
+    const series = buildTranslationModelSeries([
+      { day: "2026-08-02", model: "openai/gpt-6-luna", value: 3 },
+      { day: "2026-08-02", model: "gpt-6-luna", value: 2 },
+      { day: "2026-08-03", model: "qwen/qwen3.5-9b:free", value: 4 },
+      { day: "2026-08-04", model: "qwen/qwen3.5-9b", value: 1 },
+    ], dayKeys);
+
+    expect(series.map((entry) => [entry.key, entry.points.map((point) => point.value)])).toEqual([
+      ["qwen/qwen3.5-9b", [0, 4, 1]],
+      ["gpt-6-luna", [5, 0, 0]],
+    ]);
+  });
+
+  it("pools every unrecognized value into one trailing 기타 series", () => {
+    const series = buildTranslationModelSeries([
+      { day: "2026-08-03", model: "legacy-model-a", value: 2 },
+      { day: "2026-08-03", model: "qwen/qwen3.6-plus", value: 3 },
+      { day: "2026-08-04", model: "", value: 1 },
+      { day: "2026-08-02", model: "gemini-2.5-flash-lite", value: 1 },
+    ], dayKeys);
+
+    expect(series.map((entry) => entry.key)).toEqual(["gemini-2.5-flash-lite", "other"]);
+    expect(series[1]).toMatchObject({ label: "기타", total: 6 });
+    expect(series[1].points.map((point) => point.value)).toEqual([0, 5, 1]);
+  });
+
+  it("orders series by TRANSLATION_MODEL_OPTIONS with 기타 last, whatever the row order or volume", () => {
+    const series = buildTranslationModelSeries([
+      { day: "2026-08-02", model: "unknown", value: 900 },
+      { day: "2026-08-02", model: "gpt-6-luna", value: 500 },
+      { day: "2026-08-02", model: "qwen/qwen3.5-9b", value: 50 },
+      { day: "2026-08-02", model: "gemma-4-31b-it", value: 5 },
+      { day: "2026-08-02", model: "gemini-2.5-flash-lite", value: 1 },
+    ], dayKeys);
+
+    expect(series.map((entry) => entry.label)).toEqual([
+      "gemini-2.5-flash-lite",
+      "gemma-4-31b-it",
+      "qwen3.5-9b",
+      "gpt-6-luna",
+      "기타",
+    ]);
+  });
+
+  it("zero-fills every day of the range and drops series with no message in it", () => {
+    const series = buildTranslationModelSeries([
+      { day: "2026-08-03", model: "gemma-4-31b-it", value: 7 },
+      { day: "2026-08-03", model: "gpt-6-luna", value: 0 },
+    ], dayKeys);
+
+    expect(series).toHaveLength(1);
+    expect(series[0].points).toEqual([
+      { day: "2026-08-02", value: 0 },
+      { day: "2026-08-03", value: 7 },
+      { day: "2026-08-04", value: 0 },
+    ]);
+  });
+
+  it("computes each series' range total and share of all translated messages", () => {
+    const series = buildTranslationModelSeries([
+      { day: "2026-08-02", model: "gemini-2.5-flash-lite", value: 30 },
+      { day: "2026-08-04", model: "gemini-2.5-flash-lite", value: 10 },
+      { day: "2026-08-03", model: "gpt-6-luna", value: 50 },
+      { day: "2026-08-03", model: "retired-model", value: 10 },
+      // Outside the range: never counted.
+      { day: "2026-08-01", model: "gpt-6-luna", value: 1000 },
+    ], dayKeys);
+
+    expect(series.map((entry) => [entry.key, entry.total, entry.share])).toEqual([
+      ["gemini-2.5-flash-lite", 40, 0.4],
+      ["gpt-6-luna", 50, 0.5],
+      ["other", 10, 0.1],
+    ]);
+  });
+
+  it("returns no series when nothing was translated", () => {
+    expect(buildTranslationModelSeries([], dayKeys)).toEqual([]);
   });
 });

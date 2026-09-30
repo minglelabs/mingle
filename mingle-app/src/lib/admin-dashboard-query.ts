@@ -3,6 +3,7 @@ import {
   ADMIN_DASHBOARD_TIME_ZONE,
   type AdminDashboardDateRange,
   type AdminDashboardPlatform,
+  buildTranslationModelSeries,
   type DailyRow,
   type DashboardMetric,
   fillDailySeries,
@@ -11,6 +12,8 @@ import {
   resolveUncacheableDayKeys,
   shiftDayKey,
   startOfDayUtc,
+  type TranslationModelDailyRow,
+  type TranslationModelSeries,
 } from "@/lib/admin-dashboard-metrics";
 
 /**
@@ -22,6 +25,7 @@ const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_
 const USAGE_METRIC_VERSION = 2;
 
 type RawDayCount = { day: Date; value: bigint | number };
+type RawDayModelCount = { day: Date; model: string; value: bigint | number };
 type RawDayLatency = { day: Date; avg_ms: number | null; p95_ms: number | null };
 
 type DailyMetricSnapshot = {
@@ -161,20 +165,70 @@ async function queryDau(
   return toDailyRows(rows);
 }
 
+/**
+ * FROM + WHERE shared by every message-count query: rows that are not deleted, created in
+ * [$1, $2), and -- under a platform filter -- sent by a user last seen on that platform
+ * ($3). `extraConditions` are ANDed on after those. Building each count query on this one
+ * source keeps their filters from drifting apart.
+ */
+function buildMessageCountSource(platform: AdminDashboardPlatform, extraConditions: readonly string[] = []): string {
+  const extra = extraConditions.map((condition) => `\n       and ${condition}`).join("");
+  return `from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}${extra}`;
+}
+
 async function queryMessageCount(
   range: AdminDashboardDateRange,
   platform: AdminDashboardPlatform,
 ): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
     `select ${DAY_BUCKET_EXPR("m")} as day, count(*) as value
-     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
-     where m."is_deleted" is distinct from true
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+     ${buildMessageCountSource(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
   );
   return toDailyRows(rows);
+}
+
+/**
+ * translation_model is the model string the client reported with its stt_turn_finalized
+ * event, copied from the finalize response it got; the server stores it as sent (trimmed
+ * and length-capped) without checking it against what actually ran. Folded case- and
+ * space-insensitively here, before buildTranslationModelSeries canonicalizes it.
+ */
+const TRANSLATION_MODEL_EXPR = `lower(btrim(m."translation_model"))`;
+
+/**
+ * Messages per day per reported translation model, with queryMessageCount's filters. The
+ * model is NULL when the turn was not translated, so untranslated messages drop out here.
+ */
+async function queryTranslationModelMessageCounts(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<TranslationModelDailyRow[]> {
+  const rows = await prisma.$queryRawUnsafe<RawDayModelCount[]>(
+    `select ${DAY_BUCKET_EXPR("m")} as day, ${TRANSLATION_MODEL_EXPR} as model, count(*) as value
+     ${buildMessageCountSource(platform, [`m."translation_model" is not null`])}
+     group by day, ${TRANSLATION_MODEL_EXPR}
+     order by day, model`,
+    ...buildQueryParams(range, platform),
+  );
+  return rows.map((row) => ({ day: dayKeyFromRaw(row.day), model: row.model, value: Number(row.value) }));
+}
+
+/**
+ * Daily message counts per translation model for the range. Always a live query, never
+ * the adminDashboardDailyMetric cache: that table has no per-model columns, and adding
+ * them would need a production migration, which is applied by hand.
+ */
+export async function loadTranslationModelMessageSeries(
+  range: AdminDashboardDateRange,
+  options?: Pick<LoadAdminDashboardOptions, "platform">,
+): Promise<TranslationModelSeries[]> {
+  const rows = await queryTranslationModelMessageCounts(range, options?.platform ?? "all");
+  return buildTranslationModelSeries(rows, range.dayKeys);
 }
 
 /**

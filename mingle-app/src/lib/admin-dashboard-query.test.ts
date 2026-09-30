@@ -20,7 +20,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { clearAdminDashboardCache, loadAdminDashboardMetrics } from "./admin-dashboard-query";
+import {
+  clearAdminDashboardCache,
+  loadAdminDashboardMetrics,
+  loadTranslationModelMessageSeries,
+} from "./admin-dashboard-query";
 
 function makeRange(dayKeys: string[]): AdminDashboardDateRange {
   const rangeStart = startOfDayUtc(dayKeys[0]);
@@ -31,6 +35,16 @@ function makeRange(dayKeys: string[]): AdminDashboardDateRange {
 
 function rawDay(dayKey: string): Date {
   return parseDayKey(dayKey);
+}
+
+/** Collapses whitespace so SQL assertions pin the statement, not its indentation. */
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, " ").trim();
+}
+
+/** The FROM ... WHERE part of a normalized count query. */
+function sqlSource(sql: string): string {
+  return sql.slice(sql.indexOf(" from ") + 1, sql.indexOf(" group by "));
 }
 
 function setRawMetricResults(dayKey: string): void {
@@ -48,6 +62,28 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
+  it.each([
+    ["all", "", ""],
+    ["android", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
+    ["ios", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
+  ] as const)("counts messages with the unchanged message-count SQL (%s)", async (platform, join, platformFilter) => {
+    const today = resolveTodayKey(new Date());
+    setRawMetricResults(today);
+
+    await loadAdminDashboardMetrics(makeRange([today]), { platform });
+
+    const [query, ...params] = mocks.queryRawUnsafe.mock.calls[2] as [string, ...unknown[]];
+    expect(normalizeSql(query)).toBe(normalizeSql(`
+      select date_trunc('day', m."created_at") as day, count(*) as value
+      from "app"."app_messages" as m${join}
+      where m."is_deleted" is distinct from true
+        and m."created_at" >= $1 and m."created_at" < $2${platformFilter}
+      group by day
+      order by day
+    `));
+    expect(params).toHaveLength(platform === "all" ? 2 : 3);
+  });
+
   it("uses one indexed pre-range usage snapshot per active session instead of scanning all history", async () => {
     const today = resolveTodayKey(new Date());
     setRawMetricResults(today);
@@ -387,5 +423,87 @@ describe("clearAdminDashboardCache", () => {
   it("does nothing when given an empty array", async () => {
     await clearAdminDashboardCache([]);
     expect(mocks.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadTranslationModelMessageSeries", () => {
+  const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
+
+  it("counts live translated messages per day and case/space-folded model with the message-count filters", async () => {
+    mocks.queryRawUnsafe.mockResolvedValueOnce([]);
+    const range = makeRange(dayKeys);
+
+    await loadTranslationModelMessageSeries(range);
+
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(1);
+    const [query, ...params] = mocks.queryRawUnsafe.mock.calls[0] as [string, ...unknown[]];
+    expect(normalizeSql(query)).toBe(normalizeSql(`
+      select date_trunc('day', m."created_at") as day, lower(btrim(m."translation_model")) as model, count(*) as value
+      from "app"."app_messages" as m
+      where m."is_deleted" is distinct from true
+        and m."created_at" >= $1 and m."created_at" < $2
+        and m."translation_model" is not null
+      group by day, lower(btrim(m."translation_model"))
+      order by day, model
+    `));
+    expect(params).toEqual([range.rangeStart, range.rangeEnd]);
+    // Live by design: the daily metric cache is neither read nor written.
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it.each(["android", "ios"] as const)("joins app_users and binds %s as $3", async (platform) => {
+    mocks.queryRawUnsafe.mockResolvedValueOnce([]);
+    const range = makeRange(dayKeys);
+
+    await loadTranslationModelMessageSeries(range, { platform });
+
+    const [query, ...params] = mocks.queryRawUnsafe.mock.calls[0] as [string, ...unknown[]];
+    expect(query).toContain('join "app"."app_users" as u on u."id" = m."user_id"');
+    expect(query).toContain('and u."latest_client_platform" = $3');
+    expect(query).toContain('m."translation_model" is not null');
+    expect(params).toEqual([range.rangeStart, range.rangeEnd, platform]);
+  });
+
+  it.each(["all", "android", "ios"] as const)(
+    "filters exactly like the message count plus the translated-only condition (%s)",
+    async (platform) => {
+      const today = resolveTodayKey(new Date());
+      setRawMetricResults(today);
+      await loadAdminDashboardMetrics(makeRange([today]), { platform });
+      const messageCountQuery = normalizeSql(mocks.queryRawUnsafe.mock.calls[2][0] as string);
+      mocks.queryRawUnsafe.mockResolvedValueOnce([]);
+
+      await loadTranslationModelMessageSeries(makeRange([today]), { platform });
+
+      const modelQuery = normalizeSql(mocks.queryRawUnsafe.mock.calls[6][0] as string);
+      expect(sqlSource(modelQuery)).toBe(`${sqlSource(messageCountQuery)} and m."translation_model" is not null`);
+    },
+  );
+
+  it("folds raw model strings into ordered canonical series with a trailing 기타", async () => {
+    mocks.queryRawUnsafe.mockResolvedValueOnce([
+      { day: rawDay("2026-08-02"), model: "gpt-6-luna", value: BigInt(2) },
+      { day: rawDay("2026-08-02"), model: "openai/gpt-6-luna", value: BigInt(3) },
+      { day: rawDay("2026-08-03"), model: "qwen/qwen3.5-9b:free", value: BigInt(4) },
+      { day: rawDay("2026-08-03"), model: "gemini-2.5-flash-lite", value: 6 },
+      { day: rawDay("2026-08-04"), model: "legacy-model", value: BigInt(5) },
+    ]);
+
+    const series = await loadTranslationModelMessageSeries(makeRange(dayKeys), { platform: "android" });
+
+    expect(series.map((entry) => ({
+      key: entry.key,
+      label: entry.label,
+      values: entry.points.map((point) => point.value),
+      total: entry.total,
+      share: entry.share,
+    }))).toEqual([
+      { key: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite", values: [0, 6, 0], total: 6, share: 0.3 },
+      { key: "qwen/qwen3.5-9b", label: "qwen3.5-9b", values: [0, 4, 0], total: 4, share: 0.2 },
+      { key: "gpt-6-luna", label: "gpt-6-luna", values: [5, 0, 0], total: 5, share: 0.25 },
+      { key: "other", label: "기타", values: [0, 0, 5], total: 5, share: 0.25 },
+    ]);
   });
 });
