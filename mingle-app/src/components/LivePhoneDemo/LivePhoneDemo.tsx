@@ -4375,6 +4375,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
+          // Same model as auto TTS; omitted while the user has not picked one (server default).
+          ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
       if (!response.ok) return null
@@ -4386,7 +4388,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate, resolveConversationSessionKey])
+  }, [nativeAppUpdate, requestTtsModel, resolveConversationSessionKey])
 
   const {
     utterances,
