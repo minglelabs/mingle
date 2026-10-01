@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ZoomableConversationImage } from './ConversationImageBubble'
+import { ZoomableConversationImage } from './ZoomableConversationImage'
 
-const source = readFileSync(new URL('./ConversationImageBubble.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('./ZoomableConversationImage.tsx', import.meta.url), 'utf8')
 
 function sourceBetween(startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -16,10 +16,10 @@ function sourceBetween(startMarker: string, endMarker: string): string {
 
 const noop = () => {}
 
-function renderViewer(renderOverlay?: () => null) {
+function renderViewer(renderOverlay?: () => null, extra: object = {}) {
   return renderToStaticMarkup(createElement(ZoomableConversationImage, {
     src: '/api/conversations/c1/images/m1', alt: 'Photo', width: 945, height: 2048,
-    onError: noop, onDismiss: noop, onDragProgress: noop, onSettleChange: noop, renderOverlay,
+    onError: noop, onDismiss: noop, onDragProgress: noop, onSettleChange: noop, renderOverlay, ...extra,
   }))
 }
 
@@ -58,7 +58,7 @@ describe('ZoomableConversationImage stage', () => {
   })
 
   it('renders the overlay inside the stage only once the photo has loaded', () => {
-    const stage = sourceBetween('<div data-conversation-image-stage', '</div>\n  </div>\n}')
+    const stage = sourceBetween('<div data-conversation-image-stage', '{failure}')
     expect(stage).toContain('onLoad={event => setLoadedImage(event.currentTarget)}')
     expect(stage).toContain('renderOverlay && stage && stage.width > 0 && loadedImage')
   })
@@ -70,5 +70,49 @@ describe('ZoomableConversationImage stage', () => {
       expect(viewport).toContain(handler)
     }
     expect(viewport).toContain('touch-none')
+  })
+
+  it('leaves the backdrop as the only dark layer, so a dragged photo leaves nothing behind', () => {
+    const html = renderViewer()
+    const viewport = html.slice(0, html.indexOf('>') + 1)
+    // The black rectangle that stayed behind a photo swiped away was this viewport's own background.
+    expect(viewport).not.toContain('bg-black')
+    expect(viewport).not.toMatch(/\bbg-/)
+    // A photo dragged down is free to leave the viewport instead of being cut at its edge.
+    expect(viewport).not.toContain('overflow-hidden')
+  })
+
+  it('shows a failure instead of the photo and its overlay, and keeps the slide draggable', () => {
+    const html = renderViewer(() => null, { failure: createElement('p', { id: 'failure' }, 'Could not load') })
+    expect(html).toContain('<p id="failure">Could not load</p>')
+    expect(html).toMatch(/<img[^>]*class="invisible block h-full w-full"/)
+    expect(html).toContain('touch-none')
+  })
+
+  it('keeps a neighbouring slide out of the focus order and the accessibility tree', () => {
+    const active = renderViewer()
+    expect(active).toContain('tabindex="0"')
+    expect(active).not.toContain('aria-hidden')
+    const neighbour = renderViewer(undefined, { active: false })
+    expect(neighbour).toContain('tabindex="-1"')
+    expect(neighbour).toContain('aria-hidden="true"')
+  })
+
+  it('measures a page drag on screen and hands it to the viewer', () => {
+    // The track moves under the slide while paging, so slide-local coordinates would read no movement.
+    expect(source).toContain('startClientX: event.clientX')
+    expect(source).toContain('pagerDrag.offsetX = event.clientX - pagerDrag.startClientX')
+    const horizontal = sourceBetween("if (axis === 'horizontal') {", '} else if (isDismissibleDrag(')
+    expect(horizontal).toContain('dismissRef.current = null')
+    expect(horizontal).toContain('transformRef.current.scale <= MIN_IMAGE_SCALE')
+    expect(horizontal).toContain('pager.onDrag(drag.offsetX)')
+    expect(sourceBetween('const pagerDrag = pagerDragRef.current\n    if (pagerDrag && event.pointerId', 'const dismiss = dismissRef.current')).toContain('pager?.onRelease(')
+    // A pinch or a cancel springs the track back.
+    expect(sourceBetween('if (points.length >= 2) {', 'const [first, second] = points')).toContain('pager?.onCancel()')
+    expect(sourceBetween('const handlePointerCancel = useCallback', 'const handleWheel')).toContain('pager?.onCancel()')
+  })
+
+  it('speaks for the backdrop only while it is the photo on screen', () => {
+    expect(source).toContain('useEffect(() => { if (active) onSettleChange(settling) }, [active, settling, onSettleChange])')
   })
 })

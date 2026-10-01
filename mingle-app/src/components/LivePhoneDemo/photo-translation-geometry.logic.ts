@@ -9,10 +9,22 @@ import type { ConversationImageTextBlock } from '@/lib/conversation-image-text'
 
 export type Size = { width: number; height: number }
 
-/** Boxes are tight around the glyphs; unpadded patches leave 16-24% of lines partly visible (R2 §0). */
+/**
+ * Boxes are tight around the glyphs; unpadded patches leave 16-24% of lines partly visible (R2 §0).
+ * The fraction applies to one line (or column), never to a whole paragraph: padding a
+ * 7-line block by 15% of its full height pushed its patch far past the photo.
+ */
 export const PHOTO_TRANSLATION_PADDING_FRACTION = 0.15
+/** A patch never grows by more than this fraction of the photo's shorter side, whatever the line count says. */
+export const PHOTO_TRANSLATION_MAX_PADDING_FRACTION = 0.04
 /** Past this rotation the axis-aligned box cannot be inverted reliably; paint it unrotated. */
 export const PHOTO_TRANSLATION_MAX_ROTATION_DEG = 40
+/**
+ * Text turned this far or more (sideways labels such as a chart's y axis or a book spine) is
+ * a quarter turn: its patch is the box turned by exactly 90 degrees, so the translation reads
+ * along the long side instead of shrinking into a tall box.
+ */
+export const PHOTO_TRANSLATION_QUARTER_TURN_MIN_DEG = 60
 export const PHOTO_TRANSLATION_LINE_HEIGHT = 1.2
 /** Floor for fitted text; pinch zoom scales the overlay, so small text stays readable. */
 export const PHOTO_TRANSLATION_MIN_FONT_PX = 6
@@ -104,7 +116,7 @@ export type PaintRect = {
   angle: number
 }
 
-type BlockGeometry = Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical'> & { text?: string }
+type BlockGeometry = Pick<ConversationImageTextBlock, 'box' | 'angle' | 'vertical'> & { text?: string; lines?: number }
 
 /** A recovered text height below this fraction of width/em is implausible for the text it holds. */
 export const PHOTO_TRANSLATION_MIN_PLAUSIBLE_HEIGHT_RATIO = 0.45
@@ -146,6 +158,10 @@ export function solveRotatedSizeFromAspect(boxWidth: number, boxHeight: number, 
  */
 function blockTextRect(block: BlockGeometry, boxWidth: number, boxHeight: number): RotatedSize {
   const unrotated = { width: boxWidth, height: boxHeight, angle: 0 }
+  if (block.angle && !block.vertical && Math.abs(block.angle) >= PHOTO_TRANSLATION_QUARTER_TURN_MIN_DEG) {
+    // Sideways text: its enclosing box is the text rectangle turned by 90 degrees.
+    return { width: boxHeight, height: boxWidth, angle: block.angle < 0 ? -90 : 90 }
+  }
   if (!block.angle || Math.abs(block.angle) > PHOTO_TRANSLATION_MAX_ROTATION_DEG) return unrotated
   const recovered = recoverRotatedSize(boxWidth, boxHeight, block.angle)
   const textWidthEm = block.text && !block.vertical ? estimateTextWidthEm(block.text.replace(/\s*\n\s*/g, ' ')) : 0
@@ -157,9 +173,36 @@ function blockTextRect(block: BlockGeometry, boxWidth: number, boxHeight: number
 }
 
 /**
+ * Keeps an unrotated (or quarter-turned) patch inside the surface. A tight box that touches the
+ * photo's edge padded past it, and the text centered in that patch ended up partly outside the photo.
+ */
+function clampPaintRect(rect: PaintRect, size: Size): PaintRect {
+  const quarter = Math.abs(rect.angle) === 90
+  if (rect.angle && !quarter) return rect
+  // The region the patch covers on the surface: its enclosing box.
+  const coverWidth = quarter ? rect.height : rect.width
+  const coverHeight = quarter ? rect.width : rect.height
+  const left = Math.max(0, rect.cx - coverWidth / 2)
+  const right = Math.min(size.width, rect.cx + coverWidth / 2)
+  const top = Math.max(0, rect.cy - coverHeight / 2)
+  const bottom = Math.min(size.height, rect.cy + coverHeight / 2)
+  if (!(right > left && bottom > top)) return rect
+  const width = right - left
+  const height = bottom - top
+  return {
+    ...rect,
+    cx: (left + right) / 2,
+    cy: (top + bottom) / 2,
+    width: quarter ? height : width,
+    height: quarter ? width : height,
+  }
+}
+
+/**
  * The patch rectangle of a block on a surface of `size` pixels: the text
- * rectangle (rotation recovered in pixels), padded on every side by 15% of
- * its height across the line direction (the column width for vertical text).
+ * rectangle (rotation recovered in pixels), padded on every side by 15% of one
+ * line's height across the line direction (one column's width for vertical text),
+ * then kept inside the surface.
  */
 export function blockPaintRect(block: BlockGeometry, size: Size, paddingFraction = PHOTO_TRANSLATION_PADDING_FRACTION): PaintRect {
   const [x0, y0, x1, y1] = block.box
@@ -167,8 +210,9 @@ export function blockPaintRect(block: BlockGeometry, size: Size, paddingFraction
   const boxHeight = (y1 - y0) * size.height
   const rotated = blockTextRect(block, boxWidth, boxHeight)
   const crossSize = block.vertical ? rotated.width : rotated.height
-  const padding = crossSize * paddingFraction
-  return {
+  const lineSize = crossSize / Math.max(1, block.lines ?? 1)
+  const padding = Math.min(lineSize * paddingFraction, Math.min(size.width, size.height) * PHOTO_TRANSLATION_MAX_PADDING_FRACTION)
+  return clampPaintRect({
     cx: ((x0 + x1) / 2) * size.width,
     cy: ((y0 + y1) / 2) * size.height,
     width: rotated.width + 2 * padding,
@@ -177,7 +221,7 @@ export function blockPaintRect(block: BlockGeometry, size: Size, paddingFraction
     textHeight: rotated.height,
     padding,
     angle: rotated.angle,
-  }
+  }, size)
 }
 
 export type PercentRect = { left: number; top: number; width: number; height: number }
@@ -247,6 +291,52 @@ function horizontalLabelRect(
     height: labelHeight,
     textWidth: Math.max(1, width - 2 * rect.padding),
     textHeight: rect.textWidth,
+  }
+}
+
+/** Half the width and height of the axis-aligned box that encloses a (possibly rotated) patch. */
+function enclosingHalfSize(rect: PaintRect): { halfWidth: number; halfHeight: number } {
+  const radians = Math.abs(rect.angle) * DEG
+  return {
+    halfWidth: (Math.abs(Math.cos(radians)) * rect.width + Math.abs(Math.sin(radians)) * rect.height) / 2,
+    halfHeight: (Math.abs(Math.sin(radians)) * rect.width + Math.abs(Math.cos(radians)) * rect.height) / 2,
+  }
+}
+
+/** A neighbor must share at least this much of a patch's height to count as being in its row. */
+const ROW_SHARE_OF_HEIGHT = 0.25
+
+/**
+ * Free room (px) to the left and right of a patch inside its text row: up to the nearest other
+ * block's patch that shares the row, else the photo edge, less a small gap. A block that sits over
+ * the patch's center leaves no room. This is how a one-line translation that is longer than the
+ * original ("된장찌개" -> "Soybean Paste Stew") can borrow the empty space beside it, without pixels.
+ */
+export function resolveRowRoom(
+  rect: PaintRect,
+  selfId: string,
+  neighbors: readonly { id: string; rect: PaintRect }[],
+  stage: Size,
+): { left: number; right: number } {
+  const top = rect.cy - rect.height / 2
+  const bottom = rect.cy + rect.height / 2
+  const gap = Math.max(2, rect.padding)
+  let leftBound = 0
+  let rightBound = stage.width
+  for (const neighbor of neighbors) {
+    if (neighbor.id === selfId) continue
+    const { halfWidth, halfHeight } = enclosingHalfSize(neighbor.rect)
+    const shared = Math.min(bottom, neighbor.rect.cy + halfHeight) - Math.max(top, neighbor.rect.cy - halfHeight)
+    if (shared < ROW_SHARE_OF_HEIGHT * rect.height) continue
+    const neighborLeft = neighbor.rect.cx - halfWidth
+    const neighborRight = neighbor.rect.cx + halfWidth
+    if (neighborRight <= rect.cx) leftBound = Math.max(leftBound, neighborRight)
+    else if (neighborLeft >= rect.cx) rightBound = Math.min(rightBound, neighborLeft)
+    else return { left: 0, right: 0 }
+  }
+  return {
+    left: Math.max(0, rect.cx - rect.width / 2 - leftBound - gap),
+    right: Math.max(0, rightBound - (rect.cx + rect.width / 2) - gap),
   }
 }
 
@@ -480,6 +570,45 @@ export function isVerticalWritingLanguage(language: string | null | undefined): 
   return language === 'ko' || language === 'ja' || language === 'zh' || language === 'zh-CN' || language === 'zh-TW'
 }
 
+// ── Wrapped paragraphs ───────────────────────────────────────────────────
+
+/** Lines of at least this many em (a sentence, not a label) can be the wraps of a paragraph. */
+export const PHOTO_TRANSLATION_PARAGRAPH_MIN_LINE_EM = 8
+/** In a wrapped paragraph every line but the last fills at least this share of the widest line. */
+export const PHOTO_TRANSLATION_PARAGRAPH_FILL = 0.68
+
+/**
+ * Whether the line breaks of a block's original text are only where the photo wrapped a
+ * paragraph (long lines of about the same width), as opposed to a list, an address or a
+ * poster whose lines are separate on purpose.
+ */
+export function isWrappedParagraph(sourceText: string, measure: TextMeasurer = estimateTextWidthEm, bold = false): boolean {
+  const lines = sourceText.split('\n').map(line => line.trim()).filter(Boolean)
+  if (lines.length < 2) return false
+  const widths = lines.map(line => measure(line, bold))
+  const widest = Math.max(...widths)
+  const body = widths.slice(0, -1)
+  return Math.min(...body) >= PHOTO_TRANSLATION_PARAGRAPH_FILL * widest
+    && body.reduce((sum, width) => sum + width, 0) / body.length >= PHOTO_TRANSLATION_PARAGRAPH_MIN_LINE_EM
+}
+
+const JOIN_WITHOUT_SPACE = /[\u2e80-\u303f\u3040-\u30ff\u3100-\u31ff\u3200-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60]/u
+
+/**
+ * A translated paragraph as running text: the model keeps the photo's line breaks, which
+ * fall in the wrong places in another language ("...그렇지" / "않음을" / "보여줍니다."). The
+ * browser wraps it again inside the patch. Chinese and Japanese join without a space.
+ */
+export function reflowWrappedText(text: string): string {
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
+  let output = lines[0] ?? ''
+  for (const line of lines.slice(1)) {
+    const joinTight = JOIN_WITHOUT_SPACE.test(output.slice(-1)) && JOIN_WITHOUT_SPACE.test(line[0])
+    output += (joinTight ? '' : ' ') + line
+  }
+  return output
+}
+
 // ── Room for longer translations ─────────────────────────────────────────
 
 export type PhotoTranslationTextAlign = 'left' | 'center' | 'right'
@@ -502,13 +631,42 @@ function alignedEdge(box: ConversationImageTextBlock['box'], align: PhotoTransla
 }
 
 /**
- * How each block's text is aligned in the photo, from its siblings: the edge
- * (left, center or right) that the most other blocks share, as a column of
- * menu items shares left edges and a price column right edges. An edge counts
- * with two or more siblings, or one very close sibling; ties go to the
- * tightest edge. Anything else, and rotated or vertical text, is centered.
+ * Only blocks within this many line heights above or below a block can vouch for its
+ * alignment: a column of legend entries or a pair of credit lines are siblings, but a title
+ * that happens to end where a footnote at the other end of the photo ends is not.
  */
-export function inferBlockAlignments(blocks: readonly Pick<ConversationImageTextBlock, 'id' | 'box' | 'angle' | 'vertical'>[]): Map<string, PhotoTranslationTextAlign> {
+export const PHOTO_TRANSLATION_ALIGN_NEIGHBOR_LINES = 3
+
+type AlignmentBlock = Pick<ConversationImageTextBlock, 'id' | 'box' | 'angle' | 'vertical'> & Partial<Pick<ConversationImageTextBlock, 'lines' | 'sourceLanguage' | 'align'>>
+
+const RIGHT_TO_LEFT_LANGUAGES = new Set(['ar', 'he', 'fa', 'ur'])
+
+/** Height of one text line as a fraction of the photo height. */
+function lineHeightFraction(block: AlignmentBlock): number {
+  return (block.box[3] - block.box[1]) / Math.max(1, block.lines ?? 1)
+}
+
+function verticalGapFraction(first: AlignmentBlock, second: AlignmentBlock): number {
+  return Math.max(0, Math.max(first.box[1], second.box[1]) - Math.min(first.box[3], second.box[3]))
+}
+
+/** With no sibling to learn from: a lone line is centered in its patch, a paragraph starts at the reading edge. */
+function defaultAlignment(block: AlignmentBlock): PhotoTranslationTextAlign {
+  if ((block.lines ?? 1) < 2) return 'center'
+  return RIGHT_TO_LEFT_LANGUAGES.has((block.sourceLanguage ?? '').split('-')[0]) ? 'right' : 'left'
+}
+
+/**
+ * How each block's text is aligned in the photo: what the OCR model read from the photo when it
+ * said (align), otherwise from its siblings: the edge
+ * (left, center or right) that the most nearby blocks share, as a column of
+ * menu items shares left edges and a price column right edges. Nearby means
+ * within PHOTO_TRANSLATION_ALIGN_NEIGHBOR_LINES line heights vertically. An edge
+ * counts with two or more siblings, or one very close sibling; ties go to the
+ * tightest edge; a paragraph needs two (one coincidence proves nothing for it). Rotated and
+ * vertical text is centered; anything else falls back to defaultAlignment.
+ */
+export function inferBlockAlignments(blocks: readonly AlignmentBlock[]): Map<string, PhotoTranslationTextAlign> {
   const output = new Map<string, PhotoTranslationTextAlign>()
   const horizontal = blocks.filter(block => !block.vertical && !block.angle)
   for (const block of blocks) {
@@ -516,16 +674,21 @@ export function inferBlockAlignments(blocks: readonly Pick<ConversationImageText
       output.set(block.id, 'center')
       continue
     }
+    if (block.align) {
+      output.set(block.id, block.align)
+      continue
+    }
+    const siblings = horizontal.filter(other => other.id !== block.id
+      && verticalGapFraction(block, other) <= PHOTO_TRANSLATION_ALIGN_NEIGHBOR_LINES * Math.max(lineHeightFraction(block), lineHeightFraction(other)) + 1e-9)
     const candidates = (['left', 'center', 'right'] as const).map(align => {
       const edge = alignedEdge(block.box, align)
-      const deviations = horizontal
-        .filter(other => other.id !== block.id)
+      const deviations = siblings
         .map(other => Math.abs(alignedEdge(other.box, align) - edge))
         .filter(deviation => deviation <= PHOTO_TRANSLATION_ALIGN_TOLERANCE)
       return { align, count: deviations.length, spread: deviations.reduce((sum, value) => sum + value, 0), tight: deviations.some(value => value <= PHOTO_TRANSLATION_ALIGN_TIGHT_TOLERANCE) }
-    }).filter(candidate => candidate.count >= 2 || candidate.tight)
+    }).filter(candidate => candidate.count >= 2 || (candidate.tight && (block.lines ?? 1) < 2))
       .sort((first, second) => second.count - first.count || first.spread - second.spread)
-    output.set(block.id, candidates[0]?.align ?? 'center')
+    output.set(block.id, candidates[0]?.align ?? defaultAlignment(block))
   }
   return output
 }
@@ -632,6 +795,9 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
     : null
   const keepAll = language === 'ko'
   const vertical = isVerticalWritingLanguage(language)
+  let rowNeighbors: { id: string; rect: PaintRect }[] | null = null
+  const neighborRects = () => (rowNeighbors ??= (sourceBlocks ?? items.map(item => item.block))
+    .map(other => ({ id: other.id, rect: blockPaintRect(other, stage) })))
   const drafts = items.map(({ block, text }) => {
     let rect = blockPaintRect(block, stage)
     const fitPadding = inlineInset === null ? rect.padding : inlineInset * 2
@@ -640,7 +806,9 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
       : block.lines > 1 ? 'wrap' : 'single'
     const align = mode === 'vertical' ? 'center' : alignments?.get(block.id) ?? 'center'
     const bold = block.style?.bold === true
-    const shown = mode === 'single' ? text.replace(/\s*\n\s*/g, ' ').trim() : text
+    const shown = mode === 'single'
+      ? text.replace(/\s*\n\s*/g, ' ').trim()
+      : mode === 'wrap' && !block.vertical && isWrappedParagraph(block.text, measure, bold) ? reflowWrappedText(text) : text
     const span = freeSpans?.get(block.id)
     // Growable: one-line text (aiming at the box's line size) and vertical
     // banners written across (aiming at the column's glyph size for the widest word).
@@ -651,11 +819,16 @@ export function layoutPhotoTranslationBlocks({ items, stage, language, measure =
         * (rect.textWidth / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding
       rect = horizontalLabelRect(block, blocks, stage, rect, desiredWidth)
     }
-    if (span && !rect.angle && mode === 'single') {
+    if (!rect.angle && mode === 'single') {
       const needed = measure(shown, bold) * (rect.height / PHOTO_TRANSLATION_LINE_HEIGHT) + fitPadding - rect.width
       if (needed > 0) {
-        const leftRoom = span.left * stage.width
-        const rightRoom = span.right * stage.width
+        // Verified free background when the caller sampled the pixels, else the row between neighbors.
+        const room = span
+          ? { left: span.left * stage.width, right: span.right * stage.width }
+          : resolveRowRoom(rect, block.id, neighborRects(), stage)
+        const limit = rect.width * PHOTO_TRANSLATION_MAX_GROWTH
+        const leftRoom = Math.min(room.left, limit)
+        const rightRoom = Math.min(room.right, limit)
         let growLeft = 0
         let growRight = 0
         if (align === 'left') growRight = Math.min(needed, rightRoom)

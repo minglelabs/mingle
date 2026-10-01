@@ -7,16 +7,19 @@
  * non-streaming, and `store: false` on every call. Models, thinking levels,
  * prompts, schemas, image size and timeouts were measured live in the R2 probe
  * (see .kiro/tmp/photo-translate/r2-ocr.md); the prompts and schemas are the
- * probe's v2 versions verbatim.
+ * probe's v2 versions, except that the OCR prompt skips letterless blocks and asks for each
+ * block's alignment.
  */
 
 import sharp from 'sharp'
 import {
+  CONVERSATION_IMAGE_TEXT_ALIGNMENTS,
   CONVERSATION_IMAGE_TEXT_MAX_BLOCKS,
   CONVERSATION_IMAGE_TEXT_MAX_BLOCK_CHARS,
   CONVERSATION_IMAGE_TEXT_MAX_PARSED_CHARS,
   blockNeedsTranslation,
   normalizeImageTextLanguage,
+  type ConversationImageTextAlignment,
   type ConversationImageTextBlock,
   type ConversationImageTextBox,
   type ConversationImageTextStyle,
@@ -75,6 +78,7 @@ For every block:
 - bold: true if the strokes are bold or heavy.
 - angle_deg: rotation of the text baseline in degrees, clockwise positive, 0 for horizontal text.
 - vertical: true only for text written top-to-bottom (vertical CJK).
+- align: how the lines of the block are aligned: "left", "center" or "right". Lines that start at the same left edge are left, lines that end at the same right edge are right, and lines centered on each other are center. A single line is center when it is centered over its column or the page, left when it starts at its column's left edge.
 List blocks in reading order (top-to-bottom, then left-to-right).`
 
 export const OCR_SCHEMA = {
@@ -99,8 +103,9 @@ export const OCR_SCHEMA = {
           bold: { type: 'boolean' },
           angle_deg: { type: 'number', description: 'Baseline rotation in degrees, clockwise positive' },
           vertical: { type: 'boolean' },
+          align: { type: 'string', enum: [...CONVERSATION_IMAGE_TEXT_ALIGNMENTS] },
         },
-        required: ['box_2d', 'text', 'lang', 'bg', 'fg', 'bold', 'angle_deg', 'vertical'],
+        required: ['box_2d', 'text', 'lang', 'bg', 'fg', 'bold', 'angle_deg', 'vertical', 'align'],
       },
     },
   },
@@ -345,7 +350,7 @@ export const OPENAI_OCR_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['box_2d', 'text', 'lang', 'bg', 'fg', 'bold', 'angle_deg', 'vertical'],
+        required: ['box_2d', 'text', 'lang', 'bg', 'fg', 'bold', 'angle_deg', 'vertical', 'align'],
         properties: {
           box_2d: { type: 'array', items: { type: 'integer' }, description: '[ymin, xmin, ymax, xmax] normalized to 0-1000' },
           text: { type: 'string' },
@@ -355,6 +360,7 @@ export const OPENAI_OCR_SCHEMA = {
           bold: { type: 'boolean' },
           angle_deg: { type: 'number', description: 'Baseline rotation in degrees, clockwise positive' },
           vertical: { type: 'boolean' },
+          align: { type: 'string', enum: [...CONVERSATION_IMAGE_TEXT_ALIGNMENTS] },
         },
       },
     },
@@ -507,6 +513,12 @@ function readStyle(raw: Record<string, unknown>): ConversationImageTextStyle | u
   return Object.keys(style).length ? style : undefined
 }
 
+function readAlignment(value: unknown): ConversationImageTextAlignment | undefined {
+  return typeof value === 'string' && (CONVERSATION_IMAGE_TEXT_ALIGNMENTS as readonly string[]).includes(value)
+    ? value as ConversationImageTextAlignment
+    : undefined
+}
+
 function truncateCharacters(text: string, maxCharacters: number): string {
   const characters = Array.from(text)
   return characters.length <= maxCharacters ? text : normalizeBlockText(characters.slice(0, maxCharacters).join(''))
@@ -547,6 +559,7 @@ export function toConversationImageTextBlocks(rawBlocks: unknown): ConversationI
     // Prices, times, codes and other letterless text are never translated or painted.
     if (!box || !text || !LETTER_PATTERN.test(text)) continue
     const style = readStyle(raw)
+    const align = readAlignment(raw.align)
     blocks.push({
       box,
       text,
@@ -554,6 +567,7 @@ export function toConversationImageTextBlocks(rawBlocks: unknown): ConversationI
       angle: normalizeAngle(raw.angle_deg),
       lines: text.split('\n').length,
       ...(raw.vertical === true ? { vertical: true } : {}),
+      ...(align ? { align } : {}),
       ...(style ? { style } : {}),
     })
   }

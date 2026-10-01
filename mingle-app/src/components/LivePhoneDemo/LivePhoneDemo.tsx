@@ -61,6 +61,8 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import { PhotoTranslationProvider } from './photo-translation-context'
+import { ConversationImageGalleryProvider } from './conversation-image-gallery-context'
+import { collectConversationImages } from './conversation-image-gallery.logic'
 import { resolveLatestUtteranceReport, type LatestUtteranceReport } from './latest-utterance-report'
 import {
   buildTargetLanguagesForUtterance,
@@ -6738,6 +6740,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     previousDisplayUtteranceIdsRef.current = displayUtteranceIds
   }, [displayUtteranceIds])
 
+  // The room's photos in conversation order: the photo viewer pages through them.
+  const roomImages = useMemo(() => collectConversationImages(displayUtterances), [displayUtterances])
+
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
     ? Math.max(0, usageLimitSec - usageSec)
@@ -8525,6 +8530,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               uiLocale={uiLocale}
               viewerUserId={viewerUserId}
             >
+            <ConversationImageGalleryProvider images={roomImages}>
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"
@@ -8684,6 +8690,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               )}
             </div>
+            </ConversationImageGalleryProvider>
             </PhotoTranslationProvider>
 
             <AnimatePresence>

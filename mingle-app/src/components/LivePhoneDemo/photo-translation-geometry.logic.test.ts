@@ -16,12 +16,15 @@ import {
   harmonizeFontSizes,
   inferBlockAlignments,
   isVerticalWritingLanguage,
+  isWrappedParagraph,
   layoutPhotoTranslationBlocks,
   medianColor,
   parseHexColor,
   recoverRotatedSize,
+  reflowWrappedText,
   resolveBlockPaint,
   resolveFreeSpans,
+  resolveRowRoom,
   ringVariation,
   sampleCanvasSize,
   sampleRingColors,
@@ -312,6 +315,11 @@ describe('layoutPhotoTranslationBlocks', () => {
 
   it('fits the fixed glass-label inset before returning its font size', () => {
     const block = { id: 'tight', box: [0.1, 0.1, 0.18, 0.12] as const, text: '日本語の看板表示', sourceLanguage: 'ja', angle: 0, lines: 1 }
+    // Neighbors touch both sides, so the label has no room to grow and has to shrink.
+    const walls = [
+      { ...block, id: 'wallL', box: [0, 0.1, 0.1, 0.12] as const },
+      { ...block, id: 'wallR', box: [0.18, 0.1, 1, 0.12] as const },
+    ]
     const stage = { width: 1000, height: 1000 }
     const expectedRect = blockPaintRect(block, stage)
     const layout = layoutPhotoTranslationBlocks({
@@ -319,6 +327,7 @@ describe('layoutPhotoTranslationBlocks', () => {
       stage,
       language: 'en',
       measure: halfEm,
+      sourceBlocks: [block, ...walls],
       inlinePaddingPx: 4,
     })[0]
     expect(layout.inset).toBe(4)
@@ -396,8 +405,11 @@ describe('room for longer translations', () => {
     const item = { ...block('item', [0.1, 0.4, 0.3, 0.6]), text: '김치찌개' }
     const items = [{ block: item, text: 'Kimchi Stew' }]
     const freeSpans = new Map([['item', { left: 16.2 / 200, right: 56.2 / 200 }]])
+    // Neighbors touching both sides leave no room without the sampled spans.
+    const walls = [block('wallL', [0, 0.4, 0.1, 0.6]), block('wallR', [0.3, 0.4, 1, 0.6])]
     const layout = (align?: 'left' | 'right' | 'center', withRoom = true) => layoutPhotoTranslationBlocks({
-      items, stage, language: 'en', measure: halfEm, freeSpans: withRoom ? freeSpans : undefined, alignments: align ? new Map([['item', align]]) : undefined,
+      items, stage, language: 'en', measure: halfEm, freeSpans: withRoom ? freeSpans : undefined, sourceBlocks: [item, ...walls],
+      alignments: align ? new Map([['item', align]]) : undefined,
     })[0]
     const boxed = layout('left', false)
     expect(boxed.fontSize).toBeCloseTo(7.6, 1)
@@ -411,6 +423,191 @@ describe('room for longer translations', () => {
     const centered = layout()
     expect(centered.fontSize).toBe(13)
     expect(centered.rect.left + centered.rect.width / 2).toBeCloseTo(boxed.rect.left + boxed.rect.width / 2, 2)
+  })
+})
+
+
+describe('room beside a longer one-line translation, from the neighboring blocks', () => {
+  const stage = { width: 1000, height: 500 }
+  const block = (id: string, box: readonly [number, number, number, number], extra: object = {}) =>
+    ({ id, box, text: 'x', sourceLanguage: 'ko', angle: 0, lines: 1, ...extra }) as const
+  // A menu row: a short Korean dish name with its price far to the right.
+  const dish = block('dish', [0.1, 0.4, 0.2, 0.44], { text: '된장찌개' })
+  const price = block('price', [0.8, 0.4, 0.9, 0.44], { text: '8,500원' })
+  const items = (text: string) => [{ block: dish, text }]
+  const lay = (blocks: readonly ReturnType<typeof block>[], align: 'left' | 'center' | 'right', text = 'Soybean Paste Stew') => layoutPhotoTranslationBlocks({
+    items: items(text), stage, language: 'en', measure: halfEm, sourceBlocks: blocks, alignments: new Map([['dish', align]]),
+  })[0]
+
+  it('measures the room between a patch and the nearest block in its row', () => {
+    const own = blockPaintRect(dish, stage)
+    const neighbor = (target: typeof dish) => ({ id: target.id, rect: blockPaintRect(target, stage) })
+    const room = resolveRowRoom(own, 'dish', [neighbor(dish), neighbor(price)], stage)
+    const priceLeft = blockPaintRect(price, stage).cx - blockPaintRect(price, stage).width / 2
+    expect(room.right).toBeCloseTo(priceLeft - (own.cx + own.width / 2) - Math.max(2, own.padding), 6)
+    expect(room.left).toBeCloseTo(own.cx - own.width / 2 - Math.max(2, own.padding), 6)
+    // Another row, and a block over the center, do not count the same way.
+    const otherRow = block('below', [0.3, 0.7, 0.5, 0.74])
+    expect(resolveRowRoom(own, 'dish', [neighbor(otherRow)], stage).right).toBeCloseTo(stage.width - (own.cx + own.width / 2) - Math.max(2, own.padding), 6)
+    expect(resolveRowRoom(own, 'dish', [neighbor(block('over', [0.12, 0.4, 0.25, 0.44]))], stage)).toEqual({ left: 0, right: 0 })
+  })
+
+  it('grows a left-aligned label to the right, up to its neighbor, instead of shrinking the text', () => {
+    const grown = lay([dish, price], 'left')
+    const boxed = lay([dish, block('wallL', [0, 0.4, 0.1, 0.44]), block('wallR', [0.2, 0.4, 1, 0.44])], 'left')
+    const original = blockPaintRect(dish, stage)
+    expect(grown.rect.left).toBeCloseTo(boxed.rect.left, 3)
+    expect(grown.rect.width).toBeGreaterThan(boxed.rect.width)
+    expect(grown.fontSize).toBeGreaterThan(boxed.fontSize)
+    const right = (grown.rect.left + grown.rect.width) * stage.width / 100
+    expect(right).toBeLessThan(blockPaintRect(price, stage).cx - blockPaintRect(price, stage).width / 2)
+    // It only grows as far as the text needs.
+    expect(grown.rect.width * stage.width / 100).toBeLessThan(original.width * 3 + 1)
+  })
+
+  it('grows a right-aligned label to the left and a centered one both ways', () => {
+    const original = toPercentRect(blockPaintRect(dish, stage), stage)
+    const rightAligned = lay([dish, price], 'right')
+    expect(rightAligned.rect.left + rightAligned.rect.width).toBeCloseTo(original.left + original.width, 3)
+    expect(rightAligned.rect.left).toBeLessThan(original.left)
+    const centered = lay([dish, price], 'center')
+    expect(centered.rect.left + centered.rect.width / 2).toBeCloseTo(original.left + original.width / 2, 1)
+    expect(centered.rect.width).toBeGreaterThan(original.width)
+    // The photo edge stops it: this dish starts at the left edge.
+    const atEdge = block('edge', [0, 0.4, 0.1, 0.44], { text: '밥' })
+    const edge = layoutPhotoTranslationBlocks({
+      items: [{ block: atEdge, text: 'Steamed rice and more' }], stage, language: 'en', measure: halfEm, sourceBlocks: [atEdge, price], alignments: new Map([['edge', 'center']]),
+    })[0]
+    expect(edge.rect.left).toBeGreaterThanOrEqual(0)
+  })
+
+  it('leaves a label alone that already fits', () => {
+    const short = lay([dish, price], 'left', '찌개')
+    expect(short.rect).toEqual(toPercentRect(blockPaintRect(dish, stage), stage))
+  })
+})
+
+describe('wrapped paragraphs', () => {
+  it('tells a wrapped paragraph from a list or a poster', () => {
+    const paragraph = 'It might be reasonable to assume that men would be\nmore generous toward their own side than toward\nthe other, but new data from FIRE shows that is not\nthe case.'
+    expect(isWrappedParagraph(paragraph)).toBe(true)
+    expect(isWrappedParagraph('Very liberal\nLiberal\nSlightly liberal\nModerate, neutral')).toBe(false)
+    expect(isWrappedParagraph('Women\nMen')).toBe(false)
+    expect(isWrappedParagraph('A single line of quite a lot of words here')).toBe(false)
+    expect(isWrappedParagraph('WELCOME TO\nOUR CAFE')).toBe(false)
+    expect(isWrappedParagraph('一行目はとても長い文章がここに入ります\n二行目もとても長い文章がここに入ります\n最後')).toBe(true)
+  })
+
+  it('joins the lines of a translated paragraph into running text', () => {
+    expect(reflowWrappedText('남성이 자신의 진영에 더\n관대할 것이라고 가정하는\n것이 합리적입니다.')).toBe('남성이 자신의 진영에 더 관대할 것이라고 가정하는 것이 합리적입니다.')
+    expect(reflowWrappedText('日本語の文章が続きます\n次の行に入ります')).toBe('日本語の文章が続きます次の行に入ります')
+    expect(reflowWrappedText('English words\nthen 日本語')).toBe('English words then 日本語')
+    expect(reflowWrappedText('one line')).toBe('one line')
+  })
+
+  it('reflows a translated paragraph in the layout but keeps the breaks of a list', () => {
+    const stage = { width: 1000, height: 1000 }
+    const paragraph = { id: 'p', box: [0.05, 0.1, 0.95, 0.4] as const, sourceLanguage: 'en', angle: 0, lines: 4,
+      text: 'It might be reasonable to assume that men would be\nmore generous toward their own side than toward\nthe other, but new data from FIRE shows that is not\nthe case.' }
+    const list = { id: 'l', box: [0.05, 0.5, 0.4, 0.7] as const, sourceLanguage: 'en', angle: 0, lines: 3, text: 'Very liberal\nLiberal\nSlightly liberal' }
+    const [reflowed, kept] = layoutPhotoTranslationBlocks({
+      items: [{ block: paragraph, text: '남성이 더\n관대하다고\n가정하지만\n그렇지 않다.' }, { block: list, text: '매우 진보적\n진보적\n약간 진보적' }],
+      stage, language: 'ko', measure: halfEm,
+    })
+    expect(reflowed.text).toBe('남성이 더 관대하다고 가정하지만 그렇지 않다.')
+    expect(kept.text).toBe('매우 진보적\n진보적\n약간 진보적')
+  })
+})
+
+describe('patch placement', () => {
+  it('pads a paragraph by one line, not by its whole height', () => {
+    const size = { width: 1000, height: 1000 }
+    const paragraph = blockPaintRect({ box: [0.1, 0.2, 0.9, 0.5], angle: 0, lines: 6 }, size)
+    // 300 px tall over 6 lines: 50 px per line, so 7.5 px of padding (not 45).
+    expect(paragraph.padding).toBeCloseTo(7.5, 6)
+    expect(paragraph.height).toBeCloseTo(315, 6)
+    expect(blockPaintRect({ box: [0.1, 0.2, 0.9, 0.5], angle: 0, lines: 1 }, size).padding).toBeCloseTo(40, 6)
+  })
+
+  it('never pads past a few percent of the photo, even when the line count is wrong', () => {
+    const size = { width: 1000, height: 1000 }
+    const tall = blockPaintRect({ box: [0.1, 0.1, 0.9, 0.7], angle: 0, lines: 1 }, size)
+    expect(tall.padding).toBe(40)
+  })
+
+  it('keeps the patch inside the photo, so text is never centered on a clipped patch', () => {
+    const size = { width: 1000, height: 800 }
+    const edge = blockPaintRect({ box: [0, 0, 1, 0.3], angle: 0, lines: 2 }, size)
+    expect(edge.cx - edge.width / 2).toBeCloseTo(0, 6)
+    expect(edge.cx + edge.width / 2).toBeCloseTo(1000, 6)
+    expect(edge.cy - edge.height / 2).toBeCloseTo(0, 6)
+    expect(edge.height).toBeLessThan(240 + 2 * 12 + 0.001)
+    // The text rectangle itself is untouched.
+    expect(edge.textWidth).toBe(1000)
+    expect(edge.textHeight).toBeCloseTo(240, 6)
+  })
+
+  it('turns sideways text a quarter turn instead of painting a tall box with tiny text', () => {
+    const size = { width: 1000, height: 1000 }
+    const axisLabel = blockPaintRect({ box: [0.05, 0.4, 0.08, 0.7], angle: -90, lines: 1 }, size)
+    expect(axisLabel.angle).toBe(-90)
+    // Its text runs along the long side of the box: 300 px long, 30 px tall.
+    expect(axisLabel.textWidth).toBeCloseTo(300, 6)
+    expect(axisLabel.textHeight).toBeCloseTo(30, 6)
+    expect(axisLabel.width).toBeCloseTo(300 + 2 * 4.5, 6)
+    expect(axisLabel.cx).toBeCloseTo(65, 6)
+    expect(blockPaintRect({ box: [0.05, 0.4, 0.08, 0.7], angle: 90, lines: 1 }, size).angle).toBe(90)
+    // Between 40 and 60 degrees the box is still painted unrotated, and vertical CJK text is left alone.
+    expect(blockPaintRect({ box: [0.05, 0.4, 0.2, 0.7], angle: 50, lines: 1 }, size).angle).toBe(0)
+    expect(blockPaintRect({ box: [0.05, 0.4, 0.08, 0.7], angle: -90, lines: 1, vertical: true }, size).angle).toBe(0)
+  })
+
+  it('lays a quarter-turned label out along its long side', () => {
+    const stage = { width: 1000, height: 1000 }
+    const block = { id: 'axis', box: [0.05, 0.4, 0.08, 0.7] as const, text: 'Right tolerance', sourceLanguage: 'en', angle: -90, lines: 1 }
+    const layout = layoutPhotoTranslationBlocks({ items: [{ block, text: '우파 관용도' }], stage, language: 'ko', measure: halfEm })[0]
+    expect(layout.angle).toBe(-90)
+    expect(layout.mode).toBe('single')
+    // Pre-rotation the patch is wide and short, centered where the tall box was.
+    expect(layout.rect.width * stage.width / 100).toBeGreaterThan(layout.rect.height * stage.height / 100)
+    expect(layout.rect.left + layout.rect.width / 2).toBeCloseTo(6.5, 1)
+    expect(layout.rect.top + layout.rect.height / 2).toBeCloseTo(55, 1)
+    expect(layout.fontSize).toBeGreaterThan(20)
+  })
+})
+
+describe('alignment from the OCR model and from nearby blocks', () => {
+  const block = (id: string, box: readonly [number, number, number, number], extra: object = {}) =>
+    ({ id, box, text: 'x', sourceLanguage: 'en', angle: 0, lines: 1, ...extra }) as const
+
+  it('uses what the OCR model read from the photo, over any inference', () => {
+    const alignments = inferBlockAlignments([
+      block('a', [0.2, 0.1, 0.4, 0.15], { align: 'right' }),
+      block('b', [0.2, 0.16, 0.5, 0.2]), block('c', [0.2, 0.21, 0.45, 0.25]),
+      block('tilted', [0.1, 0.6, 0.3, 0.7], { angle: 8, align: 'left' }),
+    ])
+    expect(alignments.get('a')).toBe('right')
+    expect(alignments.get('b')).toBe('left')
+    expect(alignments.get('tilted')).toBe('center')
+  })
+
+  it('lets only nearby blocks vouch for an edge', () => {
+    // Two credit lines at the bottom end where a title at the top ends: they are not its siblings.
+    const alignments = inferBlockAlignments([
+      block('title', [0.1, 0.1, 0.9, 0.14]),
+      block('credit1', [0.5, 0.9, 0.9, 0.93]), block('credit2', [0.3, 0.94, 0.9005, 0.97]),
+    ])
+    expect(alignments.get('title')).toBe('center')
+    expect(alignments.get('credit1')).toBe('right')
+    expect(alignments.get('credit2')).toBe('right')
+  })
+
+  it('starts a paragraph at its reading edge unless two siblings say otherwise', () => {
+    const paragraph = (extra: object = {}) => block('p', [0.02, 0, 0.98, 0.25], { lines: 7, ...extra })
+    // One subtitle that happens to share the paragraph's center proves nothing for a paragraph.
+    expect(inferBlockAlignments([paragraph(), block('subtitle', [0.13, 0.28, 0.87, 0.3])]).get('p')).toBe('left')
+    expect(inferBlockAlignments([paragraph({ sourceLanguage: 'ar' })]).get('p')).toBe('right')
+    expect(inferBlockAlignments([block('lone', [0.2, 0.1, 0.8, 0.15])]).get('lone')).toBe('center')
   })
 })
 
