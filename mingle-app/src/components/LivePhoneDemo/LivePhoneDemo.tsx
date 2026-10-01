@@ -165,7 +165,7 @@ import {
   type UserSelectableTtsModel,
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
-import { postNativeBannerZone } from '@/lib/native-banner-zone'
+import { requestNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
@@ -3595,12 +3595,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!isNativeApp()) return
 
     if (isNativeMenuOverlayVisible) {
-      postNativeBannerZone('hidden')
+      requestNativeBannerZone('hidden')
       return
     }
 
     const timerId = window.setTimeout(() => {
-      postNativeBannerZone('conversation')
+      requestNativeBannerZone('conversation')
     }, 280)
 
     return () => {

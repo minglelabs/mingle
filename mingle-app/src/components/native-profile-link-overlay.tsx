@@ -5,7 +5,7 @@ import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import {
   NATIVE_PROFILE_LINK_EVENT,
   NATIVE_PROFILE_LINK_WINDOW_KEY,
@@ -35,19 +35,9 @@ function resolveLocale(pathname: string): AppLocale {
   return resolveSupportedLocaleTag(firstSegment) ?? DEFAULT_LOCALE;
 }
 
-function isConversationRoute(pathname: string): boolean {
-  const segments = pathname.split("/").filter(Boolean);
-  return segments[1] === "conversations" || segments[1] === undefined && segments.length === 1;
-}
-
 function hasNativeProfileHistoryEntry(): boolean {
   if (typeof window === "undefined" || !isRecord(window.history.state)) return false;
   return Boolean(window.history.state[NATIVE_PROFILE_HISTORY_STATE_KEY]);
-}
-
-function restoreNativeBannerZone(): void {
-  if (typeof window === "undefined") return;
-  postNativeBannerZone(isConversationRoute(window.location.pathname) ? "list" : "hidden");
 }
 
 export default function NativeProfileLinkOverlay() {
@@ -57,6 +47,7 @@ export default function NativeProfileLinkOverlay() {
   const locale = resolveLocale(pathname);
   const dictionary = useMemo(() => getDictionary(locale), [locale]);
   const [profileOverlay, setProfileOverlay] = useState<ProfileOverlayState | null>(null);
+  useNativeBannerSuppression(profileOverlay !== null);
   const profileOverlayRef = useRef<ProfileOverlayState | null>(null);
   const requestIdRef = useRef(0);
   const pendingDirectConversationNavigationRef = useRef(false);
@@ -86,7 +77,6 @@ export default function NativeProfileLinkOverlay() {
     const nextOverlay = { ...request, requestId };
     profileOverlayRef.current = nextOverlay;
     setProfileOverlay(nextOverlay);
-    postNativeBannerZone("hidden");
 
     const nativeWindow = window as NativeProfileOverlayWindow;
     delete nativeWindow[NATIVE_PROFILE_LINK_WINDOW_KEY];
@@ -100,7 +90,6 @@ export default function NativeProfileLinkOverlay() {
 
     profileOverlayRef.current = null;
     setProfileOverlay(null);
-    restoreNativeBannerZone();
   }, []);
 
   const startDirectConversationFromNativeProfile = useCallback(async (
@@ -163,7 +152,6 @@ export default function NativeProfileLinkOverlay() {
       if (pendingDirectConversationNavigationRef.current || !hasNativeProfileHistoryEntry()) {
         profileOverlayRef.current = null;
         setProfileOverlay(null);
-        restoreNativeBannerZone();
       }
     };
 
