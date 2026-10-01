@@ -45,6 +45,10 @@ export const CONVERSATION_IMAGE_TEXT_BLOCK_ID_PATTERN = /^b\d{1,3}$/
  */
 export type ConversationImageTextBox = readonly [number, number, number, number]
 
+/** How the lines of a block sit against each other in the photo (the translation keeps it). */
+export const CONVERSATION_IMAGE_TEXT_ALIGNMENTS = ['left', 'center', 'right'] as const
+export type ConversationImageTextAlignment = (typeof CONVERSATION_IMAGE_TEXT_ALIGNMENTS)[number]
+
 export type ConversationImageTextStyle = {
   /** #rrggbb estimated by the OCR model. The client prefers colors sampled from the pixels. */
   background?: string
@@ -72,6 +76,8 @@ export type ConversationImageTextBlock = {
   lines: number
   /** True for text written top-to-bottom (vertical CJK); absent otherwise. */
   vertical?: boolean
+  /** Alignment read from the photo by the OCR model; absent for photos read before it was asked for. */
+  align?: ConversationImageTextAlignment
   style?: ConversationImageTextStyle
 }
 
@@ -247,6 +253,7 @@ function parseBlock(value: unknown): ConversationImageTextBlock | null {
     angle,
     lines,
     ...(value.vertical === true ? { vertical: true } : {}),
+    ...(isOneOf(CONVERSATION_IMAGE_TEXT_ALIGNMENTS, value.align) ? { align: value.align } : {}),
     ...(style ? { style } : {}),
   }
 }

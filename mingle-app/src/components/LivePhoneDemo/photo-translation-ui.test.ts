@@ -6,6 +6,7 @@ import { overlayBlocksFor } from '@/lib/conversation-image-text'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import PhotoTranslateControl, { PHOTO_TRANSLATE_LONG_PRESS_MS, PHOTO_TRANSLATE_LONG_PRESS_SLOP_PX, PhotoTranslateMenu } from './PhotoTranslateControl'
 import PhotoTranslationOverlay from './PhotoTranslationOverlay'
+import PhotoTranslationStatusChip from './PhotoTranslationStatusChip'
 import { resolvePhotoTranslationToggle } from './photo-translation-toggle.logic'
 import {
   photoTranslationKoreanOnlyResponse,
@@ -82,6 +83,45 @@ describe('PhotoTranslationOverlay', () => {
   })
 })
 
+describe('PhotoTranslationOverlay progress', () => {
+  const pending = (ids: string[]) => photoTranslationReadyResponse.blocks.filter(block => ids.includes(block.id))
+
+  function render(extra: object) {
+    return renderToStaticMarkup(createElement(PhotoTranslationOverlay, {
+      ...stage, blocks: photoTranslationReadyResponse.blocks, painted: [], language: 'en', ...extra,
+    }))
+  }
+
+  it('shows a placeholder where each pending translation will go, in percent of the stage', () => {
+    const html = render({ pendingBlocks: pending(['b0', 'b2']) })
+    expect(html.match(/data-photo-translation-pending=/g)).toHaveLength(2)
+    expect(html).toMatch(/data-photo-translation-pending="b0"[^>]*left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;height:[\d.]+%/)
+    expect(html).toContain('background-color:rgba(12, 14, 18, 0.5)')
+    expect(html).not.toContain('data-photo-translation-block=')
+  })
+
+  it('paints no placeholder when nothing is pending, and a scan sweep only while the text is being read', () => {
+    expect(render({})).not.toContain('data-photo-translation-pending')
+    expect(render({})).not.toContain('data-photo-translation-scan')
+    expect(render({ scanning: true })).toContain('data-photo-translation-scan')
+  })
+
+  it('rotates the placeholder of a rotated block like its label', () => {
+    expect(render({ pendingBlocks: pending(['b4']) })).toContain('transform:rotate(12deg)')
+  })
+})
+
+describe('PhotoTranslationStatusChip', () => {
+  it('announces the label with a spinner, without taking pointer events', () => {
+    const html = renderToStaticMarkup(createElement(PhotoTranslationStatusChip, { label: copy.readingText }))
+    expect(html).toContain('role="status"')
+    expect(html).toContain(copy.readingText)
+    expect(html).toContain('animate-spin')
+    expect(html).toContain('pointer-events-none')
+    expect(html).toContain('h-11')
+  })
+})
+
 describe('PhotoTranslateMenu', () => {
   const toggle = resolvePhotoTranslationToggle({ order: ['ko', 'en', 'ja'], response: photoTranslationReadyResponse })
 
@@ -152,14 +192,24 @@ describe('PhotoTranslateControl', () => {
 
   it('reserves the widest label so cycling never changes the pill width', () => {
     const html = renderPill()
-    for (const label of ['한국어', '영어', copy.original]) expect(html).toContain(`>${label}</span>`)
-    expect(html.match(/col-start-1 row-start-1/g)).toHaveLength(3)
+    for (const label of ['한국어', '영어', copy.original, copy.translating]) expect(html).toContain(`>${label}</span>`)
+    expect(html.match(/col-start-1 row-start-1/g)).toHaveLength(4)
   })
 
   it('announces and shows a spinner while the shown language is pending', () => {
     const html = renderPill('en')
     expect(html).toContain(`aria-label="${copy.translate}: 영어, ${copy.translating}. ${copy.translateHint}"`)
     expect(html).toMatch(/animate-spin[^"]*opacity-100/)
+  })
+
+  it('says it is translating, in words, instead of the language name while the translation runs', () => {
+    const shown = (html: string, text: string) => html.match(new RegExp(`<span class="col-start-1 row-start-1 [^"]*opacity-(\\d+)">${text}</span>`))?.[1]
+    const pending = renderPill('en')
+    expect(shown(pending, copy.translating)).toBe('100')
+    expect(shown(pending, '영어')).toBe('0')
+    const ready = renderPill('ko')
+    expect(shown(ready, '한국어')).toBe('100')
+    expect(shown(ready, copy.translating)).toBe('0')
   })
 })
 

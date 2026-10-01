@@ -155,6 +155,23 @@ export function resolvePhotoTranslationToggle({ order, response, selection }: {
   return { options, cycle, choice, visible, pending }
 }
 
+/**
+ * What the viewer is waiting for, so it can say so:
+ * - reading: the photo's text has not been read yet (the server's OCR is still running)
+ * - translating: the shown language is still being translated
+ * Null otherwise, including while the first answer is on its way (most photos are answered
+ * at once, so a status for it would only flash) and for photos with no text.
+ */
+export type PhotoTranslationProgress = 'reading' | 'translating'
+
+export function resolvePhotoTranslationProgress({ response, toggle }: {
+  response: ConversationImageTextResponse | null | undefined
+  toggle: Pick<PhotoTranslationToggle, 'pending'>
+}): PhotoTranslationProgress | null {
+  if (response?.status === 'pending') return 'reading'
+  return toggle.pending ? 'translating' : null
+}
+
 /** One photo as one viewer sees it: api namespace + viewer + conversation + message. */
 export function photoTranslationMemoryKey({ apiNamespace, viewerUserId, conversationId, messageId }: {
   apiNamespace: string | null | undefined

@@ -10,6 +10,7 @@ import {
   resolvePhotoTranslationKeyedSnapshot,
   resolvePhotoTranslationLanguageState,
   resolvePhotoTranslationOptions,
+  resolvePhotoTranslationProgress,
   resolvePhotoTranslationToggle,
 } from './photo-translation-toggle.logic'
 import {
@@ -124,6 +125,30 @@ describe('resolvePhotoTranslationToggle', () => {
     expect(resolvePhotoTranslationToggle({ order: ['ko', 'en'], response: photoTranslationKoreanOnlyResponse })).toMatchObject({
       visible: true, choice: PHOTO_TRANSLATION_OFF, cycle: ['en', PHOTO_TRANSLATION_OFF],
     })
+  })
+})
+
+describe('progress the viewer can show', () => {
+  const progress = (response: ConversationImageTextResponse | null, selection?: string) =>
+    resolvePhotoTranslationProgress({ response, toggle: resolvePhotoTranslationToggle({ order: ORDER, response, selection }) })
+
+  it('is reading while the photo text has not been read yet', () => {
+    expect(progress(photoTranslationPendingResponse)).toBe('reading')
+  })
+
+  it('is translating while the shown language is being translated, and only then', () => {
+    // ko is ready, en is still running.
+    expect(progress(photoTranslationReadyResponse, 'en')).toBe('translating')
+    expect(progress(photoTranslationReadyResponse, 'ko')).toBeNull()
+    expect(progress(photoTranslationReadyResponse, PHOTO_TRANSLATION_OFF)).toBeNull()
+    expect(progress(photoTranslationSettledResponse, 'en')).toBeNull()
+  })
+
+  it('says nothing before the first answer, for a photo without text and for failures', () => {
+    expect(progress(null)).toBeNull()
+    expect(progress(photoTranslationEmptyResponse)).toBeNull()
+    expect(progress(photoTranslationFailedResponse)).toBeNull()
+    expect(progress(photoTranslationDisabledResponse)).toBeNull()
   })
 })
 

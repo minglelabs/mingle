@@ -19,7 +19,7 @@ import {
   toConversationImageTextBlocks,
   translateConversationImageTextBlocks,
 } from './conversation-image-text-provider'
-import type { ConversationImageTextBlock } from '@/lib/conversation-image-text'
+import { parseConversationImageTextResponse, type ConversationImageTextBlock } from '@/lib/conversation-image-text'
 
 const fetchMock = vi.fn()
 const noSleep = async () => {}
@@ -72,6 +72,25 @@ afterEach(() => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   vi.useRealTimers()
+})
+
+describe('OCR alignment', () => {
+  it('keeps a valid alignment and drops anything else', () => {
+    const blocks = toConversationImageTextBlocks([
+      rawBlock({ align: 'left' }), rawBlock({ align: 'Center' }), rawBlock({ align: 'right', text: 'second' }), rawBlock({ text: 'third' }),
+    ])
+    expect(blocks.map(block => block.align)).toEqual(['left', undefined, 'right', undefined])
+    expect(OCR_PROMPT_V2).toContain('- align:')
+    expect(OCR_SCHEMA.properties.blocks.items.required).toContain('align')
+    expect(OPENAI_OCR_SCHEMA.properties.blocks.items.required).toContain('align')
+  })
+
+  it('survives the stored-block parser the response goes through', () => {
+    const [block] = toConversationImageTextBlocks([rawBlock({ align: 'right' })])
+    const parsed = parseConversationImageTextResponse({ status: 'ready', blocks: [block], translations: [] })
+    expect(parsed?.blocks[0].align).toBe('right')
+    expect(parseConversationImageTextResponse({ status: 'ready', blocks: [{ ...block, align: 'sideways' }], translations: [] })?.blocks[0].align).toBeUndefined()
+  })
 })
 
 describe('OCR prompt', () => {

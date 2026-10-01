@@ -353,10 +353,12 @@ export default function PhotoTranslateControl({ options, cycle, choice, pending,
     rows[next]?.focus({ preventScroll: true })
   }, [])
 
-  const label = photoTranslationChoiceLabel(choice, uiLocale, copy)
-  const labels = [...new Set([...cycle.map(value => photoTranslationChoiceLabel(value, uiLocale, copy)), label])]
+  const languageLabel = photoTranslationChoiceLabel(choice, uiLocale, copy)
+  // While the translation runs the pill says so in words; the spinner alone is easy to miss.
+  const label = pending ? copy.translating : languageLabel
+  const labels = [...new Set([...cycle.map(value => photoTranslationChoiceLabel(value, uiLocale, copy)), languageLabel, copy.translating])]
   const selectedIndex = cycle.indexOf(choice)
-  const ariaLabel = `${copy.translate}: ${label}${pending ? `, ${copy.translating}` : ''}. ${copy.translateHint}`
+  const ariaLabel = `${copy.translate}: ${languageLabel}${pending ? `, ${copy.translating}` : ''}. ${copy.translateHint}`
   const fade = reducedMotion ? 'transition-none' : 'transition-opacity duration-[180ms]'
 
   return <div ref={rootRef} className="pointer-events-auto relative"

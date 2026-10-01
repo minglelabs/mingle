@@ -36,7 +36,7 @@ describe('conversation-image-copy', () => {
     const english = resolveConversationImageCopy('en')
     for (const locale of LEGAL_DOCUMENT_LOCALES) {
       const copy = resolveConversationImageCopy(locale)
-      for (const key of ['translate', 'original', 'showOriginal', 'translating', 'sameAsOriginal', 'translateHint'] as const) {
+      for (const key of ['translate', 'original', 'showOriginal', 'translating', 'sameAsOriginal', 'translateHint', 'readingText', 'previousPhoto', 'nextPhoto'] as const) {
         expect(copy[key].trim().length, `${locale}.${key}`).toBeGreaterThan(0)
         if (locale !== 'en' && key !== 'original') expect(copy[key], `${locale}.${key}`).not.toBe(english[key])
       }
