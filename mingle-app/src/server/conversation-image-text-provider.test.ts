@@ -250,8 +250,10 @@ describe('extractConversationImageText', () => {
   it('falls back to Gemini when OPENAI_API_KEY is missing, and needs at least one usable key', async () => {
     vi.stubEnv('OPENAI_API_KEY', '')
     fetchMock.mockResolvedValue(interaction({ blocks: [rawBlock()] }))
-    await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).resolves.toMatchObject({ model: 'gemini-3.8-flash', fallbackUsed: true })
+    const sleep = vi.fn(async () => {})
+    await expect(extractConversationImageText(await jpeg(), { sleep })).resolves.toMatchObject({ model: 'gemini-3.8-flash', fallbackUsed: true })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(sleep).not.toHaveBeenCalled()
 
     fetchMock.mockReset()
     vi.stubEnv('GEMINI_API_KEY', '')

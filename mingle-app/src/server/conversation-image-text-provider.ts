@@ -454,7 +454,10 @@ async function runWithFallback<T>(
   } catch (error) {
     if (!isRetryableProviderError(error) || options.signal?.aborted) throw error
     console.warn('[conversation-image-text] retrying with the fallback model', { code: error.code, status: error.status, model: error.model })
-    await (options.sleep ?? defaultSleep)(RETRY_JITTER_MIN_MS + Math.floor(Math.random() * RETRY_JITTER_SPAN_MS))
+    // A missing key is not provider load: go straight to the fallback.
+    if (error.code !== 'missing_credentials') {
+      await (options.sleep ?? defaultSleep)(RETRY_JITTER_MIN_MS + Math.floor(Math.random() * RETRY_JITTER_SPAN_MS))
+    }
     if (options.signal?.aborted) throw new ConversationImageTextProviderError('aborted', { model: models.fallback })
     return { value: await run(models.fallback), model: models.fallback, fallbackUsed: true }
   }
