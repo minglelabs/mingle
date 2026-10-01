@@ -71,6 +71,25 @@ The list and conversation room use separate inset params so the list CTA does no
 bottom banner space. `LivePhoneDemo` uses the conversation values to add transcript-safe padding so chat rows are
 not hidden by the banner overlay.
 
+### Where the banner may appear
+
+The banner is allow-listed: it is visible only on the conversation list and inside a chat room
+(`/{locale}/conversations`). Every other route and every overlay layered over those two screens is banner-free
+by default, so a new screen needs no banner code.
+
+All `native_set_banner_zone` messages are sent from `src/lib/native-banner-zone.ts` (web) and the zone it posts is
+the intersection of three gates: the route is `/{locale}/conversations`, the list/room requested `list`/`conversation`
+(`requestNativeBannerZone`), and no overlay holds a suppression (`suppressNativeBanner`).
+
+- New route: nothing to do. `NativeBannerRouteGuard` (root layout) re-syncs on every route change and the route gate hides it.
+- New modal, sheet, viewer, or layered screen over the list/room: call `useNativeBannerSuppression(isOpen)`.
+  `SlideSurface` (every role except `main`), `MessageMediaDialog` (the photo viewer), and the shared overlays already do.
+- Do not post `native_set_banner_zone` directly; `native-banner-zone.wiring.test.ts` fails if anything else does.
+
+The native shell mirrors the route gate with `resolveNativeBannerZoneForUrl` (`src/nativeBannerZone.ts`), which only
+treats the exact `/{locale}/conversations` URL as list/room, so sub-routes such as `/conversations/new-group` hide the
+banner the moment the URL changes.
+
 For `scripts/devbox mobile --device-app-env dev` and `scripts/devbox up --profile device --device-app-env dev`,
 devbox forces Google's official sample AdMob app IDs and banner unit IDs. This keeps local release verification
 off production inventory even when vault or runtime env files contain production AdMob values.

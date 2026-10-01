@@ -2,6 +2,7 @@
 
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import {
   useCallback,
@@ -104,6 +105,9 @@ export default function SlideSurface({
   onBackdropClick,
   stopPropagation = false,
 }: SlideSurfaceProps) {
+  // A layered screen (search, profile, notifications, menus, ...) never shows
+  // the native ad banner. Only role="main" — the chat room itself — keeps it.
+  useNativeBannerSuppression(open && role !== "main");
   const motionControls = useAnimationControls();
   const dragControls = useDragControls();
   const isMountedRef = useRef(false);

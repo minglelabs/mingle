@@ -18,9 +18,10 @@ export function resolveNativeBannerZoneForUrl(rawUrl: string): NativeBannerZone 
     return null;
   }
 
+  // Allow-list: only /{locale}/conversations hosts the list and the chat room.
+  // Sub-routes such as /conversations/new-group are separate screens.
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-  if (pathSegments.length < 2) return 'hidden';
-  if (pathSegments[1] !== 'conversations') return 'hidden';
+  if (pathSegments.length !== 2 || pathSegments[1] !== 'conversations') return 'hidden';
 
   return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
 }
