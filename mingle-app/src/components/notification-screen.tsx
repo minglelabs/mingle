@@ -2,11 +2,11 @@
 
 import NotificationPanel from "@/components/notification-panel";
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 
 type NotificationScreenProps = {
   dictionary: AppDictionary;
@@ -42,9 +42,7 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
     router.push(profileHref);
   }, [locale, router, searchParams]);
 
-  useEffect(() => {
-    postNativeBannerZone("hidden");
-  }, []);
+  useNativeBannerSuppression();
 
   return (
     <NotificationPanel

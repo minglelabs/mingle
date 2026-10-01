@@ -2,9 +2,12 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 
 export default function MessageMediaDialog({ title, onClose, children, dark = false, backdropOpacity, backdropTransition = false }: { title: string; onClose: () => void; children: ReactNode; dark?: boolean; backdropOpacity?: number; backdropTransition?: boolean }) {
   const panel = useRef<HTMLDivElement>(null)
+  // Full-screen photo viewer and media dialogs must not sit under the native ad banner.
+  useNativeBannerSuppression()
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     panel.current?.focus({ preventScroll: true })
