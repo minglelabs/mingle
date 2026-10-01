@@ -9,7 +9,7 @@ import {
 
 const ROOT = process.cwd();
 const LEGAL_ROOT = path.join(ROOT, "public", "legal");
-const PRIVACY_LAST_UPDATED_DATE = "October 1, 2026";
+const PRIVACY_LAST_UPDATED_DATE = "September 30, 2026";
 const TERMS_LAST_UPDATED_DATE = "August 25, 2026";
 
 const locales = [

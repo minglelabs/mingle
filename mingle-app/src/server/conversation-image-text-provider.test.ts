@@ -74,6 +74,14 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('OCR prompt', () => {
+  it('tells the model to skip letterless blocks, which the server would drop anyway', () => {
+    // A chart's axis ticks alone doubled the output tokens and the latency of a dense photo.
+    expect(OCR_PROMPT_V2).toContain('Skip a block that contains no letters at all')
+    expect(OCR_PROMPT_V2).not.toContain('Use "und"')
+  })
+})
+
 describe('OCR output -> contract blocks', () => {
   it('converts box_2d [ymin, xmin, ymax, xmax]/1000 to [x0, y0, x1, y1] and rejects malformed boxes', () => {
     expect(convertOcrBox([100, 200, 150, 600])).toEqual([0.2, 0.1, 0.6, 0.15])
@@ -169,7 +177,99 @@ describe('translation output', () => {
 })
 
 describe('extractConversationImageText', () => {
-  it('sends the v2 OCR request to gpt-6-luna with store:false and a 1536 px JPEG', async () => {
+  it('sends the v2 OCR request with store:false and a 1536 px JPEG', async () => {
+    fetchMock.mockResolvedValue(interaction({ blocks: [rawBlock()] }))
+    const result = await extractConversationImageText(await jpeg(3000, 2000), { sleep: noSleep })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+    expect(init.headers).toMatchObject({ 'x-goog-api-key': 'test-key', 'Content-Type': 'application/json' })
+    const body = requestBody()
+    expect(body).toMatchObject({
+      model: 'gemini-3.8-flash',
+      system_instruction: SYSTEM_PROMPT,
+      response_format: { type: 'text', mime_type: 'application/json', schema: OCR_SCHEMA },
+      generation_config: { thinking_level: 'low' },
+      store: false,
+    })
+    expect(body.input[0]).toEqual({ type: 'text', text: OCR_PROMPT_V2 })
+    expect(body.input[1]).toMatchObject({ type: 'image', mime_type: 'image/jpeg', resolution: 'high' })
+    const sent = await sharp(Buffer.from(body.input[1].data, 'base64')).metadata()
+    expect(sent).toMatchObject({ format: 'jpeg', width: 1536, height: 1024 })
+
+    expect(result).toMatchObject({ model: 'gemini-3.8-flash', fallbackUsed: false, usage: { inputTokens: 1200, outputTokens: 300, thoughtTokens: 0 } })
+    expect(result.blocks).toHaveLength(1)
+  })
+
+  it('does not enlarge small photos', async () => {
+    fetchMock.mockResolvedValue(interaction({ blocks: [] }))
+    await extractConversationImageText(await jpeg(400, 300), { sleep: noSleep })
+    expect(await sharp(Buffer.from(requestBody().input[1].data, 'base64')).metadata()).toMatchObject({ width: 400, height: 300 })
+  })
+
+  it('retries once with the fallback model on 5xx, 429 and invalid JSON, summing usage', async () => {
+    fetchMock
+      .mockResolvedValueOnce(interaction('{"blocks": [', { total_input_tokens: 1000, total_output_tokens: 50, total_thought_tokens: 5 }))
+      .mockResolvedValueOnce(interaction({ blocks: [rawBlock()] }))
+    const sleep = vi.fn(async () => {})
+    const result = await extractConversationImageText(await jpeg(), { sleep })
+    expect(requestBody(1).model).toBe('gemini-3.7-flash')
+    expect(requestBody(1).generation_config).toEqual({ thinking_level: 'low' })
+    expect(requestBody(1).store).toBe(false)
+    expect(sleep).toHaveBeenCalledTimes(1)
+    const [[delay]] = sleep.mock.calls as unknown as [[number]]
+    expect(delay).toBeGreaterThanOrEqual(1000)
+    expect(delay).toBeLessThan(2000)
+    expect(result).toMatchObject({ model: 'gemini-3.7-flash', fallbackUsed: true, usage: { inputTokens: 2200, outputTokens: 350, thoughtTokens: 5 } })
+
+    for (const status of [429, 503]) {
+      fetchMock.mockReset()
+      fetchMock.mockResolvedValueOnce(new Response('busy', { status })).mockResolvedValueOnce(interaction({ blocks: [] }))
+      await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).resolves.toMatchObject({ model: 'gemini-3.7-flash', blocks: [] })
+    }
+  })
+
+  it('fails the attempt after the fallback fails, and never retries a 4xx', async () => {
+    fetchMock.mockResolvedValue(new Response('down', { status: 500 }))
+    await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).rejects.toMatchObject({ code: 'upstream_error', status: 500, model: 'gemini-3.7-flash' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(new Response('bad request', { status: 400 }))
+    await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).rejects.toMatchObject({ code: 'upstream_error', status: 400, model: 'gemini-3.8-flash' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('needs the Gemini key and uses the env model overrides', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    await expect(extractConversationImageText(await jpeg())).rejects.toMatchObject({ code: 'missing_credentials' })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    vi.stubEnv('GEMINI_API_KEY', 'test-key')
+    vi.stubEnv('CONVERSATION_IMAGE_TEXT_OCR_MODEL', 'ocr-a')
+    vi.stubEnv('CONVERSATION_IMAGE_TEXT_OCR_FALLBACK_MODEL', 'ocr-b')
+    vi.stubEnv('CONVERSATION_IMAGE_TEXT_TRANSLATION_MODEL', 'tr-a')
+    vi.stubEnv('CONVERSATION_IMAGE_TEXT_TRANSLATION_FALLBACK_MODEL', 'tr-b')
+    expect(resolveConversationImageTextModels()).toEqual({ ocr: 'ocr-a', ocrFallback: 'ocr-b', translation: 'tr-a', translationFallback: 'tr-b' })
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 502 })).mockResolvedValueOnce(interaction({ blocks: [] }))
+    await extractConversationImageText(await jpeg(), { sleep: noSleep })
+    expect([requestBody(0).model, requestBody(1).model]).toEqual(['ocr-a', 'ocr-b'])
+  })
+
+  it('rejects an undecodable image without calling the model', async () => {
+    await expect(extractConversationImageText(new Uint8Array([1, 2, 3]))).rejects.toMatchObject({ code: 'invalid_image' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('extractConversationImageText with a gpt-* model override (OpenAI opt-in)', () => {
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'openai-test-key')
+    vi.stubEnv('CONVERSATION_IMAGE_TEXT_OCR_MODEL', 'gpt-6-luna')
+  })
+
+  it('sends the v2 OCR request to OpenAI with store:false and a 1536 px JPEG', async () => {
     fetchMock.mockResolvedValue(openAiChat({ blocks: [rawBlock()] }))
     const result = await extractConversationImageText(await jpeg(3000, 2000), { sleep: noSleep })
 
@@ -206,40 +306,16 @@ describe('extractConversationImageText', () => {
     expect(OPENAI_OCR_SCHEMA.properties.blocks.items.required).toEqual(Object.keys(openAiProperties))
   })
 
-  it('does not enlarge small photos', async () => {
-    fetchMock.mockResolvedValue(openAiChat({ blocks: [] }))
-    await extractConversationImageText(await jpeg(400, 300), { sleep: noSleep })
-    const dataUrl: string = requestBody().messages[1].content[1].image_url.url
-    expect(await sharp(Buffer.from(dataUrl.split(',')[1], 'base64')).metadata()).toMatchObject({ width: 400, height: 300 })
-  })
-
-  it('retries once with the Gemini fallback on 5xx, 429 and invalid JSON, summing usage', async () => {
+  it('retries once with the Gemini fallback, summing usage, and never retries a 4xx', async () => {
     fetchMock
       .mockResolvedValueOnce(openAiChat('{"blocks": [', { prompt_tokens: 1000, completion_tokens: 55, completion_tokens_details: { reasoning_tokens: 5 } }))
       .mockResolvedValueOnce(interaction({ blocks: [rawBlock()] }))
     const sleep = vi.fn(async () => {})
     const result = await extractConversationImageText(await jpeg(), { sleep })
     expect(fetchMock.mock.calls[1][0]).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
-    expect(requestBody(1).model).toBe('gemini-3.8-flash')
-    expect(requestBody(1).generation_config).toEqual({ thinking_level: 'low' })
-    expect(requestBody(1).store).toBe(false)
+    expect(requestBody(1).model).toBe('gemini-3.7-flash')
     expect(sleep).toHaveBeenCalledTimes(1)
-    const [[delay]] = sleep.mock.calls as unknown as [[number]]
-    expect(delay).toBeGreaterThanOrEqual(1000)
-    expect(delay).toBeLessThan(2000)
-    expect(result).toMatchObject({ model: 'gemini-3.8-flash', fallbackUsed: true, usage: { inputTokens: 2200, outputTokens: 350, thoughtTokens: 5 } })
-
-    for (const status of [429, 503]) {
-      fetchMock.mockReset()
-      fetchMock.mockResolvedValueOnce(new Response('busy', { status })).mockResolvedValueOnce(interaction({ blocks: [] }))
-      await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).resolves.toMatchObject({ model: 'gemini-3.8-flash', blocks: [] })
-    }
-  })
-
-  it('fails the attempt after the fallback fails, and never retries a 4xx', async () => {
-    fetchMock.mockResolvedValue(new Response('down', { status: 500 }))
-    await expect(extractConversationImageText(await jpeg(), { sleep: noSleep })).rejects.toMatchObject({ code: 'upstream_error', status: 500, model: 'gemini-3.8-flash' })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ model: 'gemini-3.7-flash', fallbackUsed: true, usage: { inputTokens: 2200, outputTokens: 350, thoughtTokens: 5 } })
 
     fetchMock.mockReset()
     fetchMock.mockResolvedValue(new Response('bad request', { status: 400 }))
@@ -247,11 +323,11 @@ describe('extractConversationImageText', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to Gemini when OPENAI_API_KEY is missing, and needs at least one usable key', async () => {
+  it('goes straight to the fallback without waiting when OPENAI_API_KEY is missing, and needs one usable key', async () => {
     vi.stubEnv('OPENAI_API_KEY', '')
     fetchMock.mockResolvedValue(interaction({ blocks: [rawBlock()] }))
     const sleep = vi.fn(async () => {})
-    await expect(extractConversationImageText(await jpeg(), { sleep })).resolves.toMatchObject({ model: 'gemini-3.8-flash', fallbackUsed: true })
+    await expect(extractConversationImageText(await jpeg(), { sleep })).resolves.toMatchObject({ model: 'gemini-3.7-flash', fallbackUsed: true })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(sleep).not.toHaveBeenCalled()
 
@@ -261,28 +337,19 @@ describe('extractConversationImageText', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('routes each model by id and uses the env model overrides', async () => {
+  it('routes each model by id', async () => {
     expect(conversationImageTextProviderForModel('gpt-6-luna')).toBe('openai')
     expect(conversationImageTextProviderForModel('openai/gpt-6-luna')).toBe('openai')
     expect(conversationImageTextProviderForModel('gemini-3.8-flash')).toBe('gemini')
 
     vi.stubEnv('CONVERSATION_IMAGE_TEXT_OCR_MODEL', 'gemini-ocr-a')
     vi.stubEnv('CONVERSATION_IMAGE_TEXT_OCR_FALLBACK_MODEL', 'gpt-ocr-b')
-    vi.stubEnv('CONVERSATION_IMAGE_TEXT_TRANSLATION_MODEL', 'tr-a')
-    vi.stubEnv('CONVERSATION_IMAGE_TEXT_TRANSLATION_FALLBACK_MODEL', 'tr-b')
-    expect(resolveConversationImageTextModels()).toEqual({ ocr: 'gemini-ocr-a', ocrFallback: 'gpt-ocr-b', translation: 'tr-a', translationFallback: 'tr-b' })
     fetchMock.mockResolvedValueOnce(new Response('x', { status: 502 })).mockResolvedValueOnce(openAiChat({ blocks: [] }))
     await extractConversationImageText(await jpeg(), { sleep: noSleep })
-    expect([requestBody(0).model, requestBody(1).model]).toEqual(['gemini-ocr-a', 'gpt-ocr-b'])
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
       'https://generativelanguage.googleapis.com/v1beta/interactions',
       'https://api.openai.com/v1/chat/completions',
     ])
-  })
-
-  it('rejects an undecodable image without calling the model', async () => {
-    await expect(extractConversationImageText(new Uint8Array([1, 2, 3]))).rejects.toMatchObject({ code: 'invalid_image' })
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

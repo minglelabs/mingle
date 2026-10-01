@@ -28,10 +28,16 @@ import { ensureChineseScript } from '@/server/chinese-script-conversion'
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions'
 
-/** Pinned defaults; each can be overridden with the env var named in resolveConversationImageTextModels. */
+/**
+ * Pinned defaults; each can be overridden with the env var named in resolveConversationImageTextModels.
+ * OCR stays on Gemini: the overlay is only as good as the boxes, and on a dense chart (26 text lines)
+ * gemini-3.8-flash put all 26 boxes on the text (mean IoU 0.81) where gpt-6-luna (low reasoning)
+ * managed 1-5 of 26 (mean IoU 0.1-0.3; 0.4-0.6 with detail "original"). A gpt-* override is still
+ * supported for experiments, but it sends photos to OpenAI, which the privacy policies do not cover.
+ */
 export const CONVERSATION_IMAGE_TEXT_DEFAULT_MODELS = {
-  ocr: 'gpt-6-luna',
-  ocrFallback: 'gemini-3.8-flash',
+  ocr: 'gemini-3.8-flash',
+  ocrFallback: 'gemini-3.7-flash',
   translation: 'gemini-3.5-flash-lite',
   translationFallback: 'gemini-3.1-flash-lite',
 } as const
@@ -63,7 +69,7 @@ Granularity:
 For every block:
 - box_2d: [ymin, xmin, ymax, xmax] as integers normalized to 0-1000 (y relative to image height, x relative to image width), tight around the visible glyphs of all lines of the block. For rotated text use the axis-aligned box that encloses it.
 - text: the text exactly as written (keep numbers, prices, symbols and punctuation); join lines with "\\n".
-- lang: BCP-47 code of the block's language: ko, en, ja, zh-CN (Simplified Chinese), zh-TW (Traditional Chinese), etc. For a block mixing languages use the dominant one. Use "und" only when the block contains no words at all (only digits, times, codes, URLs or symbols); a price or number with a unit word such as 9,000원 or 30分 belongs to that word's language.
+- lang: BCP-47 code of the block's language: ko, en, ja, zh-CN (Simplified Chinese), zh-TW (Traditional Chinese), etc. For a block mixing languages use the dominant one. Skip a block that contains no letters at all (only digits, times, codes, URLs or symbols), for example axis ticks like 10% or 2025; a price or number with a unit word such as 9,000원 or 30分 is kept and belongs to that word's language.
 - bg: the dominant background color right behind the text, "#RRGGBB".
 - fg: the text color, "#RRGGBB".
 - bold: true if the strokes are bold or heavy.
