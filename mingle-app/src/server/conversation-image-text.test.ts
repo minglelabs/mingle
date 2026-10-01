@@ -155,6 +155,15 @@ afterEach(() => {
 })
 
 describe('OCR job', () => {
+  it('records the provider of the OCR model that ran', async () => {
+    m.extract.mockResolvedValue({ ...ocrResult(japaneseSign), model: 'gpt-6-luna' })
+    m.rooms.mockResolvedValue({ languages: ['ja'], viewerDisplayLanguage: null })
+
+    await service.runConversationImageTextJob(job)
+
+    expect(db.images.get('msg-1')).toMatchObject({ provider: 'openai', model: 'gpt-6-luna' })
+  })
+
   it('stores the blocks and usage, then eagerly translates the room languages except the source language', async () => {
     m.extract.mockResolvedValue(ocrResult(japaneseSign))
     m.rooms.mockResolvedValue({ languages: ['ko', 'ja', 'en'], viewerDisplayLanguage: null })
