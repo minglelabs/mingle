@@ -26,11 +26,12 @@ import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { ensureChineseScript } from '@/server/chinese-script-conversion'
 
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions'
+const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions'
 
 /** Pinned defaults; each can be overridden with the env var named in resolveConversationImageTextModels. */
 export const CONVERSATION_IMAGE_TEXT_DEFAULT_MODELS = {
-  ocr: 'gemini-3.8-flash',
-  ocrFallback: 'gemini-3.7-flash',
+  ocr: 'gpt-6-luna',
+  ocrFallback: 'gemini-3.8-flash',
   translation: 'gemini-3.5-flash-lite',
   translationFallback: 'gemini-3.1-flash-lite',
 } as const
@@ -202,10 +203,25 @@ export class ConversationImageTextProviderError extends Error {
   }
 }
 
-/** 429, 5xx, timeouts, transport failures and invalid output get one retry with the fallback model. */
+export type ConversationImageTextProviderName = 'openai' | 'gemini'
+
+/** OpenAI models are the gpt-* family; every other model id is called through Gemini. */
+export function conversationImageTextProviderForModel(model: string): ConversationImageTextProviderName {
+  return /^(?:openai\/)?gpt-/i.test(model.trim()) ? 'openai' : 'gemini'
+}
+
+function hasProviderKey(provider: ConversationImageTextProviderName): boolean {
+  const name = provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'
+  return Boolean((process.env[name] || '').trim())
+}
+
+/**
+ * 429, 5xx, timeouts, transport failures and invalid output get one retry with the
+ * fallback model. A missing key does too: the fallback may use another provider.
+ */
 function isRetryableProviderError(error: unknown): error is ConversationImageTextProviderError {
   if (!(error instanceof ConversationImageTextProviderError)) return false
-  if (error.code === 'timeout' || error.code === 'network_error' || error.code === 'invalid_output') return true
+  if (error.code === 'missing_credentials' || error.code === 'timeout' || error.code === 'network_error' || error.code === 'invalid_output') return true
   return error.code === 'upstream_error' && (error.status === 429 || (error.status ?? 0) >= 500)
 }
 
@@ -301,6 +317,114 @@ async function callGeminiInteractions(request: {
     if (controller.signal.aborted) throw new ConversationImageTextProviderError('timeout', { model })
     if (error instanceof SyntaxError) throw new ConversationImageTextProviderError('invalid_output', { model })
     throw new ConversationImageTextProviderError('network_error', { model })
+  } finally {
+    clearTimeout(timer)
+    request.signal?.removeEventListener('abort', abortFromParent)
+  }
+}
+
+type OpenAiChatResponse = {
+  choices?: Array<{ message?: { content?: unknown } }>
+  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; completion_tokens_details?: { reasoning_tokens?: unknown } }
+}
+
+/** Strict structured outputs accept neither array-length nor numeric-range keywords; the box is validated in convertOcrBox. */
+export const OPENAI_OCR_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['blocks'],
+  properties: {
+    blocks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['box_2d', 'text', 'lang', 'bg', 'fg', 'bold', 'angle_deg', 'vertical'],
+        properties: {
+          box_2d: { type: 'array', items: { type: 'integer' }, description: '[ymin, xmin, ymax, xmax] normalized to 0-1000' },
+          text: { type: 'string' },
+          lang: { type: 'string', description: 'BCP-47 language code, or "und"' },
+          bg: { type: 'string', description: 'Color as #RRGGBB' },
+          fg: { type: 'string', description: 'Color as #RRGGBB' },
+          bold: { type: 'boolean' },
+          angle_deg: { type: 'number', description: 'Baseline rotation in degrees, clockwise positive' },
+          vertical: { type: 'boolean' },
+        },
+      },
+    },
+  },
+} as const
+
+async function callOpenAiOcr(request: {
+  model: string
+  systemInstruction: string
+  prompt: string
+  imageBase64: string
+  timeoutMs: number
+  signal?: AbortSignal
+}): Promise<{ text: string; usage: ConversationImageTextUsage }> {
+  const model = request.model.replace(/^openai\//i, '')
+  const apiKey = (process.env.OPENAI_API_KEY || '').trim()
+  if (!apiKey) throw new ConversationImageTextProviderError('missing_credentials', { model: request.model })
+  if (request.signal?.aborted) throw new ConversationImageTextProviderError('aborted', { model: request.model })
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), request.timeoutMs)
+  const abortFromParent = () => controller.abort()
+  request.signal?.addEventListener('abort', abortFromParent, { once: true })
+  try {
+    const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: request.systemInstruction },
+          {
+            role: 'user',
+            // One image: the text prompt goes before it.
+            content: [
+              { type: 'text', text: request.prompt },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${request.imageBase64}`, detail: 'high' } },
+            ],
+          },
+        ],
+        response_format: { type: 'json_schema', json_schema: { name: 'photo_ocr', strict: true, schema: OPENAI_OCR_SCHEMA } },
+        // Measured in the OCR probe: "none" drops block recall to 91% and loosens boxes.
+        reasoning_effort: 'low',
+        // Never retain user photos or their text server-side.
+        store: false,
+      }),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new ConversationImageTextProviderError('upstream_error', { status: response.status, model: request.model, detail: detail.slice(0, 200) })
+    }
+    const data = await response.json() as OpenAiChatResponse
+    const content = data?.choices?.[0]?.message?.content
+    const usage = data?.usage ?? {}
+    // completion_tokens already includes the reasoning tokens; split them so the sum stays the billed output.
+    const reasoningTokens = readTokenCount(usage.completion_tokens_details?.reasoning_tokens)
+    const completionTokens = readTokenCount(usage.completion_tokens)
+    return {
+      text: typeof content === 'string' ? content : '',
+      usage: {
+        inputTokens: readTokenCount(usage.prompt_tokens),
+        outputTokens: Math.max(0, completionTokens - reasoningTokens),
+        thoughtTokens: reasoningTokens,
+      },
+    }
+  } catch (error) {
+    if (error instanceof ConversationImageTextProviderError) throw error
+    if (request.signal?.aborted) throw new ConversationImageTextProviderError('aborted', { model: request.model })
+    if (controller.signal.aborted) throw new ConversationImageTextProviderError('timeout', { model: request.model })
+    if (error instanceof SyntaxError) throw new ConversationImageTextProviderError('invalid_output', { model: request.model })
+    throw new ConversationImageTextProviderError('network_error', { model: request.model })
   } finally {
     clearTimeout(timer)
     request.signal?.removeEventListener('abort', abortFromParent)
@@ -504,26 +628,39 @@ export async function extractConversationImageText(
   options: ConversationImageTextProviderOptions = {},
 ): Promise<ExtractConversationImageTextResult> {
   const models = resolveConversationImageTextModels()
-  if (!(process.env.GEMINI_API_KEY || '').trim()) throw new ConversationImageTextProviderError('missing_credentials', { model: models.ocr })
+  // Either OCR model may be the one that runs; a missing key on the primary only skips to the fallback.
+  if (!hasProviderKey(conversationImageTextProviderForModel(models.ocr)) && !hasProviderKey(conversationImageTextProviderForModel(models.ocrFallback))) {
+    throw new ConversationImageTextProviderError('missing_credentials', { model: models.ocr })
+  }
   const started = Date.now()
   const image = await prepareConversationImageForOcr(storedJpeg)
+  const imageBase64 = image.toString('base64')
   const input: InteractionInputItem[] = [
     // One image: the text prompt goes before it.
     { type: 'text', text: OCR_PROMPT_V2 },
-    { type: 'image', data: image.toString('base64'), mime_type: 'image/jpeg', resolution: 'high' },
+    { type: 'image', data: imageBase64, mime_type: 'image/jpeg', resolution: 'high' },
   ]
   const usage = emptyUsage()
   const result = await runWithFallback({ primary: models.ocr, fallback: models.ocrFallback }, async model => {
-    const response = await callGeminiInteractions({
-      model,
-      systemInstruction: SYSTEM_PROMPT,
-      input,
-      schema: OCR_SCHEMA,
-      // Explicit: the default (medium) adds ~2 s for no accuracy gain.
-      thinkingLevel: 'low',
-      timeoutMs: OCR_TIMEOUT_MS,
-      signal: options.signal,
-    })
+    const response = conversationImageTextProviderForModel(model) === 'openai'
+      ? await callOpenAiOcr({
+        model,
+        systemInstruction: SYSTEM_PROMPT,
+        prompt: OCR_PROMPT_V2,
+        imageBase64,
+        timeoutMs: OCR_TIMEOUT_MS,
+        signal: options.signal,
+      })
+      : await callGeminiInteractions({
+        model,
+        systemInstruction: SYSTEM_PROMPT,
+        input,
+        schema: OCR_SCHEMA,
+        // Explicit: the default (medium) adds ~2 s for no accuracy gain.
+        thinkingLevel: 'low',
+        timeoutMs: OCR_TIMEOUT_MS,
+        signal: options.signal,
+      })
     addUsage(usage, response.usage)
     return parseOcrResponseText(response.text)
   }, options)

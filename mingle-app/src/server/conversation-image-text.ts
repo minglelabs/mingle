@@ -31,6 +31,7 @@ import { localizeChineseText } from '@/server/chinese-script-conversion'
 import { getConversationImage } from '@/server/conversation-image-storage'
 import {
   ConversationImageTextProviderError,
+  conversationImageTextProviderForModel,
   extractConversationImageText,
   finalizeConversationImageTextBlocks,
   translateConversationImageTextBlocks,
@@ -54,8 +55,9 @@ const DISABLED_FLAG_VALUES = new Set(['false', '0', 'off', 'no'])
 
 /**
  * Kill switch: CONVERSATION_IMAGE_TEXT_ENABLED=false stops every job and makes
- * the GET answer `disabled`. Without GEMINI_API_KEY the feature is disabled
- * too: every attempt would fail and use up the photo's attempts.
+ * the GET answer `disabled`. Without GEMINI_API_KEY (translation, and the OCR
+ * fallback) the feature is disabled too: every attempt would fail and use up
+ * the photo's attempts.
  */
 export function isConversationImageTextEnabled(): boolean {
   const flag = (process.env.CONVERSATION_IMAGE_TEXT_ENABLED || '').trim().toLowerCase()
@@ -206,7 +208,7 @@ async function performImageTextAttempt(job: ConversationImageTextJobInput, attem
         status,
         blocks: blocks as unknown as Prisma.InputJsonValue,
         sourceLanguage: dominantSourceLanguage(blocks),
-        provider: 'gemini',
+        provider: conversationImageTextProviderForModel(result.model),
         model: result.model,
         promptTokens: result.usage.inputTokens,
         completionTokens: billedOutputTokens(result.usage),
