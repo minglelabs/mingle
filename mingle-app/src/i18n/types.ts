@@ -1,3 +1,5 @@
+import type { NativeAppInstallSource } from "@/lib/native-app-install-source";
+
 export type BaseAppDictionarySource = {
   conversations?: {
     searchPlaceholder: string;
@@ -408,6 +410,8 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
       sectionLabel: string;
       installedLabel: string;
       latestLabel: string;
+      installSourceLabel: string;
+      installSourceValues: Record<NativeAppInstallSource, string>;
       unknownVersionLabel: string;
       checkingMessage: string;
       availableMessage: string;

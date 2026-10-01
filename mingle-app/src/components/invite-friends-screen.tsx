@@ -9,7 +9,7 @@ import ExistingConversationChoiceDialog from "@/components/existing-conversation
 import AccountBadge from "@/components/posts/account-badge";
 import IdentityRow from "@/components/posts/identity-row";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { showRouteTransitionCurtain } from "@/lib/route-transition-curtain";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
@@ -265,10 +265,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     if (!response.ok) throw new Error("conversation_member_invite_failed");
   }, [normalizedConversationId, selectedUsers]);
 
-  useEffect(() => {
-    if (!active) return;
-    postNativeBannerZone("hidden");
-  }, [active]);
+  useNativeBannerSuppression(active);
 
   // Solo/shared rooms both expose the same members endpoint — fetch it only
   // in "add to existing room" mode, to hide already-in-the-room people from

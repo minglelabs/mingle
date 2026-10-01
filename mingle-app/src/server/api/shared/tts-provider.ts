@@ -35,20 +35,25 @@ const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1bet
 const DEFAULT_GEMINI_TTS_VOICE = 'Kore'
 /**
  * Built-in per-language Gemini voices. Korean uses a male Seoul-Korean voice
- * from the Extended Voice Library (median F0 ~130 Hz measured); every other
- * language keeps the default voice.
+ * from the Extended Voice Library (median F0 ~137 Hz measured with the fast
+ * default style below); every other language keeps the default voice.
  */
 const GEMINI_TTS_LANGUAGE_VOICES: Readonly<Record<string, string>> = {
-  ko: 'ko-kr-csagent-11',
+  ko: 'ko-kr-csagent-8',
 }
 /**
- * Built-in per-language tempo factors (pitch-preserving). Measured against
- * Inworld at speakingRate 1.3: Gemini Korean speech ran ~1.4x longer; English
- * and Japanese were already at or above Inworld's pace, so they stay at 1.
+ * Delivery style sent as a `speech_metadata.style` annotation. Gemini 3.8 TTS
+ * treats it as a turn-level direction and never reads it aloud. The default
+ * makes every language speak fast; Japanese gets a milder wording because
+ * "speaking rapidly" pushed short Japanese lines past the point where they
+ * stayed intelligible.
  */
-const GEMINI_TTS_LANGUAGE_SPEEDS: Readonly<Record<string, number>> = {
-  ko: 1.4,
+const DEFAULT_GEMINI_TTS_STYLE = 'speaking rapidly'
+const GEMINI_TTS_LANGUAGE_STYLES: Readonly<Record<string, string>> = {
+  ja: 'slightly faster than normal pace',
 }
+/** Env value that turns the style annotation off. */
+const GEMINI_TTS_STYLE_DISABLED = 'none'
 const MIN_GEMINI_TTS_SPEED = 0.5
 const MAX_GEMINI_TTS_SPEED = 2
 const DEFAULT_GEMINI_TTS_TIMEOUT_MS = 8000
@@ -88,33 +93,53 @@ function clampSpeed(value: number): number | null {
 }
 
 /**
- * Pitch-preserving tempo factor applied to Gemini audio (1 = unchanged,
- * 1.4 = 40% faster). `GEMINI_TTS_SPEED` is either one number for every
- * language (`1.2`) or a per-language list (`ko=1.4,ja=1.1,*=1`, where `*`
- * is the default). Languages it does not mention use the built-in table.
+ * Optional pitch-preserving tempo factor applied to Gemini audio after
+ * synthesis (1 = unchanged, 1.2 = 20% faster). Off by default for every
+ * language: pace comes from the style annotation (`getGeminiTtsStyle`).
+ * `GEMINI_TTS_SPEED` is either one number for every language (`1.1`) or a
+ * per-language list (`ko=1.1,*=1`, where `*` covers unlisted languages).
  * Values are clamped to [0.5, 2]; invalid entries are ignored.
  */
 export function getGeminiTtsSpeed(language?: string | null): number {
   const lang = baseLanguage(language)
   const raw = (process.env.GEMINI_TTS_SPEED || '').trim()
-  if (raw) {
-    if (!raw.includes('=')) {
-      const single = clampSpeed(Number(raw))
-      if (single !== null) return single
-    } else {
-      const entries = new Map<string, number>()
-      for (const part of raw.split(',')) {
-        const [key, value] = part.split('=').map((token) => token.trim().toLowerCase())
-        const speed = clampSpeed(Number(value))
-        if (key && speed !== null) entries.set(key, speed)
-      }
-      if (lang && entries.has(lang)) return entries.get(lang) as number
-      if (lang && GEMINI_TTS_LANGUAGE_SPEEDS[lang]) return GEMINI_TTS_LANGUAGE_SPEEDS[lang]
-      if (entries.has('*')) return entries.get('*') as number
-      return 1
-    }
+  if (!raw) return 1
+  if (!raw.includes('=')) return clampSpeed(Number(raw)) ?? 1
+
+  const entries = new Map<string, number>()
+  for (const part of raw.split(',')) {
+    const [key, value] = part.split('=').map((token) => token.trim().toLowerCase())
+    const speed = clampSpeed(Number(value))
+    if (key && speed !== null) entries.set(key, speed)
   }
-  return (lang && GEMINI_TTS_LANGUAGE_SPEEDS[lang]) || 1
+  if (lang && entries.has(lang)) return entries.get(lang) as number
+  return entries.get('*') ?? 1
+}
+
+/** Style env value: undefined when unset/blank, null when set to `none`. */
+function readStyleEnv(name: string): string | null | undefined {
+  const value = (process.env[name] || '').trim()
+  if (!value) return undefined
+  return value.toLowerCase() === GEMINI_TTS_STYLE_DISABLED ? null : value
+}
+
+/**
+ * Delivery style for a language (null = send no style), first match wins:
+ * 1. `GEMINI_TTS_STYLE_<LANG>` (e.g. `GEMINI_TTS_STYLE_JA`) — one language.
+ * 2. `GEMINI_TTS_STYLE` — every language.
+ * 3. The built-in per-language style (Japanese -> a milder wording).
+ * 4. `speaking rapidly`.
+ * Either env var set to `none` sends no style for the languages it covers.
+ */
+export function getGeminiTtsStyle(language?: string | null): string | null {
+  const lang = baseLanguage(language)
+  if (lang) {
+    const override = readStyleEnv(`GEMINI_TTS_STYLE_${lang.toUpperCase()}`)
+    if (override !== undefined) return override
+  }
+  const globalStyle = readStyleEnv('GEMINI_TTS_STYLE')
+  if (globalStyle !== undefined) return globalStyle
+  return (lang && GEMINI_TTS_LANGUAGE_STYLES[lang]) || DEFAULT_GEMINI_TTS_STYLE
 }
 
 function getGeminiTtsTimeoutMs(): number {
@@ -275,9 +300,10 @@ export function normalizeGeminiAudio(audio: Buffer, mimeHint: string, sampleRate
 }
 
 /**
- * Trim leading/trailing silence (keeping ~80 ms) and apply the tempo factor
- * with pitch-preserving WSOLA. Only 16-bit PCM WAV is processed; anything
- * else (MP3/OGG, other bit depths) is returned unchanged. Output is mono WAV.
+ * Trim leading/trailing silence (keeping ~80 ms) and, when the tempo factor
+ * is not 1, time-stretch with pitch-preserving WSOLA. Only 16-bit PCM WAV is
+ * processed; anything else (MP3/OGG, other bit depths) is returned
+ * unchanged. Output is mono WAV.
  */
 export function postProcessGeminiAudio(audio: Buffer, speed: number): Buffer {
   const wav = parsePcm16Wav(audio)
@@ -289,17 +315,17 @@ export function postProcessGeminiAudio(audio: Buffer, speed: number): Buffer {
 }
 
 /**
- * Gemini synthesis. The text is sent verbatim: Gemini 3.8 TTS treats `text`
- * as a verbatim transcript, `system_instruction` is refused for TTS models,
- * and a `speech_metadata.style` pace hint overshoots (0.55-0.9x Inworld's
- * duration) and raises pitch. Pace is instead matched after synthesis by
- * `postProcessGeminiAudio`.
+ * Gemini synthesis. The text is sent verbatim (Gemini 3.8 TTS treats `text`
+ * as a verbatim transcript and may read inline directions aloud). Pace is
+ * set by the structured `speech_metadata.style` annotation, which the model
+ * follows but never speaks; `system_instruction` is refused by TTS models.
  */
 export async function synthesizeWithGemini(
   input: TtsSynthesisInput & { modelId: string },
 ): Promise<TtsSynthesisResult> {
   const modelId = input.modelId
   const voiceId = getGeminiTtsVoice(input.language)
+  const style = getGeminiTtsStyle(input.language)
   const apiKey = (process.env.GEMINI_API_KEY || '').trim()
   if (!apiKey) {
     return { ok: false, provider: 'gemini', reason: 'missing_credentials', modelId, voiceId }
@@ -318,7 +344,11 @@ export async function synthesizeWithGemini(
         model: modelId,
         input: [{
           type: 'user_input',
-          content: [{ type: 'text', text: input.text }],
+          content: [{
+            type: 'text',
+            text: input.text,
+            ...(style ? { annotations: [{ type: 'speech_metadata', style }] } : {}),
+          }],
         }],
         response_format: { type: 'audio' },
         generation_config: {

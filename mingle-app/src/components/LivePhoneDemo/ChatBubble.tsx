@@ -33,17 +33,16 @@ import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-
 import ChatAccountBadge from './ChatAccountBadge'
 import { readAccountBadgeKind } from './chat-account-badge.logic'
 import type { AccountBadgeKind } from '@/lib/account-badge'
+import {
+  arePlaybackKeyListsEqual,
+  buildOriginalBubblePlaybackKey as buildOriginalPlaybackKey,
+  buildTranslationBubblePlaybackKey as buildTranslationPlaybackKey,
+  resolveBubbleTtsIndicatorState,
+  type BubbleTtsIndicatorState,
+} from './live-phone-demo.bubble-tts-indicator'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.15
 const MESSAGE_BUBBLE_MAX_WIDTH = '100%'
-
-// 재생키 빌더 (LivePhoneDemo의 것과 동일 규칙)
-function buildOriginalPlaybackKey(utteranceId: string, lang: string): string {
-  return `original:${utteranceId}:${lang.trim().toLowerCase()}`
-}
-function buildTranslationPlaybackKey(utteranceId: string, lang: string): string {
-  return `translation:${utteranceId}:${lang.trim().toLowerCase()}`
-}
 
 /** 버블 텍스트 끝에 표시되는 음파 재생 중 표시 */
 function SpeakingIndicator({ label }: { label: string }) {
@@ -69,6 +68,61 @@ function SpeakingIndicator({ label }: { label: string }) {
       ))}
     </span>
   )
+}
+
+const TTS_INDICATOR_BAR_DELAYS_S = [0, 0.15, 0.3]
+
+/** TTS requested / queued / synthesizing: the resting "…" of the bars, static. */
+function TtsPendingIndicator({ label }: { label: string }) {
+  return (
+    <span
+      data-bubble-tts-indicator="pending"
+      role="img"
+      className="ml-1.5 inline-flex items-end gap-[2px] align-middle"
+      style={{ height: '13px' }}
+      aria-label={label}
+    >
+      {TTS_INDICATOR_BAR_DELAYS_S.map((delay) => (
+        <span key={delay} className="block w-[2.5px] rounded-full bg-sky-400" style={{ height: '30%' }} />
+      ))}
+    </span>
+  )
+}
+
+/** Audio actually playing: the bars move (CSS scaleY, see globals.css). */
+function TtsPlayingIndicator({ label }: { label: string }) {
+  return (
+    <span
+      data-bubble-tts-indicator="playing"
+      role="img"
+      className="ml-1.5 inline-flex items-end gap-[2px] align-middle"
+      style={{ height: '13px' }}
+      aria-label={label}
+    >
+      {TTS_INDICATOR_BAR_DELAYS_S.map((delay) => (
+        <span
+          key={delay}
+          className="mingle-tts-playing-bar block h-full w-[2.5px] rounded-full bg-sky-400"
+          style={{ animationDelay: `${delay}s` }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function BubbleTtsIndicator({
+  state,
+  playingLabel,
+  preparingLabel,
+}: {
+  state: BubbleTtsIndicatorState | null
+  playingLabel: string
+  preparingLabel: string
+}) {
+  if (state === 'playing') return <TtsPlayingIndicator label={playingLabel} />
+  if (state === 'pending') return <TtsPendingIndicator label={preparingLabel} />
+  if (state === 'speaking') return <SpeakingIndicator label={playingLabel} />
+  return null
 }
 
 export interface Utterance {
@@ -124,7 +178,15 @@ interface ChatBubbleProps {
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName?: string
+  /**
+   * Pre-split single TTS key (legacy UI): renders the original animated
+   * indicator for requested and playing alike.
+   */
   speakingPlaybackKey?: string
+  /** Keys whose TTS is requested, queued or synthesizing: static "…". */
+  pendingPlaybackKeys?: readonly string[]
+  /** Key whose audio is actually playing: animated bars. */
+  playingPlaybackKey?: string
   shouldAnimateEntrance?: boolean
   /**
    * The current viewer's own account id. When it matches the utterance's
@@ -596,6 +658,8 @@ interface ExpandedChatBubbleRowProps {
   isSelected: boolean
   showDivider: boolean
   speakingPlaybackKey?: string
+  pendingPlaybackKeys?: readonly string[]
+  playingPlaybackKey?: string
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   onSelectLanguage?: (language: string) => void
@@ -618,19 +682,21 @@ function ExpandedChatBubbleRow({
   isSelected,
   showDivider,
   speakingPlaybackKey,
+  pendingPlaybackKeys,
+  playingPlaybackKey,
   onPlayOriginal,
   onPlayTranslation,
   onSelectLanguage,
 }: ExpandedChatBubbleRowProps) {
   const hasText = Boolean(text.trim())
-  const isSpeaking = Boolean(
-    speakingPlaybackKey
-      && speakingPlaybackKey === (
-        isOriginal
-          ? buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
-          : buildTranslationPlaybackKey(utterance.id, lang)
-      ),
-  )
+  const rowPlaybackKey = isOriginal
+    ? buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
+    : buildTranslationPlaybackKey(utterance.id, lang)
+  const ttsIndicatorState = resolveBubbleTtsIndicatorState(rowPlaybackKey, {
+    speakingPlaybackKey,
+    pendingPlaybackKeys,
+    playingPlaybackKey,
+  })
   const textClassName = isOriginal
     ? `${bubbleTextClassName} ${isDraft ? 'text-gray-400' : 'text-gray-900'}`
     : `${bubbleTextClassName} ${translationState === 'interim' ? 'text-gray-500' : 'text-gray-700'}`
@@ -658,7 +724,11 @@ function ExpandedChatBubbleRow({
       {hasText ? (
         <span data-expanded-bubble-text className="align-middle">
           {text}
-          {isSpeaking && <SpeakingIndicator label={copyActionCopy.playingIndicatorLabel} />}
+          <BubbleTtsIndicator
+            state={ttsIndicatorState}
+            playingLabel={copyActionCopy.playingIndicatorLabel}
+            preparingLabel={ttsActionCopy.preparingIndicatorLabel}
+          />
           {isOriginal && isDraft && (
             <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
           )}
@@ -740,6 +810,8 @@ function ChatBubble({
   onPlayTranslation,
   bubbleTextClassName = 'text-sm',
   speakingPlaybackKey,
+  pendingPlaybackKeys,
+  playingPlaybackKey,
   shouldAnimateEntrance = true,
   viewerUserId,
   onOpenProfile,
@@ -829,7 +901,11 @@ function ChatBubble({
   const activePlaybackKey = isOriginalLanguageSelected
     ? buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
     : buildTranslationPlaybackKey(utterance.id, activeLanguage)
-  const isActiveSpeaking = !!speakingPlaybackKey && speakingPlaybackKey === activePlaybackKey
+  const activeTtsIndicatorState = resolveBubbleTtsIndicatorState(activePlaybackKey, {
+    speakingPlaybackKey,
+    pendingPlaybackKeys,
+    playingPlaybackKey,
+  })
   const originalTextClassName = isDraft
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
@@ -924,7 +1000,11 @@ function ChatBubble({
         ) : (
           <span data-current-bubble-text-value className="align-middle">
             {activeText}
-            {isActiveSpeaking && <SpeakingIndicator label={copyActionCopy.playingIndicatorLabel} />}
+            <BubbleTtsIndicator
+              state={activeTtsIndicatorState}
+              playingLabel={copyActionCopy.playingIndicatorLabel}
+              preparingLabel={ttsActionCopy.preparingIndicatorLabel}
+            />
             {isOriginalLanguageSelected && isDraft && (
               <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
             )}
@@ -1142,6 +1222,8 @@ function ChatBubble({
                   isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(entry.lang)}
                   showDivider={index > 0}
                   speakingPlaybackKey={speakingPlaybackKey}
+                  pendingPlaybackKeys={pendingPlaybackKeys}
+                  playingPlaybackKey={playingPlaybackKey}
                   onPlayOriginal={onPlayOriginal}
                   onPlayTranslation={onPlayTranslation}
                   onSelectLanguage={selectDisplayLanguage}
@@ -1280,6 +1362,8 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
+  if (prev.playingPlaybackKey !== next.playingPlaybackKey) return false
+  if (!arePlaybackKeyListsEqual(prev.pendingPlaybackKeys, next.pendingPlaybackKeys)) return false
   if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
   if (prev.viewerUserId !== next.viewerUserId) return false
   if (prev.onOpenProfile !== next.onOpenProfile) return false

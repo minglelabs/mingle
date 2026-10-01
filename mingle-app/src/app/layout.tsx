@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
+import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
 import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
 import NativeConversationShareOverlay from "@/components/native-conversation-share-overlay";
 import NativePushTapReceiver from "@/components/native-push-tap-receiver";
@@ -102,6 +103,7 @@ export default async function RootLayout({
                 <NativeProfileLinkOverlay />
                 <NativeConversationShareOverlay />
                 <NativePushTapReceiver />
+                <NativeBannerRouteGuard />
                 <RouteTransitionCurtain />
               </MobileCanvasShell>
               <Toaster

@@ -154,7 +154,7 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import {
-  postNativeBannerZone,
+  requestNativeBannerZone,
   resolveConversationListNativeBannerZone,
   shouldReassertNativeAuthBannerZone,
 } from "@/lib/native-banner-zone";
@@ -2885,7 +2885,7 @@ export default function ConversationList({
   const handleConversationDeleted = useCallback((conversationId: string) => {
     deletingConversationIdsRef.current.add(conversationId);
     replaceConversationOverlayUrl(null, "conversation-deleted");
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
     setOverlayExitMode("instant");
     setAutoStartConversationId((current) => (
       current === conversationId ? null : current
@@ -3531,7 +3531,7 @@ export default function ConversationList({
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
     openConversationSurface({
       id: CONVERSATION_PROFILE_SURFACE_ID,
       value: normalizedUserId,
@@ -3539,7 +3539,7 @@ export default function ConversationList({
   }, [openConversationSurface]);
 
   const openNotifications = useCallback(() => {
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
     openConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
   }, [openConversationSurface]);
 
@@ -3786,7 +3786,7 @@ export default function ConversationList({
         explicitRestoreConversation.id,
         explicitRestoreConversation.status === "active",
       );
-      postNativeBannerZone("hidden");
+      requestNativeBannerZone("hidden");
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setOverlayEnterMode("instant");
       setOverlayExitMode("animate");
@@ -3821,7 +3821,7 @@ export default function ConversationList({
 
       nativeSttRestoreAttemptedRef.current = true;
       conversationRunningStateRef.current.set(restoreConversation.id, true);
-      postNativeBannerZone("hidden");
+      requestNativeBannerZone("hidden");
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setOverlayEnterMode("instant");
       setOverlayExitMode("animate");
@@ -3901,7 +3901,7 @@ export default function ConversationList({
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
-    postNativeBannerZone(resolveConversationListNativeBannerZone({
+    requestNativeBannerZone(resolveConversationListNativeBannerZone({
       isAuthenticated: sessionStatus === "authenticated",
       hasActiveConversation: Boolean(activeConversation),
       isSearchOpen: showSearch,
@@ -3936,9 +3936,9 @@ export default function ConversationList({
     // Builds before 68 can restore the list banner after the authentication
     // gate has already hidden it. Reassert the server-known auth state until
     // login succeeds so deployed web code also protects existing TestFlight builds.
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
     const intervalId = window.setInterval(() => {
-      postNativeBannerZone("hidden");
+      requestNativeBannerZone("hidden");
     }, 250);
 
     return () => {
@@ -4323,7 +4323,7 @@ export default function ConversationList({
       activeConversationRef.current = null;
     }
 
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
       replaceConversationOverlayUrl(null, "close-conversation-overlay");
@@ -4374,7 +4374,7 @@ export default function ConversationList({
       activeConversationId: activeConversationRef.current?.id ?? null,
     });
 
-    postNativeBannerZone("hidden");
+    requestNativeBannerZone("hidden");
     closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
     setOverlayEnterMode(enterMode);
     setOverlayExitMode("animate");
@@ -4759,7 +4759,7 @@ export default function ConversationList({
       && currentConversationId === closingConversation.id
       && window.history.length > 1
     ) {
-      postNativeBannerZone("hidden");
+      requestNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
       pendingConversationHistoryBackRef.current = true;
       closeConversationOverlay(closingConversation, { animateExit: true });

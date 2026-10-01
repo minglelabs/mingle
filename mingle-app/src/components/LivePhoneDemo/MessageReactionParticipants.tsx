@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { fetchReactionJson } from '@/lib/message-reaction-request'
 import { MESSAGE_REACTIONS, messageReactionCopy, type MessageReactionKind, type MessageReactionParticipant, type MessageReactionParticipantsPage } from '@/lib/message-reactions'
 import { resolveAccountBadge } from '@/lib/account-badge'
@@ -16,6 +17,7 @@ export default function MessageReactionParticipants({ endpoint, messageId, initi
   const copy = messageReactionCopy(locale)
   const panel = useRef<HTMLDivElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
+  useNativeBannerSuppression()
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeButton.current?.focus({ preventScroll: true })

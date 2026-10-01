@@ -1,29 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { after, NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { getConversationSessionKeyForMember, isMessageSenderBlockedInConversation, materializePendingConversationInvitees, listChannelMemberUserIdsBySessionKey } from '@/lib/app-conversations'
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { putConversationImage, getConversationImage, deleteConversationImage } from '@/server/conversation-image-storage'
+import { isConversationImageTextEnabled, runConversationImageTextJob } from '@/server/conversation-image-text'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
+import { authorizeConversationImageScope as authorize, readStoredConversationImage as storedImage } from './conversation-image-access'
 
-async function authorize(conversationId: string) {
-  const session = await getServerSession(getAuthOptions())
-  if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const userId = session.user.id
-  const sessionKey = await getConversationSessionKeyForMember({ conversationId, userId })
-  return sessionKey ? { userId, sessionKey } : NextResponse.json({ error: 'not_found' }, { status: 404 })
-}
-function storedImage(metadata: unknown): { objectKey: string; sha256: string; width: number; height: number } | null {
-  const image = (metadata as { image?: { objectKey?: unknown; sha256?: unknown; width?: unknown; height?: unknown } } | null)?.image
-  return image && typeof image.objectKey === 'string' && /^conversation-images\/[\w-]+\.jpg$/.test(image.objectKey)
-    && typeof image.sha256 === 'string' && typeof image.width === 'number' && typeof image.height === 'number'
-    ? image as { objectKey: string; sha256: string; width: number; height: number } : null
-}
 export async function postConversationImage(request: NextRequest, conversationId: string) {
   const scope = await authorize(conversationId)
   if (scope instanceof NextResponse) return scope
@@ -40,6 +27,8 @@ export async function postConversationImage(request: NextRequest, conversationId
   const identity = { sessionKey_clientMessageId: { sessionKey: scope.sessionKey, clientMessageId } }
   let message = await prisma.appMessage.findUnique({ where: identity })
   let created = false
+  // The processed JPEG kept in memory for the photo text job (no R2 re-download).
+  let stored: { data: Buffer; objectKey: string } | null = null
   if (message && (message.userId !== scope.userId || message.isDeleted || storedImage(message.metadata)?.sha256 !== sha256)) return NextResponse.json({ error: 'message_conflict' }, { status: 409 })
   if (!message) {
     let image
@@ -52,6 +41,7 @@ export async function postConversationImage(request: NextRequest, conversationId
     const objectKey = `conversation-images/${randomUUID()}.jpg`
     try { await putConversationImage(objectKey, image.data) }
     catch { return NextResponse.json({ error: 'image_upload_failed' }, { status: 503 }) }
+    stored = { data: image.data, objectKey }
     try {
       if (!await getConversationSessionKeyForMember({ conversationId, userId: scope.userId }) || await isMessageSenderBlockedInConversation(scope)) {
         await deleteConversationImage(objectKey).catch(() => {})
@@ -100,6 +90,19 @@ export async function postConversationImage(request: NextRequest, conversationId
         console.error('[conversation-image] operator inbox notify failed', error instanceof Error ? error.name : 'unknown')
       }
     })
+    // Photo text translation (OCR + room-language translations). Its own
+    // after() so it never delays the push, and non-fatal: a missing table or a
+    // provider failure must never turn a committed photo into a failed send.
+    if (stored && isConversationImageTextEnabled()) {
+      const job = { messageId, sessionKey: scope.sessionKey, imageSha256: sha256, objectKey: stored.objectKey, jpeg: stored.data }
+      after(async () => {
+        try {
+          await runConversationImageTextJob(job)
+        } catch (error) {
+          console.error('[conversation-image] text job failed', error instanceof Error ? error.name : 'unknown')
+        }
+      })
+    }
   }
   await materializePendingConversationInvitees(scope.sessionKey, message.createdAt)
   const members = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)

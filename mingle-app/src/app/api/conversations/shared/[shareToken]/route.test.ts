@@ -257,6 +257,46 @@ describe("/api/conversations/shared/[shareToken] route", () => {
     expect(json.utterances[1]).not.toHaveProperty("originalDisplayText");
   });
 
+  it("passes the mixed-language flags through the public payload", async () => {
+    const utterance = {
+      id: "private-message-id",
+      originalText: "イザナと 일본어로 잘 인식되는 소니옥스야",
+      originalLang: "ko",
+      targetLanguages: ["ko", "ja", "en"],
+      translations: { ko: "이자나랑 일본어로 잘 인식되는 소니옥스야", ja: "日本語", en: "English" },
+      translationFinalized: { ko: true, ja: true, en: true },
+      createdAtMs: 1,
+      speaker: null,
+      speakerAvatarSeed: null,
+      speakerAvatarIndex: null,
+      speakerName: null,
+      speakerUserId: null,
+      speakerImage: null,
+    };
+    mockGetConversationHydrationStateForShare.mockResolvedValue({
+      conversation: { title: "Mixed room" },
+      utterances: [
+        { ...utterance, sourceLanguagesMixed: true },
+        { ...utterance, sourceTextHasForeignScript: true },
+        utterance,
+      ],
+      sharedByUserId: null,
+    });
+
+    const response = await GET(
+      new NextRequest("https://example.com/api/conversations/shared/tok-mixed"),
+      { params: Promise.resolve({ shareToken: "tok-mixed" }) },
+    );
+    const json = await response.json();
+
+    expect(json.utterances[0].sourceLanguagesMixed).toBe(true);
+    expect(json.utterances[0]).not.toHaveProperty("sourceTextHasForeignScript");
+    expect(json.utterances[1].sourceTextHasForeignScript).toBe(true);
+    expect(json.utterances[1]).not.toHaveProperty("sourceLanguagesMixed");
+    expect(json.utterances[2]).not.toHaveProperty("sourceLanguagesMixed");
+    expect(json.utterances[2]).not.toHaveProperty("sourceTextHasForeignScript");
+  });
+
   it("carries no account id anywhere in the public payload, only per-response speaker aliases", async () => {
     mockGetConversationHydrationStateForShare.mockResolvedValue({
       conversation: { id: "private-conversation-id", title: "Team sync", memberUserIds: ["private-member-id"] },

@@ -16,7 +16,7 @@ import { useConversationSpectate } from "@/components/use-conversation-spectate"
 import { buildClientApiPath } from "@/lib/api-contract";
 import { DEFAULT_LOCALE, resolveLegalDocumentLocale, resolveSupportedLocaleTag, type AppLocale } from "@/i18n";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { consumeCurrentHistoryEntry } from "@/lib/slide-surface-history";
@@ -46,19 +46,9 @@ function resolveLocale(pathname: string): AppLocale {
   return resolveSupportedLocaleTag(firstSegment) ?? DEFAULT_LOCALE;
 }
 
-function isConversationRoute(pathname: string): boolean {
-  const segments = pathname.split("/").filter(Boolean);
-  return segments[1] === "conversations" || (segments[1] === undefined && segments.length === 1);
-}
-
 function hasNativeConversationShareHistoryEntry(): boolean {
   if (typeof window === "undefined" || !isRecord(window.history.state)) return false;
   return Boolean(window.history.state[NATIVE_CONVERSATION_SHARE_HISTORY_STATE_KEY]);
-}
-
-function restoreNativeBannerZone(): void {
-  if (typeof window === "undefined") return;
-  postNativeBannerZone(isConversationRoute(window.location.pathname) ? "list" : "hidden");
 }
 
 // The in-app version of a conversation-share link: unlike the public
@@ -77,6 +67,7 @@ export default function NativeConversationShareOverlay() {
   const spectateLocale = resolveLegalDocumentLocale(locale);
   const copy = useMemo(() => getConversationSpectateCopy(spectateLocale), [spectateLocale]);
   const [overlay, setOverlay] = useState<ShareOverlayState | null>(null);
+  useNativeBannerSuppression(overlay !== null);
   const overlayRef = useRef<ShareOverlayState | null>(null);
   const requestIdRef = useRef(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -111,7 +102,6 @@ export default function NativeConversationShareOverlay() {
     overlayRef.current = nextOverlay;
     setOverlay(nextOverlay);
     setJoinError(false);
-    postNativeBannerZone("hidden");
 
     const nativeWindow = window as NativeConversationShareOverlayWindow;
     delete nativeWindow[NATIVE_CONVERSATION_SHARE_WINDOW_KEY];
@@ -175,7 +165,6 @@ export default function NativeConversationShareOverlay() {
 
     overlayRef.current = null;
     setOverlay(null);
-    restoreNativeBannerZone();
   }, []);
 
   useEffect(() => {
@@ -214,7 +203,6 @@ export default function NativeConversationShareOverlay() {
       if (!hasNativeConversationShareHistoryEntry()) {
         overlayRef.current = null;
         setOverlay(null);
-        restoreNativeBannerZone();
       }
     };
 

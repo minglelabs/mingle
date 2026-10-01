@@ -2,10 +2,15 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  renderPhotoTextDeletionNotice,
+  renderPhotoTextPrivacySection,
+} from "./privacy-photo-translation.mjs";
 
 const ROOT = process.cwd();
 const LEGAL_ROOT = path.join(ROOT, "public", "legal");
-const LAST_UPDATED_DATE = "August 25, 2026";
+const PRIVACY_LAST_UPDATED_DATE = "September 30, 2026";
+const TERMS_LAST_UPDATED_DATE = "August 25, 2026";
 
 const locales = [
   { code: "en", path: "en", name: "English", lang: "en", dir: "ltr" },
@@ -365,8 +370,11 @@ function renderDocumentHtml(doc, locale, textMap) {
 
   const sectionHtml = (doc.key === "privacy"
     ? [
-        ...renderedSections.slice(0, 10),
-        accountDeletionSectionByLocale[locale.code] ?? accountDeletionSectionByLocale.en,
+        ...renderedSections.slice(0, 2),
+        renderPhotoTextPrivacySection(locale.code, escapeHtml),
+        ...renderedSections.slice(2, 10),
+        (accountDeletionSectionByLocale[locale.code] ?? accountDeletionSectionByLocale.en) +
+          renderPhotoTextDeletionNotice(locale.code, escapeHtml),
         ...renderedSections.slice(10),
       ]
     : renderedSections
@@ -376,6 +384,7 @@ function renderDocumentHtml(doc, locale, textMap) {
   const description = textMap.get(`${doc.key}.description`);
   const intro = textMap.get(`${doc.key}.intro`);
   const lastUpdated = textMap.get("meta.lastUpdated");
+  const lastUpdatedDate = doc.key === "privacy" ? PRIVACY_LAST_UPDATED_DATE : TERMS_LAST_UPDATED_DATE;
   const relatedLabel = textMap.get(`${doc.key}.relatedLabel`);
   const relatedLinkText = textMap.get(`${doc.key}.relatedLinkText`);
 
@@ -512,7 +521,7 @@ function renderDocumentHtml(doc, locale, textMap) {
       <article>
         ${buildLanguageNav(doc.fileName, locale.path)}
         <h1>${linkify(title)}</h1>
-        <p class="meta"><strong>${escapeHtml(lastUpdated)}</strong> ${escapeHtml(LAST_UPDATED_DATE)}</p>
+        <p class="meta"><strong>${escapeHtml(lastUpdated)}</strong> ${escapeHtml(lastUpdatedDate)}</p>
         <p>${linkify(intro)}</p>
         ${sectionHtml}
         <p class="legal-links">

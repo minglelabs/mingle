@@ -8,6 +8,7 @@ import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 
 export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
@@ -100,6 +101,10 @@ export type ConversationHydrationUtterance = {
   // (see normalizeChineseContent). Omitted when it equals originalText.
   originalDisplayText?: string;
   originalLang: string;
+  // Set (only ever to true) when the finalize translation found the original
+  // mixes languages or uses another script; keeps its same-language row.
+  sourceLanguagesMixed?: true;
+  sourceTextHasForeignScript?: true;
   targetLanguages: string[];
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
@@ -1907,6 +1912,48 @@ export async function listChannelMemberUserIdsBySessionKey(sessionKey: string): 
   return channel?.members.map((member) => member.userId) ?? [];
 }
 
+// Server-side targets for photo text translation: the same room language
+// union the client shows as the room's languages (see
+// resolveRoomLanguageUnion), ordered around the viewer's own picks when a
+// viewer is given, plus that viewer's display language. With no viewer (the
+// background job right after an upload) the union keeps discovery order.
+export async function listConversationTranslationLanguagesBySessionKey(
+  sessionKey: string,
+  viewerUserId?: string | null,
+): Promise<{ languages: string[]; viewerDisplayLanguage: string | null }> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { sessionKey, ...buildVisibleConversationWhere() },
+    select: { id: true, selectedLanguages: true, defaultDisplayLanguage: true, pendingInviteeUserIds: true },
+  });
+  if (!record) return { languages: [], viewerDisplayLanguage: null };
+
+  const [membersByChannelId, pendingInviteeProfileById] = await Promise.all([
+    listChannelMembersByChannelId([record.id]),
+    listPendingInviteeProfilesByUserIds(record.pendingInviteeUserIds),
+  ]);
+  const members = membersByChannelId.get(record.id);
+  const pendingInviteeProfiles = record.pendingInviteeUserIds
+    .map((userId) => pendingInviteeProfileById.get(userId))
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+  const { languages } = resolveRoomLanguageUnion(
+    record.selectedLanguages,
+    members,
+    record.pendingInviteeUserIds,
+    viewerUserId,
+    pendingInviteeProfiles,
+  );
+  const viewerDisplayLanguage = viewerUserId
+    ? resolveViewerFacingDisplayLanguage(
+      record.defaultDisplayLanguage,
+      members,
+      viewerUserId,
+      record.pendingInviteeUserIds,
+      pendingInviteeProfiles,
+    )
+    : null;
+  return { languages, viewerDisplayLanguage };
+}
+
 // Defense in depth behind the client's own composer/mic gating (see
 // isBlockedCounterpart) — even a stale client that still posts a
 // stt_turn_finalized event for a now-blocked room must not have it persist.
@@ -3059,6 +3106,7 @@ async function getConversationHydrationStateForRecord(args: {
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",
+      ...pickSourceLanguageBubbleFlags(metadata),
       targetLanguages,
       translations,
       translationFinalized,

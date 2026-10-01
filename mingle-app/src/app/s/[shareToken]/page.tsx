@@ -5,6 +5,7 @@ import { resolveConversationSpectateLocale } from "@/components/conversation-spe
 import { isValidConversationShareToken } from "@/lib/conversation-share-link";
 import { getConversationHydrationStateForShare } from "@/lib/app-conversations";
 import { toPublicSpectateSnapshot } from "@/lib/conversation-share-public-payload";
+import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 import { getUserProfile } from "@/server/user-profile";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import type { ConversationSpectateState } from "@/components/use-conversation-spectate";
@@ -88,6 +89,7 @@ export default async function ConversationSpectatePage({ params }: ConversationS
             originalText: utterance.originalText,
             ...(utterance.originalDisplayText ? { originalDisplayText: utterance.originalDisplayText } : {}),
             originalLang: utterance.originalLang,
+            ...pickSourceLanguageBubbleFlags(utterance),
             targetLanguages: utterance.targetLanguages,
             translations: utterance.translations,
             translationFinalized: utterance.translationFinalized,

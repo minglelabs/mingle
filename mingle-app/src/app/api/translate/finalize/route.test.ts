@@ -13,6 +13,14 @@ const {
 }))
 
 const mockGenerateContent = vi.fn()
+
+/** The Gemini call now takes a request object (it carries serviceTier); pull its prompt text. */
+function readGeminiUserPrompt(callIndex: number): string {
+  const request = mockGenerateContent.mock.calls[callIndex]?.[0] as
+    | { contents?: Array<{ parts?: Array<{ text?: string }> }> }
+    | undefined
+  return request?.contents?.[0]?.parts?.[0]?.text ?? ''
+}
 const mockGetGenerativeModel = vi.fn((config?: unknown) => {
   void config
   return {
@@ -292,13 +300,14 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.ttsAudioMime).toBe('audio/wav')
     // Korean inline audio uses the male Korean Gemini voice.
-    expect(json.ttsVoiceId).toBe('ko-kr-csagent-11')
+    expect(json.ttsVoiceId).toBe('ko-kr-csagent-8')
     expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
     const geminiBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
     expect(geminiBody.model).toBe('gemini-3.8-flash-tts')
-    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-11' }] })
+    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
+    expect(geminiBody.input[0].content[0].annotations).toEqual([{ type: 'speech_metadata', style: 'speaking rapidly' }])
   })
 
   it('uses the gemini-3.8-flash-tts default for inline audio when tts.ttsModel is missing', async () => {
@@ -905,6 +914,7 @@ describe('/api/translate/finalize route', () => {
     expect(headers['X-Title']).toBe('mingle-app')
     expect(body.model).toBe('qwen/qwen3.5-9b')
     expect(body.extra_body).toBeUndefined()
+    expect((body as Record<string, unknown>).service_tier).toBeUndefined()
     expect(body.response_format).toEqual({
       type: 'json_schema',
       json_schema: {
@@ -1014,6 +1024,9 @@ describe('/api/translate/finalize route', () => {
 
     const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { model?: string }
     expect(modelConfig.model).toBe('gemma-4-31b-it')
+    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string }
+    expect(request.serviceTier).toBeUndefined()
+    expect(readGeminiUserPrompt(0)).toContain('hello')
   })
 
   it('uses the request translation model before falling back to the DB preference lookup', async () => {
@@ -1107,6 +1120,10 @@ describe('/api/translate/finalize route', () => {
     expect(json.model).toBe('gemini-2.5-flash-lite')
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
+    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string, contents?: unknown[] }
+    expect(request.serviceTier).toBe('priority')
+    expect(request.contents).toHaveLength(1)
+    expect(readGeminiUserPrompt(0).length).toBeGreaterThan(0)
   })
 
   it('uses the tracking user translation model from DB for non-final requests without an auth session', async () => {
@@ -1335,6 +1352,7 @@ describe('/api/translate/finalize route', () => {
     const body = JSON.parse(String(requestInit.body)) as Record<string, unknown>
     expect(body.model).toBe('gpt-6-luna')
     expect(body.reasoning_effort).toBe('none')
+    expect(body.service_tier).toBe('priority')
     expect(body.extra_body).toBeUndefined()
     expect(body.response_format).toEqual({
       type: 'json_schema',
@@ -1549,6 +1567,10 @@ describe('/api/translate/finalize route', () => {
     expect(json.model).toBe('gemini-2.5-flash-lite')
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
+    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string, contents?: unknown[] }
+    expect(request.serviceTier).toBe('priority')
+    expect(request.contents).toHaveLength(1)
+    expect(readGeminiUserPrompt(0).length).toBeGreaterThan(0)
   })
 
   it('returns 400 when text is missing', async () => {
@@ -1841,7 +1863,7 @@ describe('/api/translate/finalize route', () => {
         ko: '안녕하세요',
       })
 
-      const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+      const userPrompt = readGeminiUserPrompt(0)
       expect(userPrompt).toContain('language_hints=en, ja, ko')
       expect(userPrompt).toContain('sourceLanguage=ja')
       expect(userPrompt).not.toContain('detect_source_language=')
@@ -1977,7 +1999,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
 
-    const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+    const userPrompt = readGeminiUserPrompt(0)
     const immediateIndex = userPrompt.indexOf('Immediate previous turn (~3s ago):')
 
     expect(immediateIndex).toBeGreaterThanOrEqual(0)
@@ -2028,7 +2050,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
 
-    const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+    const userPrompt = readGeminiUserPrompt(0)
     expect(userPrompt).not.toContain('Immediate previous turn')
   })
 
@@ -2059,7 +2081,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
 
-    const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+    const userPrompt = readGeminiUserPrompt(0)
     expect(userPrompt).not.toContain('Immediate previous turn')
     expect(userPrompt).not.toContain('turn without age')
   })

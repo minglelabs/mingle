@@ -21,6 +21,8 @@
 
 import type { AccountBadgeKind } from "@/lib/account-badge";
 
+import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
+
 export type PublicSpectateInviter = {
   name: string | null;
   image: string | null;
@@ -39,6 +41,10 @@ export type PublicSpectateUtterance = {
   // present only when it differs from originalText.
   originalDisplayText?: string;
   originalLang: string;
+  // Present (only as true) for mixed-language / foreign-script originals, so
+  // the viewer keeps their same-language row. Not an identifier.
+  sourceLanguagesMixed?: true;
+  sourceTextHasForeignScript?: true;
   targetLanguages: string[];
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
@@ -73,6 +79,8 @@ type ShareSnapshotUtteranceInput = {
   originalText: string;
   originalDisplayText?: string;
   originalLang: string;
+  sourceLanguagesMixed?: boolean;
+  sourceTextHasForeignScript?: boolean;
   targetLanguages: string[];
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
@@ -120,6 +128,7 @@ export function toPublicSpectateUtterances(
         ? { originalDisplayText: utterance.originalDisplayText }
         : {}),
       originalLang: utterance.originalLang,
+      ...pickSourceLanguageBubbleFlags(utterance),
       targetLanguages: utterance.targetLanguages,
       translations: utterance.translations,
       translationFinalized: utterance.translationFinalized,

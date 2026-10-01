@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import sharp from 'sharp'
-const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), push: vi.fn(), inboxNotify: vi.fn(), after: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn() }))
+const m = vi.hoisted(() => ({ session: vi.fn(), member: vi.fn(), blocked: vi.fn(), materialize: vi.fn(), members: vi.fn(), notify: vi.fn(), push: vi.fn(), inboxNotify: vi.fn(), after: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), put: vi.fn(), get: vi.fn(), remove: vi.fn(), textEnabled: vi.fn(), textJob: vi.fn() }))
 vi.mock('next/server', async importOriginal => ({ ...await importOriginal<typeof import('next/server')>(), after: m.after }))
 vi.mock('@/server/push-notifications', () => ({ sendPushNotificationForConversationMessage: m.push }))
 vi.mock('@/server/operator-inbox/notify', () => ({ notifyOperatorInboxActivity: m.inboxNotify }))
+vi.mock('@/server/conversation-image-text', () => ({ isConversationImageTextEnabled: m.textEnabled, runConversationImageTextJob: m.textJob }))
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/lib/prisma', () => ({ prisma: { appMessage: { findUnique: m.findUnique, findFirst: m.findFirst, create: m.create } } }))
@@ -24,6 +25,7 @@ beforeEach(() => {
   m.members.mockResolvedValue(['alice', 'bob']); m.findUnique.mockResolvedValue(null)
   m.create.mockImplementation(async ({ data }) => ({ id: 'db-image', ...data, createdAt: new Date() }))
   m.put.mockResolvedValue(undefined); m.remove.mockResolvedValue(undefined)
+  m.textEnabled.mockReturnValue(false)
 })
 const png = () => sharp({ create: { width: 64, height: 32, channels: 3, background: '#ffa000' } }).png().withMetadata({ orientation: 6 }).toBuffer()
 describe('conversation images', () => {
@@ -136,6 +138,42 @@ describe('conversation images', () => {
     expect((await postConversationImage(upload(await png()), 'room')).status).toBe(503)
     expect(m.create).not.toHaveBeenCalled()
     expect(m.after).not.toHaveBeenCalled()
+  })
+  it('queues photo text OCR in a second after() with the in-memory JPEG', async () => {
+    m.textEnabled.mockReturnValue(true)
+    const bytes = await png()
+    expect((await postConversationImage(upload(bytes), 'room')).status).toBe(201)
+    expect(m.after).toHaveBeenCalledTimes(2)
+    expect(m.textJob).not.toHaveBeenCalled()
+    await m.after.mock.calls[1][0]()
+    const [objectKey, jpeg] = m.put.mock.calls[0]
+    expect(m.textJob).toHaveBeenCalledWith({
+      messageId: 'db-image', sessionKey: 'session', imageSha256: createHash('sha256').update(bytes).digest('hex'), objectKey, jpeg,
+    })
+    // The push is still the first after() and unaffected.
+    await m.after.mock.calls[0][0]()
+    expect(m.push).toHaveBeenCalledTimes(1)
+  })
+  it('keeps the photo send successful when the text job fails', async () => {
+    m.textEnabled.mockReturnValue(true)
+    m.textJob.mockRejectedValue(new Error('relation "app_message_image_texts" does not exist'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+      await expect(m.after.mock.calls[1][0]()).resolves.toBeUndefined()
+      expect(m.remove).not.toHaveBeenCalled()
+    } finally { error.mockRestore() }
+  })
+  it('queues no photo text job when disabled or when the upload reuses a committed message', async () => {
+    expect((await postConversationImage(upload(await png()), 'room')).status).toBe(201)
+    expect(m.after).toHaveBeenCalledTimes(1)
+    m.after.mockReset()
+    m.textEnabled.mockReturnValue(true)
+    const bytes = await png()
+    m.findUnique.mockResolvedValue({ id: 'db-image', userId: 'alice', createdAt: new Date(), metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: createHash('sha256').update(bytes).digest('hex'), width: 32, height: 64 } } })
+    expect((await postConversationImage(upload(bytes), 'room')).status).toBe(201)
+    expect(m.after).not.toHaveBeenCalled()
+    expect(m.textJob).not.toHaveBeenCalled()
   })
   it('only serves images belonging to visible messages in the authorized room', async () => {
     m.findFirst.mockResolvedValue({ metadata: { image: { objectKey: 'conversation-images/key.jpg', sha256: 'hash', width: 32, height: 64 } } })

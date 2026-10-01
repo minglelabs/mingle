@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
@@ -8,6 +9,7 @@ import {
   type DashboardMetric,
   buildChartGeometry,
   buildCumulativeSeries,
+  buildSharedScaleChartGeometries,
   formatMetricDisplayValue,
   normalizeDashboardDays,
   resolveAdminDashboardRange,
@@ -18,6 +20,11 @@ import { AdminPage, AdminPageHeader } from "../_components/ui";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
+import {
+  TranslationModelSection,
+  TranslationModelSectionFallback,
+  startTranslationModelSeriesLoad,
+} from "./translation-model-section";
 
 export const dynamic = "force-dynamic";
 
@@ -49,14 +56,11 @@ function dashboardPath(days: number, platform: AdminDashboardPlatform): string {
 function DailyChart({ metric }: { metric: DashboardMetric }) {
   // Both series share one y-scale (same unit, e.g. ms) -- computed together so
   // p95 (always >= avg) doesn't get clipped against a scale sized only for avg.
-  const combinedForScale = metric.secondarySeries
-    ? [...metric.points, ...metric.secondarySeries.points]
-    : metric.points;
-  const scaleGeometry = buildChartGeometry(combinedForScale, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
-  const geometry = buildChartGeometry(metric.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax);
-  const secondaryGeometry = metric.secondarySeries
-    ? buildChartGeometry(metric.secondarySeries.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax)
-    : null;
+  const { geometries: [geometry, secondaryGeometry] } = buildSharedScaleChartGeometries(
+    metric.secondarySeries ? [metric.points, metric.secondarySeries.points] : [metric.points],
+    ADMIN_DASHBOARD_CHART_WIDTH,
+    ADMIN_DASHBOARD_CHART_HEIGHT,
+  );
 
   return (
     <LineChartCard
@@ -108,6 +112,10 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
 
   const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
   const range = resolveAdminDashboardRange(new Date(), days);
+  // Started before the metrics await so both queries run at once, but awaited only inside
+  // TranslationModelSection: this live query must neither hold back nor, if it fails,
+  // take down the rest of the page.
+  const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
   const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
@@ -132,6 +140,15 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
             <DailyChart key={metric.key} metric={metric} />
           ))}
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-2 text-sm font-semibold text-slate-600">번역 모델별 추이</h2>
+        {/* Keyed by the query inputs: a days/platform change then mounts a fresh boundary that
+            shows the skeleton, instead of holding the whole navigation for this data. */}
+        <Suspense key={`${days}:${platform}`} fallback={<TranslationModelSectionFallback />}>
+          <TranslationModelSection seriesPromise={translationModelSeries} dayKeys={range.dayKeys} />
+        </Suspense>
       </section>
 
       <section className="mt-8">

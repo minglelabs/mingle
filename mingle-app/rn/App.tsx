@@ -37,9 +37,25 @@ import {
 
 import {
   addNativeTtsListener,
+  buildNativeTtsStoppedEvent,
   playNativeTts,
+  resolveNativeTtsPlayRequest,
+  resolveNativeTtsStartedEvent,
   stopNativeTts,
 } from './src/nativeTts';
+import {
+  addNativeAudioRouteListener,
+  buildNativeAudioRouteScript,
+  createNativeAudioRouteRelay,
+  getNativeAudioRoute,
+  isNativeAudioRouteAvailable,
+  resolveNativeAudioRoutePlatform,
+  type NativeAudioRouteRelay,
+} from './src/nativeAudioRoute';
+import {
+  buildNativeShellCapabilities,
+  type NativeShellCapabilities,
+} from './src/nativeCapabilities';
 import {
   startNativeBrowserAuthSession,
   type NativeAuthProvider,
@@ -72,6 +88,7 @@ import {
   createUnknownNativeAppUpdateSnapshot,
   normalizeClientVersion,
   resolveNativeAppUpdateSnapshot,
+  resolveRuntimeInstallSource,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
 import {
@@ -142,6 +159,8 @@ type NativeRuntimeConfig = {
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
+  // app_store | testflight | play_store | local | other, detected natively.
+  installSource?: string;
   qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
@@ -712,6 +731,8 @@ type NativeTtsCommand =
         playbackId?: string;
         audioBase64: string;
         contentType?: string;
+        // Earphone mode (contract A.5): iOS stops this clip when earphones go away.
+        stopOnEarphoneDisconnect?: boolean;
       };
     }
   | {
@@ -724,6 +745,13 @@ type NativeTtsCommand =
 type NativeSttAecCommand = {
   type: 'native_stt_set_aec';
   payload: { enabled: boolean };
+};
+
+// Earphone mode (contract A.4): re-read the audio route now and reply with a
+// `mingle:native-audio-route` event.
+type NativeAudioRouteRequestCommand = {
+  type: 'native_audio_route_request';
+  payload?: Record<string, unknown>;
 };
 
 type NativeOpenAppSettingsCommand = {
@@ -860,6 +888,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
   | NativeAuthStartCommand
@@ -894,7 +923,7 @@ type NativeSttEvent =
   | { type: 'message'; raw: string; conversationId?: string; sessionId?: string; queueId?: string }
   | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string }
   | { type: 'permission'; permission: string; platform?: string }
-  | { type: 'capabilities'; openAppSettings: boolean }
+  | NativeShellCapabilities
   | { type: 'close'; reason: string; conversationId?: string; sessionId?: string };
 
 type NativeSttSnapshot = {
@@ -1106,6 +1135,10 @@ function resolveRuntimeClientInfo(): RuntimeClientInfo {
 }
 
 const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
+const RUNTIME_INSTALL_SOURCE = resolveRuntimeInstallSource(
+  NATIVE_RUNTIME_CONFIG.installSource,
+  __DEV__,
+);
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -1478,7 +1511,7 @@ function AppInner(): React.JSX.Element {
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
   const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
-    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
+    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
@@ -1554,6 +1587,10 @@ function AppInner(): React.JSX.Element {
   // read never races the clear of the previous one and routes the tap twice.
   const pushTapConsumptionRunnerRef = useRef(createSerialTaskRunner());
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
+  // Earphone mode (contract A.1/A.2): whether this shell can report earphones,
+  // and the relay that forwards NativeAudioRouteModule readings to the page.
+  const nativeAudioRouteAvailable = useMemo(() => isNativeAudioRouteAvailable(), []);
+  const nativeAudioRouteRelayRef = useRef<NativeAudioRouteRelay | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
   const lastWebViewUrlRef = useRef('');
@@ -2596,7 +2633,7 @@ function AppInner(): React.JSX.Element {
     const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
     const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
-    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
+    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion, RUNTIME_INSTALL_SOURCE));
 
     const fallbackToReady = (reason: string, details?: string) => {
       if (!active || settled) return;
@@ -2604,7 +2641,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[VersionPolicy] bypass (${reason})${details ? `: ${details}` : ''}`);
       }
-      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion));
+      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion, RUNTIME_INSTALL_SOURCE));
       setVersionGate({ status: 'ready' });
     };
 
@@ -2663,7 +2700,7 @@ function AppInner(): React.JSX.Element {
 
         if (!active || settled) return;
         setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
-        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
+        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion, RUNTIME_INSTALL_SOURCE));
 
         if (policy.action === 'force_update') {
           settled = true;
@@ -4280,15 +4317,22 @@ function AppInner(): React.JSX.Element {
     }
 
     if (parsed.type === 'native_tts_play') {
-      const { utteranceId, audioBase64 } = parsed.payload;
-      const playbackId = typeof parsed.payload.playbackId === 'string' && parsed.payload.playbackId.trim()
-        ? parsed.payload.playbackId.trim()
-        : utteranceId;
+      const request = resolveNativeTtsPlayRequest(parsed.payload);
+      const { utteranceId, playbackId } = request;
       currentTtsPlaybackRef.current = { utteranceId, playbackId };
       if (__DEV__) {
-        console.log(`[Web→NativeTTS] play utteranceId=${utteranceId} playbackId=${playbackId} base64Len=${audioBase64.length}`);
+        console.log(`[Web→NativeTTS] play utteranceId=${utteranceId} playbackId=${playbackId} base64Len=${request.audioBase64.length} stopOnEarphoneDisconnect=${request.stopOnEarphoneDisconnect}`);
       }
-      void playNativeTts({ audioBase64, utteranceId, playbackId }).catch((error: unknown) => {
+      void playNativeTts(request).then((result) => {
+        // NativeTTSModule.play resolves once the player really started
+        // (earphone mode contract A.3).
+        const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
+        if (startedEvent) {
+          emitTtsToWeb(startedEvent);
+        } else if (__DEV__) {
+          console.log(`[NativeTTS] no tts_started playbackId=${playbackId} ok=${result.ok} reason=${result.reason ?? ''}`);
+        }
+      }, (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         if (__DEV__) {
           console.log(`[NativeTTS] play error playbackId=${playbackId}: ${message}`);
@@ -4298,6 +4342,17 @@ function AppInner(): React.JSX.Element {
         }
         emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
       });
+      return;
+    }
+
+    if (parsed.type === 'native_audio_route_request') {
+      if (__DEV__) {
+        console.log('[Web→NativeAudioRoute] request');
+      }
+      const rawRequestId = parsed.payload?.requestId;
+      const requestId = typeof rawRequestId === 'string' && rawRequestId.trim()
+        ? rawRequestId.trim().slice(0, 128) : undefined;
+      void nativeAudioRouteRelayRef.current?.handleRequest(requestId);
       return;
     }
 
@@ -4599,8 +4654,12 @@ function AppInner(): React.JSX.Element {
     });
 
     const stoppedSub = addNativeTtsListener('ttsPlaybackStopped', (event) => {
-      const { utteranceId, playbackId } = resolveCurrentTtsIdentity(event);
-      emitTtsToWeb({ type: 'tts_stopped', utteranceId: utteranceId || '', playbackId: playbackId || '' });
+      const identity = resolveCurrentTtsIdentity(event);
+      if (__DEV__ && event.reason) {
+        console.log(`[NativeTTS] stopped playbackId=${identity.playbackId} reason=${event.reason}`);
+      }
+      // `reason: 'earphones_disconnected'` comes from the iOS earphone guard (contract A.5).
+      emitTtsToWeb(buildNativeTtsStoppedEvent(identity, event.reason));
     });
 
     const errorSub = addNativeTtsListener('ttsError', (event) => {
@@ -4617,6 +4676,41 @@ function AppInner(): React.JSX.Element {
       errorSub.remove();
     };
   }, [emitTtsToWeb, resolveCurrentTtsIdentity]);
+
+  // Earphone mode (contract A.2): relay NativeAudioRouteModule readings to the
+  // page. Subscribe first, then read the initial route (native events are only
+  // sent while JS listens, so the initial state must be read explicitly).
+  useEffect(() => {
+    const platform = resolveNativeAudioRoutePlatform(Platform.OS);
+    if (!nativeAudioRouteAvailable || !platform) return;
+
+    const relay = createNativeAudioRouteRelay({
+      platform,
+      readRoute: getNativeAudioRoute,
+      deliver: (detail) => {
+        const webView = webViewRef.current;
+        if (!isPageReadyRef.current || !webView) return false;
+        if (__DEV__) {
+          console.log(`[NativeAudioRoute→Web] ${JSON.stringify(detail).slice(0, 160)}`);
+        }
+        webView.injectJavaScript(buildNativeAudioRouteScript(detail));
+        return true;
+      },
+    });
+    nativeAudioRouteRelayRef.current = relay;
+    const subscription = addNativeAudioRouteListener((snapshot) => {
+      relay.handleSnapshot(snapshot);
+    });
+    void relay.syncInitial();
+
+    return () => {
+      subscription.remove();
+      relay.dispose();
+      if (nativeAudioRouteRelayRef.current === relay) {
+        nativeAudioRouteRelayRef.current = null;
+      }
+    };
+  }, [nativeAudioRouteAvailable]);
 
   useEffect(() => {
     emitBannerLayoutToWeb();
@@ -4725,7 +4819,10 @@ function AppInner(): React.JSX.Element {
       schedulePendingPushTapFlush(true);
     }
     flushPendingConversationShareToWeb();
-    emitToWeb({ type: 'capabilities', openAppSettings: true });
+    emitToWeb(buildNativeShellCapabilities({ audioRoute: nativeAudioRouteAvailable }));
+    // Earphone mode (contract A.2a): the latest route follows the capabilities
+    // message on every load end.
+    nativeAudioRouteRelayRef.current?.replayLatest();
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
     emitAppUpdateToWeb();
@@ -4787,7 +4884,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, schedulePendingPushTapFlush, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else, including the fallback switch
