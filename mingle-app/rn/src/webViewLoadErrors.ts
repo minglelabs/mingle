@@ -4,11 +4,10 @@
 // to failures where the device is online but OUR host could not be reached or
 // misbehaved.
 //
-// Only device-side signals belong here, because this classification gates the
-// one-shot switch to the fallback host: a device-offline error can never be
-// fixed by pointing at another host, but a timeout / DNS failure / dropped
-// connection can just as easily mean the primary host is down while the
-// fallback host is healthy. Those ambiguous codes are therefore deliberately
+// Only device-side signals belong here, because this classification picks the
+// "you are offline" copy on the error overlay: a timeout / DNS failure /
+// dropped connection can just as easily mean our host is down while the
+// device is online. Those ambiguous codes are therefore deliberately
 // left out (TimedOut, CannotFindHost, NetworkConnectionLost, ERR_TIMED_OUT,
 // ERR_NAME_NOT_RESOLVED, ERR_ADDRESS_UNREACHABLE, ...), together with codes
 // that clearly point at the server (CannotConnectToHost,
@@ -55,4 +54,11 @@ export function resolveWebViewRetryUrl(candidates: ReadonlyArray<string | null |
     }
   }
   return '';
+}
+
+// Decides whether the WebView's response should be covered by our own error
+// overlay instead of rendered as-is (a stray 404 from a captive portal/DNS
+// hiccup is just as much "not our page" as a 5xx is).
+export function isWebViewPageLoadFailureHttpStatus(status: number): boolean {
+  return Number.isFinite(status) && status >= 400 && status <= 599;
 }

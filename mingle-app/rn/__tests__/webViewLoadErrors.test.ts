@@ -1,4 +1,8 @@
-import { isOfflineWebViewLoadError, resolveWebViewRetryUrl } from '../src/webViewLoadErrors';
+import {
+  isOfflineWebViewLoadError,
+  isWebViewPageLoadFailureHttpStatus,
+  resolveWebViewRetryUrl,
+} from '../src/webViewLoadErrors';
 
 describe('isOfflineWebViewLoadError', () => {
   it('treats device-side no-network signals as offline', () => {
@@ -12,10 +16,10 @@ describe('isOfflineWebViewLoadError', () => {
     expect(isOfflineWebViewLoadError({ description: 'net::ERR_TUNNEL_CONNECTION_FAILED' })).toBe(true);
   });
 
-  it('does not treat an unresponsive primary host as device offline', () => {
+  it('does not treat an unresponsive host as device offline', () => {
     // Timeouts, DNS failures and dropped connections happen just as well when
-    // only the primary host is down — these must stay eligible for the
-    // fallback host instead of being blamed on the user's connection.
+    // only our host is down — these must not be blamed on the user's
+    // connection.
     expect(isOfflineWebViewLoadError({ domain: 'NSURLErrorDomain', code: -1001 })).toBe(false); // TimedOut
     expect(isOfflineWebViewLoadError({ domain: 'NSURLErrorDomain', code: -1003 })).toBe(false); // CannotFindHost
     expect(isOfflineWebViewLoadError({ domain: 'NSURLErrorDomain', code: -1005 })).toBe(false); // NetworkConnectionLost
@@ -58,5 +62,16 @@ describe('resolveWebViewRetryUrl', () => {
 
   it('returns an empty string when nothing is usable', () => {
     expect(resolveWebViewRetryUrl(['', 'data:text/html,x'])).toBe('');
+  });
+});
+
+describe('isWebViewPageLoadFailureHttpStatus', () => {
+  it('treats any client or server error as a WebView page load failure worth covering', () => {
+    expect(isWebViewPageLoadFailureHttpStatus(404)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(401)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(500)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(503)).toBe(true);
+    expect(isWebViewPageLoadFailureHttpStatus(200)).toBe(false);
+    expect(isWebViewPageLoadFailureHttpStatus(304)).toBe(false);
   });
 });

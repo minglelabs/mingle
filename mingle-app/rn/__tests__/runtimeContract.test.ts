@@ -18,7 +18,7 @@ function readWorkspaceFile(relativePath: string): string {
   return fs.readFileSync(path.join(rnRoot, relativePath), 'utf8');
 }
 
-describe('runtime fallback contract', () => {
+describe('runtime contract', () => {
   it('keeps the iOS 2.0.2 Railway endpoints in the native runtime config', () => {
     const projectFile = readWorkspaceFile('ios/mingle.xcodeproj/project.pbxproj');
     const infoPlist = readWorkspaceFile('ios/mingle/Info.plist');
@@ -40,39 +40,22 @@ describe('runtime fallback contract', () => {
     expect(fullUrlReadIndex).toBeLessThan(schemeHostReadIndex);
   });
 
-  it('switches the WebView host when version policy succeeds on fallback', () => {
+  it('never switches the WebView to another host', () => {
     const appSource = readWorkspaceFile('App.tsx');
 
-    expect(appSource).toContain('const activateWebFallback = useCallback((): boolean => {');
-    expect(appSource).toContain(
-      [
-        'policy = await fetchPolicy(FALLBACK_WEB_APP_BASE_URL);',
-        '          if (active && !settled) {',
-        '            activateWebFallback();',
-        '          }',
-      ].join('\n'),
-    );
-  });
-
-  it('does not activate the legacy host after a Mingle page has loaded', () => {
-    const appSource = readWorkspaceFile('App.tsx');
-
-    expect(appSource).toContain(
-      'if (!isOffline && mayUseHostFallback && activateWebFallback()) return;',
-    );
+    expect(appSource).not.toContain('activateWebFallback');
+    expect(appSource).not.toContain('FALLBACK_WEB_APP_BASE_URL');
+    expect(appSource).not.toContain('DEFAULT_WS_FALLBACK_URL');
+    expect(appSource).not.toContain('mingle-1-1-4-production');
     expect(appSource).toContain(
       'if (!isWebViewPageLoadFailureHttpStatus(statusCode)) return;',
     );
-    expect(appSource).toContain(
-      'if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;',
-    );
-    expect(appSource).toContain('hasLoadedPage: loadAttemptTracker.hasLoadedPage(),');
     expect(appSource).toContain(
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
   });
 
-  it('records a load failure before the fallback switch and ignores onLoadEnd of a failed load', () => {
+  it('records a load failure first and ignores onLoadEnd of a failed load', () => {
     const appSource = readWorkspaceFile('App.tsx');
     const sliceHandler = (signature: string) => {
       const start = appSource.indexOf(signature);
@@ -105,18 +88,11 @@ describe('runtime fallback contract', () => {
       const body = sliceHandler(signature);
       expect(body.indexOf('loadAttemptTracker.loadFailed();')).toBeGreaterThanOrEqual(0);
       expect(body.indexOf('loadAttemptTracker.loadFailed();'))
-        .toBeLessThan(body.indexOf('activateWebFallback()'));
+        .toBeLessThan(body.indexOf('setLoadError('));
     }
 
-    // After the startup splash is gone for good, the fallback switch keeps the
-    // neutral loading overlay over the remounting WebView, and it drops a
-    // retry's primary-host URL so the new WebView starts on the fallback host.
-    const fallbackBody = sliceHandler('const activateWebFallback = useCallback(');
-    expect(fallbackBody).toContain('setIsRetryingLoad(initialLoadSettledRef.current);');
-    expect(fallbackBody).toContain("setDebugRemountWebUrl('');");
-
-    // A retried/fallback load that never reports back must not trap the user
-    // behind the spinner.
+    // A retried load that never reports back must not trap the user behind
+    // the spinner.
     expect(appSource).toContain('}, WEBVIEW_RETRY_STALL_TIMEOUT_MS);');
     expect(appSource).toContain("setLoadError((current) => current ?? 'webview_load_stalled');");
   });

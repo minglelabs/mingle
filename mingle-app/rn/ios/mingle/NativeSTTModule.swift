@@ -366,8 +366,6 @@ class NativeSTTModule: RCTEventEmitter {
                     hostKey: "MingleDefaultWsHost",
                     legacyKey: "MingleDefaultWsURL"
                 ),
-                "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-                "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -397,8 +395,6 @@ class NativeSTTModule: RCTEventEmitter {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -1327,8 +1323,6 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
