@@ -60,7 +60,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
   const displayLanguage = request.nextUrl.searchParams.get('displayLanguage') || null
-  const [serialized] = await serializePostsPage([post], { viewerId, rawDisplayLanguage: displayLanguage })
+  // The author can read their own trashed post here, so say that it is
+  // trashed: a feed must not pin it as its linked / remembered post.
+  const [serialized] = await serializePostsPage([post], {
+    viewerId,
+    rawDisplayLanguage: displayLanguage,
+    includeDeletedAt: true,
+  })
 
   return json({ post: serialized })
 }

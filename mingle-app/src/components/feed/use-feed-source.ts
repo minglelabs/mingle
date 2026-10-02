@@ -243,6 +243,7 @@ async function fetchOne(
   postId: string,
   displayLanguage: string | null,
   signal: AbortSignal,
+  allowTrashed: boolean,
 ): Promise<FeedPostDto | null> {
   const res = await fetchWithTimeout(buildClientApiPath(postEndpoint(postId, { displayLanguage })), {
     cache: "no-store",
@@ -251,7 +252,12 @@ async function fetchOne(
   if (res.status === 404 || res.status === 403 || res.status === 410) return null;
   if (!res.ok) throw new Error(`feed_post_${res.status}`);
   const payload = (await res.json()) as FeedPostResponse;
-  return payload.post ?? null;
+  const post = payload.post ?? null;
+  // The author still gets their own trashed post from this endpoint. Only an
+  // explicit link (the trash screen opens one) may show it; a feed must not
+  // bring it back as its remembered / start post.
+  if (post?.deletedAt && !allowTrashed) return null;
+  return post;
 }
 
 /**
@@ -333,7 +339,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
         const pinnedId = deepLinkPostId ?? restorePostId ?? null;
         const anchorId = pinnedId ?? startPostId ?? null;
         const anchorPromise = anchorId
-          ? fetchOne(anchorId, displayLanguage, controller.signal)
+          ? fetchOne(anchorId, displayLanguage, controller.signal, anchorId === deepLinkPostId)
           : Promise.resolve(null);
 
         const listPromise = fetchList(

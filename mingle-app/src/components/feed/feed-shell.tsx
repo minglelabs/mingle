@@ -33,6 +33,7 @@ import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
+import { ChevronLeft, SquarePen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -436,6 +437,24 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     />
   ) : null;
 
+  // The viewer has no header: without a way out, its loading / error / empty
+  // states read as a dead end. Same back chevron as the other full screens.
+  const viewerBack = isViewer ? (
+    <div
+      className="absolute left-0 top-0 z-[20] flex h-14 items-center px-2 text-slate-900"
+      style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label={copy.closeImage}
+        className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-black/5"
+      >
+        <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+      </button>
+    </div>
+  ) : null;
+
   if (phase === "loading") {
     // A soft card-shaped skeleton instead of a black screen.
     return (
@@ -446,6 +465,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         aria-label={copy.loading}
       >
         {lightHeader}
+        {viewerBack}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 motion-safe:animate-pulse" aria-hidden="true">
           <div className="h-5 w-4/5 rounded-full bg-slate-300/70" />
           <div className="h-5 w-3/5 rounded-full bg-slate-300/70" />
@@ -472,6 +492,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     return (
       <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-b from-slate-100 to-slate-200 px-8 text-center">
         {lightHeader}
+        {viewerBack}
         <p className="text-sm text-slate-600">{copy.feedLoadFailed}</p>
         <button
           type="button"
@@ -490,13 +511,15 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     return (
       <div className="relative flex h-full w-full flex-col bg-gradient-to-b from-slate-100 to-slate-200">
         {lightHeader}
+        {viewerBack}
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <p className="text-base font-semibold text-slate-800">{copy.emptyTitle}</p>
           <button
             type="button"
             onClick={openCompose}
-            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition active:scale-95"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary px-6 text-[15px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(15,23,42,0.16)] transition active:scale-95"
           >
+            <SquarePen size={18} strokeWidth={2.2} aria-hidden="true" />
             {copy.emptyAction}
           </button>
         </div>
@@ -640,6 +663,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           onPostRemoved={(postId) => {
             dropPost(postId);
             setActionPostId(null);
+            // A link to the removed post must not bring it back on return.
+            if (postId === deepLinkPostId) router.replace(feedHref(locale), { scroll: false });
           }}
           onAuthorBlocked={(authorId) => {
             dropAuthor(authorId);

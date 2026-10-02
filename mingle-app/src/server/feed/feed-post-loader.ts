@@ -47,7 +47,7 @@ export const feedPostRowSelect = {
 export type LoadContextOptions = {
   viewerId: string | null
   rawDisplayLanguage: string | null
-  /** Surface `deletedAt` (trash list only). */
+  /** Surface `deletedAt` (trash list and the single-post read). */
   includeDeletedAt?: boolean
 }
 
