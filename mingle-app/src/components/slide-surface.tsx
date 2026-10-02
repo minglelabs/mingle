@@ -290,6 +290,9 @@ export default function SlideSurface({
       style={{
         ...style,
         ...(edgeSwipeActive ? { touchAction: "none" } : {}),
+        // A closed surface waits just off-screen to the right; its drop
+        // shadow would otherwise bleed into the visible edge of the app.
+        ...(open ? {} : { boxShadow: "none" }),
         ...(zIndex === undefined ? {} : { zIndex }),
       }}
       role={role}

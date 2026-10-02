@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { feedHref } from "@/lib/feed-routes";
 import { composeCopy, formatComposeCopy } from "@/i18n/compose-copy";
@@ -38,6 +38,17 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
   const gapCopy = composeGapCopy(locale);
   const [confirmingFor, setConfirmingFor] = useState<string | null>(null);
 
+  // The success card steps aside on its own after a few seconds.
+  const successKey = job?.status === "success" ? job.input.clientPostId : null;
+  useEffect(() => {
+    if (!successKey) return;
+    const timer = window.setTimeout(() => {
+      const current = getPublishJob();
+      if (current?.status === "success" && current.input.clientPostId === successKey) clearPublishJob();
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [successKey]);
+
   if (!job) return null;
 
   if (job.status === "publishing") {
@@ -45,10 +56,12 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 border-b border-border bg-card px-4 py-2.5 text-sm"
+        className="mx-3 mt-2 flex items-center gap-3 rounded-2xl bg-white/95 px-3.5 py-3 text-[14px] text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200"
       >
-        <Loader2 size={16} className="animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-        <span>{copy.bannerPublishing}</span>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-50">
+          <Loader2 size={17} className="animate-spin text-amber-500 motion-reduce:animate-none" aria-hidden="true" />
+        </span>
+        <span className="font-medium">{copy.bannerPublishing}</span>
       </div>
     );
   }
@@ -58,10 +71,12 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 border-b border-border bg-card px-4 py-2.5 text-sm"
+        className="mx-3 mt-2 flex items-center gap-3 rounded-2xl bg-white/95 px-3.5 py-3 text-[14px] text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200"
       >
-        <CheckCircle2 size={16} className="text-emerald-500" aria-hidden="true" />
-        <span className="flex-1">{copy.bannerSuccess}</span>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+          <CheckCircle2 size={18} className="text-emerald-500" aria-hidden="true" />
+        </span>
+        <span className="flex-1 font-medium">{copy.bannerSuccess}</span>
         {job.postId ? (
           <button
             type="button"
@@ -70,7 +85,7 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
               clearPublishJob();
               if (target) router.push(feedHref(locale, { postId: target }));
             }}
-            className="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 font-medium text-primary hover:bg-secondary"
+            className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3.5 text-[13px] font-semibold text-white transition active:scale-95"
           >
             {copy.bannerViewPost}
           </button>
@@ -79,7 +94,7 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
           type="button"
           aria-label={copy.bannerDismiss}
           onClick={() => clearPublishJob()}
-          className="inline-flex min-h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition active:bg-slate-100"
         >
           <X size={16} aria-hidden="true" />
         </button>
@@ -101,13 +116,15 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
 
   if (confirming) {
     return (
-      <div role="alert" className="flex items-center gap-2 border-b border-border bg-card px-4 py-2.5 text-sm">
-        <AlertCircle size={16} className="text-destructive" aria-hidden="true" />
-        <span className="flex-1">{gapCopy.discardFailedPrompt}</span>
+      <div role="alert" className="mx-3 mt-2 flex items-center gap-3 rounded-2xl bg-white/95 px-3.5 py-3 text-[14px] text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-50">
+          <AlertCircle size={18} className="text-red-500" aria-hidden="true" />
+        </span>
+        <span className="flex-1 leading-snug">{gapCopy.discardFailedPrompt}</span>
         <button
           type="button"
           onClick={() => setConfirmingFor(null)}
-          className="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 font-medium hover:bg-secondary"
+          className="inline-flex h-8 items-center rounded-full bg-slate-100 px-3.5 text-[13px] font-semibold text-slate-700 transition active:scale-95"
         >
           {copy.cancel}
         </button>
@@ -117,7 +134,7 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
             setConfirmingFor(null);
             clearPublishJob();
           }}
-          className="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 font-medium text-destructive hover:bg-secondary"
+          className="inline-flex h-8 items-center rounded-full bg-red-500 px-3.5 text-[13px] font-semibold text-white transition active:scale-95"
         >
           {gapCopy.discardFailedConfirm}
         </button>
@@ -128,15 +145,17 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
   return (
     <div
       role="alert"
-      className="flex items-center gap-2 border-b border-border bg-card px-4 py-2.5 text-sm"
+      className="mx-3 mt-2 flex items-center gap-3 rounded-2xl bg-white/95 px-3.5 py-3 text-[14px] text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200"
     >
-      <AlertCircle size={16} className="text-destructive" aria-hidden="true" />
-      <span className="flex-1">{message}</span>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-50">
+          <AlertCircle size={18} className="text-red-500" aria-hidden="true" />
+        </span>
+      <span className="flex-1 leading-snug">{message}</span>
       {job.restricted ? null : (
         <button
           type="button"
           onClick={() => retryPublish()}
-          className="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 font-medium text-primary hover:bg-secondary"
+          className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3.5 text-[13px] font-semibold text-white transition active:scale-95"
         >
           {copy.bannerRetry}
         </button>
@@ -149,7 +168,7 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
           if (job.savedAsDraft) clearPublishJob();
           else setConfirmingFor(jobKey);
         }}
-        className="inline-flex min-h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition active:bg-slate-100"
       >
         <X size={16} aria-hidden="true" />
       </button>

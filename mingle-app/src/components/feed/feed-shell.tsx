@@ -415,41 +415,80 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   ) : null;
 
   // ── Render states ──
+  // Light chrome for the non-card states (loading / error / empty): dark glyphs.
+  const lightHeader = !isViewer ? (
+    <AppTopHeader
+      variant="transparent"
+      composeLabel={copy.compose}
+      notificationsLabel={copy.notifications}
+      unreadNotificationsLabel={copy.notificationsUnread}
+      hasUnread={notifications.hasUnread}
+      onCompose={openCompose}
+      onNotifications={openNotifications}
+      glyphTone="dark"
+    />
+  ) : null;
+
   if (phase === "loading") {
+    // A soft card-shaped skeleton instead of a black screen.
     return (
-      <div className="relative flex h-full w-full items-center justify-center bg-black text-sm text-white/80">
-        {copy.loading}
+      <div
+        className="relative flex h-full w-full flex-col bg-gradient-to-b from-slate-100 to-slate-200"
+        role="status"
+        aria-live="polite"
+        aria-label={copy.loading}
+      >
+        {lightHeader}
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 motion-safe:animate-pulse" aria-hidden="true">
+          <div className="h-5 w-4/5 rounded-full bg-slate-300/70" />
+          <div className="h-5 w-3/5 rounded-full bg-slate-300/70" />
+          <div className="h-5 w-2/5 rounded-full bg-slate-300/70" />
+        </div>
+        <div className="flex items-end gap-3 px-4 pb-5 motion-safe:animate-pulse" aria-hidden="true">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="size-12 shrink-0 rounded-full bg-slate-300/70" />
+            <div className="h-4 w-32 rounded-full bg-slate-300/70" />
+          </div>
+          <div className="flex flex-col items-center gap-6 pb-1">
+            <div className="size-9 rounded-full bg-slate-300/70" />
+            <div className="size-9 rounded-full bg-slate-300/70" />
+            <div className="size-9 rounded-full bg-slate-300/70" />
+          </div>
+        </div>
         {publishBanner}
+        {notificationPanel}
       </div>
     );
   }
 
   if (phase === "error") {
     return (
-      <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-8 text-center">
-        <p className="text-sm text-white/80">{copy.feedLoadFailed}</p>
+      <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-b from-slate-100 to-slate-200 px-8 text-center">
+        {lightHeader}
+        <p className="text-sm text-slate-600">{copy.feedLoadFailed}</p>
         <button
           type="button"
           onClick={refresh}
-          className="rounded-full bg-white/15 px-5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition active:scale-95"
+          className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition active:scale-95"
         >
           {copy.retry}
         </button>
         {publishBanner}
+        {notificationPanel}
       </div>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <div className="relative flex h-full w-full flex-col bg-black">
-        {header}
+      <div className="relative flex h-full w-full flex-col bg-gradient-to-b from-slate-100 to-slate-200">
+        {lightHeader}
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-          <p className="text-base font-semibold text-white">{copy.emptyTitle}</p>
+          <p className="text-base font-semibold text-slate-800">{copy.emptyTitle}</p>
           <button
             type="button"
             onClick={openCompose}
-            className="rounded-full bg-white/15 px-5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition active:scale-95"
+            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition active:scale-95"
           >
             {copy.emptyAction}
           </button>

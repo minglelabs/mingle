@@ -22,7 +22,7 @@ type PostingFeedRouteGuardProps = {
  * keeps hydration consistent; the real screen appears one tick later once the
  * client namespace is known to be supported.
  */
-export default function PostingFeedRouteGuard({ locale, children, placeholderClassName = "bg-black" }: PostingFeedRouteGuardProps) {
+export default function PostingFeedRouteGuard({ locale, children, placeholderClassName = "bg-slate-100" }: PostingFeedRouteGuardProps) {
   const status = usePostingFeedGuard(locale);
 
   if (status !== "supported") {
