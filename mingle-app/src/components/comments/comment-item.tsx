@@ -10,6 +10,22 @@ import type { WriteOutcome } from "./use-comment-sheet";
 import CommentBody from "./comment-body";
 import CommentMenu from "./comment-menu";
 import AccountBadge from "@/components/posts/account-badge";
+import type { CommentImage } from "./comment-types";
+
+/** A comment photo, capped so a tall image never takes over the sheet. */
+function CommentPhoto({ image }: { image: CommentImage }) {
+  const ratio = image.width && image.height ? image.width / image.height : null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={image.url}
+      alt=""
+      loading="lazy"
+      className="mt-1.5 max-h-60 max-w-[70%] rounded-xl border border-gray-100 bg-gray-100 object-cover"
+      style={ratio ? { aspectRatio: String(ratio) } : undefined}
+    />
+  );
+}
 import { resolveAccountBadge } from "@/lib/account-badge";
 
 export type CommentItemHandlers = {
@@ -64,9 +80,12 @@ export default function CommentItem({
         className="flex items-start gap-2 rounded-md bg-destructive/5 px-2 py-1.5"
       >
         <div className="flex-1">
-          <p className="whitespace-pre-wrap break-words text-[15px] text-muted-foreground">
-            {comment.sourceText}
-          </p>
+          {comment.sourceText ? (
+            <p className="whitespace-pre-wrap break-words text-[15px] text-muted-foreground">
+              {comment.sourceText}
+            </p>
+          ) : null}
+          {comment.image ? <CommentPhoto image={comment.image} /> : null}
           <p className="mt-0.5 text-[12px] text-destructive">{copy.sendFailed}</p>
         </div>
         <button
@@ -198,27 +217,32 @@ export default function CommentItem({
             </div>
           </div>
         ) : (
-          <CommentBody
-            comment={comment}
-            locale={locale}
-            canTranslate={canTranslate}
-            onToggleTranslation={() => handlers.onToggleTranslation(comment.id)}
-            prefix={
-              comment.replyToUser ? (
-                <span className="mr-1 font-medium text-primary">
-                  {formatCommentsCopy(copy.replyToUser, {
-                    name: comment.replyToUser.name ?? comment.replyToUser.handle,
-                  })}
-                  <AccountBadge
-                    kind={resolveAccountBadge(comment.replyToUser)}
-                    locale={locale}
-                    tone="dark"
-                    className="ml-1 align-[1px]"
-                  />
-                </span>
-              ) : null
-            }
-          />
+          <>
+            {comment.sourceText?.trim() ? (
+              <CommentBody
+                comment={comment}
+                locale={locale}
+                canTranslate={canTranslate}
+                onToggleTranslation={() => handlers.onToggleTranslation(comment.id)}
+                prefix={
+                  comment.replyToUser ? (
+                    <span className="mr-1 font-medium text-primary">
+                      {formatCommentsCopy(copy.replyToUser, {
+                        name: comment.replyToUser.name ?? comment.replyToUser.handle,
+                      })}
+                      <AccountBadge
+                        kind={resolveAccountBadge(comment.replyToUser)}
+                        locale={locale}
+                        tone="dark"
+                        className="ml-1 align-[1px]"
+                      />
+                    </span>
+                  ) : null
+                }
+              />
+            ) : null}
+            {comment.image ? <CommentPhoto image={comment.image} /> : null}
+          </>
         )}
 
         {/* Actions row */}

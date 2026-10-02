@@ -412,6 +412,36 @@ describe('POST /api/posts/{postId}/comments', () => {
     )
   })
 
+  it('rejects a photo key the server did not issue to this user', async () => {
+    const res = await POST(
+      makeRequest({ sourceText: 'look', imageObjectKey: 'post-images/someone-else/00000000-0000-4000-8000-000000000000.jpg' }),
+      makeCtx('post-1'),
+    )
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('invalid_image')
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+
+  it('creates a photo-only comment without detecting or translating a body', async () => {
+    const key = 'post-images/user-1/00000000-0000-4000-8000-000000000000.jpg'
+    mockCreateComment.mockResolvedValue({
+      id: 'c2', postId: 'post-1', parentId: null, replyToUserId: null, bodyVersion: 1, createdAt: new Date(),
+      imageObjectKey: key, imageWidth: 800, imageHeight: 600,
+    })
+    const res = await POST(
+      makeRequest({ sourceText: '', imageObjectKey: key, imageWidth: 800, imageHeight: 600 }),
+      makeCtx('post-1'),
+    )
+    expect(res.status).toBe(201)
+    expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
+    expect(mockTranslateCommentBodySettled).not.toHaveBeenCalled()
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceText: '', image: { objectKey: key, width: 800, height: 600 } }),
+    )
+    const body = await res.json()
+    expect(body.image).toEqual({ url: '/api/posts/post-1/comments/c2/image', width: 800, height: 600 })
+  })
+
   it('returns 400 for invalid parentId', async () => {
     mockCreateComment.mockRejectedValue(new Error('parent_not_found'))
 

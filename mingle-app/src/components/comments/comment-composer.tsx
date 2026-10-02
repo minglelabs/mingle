@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
+import { composeCopy } from "@/i18n/compose-copy";
+import { composeGapCopy } from "@/components/compose/compose-gap-copy";
+import { PICKER_IMAGE_TYPES, prepareComposeImage } from "@/components/compose/compose-image";
+import { uploadCommentImage } from "./comment-api";
+import type { CommentImageUpload } from "./comment-types";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
 import { MAX_COMMENT_LENGTH, composerEnterAction } from "./comment-state";
@@ -16,7 +21,7 @@ type Props = {
   replyTarget: ReplyTarget;
   onCancelReply: () => void;
   /** Resolves "restricted" when the account is restricted: the text is put back. */
-  onSubmit: (text: string) => Promise<WriteOutcome> | void;
+  onSubmit: (text: string, image: CommentImageUpload | null) => Promise<WriteOutcome> | void;
   onFocusRequiresLogin?: () => void;
   /** Keyboard is up: drop the home-indicator padding so the bar sits on the keyboard. */
   keyboardOpen?: boolean;
@@ -62,7 +67,53 @@ export default function CommentComposer({
   keyboardOpen = false,
 }: Props) {
   const copy = commentsCopy(locale);
+  const photoCopy = composeCopy(locale);
+  const photoErrorText = composeGapCopy(locale).photoLoadFailed;
   const [value, setValue] = useState("");
+  // Attached photo: uploads right after picking, so sending only references its key.
+  const [attachment, setAttachment] = useState<
+    | null
+    | { status: "uploading"; previewUrl: string }
+    | { status: "ready"; upload: CommentImageUpload }
+    | { status: "error"; previewUrl: string | null }
+  >(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pickSeq = useRef(0);
+
+  const clearAttachment = () => {
+    pickSeq.current += 1;
+    setAttachment(null);
+  };
+
+  const handlePickFile = async (file: File | undefined) => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!file || disabled) return;
+    const seq = ++pickSeq.current;
+    let previewUrl: string | null = null;
+    try {
+      const prepared = await prepareComposeImage(file);
+      if (seq !== pickSeq.current) return;
+      previewUrl = URL.createObjectURL(prepared.file);
+      setAttachment({ status: "uploading", previewUrl });
+      const res = await uploadCommentImage(prepared.file);
+      if (seq !== pickSeq.current) return;
+      if (!res.ok) {
+        setAttachment({ status: "error", previewUrl });
+        return;
+      }
+      setAttachment({
+        status: "ready",
+        upload: {
+          objectKey: res.imageObjectKey,
+          width: res.width ?? prepared.originalWidth,
+          height: res.height ?? prepared.originalHeight,
+          previewUrl,
+        },
+      });
+    } catch {
+      if (seq === pickSeq.current) setAttachment({ status: "error", previewUrl });
+    }
+  };
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Focus the input when a reply target appears.
@@ -105,16 +156,27 @@ export default function CommentComposer({
 
   const trimmedLen = value.trim().length;
   const overLimit = value.length > MAX_COMMENT_LENGTH;
-  const canSend = trimmedLen > 0 && !overLimit && !sending && !disabled;
+  const readyImage = attachment?.status === "ready" ? attachment.upload : null;
+  const canSend =
+    (trimmedLen > 0 || readyImage !== null) &&
+    attachment?.status !== "uploading" &&
+    !overLimit &&
+    !sending &&
+    !disabled;
 
   const handleSubmit = () => {
     if (!canSend) return;
     const text = value;
+    const image = readyImage;
     setValue("");
-    void Promise.resolve(onSubmit(text)).then((outcome) => {
+    clearAttachment();
+    void Promise.resolve(onSubmit(text, image)).then((outcome) => {
       // No failed row exists for a restricted account, so keep what was typed
       // (unless the viewer already started typing something else).
-      if (outcome === "restricted") setValue((current) => (current ? current : text));
+      if (outcome === "restricted") {
+        setValue((current) => (current ? current : text));
+        if (image) setAttachment((current) => current ?? { status: "ready", upload: image });
+      }
     });
   };
 
@@ -141,6 +203,39 @@ export default function CommentComposer({
           >
             <X className="size-4" aria-hidden />
           </button>
+        </div>
+      )}
+
+      {attachment && (
+        <div className="mb-2 flex items-end gap-2">
+          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+            {(attachment.status === "ready" ? attachment.upload.previewUrl : attachment.previewUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={attachment.status === "ready" ? attachment.upload.previewUrl : attachment.previewUrl ?? ""}
+                alt=""
+                className="size-full object-cover"
+              />
+            ) : null}
+            {attachment.status === "uploading" && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <Loader2 className="size-5 animate-spin text-white" aria-hidden />
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={clearAttachment}
+              aria-label={photoCopy.removePhoto}
+              className="absolute right-0.5 top-0.5 flex size-5 items-center justify-center rounded-full bg-black/60 text-white"
+            >
+              <X className="size-3" strokeWidth={3} aria-hidden />
+            </button>
+          </div>
+          {attachment.status === "error" && (
+            <p role="alert" className="pb-1 text-[12px] text-red-500">
+              {photoErrorText}
+            </p>
+          )}
         </div>
       )}
 
@@ -184,7 +279,29 @@ export default function CommentComposer({
               }}
             />
           </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onPointerDown={(e) => {
+              // Keep the keyboard up while the picker opens.
+              e.preventDefault();
+            }}
+            disabled={disabled || attachment?.status === "uploading"}
+            aria-label={photoCopy.addPhoto}
+            className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition active:scale-95 disabled:opacity-40"
+            style={{ width: `${CONTROL_SIZE_PX}px`, height: `${CONTROL_SIZE_PX}px` }}
+          >
+            <ImagePlus className="size-[19px]" strokeWidth={2} aria-hidden />
+          </button>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={PICKER_IMAGE_TYPES.join(",")}
+          className="hidden"
+          onChange={(e) => void handlePickFile(e.target.files?.[0])}
+        />
 
         <button
           type="button"

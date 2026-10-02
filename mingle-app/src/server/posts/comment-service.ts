@@ -31,6 +31,8 @@ export type CreateCommentArgs = {
    * visible together. Omit for an untranslated comment.
    */
   translationRows?: Array<{ language: string; status: string; text: string | null }>
+  /** Optional photo: a post-image key already verified as the author's own. */
+  image?: { objectKey: string; width: number | null; height: number | null } | null
 }
 
 export type UpdateCommentArgs = {
@@ -163,6 +165,9 @@ export async function createComment(args: CreateCommentArgs) {
         parentId: resolvedParentId,
         replyToUserId: resolvedReplyToUserId,
         bodyVersion: 1,
+        imageObjectKey: args.image?.objectKey ?? null,
+        imageWidth: args.image?.width ?? null,
+        imageHeight: args.image?.height ?? null,
       },
     })
 

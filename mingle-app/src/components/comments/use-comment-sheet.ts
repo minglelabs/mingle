@@ -4,7 +4,7 @@ import { feedEvents, trackFeedEvent } from "@/lib/feed-analytics";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as api from "./comment-api";
-import type { CommentNode } from "./comment-types";
+import type { CommentImageUpload, CommentNode } from "./comment-types";
 import {
   applyDelete,
   applyEdit,
@@ -232,9 +232,14 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
    * so a retry never lands in whatever thread the composer points at now.
    */
   const send = useCallback(
-    async (text: string, target: SendTarget, fromComposer: boolean): Promise<WriteOutcome> => {
+    async (
+      text: string,
+      target: SendTarget,
+      fromComposer: boolean,
+      upload: CommentImageUpload | null = null,
+    ): Promise<WriteOutcome> => {
       const trimmed = text.trim();
-      if (!trimmed || sending) return "skipped";
+      if ((!trimmed && !upload) || sending) return "skipped";
       if (viewerId === null || !viewer) {
         onRequireLogin();
         return "skipped";
@@ -257,6 +262,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         parentId,
         replyToUserId: parentId ? target?.replyToUserId ?? null : null,
         replyToUser: parentId ? target?.replyToUser ?? null : null,
+        upload,
       });
       setNodes((n) => insertOptimistic(n, optimistic));
       // A direct reply should reveal the thread it lands in.
@@ -270,6 +276,9 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         sourceLanguage: null,
         parentId,
         replyToUserId: parentId ? target?.replyToUserId ?? null : null,
+        ...(upload
+          ? { imageObjectKey: upload.objectKey, imageWidth: upload.width, imageHeight: upload.height }
+          : {}),
       });
       setSending(false);
 
@@ -300,13 +309,14 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
 
   /** Composer submit: goes to the composer's current reply target. */
   const submit = useCallback(
-    (text: string): Promise<WriteOutcome> =>
+    (text: string, upload: CommentImageUpload | null = null): Promise<WriteOutcome> =>
       send(
         text,
         replyTarget
           ? { parentId: replyTarget.parentId, replyToUserId: replyTarget.replyToUserId, replyToUser: replyTarget.replyToUser }
           : null,
         true,
+        upload,
       ),
     [send, replyTarget],
   );
@@ -315,10 +325,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
   const retryFailed = useCallback(
     async (id: string) => {
       const node = findNode(nodes, id);
-      if (!node || !node.failed || !node.sourceText) return;
+      if (!node || !node.failed || (!node.sourceText && !node.upload)) return;
       // Remove the failed placeholder and re-send to the thread it was written for.
       setNodes((n) => removeNode(n, id));
-      await send(node.sourceText, failedRetryTarget(node), false);
+      await send(node.sourceText ?? "", failedRetryTarget(node), false, node.upload ?? null);
     },
     [nodes, send],
   );

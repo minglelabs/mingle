@@ -1,6 +1,6 @@
 import { buildClientApiPath } from '@/lib/api-contract'
 import { isAccountRestrictedBody } from '@/lib/account-restriction'
-import type { CommentListResponse } from './comment-types'
+import type { CommentImage, CommentListResponse } from './comment-types'
 
 /**
  * Fetch layer for the comment sheet. Every call returns a discriminated result
@@ -92,11 +92,49 @@ export type CreateCommentResult = {
   replyToUserId: string | null
   bodyVersion: number
   createdAt: string
+  image?: CommentImage | null
+}
+
+/** Upload a prepared photo for a comment; same endpoint (and key scope) as post images. */
+export async function uploadCommentImage(
+  file: File,
+): Promise<ApiResult<{ imageObjectKey: string; width?: number; height?: number }>> {
+  const form = new FormData()
+  form.append('file', file)
+  let res: Response
+  try {
+    res = await fetch(buildClientApiPath('/posts/images'), { method: 'POST', cache: 'no-store', body: form })
+  } catch {
+    return { ok: false, error: 'network' }
+  }
+  if (!res.ok) return parseError(res)
+  let body: unknown = null
+  try {
+    body = await res.json()
+  } catch {
+    /* handled below */
+  }
+  const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  if (typeof record.imageObjectKey !== 'string') return { ok: false, error: 'image_upload_failed' }
+  return {
+    ok: true,
+    imageObjectKey: record.imageObjectKey,
+    width: typeof record.width === 'number' ? record.width : undefined,
+    height: typeof record.height === 'number' ? record.height : undefined,
+  }
 }
 
 export async function createComment(
   postId: string,
-  args: { sourceText: string; sourceLanguage?: string | null; parentId?: string | null; replyToUserId?: string | null },
+  args: {
+    sourceText: string
+    sourceLanguage?: string | null
+    parentId?: string | null
+    replyToUserId?: string | null
+    imageObjectKey?: string | null
+    imageWidth?: number | null
+    imageHeight?: number | null
+  },
 ): Promise<ApiResult<CreateCommentResult>> {
   return requestJson<CreateCommentResult>(buildClientApiPath(commentsPath(postId)), {
     method: 'POST',

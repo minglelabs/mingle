@@ -27,6 +27,22 @@ export type CommentReplyToUser = {
   isOperator?: boolean
 }
 
+/** A comment photo as the list read returns it (null size = unknown). */
+export type CommentImage = {
+  url: string
+  width: number | null
+  height: number | null
+}
+
+/** A photo uploaded from the composer (POST /posts/images), ready to attach. */
+export type CommentImageUpload = {
+  objectKey: string
+  width: number | null
+  height: number | null
+  /** Local object URL used for the optimistic row. */
+  previewUrl: string
+}
+
 /** One comment or reply as the list read returns it. */
 export type CommentDto = {
   id: string
@@ -38,6 +54,8 @@ export type CommentDto = {
   /** Null when the comment is soft-deleted (body redacted). */
   sourceText: string | null
   sourceLanguage: string | null
+  /** Optional photo; null when absent or the comment is deleted. */
+  image?: CommentImage | null
   /** Body in the viewer's display language when ready, else the source. */
   displayText: string | null
   displayLanguage: string | null
@@ -74,6 +92,8 @@ export type CommentNode = CommentDto & {
   pending?: boolean
   /** UI-only: this optimistic row failed to send; keep it with a retry. */
   failed?: boolean
+  /** UI-only: the photo an optimistic row was sent with (kept for retry). */
+  upload?: CommentImageUpload | null
   /** UI-only translation overlay for on-demand toggles. */
   translation?: {
     state: CommentTranslationState

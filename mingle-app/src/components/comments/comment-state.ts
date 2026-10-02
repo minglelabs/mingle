@@ -81,6 +81,7 @@ export function makeOptimisticNode(args: {
   parentId: string | null
   replyToUserId: string | null
   replyToUser: CommentNode['replyToUser']
+  upload?: CommentNode['upload']
 }): CommentNode {
   const now = new Date().toISOString()
   return {
@@ -105,6 +106,8 @@ export function makeOptimisticNode(args: {
     replyCount: 0,
     liked: false,
     pending: true,
+    image: args.upload ? { url: args.upload.previewUrl, width: args.upload.width, height: args.upload.height } : null,
+    upload: args.upload ?? null,
   }
 }
 

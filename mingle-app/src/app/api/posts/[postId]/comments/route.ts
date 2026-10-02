@@ -19,6 +19,29 @@ import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { markPostViewedQuietly } from '@/server/feed/post-view'
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from '@/server/identity/user-identity-select'
 import { serializeListUserIdentity } from '@/server/identity/list-user-identity'
+import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
+
+/** Wire shape of a comment photo; served by GET /posts/{postId}/comments/{commentId}/image. */
+function serializeCommentImage(c: {
+  id: string
+  postId: string
+  imageObjectKey: string | null
+  imageWidth: number | null
+  imageHeight: number | null
+}) {
+  if (!c.imageObjectKey) return null
+  const valid = (v: number | null): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0
+  const sized = valid(c.imageWidth) && valid(c.imageHeight)
+  return {
+    url: `/api/posts/${encodeURIComponent(c.postId)}/comments/${encodeURIComponent(c.id)}/image`,
+    width: sized ? c.imageWidth : null,
+    height: sized ? c.imageHeight : null,
+  }
+}
+
+function positiveIntOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 20000 ? value : null
+}
 
 export const runtime = 'nodejs'
 
@@ -144,7 +167,8 @@ export async function GET(request: NextRequest, context: Ctx) {
 
     if (!isDeleted) {
       const canonicalSource = c.sourceLanguage ? canonicalizeTranslationLanguageCode(c.sourceLanguage) : ''
-      if (!canonicalDisplay || (canonicalSource && canonicalSource === canonicalDisplay)) {
+      // A photo-only comment has no body to translate.
+      if (!canonicalDisplay || !c.sourceText.trim() || (canonicalSource && canonicalSource === canonicalDisplay)) {
         translationState = 'same_language'
         displayText = c.sourceText
         displayLang = c.sourceLanguage
@@ -172,6 +196,8 @@ export async function GET(request: NextRequest, context: Ctx) {
       replyToUserId: c.replyToUserId,
       bodyVersion: c.bodyVersion,
       sourceText: isDeleted ? null : c.sourceText,
+      // Optional photo; redacted with the body when the comment is deleted.
+      image: isDeleted ? null : serializeCommentImage(c),
       sourceLanguage: isDeleted ? null : c.sourceLanguage,
       // Body in the viewer's display language when a ready translation exists,
       // else the original. Null only for a deleted (redacted) comment.
@@ -214,7 +240,8 @@ export async function GET(request: NextRequest, context: Ctx) {
 
 /**
  * POST — create a comment or reply.
- * Body: { sourceText, sourceLanguage?, parentId?, replyToUserId? }
+ * Body: { sourceText, sourceLanguage?, parentId?, replyToUserId?, imageObjectKey?, imageWidth?, imageHeight? }
+ * `sourceText` may be empty when `imageObjectKey` (from POST /posts/images) is set.
  * `parentId` must be a visible comment on this post; `replyToUserId` is only a
  * mention hint, validated against the thread by createComment.
  */
@@ -238,12 +265,23 @@ export async function POST(request: NextRequest, context: Ctx) {
   }
   if (!body || typeof body !== 'object') return json({ error: 'invalid_body' }, { status: 400 })
 
-  const { sourceText, sourceLanguage, parentId, replyToUserId } = body as Record<string, unknown>
+  const { sourceText, sourceLanguage, parentId, replyToUserId, imageObjectKey, imageWidth, imageHeight } =
+    body as Record<string, unknown>
 
-  // Validate sourceText
-  const text = typeof sourceText === 'string' ? sourceText : null
-  if (!text || text.trim().length === 0) return json({ error: 'text_required' }, { status: 400 })
+  // Optional photo: only a key the server issued to THIS user (POST /posts/images).
+  let image: { objectKey: string; width: number | null; height: number | null } | null = null
+  if (imageObjectKey !== undefined && imageObjectKey !== null) {
+    if (!isOwnedPostImageKey(imageObjectKey, userId)) return json({ error: 'invalid_image' }, { status: 400 })
+    const width = positiveIntOrNull(imageWidth)
+    const height = positiveIntOrNull(imageHeight)
+    image = { objectKey: imageObjectKey, width: width && height ? width : null, height: width && height ? height : null }
+  }
+
+  // Text is required unless the comment carries a photo.
+  const text = typeof sourceText === 'string' ? sourceText : image ? '' : null
+  if (text === null || (text.trim().length === 0 && !image)) return json({ error: 'text_required' }, { status: 400 })
   if (text.length > MAX_COMMENT_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
+  const hasText = text.trim().length > 0
 
   // Verify post is visible and not deleted
   const post = await prisma.post.findFirst({
@@ -260,7 +298,8 @@ export async function POST(request: NextRequest, context: Ctx) {
   // hint. Detect, then translate the default languages (minus source) and let
   // them settle BEFORE the comment is committed (settle-then-commit) so the
   // comment and its translations become visible together.
-  const detected = await detectSourceLanguage({ text, clientHint: lang })
+  // A photo-only comment has no body to detect or translate.
+  const detected = hasText ? await detectSourceLanguage({ text, clientHint: lang }) : null
   const settledRows =
     detected && detected.trim().length > 0
       ? (
@@ -282,6 +321,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       parentId: pId,
       replyToUserId: rUserId,
       translationRows: settledRows,
+      image,
     })
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'parent_not_found') {
@@ -327,6 +367,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       replyToUserId: comment.replyToUserId,
       bodyVersion: comment.bodyVersion,
       createdAt: comment.createdAt,
+      image: serializeCommentImage(comment),
     },
     { status: 201 },
   )
