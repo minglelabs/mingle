@@ -1,14 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { ImagePlus, RefreshCw, X, Eye } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Eye, ImagePlus, Loader2, Palette, RefreshCw, X } from 'lucide-react'
 import type { FeedPostImageDto } from '@/lib/feed-post-dto'
 import FeedPostPreview from '@/components/feed/feed-post-preview'
+import { resolveBackgroundPreset } from '@/lib/post-backgrounds'
 import { composeCopy, formatComposeCopy, type ComposeCopy } from '@/i18n/compose-copy'
 import { ComposeImageError, PICKER_IMAGE_TYPES, prepareComposeImage, type PreparedImage } from './compose-image'
 import { composeGapCopy, type ComposeGapCopy } from './compose-gap-copy'
 import { MAX_POST_LENGTH } from './compose-state'
-import PostBackgroundSurface from './post-background-surface'
 
 export type ComposeEditorProps = {
   locale: string
@@ -24,7 +24,12 @@ export type ComposeEditorProps = {
   onChangeBackground?: () => void
   author: { name: string | null; handle: string; imageUrl: string | null }
   disabled?: boolean
+  /** Focus the body when the editor appears (new post). */
+  autoFocus?: boolean
 }
+
+/** The counter stays out of the way until the body is close to the limit. */
+const COUNTER_VISIBLE_FROM = Math.floor(MAX_POST_LENGTH * 0.8)
 
 function mapImageError(
   reason: ComposeImageError['reason'],
@@ -48,16 +53,78 @@ function mapImageError(
   }
 }
 
+/** A 44px toolbar icon button. */
+function ToolButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground/55 transition active:scale-90 active:bg-foreground/5 disabled:opacity-40"
+    >
+      {children}
+    </button>
+  )
+}
+
+/** A round control drawn over the attached photo. */
+function PhotoOverlayButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="inline-flex h-11 w-11 items-center justify-center disabled:opacity-50"
+    >
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition active:scale-90">
+        {children}
+      </span>
+    </button>
+  )
+}
+
 export default function ComposeEditor(props: ComposeEditorProps) {
   const copy = composeCopy(props.locale)
   const gapCopy = composeGapCopy(props.locale)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [preparing, setPreparing] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
   const length = props.sourceText.length
   const overLimit = length > MAX_POST_LENGTH
+  const displayName = props.author.name?.trim() || (props.author.handle ? `@${props.author.handle}` : '')
+
+  // The body grows with its content; the screen scrolls, not the textarea.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [props.sourceText, showPreview])
 
   async function handleFile(file: File | undefined) {
     setImageError(null)
@@ -84,131 +151,125 @@ export default function ComposeEditor(props: ComposeEditorProps) {
       }
     : null
 
-  if (showPreview) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-base font-semibold">{copy.previewTitle}</h2>
-          <button
-            type="button"
-            onClick={() => setShowPreview(false)}
-            className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-primary hover:bg-secondary"
-          >
-            {copy.backToEdit}
-          </button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <FeedPostPreview
-            locale={props.locale}
-            text={props.sourceText}
-            backgroundKey={props.backgroundKey ?? 'warm-cream'}
-            image={previewImage}
-            author={props.author}
-          />
-        </div>
-      </div>
-    )
-  }
+  const preset = resolveBackgroundPreset(props.backgroundKey)
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <div className="rounded-2xl border border-border bg-card">
-        <label htmlFor="compose-body" className="sr-only">
-          {copy.editorPlaceholder}
-        </label>
-        <textarea
-          id="compose-body"
-          dir="auto"
-          value={props.sourceText}
-          onChange={(e) => props.onChangeText(e.target.value)}
-          placeholder={copy.editorPlaceholder}
-          disabled={props.disabled}
-          rows={7}
-          className="min-h-40 w-full resize-none rounded-2xl bg-transparent px-4 py-3 text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground"
-          style={{ whiteSpace: 'pre-wrap' }}
-        />
-        <div className="flex items-center justify-between px-4 pb-2">
-          <span
-            role="status"
-            aria-live="polite"
-            className={`text-xs ${overLimit ? 'text-destructive' : 'text-muted-foreground'}`}
-          >
-            {formatComposeCopy(copy.charCount, { count: length, max: MAX_POST_LENGTH })}
-          </span>
-        </div>
-      </div>
-
-      {props.imagePreviewUrl ? (
-        <div className="relative">
-          <PostBackgroundSurface
-            backgroundKey={props.backgroundKey}
-            text=""
-            imageUrl={props.imagePreviewUrl}
-            compact
+    <div className="px-4 pb-6 pt-4">
+      <div className="flex gap-3">
+        {props.author.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={props.author.imageUrl}
+            alt=""
+            className="h-10 w-10 shrink-0 rounded-full object-cover"
+            draggable={false}
           />
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-[15px] font-bold text-secondary-foreground"
+          >
+            {displayName.replace(/^@/, '').charAt(0).toUpperCase()}
+          </span>
+        )}
+
+        <div className="min-w-0 flex-1">
+          {displayName ? (
+            <p className="truncate text-[15px] font-semibold leading-5" dir="auto">
+              {displayName}
+            </p>
+          ) : null}
+
+          <label htmlFor="compose-body" className="sr-only">
+            {copy.editorPlaceholder}
+          </label>
+          <textarea
+            ref={textareaRef}
+            id="compose-body"
+            dir="auto"
+            value={props.sourceText}
+            onChange={(e) => props.onChangeText(e.target.value)}
+            placeholder={copy.editorPlaceholder}
+            disabled={props.disabled}
+            autoFocus={props.autoFocus}
+            rows={3}
+            className="mt-1 block min-h-[5.5rem] w-full resize-none overflow-hidden bg-transparent text-[17px] leading-[1.5] outline-none placeholder:text-foreground/35"
+            style={{ whiteSpace: 'pre-wrap' }}
+          />
+
+          {props.imagePreviewUrl ? (
+            <div
+              className="relative mt-2 overflow-hidden rounded-2xl border border-foreground/10"
+              // The letterbox shows the post's own background, as the feed card does.
+              style={{ background: preset.background }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={props.imagePreviewUrl} alt="" className="max-h-[44vh] w-full object-contain" />
+              <div className="absolute right-0.5 top-0.5 flex">
+                <PhotoOverlayButton
+                  label={copy.replacePhoto}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={props.disabled || preparing}
+                >
+                  <RefreshCw size={15} strokeWidth={2.4} aria-hidden="true" />
+                </PhotoOverlayButton>
+                <PhotoOverlayButton
+                  label={copy.removePhoto}
+                  onClick={() => {
+                    props.onPickImage(null)
+                    setImageError(null)
+                  }}
+                  disabled={props.disabled}
+                >
+                  <X size={16} strokeWidth={2.6} aria-hidden="true" />
+                </PhotoOverlayButton>
+              </div>
+            </div>
+          ) : null}
+
+          {preparing ? (
+            <p role="status" aria-live="polite" className="mt-2 flex items-center gap-1.5 text-[13px] text-foreground/55">
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              {copy.photoProcessing}
+            </p>
+          ) : null}
+          {imageError ? (
+            <p role="alert" className="mt-2 text-[13px] text-destructive">
+              {imageError}
+            </p>
+          ) : null}
+
+          <div className="-ml-2.5 mt-1 flex items-center">
+            <ToolButton
+              label={props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
               onClick={() => fileInputRef.current?.click()}
               disabled={props.disabled || preparing}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground hover:opacity-90 disabled:opacity-60"
             >
-              <RefreshCw size={16} aria-hidden="true" />
-              {copy.replacePhoto}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                props.onPickImage(null)
-                setImageError(null)
-              }}
-              disabled={props.disabled}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-secondary disabled:opacity-60"
+              <ImagePlus size={22} strokeWidth={1.9} aria-hidden="true" />
+            </ToolButton>
+            {props.onChangeBackground ? (
+              <ToolButton label={copy.changeBackground} onClick={props.onChangeBackground} disabled={props.disabled}>
+                <Palette size={22} strokeWidth={1.9} aria-hidden="true" />
+              </ToolButton>
+            ) : null}
+            <ToolButton label={copy.preview} onClick={() => setShowPreview(true)} disabled={props.disabled}>
+              <Eye size={22} strokeWidth={1.9} aria-hidden="true" />
+            </ToolButton>
+
+            {/* Always announced; shown once the body nears the limit. */}
+            <span
+              role="status"
+              aria-live="polite"
+              className={
+                length >= COUNTER_VISIBLE_FROM
+                  ? `ml-auto text-[13px] font-medium tabular-nums ${overLimit ? 'text-destructive' : 'text-foreground/45'}`
+                  : 'sr-only'
+              }
             >
-              <X size={16} aria-hidden="true" />
-              {copy.removePhoto}
-            </button>
+              {formatComposeCopy(copy.charCount, { count: length, max: MAX_POST_LENGTH })}
+            </span>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={props.disabled || preparing}
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground hover:opacity-90 disabled:opacity-60"
-        >
-          <ImagePlus size={16} aria-hidden="true" />
-          {preparing ? copy.photoProcessing : copy.addPhoto}
-        </button>
-      )}
-
-      {imageError ? (
-        <p role="alert" className="text-xs text-destructive">
-          {imageError}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        {props.onChangeBackground ? (
-          <button
-            type="button"
-            onClick={props.onChangeBackground}
-            disabled={props.disabled}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary disabled:opacity-60"
-          >
-            <RefreshCw size={16} aria-hidden="true" />
-            {copy.changeBackground}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setShowPreview(true)}
-          disabled={props.disabled}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary disabled:opacity-60"
-        >
-          <Eye size={16} aria-hidden="true" />
-          {copy.preview}
-        </button>
       </div>
 
       <input
@@ -218,6 +279,38 @@ export default function ComposeEditor(props: ComposeEditorProps) {
         className="hidden"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />
+
+      {/* Full-screen preview: exactly the feed card, over the editor. */}
+      {showPreview ? (
+        <div className="fixed inset-0 z-[70] bg-black" role="dialog" aria-modal="true" aria-label={copy.previewTitle}>
+          <FeedPostPreview
+            locale={props.locale}
+            text={props.sourceText}
+            backgroundKey={preset.key}
+            image={previewImage}
+            author={props.author}
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-3"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              aria-label={copy.backToEdit}
+              className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center"
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition active:scale-90">
+                <X size={20} strokeWidth={2.4} aria-hidden="true" />
+              </span>
+            </button>
+            <span className="rounded-full bg-black/55 px-3 py-1.5 text-[13px] font-semibold text-white backdrop-blur-sm">
+              {copy.previewTitle}
+            </span>
+            <span className="h-11 w-11" aria-hidden="true" />
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

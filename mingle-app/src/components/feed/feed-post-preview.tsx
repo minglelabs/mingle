@@ -39,25 +39,25 @@ export default function FeedPostPreview({ text, backgroundKey, image, author }: 
       expanded={false}
       ariaLabel={`${displayName}: ${preview.text}`}
       authorSlot={
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-3">
           {author.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={author.imageUrl}
               alt=""
-              className="h-9 w-9 shrink-0 rounded-full object-cover"
+              className="h-12 w-12 shrink-0 rounded-full object-cover"
               draggable={false}
             />
           ) : (
             <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg font-bold"
               style={{ color: colors.textColor }}
             >
               {initial}
             </span>
           )}
           <span
-            className="truncate text-sm font-semibold"
+            className="truncate text-[17px] font-bold"
             style={{ color: colors.textColor, textShadow: colors.textShadow }}
           >
             {displayName}

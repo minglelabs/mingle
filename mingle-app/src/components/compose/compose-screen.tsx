@@ -3,13 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
-import { ImageIcon, Trash2 } from 'lucide-react'
+import { ChevronLeft, FileText, ImageIcon, Plus, Trash2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { isAccountRestrictedResponse } from '@/lib/account-restriction'
 import { composeHref, feedHref } from '@/lib/feed-routes'
 import { randomBackgroundKey, resolveBackgroundPreset } from '@/lib/post-backgrounds'
 import { composeCopy } from '@/i18n/compose-copy'
 import { moderationCopy } from '@/i18n/moderation-copy'
+import {
+  ComposeHeader,
+  ComposeHeaderTextButton,
+  ComposePrimaryButton,
+  useKeyboardInset,
+} from './compose-chrome'
 import ComposeEditor from './compose-editor'
 import { composeGapCopy } from './compose-gap-copy'
 import { postPreviewText } from './draft-preview'
@@ -19,7 +25,6 @@ import {
   draftImageField,
   draftImagePath,
   generateClientPostId,
-  MAX_POST_LENGTH,
   type ComposeDraft,
   type ComposeDraftListResponse,
 } from './compose-state'
@@ -57,7 +62,7 @@ function DraftThumbnail({ draftId, label }: { draftId: string; label: string }) 
   const [failed, setFailed] = useState(false)
   if (failed) {
     return (
-      <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+      <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-foreground/5 text-foreground/45">
         <ImageIcon size={18} aria-label={label} />
       </span>
     )
@@ -69,7 +74,7 @@ function DraftThumbnail({ draftId, label }: { draftId: string; label: string }) 
       alt={label}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="h-14 w-14 shrink-0 rounded-lg object-cover"
+      className="h-14 w-14 shrink-0 rounded-xl object-cover"
     />
   )
 }
@@ -99,7 +104,8 @@ export default function ComposeScreen({
   const [drafts, setDrafts] = useState<ComposeDraft[]>([])
   const [draftsCursor, setDraftsCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [mode, setMode] = useState<'entry' | 'editor'>(initialDraftId ? 'editor' : 'entry')
+  // The screen opens on the editor; the draft list is one tap away in the header.
+  const [mode, setMode] = useState<'editor' | 'drafts'>('editor')
   const [text, setText] = useState('')
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
   const [image, setImageState] = useState<PendingImage>({ kind: 'none' })
@@ -154,6 +160,13 @@ export default function ComposeScreen({
   }, [text, backgroundKey])
 
   const isSignedIn = status === 'authenticated'
+  const keyboardInset = useKeyboardInset()
+
+  // A new post gets its random background once, on the client (a draft
+  // restores its own below).
+  useEffect(() => {
+    if (!initialDraftId) setBackgroundKey((current) => current ?? randomBackgroundKey())
+  }, [initialDraftId])
 
   // Analytics: compose entry, once per screen mount for a signed-in author.
   const composeOpenedRef = useRef(false)
@@ -262,6 +275,7 @@ export default function ComposeScreen({
   )
 
   function beginNewPost() {
+    router.replace(composeHref(locale))
     clientPostId.current = generateClientPostId()
     switchSaver(null)
     setNotice(null)
@@ -405,58 +419,94 @@ export default function ComposeScreen({
     }
   }
 
+  /** Leave compose; what was typed is already (or is now) saved as a draft. */
+  function leave() {
+    void saver().flush()
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.replace(feedHref(locale))
+  }
+
+  function openDrafts() {
+    setNotice(null)
+    setMode('drafts')
+    // Save the last keystrokes first so the list shows them.
+    void saver().flush().then(loadDrafts)
+  }
+
   // ── Sign-in gate ──────────────────────────────────────────────────────────
   if (status !== 'loading' && !isSignedIn) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-sm text-muted-foreground">{copy.signInRequired}</p>
-        <button
-          type="button"
-          onClick={() => void signIn(undefined, { callbackUrl: composeHref(locale, { draftId: initialDraftId }) })}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
-        >
-          {copy.signInCta}
-        </button>
+      <div className="flex h-full flex-col bg-card text-card-foreground">
+        <ComposeHeader
+          leading={<ComposeHeaderTextButton onClick={leave}>{copy.discard}</ComposeHeaderTextButton>}
+          title={copy.entryTitle}
+        />
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
+          <p className="text-[15px] text-foreground/60">{copy.signInRequired}</p>
+          <ComposePrimaryButton
+            onClick={() => void signIn(undefined, { callbackUrl: composeHref(locale, { draftId: initialDraftId }) })}
+          >
+            {copy.signInCta}
+          </ComposePrimaryButton>
+        </div>
       </div>
     )
   }
 
-  if (mode === 'entry') {
+  if (mode === 'drafts') {
     return (
-      <div className="flex h-full flex-col">
-        <header className="px-4 py-4">
-          <h1 className="text-lg font-semibold">{copy.entryTitle}</h1>
-        </header>
-        <div className="px-4">
-          <button
-            type="button"
-            onClick={beginNewPost}
-            className="w-full rounded-2xl bg-primary px-4 py-3.5 text-left text-[15px] font-medium text-primary-foreground"
-          >
-            {copy.newPost}
-          </button>
-        </div>
-        <div className="mt-5 min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">{copy.draftsTitle}</h2>
+      <div className="flex h-full flex-col bg-card text-card-foreground">
+        <ComposeHeader
+          leading={
+            <button
+              type="button"
+              onClick={() => setMode('editor')}
+              aria-label={copy.backToEdit}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition active:bg-foreground/5"
+            >
+              <ChevronLeft size={26} strokeWidth={2} aria-hidden="true" />
+            </button>
+          }
+          title={copy.draftsTitle}
+          trailing={
+            <button
+              type="button"
+              onClick={beginNewPost}
+              aria-label={copy.newPost}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition active:bg-foreground/5"
+            >
+              <Plus size={24} strokeWidth={2} aria-hidden="true" />
+            </button>
+          }
+        />
+        <div
+          className="min-h-0 flex-1 overflow-y-auto"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+        >
           {loadError ? (
-            <p className="text-sm text-muted-foreground">{copy.loadError}</p>
+            <p className="px-8 py-16 text-center text-[15px] text-foreground/55">{copy.loadError}</p>
           ) : drafts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{copy.draftsEmpty}</p>
+            <div className="flex flex-col items-center gap-3 px-8 py-20 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground/5 text-foreground/40">
+                <FileText size={26} strokeWidth={1.8} aria-hidden="true" />
+              </span>
+              <p className="text-[15px] text-foreground/55">{copy.draftsEmpty}</p>
+            </div>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul>
               {drafts.map((draft) => (
-                <li key={draft.id} className="flex items-stretch gap-2">
+                <li key={draft.id} className="flex items-stretch border-b border-foreground/10">
                   <button
                     type="button"
                     onClick={() => openDraft(draft)}
-                    className="flex min-h-16 flex-1 items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-left hover:bg-secondary"
+                    className="flex min-h-[4.5rem] min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-1 text-left transition active:bg-foreground/5"
                   >
                     {draft.imageObjectKey ? <DraftThumbnail draftId={draft.id} label={copy.draftPhoto} /> : null}
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="line-clamp-2 text-sm" dir="auto">
+                      <span className="line-clamp-2 text-[15px] leading-snug" dir="auto">
                         {postPreviewText(draft.sourceText) || copy.draftUntitled}
                       </span>
-                      <time dateTime={draft.updatedAt} className="text-xs text-muted-foreground">
+                      <time dateTime={draft.updatedAt} className="text-[13px] text-foreground/45">
                         {copy.savedAtPrefix} {new Date(draft.updatedAt).toLocaleString(locale)}
                       </time>
                     </span>
@@ -465,76 +515,80 @@ export default function ComposeScreen({
                     type="button"
                     aria-label={copy.draftDelete}
                     onClick={() => void deleteDraft(draft.id)}
-                    className="inline-flex min-h-16 w-11 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-destructive"
+                    className="inline-flex w-14 shrink-0 items-center justify-center text-foreground/40 transition active:bg-foreground/5 active:text-destructive"
                   >
-                    <Trash2 size={18} aria-hidden="true" />
+                    <Trash2 size={20} strokeWidth={1.9} aria-hidden="true" />
                   </button>
                 </li>
               ))}
             </ul>
           )}
           {!loadError && draftsCursor ? (
-            <button
-              type="button"
-              onClick={() => void loadMoreDrafts()}
-              disabled={loadingMore}
-              className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-secondary px-4 py-2 text-sm text-secondary-foreground disabled:opacity-60"
-            >
-              {loadingMore ? '…' : gapCopy.loadMore}
-            </button>
+            <div className="px-4 pt-4">
+              <button
+                type="button"
+                onClick={() => void loadMoreDrafts()}
+                disabled={loadingMore}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-foreground/5 px-4 text-[15px] font-medium disabled:opacity-60"
+              >
+                {loadingMore ? '…' : gapCopy.loadMore}
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between px-4 py-3">
-        <button
-          type="button"
-          onClick={() => {
-            setMode('entry')
-            setNotice(null)
-            router.replace(composeHref(locale))
-            // Save the last keystrokes first so the list shows them.
-            void saver().flush().then(loadDrafts)
-          }}
-          className="inline-flex min-h-11 items-center rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-secondary"
-        >
-          {copy.discard}
-        </button>
-        <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
-          {saveState.saving
-            ? copy.savingDraft
-            : saveState.error === 'failed'
-              ? gapCopy.draftSaveFailed
-              : saveState.draftId && !saveState.error
-                ? copy.draftSaved
-                : ''}
-        </span>
-        <button
-          type="button"
-          onClick={() => void handlePublish()}
-          disabled={!publishable}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {copy.publish}
-        </button>
-      </header>
+  const saveStatus = saveState.saving
+    ? copy.savingDraft
+    : saveState.error === 'failed'
+      ? gapCopy.draftSaveFailed
+      : saveState.draftId && !saveState.error
+        ? copy.draftSaved
+        : ''
 
-      {saveState.error === 'restricted' || imageRestricted ? (
-        <p role="alert" className="mx-4 mb-2 rounded-lg bg-secondary px-3 py-2 text-xs text-foreground">
-          {restrictedCopy}
-        </p>
-      ) : null}
-      {notice ? (
-        <p role="status" aria-live="polite" className="mx-4 mb-2 rounded-lg bg-secondary px-3 py-2 text-xs text-foreground">
-          {notice}
-        </p>
-      ) : null}
+  return (
+    <div
+      className="flex h-full flex-col bg-card text-card-foreground"
+      // Keep the bottom bar above the on-screen keyboard.
+      style={{ paddingBottom: keyboardInset }}
+    >
+      <ComposeHeader
+        leading={<ComposeHeaderTextButton onClick={leave}>{copy.discard}</ComposeHeaderTextButton>}
+        title={copy.entryTitle}
+        trailing={
+          <button
+            type="button"
+            onClick={openDrafts}
+            aria-label={drafts.length > 0 ? `${copy.draftsTitle}, ${drafts.length}` : copy.draftsTitle}
+            className="relative inline-flex h-11 w-11 items-center justify-center rounded-full transition active:bg-foreground/5"
+          >
+            <FileText size={23} strokeWidth={1.9} aria-hidden="true" />
+            {drafts.length > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold leading-none text-primary-foreground"
+              >
+                {drafts.length > 9 ? '9+' : drafts.length}
+              </span>
+            ) : null}
+          </button>
+        }
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {saveState.error === 'restricted' || imageRestricted ? (
+          <p role="alert" className="mx-4 mt-3 rounded-2xl bg-destructive/10 px-4 py-3 text-[14px] leading-snug text-destructive">
+            {restrictedCopy}
+          </p>
+        ) : null}
+        {notice ? (
+          <p role="status" aria-live="polite" className="mx-4 mt-3 rounded-2xl bg-secondary px-4 py-3 text-[14px] leading-snug text-secondary-foreground">
+            {notice}
+          </p>
+        ) : null}
+
         <ComposeEditor
           locale={locale}
           sourceText={text}
@@ -544,12 +598,22 @@ export default function ComposeScreen({
           imageDimensions={dimensions}
           onPickImage={handlePickImage}
           author={author}
+          autoFocus={!initialDraftId}
         />
-        {!publishable && (text.length > MAX_POST_LENGTH || (!text.trim() && !hasImage)) ? (
-          <p role="status" className="px-4 pb-4 text-xs text-muted-foreground">
-            {copy.emptyBlocked}
-          </p>
-        ) : null}
+      </div>
+
+      <div
+        className="flex shrink-0 items-center justify-between gap-3 border-t border-foreground/10 px-4 pt-2.5"
+        style={{
+          paddingBottom: keyboardInset > 0 ? '10px' : 'max(env(safe-area-inset-bottom, 0px), 10px)',
+        }}
+      >
+        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/45" role="status" aria-live="polite">
+          {saveStatus}
+        </span>
+        <ComposePrimaryButton onClick={() => void handlePublish()} disabled={!publishable}>
+          {copy.publish}
+        </ComposePrimaryButton>
       </div>
     </div>
   )

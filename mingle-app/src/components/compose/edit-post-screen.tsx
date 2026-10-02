@@ -7,6 +7,7 @@ import { postEndpoint, feedHref } from '@/lib/feed-routes'
 import type { FeedPostResponse } from '@/lib/feed-post-dto'
 import { composeCopy } from '@/i18n/compose-copy'
 import { moderationCopy } from '@/i18n/moderation-copy'
+import { ComposeHeader, ComposeHeaderTextButton, ComposePrimaryButton } from './compose-chrome'
 import ComposeEditor from './compose-editor'
 import { composeGapCopy } from './compose-gap-copy'
 import { nextBackgroundKey } from './compose-background'
@@ -202,25 +203,18 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between px-4 py-3">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex min-h-11 items-center rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-secondary"
-        >
-          {copy.cancel}
-        </button>
-        <h1 className="text-base font-semibold">{copy.editTitle}</h1>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={!publishable || saving}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {saving ? copy.savingChanges : copy.saveChanges}
-        </button>
-      </header>
+    <div className="flex h-full flex-col bg-card text-card-foreground">
+      <ComposeHeader
+        leading={<ComposeHeaderTextButton onClick={() => router.back()}>{copy.cancel}</ComposeHeaderTextButton>}
+        title={copy.editTitle}
+        trailing={
+          <div className="pr-2">
+            <ComposePrimaryButton onClick={() => void handleSave()} disabled={!publishable || saving}>
+              {saving ? copy.savingChanges : copy.saveChanges}
+            </ComposePrimaryButton>
+          </div>
+        }
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ComposeEditor
@@ -235,12 +229,12 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
           author={author}
         />
         {text.length > MAX_POST_LENGTH || (!text.trim() && !hasImage) ? (
-          <p role="status" className="px-4 pb-3 text-xs text-muted-foreground">
+          <p role="status" className="px-4 pb-3 text-[13px] text-foreground/55">
             {copy.emptyBlocked}
           </p>
         ) : null}
         {saveError === 'conflict' ? (
-          <div role="alert" className="flex items-center gap-2 px-4 pb-4 text-xs text-destructive">
+          <div role="alert" className="flex items-center gap-2 px-4 pb-4 text-[13px] text-destructive">
             <span className="flex-1">{gapCopy.editConflict}</span>
             <button
               type="button"
@@ -251,11 +245,11 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
             </button>
           </div>
         ) : saveError === 'restricted' ? (
-          <p role="alert" className="px-4 pb-4 text-xs text-destructive">
+          <p role="alert" className="px-4 pb-4 text-[13px] text-destructive">
             {moderationCopy(locale).accountRestricted}
           </p>
         ) : saveError === 'failed' ? (
-          <p role="alert" className="px-4 pb-4 text-xs text-destructive">
+          <p role="alert" className="px-4 pb-4 text-[13px] text-destructive">
             {gapCopy.editSaveFailed}
           </p>
         ) : null}
