@@ -93,7 +93,7 @@ describe('resolveTtsRuntimeSelection (re-exported from @/lib/tts-models)', () =>
   it('maps Inworld to the INWORLD_TTS_MODEL_ID runtime model and Gemini to its own id', async () => {
     const { resolveTtsRuntimeSelection } = await loadModule()
     expect(resolveTtsRuntimeSelection(undefined)).toEqual({
-      value: 'gemini-3.8-flash-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-tts',
+      value: 'gemini-3.8-flash-lite-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-lite-tts',
     })
     expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini')).toEqual({
       value: 'inworld-tts-1.5-mini', provider: 'inworld', runtimeModel: 'inworld-tts-1.5-mini',
@@ -105,16 +105,16 @@ describe('resolveTtsRuntimeSelection (re-exported from @/lib/tts-models)', () =>
     })
   })
 
-  it('resolves invalid values to the gemini-3.8-flash-tts default', async () => {
+  it('resolves invalid values to the gemini-3.8-flash-lite-tts default', async () => {
     const { resolveTtsRuntimeSelection } = await loadModule()
-    expect(resolveTtsRuntimeSelection('gemini').value).toBe('gemini-3.8-flash-tts')
-    expect(resolveTtsRuntimeSelection(123).value).toBe('gemini-3.8-flash-tts')
-    expect(resolveTtsRuntimeSelection({ ttsModel: 'inworld-tts-1.5-mini' }).value).toBe('gemini-3.8-flash-tts')
+    expect(resolveTtsRuntimeSelection('gemini').value).toBe('gemini-3.8-flash-lite-tts')
+    expect(resolveTtsRuntimeSelection(123).value).toBe('gemini-3.8-flash-lite-tts')
+    expect(resolveTtsRuntimeSelection({ ttsModel: 'inworld-tts-1.5-mini' }).value).toBe('gemini-3.8-flash-lite-tts')
   })
 })
 
 describe('synthesizeSpeech — default (no ttsModel)', () => {
-  it('uses gemini-3.8-flash-tts when ttsModel is missing', async () => {
+  it('uses gemini-3.8-flash-lite-tts when ttsModel is missing', async () => {
     const wav = wavBytes()
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
     vi.stubGlobal('fetch', fetchMock)
@@ -122,10 +122,10 @@ describe('synthesizeSpeech — default (no ttsModel)', () => {
 
     const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
-    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-tts' })
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' })
     expect(result.fallbackFrom).toBeUndefined()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
+    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
   })
 
   it('resolves an invalid ttsModel to Gemini and falls back to Inworld when Gemini fails', async () => {
@@ -144,7 +144,7 @@ describe('synthesizeSpeech — default (no ttsModel)', () => {
 
     expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini', voiceId: 'Ashley' })
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
+    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
     expect(urlOf(fetchMock.mock.calls[1])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
