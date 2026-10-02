@@ -115,7 +115,7 @@ describe('conversation images', () => {
     await m.after.mock.calls[1][0]()
     const [objectKey, jpeg] = m.put.mock.calls[0]
     expect(m.textJob).toHaveBeenCalledWith({
-      messageId: 'db-image', sessionKey: 'session', imageSha256: createHash('sha256').update(bytes).digest('hex'), objectKey, jpeg,
+      messageId: 'db-image', sessionKey: 'session', imageSha256: createHash('sha256').update(bytes).digest('hex'), objectKey, jpeg, billedUserId: null,
     })
     // The push is still the first after() and unaffected.
     await m.after.mock.calls[0][0]()

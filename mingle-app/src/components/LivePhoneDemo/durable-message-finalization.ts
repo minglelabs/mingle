@@ -1,5 +1,6 @@
 'use client'
 
+import { notifyCoinsExhausted } from '@/lib/coin-wallet-client'
 import type { Utterance } from './ChatBubble'
 import { canonicalizeLanguageKey, classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
 import { canonicalizeUtteranceLanguages } from './conversation-live'
@@ -442,7 +443,19 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
       (async () => {
         if (!record.translationBody || record.result) return
         const startedAt = Date.now()
-        const response = await post(record, 'translate/finalize', record.translationBody, fetcher, controller.signal, canSend)
+        let response: unknown
+        try {
+          response = await post(record, 'translate/finalize', record.translationBody, fetcher, controller.signal, canSend)
+        } catch (error) {
+          // 402 = the sender has no coins (docs/coin-iap-spec.md 3.5). The message is
+          // delivered untranslated and is not retried, so a later top-up never
+          // translates it retroactively.
+          if (!(error instanceof Error) || error.message !== 'translate/finalize_402' || !canSend()) throw error
+          record.translationBody = null
+          persist(); notify(record)
+          notifyCoinsExhausted()
+          return
+        }
         const preferSourceScript = isTypedDurableFinalization(record)
         let result: FinalizationResult
         try {

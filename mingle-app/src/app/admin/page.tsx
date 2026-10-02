@@ -594,6 +594,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           >
             신고함
           </Link>
+          <Link
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            href="/admin/coins"
+          >
+            코인
+          </Link>
           <form action={logoutAdminAction}>
             <button
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

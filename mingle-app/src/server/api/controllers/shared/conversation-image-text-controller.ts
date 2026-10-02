@@ -6,6 +6,9 @@ import {
   type ConversationImageTextResponse,
 } from '@/lib/conversation-image-text'
 import { prisma } from '@/lib/prisma'
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
+import { resolveCoinBillingMode } from '@/server/coins/config'
+import { canSpendCoins } from '@/server/coins/wallet'
 import {
   isConversationImageTextEnabled,
   readConversationImageTextState,
@@ -66,13 +69,21 @@ export async function readConversationImageText(request: NextRequest, conversati
     return NextResponse.json({ error: 'image_text_unavailable' }, { status: 503, headers: NO_STORE_HEADERS })
   }
 
-  if (state.runImageJob) {
-    const job = { messageId, sessionKey: scope.sessionKey, imageSha256: image.sha256, objectKey: image.objectKey }
-    after(() => runConversationImageTextJob(job))
-  }
-  if (state.translateLanguages.length) {
-    const languages = state.translateLanguages
-    after(() => runConversationImageTextTranslations({ messageId, languages }))
+  // Coins (docs/coin-iap-spec.md 4.3): the viewer who asks for new OCR/translation
+  // work pays for it. Reading results that already exist stays free.
+  if (state.runImageJob || state.translateLanguages.length) {
+    const billedUserId = resolveCoinBillingMode() === 'off' ? null : scope.userId
+    if (billedUserId && !(await canSpendCoins(billedUserId))) {
+      return NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402, headers: NO_STORE_HEADERS })
+    }
+    if (state.runImageJob) {
+      const job = { messageId, sessionKey: scope.sessionKey, imageSha256: image.sha256, objectKey: image.objectKey, billedUserId }
+      after(() => runConversationImageTextJob(job))
+    }
+    if (state.translateLanguages.length) {
+      const languages = state.translateLanguages
+      after(() => runConversationImageTextTranslations({ messageId, languages, billedUserId, sessionKey: scope.sessionKey }))
+    }
   }
   return textResponse(state.response)
 }
