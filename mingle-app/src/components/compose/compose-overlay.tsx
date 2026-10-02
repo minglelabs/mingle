@@ -23,23 +23,25 @@ type ComposeOverlayProps = {
 export default function ComposeOverlay({ open, locale, onClose, onPublished }: ComposeOverlayProps) {
   const [prevOpen, setPrevOpen] = useState(open)
   const [session, setSession] = useState(open ? 1 : 0)
-  const [mounted, setMounted] = useState(open)
+  // The last session whose slide-out finished; its editor is gone.
+  const [retiredSession, setRetiredSession] = useState(0)
   // Back / edge swipe closes the editor's inner layer (preview, drafts) first.
   const backHandlerRef = useRef<(() => boolean) | null>(null)
 
   if (open !== prevOpen) {
     setPrevOpen(open)
-    if (open) {
-      setSession((current) => current + 1)
-      setMounted(true)
-    }
+    if (open) setSession((current) => current + 1)
   }
+
+  // An open panel always has its editor: this must not depend on a state
+  // update landing, or the panel slides in blank.
+  const mounted = open || retiredSession !== session
 
   useEffect(() => {
     if (open) return
-    const timer = window.setTimeout(() => setMounted(false), 360)
+    const timer = window.setTimeout(() => setRetiredSession(session), 360)
     return () => window.clearTimeout(timer)
-  }, [open])
+  }, [open, session])
 
   // Safety net: the app shell never scrolls sideways. If anything (a focus,
   // the keyboard) nudged the document horizontally while the panel was
