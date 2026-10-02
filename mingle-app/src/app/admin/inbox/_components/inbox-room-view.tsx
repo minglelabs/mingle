@@ -47,6 +47,7 @@ import { InboxAvatar, KoreanViewSwitch } from './inbox-ui'
 import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
 import { useVisualViewportBox } from './use-visual-viewport-box'
+import { useIsDesktop } from '../../_components/use-is-desktop'
 
 const KO_BADGE_COPY = accountBadgeCopy('ko')
 const REPLY_MAX_LENGTH = 2000
@@ -274,6 +275,8 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
   const [koById, setKoById] = useState<Record<string, string | null>>({})
   const [atBottom, setAtBottom] = useState(true)
   const box = useVisualViewportBox()
+  // From `lg` up the room fills the detail pane beside the list instead of the whole screen.
+  const desktop = useIsDesktop()
 
   const operator = room.operator
   const operatorId = operator.userId
@@ -513,18 +516,18 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
 
   return (
     <div
-      className="fixed inset-x-0 z-[60] flex flex-col bg-slate-50 text-slate-900"
-      style={box ? { top: box.top, height: box.height } : { top: 0, bottom: 0 }}
+      className="fixed inset-x-0 z-[60] flex flex-col bg-slate-50 text-slate-900 lg:absolute lg:inset-0 lg:z-0"
+      style={desktop ? undefined : box ? { top: box.top, height: box.height } : { top: 0, bottom: 0 }}
     >
       <header
-        className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-1 pb-1"
+        className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-1 pb-1 lg:px-3"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 4px)' }}
       >
         <Link
           href="/admin/inbox"
           prefetch={false}
           aria-label="인박스로 돌아가기"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100 lg:hidden"
         >
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>

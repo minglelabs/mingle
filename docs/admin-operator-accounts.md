@@ -1,6 +1,6 @@
 # Admin operator accounts
 
-Staff use `/admin` to manage clearly labeled Mingle-run accounts from a phone or desktop. Account creation, posts, replies, and alert settings are available in the bottom navigation. Operator accounts have no login credentials or push tokens; staff keep their own admin session and app account.
+Staff use `/admin` to manage clearly labeled Mingle-run accounts from a phone or desktop. Inbox, notifications, account creation, posts, and alert settings are available in the navigation: a bottom tab bar on a phone, a left rail on a wide screen (1024 px and up). Operator accounts have no login credentials or push tokens; staff keep their own admin session and app account.
 
 ## Access and setup
 
@@ -26,6 +26,20 @@ Open **Inbox** to see conversations with operator accounts, optionally filtered 
 Replies are sent as the selected operator while the staff member retains their own session. The source text is converted into the operator's primary language, with other conversation languages translated separately. A failed primary-language translation must be retried rather than publishing the staff draft as the operator's source.
 
 The inbox refreshes through the messaging service when configured, with a polling fallback. Its unread count appears on the bottom tab. Rooms with operator members include a disclosure notice, and account labels appear throughout public profiles, feed, comments, notifications, and conversation surfaces.
+
+## Notifications and comment replies
+
+Open **알림** to see every operator account's notifications in one list: follows, post likes, comments, replies, and comment likes from real users, newest first. Filter by account with the chips; each chip and the tab show the unread count. Activity between two operator accounts is left out. **모두 읽음** marks the listed notifications read (for the filtered account, or all).
+
+Selecting a comment or like opens the post's thread as the operator that received it. Opening a thread marks that operator's notifications for the post read. Staff can comment on the post or reply to any comment as that operator; when several operator accounts are in the thread, choose which one answers. The draft is converted into the operator's primary language before it is posted (a failed conversion posts nothing), then goes through the application's own comment path, including translations and the notification to the user. Comments are limited to 500 characters after conversion. Photos cannot be attached or viewed from this screen; a comment with a photo is marked as such.
+
+A comment or reply from a real user to an operator account also sends a push to registered staff accounts, at most one per post every 20 seconds. Tapping it opens `/admin/activity/posts/<postId>`. Likes and follows only update the list.
+
+## Wide-screen layout
+
+From 1024 px, **인박스** and **알림** show the list on the left and the open conversation or thread on the right, each scrolling on its own; the list keeps its filter while conversations are opened. Below that width the same screens are a single column. The other screens are single-column at every width.
+
+These two sections were added on 2026-10-02 with unit and server-render tests only; they have not been exercised in a browser or on a device.
 
 ## Staff alerts
 
