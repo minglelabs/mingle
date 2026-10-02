@@ -20,6 +20,8 @@ export type AdminAuditAction =
   | 'activity.comment'
   | 'inbox.auto_reply'
   | 'settings.auto_reply'
+  | 'settings.post_reserve'
+  | 'operator_post.reserve_published'
   | 'notify_target.add'
   | 'notify_target.remove'
 

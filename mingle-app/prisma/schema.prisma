@@ -116,6 +116,7 @@ model User {
   operatorAccount         OperatorAccount?
   adminNotifyTarget       AdminNotifyTarget?
   operatorPostJobs        OperatorPostJob[]
+  operatorPostReserve     OperatorPostReserve[]
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
@@ -977,6 +978,30 @@ model AdminNotifyTarget {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("app_admin_notify_targets")
+}
+
+/// A pre-written ("latent") post of an operator account. A few are released
+/// per day through the unchanged `publishPost`; only the next one to go out
+/// carries a `releaseAt`.
+model OperatorPostReserve {
+  id             String    @id @default(cuid())
+  operatorUserId String    @map("operator_user_id")
+  text           String    @db.Text
+  topic          String?
+  /// queued | publishing | published | failed | cancelled
+  state          String    @default("queued")
+  releaseAt      DateTime? @map("release_at")
+  postId         String?   @map("post_id")
+  error          String?   @db.Text
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  operatorUser User @relation(fields: [operatorUserId], references: [id], onDelete: Cascade)
+
+  @@index([state, releaseAt], map: "app_operator_post_reserve_state_release_at_idx")
+  @@index([operatorUserId, state, createdAt], map: "app_operator_post_reserve_operator_state_idx")
+  @@map("app_operator_post_reserve")
 }
 
 /// Staff-editable admin settings, one JSON value per key (e.g. `operator_auto_reply`).

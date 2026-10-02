@@ -51,6 +51,19 @@ Only messages that arrive after auto-reply was turned on are answered, never one
 
 The worker runs in the Node server process every 30 seconds (`MINGLE_OPERATOR_AUTO_REPLY_WORKER=off` keeps it from starting), so a reply goes out up to 30 seconds after the wait ends. Added on 2026-10-02 with unit tests only: the candidate query has not run against a database and no real model call was made.
 
+## Seeding accounts and the post reserve
+
+Open **More → 계정 대량 생성** to create many accounts from a per-country plan. The default is 100 accounts centered on Korea and Japan (22 each) with the rest spread over the other persona countries; every count is editable. It calls the same draft and create endpoints as the wizard, ten accounts at a time, without the review step, and runs in the open tab. Profile photos are not created.
+
+Open **More → 잠재 글** to keep each account posting on its own. It is off until staff turn it on, and needs migrations `20261002150000_add_admin_settings` and `20261003090000_add_operator_post_reserve`. Settings: posts kept waiting per account (default 200) and the share released per day (default 1%, i.e. two posts per account per day).
+
+While on, a worker in the Node server process runs every 60 seconds (`MINGLE_OPERATOR_POST_RESERVE_WORKER=off` keeps it from starting):
+
+- Refill: up to three accounts below the target each get 20 new text posts per run, written by the model (`gemini-3.8-flash-lite`, same override as auto-reply) from the account's profile in its primary language. The server assigns the topics; posts with links, contact details, hashtags or the app name are dropped, as are repeats. The model is told to avoid anything date-dependent because a post may go out months later. Filling 100 accounts to 200 takes roughly five to six hours.
+- Release: each account's next post gets a time one jittered gap after its previous post (24 h divided by posts per day, 60-140%), moved out of the persona country's night (00:00-08:00 local). Due posts go through the application's own publish path and are audited as `operator_post.reserve_published`. A released post is replaced by the next refill, so posting continues indefinitely.
+
+These posts are separate from the staff queue in **Posts** and do not count against its 500-item cap. Added on 2026-10-03 with unit tests only: the SQL has not run against a database and no real model call was made.
+
 ## Staff alerts
 
 Open **More → Notification settings** and add the handle of your own Mingle account. Sign into that account on the phone and allow notifications. Operator accounts cannot be alert targets.
