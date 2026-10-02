@@ -33,10 +33,10 @@ import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
-import { ChevronLeft, SquarePen } from "lucide-react";
+import { ChevronLeft, Loader2, SquarePen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 
 type FeedShellProps = {
   locale: string;
@@ -56,6 +56,11 @@ const HOME_SOURCE: FeedSource = { kind: "home" };
 /** First-paint estimate only; replaced by the measured container height. */
 const FALLBACK_CARD_HEIGHT = `calc(100dvh - ${BOTTOM_TAB_BAR_HEIGHT_PX}px - env(safe-area-inset-bottom, 0px))`;
 const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
+
+/** Pull-to-refresh (home feed, first card): same feel as the conversation list. */
+const PULL_REFRESH_TRIGGER_PX = 72;
+const PULL_REFRESH_MAX_PX = 108;
+const PULL_REFRESH_RESISTANCE = 0.45;
 
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
@@ -105,6 +110,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     onVisibleIndexChange,
     loadMore,
     refresh,
+    refreshFromTop,
     applyPatch,
     applyAuthorPatch,
     dropPost,
@@ -328,6 +334,62 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     [router, locale],
   );
 
+  // ── Pull to refresh: drag down on the first card of the home feed ──
+  const pullStartYRef = useRef<number | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  const handlePullStart = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      pullStartYRef.current = null;
+      if (isViewer || pullRefreshing || anyOverlayOpen || !scrollEl || scrollEl.scrollTop > 0) return;
+      if (event.touches.length !== 1) return;
+      // A drag that starts inside scrolled content (an expanded post) scrolls
+      // that content back up; it is not a pull on the feed.
+      for (let node = event.target as HTMLElement | null; node && node !== scrollEl; node = node.parentElement) {
+        if (node.scrollTop > 0) return;
+      }
+      pullStartYRef.current = event.touches[0].clientY;
+    },
+    [isViewer, pullRefreshing, anyOverlayOpen, scrollEl],
+  );
+
+  const handlePullMove = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      const startY = pullStartYRef.current;
+      if (startY === null) return;
+      const dy = event.touches[0].clientY - startY;
+      if (dy <= 0 || (scrollEl && scrollEl.scrollTop > 0)) {
+        if (dy < 0) pullStartYRef.current = null;
+        setPullDistance(0);
+        return;
+      }
+      setPullDistance(Math.min(PULL_REFRESH_MAX_PX, Math.round(dy * PULL_REFRESH_RESISTANCE)));
+    },
+    [scrollEl],
+  );
+
+  const handlePullEnd = useCallback(() => {
+    const tracking = pullStartYRef.current !== null;
+    pullStartYRef.current = null;
+    const pulled = pullDistance;
+    setPullDistance(0);
+    if (!tracking || pulled < PULL_REFRESH_TRIGGER_PX) return;
+    setPullRefreshing(true);
+    void refreshFromTop().then((ok) => {
+      setPullRefreshing(false);
+      if (!ok) {
+        setToast(copy.feedLoadFailed);
+        return;
+      }
+      if (scrollEl) scrollEl.scrollTop = 0;
+      setActive(0);
+    });
+  }, [pullDistance, refreshFromTop, scrollEl, setActive, copy]);
+
+  const pullOffset = pullRefreshing ? PULL_REFRESH_TRIGGER_PX : pullDistance;
+  const pullProgress = Math.min(1, pullOffset / PULL_REFRESH_TRIGGER_PX);
+
   const scrollToIndex = useCallback(
     (idx: number) => {
       if (!scrollEl) return;
@@ -535,11 +597,39 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       {header}
 
+      {!isViewer ? (
+        <div
+          className="pointer-events-none absolute left-1/2 z-[24] flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
+          style={{
+            top: HEADER_BOTTOM,
+            opacity: pullProgress,
+            transform: `translate(-50%, ${pullOffset - 56}px) scale(${0.92 + pullProgress * 0.08})`,
+            transition: pullDistance > 0 ? "none" : "transform 180ms ease, opacity 180ms ease",
+          }}
+          role={pullRefreshing ? "status" : undefined}
+          aria-label={pullRefreshing ? copy.loading : undefined}
+          aria-hidden={pullRefreshing ? undefined : true}
+        >
+          <Loader2
+            size={16}
+            className={pullRefreshing ? "animate-spin text-slate-500" : "text-slate-400"}
+            strokeWidth={2.25}
+            style={pullRefreshing ? undefined : { transform: `rotate(${pullProgress * 270}deg)` }}
+          />
+        </div>
+      ) : null}
+
       <div
         ref={setScrollEl}
         className="min-h-0 flex-1 overflow-y-auto"
         onScroll={handleScroll}
-        onTouchStart={markUserGesture}
+        onTouchStart={(event) => {
+          markUserGesture();
+          handlePullStart(event);
+        }}
+        onTouchMove={handlePullMove}
+        onTouchEnd={handlePullEnd}
+        onTouchCancel={handlePullEnd}
         onWheel={markUserGesture}
         onPointerDown={markUserGesture}
         onKeyDown={markUserGesture}

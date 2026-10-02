@@ -67,8 +67,14 @@ type UseFeedSourceReturn = FeedSourceState & {
   loadMore: () => void;
   /** Called as the visible index changes; triggers prefetch near the end. */
   onVisibleIndexChange: (index: number) => void;
-  /** Discard everything and re-fetch from the top (pull-to-refresh / new posts). */
+  /** Discard everything and re-fetch, showing the loading state (error retry). */
   refresh: () => void;
+  /**
+   * Pull-to-refresh: fetch a fresh first page (no remembered / linked post
+   * pinned) while the current list stays on screen, then swap it in. Resolves
+   * false when the request failed and the list was left as it was.
+   */
+  refreshFromTop: () => Promise<boolean>;
   /** Optimistically patch every appearance of one post (like, comment count). */
   applyPatch: (postId: string, patch: Partial<FeedPostDto>) => void;
   /** Patch every on-screen post by one author (follow). */
@@ -476,6 +482,30 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
     void runInitialLoad(generation);
   }, [runInitialLoad]);
 
+  const refreshFromTop = useCallback(async (): Promise<boolean> => {
+    // Invalidate any in-flight page: it belongs to the list being replaced.
+    const generation = ++generationRef.current;
+    loadingRef.current = false;
+    setLoadingMore(false);
+    const controller = new AbortController();
+    try {
+      const first = await fetchList(feedSourceEndpoint(source, { limit, displayLanguage }), controller.signal);
+      if (generation !== generationRef.current) return false;
+      feedListCache.delete(listCacheKey);
+      cursorRef.current = first.nextCursor;
+      visibleIndexRef.current = 0;
+      setHasMore(Boolean(first.nextCursor));
+      setLoadMoreError(false);
+      setDeepLinkUnavailable(false);
+      setStartIndex(0);
+      setList(createCycleList(first.posts));
+      setPhase("ready");
+      return true;
+    } catch {
+      return false;
+    }
+  }, [source, displayLanguage, limit, listCacheKey]);
+
   const applyPatch = useCallback((postId: string, patch: Partial<FeedPostDto>) => {
     setList((prev) => patchCycleList(prev, postId, patch));
   }, []);
@@ -508,6 +538,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
     loadMore,
     onVisibleIndexChange,
     refresh,
+    refreshFromTop,
     applyPatch,
     applyAuthorPatch,
     dropPost,
