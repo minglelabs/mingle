@@ -41,6 +41,24 @@ export default function ComposeOverlay({ open, locale, onClose, onPublished }: C
     return () => window.clearTimeout(timer)
   }, [open])
 
+  // Safety net: the app shell never scrolls sideways. If anything (a focus,
+  // the keyboard) nudged the document horizontally while the panel was
+  // around, put it back so the tab behind is not left shifted.
+  useEffect(() => {
+    const unshift = () => {
+      if (window.scrollX !== 0) window.scrollTo(0, window.scrollY)
+      if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0
+      if (document.body.scrollLeft !== 0) document.body.scrollLeft = 0
+    }
+    unshift()
+    window.addEventListener('scroll', unshift, { passive: true })
+    const timers = [120, 400, 800].map((ms) => window.setTimeout(unshift, ms))
+    return () => {
+      window.removeEventListener('scroll', unshift)
+      timers.forEach((timer) => window.clearTimeout(timer))
+    }
+  }, [open])
+
   return (
     <SlideSurface
       open={open}

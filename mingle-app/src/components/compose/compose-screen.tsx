@@ -634,6 +634,8 @@ export default function ComposeScreen({
           onPickImage={handlePickImage}
           author={author}
           autoFocus={!initialDraftId}
+          // In the panel, focus once it has slid in (SlideSurface: 320ms).
+          autoFocusDelayMs={embedded ? 360 : 0}
           previewOpen={previewOpen}
           onPreviewOpenChange={setPreviewOpen}
         />

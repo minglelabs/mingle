@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Eye, ImagePlus, Loader2, Palette, RefreshCw, X } from 'lucide-react'
 import type { FeedPostImageDto } from '@/lib/feed-post-dto'
 import FeedPostPreview from '@/components/feed/feed-post-preview'
@@ -26,6 +26,12 @@ export type ComposeEditorProps = {
   disabled?: boolean
   /** Focus the body when the editor appears (new post). */
   autoFocus?: boolean
+  /**
+   * Wait this long before the auto-focus (compose panel: until it has slid
+   * in). Focus never scrolls the page, so an off-screen field cannot drag
+   * the whole app sideways.
+   */
+  autoFocusDelayMs?: number
   /** Controlled preview (compose overlay: back / edge swipe closes the preview first). */
   previewOpen?: boolean
   onPreviewOpenChange?: (open: boolean) => void
@@ -126,6 +132,18 @@ export default function ComposeEditor(props: ComposeEditorProps) {
   const overLimit = length > MAX_POST_LENGTH
   const displayName = props.author.name?.trim() || (props.author.handle ? `@${props.author.handle}` : '')
 
+  // Auto-focus without scrolling the page (a native autoFocus on a field that
+  // is still off-screen makes iOS scroll the whole document sideways).
+  const autoFocus = props.autoFocus
+  const autoFocusDelayMs = props.autoFocusDelayMs ?? 0
+  useEffect(() => {
+    if (!autoFocus) return
+    const timer = window.setTimeout(() => {
+      textareaRef.current?.focus({ preventScroll: true })
+    }, autoFocusDelayMs)
+    return () => window.clearTimeout(timer)
+  }, [autoFocus, autoFocusDelayMs])
+
   // The body grows with its content; the screen scrolls, not the textarea.
   useLayoutEffect(() => {
     const el = textareaRef.current
@@ -199,7 +217,6 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             onChange={(e) => props.onChangeText(e.target.value)}
             placeholder={copy.editorPlaceholder}
             disabled={props.disabled}
-            autoFocus={props.autoFocus}
             rows={1}
             className="mt-0.5 block min-h-[1.5em] w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35"
             style={{ whiteSpace: 'pre-wrap' }}
