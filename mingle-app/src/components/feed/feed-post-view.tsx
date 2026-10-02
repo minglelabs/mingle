@@ -241,7 +241,7 @@ export default function FeedPostView({
 
       {/* Bottom section: author + (image body) + actions */}
       <div className="relative z-10 mt-auto flex items-end gap-3 px-4 pb-5">
-        <div className="min-w-0 flex-1" style={{ maxWidth: "calc(100% - 56px)" }}>
+        <div className="min-w-0 flex-1" style={{ maxWidth: "calc(100% - 60px)" }}>
           {/* Expanded body for image posts opens UPWARD from the author row,
               so the author row and controls stay exactly where they were. */}
           {imageUrl && expanded ? (
@@ -293,7 +293,7 @@ export default function FeedPostView({
         </div>
 
         {actionSlot ? (
-          <div className="flex shrink-0 flex-col items-center gap-4 pb-1">{actionSlot}</div>
+          <div className="flex shrink-0 flex-col items-center gap-6 pb-1">{actionSlot}</div>
         ) : null}
       </div>
     </article>

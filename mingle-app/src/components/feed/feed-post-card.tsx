@@ -452,13 +452,16 @@ export default function FeedPostCard({
 
   const iconStyle = fg.iconFilter ? { filter: fg.iconFilter } : undefined;
 
+  // Feed-sized account badge: the shared chip is tuned for dense lists.
+  const feedBadgeClass = "!px-2 !py-1 !text-[13px] [&>svg]:!h-3.5 [&>svg]:!w-3.5";
+
   const authorSlot = (
-    <div className="mb-2 flex items-center gap-2">
+    <div className="relative mb-3 flex items-center gap-3">
       <button
         type="button"
         data-feed-action
         onClick={() => onOpenAuthor(post.author.id)}
-        className="flex min-w-0 items-center gap-2 rounded-full transition active:opacity-70"
+        className="flex min-w-0 items-center gap-3 rounded-full transition active:opacity-70"
         aria-label={authorLabel}
       >
         {post.author.imageUrl ? (
@@ -466,50 +469,56 @@ export default function FeedPostCard({
           <img
             src={post.author.imageUrl}
             alt=""
-            className="h-9 w-9 shrink-0 rounded-full object-cover"
+            className="h-12 w-12 shrink-0 rounded-full object-cover"
             draggable={false}
             loading={eagerImage ? "eager" : "lazy"}
             decoding="async"
           />
         ) : (
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${fg.chipClass}`}>
+          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold ${fg.chipClass}`}>
             {displayName.charAt(0).toUpperCase()}
           </span>
         )}
-        <span className={`max-w-[9rem] truncate text-sm font-semibold ${fg.textClass}`}>
+        <span className={`max-w-[10rem] truncate text-[17px] font-bold ${fg.textClass}`}>
           {displayName}
         </span>
         {/* The official chip is plain content of the profile button (a tap on
             it opens the profile, as before). */}
-        {authorBadge === "official" ? <AccountBadge kind={authorBadge} locale={locale} tone={tone} /> : null}
+        {authorBadge === "official" ? (
+          <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
+        ) : null}
       </button>
       {/* The operator badge is its own button, so it sits next to the profile
           button, never inside it: a tap on it opens the badge sheet only. */}
-      {authorBadge === "operator" ? <AccountBadge kind={authorBadge} locale={locale} tone={tone} /> : null}
+      {authorBadge === "operator" ? (
+        <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
+      ) : null}
 
-      <time className={`shrink-0 text-[11px] font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
+      <time className={`shrink-0 text-sm font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
         {formatPostTime(post.publishedAt, locale)}
       </time>
 
+      {/* Follow: a "+" badge on the avatar's lower-right corner. It is a
+          sibling of the profile button (never nested), positioned over it. */}
       {followState === "idle" || followState === "pending" ? (
         <button
           type="button"
           data-feed-action
           onClick={follow}
           disabled={followState === "pending"}
-          className={`${HIT_44} flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition active:scale-90 disabled:opacity-60 ${fg.chipClass}`}
+          className={`${HIT_44} !absolute left-[30px] top-[28px] flex h-6 w-6 items-center justify-center rounded-full bg-white text-slate-900 shadow-md ring-2 ring-black/10 transition active:scale-90 disabled:opacity-60`}
           aria-label={copy.follow}
         >
-          <Plus size={13} strokeWidth={3} aria-hidden="true" />
+          <Plus size={16} strokeWidth={3} aria-hidden="true" />
         </button>
       ) : null}
       {followState === "success" ? (
         <span
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"
+          className="absolute left-[30px] top-[28px] flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md ring-2 ring-white"
           role="status"
           aria-label={copy.followed}
         >
-          <Check size={12} strokeWidth={3} aria-hidden="true" />
+          <Check size={14} strokeWidth={3} aria-hidden="true" />
         </span>
       ) : null}
     </div>
@@ -594,12 +603,12 @@ export default function FeedPostCard({
         onClick={toggleLike}
         disabled={readOnly}
         aria-pressed={likeState.likedByMe}
-        className="flex flex-col items-center gap-0.5 transition active:scale-95 disabled:opacity-40"
+        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 transition active:scale-95 disabled:opacity-40"
         // Fixed name; the pressed state alone announces liked/unliked.
         aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
       >
         <Heart
-          size={26}
+          size={34}
           fill={likeState.likedByMe ? "#ef4444" : "none"}
           stroke={likeState.likedByMe ? "#ef4444" : fg.iconColor}
           strokeWidth={1.8}
@@ -607,7 +616,7 @@ export default function FeedPostCard({
           aria-hidden="true"
         />
         {likeState.likeCount > 0 ? (
-          <span className={`text-[11px] font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
+          <span className={`text-sm font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
             {likeState.likeCount}
           </span>
         ) : null}
@@ -618,12 +627,12 @@ export default function FeedPostCard({
         data-feed-action
         onClick={() => onOpenComments(post.id)}
         disabled={readOnly}
-        className="flex flex-col items-center gap-0.5 transition active:scale-95 disabled:opacity-40"
+        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 transition active:scale-95 disabled:opacity-40"
         aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
       >
-        <MessageCircle size={26} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
+        <MessageCircle size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
         {post.commentCount > 0 ? (
-          <span className={`text-[11px] font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
+          <span className={`text-sm font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
             {post.commentCount}
           </span>
         ) : null}
@@ -633,10 +642,10 @@ export default function FeedPostCard({
         type="button"
         data-feed-action
         onClick={() => onOpenActions(post.id)}
-        className="transition active:scale-95"
+        className="flex min-h-11 min-w-11 items-center justify-center transition active:scale-95"
         aria-label={copy.more}
       >
-        <MoreHorizontal size={26} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
+        <MoreHorizontal size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
       </button>
 
       {/* Accessibility: explicit next / previous beyond the swipe gesture.
