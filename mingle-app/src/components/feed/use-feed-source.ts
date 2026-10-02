@@ -3,6 +3,7 @@
 import { buildClientApiPath } from "@/lib/api-contract";
 import type { FeedPostDto, FeedPostListResponse, FeedPostResponse } from "@/lib/feed-post-dto";
 import { feedSourceEndpoint, postEndpoint, type FeedSource } from "@/lib/feed-routes";
+import { onPublishSuccess } from "@/components/compose/publish-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appendCyclePage,
@@ -126,6 +127,52 @@ export async function resolveViewerStart(
 
 const EMPTY_LIST: FeedCycleList = createCycleList([]);
 
+// ---------------------------------------------------------------------------
+// Session list cache: returning to a feed shows it at once
+// ---------------------------------------------------------------------------
+//
+// Leaving the feed for another screen (compose, a profile, notifications)
+// unmounts it. Without this, coming back refetches the list and the reader
+// sees a loading screen flash before the post they left. The list as it was
+// on screen is kept in memory per source; on return it is shown immediately,
+// starting at the remembered post. It is dropped after `FEED_LIST_CACHE_TTL_MS`
+// (the server's ranked snapshot lives that long) and when a post is published.
+
+/** Matches the server snapshot TTL, so the kept cursor still pages the same list. */
+export const FEED_LIST_CACHE_TTL_MS = 10 * 60_000;
+
+export type FeedListCacheEntry = {
+  list: FeedCycleList;
+  cursor: string | null;
+  hasMore: boolean;
+  savedAt: number;
+};
+
+const feedListCache = new Map<string, FeedListCacheEntry>();
+
+onPublishSuccess(() => feedListCache.clear());
+
+/** Test-only: drop every kept list. */
+export function __resetFeedListCache(): void {
+  feedListCache.clear();
+}
+
+/**
+ * The kept list from `restorePostId` onwards (so the remembered post is first,
+ * exactly where a fresh load would pin it), or null when nothing usable is kept.
+ */
+export function resumeFeedList(
+  entry: FeedListCacheEntry | undefined,
+  restorePostId: string,
+  now: number,
+): FeedListCacheEntry | null {
+  if (!entry || now - entry.savedAt > FEED_LIST_CACHE_TTL_MS) return null;
+  const index = entry.list.entries.findIndex((e) => e.post.id === restorePostId);
+  if (index === -1) return null;
+  if (index === 0) return entry;
+  return { ...entry, list: { ...entry.list, entries: entry.list.entries.slice(index) } };
+}
+
 /**
  * `fetch` with a hard timeout. Aborts the request after `timeoutMs` and rejects
  * with `feed_timeout`, so a stalled network surfaces as an error + retry
@@ -216,15 +263,24 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
     limit = DEFAULT_PAGE_LIMIT,
   } = options;
 
-  const [list, setList] = useState<FeedCycleList>(EMPTY_LIST);
-  const [phase, setPhase] = useState<FeedLoadPhase>("loading");
+  // Returning to this feed (a remembered post, no deep link): resume the kept
+  // list instead of loading. Read once, at mount.
+  const listCacheKey = `${JSON.stringify(source)}|${displayLanguage ?? ""}`;
+  const [resumed] = useState<FeedListCacheEntry | null>(() =>
+    restorePostId && !deepLinkPostId && !startPostId
+      ? resumeFeedList(feedListCache.get(listCacheKey), restorePostId, Date.now())
+      : null,
+  );
+
+  const [list, setList] = useState<FeedCycleList>(resumed?.list ?? EMPTY_LIST);
+  const [phase, setPhase] = useState<FeedLoadPhase>(resumed ? "ready" : "loading");
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(resumed?.hasMore ?? true);
   const [deepLinkUnavailable, setDeepLinkUnavailable] = useState(false);
   const [startIndex, setStartIndex] = useState(0);
 
-  const cursorRef = useRef<string | null>(null);
+  const cursorRef = useRef<string | null>(resumed?.cursor ?? null);
   const loadingRef = useRef(false);
   const visibleIndexRef = useRef(0);
   // Bumped on refresh / source change to invalidate in-flight requests.
@@ -237,6 +293,8 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
       `${JSON.stringify(source)}|${displayLanguage ?? ""}|${deepLinkPostId ?? ""}|${restorePostId ?? ""}|${startPostId ?? ""}`,
     [source, displayLanguage, deepLinkPostId, restorePostId, startPostId],
   );
+
+  const resumedKeyRef = useRef<string | null>(resumed ? sourceKey : null);
 
   const runInitialLoad = useCallback(
     async (generation: number) => {
@@ -307,6 +365,10 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
   );
 
   useEffect(() => {
+    // A resumed list needs no load for the inputs it was resumed with (also
+    // across a dev double-invoked effect); any later input change loads.
+    if (resumedKeyRef.current === sourceKey) return;
+    resumedKeyRef.current = null;
     const generation = ++generationRef.current;
     loadingRef.current = false;
     setLoadingMore(false);
@@ -354,6 +416,13 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
       }
     })();
   }, [hasMore, phase, source, displayLanguage, limit]);
+
+  // Keep the on-screen list for a later return (home / list feeds only; a
+  // viewer opened at a selected post always loads its own order).
+  useEffect(() => {
+    if (startPostId || phase !== "ready" || list.entries.length === 0) return;
+    feedListCache.set(listCacheKey, { list, cursor: cursorRef.current, hasMore, savedAt: Date.now() });
+  }, [listCacheKey, startPostId, phase, list, hasMore]);
 
   const count = list.entries.length;
 

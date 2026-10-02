@@ -16,6 +16,15 @@ const scheduleMicrotask: (callback: () => void) => void =
     : (callback) => { void Promise.resolve().then(callback); };
 
 /**
+ * The answer for this page session, once known. The namespace cannot change
+ * without a full reload, so a later posting screen reached by an in-app
+ * navigation starts from it and renders at once, with no blank frame. It is
+ * unset during the first (hydrating) render of a full load, which therefore
+ * still matches the server.
+ */
+let knownSupport: boolean | null = null;
+
+/**
  * Client-side rollout gate for a posting screen entered directly (a deep link,
  * a bookmark, or a back gesture) rather than through an in-app link.
  *
@@ -29,13 +38,16 @@ const scheduleMicrotask: (callback: () => void) => void =
  */
 export function usePostingFeedGuard(locale: string): PostingFeedGuardStatus {
   const router = useRouter();
-  const [status, setStatus] = useState<PostingFeedGuardStatus>("checking");
+  const [status, setStatus] = useState<PostingFeedGuardStatus>(() =>
+    knownSupport === true ? "supported" : "checking",
+  );
 
   useEffect(() => {
     let cancelled = false;
     scheduleMicrotask(() => {
       if (cancelled) return;
-      if (namespaceSupportsPostingFeed(clientApiNamespace)) {
+      knownSupport = namespaceSupportsPostingFeed(clientApiNamespace);
+      if (knownSupport) {
         setStatus("supported");
         return;
       }
@@ -61,13 +73,14 @@ export function usePostingFeedGuard(locale: string): PostingFeedGuardStatus {
  * build-time namespace), hiding it once `false` arrives.
  */
 export function useIsPostingFeedSupported(): boolean | null {
-  const [supported, setSupported] = useState<boolean | null>(null);
+  const [supported, setSupported] = useState<boolean | null>(() => knownSupport);
 
   useEffect(() => {
     let cancelled = false;
     scheduleMicrotask(() => {
       if (cancelled) return;
-      setSupported(namespaceSupportsPostingFeed(clientApiNamespace));
+      knownSupport = namespaceSupportsPostingFeed(clientApiNamespace);
+      setSupported(knownSupport);
     });
     return () => {
       cancelled = true;

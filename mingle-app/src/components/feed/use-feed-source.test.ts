@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FeedPostDto, FeedPostListResponse } from "@/lib/feed-post-dto";
-import { FEED_REQUEST_TIMEOUT_MS, fetchWithTimeout, resolveViewerStart, shouldPrefetch } from "./use-feed-source";
+import {
+  FEED_LIST_CACHE_TTL_MS,
+  FEED_REQUEST_TIMEOUT_MS,
+  fetchWithTimeout,
+  resolveViewerStart,
+  resumeFeedList,
+  shouldPrefetch,
+} from "./use-feed-source";
+import { createCycleList } from "./feed-list";
 
 function post(id: string, extra: Partial<FeedPostDto> = {}): FeedPostDto {
   return {
@@ -150,5 +158,32 @@ describe("shouldPrefetch", () => {
     expect(shouldPrefetch(10, 10)).toBe(true);
     // A tiny feed is always "near the end".
     expect(shouldPrefetch(2, 0)).toBe(true);
+  });
+});
+
+describe("resumeFeedList — returning to the feed shows the kept list", () => {
+  const entry = (savedAt: number) => ({
+    list: createCycleList([post("a"), post("b"), post("c")]),
+    cursor: "cursor-1",
+    hasMore: true,
+    savedAt,
+  });
+
+  it("starts at the remembered post and keeps the cursor", () => {
+    const resumed = resumeFeedList(entry(1_000), "b", 2_000);
+    expect(resumed?.list.entries.map((e) => e.post.id)).toEqual(["b", "c"]);
+    expect(resumed?.cursor).toBe("cursor-1");
+    expect(resumed?.hasMore).toBe(true);
+  });
+
+  it("returns the list unchanged when the remembered post is first", () => {
+    const kept = entry(1_000);
+    expect(resumeFeedList(kept, "a", 2_000)).toBe(kept);
+  });
+
+  it("is not used when missing, expired, or without the remembered post", () => {
+    expect(resumeFeedList(undefined, "a", 2_000)).toBeNull();
+    expect(resumeFeedList(entry(1_000), "a", 1_000 + FEED_LIST_CACHE_TTL_MS + 1)).toBeNull();
+    expect(resumeFeedList(entry(1_000), "zzz", 2_000)).toBeNull();
   });
 });
