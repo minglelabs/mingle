@@ -8,6 +8,7 @@ import { deletePostImage, getPostImage } from '@/server/posts/post-image-storage
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
 import { contentLengthTooLarge, storeUploadedPostImage } from '@/server/posts/post-image-upload'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
+import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -67,6 +68,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!userId) return json({ error: 'unauthorized' }, { status: 401 })
   const restricted = await accountRestrictionGuard(userId)
   if (restricted) return restricted
+  // Same ceiling as POST /posts/images: each upload runs the image pipeline.
+  const limited = rateLimitGuard('upload_post_image', userId)
+  if (limited) return limited
 
   if (contentLengthTooLarge(request.headers)) {
     return json({ error: 'image_too_large' }, { status: 413 })

@@ -50,6 +50,11 @@ vi.mock('@/server/reports/account-restriction', () => ({
   accountRestrictionGuard: mockAccountRestrictionGuard,
 }))
 
+const { mockRateLimitGuard } = vi.hoisted(() => ({
+  mockRateLimitGuard: vi.fn<(action: string, userId: string) => Response | null>(() => null),
+}))
+vi.mock('@/server/rate-limit/rate-limit', () => ({ rateLimitGuard: mockRateLimitGuard }))
+
 import { GET, POST } from './route'
 
 const OWN_KEY = 'post-images/author-1/0f8fad5b-d9cb-469f-a165-70867728950e.jpg'
@@ -157,6 +162,16 @@ describe('POST /api/posts/{postId}/image', () => {
     mockPostCount.mockResolvedValue(0)
     mockDraftCount.mockResolvedValue(0)
     mockDeletePostImage.mockResolvedValue(undefined)
+    mockRateLimitGuard.mockReturnValue(null)
+  })
+
+  it('is rate limited under upload_post_image before any image work', async () => {
+    mockRateLimitGuard.mockReturnValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429 }))
+    const res = await POST(upload(), context('p1'))
+    expect(res.status).toBe(429)
+    expect(mockRateLimitGuard).toHaveBeenCalledWith('upload_post_image', 'author-1')
+    expect(mockPostFindFirst).not.toHaveBeenCalled()
+    expect(mockStoreUploadedPostImage).not.toHaveBeenCalled()
   })
 
   it('stores under the author\'s prefix and deletes the replaced own image', async () => {

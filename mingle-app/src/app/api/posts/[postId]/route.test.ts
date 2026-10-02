@@ -257,6 +257,24 @@ describe('PATCH /api/posts/[postId]', () => {
     expect(mockPostTranslationCreateMany).not.toHaveBeenCalled()
   })
 
+  it('ignores a client sourceLanguage when the body is unchanged (server detection is authoritative)', async () => {
+    mockPostFindFirst.mockResolvedValue({
+      id: 'p1', authorId: 'user-1', bodyVersion: 3, imageObjectKey: null, sourceText: 'keep', sourceLanguage: 'en',
+      backgroundKey: 'warm-cream', updatedAt: new Date(),
+    })
+
+    const req = new NextRequest('http://localhost/api/posts/p1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceLanguage: 'ko' }),
+    })
+    const res = await PATCH(req, makeParams('p1'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.unchanged).toBe(true)
+    expect(mockPostUpdateMany).not.toHaveBeenCalled()
+  })
+
   it('rejects a foreign (conversation) image key without updating the post', async () => {
     mockPostFindFirst.mockResolvedValue({
       id: 'p1', authorId: 'user-1', bodyVersion: 3, imageObjectKey: null, sourceText: 'keep',

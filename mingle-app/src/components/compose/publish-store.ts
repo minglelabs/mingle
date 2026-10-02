@@ -247,6 +247,11 @@ async function runPipeline(initialInput: PublishInput) {
       imageWidth: typeof uploaded.width === 'number' ? uploaded.width : input.imageWidth,
       imageHeight: typeof uploaded.height === 'number' ? uploaded.height : input.imageHeight,
     }
+    // Mirror the key onto the live job: if the create request below throws
+    // (offline, timeout) the `startPublish` catch rebuilds the failed job from
+    // `current.input`, and a retry must reuse this upload instead of
+    // uploading the photo again and orphaning the first object.
+    if (isSameJob(current, input)) setJob({ ...current, input })
   }
 
   // Step 2 — create the post (idempotent via clientPostId).

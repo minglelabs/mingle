@@ -223,12 +223,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     })
   }
 
-  // ── No body change: apply source-language / image / background edits only. ──
+  // ── No body change: apply image / background edits only. ──
+  // The source language is NOT taken from the request here: the server's
+  // detection is authoritative (it runs when the body changes), and a client
+  // value would let an author mislabel the post, which hides its translations
+  // (`same_language`) and feeds a wrong source language to the translator.
   const data: Record<string, unknown> = { ...sideData }
-  if ('sourceLanguage' in input && typeof input.sourceLanguage === 'string') {
-    const nextLanguage = input.sourceLanguage.trim() || null
-    if (nextLanguage !== existing.sourceLanguage) data.sourceLanguage = nextLanguage
-  }
 
   // Nothing to change (e.g. only the image was replaced through
   // POST /posts/{id}/image beforehand) is a successful no-op, not an error.

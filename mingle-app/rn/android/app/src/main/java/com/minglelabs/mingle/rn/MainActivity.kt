@@ -17,7 +17,16 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent?.dataString)
-    NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
+    // A re-created activity (rotation, theme/locale change, process restore) or a
+    // launch from Recents re-delivers the intent that first opened it. Recording it
+    // again would replay a push tap that was already handled and navigate the
+    // WebView back to the old target. Only a fresh launch carries a new tap here;
+    // taps while the app is running arrive through onNewIntent.
+    val launchedFromHistory =
+      ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+    if (savedInstanceState == null && !launchedFromHistory) {
+      NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
+    }
     super.onCreate(savedInstanceState)
   }
 

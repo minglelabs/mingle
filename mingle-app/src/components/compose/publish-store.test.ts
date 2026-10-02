@@ -183,6 +183,32 @@ describe('publish store', () => {
     expect(uploads).toHaveLength(1)
   })
 
+  it('keeps the uploaded key when the create request throws (network error), so a retry does not re-upload', async () => {
+    let createAttempt = 0
+    const fetchMock = routeFetch({
+      'POST /posts/images': () => jsonResponse({ imageObjectKey: 'post-images/u1/net.jpg' }, 201),
+      'POST /posts': () => {
+        createAttempt += 1
+        if (createAttempt === 1) throw new TypeError('Failed to fetch')
+        return jsonResponse({ postId: 'post-net' }, 201)
+      },
+      'POST /posts/drafts': () => jsonResponse({ draft: { id: 'draft-net' } }, 201),
+      'DELETE /posts/drafts': () => jsonResponse({ deleted: true }),
+    })
+
+    startPublish(baseInput({ imageFile: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) }))
+    await flush()
+    expect(getPublishJob()?.status).toBe('failed')
+    expect(getPublishJob()?.input.imageObjectKey).toBe('post-images/u1/net.jpg')
+    expect(getPublishJob()?.input.imageFile).toBeNull()
+
+    retryPublish()
+    await flush()
+    expect(getPublishJob()?.status).toBe('success')
+    const uploads = fetchMock.mock.calls.filter((c) => callKey(c) === 'POST /posts/images')
+    expect(uploads).toHaveLength(1)
+  })
+
   it('refuses a second startPublish while one is running (no duplicate create, caller told)', async () => {
     let resolveCreate: (r: Response) => void = () => {}
     const fetchMock = vi.fn().mockImplementation(
