@@ -162,9 +162,11 @@ export default function SlideSurface({
       return;
     }
     isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: SURFACE_TRANSITION });
+    if (transitionMode !== "instant") {
+      await motionControls.start({ x: "100%", transition: SURFACE_TRANSITION });
+    }
     if (isMountedRef.current) onClose();
-  }, [canClose, motionControls, onClose, onRequestClose, open]);
+  }, [canClose, motionControls, onClose, onRequestClose, open, transitionMode]);
 
   useEffect(() => registerNativeBackHandler(() => {
     if (!open || !canClose) return false;
@@ -245,7 +247,7 @@ export default function SlideSurface({
 
   const surface = (
     <motion.main
-      initial={{ x: "100%" }}
+      initial={{ x: open && transitionMode === "instant" ? 0 : "100%" }}
       animate={motionControls}
       drag="x"
       dragControls={dragControls}

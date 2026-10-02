@@ -61,6 +61,7 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
   return (
     <NotificationPanel
       open
+      transitionMode="instant"
       enabled={sessionStatus === "authenticated"}
       locale={locale}
       dictionary={dictionary}

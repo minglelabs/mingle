@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ArrowUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
 import { MAX_COMMENT_LENGTH, composerEnterAction } from "./comment-state";
@@ -19,6 +19,10 @@ type Props = {
   onSubmit: (text: string) => Promise<WriteOutcome> | void;
   onFocusRequiresLogin?: () => void;
 };
+
+const MAX_TEXTAREA_PX = 144;
+/** Show the live counter only when the limit is getting close. */
+const COUNTER_THRESHOLD = Math.floor(MAX_COMMENT_LENGTH * 0.8);
 
 /** A touch keyboard has no Shift key, so Enter must stay a newline there. */
 function isTouchInput(): boolean {
@@ -54,6 +58,14 @@ export default function CommentComposer({
     }
   }, [replyTarget]);
 
+  // Grow with the text like the chat composer: 1 line up to ~6, then scroll.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
+  }, [value]);
+
   const trimmedLen = value.trim().length;
   const overLimit = value.length > MAX_COMMENT_LENGTH;
   const canSend = trimmedLen > 0 && !overLimit && !sending && !disabled;
@@ -70,9 +82,9 @@ export default function CommentComposer({
   };
 
   return (
-    <div className="border-t border-border bg-background px-3 pb-[env(safe-area-inset-bottom)] pt-2">
+    <div className="border-t border-border/60 bg-background px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2.5">
       {replyTarget && (
-        <div className="mb-1 flex items-center justify-between rounded-md bg-muted px-2 py-1 text-[13px] text-muted-foreground">
+        <div className="mb-2 flex items-center justify-between rounded-xl bg-muted/70 px-3 py-1.5 text-[13px] text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate">
               {formatCommentsCopy(copy.replyingTo, { name: replyTarget.label })}
@@ -90,63 +102,62 @@ export default function CommentComposer({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onFocus={() => {
-              if (disabled) onFocusRequiresLogin?.();
-            }}
-            readOnly={disabled}
-            rows={1}
-            placeholder={replyTarget ? copy.writeReply : copy.writeComment}
-            aria-label={replyTarget ? copy.writeReply : copy.writeComment}
-            className={cn(
-              "max-h-32 min-h-[40px] w-full resize-none rounded-2xl border border-input bg-background px-3 py-2 text-[15px] leading-relaxed",
-              "focus:outline-none focus:ring-2 focus:ring-ring",
-            )}
-            onKeyDown={(e) => {
-              // Hardware keyboard: Enter sends, Shift+Enter is a newline.
-              // Touch keyboard: Enter is a newline; the button sends.
-              // Enter during IME composition only commits the composition.
-              const action = composerEnterAction({
-                key: e.key,
-                shiftKey: e.shiftKey,
-                isComposing: e.nativeEvent.isComposing,
-                keyCode: e.nativeEvent.keyCode,
-                touchInput: isTouchInput(),
-              });
-              if (action === "send") {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-          />
-          <div
-            className={cn(
-              "mt-0.5 text-right text-[11px]",
-              overLimit ? "text-destructive" : "text-muted-foreground",
-            )}
-            aria-live="polite"
-          >
-            {formatCommentsCopy(copy.charCount, { n: value.length, max: MAX_COMMENT_LENGTH })}
-          </div>
-        </div>
+      <div
+        className={cn(
+          "flex items-end gap-2 rounded-[22px] border bg-muted/40 py-1.5 pl-4 pr-1.5 transition-colors",
+          "focus-within:border-foreground/30 focus-within:bg-background",
+          overLimit ? "border-destructive" : "border-border",
+        )}
+      >
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={() => {
+            if (disabled) onFocusRequiresLogin?.();
+          }}
+          readOnly={disabled}
+          rows={1}
+          placeholder={replyTarget ? copy.writeReply : copy.writeComment}
+          aria-label={replyTarget ? copy.writeReply : copy.writeComment}
+          className="max-h-36 min-h-[32px] flex-1 resize-none self-center bg-transparent py-1 text-[15px] leading-6 placeholder:text-muted-foreground focus:outline-none"
+          onKeyDown={(e) => {
+            // Hardware keyboard: Enter sends, Shift+Enter is a newline.
+            // Touch keyboard: Enter is a newline; the button sends.
+            // Enter during IME composition only commits the composition.
+            const action = composerEnterAction({
+              key: e.key,
+              shiftKey: e.shiftKey,
+              isComposing: e.nativeEvent.isComposing,
+              keyCode: e.nativeEvent.keyCode,
+              touchInput: isTouchInput(),
+            });
+            if (action === "send") {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+        />
 
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!canSend}
-          className={cn(
-            "mb-6 shrink-0 rounded-full px-4 py-2 text-[14px] font-semibold",
-            "bg-primary text-primary-foreground disabled:opacity-40",
-          )}
+          aria-label={sending ? copy.sending : copy.send}
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:bg-muted-foreground/25 disabled:text-background"
         >
-          {sending ? copy.sending : copy.send}
+          <ArrowUp className="size-[18px]" strokeWidth={2.5} aria-hidden />
         </button>
       </div>
+
+      {value.length >= COUNTER_THRESHOLD && (
+        <div
+          className={cn("mt-1 pr-2 text-right text-[11px]", overLimit ? "text-destructive" : "text-muted-foreground")}
+          aria-live="polite"
+        >
+          {formatCommentsCopy(copy.charCount, { n: value.length, max: MAX_COMMENT_LENGTH })}
+        </div>
+      )}
     </div>
   );
 }

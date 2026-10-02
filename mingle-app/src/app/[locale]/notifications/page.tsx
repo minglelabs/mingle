@@ -12,7 +12,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
   if (!isSupportedLocale(locale)) notFound();
 
   return (
-    <PostingFeedRouteGuard locale={locale}>
+    <PostingFeedRouteGuard locale={locale} placeholderClassName="bg-white">
       <NotificationScreen
         dictionary={getDictionary(locale)}
         locale={locale as AppLocale}

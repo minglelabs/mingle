@@ -94,7 +94,7 @@ export default function CommentItem({
   return (
     <div
       data-comment-id={comment.id}
-      className={cn("flex gap-2 px-2 py-1.5", comment.pending && "opacity-60")}
+      className={cn("flex gap-3 px-2 py-2", comment.pending && "opacity-60")}
     >
       {/* Avatar */}
       <div className="mt-0.5 shrink-0">
@@ -121,7 +121,7 @@ export default function CommentItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="text-[14px] font-semibold text-foreground">{name}</span>
+            <span className="text-[13.5px] font-bold text-foreground">{name}</span>
             <AccountBadge
               kind={resolveAccountBadge(comment.author)}
               locale={locale}

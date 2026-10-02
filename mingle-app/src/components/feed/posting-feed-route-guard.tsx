@@ -6,6 +6,8 @@ import { usePostingFeedGuard } from "@/components/feed/use-posting-feed-guard";
 type PostingFeedRouteGuardProps = {
   locale: string;
   children: ReactNode;
+  /** Placeholder background while the client namespace resolves. */
+  placeholderClassName?: string;
 };
 
 /**
@@ -20,11 +22,11 @@ type PostingFeedRouteGuardProps = {
  * keeps hydration consistent; the real screen appears one tick later once the
  * client namespace is known to be supported.
  */
-export default function PostingFeedRouteGuard({ locale, children }: PostingFeedRouteGuardProps) {
+export default function PostingFeedRouteGuard({ locale, children, placeholderClassName = "bg-black" }: PostingFeedRouteGuardProps) {
   const status = usePostingFeedGuard(locale);
 
   if (status !== "supported") {
-    return <div aria-hidden className="h-full w-full bg-black" />;
+    return <div aria-hidden className={`h-full w-full ${placeholderClassName}`} />;
   }
 
   return <>{children}</>;

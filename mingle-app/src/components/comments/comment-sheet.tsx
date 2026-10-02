@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
+import { motion, useDragControls, type PanInfo } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy, formatViewReplies } from "@/i18n/comments-copy";
@@ -88,6 +89,8 @@ export default function CommentSheet(props: CommentSheetProps) {
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const dragControls = useDragControls();
+  const [dismissing, setDismissing] = useState(false);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => setMounted(true));
@@ -260,6 +263,18 @@ export default function CommentSheet(props: CommentSheetProps) {
     return copy.actionFailed;
   }, [sheet.notice, copy, locale]);
 
+  // Swipe-down dismiss: the drag starts only from the handle / header so the
+  // comment list keeps its own vertical scroll.
+  const handleDragEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.y > 110 || info.velocity.y > 600) {
+      setDismissing(true);
+      window.setTimeout(() => {
+        setDismissing(false);
+        onClose();
+      }, 180);
+    }
+  };
+
   if (!open || !mounted) return null;
 
   const body = (
@@ -274,44 +289,58 @@ export default function CommentSheet(props: CommentSheetProps) {
         type="button"
         aria-label={copy.close}
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className={cn("absolute inset-0 bg-black/40 transition-opacity duration-200", dismissing && "opacity-0")}
         tabIndex={-1}
       />
 
-      <div
+      <motion.div
         ref={panelRef}
         tabIndex={-1}
-        className={cn(
-          "outline-none",
-          "relative flex max-h-[85vh] min-h-[50vh] flex-col overflow-hidden rounded-t-2xl bg-background shadow-2xl",
-          "motion-safe:animate-in motion-safe:slide-in-from-bottom motion-safe:duration-200",
-        )}
+        className="relative flex max-h-[88vh] min-h-[55vh] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl outline-none"
         style={{ paddingBottom: keyboardInset ? keyboardInset : undefined }}
+        initial={{ y: "100%" }}
+        animate={{ y: dismissing ? "100%" : 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.6 }}
+        dragMomentum={false}
+        onDragEnd={handleDragEnd}
         // Keep touches inside the sheet from reaching the feed behind it.
         onTouchMove={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-[15px] font-semibold">
-            {copy.title}
-            {sheet.commentCount > 0 && (
-              <span className="ml-1.5 text-muted-foreground">{sheet.commentCount}</span>
-            )}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={copy.close}
-            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-          >
-            <X className="size-5" aria-hidden />
-          </button>
+        {/* Handle + header: the swipe-down grab area */}
+        <div
+          className="shrink-0 cursor-grab touch-none select-none"
+          onPointerDown={(e) => dragControls.start(e)}
+        >
+          <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
+          <div className="flex items-center justify-between px-5 pb-3 pt-3">
+            <h2 className="text-[16px] font-bold">
+              {copy.title}
+              {sheet.commentCount > 0 && (
+                <span className="ml-1.5 font-semibold text-muted-foreground">{sheet.commentCount}</span>
+              )}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={copy.close}
+              className="rounded-full bg-muted p-1.5 text-muted-foreground transition active:scale-95"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
         </div>
+        <div className="h-px shrink-0 bg-border/60" />
 
         {/* List */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto overscroll-contain px-2 py-2"
+          className="flex-1 overflow-y-auto overscroll-contain px-3 py-2"
         >
           {sheet.phase === "loading" && (
             <p className="py-8 text-center text-[14px] text-muted-foreground">{copy.loading}</p>
@@ -337,7 +366,7 @@ export default function CommentSheet(props: CommentSheetProps) {
               const replies = comment.replies ?? [];
               const isExpanded = sheet.expanded.has(comment.id);
               return (
-                <div key={comment.id} className="border-b border-border/60 last:border-b-0">
+                <div key={comment.id} className="py-0.5">
                   <CommentItem
                     comment={comment}
                     isReply={false}
@@ -349,7 +378,7 @@ export default function CommentSheet(props: CommentSheetProps) {
                   />
 
                   {replies.length > 0 && (
-                    <div className="ml-10">
+                    <div className="ml-11 border-l-2 border-border/60 pl-1">
                       <button
                         type="button"
                         onClick={() => sheet.toggleReplies(comment.id)}
@@ -411,7 +440,7 @@ export default function CommentSheet(props: CommentSheetProps) {
             onSubmit={sheet.submit}
           />
         )}
-      </div>
+      </motion.div>
 
       {/* Report flow for others' comments (R team owns the sheet body). */}
       {reportTarget && (

@@ -28,6 +28,8 @@ type NotificationPanelProps = {
   locale: AppLocale;
   dictionary: AppDictionary;
   nativeTopInsetPx?: number;
+  /** "instant" for the dedicated route (no slide-in over a blank page). */
+  transitionMode?: "animate" | "instant";
   onClose: () => void;
   onOpenProfile: (userId: string) => void;
   /**
@@ -208,6 +210,7 @@ export default function NotificationPanel({
   locale,
   dictionary,
   nativeTopInsetPx = 0,
+  transitionMode = "animate",
   onClose,
   onOpenProfile,
   onOpenPost,
@@ -524,6 +527,7 @@ export default function NotificationPanel({
     <SlideSurface
       open={open}
       onClose={onClose}
+      transitionMode={transitionMode}
       ariaLabel={copy.title}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
       style={{ touchAction: "pan-y" }}
