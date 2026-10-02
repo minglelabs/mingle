@@ -21,6 +21,8 @@ import {
 
 const CONTENT_PATH = path.resolve(__dirname, '../../../content/feed-seed/posts.v1.json')
 const content = JSON.parse(readFileSync(CONTENT_PATH, 'utf8')) as SeedContent
+const GLOBAL_CONTENT_PATH = path.resolve(__dirname, '../../../content/feed-seed/posts.v2.json')
+const globalContent = JSON.parse(readFileSync(GLOBAL_CONTENT_PATH, 'utf8')) as SeedContent
 
 function item(overrides: Partial<SeedItem> = {}): SeedItem {
   return {
@@ -38,6 +40,30 @@ function contentWith(items: SeedItem[]): SeedContent {
   return { version: 1, authorHandle: 'mingle_team', authorDisplayName: 'Mingle 팀', items }
 }
 
+describe('global feed seed content file (posts.v2.json)', () => {
+  it('passes every content rule', () => {
+    expect(validateSeedContent(globalContent)).toEqual([])
+  })
+
+  it('has about 300 short posts', () => {
+    expect(globalContent.items.length).toBeGreaterThanOrEqual(280)
+    expect(globalContent.items.length).toBeLessThanOrEqual(320)
+    for (const entry of globalContent.items) expect(entry.text.length).toBeLessThanOrEqual(300)
+  })
+
+  it('covers every non-Korean seed language', () => {
+    const langs = new Set(globalContent.items.map((entry) => entry.language))
+    for (const lang of SEED_LANGUAGES.filter((code) => code !== 'ko')) expect(langs.has(lang)).toBe(true)
+  })
+
+  it('never reuses a v1 key, id or text', () => {
+    const all = [...content.items, ...globalContent.items]
+    expect(new Set(all.map((entry) => entry.key)).size).toBe(all.length)
+    expect(new Set(all.map((entry) => entry.clientPostId)).size).toBe(all.length)
+    expect(new Set(all.map((entry) => entry.text)).size).toBe(all.length)
+  })
+})
+
 describe('feed seed content file (posts.v1.json)', () => {
   it('passes every content rule', () => {
     expect(validateSeedContent(content)).toEqual([])
@@ -52,9 +78,9 @@ describe('feed seed content file (posts.v1.json)', () => {
     }
   })
 
-  it('mixes all four source languages', () => {
+  it('mixes all four launch languages', () => {
     const langs = new Set(content.items.map((entry) => entry.language))
-    for (const lang of SEED_LANGUAGES) expect(langs.has(lang)).toBe(true)
+    for (const lang of ['ko', 'en', 'ja', 'zh-CN'] as const) expect(langs.has(lang)).toBe(true)
   })
 
   it('uses unique keys, ids and texts', () => {

@@ -4,6 +4,7 @@
  * Run from mingle-app (always through the launcher, which wires the `@/` alias):
  *   node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs            # dry-run (default)
  *   node scripts/run-with-env-local.mjs node scripts/seed-feed-content.mjs --apply    # write
+ *   ... --content content/feed-seed/posts.v2.json [--apply]                            # global seed (300 posts, 10 languages)
  *
  * Flags:
  *   --apply                       write posts (default is a read-only dry-run)

@@ -6,7 +6,7 @@
  * tested without a database.
  */
 
-export const SEED_LANGUAGES = ['ko', 'en', 'ja', 'zh-CN'] as const
+export const SEED_LANGUAGES = ['ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'es', 'fr', 'ru', 'vi', 'hi', 'ar'] as const
 export type SeedLanguage = (typeof SEED_LANGUAGES)[number]
 
 export const SEED_KINDS = ['notice', 'fact', 'tip', 'phrase', 'question'] as const
@@ -124,7 +124,7 @@ export function validateSeedContent(raw: unknown): SeedValidationIssue[] {
 
     for (const id of findForbiddenPhrases(text)) push(`forbidden phrase (${id})`)
 
-    if (entry.kind === 'question' && !/[?？]/.test(text)) push('question must contain a question mark')
+    if (entry.kind === 'question' && !/[?？؟]/.test(text)) push('question must contain a question mark')
 
     const sources = entry.sources
     if (entry.kind === 'fact') {
