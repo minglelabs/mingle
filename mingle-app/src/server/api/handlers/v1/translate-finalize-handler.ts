@@ -37,6 +37,10 @@ import {
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
+import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
+
 export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
@@ -1708,7 +1712,7 @@ async function synthesizeTtsInline(args: {
   language: string
   requestedVoiceId?: string
   ttsModel?: unknown
-}): Promise<{ audioBase64: string, audioMime: string, voiceId: string } | null> {
+}): Promise<{ audioBase64: string, audioMime: string, voiceId: string, provider: string, modelId: string, audioSeconds: number } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
   const result = await synthesizeSpeech({
     text: args.text,
@@ -1722,6 +1726,9 @@ async function synthesizeTtsInline(args: {
     audioBase64: result.audio.toString('base64'),
     audioMime: result.mime,
     voiceId: result.voiceId,
+    provider: result.provider,
+    modelId: result.modelId,
+    audioSeconds: estimateTtsAudioSeconds(result.audio, result.mime),
   }
 }
 
@@ -1800,6 +1807,17 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     return response
   }
 
+  // Coins (docs/coin-iap-spec.md 3.5, 4.3): the sender pays for translation, and
+  // a sender with no coins gets no translation (the message still goes out untranslated).
+  const coinBillingUserId = await resolveCoinBillingUserId()
+  if (coinBillingUserId && !(await canSpendCoins(coinBillingUserId))) {
+    const response = NextResponse.json({ error: COIN_INSUFFICIENT_ERROR, translations: {} }, { status: 402 })
+    ensureTrackingContext(request, response, { sessionKeyHint })
+    return response
+  }
+  const coinClientMessageId = typeof body.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : ''
+  const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
+
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
   const ctx: TranslateContext = {
     text,
@@ -1875,7 +1893,27 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         responsePayload.translationTotalTokens = meta.usage.totalTokens
       }
 
-      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage)) {
+      // meta.usage exists only when the provider was actually called for this request.
+      let coinsExhausted = false
+      if (coinBillingUserId && meta.usage) {
+        const charge = await chargeCoinUsageSafely({
+          userId: coinBillingUserId,
+          kind: 'translation',
+          units: {
+            input_token: meta.usage.promptTokens ?? 0,
+            // OpenAI-style completion counts already include reasoning tokens.
+            output_token: meta.usage.completionTokens ?? 0,
+          },
+          model: meta.model,
+          provider: meta.infrastructureProvider,
+          sessionKey: sessionKeyHint,
+          idempotencyKey: `translation:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinRequestDigest}`,
+        })
+        coinsExhausted = charge?.balanceExhausted === true
+        if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
+      }
+
+      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage) && !coinsExhausted) {
         const ttsText = (translations[ttsLanguage] || '').trim()
         if (ttsText) {
           const ttsResult = await synthesizeTtsInline({
@@ -1890,10 +1928,24 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             responsePayload.ttsAudioBase64 = ttsResult.audioBase64
             responsePayload.ttsAudioMime = ttsResult.audioMime
             responsePayload.ttsVoiceId = ttsResult.voiceId
+            if (coinBillingUserId) {
+              const charge = await chargeCoinUsageSafely({
+                userId: coinBillingUserId,
+                kind: 'tts',
+                units: { char: ttsText.length, second: ttsResult.audioSeconds },
+                model: ttsResult.modelId,
+                provider: ttsResult.provider,
+                sessionKey: sessionKeyHint,
+                idempotencyKey: `tts:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinKeyDigest(sessionKeyHint, ttsLanguage, ttsText)}`,
+              })
+              coinsExhausted = charge?.balanceExhausted === true
+              if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
+            }
           }
         }
       }
 
+      if (coinsExhausted) responsePayload.coinExhausted = true
       const response = NextResponse.json(responsePayload)
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response

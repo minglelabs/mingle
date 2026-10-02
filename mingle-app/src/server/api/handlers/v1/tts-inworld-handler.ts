@@ -10,6 +10,9 @@ import {
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
+import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
 
 export const runtime = 'nodejs'
 
@@ -51,6 +54,14 @@ export async function handleTtsInworldV1(request: NextRequest) {
 
   if (!text) {
     const response = NextResponse.json({ error: 'text is required' }, { status: 400 })
+    ensureTrackingContext(request, response, { sessionKeyHint })
+    return response
+  }
+
+  // Coins (docs/coin-iap-spec.md 3.5, 4.3): whoever asks for the audio pays; no coins, no synthesis.
+  const coinBillingUserId = await resolveCoinBillingUserId()
+  if (coinBillingUserId && !(await canSpendCoins(coinBillingUserId))) {
+    const response = NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
@@ -130,6 +141,19 @@ export async function handleTtsInworldV1(request: NextRequest) {
       'X-TTS-Voice-Id': result.voiceId,
     }
     if (result.fallbackFrom) headers['X-TTS-Fallback-From'] = result.fallbackFrom
+    if (coinBillingUserId) {
+      const charge = await chargeCoinUsageSafely({
+        userId: coinBillingUserId,
+        kind: 'tts',
+        units: { char: text.length, second: estimateTtsAudioSeconds(audioBuffer, result.mime) },
+        model: result.modelId,
+        provider: result.provider,
+        sessionKey: sessionKeyHint,
+        idempotencyKey: `tts:${coinBillingUserId}:${clientMessageId || '-'}:${coinKeyDigest(sessionKeyHint, language, text)}`,
+      })
+      if (charge?.wallet) headers['X-Coin-Balance'] = String(charge.wallet.balance)
+      if (charge?.balanceExhausted) headers['X-Coin-Exhausted'] = '1'
+    }
     const audioResponse = new NextResponse(new Uint8Array(audioBuffer), { headers })
 
     const tracking = ensureTrackingContext(request, audioResponse, { sessionKeyHint })
