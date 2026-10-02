@@ -26,6 +26,9 @@ export type ComposeEditorProps = {
   disabled?: boolean
   /** Focus the body when the editor appears (new post). */
   autoFocus?: boolean
+  /** Controlled preview (compose overlay: back / edge swipe closes the preview first). */
+  previewOpen?: boolean
+  onPreviewOpenChange?: (open: boolean) => void
 }
 
 /** The counter stays out of the way until the body is close to the limit. */
@@ -71,7 +74,7 @@ function ToolButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground/55 transition active:scale-90 active:bg-foreground/5 disabled:opacity-40"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-foreground/45 transition active:scale-90 active:bg-foreground/5 disabled:opacity-40"
     >
       {children}
     </button>
@@ -112,7 +115,12 @@ export default function ComposeEditor(props: ComposeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [preparing, setPreparing] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
-  const [showPreview, setShowPreview] = useState(false)
+  const [localPreview, setLocalPreview] = useState(false)
+  const showPreview = props.previewOpen ?? localPreview
+  const setShowPreview = (open: boolean) => {
+    if (props.onPreviewOpenChange) props.onPreviewOpenChange(open)
+    else setLocalPreview(open)
+  }
 
   const length = props.sourceText.length
   const overLimit = length > MAX_POST_LENGTH
@@ -154,7 +162,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
   const preset = resolveBackgroundPreset(props.backgroundKey)
 
   return (
-    <div className="px-4 pb-6 pt-4">
+    <div className="px-4 pb-6 pt-3">
       <div className="flex gap-3">
         {props.author.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -192,8 +200,8 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             placeholder={copy.editorPlaceholder}
             disabled={props.disabled}
             autoFocus={props.autoFocus}
-            rows={3}
-            className="mt-1 block min-h-[5.5rem] w-full resize-none overflow-hidden bg-transparent text-[17px] leading-[1.5] outline-none placeholder:text-foreground/35"
+            rows={1}
+            className="mt-0.5 block min-h-[1.5em] w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35"
             style={{ whiteSpace: 'pre-wrap' }}
           />
 
@@ -239,21 +247,22 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             </p>
           ) : null}
 
-          <div className="-ml-2.5 mt-1 flex items-center">
+          {/* Sits right under the text (Threads-style) and moves down as it grows. */}
+          <div className="-ml-2 mt-1.5 flex items-center gap-0.5">
             <ToolButton
               label={props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
               onClick={() => fileInputRef.current?.click()}
               disabled={props.disabled || preparing}
             >
-              <ImagePlus size={22} strokeWidth={1.9} aria-hidden="true" />
+              <ImagePlus size={20} strokeWidth={1.9} aria-hidden="true" />
             </ToolButton>
             {props.onChangeBackground ? (
               <ToolButton label={copy.changeBackground} onClick={props.onChangeBackground} disabled={props.disabled}>
-                <Palette size={22} strokeWidth={1.9} aria-hidden="true" />
+                <Palette size={20} strokeWidth={1.9} aria-hidden="true" />
               </ToolButton>
             ) : null}
             <ToolButton label={copy.preview} onClick={() => setShowPreview(true)} disabled={props.disabled}>
-              <Eye size={22} strokeWidth={1.9} aria-hidden="true" />
+              <Eye size={20} strokeWidth={1.9} aria-hidden="true" />
             </ToolButton>
 
             {/* Always announced; shown once the body nears the limit. */}

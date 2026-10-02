@@ -84,6 +84,7 @@ export default function ComposeScreen({
   initialDraftId,
   onClose,
   onPublished,
+  backHandlerRef,
 }: {
   locale: string
   initialDraftId: string | null
@@ -91,6 +92,11 @@ export default function ComposeScreen({
   onClose?: () => void
   /** Overlay mode: what to do once a publish starts (default: go to the feed). */
   onPublished?: () => void
+  /**
+   * Overlay mode: the panel asks this before closing (back / edge swipe).
+   * Returns true when it closed an inner layer (preview, drafts) instead.
+   */
+  backHandlerRef?: { current: (() => boolean) | null }
 }) {
   const embedded = Boolean(onClose)
   const copy = composeCopy(locale)
@@ -113,6 +119,7 @@ export default function ComposeScreen({
   const [loadingMore, setLoadingMore] = useState(false)
   // The screen opens on the editor; the draft list is one tap away in the header.
   const [mode, setMode] = useState<'editor' | 'drafts'>('editor')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [text, setText] = useState('')
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
   const [image, setImageState] = useState<PendingImage>({ kind: 'none' })
@@ -167,6 +174,25 @@ export default function ComposeScreen({
   }, [text, backgroundKey])
 
   const isSignedIn = status === 'authenticated'
+
+  // One layer per back: preview → editor, drafts → editor, then the panel.
+  useEffect(() => {
+    if (!backHandlerRef) return
+    backHandlerRef.current = () => {
+      if (previewOpen) {
+        setPreviewOpen(false)
+        return true
+      }
+      if (mode === 'drafts') {
+        setMode('editor')
+        return true
+      }
+      return false
+    }
+    return () => {
+      backHandlerRef.current = null
+    }
+  }, [backHandlerRef, previewOpen, mode])
   const keyboardInset = useKeyboardInset()
 
   // A new post gets its random background once, on the client (a draft
@@ -608,6 +634,8 @@ export default function ComposeScreen({
           onPickImage={handlePickImage}
           author={author}
           autoFocus={!initialDraftId}
+          previewOpen={previewOpen}
+          onPreviewOpenChange={setPreviewOpen}
         />
       </div>
 

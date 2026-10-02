@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import SlideSurface from '@/components/slide-surface'
 import { composeCopy } from '@/i18n/compose-copy'
 import ComposeScreen from './compose-screen'
@@ -24,6 +24,8 @@ export default function ComposeOverlay({ open, locale, onClose, onPublished }: C
   const [prevOpen, setPrevOpen] = useState(open)
   const [session, setSession] = useState(open ? 1 : 0)
   const [mounted, setMounted] = useState(open)
+  // Back / edge swipe closes the editor's inner layer (preview, drafts) first.
+  const backHandlerRef = useRef<(() => boolean) | null>(null)
 
   if (open !== prevOpen) {
     setPrevOpen(open)
@@ -43,6 +45,7 @@ export default function ComposeOverlay({ open, locale, onClose, onPublished }: C
     <SlideSurface
       open={open}
       onClose={onClose}
+      onRequestClose={() => !(backHandlerRef.current?.() ?? false)}
       ariaLabel={composeCopy(locale).entryTitle}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-card text-card-foreground shadow-2xl"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -54,6 +57,7 @@ export default function ComposeOverlay({ open, locale, onClose, onPublished }: C
           initialDraftId={null}
           onClose={onClose}
           onPublished={onPublished}
+          backHandlerRef={backHandlerRef}
         />
       ) : null}
     </SlideSurface>
