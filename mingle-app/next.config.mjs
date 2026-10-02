@@ -72,6 +72,12 @@ const nextConfig = {
         source: "/api/ios/v2.0.4/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
+      // 2.1.1 is a patch release: it keeps the v2.1.0 server contract while
+      // using its own versioned namespace.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.1.1`, destination: `/api/${platform}/v2.1.0` },
+        { source: `/api/${platform}/v2.1.1/:path*`, destination: `/api/${platform}/v2.1.0/:path*` },
+      ]),
     ];
   },
   turbopack: {
