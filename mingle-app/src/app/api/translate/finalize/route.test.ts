@@ -310,7 +310,7 @@ describe('/api/translate/finalize route', () => {
     expect(geminiBody.input[0].content[0].annotations).toEqual([{ type: 'speech_metadata', style: 'speaking rapidly' }])
   })
 
-  it('uses the gemini-3.8-flash-tts default for inline audio when tts.ttsModel is missing', async () => {
+  it('uses the gemini-3.8-flash-lite-tts default for inline audio when tts.ttsModel is missing', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -342,7 +342,7 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.ttsAudioMime).toBe('audio/wav')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
   })
 
   it('falls back to Inworld inline audio when Gemini TTS fails and resolves an invalid tts.ttsModel to the Gemini default', async () => {
@@ -389,7 +389,7 @@ describe('/api/translate/finalize route', () => {
     const invalidJson = await invalidRes.json()
     expect(invalidJson.ttsAudioMime).toBe('audio/mpeg')
     expect(fetchMock).toHaveBeenCalledTimes(4)
-    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-tts')
+    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
     expect(String(fetchMock.mock.calls[3][0])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 

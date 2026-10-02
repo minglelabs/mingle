@@ -209,7 +209,7 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('serves the gemini-3.8-flash-tts default when the body has no ttsModel', async () => {
+  it('serves the gemini-3.8-flash-lite-tts default when the body has no ttsModel', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
@@ -220,10 +220,10 @@ describe('handleTtsInworldV1', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('X-TTS-Provider')).toBe('gemini')
     expect(res.headers.get('X-TTS-Fallback-From')).toBeNull()
-    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
+    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
     expect(createTrackedEventLogMock.mock.calls[0][0].metadata).toMatchObject({
       provider: 'gemini',
-      modelId: 'gemini-3.8-flash-tts',
+      modelId: 'gemini-3.8-flash-lite-tts',
     })
   })
 
@@ -237,7 +237,7 @@ describe('handleTtsInworldV1', () => {
     const res = await handler(makeRequest({ text: 'hello', voiceId: 'Ashley', ttsModel: 'azure', provider: 'inworld' }) as never)
 
     expect(res.status).toBe(200)
-    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-tts')
+    expect(bodyOfCall(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
     expect(res.headers.get('X-TTS-Provider')).toBe('inworld')
     expect(res.headers.get('X-TTS-Fallback-From')).toBe('gemini')
     expect(fetchMock).toHaveBeenCalledTimes(2)

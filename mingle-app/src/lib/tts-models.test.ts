@@ -15,8 +15,8 @@ afterEach(() => {
 })
 
 describe('tts model catalog', () => {
-  it('defaults unset users to gemini-3.8-flash-tts', () => {
-    expect(DEFAULT_SELECTABLE_TTS_MODEL).toBe('gemini-3.8-flash-tts')
+  it('defaults unset users to gemini-3.8-flash-lite-tts', () => {
+    expect(DEFAULT_SELECTABLE_TTS_MODEL).toBe('gemini-3.8-flash-lite-tts')
   })
 
   it('lists the three selectable models with the model id as the label and no badges', () => {
@@ -64,13 +64,13 @@ describe('tts model catalog', () => {
     expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini').runtimeModel).toBe('inworld-tts-1.5-max')
   })
 
-  it('resolves missing or invalid values to the gemini-3.8-flash-tts default', () => {
+  it('resolves missing or invalid values to the gemini-3.8-flash-lite-tts default', () => {
     delete process.env.INWORLD_TTS_MODEL_ID
     for (const value of [undefined, null, '', 'gemini', 'polly', 7, { ttsModel: 'inworld-tts-1.5-mini' }]) {
       expect(resolveTtsRuntimeSelection(value)).toEqual({
-        value: 'gemini-3.8-flash-tts',
+        value: 'gemini-3.8-flash-lite-tts',
         provider: 'gemini',
-        runtimeModel: 'gemini-3.8-flash-tts',
+        runtimeModel: 'gemini-3.8-flash-lite-tts',
       })
     }
   })
