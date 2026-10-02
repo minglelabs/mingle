@@ -113,7 +113,7 @@ describe('validateSeedContent', () => {
   it('rejects a bad language, over-long text and a fact without sources', () => {
     const issues = validateSeedContent(
       contentWith([
-        item({ key: 'bad-lang', clientPostId: 'mingleseed-test-001', language: 'fr' as SeedItem['language'] }),
+        item({ key: 'bad-lang', clientPostId: 'mingleseed-test-001', language: 'xx' as SeedItem['language'] }),
         item({ key: 'too-long', clientPostId: 'mingleseed-test-002', text: 'a'.repeat(1001) }),
         item({ key: 'no-source', clientPostId: 'mingleseed-test-003', kind: 'fact', text: '세금 환급은 15,000원 이상.' }),
       ]),

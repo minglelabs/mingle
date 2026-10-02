@@ -448,8 +448,6 @@ function ProfileSettingsPanel({
   sessionStatus: SessionStatus;
 }) {
   const postingFeedSupported = useIsPostingFeedSupported();
-  // Compose slides in over My page (like the notification panel), no route change.
-  const [composeOpen, setComposeOpen] = useState(false);
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -1781,6 +1779,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   // endpoints 404). `null` before mount → shown, matching the server render;
   // hidden once a client is known to be unsupported.
   const postingFeedSupported = useIsPostingFeedSupported();
+  // Compose slides in over My page (like the notification panel), no route change.
+  const [composeOpen, setComposeOpen] = useState(false);
   const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
     image: null,
     imageCropScale: null,
