@@ -1,9 +1,11 @@
 import { createServer } from 'http';
+import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
+import { COIN_INSUFFICIENT_ERROR, createSttCoinMeter, readCoinBillingEnv, type SttCoinMeter } from './coin-billing';
 import { SonioxAudioRelay, type SonioxRelayTiming, type SonioxStreamFailure } from './soniox-audio-relay';
 import {
     buildSonioxEndpointDetectionConfig,
@@ -77,6 +79,8 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
 type SttServerOptions = {
+    // Coin billing (COIN_CHARGE_URL + COIN_INTERNAL_SECRET); injectable for tests.
+    coinBilling?: { chargeUrl: string; secret: string; requireToken: boolean; settleIntervalMs?: number } | null;
     sonioxUrl?: string;
     sonioxApiKey?: string;
     sonioxHandshakeTimeoutMs?: number;
@@ -136,13 +140,32 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
     let sonioxStopRequested = false;
     let stopRecordingLifecycleStarted = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
+    let coinMeter: SttCoinMeter | null = null;
+    const coinBilling: SttServerOptions['coinBilling'] = options.coinBilling === undefined ? readCoinBillingEnv() : options.coinBilling;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
     const sonioxApiKey = options.sonioxApiKey ?? process.env.SONIOX_API_KEY;
 
+    // Ends the session for a user with no coins: the client turns the mic off and shows the store.
+    const closeForCoinExhaustion = () => {
+        console.log(`[conn:${connId}] coin_insufficient`);
+        sonioxAudioRelay?.stop();
+        if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({
+                type: 'error',
+                error_code: COIN_INSUFFICIENT_ERROR,
+                error_type: COIN_INSUFFICIENT_ERROR,
+                error_message: COIN_INSUFFICIENT_ERROR,
+            }));
+            clientWs.close(4402, COIN_INSUFFICIENT_ERROR);
+        }
+    };
+
     const cleanup = () => {
         isClientConnected = false;
+        void coinMeter?.stop();
+        coinMeter = null;
         sonioxAudioRelay?.stop();
         if (clientCloseTimer) clearTimeout(clientCloseTimer);
         clientCloseTimer = null;
@@ -1759,6 +1782,12 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
             return;
         }
 
+        if (coinMeter && data.type === 'audio_chunk' && typeof data.data?.chunk === 'string'
+            && !stopRecordingLifecycleStarted) {
+            // base64 -> bytes of 16-bit PCM.
+            coinMeter.addAudioBytes(Math.floor(data.data.chunk.length * 3 / 4));
+        }
+
         if (data.sample_rate) {
             // One configuration owns one provider socket. A duplicate must not
             // orphan the first connection or revive a session after Stop.
@@ -1802,6 +1831,28 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
             console.log(
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')} soniox_hints=${JSON.stringify(clientConfig.soniox_language_hints || [])} hints_enabled=false`,
             );
+
+            const coinBillingToken = typeof data.coin_billing_token === 'string' ? data.coin_billing_token.trim() : '';
+            if (coinBilling && !coinBillingToken && coinBilling.requireToken) {
+                closeForCoinExhaustion();
+                return;
+            }
+            if (coinBilling && coinBillingToken) {
+                const meter = createSttCoinMeter({
+                    chargeUrl: coinBilling.chargeUrl,
+                    secret: coinBilling.secret,
+                    billingToken: coinBillingToken,
+                    connectionKey: randomUUID(),
+                    sessionKey: typeof data.coin_session_key === 'string' ? data.coin_session_key.trim().slice(0, 128) : null,
+                    model: currentModel,
+                    sampleRate: Number(clientConfig.sample_rate) || 16000,
+                    settleIntervalMs: coinBilling.settleIntervalMs,
+                    onExhausted: closeForCoinExhaustion,
+                });
+                coinMeter = meter;
+                // The provider connection starts right away; a user with no coins is cut off as soon as the check returns.
+                void meter.start();
+            }
 
             releaseRuntime.startConnectionForModel({
                 config: clientConfig,
