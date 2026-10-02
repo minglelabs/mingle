@@ -63,7 +63,7 @@ export default function CommentMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={copy.more}
-        className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+        className="rounded-full p-1.5 text-muted-foreground hover:bg-gray-100"
       >
         <MoreHorizontal className="size-4" aria-hidden />
       </button>
@@ -71,7 +71,7 @@ export default function CommentMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 min-w-32 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className="absolute right-0 z-10 mt-1 min-w-32 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
         >
           {editable && (
             <MenuItem
@@ -112,7 +112,7 @@ export default function CommentMenu({
                 <button
                   type="button"
                   onClick={() => setConfirming(false)}
-                  className="rounded-md bg-muted px-2.5 py-1 text-[13px] font-medium"
+                  className="rounded-md bg-gray-100 px-2.5 py-1 text-[13px] font-medium"
                 >
                   {copy.cancel}
                 </button>
@@ -140,7 +140,7 @@ function MenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        "block w-full px-3 py-2 text-left text-[14px] hover:bg-muted",
+        "block w-full px-3 py-2 text-left text-[14px] hover:bg-gray-100",
         destructive ? "text-destructive" : "text-foreground",
       )}
     >

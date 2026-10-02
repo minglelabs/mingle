@@ -108,7 +108,7 @@ export default function CommentItem({
         ) : (
           <div
             className={cn(
-              "flex items-center justify-center rounded-full bg-muted text-[13px] font-semibold text-muted-foreground",
+              "flex items-center justify-center rounded-full bg-gray-100 text-[13px] font-semibold text-muted-foreground",
               isReply ? "size-7" : "size-9",
             )}
             aria-hidden
@@ -158,7 +158,7 @@ export default function CommentItem({
               onChange={(e) => setDraft(e.target.value)}
               rows={2}
               maxLength={MAX_COMMENT_LENGTH + 100}
-              className="w-full resize-none rounded-lg border border-input bg-background px-2 py-1.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[15px] focus:outline-none focus:border-gray-300"
               aria-label={copy.edit}
             />
             <div className="mt-1 flex items-center gap-2">
@@ -183,7 +183,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={() => setEditing(false)}
-                className="rounded-md bg-muted px-2.5 py-1 text-[13px] font-medium"
+                className="rounded-md bg-gray-100 px-2.5 py-1 text-[13px] font-medium"
               >
                 {copy.cancel}
               </button>

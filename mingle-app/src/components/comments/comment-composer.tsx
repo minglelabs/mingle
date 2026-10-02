@@ -31,6 +31,12 @@ const CONTROL_SIZE_PX = 36;
 /** Show the live counter only when the limit is getting close. */
 const COUNTER_THRESHOLD = Math.floor(MAX_COMMENT_LENGTH * 0.8);
 
+function focusWithoutPan(el: HTMLTextAreaElement) {
+  el.focus({ preventScroll: true });
+  const end = el.value.length;
+  el.setSelectionRange(end, end);
+}
+
 /** A touch keyboard has no Shift key, so Enter must stay a newline there. */
 function isTouchInput(): boolean {
   if (typeof window === "undefined") return false;
@@ -62,9 +68,26 @@ export default function CommentComposer({
   // Focus the input when a reply target appears.
   useEffect(() => {
     if (replyTarget && textareaRef.current) {
-      textareaRef.current.focus();
+      focusWithoutPan(textareaRef.current);
     }
   }, [replyTarget]);
+
+  // A native tap-to-focus makes the iOS WebView pan the whole page up to
+  // reveal the field, then it snaps back (the "screen jumps" on first open).
+  // Take over the first tap like the chat composer does: cancel the native
+  // focus and focus with preventScroll. Taps while focused stay native so the
+  // caret can still be placed.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const onTouchStart = (event: TouchEvent) => {
+      if (document.activeElement === el || el.readOnly) return;
+      event.preventDefault();
+      focusWithoutPan(el);
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    return () => el.removeEventListener("touchstart", onTouchStart);
+  }, []);
 
   // Grow with the text like the chat composer: 1 line up to ~4, then scroll.
   const [textareaHeight, setTextareaHeight] = useState(TEXTAREA_MIN_HEIGHT_PX);
@@ -103,7 +126,7 @@ export default function CommentComposer({
       )}
     >
       {replyTarget && (
-        <div className="mb-2 flex items-center justify-between rounded-xl bg-muted/70 px-3 py-1.5 text-[13px] text-muted-foreground">
+        <div className="mb-2 flex items-center justify-between rounded-xl bg-gray-100 px-3 py-1.5 text-[13px] text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate">
               {formatCommentsCopy(copy.replyingTo, { name: replyTarget.label })}
@@ -114,7 +137,7 @@ export default function CommentComposer({
             type="button"
             onClick={onCancelReply}
             aria-label={copy.cancelReply}
-            className="ml-2 rounded-full p-1 hover:bg-background"
+            className="ml-2 rounded-full p-1 hover:bg-white"
           >
             <X className="size-4" aria-hidden />
           </button>

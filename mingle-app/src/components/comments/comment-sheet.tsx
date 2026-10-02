@@ -141,9 +141,9 @@ export default function CommentSheet(props: CommentSheetProps) {
   }, [open]);
 
   // ── Keep the composer above the keyboard using visualViewport ────────────
-  // Only the sheet rises with the keyboard: the dialog's bottom edge is pinned
-  // to the keyboard top, and the iOS WebView's focus pan (which would lift the
-  // whole feed + header) is undone by holding the page at scroll 0.
+  // Only the composer rises with the keyboard. The composer focuses with
+  // preventScroll so the iOS WebView does not pan the page; any pan that still
+  // happens is undone by holding the page at scroll 0.
   const [keyboardInset, setKeyboardInset] = useState(0);
   useEffect(() => {
     if (!open || typeof window === "undefined" || !window.visualViewport) return;
@@ -298,8 +298,7 @@ export default function CommentSheet(props: CommentSheetProps) {
 
   const body = (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex flex-col justify-end"
-      style={{ bottom: keyboardInset }}
+      className="fixed inset-0 z-50 flex flex-col justify-end"
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
@@ -316,10 +315,11 @@ export default function CommentSheet(props: CommentSheetProps) {
       <motion.div
         ref={panelRef}
         tabIndex={-1}
-        className={cn(
-          "relative flex max-h-[88%] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl outline-none",
-          keyboardInset > 0 ? "min-h-[45%]" : "min-h-[55%]",
-        )}
+        // Fixed height (layout-viewport vh does not shrink with the keyboard):
+        // the sheet never moves when the keyboard opens; only the composer
+        // rides up on the keyboard and the list above it gets shorter.
+        className="relative flex h-[78vh] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl outline-none"
+        style={{ paddingBottom: keyboardInset || undefined }}
         initial={{ y: "100%" }}
         animate={{ y: dismissing ? "100%" : 0 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
@@ -351,13 +351,13 @@ export default function CommentSheet(props: CommentSheetProps) {
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
               aria-label={copy.close}
-              className="rounded-full bg-muted p-1.5 text-muted-foreground transition active:scale-95"
+              className="rounded-full bg-gray-100 p-1.5 text-muted-foreground transition active:scale-95"
             >
               <X className="size-4" aria-hidden />
             </button>
           </div>
         </div>
-        <div className="h-px shrink-0 bg-border/60" />
+        <div className="h-px shrink-0 bg-gray-100" />
 
         {/* List */}
         <div
@@ -373,7 +373,7 @@ export default function CommentSheet(props: CommentSheetProps) {
               <button
                 type="button"
                 onClick={() => void sheet.reload()}
-                className="mt-2 rounded-md bg-muted px-3 py-1.5 text-[13px] font-medium"
+                className="mt-2 rounded-md bg-gray-100 px-3 py-1.5 text-[13px] font-medium"
               >
                 {copy.retry}
               </button>
@@ -400,7 +400,7 @@ export default function CommentSheet(props: CommentSheetProps) {
                   />
 
                   {replies.length > 0 && (
-                    <div className="ml-11 border-l-2 border-border/60 pl-1">
+                    <div className="ml-11 border-l-2 border-gray-100 pl-1">
                       <button
                         type="button"
                         onClick={() => sheet.toggleReplies(comment.id)}
@@ -436,7 +436,7 @@ export default function CommentSheet(props: CommentSheetProps) {
         {noticeText && (
           <div
             role="status"
-            className="flex items-center justify-between gap-2 bg-muted px-4 py-2 text-[13px] text-foreground"
+            className="flex items-center justify-between gap-2 bg-gray-100 px-4 py-2 text-[13px] text-foreground"
           >
             <span>{noticeText}</span>
             <button type="button" onClick={sheet.dismissNotice} aria-label={copy.close}>
@@ -447,7 +447,7 @@ export default function CommentSheet(props: CommentSheetProps) {
 
         {/* Composer or signed-out hint */}
         {viewerId === null ? (
-          <div className="border-t border-border px-4 py-3 text-center text-[14px] text-muted-foreground">
+          <div className="border-t border-gray-100 px-4 py-3 text-center text-[14px] text-muted-foreground">
             <button type="button" onClick={onRequireLogin} className="font-medium text-primary">
               {copy.signedOutHint}
             </button>
