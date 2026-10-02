@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { refreshCoinWallet } from "@/lib/coin-wallet-client";
+import { getCoinWalletState, refreshCoinWallet } from "@/lib/coin-wallet-client";
 import {
   postNativeIapFinish,
   postNativeIapGetProducts,
@@ -31,6 +31,8 @@ export type CoinProduct = {
 };
 
 export type CoinStoreState = {
+  // store = App Store / Google Play through the native shell; web = Polar checkout in the browser.
+  channel: "store" | "web";
   // loading | ready | error (server or store unreachable) | unavailable (web, or an app build without purchases)
   status: "idle" | "loading" | "ready" | "error" | "unavailable";
   products: CoinProduct[];
@@ -45,6 +47,7 @@ export type CoinStoreState = {
 const STORE_PRICE_TIMEOUT_MS = 6_000;
 
 let state: CoinStoreState = {
+  channel: "store",
   status: "idle",
   products: [],
   sttCoinsPerMinute: 0,
@@ -93,14 +96,27 @@ export async function loadCoinProducts(): Promise<void> {
     };
     const products = data.products.map((product) => ({ ...product, displayPrice: null }));
     const sttCoinsPerMinute = typeof data.sttCoinsPerMinute === "number" ? data.sttCoinsPerMinute : 0;
+    if (data.platform === "web") {
+      // Web prices are our own USD list prices; Polar adds tax at checkout where it applies.
+      setState({
+        channel: "web",
+        status: products.length ? "ready" : "unavailable",
+        sttCoinsPerMinute,
+        products: products.map((product) => ({
+          ...product,
+          displayPrice: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(product.priceUsdCents / 100),
+        })),
+      });
+      return;
+    }
     const requestId = `p${++requestSequence}`;
     activeRequestId = requestId;
     if (!data.platform || !products.length
       || !postNativeIapGetProducts(products.map((product) => product.productId), requestId)) {
-      setState({ status: "unavailable", products, sttCoinsPerMinute });
+      setState({ channel: "store", status: "unavailable", products, sttCoinsPerMinute });
       return;
     }
-    setState({ products, sttCoinsPerMinute });
+    setState({ channel: "store", products, sttCoinsPerMinute });
     if (priceTimer) clearTimeout(priceTimer);
     // An app build from before the store never answers: tell the user to update.
     priceTimer = setTimeout(() => {
@@ -122,8 +138,55 @@ function applyStorePrices(prices: NativeIapProduct[]) {
   setState({ status: products.length ? "ready" : "error", products });
 }
 
+const WEB_CHECKOUT_PARAM = "coin_checkout";
+
+async function startWebCheckout(productId: string) {
+  setState({ purchasingProductId: productId, lastResult: null });
+  try {
+    const response = await fetch(buildClientApiPath("/coins/web-checkout"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, returnPath: `${window.location.pathname}${window.location.search}` }),
+    });
+    const data = response.ok ? await response.json() as { url?: string } : null;
+    if (!data?.url) throw new Error("coin_checkout_failed");
+    // Leaves the app for Polar's hosted checkout; it returns to this page with ?coin_checkout=success.
+    window.location.assign(data.url);
+  } catch {
+    setState({ purchasingProductId: null, lastResult: { kind: "failed" } });
+  }
+}
+
+/**
+ * Back from a paid web checkout: the coins arrive through Polar's webhook, a
+ * moment after the redirect, so the wallet is re-read until the balance grows.
+ */
+export async function resumeWebCheckoutIfReturned(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(WEB_CHECKOUT_PARAM) !== "success") return;
+  for (const key of [WEB_CHECKOUT_PARAM, "checkout_id", "customer_session_token"]) url.searchParams.delete(key);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+
+  await refreshCoinWallet({ force: true });
+  const before = getCoinWalletState().wallet?.balance ?? 0;
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const balance = getCoinWalletState().wallet?.balance ?? 0;
+    if (balance > before) {
+      setState({ lastResult: { kind: "success", coins: balance - before } });
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await refreshCoinWallet({ force: true });
+  }
+}
+
 export function startCoinPurchase(productId: string) {
   if (state.purchasingProductId) return;
+  if (state.channel === "web") {
+    void startWebCheckout(productId);
+    return;
+  }
   if (!postNativeIapPurchase(productId)) {
     setState({ status: "unavailable" });
     return;

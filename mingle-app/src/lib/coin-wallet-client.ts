@@ -17,6 +17,8 @@ export type CoinWallet = {
   dailyFreeCap: number;
   lowBalance: boolean;
   exhausted: boolean;
+  // Absent while billing is off.
+  rates?: { sttCoinsPerMinute: number; ttsCoinsPerAudioMinute: number };
 };
 
 export type CoinWalletState = {

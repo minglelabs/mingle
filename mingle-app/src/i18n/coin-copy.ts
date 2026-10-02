@@ -3,7 +3,7 @@ import { resolvePrimaryUiLocale, type PrimaryUiLocale } from "@/i18n/mingle-loca
 
 // Copy for coins: balance chip, store, "out of coins" sheet, banners and the
 // usage screen (docs/coin-iap-spec.md 9). Placeholders: {free} {paid} {cap}
-// {time} {minutes} {coins}.
+// {time} {minutes} {coins} {stt} {tts}.
 export type CoinCopy = {
   coin: string;
   storeTitle: string;
@@ -21,6 +21,8 @@ export type CoinCopy = {
   productsLoadError: string;
   retry: string;
   updateRequired: string;
+  webUnavailable: string;
+  ttsCostNotice: string;
   restore: string;
   viewUsage: string;
   terms: string;
@@ -57,6 +59,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "추천", minutesHint: "통역 약 {minutes}분",
     purchasing: "결제 중…", purchasePending: "승인 대기 중", purchaseSuccess: "{coins} 코인이 충전됐어요", purchaseFailed: "결제를 완료하지 못했어요",
     productsLoadError: "상품을 불러오지 못했어요", retry: "다시 시도", updateRequired: "앱을 업데이트하면 충전할 수 있어요",
+    webUnavailable: "지금은 앱에서만 충전할 수 있어요", ttsCostNotice: "음성 통역을 켜면 코인이 더 빨리 줄어요. 음성 인식은 분당 약 {stt}코인, 음성 재생은 1분당 약 {tts}코인이 추가로 들어요.",
     restore: "구매 복원", viewUsage: "사용 내역 보기", terms: "구매한 코인은 만료되지 않으며, 환불은 스토어 정책을 따릅니다.",
     exhaustedTitle: "코인을 다 썼어요", exhaustedBody: "번역과 통역을 계속하려면 코인을 충전해 주세요.",
     exhaustedBanner: "코인이 없어 번역과 통역이 멈췄어요", lowBanner: "코인이 얼마 남지 않았어요", charge: "충전하기", close: "닫기",
@@ -71,6 +74,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Best value", minutesHint: "About {minutes} min of interpreting",
     purchasing: "Processing…", purchasePending: "Waiting for approval", purchaseSuccess: "{coins} coins added", purchaseFailed: "The purchase could not be completed",
     productsLoadError: "Could not load the products", retry: "Try again", updateRequired: "Update the app to buy coins",
+    webUnavailable: "Coins can only be bought in the app for now", ttsCostNotice: "Voice interpreting uses coins faster. Speech recognition costs about {stt} coins per minute, and spoken playback adds about {tts} coins per minute of audio.",
     restore: "Restore purchases", viewUsage: "View usage", terms: "Purchased coins never expire. Refunds follow the store's policy.",
     exhaustedTitle: "You're out of coins", exhaustedBody: "Add coins to keep translating and interpreting.",
     exhaustedBanner: "Translation and interpreting are paused: no coins left", lowBanner: "You're running low on coins", charge: "Get coins", close: "Close",
@@ -85,6 +89,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "おすすめ", minutesHint: "通訳 約{minutes}分",
     purchasing: "処理中…", purchasePending: "承認待ち", purchaseSuccess: "{coins} コインをチャージしました", purchaseFailed: "購入を完了できませんでした",
     productsLoadError: "商品を読み込めませんでした", retry: "再試行", updateRequired: "アプリを更新するとチャージできます",
+    webUnavailable: "現在はアプリでのみチャージできます", ttsCostNotice: "音声通訳をオンにするとコインの消費が速くなります。音声認識は1分あたり約{stt}コイン、音声再生は1分あたり約{tts}コインが追加でかかります。",
     restore: "購入を復元", viewUsage: "利用履歴を見る", terms: "購入したコインに有効期限はありません。返金はストアのポリシーに従います。",
     exhaustedTitle: "コインがなくなりました", exhaustedBody: "翻訳と通訳を続けるにはコインをチャージしてください。",
     exhaustedBanner: "コインがないため翻訳と通訳が停止しました", lowBanner: "コインが残りわずかです", charge: "チャージする", close: "閉じる",
@@ -99,6 +104,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "推荐", minutesHint: "约可口译 {minutes} 分钟",
     purchasing: "处理中…", purchasePending: "等待批准", purchaseSuccess: "已充值 {coins} 金币", purchaseFailed: "未能完成购买",
     productsLoadError: "无法加载商品", retry: "重试", updateRequired: "更新应用后即可充值",
+    webUnavailable: "目前只能在应用内充值", ttsCostNotice: "开启语音口译后金币消耗更快。语音识别每分钟约 {stt} 金币，语音播放每分钟另需约 {tts} 金币。",
     restore: "恢复购买", viewUsage: "查看使用记录", terms: "购买的金币不会过期，退款遵循应用商店政策。",
     exhaustedTitle: "金币已用完", exhaustedBody: "请充值金币以继续使用翻译和口译。",
     exhaustedBanner: "金币不足，翻译和口译已暂停", lowBanner: "金币即将用完", charge: "去充值", close: "关闭",
@@ -113,6 +119,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "推薦", minutesHint: "約可口譯 {minutes} 分鐘",
     purchasing: "處理中…", purchasePending: "等待核准", purchaseSuccess: "已儲值 {coins} 金幣", purchaseFailed: "無法完成購買",
     productsLoadError: "無法載入商品", retry: "重試", updateRequired: "更新 App 後即可儲值",
+    webUnavailable: "目前只能在 App 內儲值", ttsCostNotice: "開啟語音口譯後金幣消耗更快。語音辨識每分鐘約 {stt} 金幣，語音播放每分鐘另需約 {tts} 金幣。",
     restore: "回復購買", viewUsage: "查看使用紀錄", terms: "購買的金幣不會過期，退款依商店政策辦理。",
     exhaustedTitle: "金幣已用完", exhaustedBody: "請儲值金幣以繼續使用翻譯和口譯。",
     exhaustedBanner: "金幣不足，翻譯和口譯已暫停", lowBanner: "金幣即將用完", charge: "前往儲值", close: "關閉",
@@ -127,6 +134,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Meilleure offre", minutesHint: "Environ {minutes} min d'interprétation",
     purchasing: "Traitement…", purchasePending: "En attente d'approbation", purchaseSuccess: "{coins} pièces ajoutées", purchaseFailed: "L'achat n'a pas pu être finalisé",
     productsLoadError: "Impossible de charger les offres", retry: "Réessayer", updateRequired: "Mettez l'app à jour pour acheter des pièces",
+    webUnavailable: "Pour l'instant, les pièces s'achètent uniquement dans l'app", ttsCostNotice: "L'interprétation vocale consomme les pièces plus vite. La reconnaissance vocale coûte environ {stt} pièces par minute, et la lecture audio ajoute environ {tts} pièces par minute.",
     restore: "Restaurer les achats", viewUsage: "Voir l'utilisation", terms: "Les pièces achetées n'expirent pas. Les remboursements suivent la politique de la boutique.",
     exhaustedTitle: "Vous n'avez plus de pièces", exhaustedBody: "Ajoutez des pièces pour continuer à traduire et interpréter.",
     exhaustedBanner: "Traduction et interprétation en pause : plus de pièces", lowBanner: "Il vous reste peu de pièces", charge: "Obtenir des pièces", close: "Fermer",
@@ -141,6 +149,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Bestes Angebot", minutesHint: "Ca. {minutes} Min. Dolmetschen",
     purchasing: "Wird verarbeitet…", purchasePending: "Wartet auf Genehmigung", purchaseSuccess: "{coins} Münzen hinzugefügt", purchaseFailed: "Der Kauf konnte nicht abgeschlossen werden",
     productsLoadError: "Angebote konnten nicht geladen werden", retry: "Erneut versuchen", updateRequired: "Aktualisiere die App, um Münzen zu kaufen",
+    webUnavailable: "Münzen können derzeit nur in der App gekauft werden", ttsCostNotice: "Sprachdolmetschen verbraucht Münzen schneller. Die Spracherkennung kostet etwa {stt} Münzen pro Minute, die Sprachausgabe zusätzlich etwa {tts} Münzen pro Minute Audio.",
     restore: "Käufe wiederherstellen", viewUsage: "Nutzung ansehen", terms: "Gekaufte Münzen verfallen nicht. Erstattungen richten sich nach den Store-Richtlinien.",
     exhaustedTitle: "Keine Münzen mehr", exhaustedBody: "Lade Münzen auf, um weiter zu übersetzen und zu dolmetschen.",
     exhaustedBanner: "Übersetzung und Dolmetschen pausiert: keine Münzen", lowBanner: "Deine Münzen gehen zur Neige", charge: "Münzen holen", close: "Schließen",
@@ -155,6 +164,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Mejor oferta", minutesHint: "Unos {minutes} min de interpretación",
     purchasing: "Procesando…", purchasePending: "Esperando aprobación", purchaseSuccess: "Se añadieron {coins} monedas", purchaseFailed: "No se pudo completar la compra",
     productsLoadError: "No se pudieron cargar los productos", retry: "Reintentar", updateRequired: "Actualiza la app para comprar monedas",
+    webUnavailable: "Por ahora las monedas solo se compran en la app", ttsCostNotice: "La interpretación por voz gasta monedas más rápido. El reconocimiento de voz cuesta unas {stt} monedas por minuto y la reproducción de voz añade unas {tts} monedas por minuto de audio.",
     restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Las monedas compradas no caducan. Los reembolsos siguen la política de la tienda.",
     exhaustedTitle: "Te quedaste sin monedas", exhaustedBody: "Añade monedas para seguir traduciendo e interpretando.",
     exhaustedBanner: "Traducción e interpretación en pausa: sin monedas", lowBanner: "Te quedan pocas monedas", charge: "Conseguir monedas", close: "Cerrar",
@@ -169,6 +179,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Melhor oferta", minutesHint: "Cerca de {minutes} min de interpretação",
     purchasing: "Processando…", purchasePending: "Aguardando aprovação", purchaseSuccess: "{coins} moedas adicionadas", purchaseFailed: "Não foi possível concluir a compra",
     productsLoadError: "Não foi possível carregar os produtos", retry: "Tentar novamente", updateRequired: "Atualize o app para comprar moedas",
+    webUnavailable: "Por enquanto, as moedas só podem ser compradas no app", ttsCostNotice: "A interpretação por voz gasta moedas mais rápido. O reconhecimento de voz custa cerca de {stt} moedas por minuto e a reprodução de voz adiciona cerca de {tts} moedas por minuto de áudio.",
     restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Moedas compradas não expiram. Reembolsos seguem a política da loja.",
     exhaustedTitle: "Suas moedas acabaram", exhaustedBody: "Adicione moedas para continuar traduzindo e interpretando.",
     exhaustedBanner: "Tradução e interpretação pausadas: sem moedas", lowBanner: "Suas moedas estão acabando", charge: "Obter moedas", close: "Fechar",
@@ -183,6 +194,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Più conveniente", minutesHint: "Circa {minutes} min di interpretariato",
     purchasing: "Elaborazione…", purchasePending: "In attesa di approvazione", purchaseSuccess: "{coins} monete aggiunte", purchaseFailed: "Impossibile completare l'acquisto",
     productsLoadError: "Impossibile caricare i prodotti", retry: "Riprova", updateRequired: "Aggiorna l'app per acquistare monete",
+    webUnavailable: "Per ora le monete si acquistano solo nell'app", ttsCostNotice: "L'interpretariato vocale consuma monete più in fretta. Il riconoscimento vocale costa circa {stt} monete al minuto e la riproduzione vocale aggiunge circa {tts} monete per minuto di audio.",
     restore: "Ripristina acquisti", viewUsage: "Vedi utilizzo", terms: "Le monete acquistate non scadono. I rimborsi seguono le regole dello store.",
     exhaustedTitle: "Hai finito le monete", exhaustedBody: "Aggiungi monete per continuare a tradurre e interpretare.",
     exhaustedBanner: "Traduzione e interpretariato in pausa: monete esaurite", lowBanner: "Le monete stanno per finire", charge: "Ottieni monete", close: "Chiudi",
@@ -197,6 +209,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Выгодно", minutesHint: "Около {minutes} мин перевода речи",
     purchasing: "Обработка…", purchasePending: "Ожидает одобрения", purchaseSuccess: "Добавлено монет: {coins}", purchaseFailed: "Не удалось завершить покупку",
     productsLoadError: "Не удалось загрузить товары", retry: "Повторить", updateRequired: "Обновите приложение, чтобы покупать монеты",
+    webUnavailable: "Пока монеты можно купить только в приложении", ttsCostNotice: "С голосовым переводом монеты тратятся быстрее. Распознавание речи стоит около {stt} монет в минуту, а озвучивание добавляет около {tts} монет за минуту аудио.",
     restore: "Восстановить покупки", viewUsage: "Посмотреть расход", terms: "Купленные монеты не сгорают. Возвраты выполняются по правилам магазина.",
     exhaustedTitle: "Монеты закончились", exhaustedBody: "Пополните монеты, чтобы продолжить перевод.",
     exhaustedBanner: "Перевод приостановлен: нет монет", lowBanner: "Монеты заканчиваются", charge: "Пополнить", close: "Закрыть",
@@ -211,6 +224,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "الأفضل قيمة", minutesHint: "حوالي {minutes} دقيقة من الترجمة الفورية",
     purchasing: "جارٍ المعالجة…", purchasePending: "بانتظار الموافقة", purchaseSuccess: "تمت إضافة {coins} عملة", purchaseFailed: "تعذر إكمال الشراء",
     productsLoadError: "تعذر تحميل المنتجات", retry: "إعادة المحاولة", updateRequired: "حدّث التطبيق لشراء العملات",
+    webUnavailable: "حاليًا يمكن شراء العملات من داخل التطبيق فقط", ttsCostNotice: "الترجمة الصوتية تستهلك العملات بسرعة أكبر. التعرف على الكلام يكلف نحو {stt} عملة في الدقيقة، وتشغيل الصوت يضيف نحو {tts} عملة لكل دقيقة صوت.",
     restore: "استعادة المشتريات", viewUsage: "عرض الاستخدام", terms: "العملات المشتراة لا تنتهي صلاحيتها. الاسترداد يتبع سياسة المتجر.",
     exhaustedTitle: "نفدت عملاتك", exhaustedBody: "أضف عملات لمتابعة الترجمة والترجمة الفورية.",
     exhaustedBanner: "توقفت الترجمة والترجمة الفورية: لا توجد عملات", lowBanner: "عملاتك على وشك النفاد", charge: "احصل على عملات", close: "إغلاق",
@@ -225,6 +239,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "सबसे किफ़ायती", minutesHint: "लगभग {minutes} मिनट इंटरप्रेटिंग",
     purchasing: "प्रोसेस हो रहा है…", purchasePending: "मंज़ूरी की प्रतीक्षा", purchaseSuccess: "{coins} कॉइन जोड़े गए", purchaseFailed: "खरीदारी पूरी नहीं हो सकी",
     productsLoadError: "प्रोडक्ट लोड नहीं हो सके", retry: "फिर से कोशिश करें", updateRequired: "कॉइन खरीदने के लिए ऐप अपडेट करें",
+    webUnavailable: "अभी कॉइन केवल ऐप में खरीदे जा सकते हैं", ttsCostNotice: "वॉइस इंटरप्रेटिंग चालू करने पर कॉइन तेज़ी से खर्च होते हैं। वाक् पहचान में प्रति मिनट लगभग {stt} कॉइन लगते हैं और आवाज़ चलाने पर प्रति मिनट ऑडियो लगभग {tts} कॉइन और लगते हैं।",
     restore: "खरीदारी बहाल करें", viewUsage: "उपयोग देखें", terms: "खरीदे गए कॉइन कभी समाप्त नहीं होते। रिफ़ंड स्टोर की नीति के अनुसार होते हैं।",
     exhaustedTitle: "आपके कॉइन खत्म हो गए", exhaustedBody: "अनुवाद और इंटरप्रेटिंग जारी रखने के लिए कॉइन जोड़ें।",
     exhaustedBanner: "कॉइन न होने से अनुवाद और इंटरप्रेटिंग रुक गई है", lowBanner: "आपके कॉइन कम बचे हैं", charge: "कॉइन पाएं", close: "बंद करें",
@@ -239,6 +254,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "คุ้มที่สุด", minutesHint: "ล่ามได้ประมาณ {minutes} นาที",
     purchasing: "กำลังดำเนินการ…", purchasePending: "รอการอนุมัติ", purchaseSuccess: "เติม {coins} เหรียญแล้ว", purchaseFailed: "ทำรายการซื้อไม่สำเร็จ",
     productsLoadError: "โหลดสินค้าไม่สำเร็จ", retry: "ลองอีกครั้ง", updateRequired: "อัปเดตแอปเพื่อซื้อเหรียญ",
+    webUnavailable: "ตอนนี้ซื้อเหรียญได้ในแอปเท่านั้น", ttsCostNotice: "เมื่อเปิดล่ามเสียง เหรียญจะหมดเร็วขึ้น การรู้จำเสียงพูดใช้ประมาณ {stt} เหรียญต่อนาที และการเล่นเสียงใช้เพิ่มประมาณ {tts} เหรียญต่อเสียง 1 นาที",
     restore: "กู้คืนการซื้อ", viewUsage: "ดูการใช้งาน", terms: "เหรียญที่ซื้อไม่มีวันหมดอายุ การคืนเงินเป็นไปตามนโยบายของสโตร์",
     exhaustedTitle: "เหรียญหมดแล้ว", exhaustedBody: "เติมเหรียญเพื่อแปลและล่ามต่อ",
     exhaustedBanner: "การแปลและล่ามหยุดชั่วคราวเพราะเหรียญหมด", lowBanner: "เหรียญใกล้หมดแล้ว", charge: "เติมเหรียญ", close: "ปิด",
@@ -253,6 +269,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     recommended: "Tiết kiệm nhất", minutesHint: "Khoảng {minutes} phút phiên dịch",
     purchasing: "Đang xử lý…", purchasePending: "Đang chờ phê duyệt", purchaseSuccess: "Đã nạp {coins} xu", purchaseFailed: "Không thể hoàn tất giao dịch",
     productsLoadError: "Không tải được sản phẩm", retry: "Thử lại", updateRequired: "Cập nhật ứng dụng để mua xu",
+    webUnavailable: "Hiện chỉ có thể mua xu trong ứng dụng", ttsCostNotice: "Bật phiên dịch giọng nói sẽ tốn xu nhanh hơn. Nhận dạng giọng nói tốn khoảng {stt} xu mỗi phút, và phát giọng nói tốn thêm khoảng {tts} xu cho mỗi phút âm thanh.",
     restore: "Khôi phục giao dịch mua", viewUsage: "Xem mức sử dụng", terms: "Xu đã mua không hết hạn. Hoàn tiền theo chính sách của cửa hàng ứng dụng.",
     exhaustedTitle: "Bạn đã hết xu", exhaustedBody: "Nạp xu để tiếp tục dịch và phiên dịch.",
     exhaustedBanner: "Dịch và phiên dịch đã tạm dừng vì hết xu", lowBanner: "Bạn sắp hết xu", charge: "Nạp xu", close: "Đóng",

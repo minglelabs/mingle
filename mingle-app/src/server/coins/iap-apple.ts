@@ -85,7 +85,7 @@ export function verifyAppleJws(
 }
 
 export type VerifiedStorePurchase = {
-  platform: 'ios' | 'android'
+  platform: 'ios' | 'android' | 'web'
   storeTransactionId: string
   storeOriginalTransactionId: string | null
   storeProductId: string

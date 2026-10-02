@@ -20,7 +20,8 @@ import {
 import { resolveCoinBillingMode } from "@/server/coins/config";
 import { COIN_PRICING_UNITS, COIN_USAGE_KINDS } from "@/server/coins/pricing";
 import { LineChartCard } from "../dashboard/line-chart-card";
-import { addPricingRateAction, adjustCoinsAction, updateProductAction } from "./actions";
+import { readPolarConfig } from "@/server/coins/polar";
+import { addPricingRateAction, adjustCoinsAction, createPolarProductsAction, updateProductAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ const RESULT_MESSAGES: Record<string, string> = {
   invalid_product: "상품 입력값을 확인해 주세요.",
   rate_added: "새 단가를 추가했습니다. 같은 항목의 기존 단가는 종료 처리됩니다.",
   invalid_rate: "단가 입력값을 확인해 주세요. 마진은 1.0~10.0 사이입니다.",
+  polar_failed: "Polar 상품 생성에 실패했습니다. 토큰 권한(products:write)과 POLAR_SERVER를 확인해 주세요.",
 };
 
 function takeFirst(value: string | string[] | undefined): string {
@@ -78,6 +80,7 @@ function resultMessage(result: string): string | null {
   if (!result) return null;
   const [kind, amount] = result.split(":");
   if (kind === "granted") return `${NUMBER_FORMATTER.format(Number(amount))} 코인을 충전했습니다.`;
+  if (kind === "polar_created") return `Polar 상품 ${amount}개를 만들고 연결했습니다.`;
   if (kind === "revoked") return `${NUMBER_FORMATTER.format(Number(amount))} 코인을 회수했습니다. (남은 잔액까지만 회수됩니다)`;
   return RESULT_MESSAGES[result] ?? null;
 }
@@ -204,6 +207,8 @@ async function DashboardTab() {
 
 async function CatalogTab() {
   const { products, rates } = await listCoinAdminCatalog();
+  const polar = readPolarConfig();
+  const polarMode = !polar ? "off" : polar.sandbox ? "sandbox" : "production";
   return (
     <>
       <h2 className="mb-2 text-sm font-semibold text-[#52514e]">상품</h2>
@@ -225,6 +230,15 @@ async function CatalogTab() {
                     <input type="hidden" name="id" value={product.id} />
                     <input className={`${INPUT} w-16`} name="sortOrder" type="number" defaultValue={product.sortOrder} aria-label="정렬" />
                     <input className={`${INPUT} w-32`} name="badge" defaultValue={product.badge ?? ""} placeholder="best_value" aria-label="뱃지" />
+                    {product.platform === "web" ? (
+                      <input
+                        className={`${INPUT} w-72`}
+                        name="providerProductId"
+                        defaultValue={product.providerProductId ?? ""}
+                        placeholder="Polar 상품 ID (비어 있으면 판매 안 함)"
+                        aria-label="Polar 상품 ID"
+                      />
+                    ) : null}
                     <label className="flex items-center gap-1 text-sm">
                       <input type="checkbox" name="isActive" defaultChecked={product.isActive} /> 판매 중
                     </label>
@@ -236,6 +250,14 @@ async function CatalogTab() {
           </tbody>
         </table>
       </div>
+
+      <form action={createPolarProductsAction} className={`${CARD} mt-3 flex flex-wrap items-center gap-3 px-4 py-3`}>
+        <p className="min-w-0 flex-1 text-sm text-[#52514e]">
+          웹 결제(Polar): {polarMode === "off" ? "꺼짐 (POLAR_ACCESS_TOKEN 미설정)" : polarMode === "sandbox" ? "샌드박스" : "운영"}.
+          웹 상품은 Polar 상품 ID가 연결돼야 판매됩니다. 아래 버튼은 연결되지 않은 웹 상품을 Polar에 만들고 ID를 저장합니다.
+        </p>
+        <button className={BUTTON} type="submit" disabled={polarMode === "off"}>Polar 상품 생성</button>
+      </form>
 
       <h2 className="mb-2 mt-8 text-sm font-semibold text-[#52514e]">단가표 (현재 적용 중)</h2>
       <p className="mb-2 text-sm text-[#52514e]">

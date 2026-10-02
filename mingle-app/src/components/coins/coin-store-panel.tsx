@@ -155,7 +155,9 @@ export default function CoinStorePanel({
               {store.status === "loading" || store.status === "idle" ? (
                 <div className="flex justify-center py-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-hidden="true" /></div>
               ) : store.status === "unavailable" ? (
-                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-600">{copy.updateRequired}</p>
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-600">
+                  {store.channel === "web" ? copy.webUnavailable : copy.updateRequired}
+                </p>
               ) : store.status === "error" ? (
                 <div className="rounded-xl bg-gray-50 px-4 py-5 text-center">
                   <p className="text-[13px] text-gray-600" role="alert">{copy.productsLoadError}</p>
@@ -224,7 +226,7 @@ export default function CoinStorePanel({
                 {copy.viewUsage}
                 <ChevronLeft size={18} className="rotate-180 text-gray-400" aria-hidden="true" />
               </button>
-              {store.status === "ready" ? (
+              {store.status === "ready" && store.channel === "store" ? (
                 <button
                   type="button"
                   onClick={restoreCoinPurchases}

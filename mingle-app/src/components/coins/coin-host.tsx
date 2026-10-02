@@ -5,7 +5,11 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DEFAULT_LOCALE, type AppLocale } from "@/i18n";
 import { resolveSupportedLocaleTag } from "@/i18n/config";
-import { restoreCoinPurchases, startCoinPurchaseListener } from "@/lib/coin-purchase-client";
+import {
+  restoreCoinPurchases,
+  resumeWebCheckoutIfReturned,
+  startCoinPurchaseListener,
+} from "@/lib/coin-purchase-client";
 import {
   getCoinWalletState,
   isCoinBillingActive,
@@ -37,6 +41,7 @@ export default function CoinHost() {
       // Finish any purchase that was paid before the app was closed.
       if (isCoinBillingActive(getCoinWalletState().wallet)) restoreCoinPurchases();
     });
+    void resumeWebCheckoutIfReturned();
     const refresh = () => {
       if (!document.hidden) void refreshCoinWallet();
     };

@@ -44,7 +44,8 @@ import {
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
-import { applyCoinBalanceFromHeaders, notifyCoinsExhausted } from '@/lib/coin-wallet-client'
+import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, useCoinWallet } from '@/lib/coin-wallet-client'
+import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip from '@/components/coins/coin-balance-chip'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
@@ -2210,6 +2211,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const coinLocale = resolveAppSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE
+  const coinWallet = useCoinWallet().wallet
+  const coinTtsCostNotice = isCoinBillingActive(coinWallet) && coinWallet.rates
+    ? fillCoinCopy(getCoinCopy(coinLocale).ttsCostNotice, {
+        stt: Math.round(coinWallet.rates.sttCoinsPerMinute),
+        tts: Math.round(coinWallet.rates.ttsCoinsPerAudioMinute),
+      })
+    : null
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const textSizeDropdownRef = useRef<HTMLDivElement | null>(null)
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -9331,6 +9339,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
                 onConfirm={closeEarphoneModeNotice}
+                coinCostNotice={coinTtsCostNotice}
               />
             </MessageMediaDialog>
           )}

@@ -841,9 +841,11 @@ model AppCoinPricingRate {
 
 model AppIapProduct {
   id             String   @id @default(cuid())
-  // ios | android
+  // ios | android | web
   platform       String
   storeProductId String   @map("store_product_id")
+  // web only: the product's id at the payment provider (Polar product UUID).
+  providerProductId String? @map("provider_product_id")
   coinMicro      BigInt   @map("coin_micro")
   bonusMicro     BigInt   @default(0) @map("bonus_micro")
   priceUsdCents  Int      @map("price_usd_cents")

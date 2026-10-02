@@ -21,6 +21,9 @@
 | `COIN_CHARGE_URL` | STT | 내부 과금 API 주소 |
 | `COIN_STT_ALLOW_LEGACY_ANONYMOUS` | 웹 | `0`이면 계정 없는 1.x 클라이언트의 무과금 STT 예외를 없앤다(1.x 지원 종료 후) |
 | `IAP_ALLOW_SANDBOX` | 웹 | 샌드박스 결제(TestFlight·심사·라이선스 테스터)로 코인 지급 허용. 운영 기본값은 거부. **App 심사 기간에는 `1`로 켜야 한다** |
+| `POLAR_ACCESS_TOKEN` | 웹 | Polar 조직 액세스 토큰(`checkouts:write`, `orders:read`, `products:write`). 없으면 웹 결제 꺼짐 |
+| `POLAR_SERVER` | 웹 | `sandbox` 또는 `production`(기본) |
+| `POLAR_WEBHOOK_SECRET` | 웹 | Polar 웹훅 서명 비밀값 |
 | `IOS_IAP_BUNDLE_ID` | 웹 | 기본 `com.minglelabs.mingle.rn` |
 | `ANDROID_IAP_PACKAGE_NAME` | 웹 | 기본 `com.minglelabs.mingle.rn` |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | 웹 | Play Developer API 서비스 계정(JSON 또는 base64) |
@@ -33,13 +36,28 @@
 - iOS는 `pnpm rn:pods`로 `react-native-iap`(NitroIap) 팟을 설치해야 한다.
 - 네이티브 변경이 있으므로 새 앱 버전과 네임스페이스 정렬이 필요하다(메모리 `mobile-release-procedure`).
 
+## 웹 결제 (Polar)
+
+앱 안(iOS·Android 웹뷰)에서는 스토어 결제만 쓰고, 브라우저로 접속한 웹에서는 Polar 체크아웃으로 결제한다. 앱 안에서 외부 결제로 유도하면 스토어 심사 규정에 걸리므로 앱에는 Polar 버튼이 나오지 않는다(네임스페이스 API는 `web-checkout`을 거부한다).
+
+흐름: 상점에서 상품 선택 → `POST /coins/web-checkout` → Polar 결제 페이지 → 결제 완료 시 Polar가 `/api/webhooks/polar`로 `order.paid` 전송 → 서버가 서명을 확인하고 **주문을 Polar API에서 다시 읽은 뒤** 지급 → 사용자는 원래 페이지로 돌아와 잔액이 오른 것을 본다. 환불은 `order.refunded`로 들어와 남은 코인만 회수한다(전액·부분 환불 모두).
+
+설정 순서:
+1. Polar에서 Mingle용 조직을 만든다(샌드박스는 `sandbox.polar.sh`에서 별도 계정·조직·토큰).
+2. 조직 액세스 토큰을 만들어 `POLAR_ACCESS_TOKEN`에, 환경을 `POLAR_SERVER`에 넣는다.
+3. `/admin/coins` → 상품·단가표 → "Polar 상품 생성"을 누르면 웹 상품 4개가 Polar에 만들어지고 ID가 저장된다.
+4. Polar 웹훅을 `https://<앱>/api/webhooks/polar`로 등록하고(`order.paid`, `order.refunded`) 비밀값을 `POLAR_WEBHOOK_SECRET`에 넣는다.
+5. 샌드박스 결제로 코인을 받으려면 `IAP_ALLOW_SANDBOX=1`이 필요하다(테스트 카드 4242 4242 4242 4242).
+
+웹 상품은 $2.99 / $9.99 / $29.99 / $99.99 네 가지다. $0.99는 뺐다. Polar Starter 요금(5% + 50센트, 해외 카드 +1.5%)에서는 $0.99의 절반 이상이 수수료로 나가기 때문이다. 같은 기준으로 수수료율은 $2.99 약 22~23%, $9.99 약 10~11.5%, $29.99 약 6.7~8.2%, $99.99 약 5.5~7%다. 즉 Apple 30% 대비로는 $2.99부터, Apple 소규모 사업자 15% 대비로는 $9.99부터 웹이 유리하다.
+
 ## 구조
 
 | 영역 | 위치 |
 |---|---|
 | 지갑·lot·원장(추가 전용), 일일 무료 충전, 차감 | `mingle-app/src/server/coins/ledger.ts`, `wallet.ts`, `lot-plan.ts` |
 | 단가표·차감액 계산 | `src/server/coins/pricing.ts` |
-| 결제 검증·지급·환불 | `src/server/coins/iap-apple.ts`, `iap-google.ts`, `purchases.ts` |
+| 결제 검증·지급·환불 | `src/server/coins/iap-apple.ts`, `iap-google.ts`, `polar.ts`, `purchases.ts` |
 | API | `src/server/api/controllers/shared/coins-controller.ts`, `src/app/api/coins/*`, `internal/coins/charge`, `webhooks/*` |
 | 과금 연결 | `translate-finalize-handler.ts`(번역 + 인라인 TTS), `tts-inworld-handler.ts`, `conversation-image-text.ts`, `mingle-stt/coin-billing.ts` |
 | 어드민 | `src/app/admin/coins`, `src/server/coins/admin.ts` |

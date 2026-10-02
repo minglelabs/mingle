@@ -11,15 +11,27 @@ import {
   type CoinUsageKind,
   type CoinUsageUnits,
 } from '@/server/coins/pricing'
-import { listCoinProducts, refundPurchase, verifyAndGrantPurchase, type IapPlatform } from '@/server/coins/purchases'
+import {
+  createWebCoinCheckout,
+  handlePolarOrderEvent,
+  listCoinProducts,
+  refundPurchase,
+  verifyAndGrantPurchase,
+  type CoinProductPlatform,
+  type IapPlatform,
+} from '@/server/coins/purchases'
+import { verifyPolarWebhookSignature } from '@/server/coins/polar'
 import { getCoinHistory, getCoinUsageSummary, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
+import { resolveTtsRuntimeSelection } from '@/lib/tts-models'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
+// Speaking rate of synthesized speech in our own logs: about 12 characters per second.
+const TTS_CHARS_PER_SECOND = 12
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
@@ -42,20 +54,41 @@ export async function readCoinWallet() {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
   if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
-  const wallet = await getCoinWallet(userId)
-  return json({ ...wallet, sttBillingToken: mintSttBillingToken(userId) })
+  const [wallet, rates, user] = await Promise.all([
+    getCoinWallet(userId),
+    loadCoinPricingRates(),
+    prisma.user.findUnique({ where: { id: userId }, select: { ttsModel: true } }),
+  ])
+  const coinsFor = (quote: { chargedMicro: bigint }) => Number(quote.chargedMicro) / 1_000_000
+  const now = new Date()
+  return json({
+    ...wallet,
+    sttBillingToken: mintSttBillingToken(userId),
+    // What the user's own settings cost right now, for the notice shown when voice interpreting is turned on.
+    rates: {
+      sttCoinsPerMinute: coinsFor(quoteCoinUsage(rates, { kind: 'stt', model: 'soniox', units: { second: 60 }, at: now })),
+      // One minute of spoken playback: 60 s of audio plus its text.
+      ttsCoinsPerAudioMinute: coinsFor(quoteCoinUsage(rates, {
+        kind: 'tts',
+        model: resolveTtsRuntimeSelection(user?.ttsModel).runtimeModel,
+        units: { second: 60, char: 60 * TTS_CHARS_PER_SECOND },
+        at: now,
+      })),
+    },
+  })
 }
 
 /** GET /coins/products */
 export async function readCoinProducts(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  const platform = resolveRequestPlatform(request)
+  // The unversioned API is the web app: it sells through Polar checkout, never inside the store apps.
+  const platform: CoinProductPlatform = resolveRequestPlatform(request) ?? 'web'
   // What one minute of interpreting (speech recognition) costs right now, for the "about N minutes" hint.
   const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', model: 'soniox', units: { second: 60 }, at: new Date() })
   return json({
     platform,
-    products: platform ? await listCoinProducts(platform) : [],
+    products: await listCoinProducts(platform),
     sttCoinsPerMinute: Number(perMinute.chargedMicro) / 1_000_000,
   })
 }
@@ -187,8 +220,78 @@ export async function chargeCoinsInternally(request: NextRequest) {
   })
 }
 
+const CHECKOUT_CLIENT_ERRORS = new Set(['unknown_product', 'polar_not_configured'])
+
+/** POST /coins/web-checkout { productId, returnPath } — web only; returns the Polar checkout URL. */
+export async function createCoinWebCheckout(request: NextRequest) {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  // Store apps must buy through the store (App Store / Play billing rules).
+  if (resolveRequestPlatform(request)) return json({ error: 'web_only' }, 400)
+  const body = await request.json().catch((): Record<string, unknown> => ({}))
+  const productId = typeof body.productId === 'string' ? body.productId.trim().slice(0, 100) : ''
+  const rawPath = typeof body.returnPath === 'string' ? body.returnPath : '/'
+  // A same-origin path only: never redirect the buyer somewhere else after paying.
+  const returnPath = /^\/(?!\/)[^\\]*$/.test(rawPath) ? rawPath.slice(0, 500) : '/'
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || '').trim() || request.nextUrl.origin
+  try {
+    return json(await createWebCoinCheckout({ userId, storeProductId: productId, origin, returnPath }))
+  } catch (error) {
+    if (error instanceof IapVerificationError) {
+      return json({ error: error.code }, CHECKOUT_CLIENT_ERRORS.has(error.code) ? 400 : 503)
+    }
+    console.error('[coins] web checkout failed', error instanceof Error ? error.message : 'unknown')
+    return json({ error: 'checkout_failed' }, 500)
+  }
+}
+
+/**
+ * POST /webhooks/polar — Standard Webhooks signature, then the order is read
+ * back from Polar before anything is granted. Errors become a 5xx so Polar retries.
+ */
+export async function handlePolarWebhook(request: NextRequest) {
+  const rawBody = await request.text()
+  const signed = verifyPolarWebhookSignature({
+    secret: (process.env.POLAR_WEBHOOK_SECRET || '').trim(),
+    webhookId: request.headers.get('webhook-id'),
+    webhookTimestamp: request.headers.get('webhook-timestamp'),
+    webhookSignature: request.headers.get('webhook-signature'),
+    rawBody,
+  })
+  if (!signed) return json({ error: 'invalid_signature' }, 401)
+  let payload: { type?: unknown; data?: { id?: unknown } }
+  try {
+    payload = JSON.parse(rawBody)
+  } catch {
+    return json({ error: 'invalid_notification' }, 400)
+  }
+  const type = typeof payload.type === 'string' ? payload.type : ''
+  const orderId = typeof payload.data?.id === 'string' ? payload.data.id : null
+  const eventId = await recordStoreEvent({
+    platform: 'web',
+    notificationType: type,
+    notificationId: request.headers.get('webhook-id'),
+    storeTransactionId: orderId,
+    rawPayload: payload as Record<string, unknown>,
+  })
+  if (!eventId) return json({ ok: true, duplicate: true })
+
+  let result = 'ignored'
+  if (orderId && (type === 'order.paid' || type === 'order.refunded')) {
+    try {
+      result = await handlePolarOrderEvent(orderId)
+    } catch (error) {
+      // A definite refusal is final; anything else is retried by Polar.
+      if (!(error instanceof IapVerificationError) || !CLIENT_ERROR_CODES.has(error.code)) throw error
+      result = error.code
+    }
+  }
+  await finishStoreEvent(eventId, result)
+  return json({ ok: true })
+}
+
 async function recordStoreEvent(input: {
-  platform: IapPlatform
+  platform: CoinProductPlatform
   notificationType: string
   notificationId: string | null
   storeTransactionId: string | null

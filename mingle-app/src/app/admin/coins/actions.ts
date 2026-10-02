@@ -5,7 +5,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { MICRO_PER_COIN } from "@/lib/coin-units";
-import { addCoinPricingRate, updateCoinProduct } from "@/server/coins/admin";
+import { addCoinPricingRate, createMissingPolarProducts, updateCoinProduct } from "@/server/coins/admin";
 import type { CoinPricingUnit, CoinUsageKind } from "@/server/coins/pricing";
 import { adjustCoinsAsAdmin } from "@/server/coins/wallet";
 
@@ -77,9 +77,25 @@ export async function updateProductAction(formData: FormData) {
     isActive: read(formData, "isActive") === "on",
     sortOrder,
     badge: read(formData, "badge").slice(0, 32) || null,
+    ...(formData.has("providerProductId")
+      ? { providerProductId: read(formData, "providerProductId").slice(0, 64) || null }
+      : {}),
   });
   revalidatePath("/admin/coins");
   redirect(withResult("/admin/coins?tab=catalog", "product_updated"));
+}
+
+export async function createPolarProductsAction() {
+  await requireAdmin();
+  let result: string;
+  try {
+    result = `polar_created:${await createMissingPolarProducts()}`;
+  } catch (error) {
+    console.error("[admin/coins] polar product creation failed", error);
+    result = "polar_failed";
+  }
+  revalidatePath("/admin/coins");
+  redirect(withResult("/admin/coins?tab=catalog", result));
 }
 
 export async function addPricingRateAction(formData: FormData) {

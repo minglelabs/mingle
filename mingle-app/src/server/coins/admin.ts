@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
+import { MICRO_PER_COIN } from '@/lib/coin-units'
+import { createPolarProduct, readPolarConfig } from './polar'
 import { clearCoinPricingRateCache, COIN_PRICING_UNITS, COIN_USAGE_KINDS, type CoinPricingUnit, type CoinUsageKind } from './pricing'
 
 // Read models and small writes for /admin/coins (docs/coin-iap-spec.md 8).
@@ -184,11 +186,44 @@ export async function listCoinAdminCatalog() {
   return { products, rates }
 }
 
-export async function updateCoinProduct(input: { id: string; isActive: boolean; sortOrder: number; badge: string | null }) {
+export async function updateCoinProduct(input: {
+  id: string
+  isActive: boolean
+  sortOrder: number
+  badge: string | null
+  // Web packs only: the linked Polar product id. undefined leaves it unchanged.
+  providerProductId?: string | null
+}) {
   await prisma.appIapProduct.update({
     where: { id: input.id },
-    data: { isActive: input.isActive, sortOrder: input.sortOrder, badge: input.badge },
+    data: {
+      isActive: input.isActive,
+      sortOrder: input.sortOrder,
+      badge: input.badge,
+      ...(input.providerProductId === undefined ? {} : { providerProductId: input.providerProductId }),
+    },
   })
+}
+
+/**
+ * Creates a Polar product for every web pack that is not linked yet and stores
+ * its id. Runs against whichever Polar environment POLAR_SERVER selects.
+ */
+export async function createMissingPolarProducts(): Promise<number> {
+  const config = readPolarConfig()
+  if (!config) throw new Error('polar_not_configured')
+  const packs = await prisma.appIapProduct.findMany({ where: { platform: 'web', providerProductId: null } })
+  for (const pack of packs) {
+    const coins = ((pack.coinMicro + pack.bonusMicro) / MICRO_PER_COIN).toLocaleString('en-US')
+    const providerProductId = await createPolarProduct(config, {
+      name: `Mingle ${coins} coins`,
+      description: `${coins} Mingle coins for speech recognition, translation and voice interpreting. Coins do not expire.`,
+      priceUsdCents: pack.priceUsdCents,
+      coinProductId: pack.storeProductId,
+    })
+    await prisma.appIapProduct.update({ where: { id: pack.id }, data: { providerProductId } })
+  }
+  return packs.length
 }
 
 /**

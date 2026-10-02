@@ -4,9 +4,17 @@ import { microToDisplayCoins } from '@/lib/coin-units'
 import { IapVerificationError, verifyAppleTransactionJws, type VerifiedStorePurchase } from './iap-apple'
 import { consumeGooglePlayPurchase, verifyGooglePlayPurchase } from './iap-google'
 import { grantLot, takeFromLots, withLockedWallet } from './ledger'
+import {
+  createPolarCheckout,
+  getPolarOrder,
+  readPolarConfig,
+  type PolarOrder,
+} from './polar'
 import { getCoinWallet, type CoinWalletSnapshot } from './wallet'
 
 export type IapPlatform = 'ios' | 'android'
+// Web purchases go through Polar checkout instead of a store.
+export type CoinProductPlatform = IapPlatform | 'web'
 
 export type CoinProductDto = {
   productId: string
@@ -17,9 +25,11 @@ export type CoinProductDto = {
   badge: string | null
 }
 
-export async function listCoinProducts(platform: IapPlatform): Promise<CoinProductDto[]> {
+export async function listCoinProducts(platform: CoinProductPlatform): Promise<CoinProductDto[]> {
+  // A web pack is sold only once it is linked to a Polar product and Polar is configured.
+  if (platform === 'web' && !readPolarConfig()) return []
   const rows = await prisma.appIapProduct.findMany({
-    where: { platform, isActive: true },
+    where: { platform, isActive: true, ...(platform === 'web' ? { providerProductId: { not: null } } : {}) },
     orderBy: [{ sortOrder: 'asc' }, { priceUsdCents: 'asc' }],
   })
   return rows.map(row => ({
@@ -186,4 +196,77 @@ export async function refundPurchase(
     })
     return 'refunded' as const
   }, { skipDailyGrant: true })
+}
+
+/** Starts a Polar checkout for a web pack and returns the hosted checkout URL. */
+export async function createWebCoinCheckout(input: {
+  userId: string
+  storeProductId: string
+  origin: string
+  returnPath: string
+}): Promise<{ url: string }> {
+  const config = readPolarConfig()
+  if (!config) throw new IapVerificationError('polar_not_configured')
+  const product = await prisma.appIapProduct.findUnique({
+    where: { platform_storeProductId: { platform: 'web', storeProductId: input.storeProductId } },
+  })
+  if (!product?.isActive || !product.providerProductId) throw new IapVerificationError('unknown_product')
+  const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { email: true } })
+
+  const back = new URL(input.returnPath, input.origin)
+  const success = new URL(back)
+  success.searchParams.set('coin_checkout', 'success')
+  const checkout = await createPolarCheckout(config, {
+    polarProductId: product.providerProductId,
+    userId: input.userId,
+    coinProductId: product.storeProductId,
+    customerEmail: user?.email,
+    successUrl: success.toString(),
+    returnUrl: back.toString(),
+  })
+  return { url: checkout.url }
+}
+
+/** Reads the order back from Polar (never trusting the webhook body) and maps it to a purchase. */
+async function verifyPolarOrder(orderId: string): Promise<{ order: PolarOrder; verified: VerifiedStorePurchase | null }> {
+  const config = readPolarConfig()
+  if (!config) throw new IapVerificationError('polar_not_configured')
+  const order = await getPolarOrder(config, orderId)
+  if (!order.paid || !order.userId || !order.coinProductId) return { order, verified: null }
+  const product = await prisma.appIapProduct.findUnique({
+    where: { platform_storeProductId: { platform: 'web', storeProductId: order.coinProductId } },
+    select: { providerProductId: true },
+  })
+  // The order must be for the Polar product this pack is linked to.
+  if (!product?.providerProductId || product.providerProductId !== order.polarProductId) {
+    throw new IapVerificationError('unknown_product')
+  }
+  return {
+    order,
+    verified: {
+      platform: 'web',
+      storeTransactionId: order.id,
+      storeOriginalTransactionId: null,
+      storeProductId: order.coinProductId,
+      environment: config.sandbox ? 'sandbox' : 'production',
+      // Polar reports cents; purchases store micros.
+      priceAmountMicros: order.totalAmount === null ? null : BigInt(order.totalAmount) * 10_000n,
+      priceCurrency: order.currency ? order.currency.toUpperCase() : null,
+      storefrontCountry: order.country,
+      rawPayload: order.raw,
+    },
+  }
+}
+
+export type PolarOrderEventResult = 'granted' | 'already_granted' | 'not_paid' | RefundResult
+
+/** order.paid / order.refunded: grant a paid order once, or claw back a refunded one. */
+export async function handlePolarOrderEvent(orderId: string): Promise<PolarOrderEventResult> {
+  const { order, verified } = await verifyPolarOrder(orderId)
+  // Any refund, full or partial, takes back what is left of the pack.
+  if (order.status === 'refunded' || order.status === 'partially_refunded' || order.refundedAmount > 0) {
+    return refundPurchase(order.id)
+  }
+  if (!verified || !order.userId) return 'not_paid'
+  return (await grantVerifiedPurchase(order.userId, verified)).status
 }

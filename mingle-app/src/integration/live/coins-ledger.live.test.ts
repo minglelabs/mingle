@@ -221,6 +221,61 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(state).toEqual({ ledger: 0n, lots: 0n, wallet: 0n })
   })
 
+  it('grants a paid Polar order once from the order read back from Polar, and claws it back on refund', async () => {
+    const purchases = await import('@/server/coins/purchases')
+    const userId = newUser()
+    await wallet.getCoinWallet(userId)
+    const polarProductId = `polar-${randomUUID()}`
+    await prisma.appIapProduct.update({
+      where: { platform_storeProductId: { platform: 'web', storeProductId: 'coin_10000' } },
+      data: { providerProductId: polarProductId },
+    })
+    const orderId = randomUUID()
+    const order: Record<string, unknown> = {
+      id: orderId, status: 'paid', paid: true, total_amount: 999, refunded_amount: 0, currency: 'usd',
+      product_id: polarProductId, metadata: { mingle_user_id: userId, mingle_coin_product: 'coin_10000' },
+    }
+    const realFetch = globalThis.fetch
+    const requested: string[] = []
+    globalThis.fetch = (async (url: string) => {
+      requested.push(String(url))
+      return { ok: true, status: 200, json: async () => order }
+    }) as unknown as typeof fetch
+    process.env.POLAR_ACCESS_TOKEN = 'polar_pat_test'
+    process.env.POLAR_SERVER = 'sandbox'
+    try {
+      expect((await purchases.listCoinProducts('web')).map(product => product.productId)).toEqual(['coin_10000'])
+      expect(await purchases.handlePolarOrderEvent(orderId)).toBe('granted')
+      expect(await purchases.handlePolarOrderEvent(orderId)).toBe('already_granted')
+      expect(requested[0]).toBe(`https://sandbox-api.polar.sh/v1/orders/${orderId}`)
+      expect((await wallet.getCoinWallet(userId)).paidBalance).toBe(10_600)
+
+      // An order for a different Polar product than the pack is linked to is refused.
+      order.product_id = 'something-else'
+      await expect(purchases.handlePolarOrderEvent(orderId)).rejects.toMatchObject({ code: 'unknown_product' })
+      order.product_id = polarProductId
+
+      order.status = 'refunded'
+      order.refunded_amount = 999
+      expect(await purchases.handlePolarOrderEvent(orderId)).toBe('refunded')
+      expect((await wallet.getCoinWallet(userId)).paidBalance).toBe(0)
+
+      // An unpaid order grants nothing.
+      Object.assign(order, { id: randomUUID(), status: 'pending', paid: false, refunded_amount: 0 })
+      expect(await purchases.handlePolarOrderEvent(order.id as string)).toBe('not_paid')
+    } finally {
+      globalThis.fetch = realFetch
+      delete process.env.POLAR_ACCESS_TOKEN
+      delete process.env.POLAR_SERVER
+      await prisma.appIapProduct.update({
+        where: { platform_storeProductId: { platform: 'web', storeProductId: 'coin_10000' } },
+        data: { providerProductId: null },
+      })
+    }
+    const purchase = await prisma.appIapPurchase.findUniqueOrThrow({ where: { storeTransactionId: orderId } })
+    expect(purchase).toMatchObject({ platform: 'web', status: 'refunded', environment: 'sandbox', priceCurrency: 'USD', priceAmountMicros: 9_990_000n })
+  })
+
   it('lists store products per platform', async () => {
     const purchases = await import('@/server/coins/purchases')
     const products = await purchases.listCoinProducts('android')
@@ -286,7 +341,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(today.freeGrantedMicro).toBeGreaterThan(0n)
     expect(today.spentMicro).toBeGreaterThan(0n)
     const catalog = await admin.listCoinAdminCatalog()
-    expect(catalog.products).toHaveLength(10)
+    expect(catalog.products).toHaveLength(14)
     expect(catalog.rates.length).toBeGreaterThan(20)
   })
 
