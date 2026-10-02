@@ -613,6 +613,14 @@ const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
   bottomEdgeMode: 'transparent',
 };
 
+// The post feed and the full-screen post viewer are full-bleed: the card (and
+// the feed's translucent tab bar) runs to the bottom edge, so the white
+// bottom fill would show as a strip under it.
+const POST_FEED_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  ...DEFAULT_SAFE_AREA_PALETTE,
+  bottomEdgeMode: 'transparent',
+};
+
 const PROFILE_SHARE_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topColor: '#1295e8',
   topOverlayColor: 'transparent',
@@ -1271,6 +1279,19 @@ function isConversationSpectatePathname(pathname: string): boolean {
   return false;
 }
 
+function isPostFeedPathname(pathname: string): boolean {
+  const segments = pathname
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'feed' || (segments[1] === 'posts' && segments[2] === 'viewer');
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -1293,6 +1314,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     }
     if (isConversationsLikePathname(parsed.pathname)) {
       return CONVERSATIONS_SAFE_AREA_PALETTE;
+    }
+    if (isPostFeedPathname(parsed.pathname)) {
+      return POST_FEED_SAFE_AREA_PALETTE;
     }
   } catch {
     return DEFAULT_SAFE_AREA_PALETTE;

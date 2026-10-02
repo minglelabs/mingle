@@ -483,9 +483,10 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       ? FALLBACK_VIEWER_CARD_HEIGHT
       : FALLBACK_CARD_HEIGHT;
   // Cards read this to keep their bottom row clear of the floating tab bar.
-  const bottomInsetStyle = underTabBar
-    ? ({ "--feed-bottom-inset": GLASS_TAB_BAR_INSET } as CSSProperties)
-    : undefined;
+  // The viewer is full-screen: its cards only clear the home indicator.
+  const bottomInsetStyle = {
+    "--feed-bottom-inset": underTabBar ? GLASS_TAB_BAR_INSET : isViewer ? "env(safe-area-inset-bottom, 0px)" : "0px",
+  } as CSSProperties;
   const commentPost = posts.find((p) => p.id === commentPostId) ?? null;
   const actionPost = posts.find((p) => p.id === actionPostId) ?? null;
   const glyphTone = activePost ? postForegroundTone(activePost.backgroundKey, Boolean(activePost.image)) : "light";

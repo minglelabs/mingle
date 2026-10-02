@@ -16,10 +16,9 @@ import {
 } from "@/lib/tab-navigation";
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
-/** Gap under the floating glass bar where the device has no bottom inset. */
-const GLASS_TAB_BAR_BOTTOM_GAP_PX = 8;
-/** Space the glass bar covers at the bottom of the screen it floats over. */
-export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX + GLASS_TAB_BAR_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px))`;
+/** Space the glass bar covers at the bottom of the screen it sits over. */
+export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`;
+
 // Fallback poll for the unread badge. Push, focus and visibilitychange cover
 // the fast path; this only bounds how stale a visible badge can get.
 export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
@@ -39,9 +38,9 @@ type BottomTabBarProps = {
   locale: string;
   unreadConversationMessageCount?: number;
   /**
-   * `glass`: a frosted capsule floating over full-bleed content. The host
-   * positions nothing; it only keeps `GLASS_TAB_BAR_INSET` clear at the
-   * bottom of what scrolls under the bar. Default: the solid bar in the flow.
+   * `glass`: the same bar, translucent, laid over full-bleed content (the
+   * feed) instead of sitting below it. The host keeps `GLASS_TAB_BAR_INSET`
+   * clear at the bottom of what shows through. Default: the solid bar.
    */
   variant?: "solid" | "glass";
 };
@@ -237,21 +236,13 @@ export default function BottomTabBar({
       aria-label={dictionary.titles.my}
       className={
         glass
-          ? // A frosted capsule floating over full-bleed content (the feed).
-            "absolute inset-x-3 z-30 flex items-stretch overflow-hidden rounded-full border border-white/50 bg-white/60 shadow-[0_8px_28px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-150 [&_.text-gray-400]:!text-slate-700"
+          ? "absolute inset-x-0 bottom-0 z-30 flex w-full items-stretch border-t border-white/25 bg-white/45 backdrop-blur-xl backdrop-saturate-150 [&_.text-gray-400]:!text-slate-600"
           : "flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
       }
-      style={
-        glass
-          ? {
-              height: BOTTOM_TAB_BAR_HEIGHT_PX,
-              bottom: `calc(${GLASS_TAB_BAR_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px))`,
-            }
-          : {
-              height: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
-              paddingBottom: "env(safe-area-inset-bottom, 0px)",
-            }
-      }
+      style={{
+        height: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
     >
       {showFeedTab ? (
         <button
