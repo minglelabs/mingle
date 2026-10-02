@@ -515,10 +515,40 @@ export default function FeedPostCard({
     </div>
   );
 
+  // Text post: "See more" sits right under the centre preview (a large,
+  // easy target) and the body opens there. Image posts keep it in the row
+  // under the snippet.
+  const centerExpandSlot =
+    showExpand && !hasImage ? (
+      <button
+        type="button"
+        data-feed-action
+        onClick={handleExpand}
+        className={`min-h-11 rounded-full px-5 text-base font-semibold underline underline-offset-4 transition active:scale-95 ${fg.textClass}`}
+      >
+        {copy.expand}
+      </button>
+    ) : null;
+
+  const centerCollapseSlot =
+    expanded && !hasImage ? (
+      <button
+        type="button"
+        data-feed-action
+        onClick={handleCollapse}
+        className={`flex min-h-11 items-center gap-1 rounded-full px-5 text-base font-semibold underline underline-offset-4 transition active:scale-95 ${fg.textClass}`}
+      >
+        <ChevronDown size={16} strokeWidth={2.5} className="rotate-180" aria-hidden="true" />
+        <span>{copy.collapse}</span>
+      </button>
+    ) : null;
+
+  const showRowExpand = showExpand && hasImage;
+  const showRowCollapse = expanded && hasImage;
   const controlSlot =
-    showExpand || expanded || translate.mode !== "hidden" ? (
+    showRowExpand || showRowCollapse || translate.mode !== "hidden" ? (
       <div className="mt-1 flex items-center gap-4">
-        {showExpand ? (
+        {showRowExpand ? (
           <button
             type="button"
             data-feed-action
@@ -529,7 +559,7 @@ export default function FeedPostCard({
           </button>
         ) : null}
 
-        {expanded ? (
+        {showRowCollapse ? (
           <button
             type="button"
             data-feed-action
@@ -653,6 +683,8 @@ export default function FeedPostCard({
         displayText={displayText}
         previewText={previewText}
         expanded={expanded}
+        centerExpandSlot={centerExpandSlot}
+        centerCollapseSlot={centerCollapseSlot}
         ariaLabel={ariaLabel}
         authorSlot={authorSlot}
         actionSlot={actionSlot}

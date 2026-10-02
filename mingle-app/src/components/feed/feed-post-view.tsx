@@ -49,6 +49,13 @@ export type FeedPostViewProps = {
   actionSlot?: ReactNode;
   /** Expand / collapse / translate controls under the body. Null in preview. */
   controlSlot?: ReactNode;
+  /**
+   * Text-only cards: the "See more" control shown right under the centre
+   * preview, so the body opens where the reader is looking.
+   */
+  centerExpandSlot?: ReactNode;
+  /** Text-only cards: the "Collapse" control shown right under the expanded body. */
+  centerCollapseSlot?: ReactNode;
   /** aria-label describing the card for screen readers. */
   ariaLabel: string;
   /** Overlays (heart burst). */
@@ -74,6 +81,9 @@ export type FeedPostViewProps = {
   bodyTouchAction?: "pan-y" | "none";
 };
 
+/** Top and bottom inset of the expanded text body: clears the header and the author row. */
+const EXPANDED_BODY_EDGE_PADDING = "calc(56px + env(safe-area-inset-top, 44px) + 40px)";
+
 /**
  * Presentational, layout-only rendering of a post card. Both the interactive
  * feed card and the compose preview render THROUGH this so what an author sees
@@ -90,6 +100,8 @@ export default function FeedPostView({
   authorSlot,
   actionSlot,
   controlSlot,
+  centerExpandSlot,
+  centerCollapseSlot,
   ariaLabel,
   overlaySlot,
   onImageError,
@@ -173,7 +185,7 @@ export default function FeedPostView({
 
       {/* Centre preview (text-only, collapsed) */}
       {!imageUrl && !expanded ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8">
           <p
             className="max-w-full break-words text-center text-[1.5rem] font-bold leading-[1.45]"
             style={{
@@ -185,30 +197,34 @@ export default function FeedPostView({
           >
             {previewText}
           </p>
+          {centerExpandSlot ? <div className="pointer-events-auto mt-3">{centerExpandSlot}</div> : null}
         </div>
       ) : null}
 
-      {/* Expanded body (text-only) */}
+      {/* Expanded body (text-only): opens in place, in the same large centred
+          type as the preview. A short body stays centred; a long one scrolls.
+          The equal top/bottom padding keeps the centre where the preview was
+          and clears the header and the author row at the scroll ends. */}
       {!imageUrl && expanded ? (
         <div
-          className="relative z-10 flex flex-1 flex-col overflow-hidden"
+          ref={bodyScrollRef}
+          className="absolute inset-0 overflow-y-auto"
           style={{
-            paddingBottom: "140px",
-            paddingTop: "calc(56px + env(safe-area-inset-top, 44px) + 8px)",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+            touchAction: bodyTouchAction,
           }}
+          onScroll={onBodyScroll}
         >
           <div
-            ref={bodyScrollRef}
-            className="flex-1 overflow-y-auto px-6"
+            className="flex min-h-full flex-col items-center justify-center px-8"
             style={{
-              overscrollBehavior: "contain",
-              WebkitOverflowScrolling: "touch",
-              touchAction: bodyTouchAction,
+              paddingTop: EXPANDED_BODY_EDGE_PADDING,
+              paddingBottom: EXPANDED_BODY_EDGE_PADDING,
             }}
-            onScroll={onBodyScroll}
           >
             <p
-              className="whitespace-pre-wrap text-base leading-relaxed"
+              className="max-w-full whitespace-pre-wrap text-center text-[1.5rem] font-bold leading-[1.45]"
               style={{
                 color: colors.textColor,
                 textShadow: colors.textShadow,
@@ -218,6 +234,7 @@ export default function FeedPostView({
             >
               {displayText}
             </p>
+            {centerCollapseSlot ? <div className="mt-3">{centerCollapseSlot}</div> : null}
           </div>
         </div>
       ) : null}
