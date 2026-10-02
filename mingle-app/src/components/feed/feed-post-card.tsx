@@ -23,6 +23,8 @@ import {
 } from "@/components/feed/feed-card-format";
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
+import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { isScrolledToEnd, READ_DWELL_MS, readClockRunning, readVerdict } from "@/components/feed/feed-read";
 import { readOnlyPostKind } from "@/components/feed/read-only-post";
 import { useFeedFollow, type FollowError } from "@/components/feed/use-feed-follow";
@@ -32,7 +34,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Globe,
   Heart,
   MessageCircle,
   MoreHorizontal,
@@ -184,9 +185,19 @@ export default function FeedPostCard({
 
   // One shown text drives the centre preview, the image snippet and the
   // expanded body, so all three switch language together.
+  // Any other language the post is already translated into can be picked from
+  // its flag; those texts are fetched once, on the first pick.
+  const [pickedLanguage, setPickedLanguage] = useState<string | null>(null);
+  const [otherTranslations, setOtherTranslations] = useState<Record<string, string> | null>(null);
+  const [loadingLanguage, setLoadingLanguage] = useState<string | null>(null);
+  const pickedText = pickedLanguage ? otherTranslations?.[pickedLanguage] ?? null : null;
+
   const { displayText, previewText, previewTruncated } = useMemo(
-    () => resolveCardTexts(post.sourceText, translate.translatedText, translate.showingTranslation),
-    [post.sourceText, translate.translatedText, translate.showingTranslation],
+    () =>
+      pickedText
+        ? resolveCardTexts(post.sourceText, pickedText, true)
+        : resolveCardTexts(post.sourceText, translate.translatedText, translate.showingTranslation),
+    [post.sourceText, pickedText, translate.translatedText, translate.showingTranslation],
   );
 
   // ── Follow ──
@@ -426,20 +437,6 @@ export default function FeedPostCard({
     };
   }, []);
 
-  // ── Translate button label ──
-  const translateLabel = (() => {
-    switch (translate.mode) {
-      case "loading":
-        return copy.translating;
-      case "showOriginal":
-        return copy.translateHide;
-      case "retry":
-      case "show":
-      default:
-        return copy.translateShow;
-    }
-  })();
-
   const handleTranslateToggle = useCallback(() => {
     if (isSignedIn && translate.mode !== "loading" && translate.mode !== "hidden") {
       const to = translate.mode === "showOriginal" ? "original" : "translated";
@@ -447,6 +444,65 @@ export default function FeedPostCard({
     }
     translate.toggle();
   }, [isSignedIn, translate, track]);
+
+  // ── Language chips: original + the viewer's language + every other
+  // language the post is already translated into ──
+  const viewerChipLanguage =
+    translate.mode !== "hidden" ? (post.displayLanguage && post.displayLanguage.trim()) || viewerLanguage : null;
+  const chipLanguages = useMemo(() => {
+    const seen = new Set<string>();
+    const sourceKey = (post.sourceLanguage ?? "").toLowerCase();
+    const out: string[] = [];
+    for (const language of [viewerChipLanguage, ...(post.translationLanguages ?? [])]) {
+      const key = (language ?? "").toLowerCase();
+      if (!language || !key || key === sourceKey || seen.has(key)) continue;
+      seen.add(key);
+      out.push(language);
+    }
+    return out.slice(0, 6);
+  }, [viewerChipLanguage, post.translationLanguages, post.sourceLanguage]);
+  const selectedChip = pickedText
+    ? (pickedLanguage as string)
+    : viewerChipLanguage && translate.showingTranslation
+      ? viewerChipLanguage
+      : ORIGINAL_CHIP;
+
+  const handleSelectLanguage = useCallback(
+    (chip: string) => {
+      if (chip === ORIGINAL_CHIP || chip === viewerChipLanguage) {
+        setPickedLanguage(null);
+        // The viewer-language chip keeps the existing flow (it may request a
+        // translation that does not exist yet); the others only read.
+        if ((chip === ORIGINAL_CHIP) === translate.showingTranslation) handleTranslateToggle();
+        return;
+      }
+      if (otherTranslations) {
+        if (otherTranslations[chip]) setPickedLanguage(chip);
+        return;
+      }
+      if (loadingLanguage) return;
+      setLoadingLanguage(chip);
+      void (async () => {
+        try {
+          const res = await fetch(buildClientApiPath(`/posts/${encodeURIComponent(post.id)}/translate`), {
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error("translations_unavailable");
+          const body = (await res.json()) as { translations?: Array<{ language: string; text: string }> };
+          const texts = Object.fromEntries((body.translations ?? []).map((row) => [row.language, row.text]));
+          setOtherTranslations(texts);
+          if (texts[chip]) setPickedLanguage(chip);
+          else onToast(copy.translateFailed);
+        } catch {
+          onToast(copy.translateFailed);
+        } finally {
+          setLoadingLanguage(null);
+        }
+      })();
+    },
+    [viewerChipLanguage, translate.showingTranslation, handleTranslateToggle, otherTranslations, loadingLanguage, post.id, onToast, copy],
+  );
+  const showLanguageChips = post.sourceText.trim().length > 0 && chipLanguages.length > 0;
 
   const ariaLabel = `${authorLabel}: ${previewText}`;
 
@@ -555,7 +611,7 @@ export default function FeedPostCard({
   const showRowExpand = showExpand && hasImage;
   const showRowCollapse = expanded && hasImage;
   const controlSlot =
-    showRowExpand || showRowCollapse || translate.mode !== "hidden" ? (
+    showRowExpand || showRowCollapse || showLanguageChips ? (
       <div className="mt-1 flex items-center gap-4">
         {showRowExpand ? (
           <button
@@ -580,17 +636,18 @@ export default function FeedPostCard({
           </button>
         ) : null}
 
-        {translate.mode !== "hidden" ? (
-          <button
-            type="button"
-            data-feed-action
-            onClick={handleTranslateToggle}
-            className={`${HIT_44} flex items-center gap-1.5 text-xs font-medium transition ${fg.textClass}`}
-            aria-busy={translate.mode === "loading"}
-          >
-            <Globe size={13} strokeWidth={2} aria-hidden="true" />
-            <span>{translateLabel}</span>
-          </button>
+        {showLanguageChips ? (
+          <PostLanguageChips
+            sourceLanguage={post.sourceLanguage}
+            languages={chipLanguages}
+            selected={selectedChip}
+            loadingLanguage={
+              loadingLanguage ?? (translate.mode === "loading" ? viewerChipLanguage : null)
+            }
+            locale={locale}
+            originalLabel={copy.translateHide}
+            onSelect={handleSelectLanguage}
+          />
         ) : null}
       </div>
     ) : null;

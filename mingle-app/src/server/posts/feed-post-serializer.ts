@@ -100,6 +100,11 @@ export type SerializerContext = {
    */
   translationByPostId: ReadonlyMap<string, SerializerTranslationRow>
   /**
+   * Languages with a finished translation of each post's current body
+   * version, indexed by postId. Absent: the DTO omits the list.
+   */
+  translationLanguagesByPostId?: ReadonlyMap<string, readonly string[]>
+  /**
    * When true a post's `deletedAt` is surfaced (trash list only). Every other
    * list forces it to null even if a row carries a value.
    */
@@ -221,6 +226,10 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     ctx.displayLanguage,
     ctx.translationByPostId.get(post.id),
   )
+  // The source language is the original, not a translation of it.
+  const translationLanguages = (ctx.translationLanguagesByPostId?.get(post.id) ?? []).filter(
+    (language) => language !== post.sourceLanguage,
+  )
 
   return {
     id: post.id,
@@ -238,6 +247,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     displayText,
     displayLanguage,
     translationState,
+    ...(translationLanguages.length > 0 ? { translationLanguages } : {}),
     backgroundKey: post.backgroundKey ?? '',
     image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
     likeCount: post.likeCount,

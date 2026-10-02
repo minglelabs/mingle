@@ -54,6 +54,12 @@ export type FeedPostDto = {
   displayText: string | null
   displayLanguage: string | null
   translationState: FeedPostTranslationState
+  /**
+   * Languages this body already has a finished translation in (current body
+   * version, the source language excluded). Anyone may read them via
+   * `GET /posts/{id}/translate`. Optional on the wire: absent means none.
+   */
+  translationLanguages?: string[]
   /** A key of POST_BACKGROUND catalog in `@/lib/post-backgrounds`. */
   backgroundKey: string
   image: FeedPostImageDto | null

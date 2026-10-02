@@ -110,12 +110,31 @@ export async function loadSerializerContext(
     }
   }
 
+  // Every language each post is already translated into (no text: the card
+  // fetches a translation only when the reader picks its language).
+  const translationLanguagesByPostId = new Map<string, string[]>()
+  if (postIds.length > 0) {
+    const currentVersionByPost = new Map(posts.map((p) => [p.id, p.bodyVersion]))
+    const rows = await prisma.postTranslation.findMany({
+      where: { postId: { in: postIds }, status: 'ready', text: { not: null } },
+      select: { postId: true, bodyVersion: true, language: true },
+      orderBy: { language: 'asc' },
+    })
+    for (const row of rows) {
+      if (currentVersionByPost.get(row.postId) !== row.bodyVersion) continue
+      const languages = translationLanguagesByPostId.get(row.postId)
+      if (languages) languages.push(row.language)
+      else translationLanguagesByPostId.set(row.postId, [row.language])
+    }
+  }
+
   return {
     viewerId,
     displayLanguage,
     likedPostIds,
     followedAuthorIds,
     translationByPostId,
+    translationLanguagesByPostId,
     includeDeletedAt: includeDeletedAt ?? false,
   }
 }

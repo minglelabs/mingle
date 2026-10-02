@@ -24,6 +24,36 @@ function json(payload: object, init?: ResponseInit): NextResponse {
 type RouteContext = { params: Promise<{ postId: string }> }
 
 /**
+ * GET — every finished translation of the post's current body, for the
+ * language chips on a post. Public like the post itself: these rows are
+ * shared by all viewers and reading them never calls the LLM.
+ */
+export async function GET(_request: NextRequest, context: RouteContext) {
+  const { postId } = await context.params
+  const session = await getServerSession(getAuthOptions())
+  const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() || null : null
+
+  const post = await prisma.post.findFirst({
+    where: visibleSinglePostWhere(postId, viewerId),
+    select: { bodyVersion: true, sourceLanguage: true },
+  })
+  if (!post) return json({ error: 'not_found' }, { status: 404 })
+
+  const rows = await prisma.postTranslation.findMany({
+    where: { postId, bodyVersion: post.bodyVersion, status: 'ready', text: { not: null } },
+    select: { language: true, text: true },
+    orderBy: { language: 'asc' },
+  })
+
+  return json({
+    postId,
+    translations: rows
+      .filter((row) => row.language !== post.sourceLanguage && row.text)
+      .map((row) => ({ language: row.language, text: row.text })),
+  })
+}
+
+/**
  * POST — "see translation" for a post, in the viewer's display language.
  * Body: { language }. `language` must be a supported translation language;
  * it is canonicalized ('zh-cn' → 'zh-CN') and the stored row is shared by
