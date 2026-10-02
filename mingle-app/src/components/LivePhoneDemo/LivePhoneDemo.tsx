@@ -44,6 +44,7 @@ import {
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import { applyCoinBalanceFromHeaders, notifyCoinsExhausted } from '@/lib/coin-wallet-client'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
@@ -4507,7 +4508,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
+      if (response.status === 402) notifyCoinsExhausted()
       if (!response.ok) return null
+      applyCoinBalanceFromHeaders(response.headers)
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
       return new Blob([arrayBuffer], {

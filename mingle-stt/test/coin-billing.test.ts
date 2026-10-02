@@ -72,3 +72,53 @@ test('is disabled unless both the charge URL and the secret are set', () => {
         chargeUrl: 'http://x', secret: 's', requireToken: true,
     });
 });
+
+test('a connection whose balance is exhausted is told coin_insufficient and closed', async (t) => {
+    const { createServer } = await import('node:http');
+    const { once } = await import('node:events');
+    const { WebSocket, WebSocketServer } = await import('ws');
+    const { createSttServer } = await import('../stt-server');
+
+    const charges: Array<Record<string, unknown>> = [];
+    const chargeServer = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => { raw += chunk; });
+        req.on('end', () => {
+            charges.push({ ...JSON.parse(raw), authorization: req.headers.authorization });
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify({ balanceExhausted: true, error: 'coin_insufficient' }));
+        });
+    });
+    chargeServer.listen(0, '127.0.0.1');
+    await once(chargeServer, 'listening');
+    const chargePort = (chargeServer.address() as { port: number }).port;
+
+    // A provider that accepts the socket and stays silent.
+    const provider = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    await once(provider, 'listening');
+    const providerPort = (provider.address() as { port: number }).port;
+
+    const { server } = createSttServer({
+        sonioxApiKey: 'test',
+        sonioxUrl: `ws://127.0.0.1:${providerPort}`,
+        coinBilling: { chargeUrl: `http://127.0.0.1:${chargePort}/charge`, secret: 'secret', requireToken: false },
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const sttPort = (server.address() as { port: number }).port;
+    t.after(() => { server.close(); chargeServer.close(); provider.close(); });
+
+    const client = new WebSocket(`ws://127.0.0.1:${sttPort}/?coin_token=tok&coin_session=room-1`);
+    const messages: Array<Record<string, unknown>> = [];
+    client.on('message', (data) => messages.push(JSON.parse(data.toString())));
+    await once(client, 'open');
+    client.send(JSON.stringify({ sample_rate: 16000, stt_model: 'soniox', languages: ['en'] }));
+    const [code] = await once(client, 'close');
+
+    assert.equal(code, 4402);
+    assert.ok(messages.some((message) => message.type === 'error' && message.error_code === 'coin_insufficient'));
+    assert.equal(charges[0].billingToken, 'tok');
+    assert.equal(charges[0].sessionKey, 'room-1');
+    assert.equal(charges[0].seconds, 0);
+    assert.equal(charges[0].authorization, 'Bearer secret');
+});

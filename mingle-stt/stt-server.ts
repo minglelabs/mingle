@@ -93,8 +93,8 @@ export function createSttServer(options: SttServerOptions = {}) {
     const server = createServer();
     const wss = new WebSocketServer({ server });
     let connectionCounter = 0;
-    wss.on('connection', (clientWs) => {
-        handleSttConnection(clientWs, ++connectionCounter, options);
+    wss.on('connection', (clientWs, request) => {
+        handleSttConnection(clientWs, ++connectionCounter, options, readCoinBillingQuery(request.url));
     });
     return { server, wss };
 }
@@ -116,7 +116,27 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
     );
 }
 
-function handleSttConnection(clientWs: WebSocket, connId: number, options: SttServerOptions) {
+// The web client appends its billing identity to the socket URL, so the same
+// path works for the browser socket and for the native STT modules, which
+// only receive a URL.
+function readCoinBillingQuery(requestUrl: string | undefined): { token: string; sessionKey: string } {
+    try {
+        const params = new URL(requestUrl || '/', 'http://stt.local').searchParams;
+        return {
+            token: (params.get('coin_token') || '').trim(),
+            sessionKey: (params.get('coin_session') || '').trim().slice(0, 128),
+        };
+    } catch {
+        return { token: '', sessionKey: '' };
+    }
+}
+
+function handleSttConnection(
+    clientWs: WebSocket,
+    connId: number,
+    options: SttServerOptions,
+    coinQuery: { token: string; sessionKey: string } = { token: '', sessionKey: '' },
+) {
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);
 
@@ -1832,7 +1852,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')} soniox_hints=${JSON.stringify(clientConfig.soniox_language_hints || [])} hints_enabled=false`,
             );
 
-            const coinBillingToken = typeof data.coin_billing_token === 'string' ? data.coin_billing_token.trim() : '';
+            const coinBillingToken = coinQuery.token;
             if (coinBilling && !coinBillingToken && coinBilling.requireToken) {
                 closeForCoinExhaustion();
                 return;
@@ -1843,7 +1863,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
                     secret: coinBilling.secret,
                     billingToken: coinBillingToken,
                     connectionKey: randomUUID(),
-                    sessionKey: typeof data.coin_session_key === 'string' ? data.coin_session_key.trim().slice(0, 128) : null,
+                    sessionKey: coinQuery.sessionKey || null,
                     model: currentModel,
                     sampleRate: Number(clientConfig.sample_rate) || 16000,
                     settleIntervalMs: coinBilling.settleIntervalMs,
