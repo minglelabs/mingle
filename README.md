@@ -59,9 +59,11 @@ scripts/devbox status
 - Detailed guide: `docs/worktree-devbox.md`
 - Railway single-service deployment guide: `docs/railway-single-service.md`
 - `scripts/devbox bootstrap` does not modify `.env.local`, but it uploads shared values
-  from the MAIN worktree root `.env.local` and service-specific values from
-  `mingle-app/.env.local` / `mingle-stt/.env.local` / `mingle-messaging/.env.local`
-  to the shared Vault record before installing dependencies.
+  from the MAIN worktree root `.env.local` (required) and, when they still exist, legacy
+  service-specific values from `mingle-app/.env.local` / `mingle-stt/.env.local` /
+  `mingle-messaging/.env.local` to the shared Vault record before installing dependencies.
+  The MAIN worktree is the one with `main` checked out, or the primary checkout when no
+  worktree is on `main`.
   The `--vault-push` option is retained as a backward-compatible no-op.
 - `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely
   seeds/patches the same MAIN root/service env values into `secret/mingle/dev`.

@@ -1165,10 +1165,13 @@ prepare_generated_file() {
 find_main_worktree_root() {
   local line=""
   local worktree_path=""
+  local primary_path=""
   while IFS= read -r line; do
     case "$line" in
       worktree\ *)
         worktree_path="${line#worktree }"
+        # The first entry is the primary checkout (the one holding .git).
+        [[ -n "$primary_path" ]] || primary_path="$worktree_path"
         ;;
       branch\ refs/heads/main)
         printf '%s' "$worktree_path"
@@ -1176,7 +1179,10 @@ find_main_worktree_root() {
         ;;
     esac
   done < <(git -C "$ROOT_DIR" worktree list --porcelain)
-  return 1
+  # No worktree has main checked out (e.g. the primary checkout is on a
+  # feature branch): the primary checkout still owns the shared root env.
+  [[ -n "$primary_path" ]] || return 1
+  printf '%s' "$primary_path"
 }
 
 main_worktree_env_file() {
@@ -1604,23 +1610,27 @@ push_env_to_vault_path() {
   app_file="$(main_worktree_env_file app || true)"
   stt_file="$(main_worktree_env_file stt || true)"
   messaging_file="$(main_worktree_env_file messaging || true)"
-  [[ -n "$app_file" && -f "$app_file" ]] || die "missing main mingle-app/.env.local for Vault bootstrap"
-  [[ -n "$stt_file" && -f "$stt_file" ]] || die "missing main mingle-stt/.env.local for Vault bootstrap"
+  # The root .env.local is the source of truth; per-service env files are
+  # legacy and uploaded only when they still exist.
+  [[ -n "$root_file" && -f "$root_file" ]] || die "missing main root .env.local for Vault bootstrap"
 
-  push_env_file_to_vault_path "mingle" "$path" "$app_file"
-  push_env_file_to_vault_path "mingle" "$path" "$stt_file"
-  if [[ -n "$messaging_file" && -f "$messaging_file" ]]; then
-    push_env_file_to_vault_path "mingle" "$path" "$messaging_file"
-  else
-    warn "main mingle-messaging/.env.local not found; skipping messaging service env upload"
-  fi
-  if [[ -n "$root_file" && -f "$root_file" ]]; then
-    # Push the root env last so shared values are the final source when a
-    # legacy service env still contains a duplicate key.
-    push_env_file_to_vault_path "mingle" "$path" "$root_file"
-  else
-    warn "main root .env.local not found; skipping shared root env upload"
-  fi
+  local service_label service_file
+  for service_label in app stt messaging; do
+    case "$service_label" in
+      app) service_file="$app_file" ;;
+      stt) service_file="$stt_file" ;;
+      messaging) service_file="$messaging_file" ;;
+    esac
+    if [[ -n "$service_file" && -f "$service_file" ]]; then
+      push_env_file_to_vault_path "mingle" "$path" "$service_file"
+    else
+      log "no legacy mingle-${service_label}/.env.local in the main root; using the root .env.local only"
+    fi
+  done
+
+  # Push the root env last so shared values are the final source when a
+  # legacy service env still contains a duplicate key.
+  push_env_file_to_vault_path "mingle" "$path" "$root_file"
 }
 
 cmd_vault_up() {
