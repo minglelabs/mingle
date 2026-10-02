@@ -393,15 +393,22 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     />
   ) : null;
 
-  const notificationPanel = !isViewer && dictionary ? (
-    <>
+  // Compose is reachable from every mode: the empty state's button opens it in
+  // the viewer too, which has no header and no notification panel.
+  const composePanel = (
     <ComposeOverlay
       open={composeOpen}
       locale={locale}
       onClose={closeCompose}
-      // The feed is already behind; its PublishStatusBanner shows progress.
-      onPublished={closeCompose}
+      // Home: the feed is already behind and its PublishStatusBanner shows
+      // progress. Viewer: no banner here, so keep the default (go to the feed).
+      onPublished={isViewer ? undefined : closeCompose}
     />
+  );
+
+  const notificationPanel = !isViewer && dictionary ? (
+    <>
+    {composePanel}
     <NotificationPanel
       open={notificationsOpen}
       enabled={Boolean(viewerId)}
@@ -412,7 +419,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       onOpenPost={openNotificationPost}
     />
     </>
-  ) : null;
+  ) : composePanel;
 
   // ── Render states ──
   // Light chrome for the non-card states (loading / error / empty): dark glyphs.
