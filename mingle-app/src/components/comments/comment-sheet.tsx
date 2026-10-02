@@ -141,22 +141,41 @@ export default function CommentSheet(props: CommentSheetProps) {
   }, [open]);
 
   // ── Keep the composer above the keyboard using visualViewport ────────────
+  // Only the sheet rises with the keyboard: the dialog's bottom edge is pinned
+  // to the keyboard top, and the iOS WebView's focus pan (which would lift the
+  // whole feed + header) is undone by holding the page at scroll 0.
   const [keyboardInset, setKeyboardInset] = useState(0);
   useEffect(() => {
     if (!open || typeof window === "undefined" || !window.visualViewport) return;
     const vv = window.visualViewport;
+    const pinPage = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+      if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+      if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+    };
     const onResize = () => {
+      pinPage();
       // How much of the layout viewport the keyboard covers at the bottom.
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardInset(inset);
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      setKeyboardInset((current) => (Math.abs(current - inset) < 2 ? current : inset));
+    };
+    const onFocusIn = () => {
+      pinPage();
+      // iOS pans after focus; re-pin once the keyboard animation settles.
+      window.setTimeout(onResize, 60);
+      window.setTimeout(onResize, 300);
     };
     const initial = window.requestAnimationFrame(onResize);
     vv.addEventListener("resize", onResize);
     vv.addEventListener("scroll", onResize);
+    window.addEventListener("scroll", pinPage, { passive: true });
+    document.addEventListener("focusin", onFocusIn);
     return () => {
       window.cancelAnimationFrame(initial);
       vv.removeEventListener("resize", onResize);
       vv.removeEventListener("scroll", onResize);
+      window.removeEventListener("scroll", pinPage);
+      document.removeEventListener("focusin", onFocusIn);
     };
   }, [open]);
 
@@ -279,7 +298,8 @@ export default function CommentSheet(props: CommentSheetProps) {
 
   const body = (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end"
+      className="fixed inset-x-0 top-0 z-50 flex flex-col justify-end"
+      style={{ bottom: keyboardInset }}
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
@@ -296,8 +316,10 @@ export default function CommentSheet(props: CommentSheetProps) {
       <motion.div
         ref={panelRef}
         tabIndex={-1}
-        className="relative flex max-h-[88vh] min-h-[55vh] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl outline-none"
-        style={{ paddingBottom: keyboardInset ? keyboardInset : undefined }}
+        className={cn(
+          "relative flex max-h-[88%] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl outline-none",
+          keyboardInset > 0 ? "min-h-[45%]" : "min-h-[55%]",
+        )}
         initial={{ y: "100%" }}
         animate={{ y: dismissing ? "100%" : 0 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
@@ -438,6 +460,7 @@ export default function CommentSheet(props: CommentSheetProps) {
             replyTarget={sheet.replyTarget}
             onCancelReply={sheet.cancelReply}
             onSubmit={sheet.submit}
+            keyboardOpen={keyboardInset > 0}
           />
         )}
       </motion.div>

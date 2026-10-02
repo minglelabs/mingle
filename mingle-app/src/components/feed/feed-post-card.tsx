@@ -597,44 +597,48 @@ export default function FeedPostCard({
 
   const actionSlot = (
     <>
-      <button
-        type="button"
-        data-feed-action
-        onClick={toggleLike}
-        disabled={readOnly}
-        aria-pressed={likeState.likedByMe}
-        className="relative flex min-h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
-        // Fixed name; the pressed state alone announces liked/unliked.
-        aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
-      >
-        <Heart
-          size={34}
-          fill={likeState.likedByMe ? "#ef4444" : "none"}
-          stroke={likeState.likedByMe ? "#ef4444" : fg.iconColor}
-          strokeWidth={1.8}
-          style={iconStyle}
-          aria-hidden="true"
-        />
-        {/* Count is overlaid below the icon (out of flow), so showing it never moves the button. */}
-        <span className={`pointer-events-none absolute left-1/2 top-full -translate-x-1/2 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+      <div className="flex flex-col items-center">
+        <button
+          type="button"
+          data-feed-action
+          onClick={toggleLike}
+          disabled={readOnly}
+          aria-pressed={likeState.likedByMe}
+          className="flex h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
+          // Fixed name; the pressed state alone announces liked/unliked.
+          aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
+        >
+          <Heart
+            size={34}
+            fill={likeState.likedByMe ? "#ef4444" : "none"}
+            stroke={likeState.likedByMe ? "#ef4444" : fg.iconColor}
+            strokeWidth={1.8}
+            style={iconStyle}
+            aria-hidden="true"
+          />
+        </button>
+        {/* Count sits under the button in its own always-reserved line, so it
+            never overlaps the icon and a first like never moves anything. */}
+        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
           {likeState.likeCount > 0 ? likeState.likeCount : ""}
         </span>
-      </button>
+      </div>
 
-      <button
-        type="button"
-        data-feed-action
-        onClick={() => onOpenComments(post.id)}
-        disabled={readOnly}
-        className="relative flex min-h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
-        aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
-      >
-        <MessageCircle size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
-        {/* Count is overlaid below the icon (out of flow), so showing it never moves the button. */}
-        <span className={`pointer-events-none absolute left-1/2 top-full -translate-x-1/2 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+      <div className="flex flex-col items-center">
+        <button
+          type="button"
+          data-feed-action
+          onClick={() => onOpenComments(post.id)}
+          disabled={readOnly}
+          className="flex h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
+          aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
+        >
+          <MessageCircle size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
+        </button>
+        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
           {post.commentCount > 0 ? post.commentCount : ""}
         </span>
-      </button>
+      </div>
 
       <button
         type="button"
