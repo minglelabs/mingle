@@ -1,4 +1,7 @@
-import { isSupportedLocale } from "@/i18n";
+import { getServerSession } from "next-auth";
+import { getDictionary, isSupportedLocale, type AppLocale } from "@/i18n";
+import BottomTabBar from "@/components/bottom-tab-bar";
+import { getAuthOptions } from "@/lib/auth-options";
 import FeedViewerClient from "@/components/feed/feed-viewer-client";
 import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
@@ -35,12 +38,26 @@ export default async function PostsViewerPage({ params, searchParams }: ViewerPa
   if (kind === "search" && !q) notFound();
   if (kind !== "author" && kind !== "search") notFound();
 
+  // The tab the viewer was opened from stays highlighted: search results →
+  // search, the viewer's own posts → My page, anyone else's → the feed.
+  const session = kind === "author" ? await getServerSession(getAuthOptions()) : null;
+  const activeRoute =
+    kind === "search" ? "connect" : session?.user?.id === authorId ? "mypage" : "feed";
+
   return (
     <PostingFeedRouteGuard locale={locale}>
       <FeedViewerClient
         locale={locale}
         source={kind === "author" ? { kind: "author", authorId } : { kind: "search", query: q }}
         startPostId={postId}
+        tabBar={
+          <BottomTabBar
+            activeRoute={activeRoute}
+            dictionary={getDictionary(locale as AppLocale)}
+            locale={locale}
+            variant="glass"
+          />
+        }
       />
     </PostingFeedRouteGuard>
   );
