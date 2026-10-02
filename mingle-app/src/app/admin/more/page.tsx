@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Bell, ChartLine, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
+import { ArrowUpRight, Bell, Bot, ChartLine, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
 import { requireAdmin } from "@/server/admin/guard";
 import { logoutAdminAction } from "../_components/session-actions";
 import { AdminButton, AdminCard, AdminListLink, AdminPage, AdminPageHeader } from "../_components/ui";
@@ -15,6 +15,7 @@ const MORE_LINKS = [
   { href: "/admin/dashboard", icon: ChartLine, title: "대시보드", description: "사용시간, 메시지, DAU, 가입자 추이" },
   { href: "/admin/conversations", icon: MessagesSquare, title: "대화록", description: "외부 사용자 ID로 대화방과 메시지 조회" },
   { href: "/admin/settings/notifications", icon: Bell, title: "알림 설정", description: "인박스 알림을 받을 내 Mingle 계정" },
+  { href: "/admin/settings/auto-reply", icon: Bot, title: "AI 자동 답장", description: "N분 안에 답하지 못한 대화에 AI가 답장" },
 ] as const;
 
 export default async function AdminMorePage() {

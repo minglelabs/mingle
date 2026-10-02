@@ -41,6 +41,16 @@ From 1024 px, **인박스** and **알림** show the list on the left and the ope
 
 These two sections were added on 2026-10-02 with unit and server-render tests only; they have not been exercised in a browser or on a device.
 
+## AI auto-reply
+
+Open **More → AI 자동 답장** to let the AI answer inbox conversations staff did not get to. Turn it on and set the wait in minutes (N, 1 to 1440; default 5). It is off until staff turn it on, and it needs migration `20261002150000_add_admin_settings` (table `app_admin_settings`).
+
+A one-to-one conversation whose latest message is from a real user and has waited N minutes gets one reply as its operator account. The model (`gemini-3.8-flash-lite`, overridable with `OPERATOR_AUTO_REPLY_MODEL`, key `GEMINI_API_KEY`) receives only that account's profile, up to 20 of its posts, and the conversation's last 30 messages. It writes in the operator's primary language; the reply then goes through the same send path as a staff reply, including translations.
+
+Only messages that arrive after auto-reply was turned on are answered, never ones older than 24 hours, and never group or blocked conversations. A staff reply before the wait ends cancels the AI reply. The model is told not to exchange contact details or agree to meet, and to leave harassment, sexual content and anything needing a human unanswered; those stay for staff. A message that fails three times is also left for staff. The conversation stays unread in the inbox after an AI reply, and each AI reply is written to the audit log as `inbox.auto_reply`.
+
+The worker runs in the Node server process every 30 seconds (`MINGLE_OPERATOR_AUTO_REPLY_WORKER=off` keeps it from starting), so a reply goes out up to 30 seconds after the wait ends. Added on 2026-10-02 with unit tests only: the candidate query has not run against a database and no real model call was made.
+
 ## Staff alerts
 
 Open **More → Notification settings** and add the handle of your own Mingle account. Sign into that account on the phone and allow notifications. Operator accounts cannot be alert targets.

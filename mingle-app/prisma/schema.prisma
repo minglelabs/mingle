@@ -979,6 +979,16 @@ model AdminNotifyTarget {
   @@map("app_admin_notify_targets")
 }
 
+/// Staff-editable admin settings, one JSON value per key (e.g. `operator_auto_reply`).
+model AdminSetting {
+  key                String   @id
+  value              Json
+  updatedBySessionId String?  @map("updated_by_session_id")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_admin_settings")
+}
+
 // OCR job + result for one photo message (photo text translation overlay).
 // Kept out of AppMessage.metadata/contents so hydration never loads it.
 model AppMessageImageText {
