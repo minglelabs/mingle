@@ -399,7 +399,7 @@ export async function synthesizeWithGemini(
 }
 
 /**
- * Synthesize with the model the user selected (`ttsModel`, default gemini-3.8-flash-tts).
+ * Synthesize with the model the user selected (`ttsModel`, default gemini-3.8-flash-lite-tts).
  * Gemini failures fall back to Inworld; the Inworld result (success or
  * failure) is then returned with `fallbackFrom: 'gemini'`.
  */
