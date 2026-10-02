@@ -603,7 +603,7 @@ export default function FeedPostCard({
         onClick={toggleLike}
         disabled={readOnly}
         aria-pressed={likeState.likedByMe}
-        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 transition active:scale-95 disabled:opacity-40"
+        className="relative flex min-h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
         // Fixed name; the pressed state alone announces liked/unliked.
         aria-label={`${copy.like}${likeState.likeCount > 0 ? `, ${likeState.likeCount}` : ""}`}
       >
@@ -615,9 +615,8 @@ export default function FeedPostCard({
           style={iconStyle}
           aria-hidden="true"
         />
-        {/* The count line is always reserved, so a first like / comment
-            fills it in without moving the button. */}
-        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+        {/* Count is overlaid below the icon (out of flow), so showing it never moves the button. */}
+        <span className={`pointer-events-none absolute left-1/2 top-full -translate-x-1/2 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
           {likeState.likeCount > 0 ? likeState.likeCount : ""}
         </span>
       </button>
@@ -627,13 +626,12 @@ export default function FeedPostCard({
         data-feed-action
         onClick={() => onOpenComments(post.id)}
         disabled={readOnly}
-        className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 transition active:scale-95 disabled:opacity-40"
+        className="relative flex min-h-11 min-w-11 items-center justify-center transition active:scale-95 disabled:opacity-40"
         aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
       >
         <MessageCircle size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
-        {/* The count line is always reserved, so a first like / comment
-            fills it in without moving the button. */}
-        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+        {/* Count is overlaid below the icon (out of flow), so showing it never moves the button. */}
+        <span className={`pointer-events-none absolute left-1/2 top-full -translate-x-1/2 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
           {post.commentCount > 0 ? post.commentCount : ""}
         </span>
       </button>
