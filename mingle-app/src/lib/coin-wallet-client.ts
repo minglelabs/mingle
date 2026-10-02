@@ -128,7 +128,8 @@ export function applyCoinBalance(balance: number) {
       freeBalance: next >= wallet.balance ? wallet.freeBalance : freeBalance,
       paidBalance: next >= wallet.balance ? wallet.paidBalance : next - freeBalance,
       lowBalance: next < COIN_LOW_BALANCE_THRESHOLD,
-      exhausted: next <= 0,
+      // Whole coins can read 0 while a fraction is left; only the server declares exhaustion.
+      exhausted: next > 0 ? false : wallet.exhausted,
       dailyFreeFull: wallet.dailyFreeFull && next >= wallet.balance,
     },
   });
@@ -141,12 +142,19 @@ export function applyCoinBalanceFromHeaders(headers: Headers) {
   if (headers.get("x-coin-exhausted") === "1") notifyCoinsExhausted();
 }
 
-/** The server cut an AI feature for lack of coins: reflect it and raise the sheet. */
-export function notifyCoinsExhausted() {
+/**
+ * The server cut an AI feature for lack of coins. The sheet is raised when the
+ * balance has just hit zero, or when the user tapped a paid feature
+ * (userInitiated). A background refusal while already at zero, such as an
+ * untranslated text message, only keeps the room banner: sending text with no
+ * coins must not pop a sheet on every message.
+ */
+export function notifyCoinsExhausted(options: { userInitiated?: boolean } = {}) {
+  const alreadyExhausted = state.wallet?.exhausted === true;
   if (state.wallet && isCoinBillingActive(state.wallet)) {
     setState({ status: "ready", wallet: { ...state.wallet, balance: 0, freeBalance: 0, paidBalance: 0, lowBalance: true, exhausted: true } });
   }
-  dispatchCoinUiEvent({ type: "exhausted" });
+  if (!alreadyExhausted || options.userInitiated) dispatchCoinUiEvent({ type: "exhausted" });
   void refreshCoinWallet({ force: true });
 }
 

@@ -10,7 +10,7 @@ export const LOW_BALANCE_COINS = 200n
 export const LOW_BALANCE_MICRO = LOW_BALANCE_COINS * MICRO_PER_COIN
 export const DEFAULT_MARGIN_BPS = 15_000
 
-export const COIN_INSUFFICIENT_ERROR = 'coin_insufficient'
+export { COIN_INSUFFICIENT_ERROR } from './coin-errors'
 
 export function coinsToMicro(coins: number | bigint): bigint {
   return BigInt(coins) * MICRO_PER_COIN

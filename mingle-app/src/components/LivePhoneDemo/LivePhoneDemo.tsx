@@ -4511,7 +4511,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
-      if (response.status === 402) notifyCoinsExhausted()
+      if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
       applyCoinBalanceFromHeaders(response.headers)
       const arrayBuffer = await response.arrayBuffer()

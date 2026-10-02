@@ -113,6 +113,8 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(result.uncollectedMicro).toBeGreaterThan(0n)
     expect(result.balanceExhausted).toBe(true)
     expect(await wallet.canSpendCoins(userId)).toBe(false)
+    // A user who has never been seen passes the gate: the locked path pays the first refill.
+    expect(await wallet.canSpendCoins(newUser())).toBe(true)
 
     const after = await stt(userId, 60, `${userId}:after`)
     expect(after.chargedMicro).toBe(0n)
@@ -195,6 +197,14 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     await expect(purchases.grantVerifiedPurchase(newUser(), verified)).rejects.toMatchObject({ code: 'purchase_belongs_to_another_account' })
     await expect(purchases.grantVerifiedPurchase(userId, { ...verified, storeTransactionId: 'x', storeProductId: 'nope' }))
       .rejects.toMatchObject({ code: 'unknown_product' })
+
+    process.env.IAP_ALLOW_SANDBOX = '0'
+    try {
+      await expect(purchases.grantVerifiedPurchase(userId, { ...verified, storeTransactionId: `tx-${randomUUID()}` }))
+        .rejects.toMatchObject({ code: 'sandbox_not_allowed' })
+    } finally {
+      delete process.env.IAP_ALLOW_SANDBOX
+    }
 
     // Spend the 1,000 free coins and 250 of the purchased ones, then refund.
     await stt(userId, 25_000, `${userId}:spend`)

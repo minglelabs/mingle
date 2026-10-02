@@ -4,15 +4,20 @@ import { createSttCoinMeter, readCoinBillingEnv } from '../coin-billing';
 
 type Call = { seconds: number; idempotencyKey: string };
 
-function meterFixture(responses: Array<{ ok?: boolean; balanceExhausted?: boolean } | 'throw'>) {
+function meterFixture(responses: Array<{ ok?: boolean; status?: number; error?: string; balanceExhausted?: boolean } | 'throw'>) {
     const calls: Call[] = [];
     let exhausted = 0;
+    let rejected = 0;
     const fetchImpl = (async (_url: unknown, init?: { body?: unknown }) => {
         const body = JSON.parse(String(init?.body));
         calls.push({ seconds: body.seconds, idempotencyKey: body.idempotencyKey });
         const next = responses.shift() ?? {};
         if (next === 'throw') throw new Error('network');
-        return { ok: next.ok !== false, json: async () => ({ balanceExhausted: next.balanceExhausted === true }) };
+        return {
+            ok: next.ok !== false && !next.status,
+            status: next.status ?? 200,
+            json: async () => ({ balanceExhausted: next.balanceExhausted === true, error: next.error }),
+        };
     }) as unknown as typeof fetch;
     const meter = createSttCoinMeter({
         chargeUrl: 'http://app.test/api/internal/coins/charge',
@@ -22,9 +27,10 @@ function meterFixture(responses: Array<{ ok?: boolean; balanceExhausted?: boolea
         sampleRate: 16000,
         settleIntervalMs: 60_000,
         onExhausted: () => { exhausted += 1; },
+        onRejected: () => { rejected += 1; },
         fetchImpl,
     });
-    return { meter, calls, exhaustedCount: () => exhausted };
+    return { meter, calls, exhaustedCount: () => exhausted, rejectedCount: () => rejected };
 }
 
 test('reports whole audio seconds and rounds the tail up on stop', async () => {
@@ -63,6 +69,17 @@ test('signals exhaustion once when a charge empties the balance', async () => {
     meter.addAudioBytes(32_000);
     await meter.stop();
     assert.equal(exhaustedCount(), 1);
+});
+
+test('ends the session when the billing token is refused, but not when our own secret is wrong', async () => {
+    const forged = meterFixture([{ status: 401, error: 'invalid_billing_token' }]);
+    await forged.meter.start();
+    assert.equal(forged.rejectedCount(), 1);
+
+    const misconfigured = meterFixture([{ status: 401, error: 'unauthorized' }]);
+    assert.equal(await misconfigured.meter.start(), true);
+    assert.equal(misconfigured.rejectedCount(), 0);
+    await misconfigured.meter.stop();
 });
 
 test('is disabled unless both the charge URL and the secret are set', () => {

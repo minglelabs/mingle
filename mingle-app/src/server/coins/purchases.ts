@@ -32,6 +32,18 @@ export async function listCoinProducts(platform: IapPlatform): Promise<CoinProdu
   }))
 }
 
+/**
+ * Sandbox purchases (TestFlight, App Review, Play license testers) cost
+ * nothing, so in production they grant real coins only while IAP_ALLOW_SANDBOX=1.
+ * It must be on during App Review, which buys in the sandbox against production.
+ */
+export function isSandboxPurchaseAllowed(): boolean {
+  const flag = (process.env.IAP_ALLOW_SANDBOX || '').trim()
+  if (flag === '1' || flag === 'true') return true
+  if (flag === '0' || flag === 'false') return false
+  return process.env.NODE_ENV !== 'production'
+}
+
 export type PurchaseGrantResult = {
   status: 'granted' | 'already_granted'
   purchaseId: string
@@ -49,6 +61,7 @@ export async function grantVerifiedPurchase(userId: string, verified: VerifiedSt
     where: { platform_storeProductId: { platform: verified.platform, storeProductId: verified.storeProductId } },
   })
   if (!product) throw new IapVerificationError('unknown_product')
+  if (verified.environment === 'sandbox' && !isSandboxPurchaseAllowed()) throw new IapVerificationError('sandbox_not_allowed')
   const totalMicro = product.coinMicro + product.bonusMicro
 
   const outcome = await withLockedWallet(userId, async (ctx) => {

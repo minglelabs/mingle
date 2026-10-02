@@ -20,6 +20,8 @@ export type SttCoinMeterOptions = {
     sampleRate: number;
     settleIntervalMs?: number;
     onExhausted: () => void;
+    /** The charge API refused the billing token (forged or expired): the session must not continue unbilled. */
+    onRejected: () => void;
     fetchImpl?: typeof fetch;
 };
 
@@ -51,6 +53,7 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
     let timer: ReturnType<typeof setInterval> | null = null;
     let settling: Promise<void> | null = null;
     let exhausted = false;
+    let stopped = false;
 
     const post = async (seconds: number, idempotencyKey: string): Promise<{ ok: boolean; exhausted: boolean }> => {
         try {
@@ -68,12 +71,27 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
                     provider: options.model || undefined,
                 }),
             });
+            if (response.status === 401) {
+                // Only a bad token ends the session. A wrong shared secret is our own
+                // misconfiguration and stays fail-open like any other billing outage.
+                const failure = await response.json().catch(() => null) as { error?: unknown } | null;
+                if (failure?.error === 'invalid_billing_token') markRejected();
+                return { ok: false, exhausted: false };
+            }
             if (!response.ok) return { ok: false, exhausted: false };
             const body = await response.json() as { balanceExhausted?: unknown };
             return { ok: true, exhausted: body.balanceExhausted === true };
         } catch {
             return { ok: false, exhausted: false };
         }
+    };
+
+    const markRejected = () => {
+        if (exhausted) return;
+        exhausted = true;
+        if (timer) clearInterval(timer);
+        timer = null;
+        options.onRejected();
     };
 
     const markExhausted = () => {
@@ -113,7 +131,8 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
                 markExhausted();
                 return false;
             }
-            if (!exhausted) {
+            // stop() may already have run: the socket can close while the balance check is in flight.
+            if (!exhausted && !stopped) {
                 timer = setInterval(() => { void settleOnce(); }, options.settleIntervalMs ?? DEFAULT_SETTLE_INTERVAL_MS);
                 timer.unref?.();
             }
@@ -123,6 +142,7 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
             if (!exhausted && byteLength > 0) pendingBytes += byteLength;
         },
         stop: async () => {
+            stopped = true;
             if (timer) clearInterval(timer);
             timer = null;
             // Round the tail up so a short final fragment is still billed as one second.

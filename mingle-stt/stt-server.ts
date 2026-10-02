@@ -182,6 +182,12 @@ function handleSttConnection(
         }
     };
 
+    const closeForRejectedCoinToken = () => {
+        console.log(`[conn:${connId}] coin_billing_token_invalid`);
+        sonioxAudioRelay?.stop();
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.close(4401, 'coin_billing_token_invalid');
+    };
+
     const cleanup = () => {
         isClientConnected = false;
         void coinMeter?.stop();
@@ -1868,6 +1874,7 @@ function handleSttConnection(
                     sampleRate: Number(clientConfig.sample_rate) || 16000,
                     settleIntervalMs: coinBilling.settleIntervalMs,
                     onExhausted: closeForCoinExhaustion,
+                    onRejected: closeForRejectedCoinToken,
                 });
                 coinMeter = meter;
                 // The provider connection starts right away; a user with no coins is cut off as soon as the check returns.

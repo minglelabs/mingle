@@ -20,6 +20,7 @@
 | `COIN_INTERNAL_SECRET` | 웹, STT | STT 과금 토큰 서명 + 내부 과금 API 인증 |
 | `COIN_CHARGE_URL` | STT | 내부 과금 API 주소 |
 | `COIN_STT_REQUIRE_TOKEN` | STT | `1`이면 과금 토큰 없는 STT 연결을 거부(강제 업데이트 이후에만) |
+| `IAP_ALLOW_SANDBOX` | 웹 | 샌드박스 결제(TestFlight·심사·라이선스 테스터)로 코인 지급 허용. 운영 기본값은 거부. **App 심사 기간에는 `1`로 켜야 한다** |
 | `IOS_IAP_BUNDLE_ID` | 웹 | 기본 `com.minglelabs.mingle.rn` |
 | `ANDROID_IAP_PACKAGE_NAME` | 웹 | 기본 `com.minglelabs.mingle.rn` |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | 웹 | Play Developer API 서비스 계정(JSON 또는 base64) |
@@ -60,6 +61,7 @@
 - **구버전 앱**: 웹뷰가 서버에서 내려오므로 구버전 앱에도 잔액 칩·차단이 그대로 적용된다. 다만 결제 브리지가 없어 상점에는 "앱을 업데이트하면 충전할 수 있어요"가 표시된다. 1.x 익명(비로그인) 클라이언트는 과금 대상이 아니다.
 - **실시간 잔액 푸시 없음**: 메시징 서비스 변경 없이, 번역·TTS 응답에 잔액을 실어 보내고 지갑을 60초마다(그리고 화면 복귀 시) 다시 읽는다. 음성 인식 중 잔액 표시는 최대 60초 늦을 수 있다. 차단 자체는 STT 서버가 15초 정산 주기로 한다.
 - **사진 번역**: 업로드 시 자동 OCR은 보낸 사람이, 이후 새 언어 번역은 처음 요청한 사람이 낸다. 사진당 OCR 1회, 언어당 번역 1회만 과금된다.
+- **과금 우회 가능 구간**: STT WebSocket은 원래 인증이 없어서, 과금 토큰 없이 직접 연결하면 음성 인식이 과금되지 않는다. 1.x 익명 클라이언트를 더 지원하지 않게 되면 `COIN_STT_REQUIRE_TOKEN=1`로 막는다.
 - **가입 보너스 없음**, **대화 종료 시 사용 코인 요약 없음**(미정 항목).
 
 ## 아직 안 된 것

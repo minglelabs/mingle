@@ -60,8 +60,28 @@ export async function getCoinWallet(userId: string, now?: Date): Promise<CoinWal
  */
 export async function canSpendCoins(userId: string | null | undefined): Promise<boolean> {
   if (resolveCoinBillingMode() !== 'enforce' || !userId) return true
+  // Hot path (every translation request): a positive snapshot needs no lock.
+  // Only a missing or empty wallet takes the locked path, which may pay the daily refill.
+  const snapshot = await prisma.appCoinWallet.findUnique({ where: { userId }, select: { balanceMicro: true } })
+  if (snapshot && snapshot.balanceMicro > 0n) return true
   const wallet = await getCoinWallet(userId)
   return !wallet.exhausted
+}
+
+/** What the wallet API returns while billing is off: no row is read or created. */
+export function disabledCoinWallet(now = new Date()): CoinWalletSnapshot {
+  return {
+    billingMode: 'off',
+    balance: 0,
+    freeBalance: 0,
+    paidBalance: 0,
+    balanceMicro: '0',
+    nextDailyGrantAt: new Date(now.getTime() + DAILY_FREE_INTERVAL_MS).toISOString(),
+    dailyFreeFull: false,
+    dailyFreeCap: microToDisplayCoins(DAILY_FREE_CAP_MICRO),
+    lowBalance: false,
+    exhausted: false,
+  }
 }
 
 export type CoinChargeInput = {

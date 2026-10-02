@@ -154,9 +154,10 @@ async function verifyWithServer(event: Extract<NativeIapEvent, { type: "purchase
       return;
     }
     if (!response.ok) {
-      // 4xx other than "belongs to another account": the store proof is invalid, so
-      // finishing it is the only way to stop the replay. 5xx/network: keep it for the next restore.
-      if (response.status >= 400 && response.status < 500 && response.status !== 409) postNativeIapFinish(event.transactionId);
+      // 4xx: the server will never grant this transaction (invalid proof, or already
+      // granted to another account), so finishing it is the only way to stop the
+      // replay and unblock the product. 5xx/network: keep it for the next restore.
+      if (response.status >= 400 && response.status < 500) postNativeIapFinish(event.transactionId);
       setState({ purchasingProductId: null, lastResult: event.restored ? state.lastResult : { kind: "failed" } });
       return;
     }

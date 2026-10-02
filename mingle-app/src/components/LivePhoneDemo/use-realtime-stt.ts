@@ -1,6 +1,6 @@
 'use client'
 
-import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-errors'
 import {
   appendCoinBillingToWsUrl,
   applyCoinBalance,
@@ -4649,7 +4649,7 @@ export default function useRealtimeSTT({
           ...(ttsModel ? { ttsModel } : {}),
         }),
       })
-      if (res.status === 402) notifyCoinsExhausted()
+      if (res.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!res.ok) return null
       applyCoinBalanceFromHeaders(res.headers)
       const arrayBuffer = await res.arrayBuffer()

@@ -14,7 +14,7 @@ import {
 import { listCoinProducts, refundPurchase, verifyAndGrantPurchase, type IapPlatform } from '@/server/coins/purchases'
 import { getCoinHistory, getCoinUsageSummary, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
-import { chargeCoinUsage, getCoinWallet } from '@/server/coins/wallet'
+import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
 
@@ -39,6 +39,8 @@ function resolveRequestPlatform(request: NextRequest): IapPlatform | null {
 export async function readCoinWallet() {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
+  // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
+  if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
   const wallet = await getCoinWallet(userId)
   return json({ ...wallet, sttBillingToken: mintSttBillingToken(userId) })
 }
@@ -71,6 +73,7 @@ const CLIENT_ERROR_CODES = new Set([
   'unsupported_product_type',
   'unknown_product',
   'purchase_not_completed',
+  'sandbox_not_allowed',
 ])
 
 /** POST /coins/purchases — verifies the transaction with the store, then grants once. */
@@ -144,8 +147,7 @@ export async function chargeCoinsInternally(request: NextRequest) {
   const enforced = resolveCoinBillingMode() === 'enforce'
 
   if (seconds === 0) {
-    const wallet = await getCoinWallet(identity.userId)
-    const exhausted = enforced && wallet.exhausted
+    const exhausted = enforced && !(await canSpendCoins(identity.userId))
     return json({ balanceExhausted: exhausted, ...(exhausted ? { error: COIN_INSUFFICIENT_ERROR } : {}) })
   }
 
@@ -185,9 +187,14 @@ async function recordStoreEvent(input: {
     })
     return event.id
   } catch (error) {
-    // Duplicate delivery of a notification we already stored.
-    if ((error as { code?: unknown } | null)?.code === 'P2002') return null
-    throw error
+    if ((error as { code?: unknown } | null)?.code !== 'P2002' || !input.notificationId) throw error
+    // Duplicate delivery. If the first delivery was stored but its processing failed
+    // (the store retries after our 5xx), process it now; otherwise skip it.
+    const existing = await prisma.appIapStoreEvent.findUnique({
+      where: { notificationId: `${input.platform}:${input.notificationId}` },
+      select: { id: true, processedAt: true },
+    })
+    return existing && !existing.processedAt ? existing.id : null
   }
 }
 
@@ -195,7 +202,7 @@ async function finishStoreEvent(eventId: string, processResult: string) {
   await prisma.appIapStoreEvent.update({ where: { id: eventId }, data: { processedAt: new Date(), processResult } })
 }
 
-/** POST /webhooks/appstore — App Store Server Notifications V2. */
+/** POST /webhooks/appstore — App Store Server Notifications V2. A thrown error becomes a 5xx, so the store retries. */
 export async function handleAppStoreWebhook(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   let notification
