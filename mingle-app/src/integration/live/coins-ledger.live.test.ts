@@ -168,4 +168,126 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(state.ledger).toBe(state.wallet)
     expect(state.lots).toBe(state.wallet)
   })
+
+  it('grants a verified purchase once, with the bonus, and claws back only what is left on refund', async () => {
+    const purchases = await import('@/server/coins/purchases')
+    const userId = newUser()
+    await wallet.getCoinWallet(userId)
+    const verified = {
+      platform: 'ios' as const,
+      storeTransactionId: `tx-${randomUUID()}`,
+      storeOriginalTransactionId: null,
+      storeProductId: 'coin_5000',
+      environment: 'sandbox' as const,
+      priceAmountMicros: 4_990_000n,
+      priceCurrency: 'USD',
+      storefrontCountry: 'USA',
+      rawPayload: { test: true },
+    }
+    const first = await purchases.grantVerifiedPurchase(userId, verified)
+    expect(first.status).toBe('granted')
+    expect(first.grantedCoins).toBe(5250)
+    expect(first.wallet.paidBalance).toBe(5250)
+
+    const again = await purchases.grantVerifiedPurchase(userId, verified)
+    expect(again.status).toBe('already_granted')
+    expect(again.wallet.paidBalance).toBe(5250)
+    await expect(purchases.grantVerifiedPurchase(newUser(), verified)).rejects.toMatchObject({ code: 'purchase_belongs_to_another_account' })
+    await expect(purchases.grantVerifiedPurchase(userId, { ...verified, storeTransactionId: 'x', storeProductId: 'nope' }))
+      .rejects.toMatchObject({ code: 'unknown_product' })
+
+    // Spend the 1,000 free coins and 250 of the purchased ones, then refund.
+    await stt(userId, 25_000, `${userId}:spend`)
+    expect(await purchases.refundPurchase(verified.storeTransactionId)).toBe('refunded')
+    expect(await purchases.refundPurchase(verified.storeTransactionId)).toBe('already_refunded')
+    expect(await purchases.refundPurchase('missing')).toBe('purchase_not_found')
+
+    const purchase = await prisma.appIapPurchase.findUniqueOrThrow({ where: { storeTransactionId: verified.storeTransactionId } })
+    expect(purchase.status).toBe('refunded')
+    const meta = purchase.meta as { clawedBackMicro: string; unrecoveredMicro: string }
+    expect(BigInt(meta.clawedBackMicro) + BigInt(meta.unrecoveredMicro)).toBe(5250n * COIN)
+    expect(BigInt(meta.unrecoveredMicro)).toBeGreaterThan(249n * COIN)
+    const state = await sums(userId)
+    expect(state).toEqual({ ledger: 0n, lots: 0n, wallet: 0n })
+  })
+
+  it('lists store products per platform', async () => {
+    const purchases = await import('@/server/coins/purchases')
+    const products = await purchases.listCoinProducts('android')
+    expect(products.map(product => [product.productId, product.totalCoins])).toEqual([
+      ['coin_1000', 1000], ['coin_5000', 5250], ['coin_10000', 11000], ['coin_30000', 34500],
+    ])
+  })
+
+  it('reports usage per kind and per day, and folds history per conversation', async () => {
+    const queries = await import('@/server/coins/queries')
+    const userId = newUser()
+    await wallet.getCoinWallet(userId)
+    const sessionKey = `room-${randomUUID()}`
+    await wallet.chargeCoinUsage({ userId, kind: 'stt', units: { second: 600 }, idempotencyKey: `${userId}:s1`, sessionKey })
+    await wallet.chargeCoinUsage({ userId, kind: 'stt', units: { second: 60 }, idempotencyKey: `${userId}:s2`, sessionKey })
+    await wallet.chargeCoinUsage({
+      userId, kind: 'translation', model: 'gpt-6-luna', units: { input_token: 4000, output_token: 1000 },
+      idempotencyKey: `${userId}:t1`, sessionKey,
+    })
+
+    const usage = await queries.getCoinUsageSummary(userId, 'today', { tzOffsetMinutes: 540 })
+    const stt = usage.kinds.find(kind => kind.kind === 'stt')!
+    expect(stt.seconds).toBe(660)
+    expect(stt.count).toBe(2)
+    expect(stt.coins).toBeCloseTo(33, 0)
+    expect(usage.kinds.find(kind => kind.kind === 'translation')!.count).toBe(1)
+    expect(usage.days).toHaveLength(1)
+    expect(usage.totalCoins).toBeCloseTo(usage.kinds.reduce((sum, kind) => sum + kind.coins, 0), 1)
+    expect((await queries.getCoinUsageSummary(userId, '30d')).days).toHaveLength(30)
+
+    const history = await queries.getCoinHistory(userId, null)
+    expect(history.items.map(item => item.type)).toEqual(['usage', 'grant'])
+    const folded = history.items[0]
+    if (folded.type !== 'usage') throw new Error('expected a usage item')
+    expect(folded.sttSeconds).toBe(660)
+    expect(Object.keys(folded.breakdown).sort()).toEqual(['stt', 'translation'])
+    expect(history.nextCursor).toBeNull()
+  })
+
+  it('records shadow charges without touching the wallet', async () => {
+    const userId = newUser()
+    await wallet.getCoinWallet(userId)
+    process.env.COIN_BILLING_ENABLED = 'shadow'
+    try {
+      const result = await stt(userId, 600, `${userId}:shadow`)
+      expect(result).toMatchObject({ mode: 'shadow', applied: true, balanceExhausted: false })
+      expect(result.chargedMicro).toBeGreaterThan(29n * COIN)
+      expect((await stt(userId, 600, `${userId}:shadow`)).duplicate).toBe(true)
+      expect(await wallet.canSpendCoins(userId)).toBe(true)
+    } finally {
+      process.env.COIN_BILLING_ENABLED = '1'
+    }
+    expect((await sums(userId)).wallet).toBe(1000n * COIN)
+    expect(await prisma.appCoinUsageCharge.count({ where: { userId, shadow: true } })).toBe(1)
+  })
+
+  it('finds no integrity mismatch and builds the admin dashboard', async () => {
+    const admin = await import('@/server/coins/admin')
+    expect(await admin.findCoinIntegrityMismatches()).toEqual([])
+    const rows = await admin.loadCoinAdminDashboard(7)
+    expect(rows).toHaveLength(7)
+    const today = rows[rows.length - 1]
+    expect(today.freeGrantedMicro).toBeGreaterThan(0n)
+    expect(today.spentMicro).toBeGreaterThan(0n)
+    const catalog = await admin.listCoinAdminCatalog()
+    expect(catalog.products).toHaveLength(8)
+    expect(catalog.rates.length).toBeGreaterThan(20)
+  })
+
+  it('closes the open price row when a new one is added', async () => {
+    const admin = await import('@/server/coins/admin')
+    const model = `test-model-${randomUUID()}`
+    const base = { kind: 'translation' as const, provider: 'test', model, unit: 'input_token' as const, note: null, adminUsername: 'test' }
+    await admin.addCoinPricingRate({ ...base, usdMicroPerMillionUnits: 100_000n, marginBps: 15_000, effectiveFrom: new Date(Date.now() - 60_000) })
+    await admin.addCoinPricingRate({ ...base, usdMicroPerMillionUnits: 200_000n, marginBps: 20_000, effectiveFrom: new Date() })
+    const rows = await prisma.appCoinPricingRate.findMany({ where: { model }, orderBy: { effectiveFrom: 'asc' } })
+    expect(rows.map(row => [row.usdMicroPerMillionUnits, row.effectiveTo === null])).toEqual([[100_000n, false], [200_000n, true]])
+    await expect(admin.addCoinPricingRate({ ...base, usdMicroPerMillionUnits: 1n, marginBps: 5_000, effectiveFrom: new Date() })).rejects.toThrow('invalid_rate')
+  })
 })

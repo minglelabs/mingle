@@ -4,7 +4,13 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { IapVerificationError, verifyAppleNotification, readAppleTransaction } from '@/server/coins/iap-apple'
 import { parseGooglePlayNotification } from '@/server/coins/iap-google'
-import { COIN_USAGE_KINDS, type CoinUsageKind, type CoinUsageUnits } from '@/server/coins/pricing'
+import {
+  COIN_USAGE_KINDS,
+  loadCoinPricingRates,
+  quoteCoinUsage,
+  type CoinUsageKind,
+  type CoinUsageUnits,
+} from '@/server/coins/pricing'
 import { listCoinProducts, refundPurchase, verifyAndGrantPurchase, type IapPlatform } from '@/server/coins/purchases'
 import { getCoinHistory, getCoinUsageSummary, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
@@ -42,7 +48,13 @@ export async function readCoinProducts(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   const platform = resolveRequestPlatform(request)
-  return json({ platform, products: platform ? await listCoinProducts(platform) : [] })
+  // What one minute of interpreting (speech recognition) costs right now, for the "about N minutes" hint.
+  const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', model: 'soniox', units: { second: 60 }, at: new Date() })
+  return json({
+    platform,
+    products: platform ? await listCoinProducts(platform) : [],
+    sttCoinsPerMinute: Number(perMinute.chargedMicro) / 1_000_000,
+  })
 }
 
 const CLIENT_ERROR_CODES = new Set([
