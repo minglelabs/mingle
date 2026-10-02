@@ -20,6 +20,7 @@ import { AdminPage, AdminPageHeader } from "../_components/ui";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
+import { SnsSection, SnsSectionFallback, startSnsDashboardLoad } from "./sns-section";
 import {
   TranslationModelSection,
   TranslationModelSectionFallback,
@@ -116,6 +117,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   // TranslationModelSection: this live query must neither hold back nor, if it fails,
   // take down the rest of the page.
   const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
+  const snsDashboard = startSnsDashboardLoad(range);
   const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
@@ -140,6 +142,16 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
             <DailyChart key={metric.key} metric={metric} />
           ))}
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-sm font-semibold text-slate-600">SNS 지표</h2>
+        <p className="mb-2 break-words text-xs text-slate-500">
+          실사용자가 한 행동만 셉니다(운영 계정 글에 한 반응 포함). 플랫폼 필터는 적용되지 않고, 캐시 없이 매번 새로 집계합니다.
+        </p>
+        <Suspense key={`sns:${days}`} fallback={<SnsSectionFallback />}>
+          <SnsSection dashboardPromise={snsDashboard} />
+        </Suspense>
       </section>
 
       <section className="mt-8">
