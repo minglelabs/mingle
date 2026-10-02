@@ -3,7 +3,7 @@
 import AppTopHeader from "@/components/app-top-header";
 import NotificationPanel from "@/components/notification-panel";
 import ComposeOverlay from "@/components/compose/compose-overlay";
-import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import { BOTTOM_TAB_BAR_HEIGHT_PX, GLASS_TAB_BAR_INSET } from "@/components/bottom-tab-bar";
 import CommentSheet from "@/components/comments/comment-sheet";
 import PublishStatusBanner from "@/components/compose/publish-status-banner";
 import FeedPostCard from "@/components/feed/feed-post-card";
@@ -48,6 +48,8 @@ type FeedShellProps = {
   isViewer?: boolean;
   /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
   dictionary?: AppDictionary;
+  /** Home feed only: the glass tab bar floats over the bottom of the cards. */
+  underTabBar?: boolean;
 };
 
 /** Stable default so the home feed does not get a fresh `source` every render. */
@@ -69,7 +71,7 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary }: FeedShellProps) {
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, underTabBar = false }: FeedShellProps) {
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
@@ -477,9 +479,13 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
   const cardHeight = measuredHeight
     ? `${measuredHeight}px`
-    : isViewer
+    : isViewer || underTabBar
       ? FALLBACK_VIEWER_CARD_HEIGHT
       : FALLBACK_CARD_HEIGHT;
+  // Cards read this to keep their bottom row clear of the floating tab bar.
+  const bottomInsetStyle = underTabBar
+    ? ({ "--feed-bottom-inset": GLASS_TAB_BAR_INSET } as CSSProperties)
+    : undefined;
   const commentPost = posts.find((p) => p.id === commentPostId) ?? null;
   const actionPost = posts.find((p) => p.id === actionPostId) ?? null;
   const glyphTone = activePost ? postForegroundTone(activePost.backgroundKey, Boolean(activePost.image)) : "light";
@@ -584,7 +590,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           <div className="h-5 w-3/5 rounded-full bg-slate-300/70" />
           <div className="h-5 w-2/5 rounded-full bg-slate-300/70" />
         </div>
-        <div className="flex items-end gap-3 px-4 pb-5 motion-safe:animate-pulse" aria-hidden="true">
+        <div
+          className="flex items-end gap-3 px-4 motion-safe:animate-pulse"
+          style={{ paddingBottom: underTabBar ? `calc(20px + ${GLASS_TAB_BAR_INSET})` : 20 }}
+          aria-hidden="true"
+        >
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="size-12 shrink-0 rounded-full bg-slate-300/70" />
             <div className="h-4 w-32 rounded-full bg-slate-300/70" />
@@ -647,6 +657,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   return (
     <div
       className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-white"}`}
+      style={bottomInsetStyle}
     >
       {!isViewer ? (
         <>

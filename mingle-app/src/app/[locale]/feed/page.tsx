@@ -20,13 +20,15 @@ export default async function FeedPage({ params }: FeedPageProps) {
   return (
     <PostingFeedRouteGuard locale={locale}>
       <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+        {/* The feed is full-bleed; the glass tab bar floats over its bottom. */}
         <div className="min-h-0 flex-1">
-          <FeedShell locale={locale} dictionary={dictionary} />
+          <FeedShell locale={locale} dictionary={dictionary} underTabBar />
         </div>
         <BottomTabBar
           activeRoute="feed"
           dictionary={dictionary}
           locale={locale}
+          variant="glass"
         />
       </main>
     </PostingFeedRouteGuard>

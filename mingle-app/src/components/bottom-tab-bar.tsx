@@ -16,6 +16,10 @@ import {
 } from "@/lib/tab-navigation";
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
+/** Gap under the floating glass bar where the device has no bottom inset. */
+const GLASS_TAB_BAR_BOTTOM_GAP_PX = 8;
+/** Space the glass bar covers at the bottom of the screen it floats over. */
+export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX + GLASS_TAB_BAR_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px))`;
 // Fallback poll for the unread badge. Push, focus and visibilitychange cover
 // the fast path; this only bounds how stale a visible badge can get.
 export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
@@ -34,6 +38,12 @@ type BottomTabBarProps = {
   dictionary: AppDictionary;
   locale: string;
   unreadConversationMessageCount?: number;
+  /**
+   * `glass`: a frosted capsule floating over full-bleed content. The host
+   * positions nothing; it only keeps `GLASS_TAB_BAR_INSET` clear at the
+   * bottom of what scrolls under the bar. Default: the solid bar in the flow.
+   */
+  variant?: "solid" | "glass";
 };
 
 type NativeBridgeWindow = Window & {
@@ -95,7 +105,9 @@ export default function BottomTabBar({
   dictionary,
   locale,
   unreadConversationMessageCount,
+  variant = "solid",
 }: BottomTabBarProps) {
+  const glass = variant === "glass";
   const { data: session } = useSession();
   const postingFeedSupported = useIsPostingFeedSupported();
   // Hide the feed tab for a client whose namespace does not serve the posting
@@ -223,11 +235,23 @@ export default function BottomTabBar({
   return (
     <nav
       aria-label={dictionary.titles.my}
-      className="flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
-      style={{
-        height: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      }}
+      className={
+        glass
+          ? // A frosted capsule floating over full-bleed content (the feed).
+            "absolute inset-x-3 z-30 flex items-stretch overflow-hidden rounded-full border border-white/50 bg-white/60 shadow-[0_8px_28px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-150 [&_.text-gray-400]:!text-slate-700"
+          : "flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
+      }
+      style={
+        glass
+          ? {
+              height: BOTTOM_TAB_BAR_HEIGHT_PX,
+              bottom: `calc(${GLASS_TAB_BAR_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px))`,
+            }
+          : {
+              height: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            }
+      }
     >
       {showFeedTab ? (
         <button

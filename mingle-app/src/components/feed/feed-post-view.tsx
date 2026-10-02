@@ -240,7 +240,11 @@ export default function FeedPostView({
       ) : null}
 
       {/* Bottom section: author + (image body) + actions */}
-      <div className="relative z-10 mt-auto flex items-end gap-3 px-4 pb-5">
+      <div
+        className="relative z-10 mt-auto flex items-end gap-3 px-4"
+        // Clears whatever floats over the card's bottom (the glass tab bar).
+        style={{ paddingBottom: "calc(20px + var(--feed-bottom-inset, 0px))" }}
+      >
         <div className="min-w-0 flex-1" style={{ maxWidth: "calc(100% - 60px)" }}>
           {/* Expanded body for image posts opens UPWARD from the author row,
               so the author row and controls stay exactly where they were. */}
