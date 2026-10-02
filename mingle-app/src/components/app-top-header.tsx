@@ -2,7 +2,7 @@
 
 import MingleWordmark from "@/components/mingle-wordmark";
 import type { PostForegroundTone } from "@/lib/post-backgrounds";
-import { Bell, SquarePen } from "lucide-react";
+import { Bell, Search, SquarePen } from "lucide-react";
 
 export type AppTopHeaderVariant = "transparent" | "surface";
 
@@ -13,6 +13,13 @@ type AppTopHeaderProps = {
   notificationsLabel: string;
   onCompose?: () => void;
   onNotifications?: () => void;
+  /**
+   * Conversation list only: shows the search (magnifier) button before the
+   * compose button. Omit on the feed, which has no search entry in its header.
+   */
+  onSearch?: () => void;
+  /** Accessible name for the search button (required when `onSearch` is set). */
+  searchLabel?: string;
   /** Numberless red dot from useUnreadNotifications(viewerId).hasUnread. */
   hasUnread?: boolean;
   /**
@@ -48,6 +55,8 @@ export default function AppTopHeader({
   notificationsLabel,
   onCompose,
   onNotifications,
+  onSearch,
+  searchLabel,
   hasUnread = false,
   unreadNotificationsLabel,
   variant = "transparent",
@@ -100,6 +109,16 @@ export default function AppTopHeader({
       <MingleWordmark className={wordmarkClassName} />
 
       <div className="flex items-center gap-1">
+        {onSearch ? (
+          <button
+            type="button"
+            onClick={onSearch}
+            className={buttonClassName}
+            aria-label={searchLabel}
+          >
+            <Search size={22} strokeWidth={2} className={glyphClassName} />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onCompose}

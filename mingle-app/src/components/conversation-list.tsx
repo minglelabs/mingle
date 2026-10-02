@@ -5469,6 +5469,8 @@ export default function ConversationList({
           hasUnread={postingUnread.hasUnread}
           onCompose={() => router.push(composeHref(locale))}
           onNotifications={() => router.push(notificationsHref(locale))}
+          onSearch={handleOpenSearch}
+          searchLabel={copy.searchButtonLabel}
         />
       ) : (
       <header
