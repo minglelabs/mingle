@@ -615,11 +615,11 @@ export default function FeedPostCard({
           style={iconStyle}
           aria-hidden="true"
         />
-        {likeState.likeCount > 0 ? (
-          <span className={`text-sm font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
-            {likeState.likeCount}
-          </span>
-        ) : null}
+        {/* The count line is always reserved, so a first like / comment
+            fills it in without moving the button. */}
+        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+          {likeState.likeCount > 0 ? likeState.likeCount : ""}
+        </span>
       </button>
 
       <button
@@ -631,11 +631,11 @@ export default function FeedPostCard({
         aria-label={`${copy.comment}${post.commentCount > 0 ? `, ${post.commentCount}` : ""}`}
       >
         <MessageCircle size={34} stroke={fg.iconColor} strokeWidth={1.8} style={iconStyle} aria-hidden="true" />
-        {post.commentCount > 0 ? (
-          <span className={`text-sm font-semibold tabular-nums ${fg.textClass}`} aria-hidden="true">
-            {post.commentCount}
-          </span>
-        ) : null}
+        {/* The count line is always reserved, so a first like / comment
+            fills it in without moving the button. */}
+        <span className={`h-5 text-sm font-semibold leading-5 tabular-nums ${fg.textClass}`} aria-hidden="true">
+          {post.commentCount > 0 ? post.commentCount : ""}
+        </span>
       </button>
 
       <button
