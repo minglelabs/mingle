@@ -36,7 +36,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { ChevronLeft, Loader2, SquarePen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 type FeedShellProps = {
   locale: string;
@@ -57,10 +57,14 @@ const HOME_SOURCE: FeedSource = { kind: "home" };
 const FALLBACK_CARD_HEIGHT = `calc(100dvh - ${BOTTOM_TAB_BAR_HEIGHT_PX}px - env(safe-area-inset-bottom, 0px))`;
 const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
 
-/** Pull-to-refresh (home feed, first card): same feel as the conversation list. */
-const PULL_REFRESH_TRIGGER_PX = 72;
-const PULL_REFRESH_MAX_PX = 108;
-const PULL_REFRESH_RESISTANCE = 0.45;
+/**
+ * Pull-to-refresh (home feed, first card). The feed slides down with the
+ * finger and opens a gap above it that holds the spinner; once the gap is
+ * fully open it stops and the refresh starts, without waiting for release.
+ */
+const PULL_REFRESH_TRIGGER_PX = 150;
+/** The open gap: room for the spinner below the status bar / notch. */
+const PULL_REFRESH_GAP = "calc(env(safe-area-inset-top, 0px) + 64px)";
 
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
@@ -335,49 +339,22 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   );
 
   // ── Pull to refresh: drag down on the first card of the home feed ──
-  const pullStartYRef = useRef<number | null>(null);
-  const [pullDistance, setPullDistance] = useState(0);
+  const [pullProgress, setPullProgress] = useState(0); // 0..1 of the gap
+  const [pullDragging, setPullDragging] = useState(false);
   const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullBlockedRef = useRef(false);
+  useEffect(() => {
+    pullBlockedRef.current = isViewer || pullRefreshing || anyOverlayOpen;
+  }, [isViewer, pullRefreshing, anyOverlayOpen]);
 
-  const handlePullStart = useCallback(
-    (event: ReactTouchEvent<HTMLDivElement>) => {
-      pullStartYRef.current = null;
-      if (isViewer || pullRefreshing || anyOverlayOpen || !scrollEl || scrollEl.scrollTop > 0) return;
-      if (event.touches.length !== 1) return;
-      // A drag that starts inside scrolled content (an expanded post) scrolls
-      // that content back up; it is not a pull on the feed.
-      for (let node = event.target as HTMLElement | null; node && node !== scrollEl; node = node.parentElement) {
-        if (node.scrollTop > 0) return;
-      }
-      pullStartYRef.current = event.touches[0].clientY;
-    },
-    [isViewer, pullRefreshing, anyOverlayOpen, scrollEl],
-  );
-
-  const handlePullMove = useCallback(
-    (event: ReactTouchEvent<HTMLDivElement>) => {
-      const startY = pullStartYRef.current;
-      if (startY === null) return;
-      const dy = event.touches[0].clientY - startY;
-      if (dy <= 0 || (scrollEl && scrollEl.scrollTop > 0)) {
-        if (dy < 0) pullStartYRef.current = null;
-        setPullDistance(0);
-        return;
-      }
-      setPullDistance(Math.min(PULL_REFRESH_MAX_PX, Math.round(dy * PULL_REFRESH_RESISTANCE)));
-    },
-    [scrollEl],
-  );
-
-  const handlePullEnd = useCallback(() => {
-    const tracking = pullStartYRef.current !== null;
-    pullStartYRef.current = null;
-    const pulled = pullDistance;
-    setPullDistance(0);
-    if (!tracking || pulled < PULL_REFRESH_TRIGGER_PX) return;
+  const startPullRefresh = useCallback(() => {
     setPullRefreshing(true);
-    void refreshFromTop().then((ok) => {
+    // Keep the spinner up briefly even when the request is instant, so the
+    // gap does not just flash open and shut.
+    const minimumShown = new Promise<void>((resolve) => window.setTimeout(resolve, 500));
+    void Promise.all([refreshFromTop(), minimumShown]).then(([ok]) => {
       setPullRefreshing(false);
+      setPullProgress(0);
       if (!ok) {
         setToast(copy.feedLoadFailed);
         return;
@@ -385,10 +362,73 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       if (scrollEl) scrollEl.scrollTop = 0;
       setActive(0);
     });
-  }, [pullDistance, refreshFromTop, scrollEl, setActive, copy]);
+  }, [refreshFromTop, scrollEl, setActive, copy]);
 
-  const pullOffset = pullRefreshing ? PULL_REFRESH_TRIGGER_PX : pullDistance;
-  const pullProgress = Math.min(1, pullOffset / PULL_REFRESH_TRIGGER_PX);
+  // Native listeners: touchmove must be non-passive so the pull can replace
+  // the browser's own rubber-band (which would show the page behind the feed).
+  useEffect(() => {
+    if (!scrollEl) return;
+    let startY: number | null = null;
+
+    const onStart = (event: TouchEvent) => {
+      startY = null;
+      if (pullBlockedRef.current || scrollEl.scrollTop > 0 || event.touches.length !== 1) return;
+      // A drag that starts inside scrolled content (an expanded post) scrolls
+      // that content back up; it is not a pull on the feed.
+      for (let node = event.target as HTMLElement | null; node && node !== scrollEl; node = node.parentElement) {
+        if (node.scrollTop > 0) return;
+      }
+      startY = event.touches[0].clientY;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (startY === null) return;
+      const dy = event.touches[0].clientY - startY;
+      if (dy <= 0 || scrollEl.scrollTop > 0) {
+        // Upward: this is a normal swipe to the next post.
+        if (dy < 0) startY = null;
+        setPullDragging(false);
+        setPullProgress(0);
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      const progress = Math.min(1, dy / PULL_REFRESH_TRIGGER_PX);
+      setPullDragging(true);
+      setPullProgress(progress);
+      if (progress >= 1) {
+        // Fully open: stop following the finger and refresh now.
+        startY = null;
+        setPullDragging(false);
+        startPullRefresh();
+      }
+    };
+    const onEnd = () => {
+      if (startY === null) return;
+      startY = null;
+      setPullDragging(false);
+      setPullProgress(0);
+    };
+
+    scrollEl.addEventListener("touchstart", onStart, { passive: true });
+    scrollEl.addEventListener("touchmove", onMove, { passive: false });
+    scrollEl.addEventListener("touchend", onEnd);
+    scrollEl.addEventListener("touchcancel", onEnd);
+    return () => {
+      scrollEl.removeEventListener("touchstart", onStart);
+      scrollEl.removeEventListener("touchmove", onMove);
+      scrollEl.removeEventListener("touchend", onEnd);
+      scrollEl.removeEventListener("touchcancel", onEnd);
+    };
+  }, [scrollEl, startPullRefresh]);
+
+  const pullShown = pullRefreshing ? 1 : pullProgress;
+  /** The header and the feed slide down together, opening the gap above. */
+  const pullSlideStyle: CSSProperties | undefined =
+    isViewer
+      ? undefined
+      : {
+          transform: pullShown > 0 ? `translateY(calc(${pullShown} * ${PULL_REFRESH_GAP}))` : undefined,
+          transition: pullDragging ? "none" : "transform 220ms ease",
+        };
 
   const scrollToIndex = useCallback(
     (idx: number) => {
@@ -594,42 +634,41 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const showStatusCard = hasMore || loadingMore || loadMoreError;
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      {header}
-
+    <div
+      className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-slate-100"}`}
+    >
       {!isViewer ? (
-        <div
-          className="pointer-events-none absolute left-1/2 z-[24] flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
-          style={{
-            top: HEADER_BOTTOM,
-            opacity: pullProgress,
-            transform: `translate(-50%, ${pullOffset - 56}px) scale(${0.92 + pullProgress * 0.08})`,
-            transition: pullDistance > 0 ? "none" : "transform 180ms ease, opacity 180ms ease",
-          }}
-          role={pullRefreshing ? "status" : undefined}
-          aria-label={pullRefreshing ? copy.loading : undefined}
-          aria-hidden={pullRefreshing ? undefined : true}
-        >
-          <Loader2
-            size={16}
-            className={pullRefreshing ? "animate-spin text-slate-500" : "text-slate-400"}
-            strokeWidth={2.25}
-            style={pullRefreshing ? undefined : { transform: `rotate(${pullProgress * 270}deg)` }}
-          />
-        </div>
+        <>
+          {/* The gap the pull opens above the feed, with its spinner. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 flex items-end justify-center pb-[18px]"
+            style={{ height: PULL_REFRESH_GAP, opacity: pullShown > 0 ? 1 : 0 }}
+            role={pullRefreshing ? "status" : undefined}
+            aria-label={pullRefreshing ? copy.loading : undefined}
+            aria-hidden={pullRefreshing ? undefined : true}
+          >
+            <Loader2
+              size={26}
+              strokeWidth={2.25}
+              className={pullRefreshing ? "animate-spin text-slate-500" : "text-slate-400"}
+              style={
+                pullRefreshing
+                  ? undefined
+                  : { opacity: pullProgress, transform: `rotate(${pullProgress * 300}deg)` }
+              }
+            />
+          </div>
+          <div className="absolute inset-x-0 top-0 z-20" style={pullSlideStyle}>
+            {header}
+          </div>
+        </>
       ) : null}
 
       <div
         ref={setScrollEl}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto bg-black"
         onScroll={handleScroll}
-        onTouchStart={(event) => {
-          markUserGesture();
-          handlePullStart(event);
-        }}
-        onTouchMove={handlePullMove}
-        onTouchEnd={handlePullEnd}
-        onTouchCancel={handlePullEnd}
+        onTouchStart={markUserGesture}
         onWheel={markUserGesture}
         onPointerDown={markUserGesture}
         onKeyDown={markUserGesture}
@@ -640,6 +679,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           // Block vertical paging while a sheet / zoom is open.
           overflowY: anyOverlayOpen ? "hidden" : "auto",
           touchAction: anyOverlayOpen ? "none" : undefined,
+          ...pullSlideStyle,
         }}
       >
         {entries.map(({ key, post }, idx) => {
