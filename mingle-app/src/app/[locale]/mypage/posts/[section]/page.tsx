@@ -17,7 +17,7 @@ export default async function MyPostsPage({ params }: MyPostsPageProps) {
 
   return (
     <PostingFeedRouteGuard locale={locale}>
-      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <MyPostsScreen locale={locale} section={section as MyPostsSection} />
       </main>
     </PostingFeedRouteGuard>

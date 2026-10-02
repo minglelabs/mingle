@@ -89,8 +89,9 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, Trash2, UserRound, UserRoundX, X } from "lucide-react";
-import { myPostsHref } from "@/lib/feed-routes";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { composeHref, myPostsHref } from "@/lib/feed-routes";
+import { feedCopy } from "@/i18n/feed-copy";
 import { composeCopy } from "@/i18n/compose-copy";
 import AccountBadge from "@/components/posts/account-badge";
 import IdentityRow from "@/components/posts/identity-row";
@@ -2405,7 +2406,18 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        {sessionUserId && postingFeedSupported !== false ? (
+          <button
+            type="button"
+            onClick={() => router.push(composeHref(locale))}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
+            aria-label={feedCopy(locale).compose}
+          >
+            <SquarePen size={22} strokeWidth={2} />
+          </button>
+        ) : (
+          <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        )}
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {name}
         </h1>

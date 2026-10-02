@@ -6,10 +6,10 @@
  * character or an emoji is about twice as wide as a Latin letter. One card line
  * holds roughly `LINE_UNITS` narrow units (~12 Hangul characters).
  *
- * - A body that fits in about 2–3 lines is shown whole (`isTruncated: false`).
- * - Otherwise the cut starts from ~20 wide characters (`TARGET_UNITS`) and
+ * - A body that fits in about nine lines is shown whole (`isTruncated: false`).
+ * - Otherwise the cut starts from ~100 wide characters (`TARGET_UNITS`) and
  *   snaps to the nearest meaning boundary (sentence end, clause punctuation,
- *   then a space) inside the 1–3 line window, falling back to a hard cut.
+ *   then a space) inside the 1–9 line window, falling back to a hard cut.
  * - Text is split into grapheme clusters (`Intl.Segmenter`), so ZWJ emoji,
  *   flags and combining marks are never broken.
  * - The original body text is never mutated.
@@ -17,12 +17,12 @@
 
 /** Narrow units per displayed line at the feed's 1.5rem preview size. */
 export const LINE_UNITS = 24;
-/** Starting point for the cut: ~20 wide characters. */
-export const TARGET_UNITS = 40;
+/** Starting point for the cut: ~100 wide characters. */
+export const TARGET_UNITS = 200;
 /** Never cut before one full line. */
 const MIN_UNITS = LINE_UNITS;
-/** Whole-body / cut ceiling: under three lines, leaving room for "…". */
-export const MAX_UNITS = LINE_UNITS * 3 - 6;
+/** Whole-body / cut ceiling: about nine lines (~108 wide characters). */
+export const MAX_UNITS = LINE_UNITS * 9;
 
 /** Sentence ends: the cut reads as complete, no ellipsis. */
 const SENTENCE_END_RE = /^[.!?。！？…]$/u;
@@ -84,14 +84,25 @@ function closestTo(target: number, candidates: { index: number; cost: number }[]
   return best;
 }
 
+export type PreviewLimits = { targetUnits: number; maxUnits: number };
+
+/** Feed centre preview: ~100 wide characters before "See more". */
+export const FEED_PREVIEW_LIMITS: PreviewLimits = { targetUnits: TARGET_UNITS, maxUnits: MAX_UNITS };
+/** Small surfaces (grid tiles): ~20 wide characters, under three lines. */
+export const COMPACT_PREVIEW_LIMITS: PreviewLimits = { targetUnits: 40, maxUnits: LINE_UNITS * 3 - 6 };
+
 /**
  * Produce a preview snippet from the first portion of `bodyText`.
- * Returns `{ text, isTruncated }`.
+ * Returns `{ text, isTruncated }`. `limits` defaults to the feed's.
  */
-export function generatePreviewText(bodyText: string): {
+export function generatePreviewText(
+  bodyText: string,
+  limits: PreviewLimits = FEED_PREVIEW_LIMITS,
+): {
   text: string;
   isTruncated: boolean;
 } {
+  const { targetUnits: TARGET, maxUnits: MAX } = limits;
   const normalized = bodyText.replace(/\r\n/g, "\n").trim();
   if (!normalized) {
     return { text: "", isTruncated: false };
@@ -100,7 +111,7 @@ export function generatePreviewText(bodyText: string): {
   const graphemes = splitGraphemes(normalized);
   const cost = cumulativeCost(graphemes);
 
-  if (cost[cost.length - 1] <= MAX_UNITS) {
+  if (cost[cost.length - 1] <= MAX) {
     return { text: normalized, isTruncated: false };
   }
 
@@ -113,7 +124,7 @@ export function generatePreviewText(bodyText: string): {
   for (let i = 0; i < graphemes.length; i++) {
     const g = graphemes[i];
     const c = cost[i];
-    if (c > MAX_UNITS) break;
+    if (c > MAX) break;
     if (g === "\n") {
       // Cut BEFORE the newline; its cost is the text before it.
       const before = i > 0 ? cost[i - 1] : 0;
@@ -123,20 +134,20 @@ export function generatePreviewText(bodyText: string): {
     if (c < MIN_UNITS) continue;
     if (SENTENCE_END_RE.test(g)) sentence.push({ index: i + 1, cost: c });
     else if (CLAUSE_END_RE.test(g)) clause.push({ index: i + 1, cost: c });
-    else if (/^\s$/u.test(g) && c <= MAX_UNITS - 2) space.push({ index: i, cost: c });
+    else if (/^\s$/u.test(g) && c <= MAX - 2) space.push({ index: i, cost: c });
   }
 
-  const sentenceCut = closestTo(TARGET_UNITS, sentence);
+  const sentenceCut = closestTo(TARGET, sentence);
   if (sentenceCut) {
     const text = join(sentenceCut.index);
     if (text) return { text, isTruncated: true };
   }
-  const clauseCut = closestTo(TARGET_UNITS, clause);
+  const clauseCut = closestTo(TARGET, clause);
   if (clauseCut) {
     const text = join(clauseCut.index);
     if (text) return { text: `${text}…`, isTruncated: true };
   }
-  const spaceCut = closestTo(TARGET_UNITS, space);
+  const spaceCut = closestTo(TARGET, space);
   if (spaceCut) {
     const text = join(spaceCut.index);
     if (text) return { text: `${text}…`, isTruncated: true };
@@ -144,6 +155,6 @@ export function generatePreviewText(bodyText: string): {
 
   // 2. Hard cut at the target width (whole graphemes only).
   let end = 0;
-  while (end < graphemes.length && cost[end] <= TARGET_UNITS) end++;
+  while (end < graphemes.length && cost[end] <= TARGET) end++;
   return { text: `${join(Math.max(1, end))}…`, isTruncated: true };
 }

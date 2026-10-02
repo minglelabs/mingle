@@ -27,7 +27,10 @@ describe("resolveCardTexts — centre preview, image snippet and expanded body a
   it("truncation follows the shown language, not the original", () => {
     const shortTranslation = "Nice ride today.";
     expect(resolveCardTexts(source, shortTranslation, true).previewTruncated).toBe(false);
-    expect(resolveCardTexts(source, shortTranslation, false).previewTruncated).toBe(true);
+    // A source well past the ~100-character centre preview.
+    const longSource = source.repeat(4);
+    expect(resolveCardTexts(longSource, shortTranslation, true).previewTruncated).toBe(false);
+    expect(resolveCardTexts(longSource, shortTranslation, false).previewTruncated).toBe(true);
   });
 });
 

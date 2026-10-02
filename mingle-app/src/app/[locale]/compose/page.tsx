@@ -19,7 +19,7 @@ export default async function ComposePage({ params, searchParams }: ComposePageP
 
   return (
     <PostingFeedRouteGuard locale={locale}>
-      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <ComposeScreen locale={locale} initialDraftId={resolveDraftId(resolvedSearchParams.draftId)} />
       </main>
     </PostingFeedRouteGuard>

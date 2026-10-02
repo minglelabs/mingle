@@ -1,5 +1,5 @@
 import type { FeedPostDto } from "@/lib/feed-post-dto";
-import { generatePreviewText } from "@/lib/post-preview-text";
+import { COMPACT_PREVIEW_LIMITS, generatePreviewText } from "@/lib/post-preview-text";
 
 /**
  * Shared display rules for a post grid tile, extracted as pure functions so the
@@ -36,5 +36,5 @@ export function resolveGridTilePreview(post: GridTilePostFields): {
   text: string;
   isTruncated: boolean;
 } {
-  return generatePreviewText(resolveGridTileText(post));
+  return generatePreviewText(resolveGridTileText(post), COMPACT_PREVIEW_LIMITS);
 }
