@@ -1,6 +1,7 @@
 "use client";
 
 import AppTopHeader from "@/components/app-top-header";
+import NotificationPanel from "@/components/notification-panel";
 import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import CommentSheet from "@/components/comments/comment-sheet";
 import PublishStatusBanner from "@/components/compose/publish-status-banner";
@@ -26,7 +27,9 @@ import {
 import PostActionSheet from "@/components/posts/post-action-sheet";
 import { feedCopy } from "@/i18n/feed-copy";
 import type { FeedSource } from "@/lib/feed-routes";
-import { composeHref, feedHref, notificationsHref } from "@/lib/feed-routes";
+import { composeHref, feedHref } from "@/lib/feed-routes";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { useSession } from "next-auth/react";
@@ -41,6 +44,8 @@ type FeedShellProps = {
   startPostId?: string | null;
   /** Viewer route uses history back instead of the compose/notification chrome. */
   isViewer?: boolean;
+  /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
+  dictionary?: AppDictionary;
 };
 
 /** Stable default so the home feed does not get a fresh `source` every render. */
@@ -53,7 +58,7 @@ const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false }: FeedShellProps) {
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary }: FeedShellProps) {
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
@@ -129,7 +134,9 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const [initialCommentId, setInitialCommentId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen);
 
   const notifications = useUnreadNotifications(viewerId);
 
@@ -288,7 +295,31 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     router.push(viewerId ? composeHref(locale) : composeLoginHref(locale));
   }, [router, viewerId, locale]);
 
-  const openNotifications = useCallback(() => router.push(notificationsHref(locale)), [router, locale]);
+  // The bell slides the notification panel in over the feed (same panel and
+  // motion as the conversation list), instead of navigating to a new route.
+  const openNotifications = useCallback(() => setNotificationsOpen(true), []);
+  const closeNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+    notifications.refresh();
+  }, [notifications]);
+  const openNotificationProfile = useCallback(
+    (userId: string) => {
+      const id = userId.trim();
+      if (!id) return;
+      router.push(buildNativeAwareTabPath(`/${locale}/users/${encodeURIComponent(id)}`, searchParams));
+    },
+    [router, locale, searchParams],
+  );
+  const openNotificationPost = useCallback(
+    (postId: string, commentId: string | null) => {
+      const id = postId.trim();
+      if (!id) return;
+      setNotificationsOpen(false);
+      // feedHref pins this post first; with a commentId its comment sheet opens on it.
+      router.push(feedHref(locale, { postId: id, commentId: commentId?.trim() || null }), { scroll: false });
+    },
+    [router, locale],
+  );
 
   const scrollToIndex = useCallback(
     (idx: number) => {
@@ -356,6 +387,18 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     />
   ) : null;
 
+  const notificationPanel = !isViewer && dictionary ? (
+    <NotificationPanel
+      open={notificationsOpen}
+      enabled={Boolean(viewerId)}
+      locale={locale as AppLocale}
+      dictionary={dictionary}
+      onClose={closeNotifications}
+      onOpenProfile={openNotificationProfile}
+      onOpenPost={openNotificationPost}
+    />
+  ) : null;
+
   // ── Render states ──
   if (phase === "loading") {
     return (
@@ -397,6 +440,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           </button>
         </div>
         {publishBanner}
+        {notificationPanel}
       </div>
     );
   }
@@ -543,6 +587,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           onRequireLogin={() => goToLogin(actionPostId)}
         />
       ) : null}
+
+      {notificationPanel}
 
       <ImageZoomOverlay
         open={Boolean(zoomSrc)}

@@ -21,7 +21,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
     <PostingFeedRouteGuard locale={locale}>
       <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
         <div className="min-h-0 flex-1">
-          <FeedShell locale={locale} />
+          <FeedShell locale={locale} dictionary={dictionary} />
         </div>
         <BottomTabBar
           activeRoute="feed"

@@ -184,7 +184,7 @@ import AppTopHeader from "@/components/app-top-header";
 import ConversationSearchBar from "@/components/conversation-search-bar";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
-import { composeHref, notificationsHref } from "@/lib/feed-routes";
+import { composeHref, feedHref } from "@/lib/feed-routes";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
@@ -5468,7 +5468,7 @@ export default function ConversationList({
           unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
           hasUnread={postingUnread.hasUnread}
           onCompose={() => router.push(composeHref(locale))}
-          onNotifications={() => router.push(notificationsHref(locale))}
+          onNotifications={openNotifications}
           onSearch={handleOpenSearch}
           searchLabel={copy.searchButtonLabel}
         />
@@ -5860,6 +5860,10 @@ export default function ConversationList({
               dictionary={dictionary}
               onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
               onOpenProfile={openConversationProfile}
+              onOpenPost={showPostingHeader ? (postId, commentId) => {
+                closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+                router.push(feedHref(locale, { postId, commentId }));
+              } : undefined}
               onUnreadCountChange={setUnreadNotificationCount}
             />
             <PublicUserProfileScreen
