@@ -44,16 +44,19 @@ export default async function PostsViewerPage({ params, searchParams }: ViewerPa
   const activeRoute =
     kind === "search" ? "connect" : session?.user?.id === authorId ? "mypage" : "feed";
 
+  const dictionary = getDictionary(locale as AppLocale);
+
   return (
     <PostingFeedRouteGuard locale={locale}>
       <FeedViewerClient
+        menuLabel={dictionary.profile.menuLabel}
         locale={locale}
         source={kind === "author" ? { kind: "author", authorId } : { kind: "search", query: q }}
         startPostId={postId}
         tabBar={
           <BottomTabBar
             activeRoute={activeRoute}
-            dictionary={getDictionary(locale as AppLocale)}
+            dictionary={dictionary}
             locale={locale}
             variant="glass"
           />

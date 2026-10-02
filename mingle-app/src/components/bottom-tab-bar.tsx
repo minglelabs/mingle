@@ -136,6 +136,9 @@ export default function BottomTabBar({
   const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
   const feedHref = buildNativeAwareTabPath(feedPath, searchParams, { tabRoot: true });
+  // A screen can highlight a tab without living under its route (the post
+  // viewer opened from My page): tapping that tab must still go to it.
+  const isOnTabRoute = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
   const isFeedActive = activeRoute === "feed"
     || pathname === feedPath
     || pathname.startsWith(`${feedPath}/`);
@@ -248,7 +251,7 @@ export default function BottomTabBar({
         <button
           type="button"
           onClick={() => {
-            if (isFeedActive) return;
+            if (isOnTabRoute(feedPath)) return;
             router.replace(feedHref);
           }}
           className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -297,7 +300,7 @@ export default function BottomTabBar({
       <button
         type="button"
         onClick={() => {
-          if (isConnectActive) return;
+          if (isOnTabRoute(connectPath)) return;
           router.replace(connectHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -314,7 +317,7 @@ export default function BottomTabBar({
       <button
         type="button"
         onClick={() => {
-          if (isMypageActive) return;
+          if (isOnTabRoute(mypagePath)) return;
           router.replace(mypageHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"

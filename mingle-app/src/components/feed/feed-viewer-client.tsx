@@ -10,6 +10,7 @@ type FeedViewerClientProps = {
   startPostId: string;
   /** The glass tab bar, floating over the bottom of the cards. */
   tabBar?: ReactNode;
+  menuLabel?: string;
 };
 
 /**
@@ -18,11 +19,11 @@ type FeedViewerClientProps = {
  * chevron, native back gesture / hardware back) returns to the profile grid or
  * search results the viewer was opened from.
  */
-export default function FeedViewerClient({ locale, source, startPostId, tabBar }: FeedViewerClientProps) {
+export default function FeedViewerClient({ locale, source, startPostId, tabBar, menuLabel }: FeedViewerClientProps) {
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       <div className="min-h-0 flex-1">
-        <FeedShell locale={locale} source={source} startPostId={startPostId} isViewer underTabBar={Boolean(tabBar)} />
+        <FeedShell locale={locale} source={source} startPostId={startPostId} isViewer underTabBar={Boolean(tabBar)} menuLabel={menuLabel} />
       </div>
       {tabBar}
     </main>

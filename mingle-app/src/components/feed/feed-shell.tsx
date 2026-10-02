@@ -33,7 +33,7 @@ import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
-import { ChevronLeft, Loader2, SquarePen } from "lucide-react";
+import { ChevronLeft, Loader2, Menu, SquarePen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -50,6 +50,8 @@ type FeedShellProps = {
   dictionary?: AppDictionary;
   /** Home feed only: the glass tab bar floats over the bottom of the cards. */
   underTabBar?: boolean;
+  /** Viewer of the viewer's own posts: accessible name of the My page menu button. */
+  menuLabel?: string;
 };
 
 /** Stable default so the home feed does not get a fresh `source` every render. */
@@ -71,7 +73,7 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, underTabBar = false }: FeedShellProps) {
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, underTabBar = false, menuLabel }: FeedShellProps) {
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
@@ -557,23 +559,56 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     />
   ) : null;
 
-  // The viewer has no header: without a way out, its loading / error / empty
-  // states read as a dead end. Same back chevron as the other full screens.
-  const viewerBack = isViewer ? (
-    <div
-      className="absolute left-0 top-0 z-[20] flex h-14 items-center px-2 text-slate-900"
-      style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
-    >
-      <button
-        type="button"
-        onClick={() => router.back()}
-        aria-label={copy.closeImage}
-        className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-black/5"
+  // The viewer keeps the bar of the screen it was opened from, laid over the
+  // card: My page's own bar (compose, name, menu) for the viewer's own posts,
+  // otherwise a back chevron and the author's name.
+  const viewerAuthorId = source.kind === "author" ? source.authorId : null;
+  const viewerIsOwnPosts = Boolean(viewerId) && viewerAuthorId === viewerId;
+  const viewerTitle =
+    source.kind === "author"
+      ? posts[0]?.author.name ?? (viewerIsOwnPosts ? session?.user?.name ?? "" : "")
+      : source.kind === "search"
+        ? source.query
+        : "";
+  const openMyPageMenu = useCallback(() => {
+    const path = buildNativeAwareTabPath(`/${locale}/mypage`, searchParams, { tabRoot: true });
+    router.push(`${path}${path.includes("?") ? "&" : "?"}menu=1`);
+  }, [router, locale, searchParams]);
+  const renderViewerHeader = (tone: "light" | "dark") => {
+    if (!isViewer) return null;
+    const ink = tone === "dark" ? "text-slate-950" : "text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]";
+    const button = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+      tone === "dark" ? "active:bg-black/5" : "active:bg-white/10"
+    }`;
+    return (
+      <header
+        className={`absolute inset-x-0 top-0 z-20 flex items-center px-4 ${ink}`}
+        style={{
+          height: "calc(54px + env(safe-area-inset-top, 44px))",
+          paddingTop: "env(safe-area-inset-top, 44px)",
+        }}
       >
-        <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
-      </button>
-    </div>
-  ) : null;
+        {viewerIsOwnPosts ? (
+          <button type="button" onClick={openCompose} className={button} aria-label={copy.compose}>
+            <SquarePen size={22} strokeWidth={2} aria-hidden="true" />
+          </button>
+        ) : (
+          <button type="button" onClick={() => router.back()} className={button} aria-label={copy.closeImage}>
+            <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+          </button>
+        )}
+        <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold">{viewerTitle}</h1>
+        {viewerIsOwnPosts ? (
+          <button type="button" onClick={openMyPageMenu} className={button} aria-label={menuLabel}>
+            <Menu size={23} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        ) : (
+          <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        )}
+      </header>
+    );
+  };
+  const viewerBack = renderViewerHeader("dark");
 
   if (phase === "loading") {
     // A soft card-shaped skeleton instead of a black screen.
@@ -660,6 +695,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-white"}`}
       style={bottomInsetStyle}
     >
+      {renderViewerHeader(glyphTone)}
+
       {!isViewer ? (
         <>
           {/* The row the pull opens above the feed, with its spinner. */}
