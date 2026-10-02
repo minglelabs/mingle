@@ -27,13 +27,13 @@ function renderRow(action: IdentityRowAction) {
       IdentityRow,
       {
         action,
-        label: 'Mina (운영 계정), @mina',
+        label: 'Mina (공식), @mina',
         className: 'min-w-0 flex-1',
         actionClassName: 'rounded-xl active:bg-gray-50',
         contentClassName: 'flex items-center gap-3',
       },
       createElement('span', { 'aria-hidden': 'true' }, 'Mina'),
-      createElement(AccountBadge, { kind: 'operator', locale: 'ko' }),
+      createElement(AccountBadge, { kind: 'official', locale: 'ko' }),
     ),
   )
 }
@@ -43,18 +43,18 @@ describe('IdentityRow', () => {
     const html = renderRow({ kind: 'button', onClick: () => {} })
     // The action is an empty, stretched button carrying the row label.
     expect(html).toContain(
-      '<button type="button" aria-label="Mina (운영 계정), @mina" class="absolute inset-0 rounded-xl active:bg-gray-50"></button>',
+      '<button type="button" aria-label="Mina (공식), @mina" class="absolute inset-0 rounded-xl active:bg-gray-50"></button>',
     )
     // Content passes taps through to the action; the badge (a later sibling) takes its own.
     expect(html).toContain('<div class="pointer-events-none relative flex items-center gap-3">')
-    expect(html).toContain('data-account-badge="operator"')
+    expect(html).toContain('data-account-badge="official"')
     expect(maxInteractiveDepth(html)).toBe(1)
-    expect(html.indexOf('data-account-badge="operator"')).toBeGreaterThan(html.indexOf('</button>'))
+    expect(html.indexOf('data-account-badge="official"')).toBeGreaterThan(html.indexOf('</button>'))
   })
 
   it('supports a link action and the toggle / expand states', () => {
     const link = renderRow({ kind: 'link', href: '/ko/users/u1' })
-    expect(link).toContain('<a aria-label="Mina (운영 계정), @mina" class="absolute inset-0 rounded-xl active:bg-gray-50" href="/ko/users/u1"></a>')
+    expect(link).toContain('<a aria-label="Mina (공식), @mina" class="absolute inset-0 rounded-xl active:bg-gray-50" href="/ko/users/u1"></a>')
     expect(maxInteractiveDepth(link)).toBe(1)
 
     expect(renderRow({ kind: 'button', onClick: () => {}, pressed: true })).toContain('aria-pressed="true"')

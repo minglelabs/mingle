@@ -43,16 +43,16 @@ export function InboxAvatar({ person, size = 48 }: { person: InboxPerson | null 
 }
 
 /**
- * The badge a user would see next to this account ("운영 계정" / "공식"), for
- * counterparts that are themselves operator or official accounts.
+ * The badge a user would see next to this account ("공식"), for
+ * counterparts that are themselves official accounts.
  */
-export function InboxAccountTag({ person }: { person: Pick<InboxPerson, 'isOfficial' | 'isOperator'> }) {
+export function InboxAccountTag({ person }: { person: Pick<InboxPerson, 'isOfficial'> }) {
   const kind = resolveAccountBadge(person)
   if (!kind) return null
   return (
     <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-sky-700 ring-1 ring-sky-200">
       <BadgeCheck size={11} strokeWidth={2.4} aria-hidden="true" />
-      {kind === 'operator' ? KO_BADGE_COPY.operator : KO_BADGE_COPY.official}
+      {KO_BADGE_COPY.official}
     </span>
   )
 }

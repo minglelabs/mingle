@@ -20,7 +20,7 @@ export const USER_IDENTITY_SELECT = {
 export type UserIdentityRecord = Prisma.UserGetPayload<{ select: typeof USER_IDENTITY_SELECT }>
 
 /** Wire flags next to an identity. Each key is present only when true. */
-export type IdentityBadgeFlags = { isOfficial?: true; isOperator?: true }
+export type IdentityBadgeFlags = { isOfficial?: true }
 
 /**
  * Badge flags for a DTO carrying another user's identity: spread it next to
@@ -28,10 +28,9 @@ export type IdentityBadgeFlags = { isOfficial?: true; isOperator?: true }
  * the payload. Clients pick the badge with `resolveAccountBadge`.
  */
 export function identityBadgeFlags(
-  user: { isOfficial?: boolean | null; isOperator?: boolean | null } | null | undefined,
+  user: { isOfficial?: boolean | null } | null | undefined,
 ): IdentityBadgeFlags {
   return {
     ...(user?.isOfficial ? { isOfficial: true as const } : {}),
-    ...(user?.isOperator ? { isOperator: true as const } : {}),
   }
 }

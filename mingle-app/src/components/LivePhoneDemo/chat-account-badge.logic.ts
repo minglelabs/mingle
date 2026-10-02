@@ -6,12 +6,11 @@ import {
 } from '@/lib/account-badge'
 
 /**
- * Reads an account badge carried on the wire as a kind ('official' |
- * 'operator'): hydration/live `speakerBadge`, invite-notice badges. Any other
+ * Reads an account badge carried on the wire as a kind ('official'): hydration/live `speakerBadge`, invite-notice badges. Any other
  * value (older payloads, cached rows, garbage) means no badge.
  */
 export function readAccountBadgeKind(value: unknown): AccountBadgeKind | null {
-  return value === 'operator' || value === 'official' ? value : null
+  return value === 'official' ? value : null
 }
 
 /** Flags carried on the wire next to an identity, keeping only `true`. */
@@ -27,10 +26,8 @@ export function readAccountBadgeFlags(record: Record<string, unknown> | null | u
 
 /**
  * The one badge a room-level label (chat list row title, room header) shows:
- * the strongest badge among the room's OTHER members. `operator` wins, so a
- * room with a Mingle-run account is never shown as merely "official". Room
- * titles are renamable plain strings, so the label sits next to the title and
- * is never written into it.
+ * the badge of the room's OTHER members. Room titles are renamable plain
+ * strings, so the label sits next to the title and is never written into it.
  */
 export function resolveRoomAccountBadge(
   otherMembers: readonly AccountBadgeFlags[] | null | undefined,
@@ -38,7 +35,6 @@ export function resolveRoomAccountBadge(
   let badge: AccountBadgeKind | null = null
   for (const member of otherMembers ?? []) {
     const kind = resolveAccountBadge(member)
-    if (kind === 'operator') return 'operator'
     if (kind === 'official') badge = 'official'
   }
   return badge

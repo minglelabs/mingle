@@ -544,11 +544,7 @@ export default function FeedPostCard({
           <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
         ) : null}
       </button>
-      {/* The operator badge is its own button, so it sits next to the profile
-          button, never inside it: a tap on it opens the badge sheet only. */}
-      {authorBadge === "operator" ? (
-        <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
-      ) : null}
+
 
       <time className={`shrink-0 text-sm font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
         {formatPostTime(post.publishedAt, locale)}

@@ -487,10 +487,7 @@ export default function PublicUserProfileScreen({
   const badge = resolveAccountBadge(profile);
   // The name as screen readers hear it: with the badge label.
   const nameLabel = withAccountBadgeLabel(name, badge, locale);
-  // The title bar and the photo preview repeat the name, and an operator
-  // account must be labeled wherever its name shows (the name line below
-  // scrolls away). The official chip stays where it always was: the name line.
-  const repeatedNameBadge = badge === "operator" ? badge : null;
+  const repeatedNameBadge = null;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
   const primaryLanguages = sanitizeSttLanguageSelection(
     profile?.primaryLanguages,
