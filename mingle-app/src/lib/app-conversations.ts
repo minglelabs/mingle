@@ -5,7 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 
 export { MAX_CONVERSATION_MEMBERS };
@@ -24,6 +26,12 @@ export type ConversationChannelOtherMember = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  // Account badge flags (see identityBadgeFlags), each present only when
+  // true. Clients pick the badge with resolveAccountBadge; a room with an
+  // operator member is labeled next to its title (the title itself is a
+  // renamable plain string and never carries the label).
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 export type ConversationChannelSummary = {
@@ -115,6 +123,11 @@ export type ConversationHydrationUtterance = {
   // has 2+ real members. Null in a solo room, where bubbles keep using the
   // generated animal avatar instead.
   speakerImage: string | null;
+  // The sender's account badge ('operator' = run by Mingle staff,
+  // 'official' = the Mingle team's own account). Gated exactly like
+  // speakerName and present only when the sender carries a badge. The live
+  // committed utterance published over realtime uses the same field name.
+  speakerBadge?: AccountBadgeKind;
 };
 
 export type ConversationHydrationCursor = {
@@ -133,6 +146,10 @@ export type ConversationHydrationLeaveNotice = {
   name: string | null;
   handle: string | null;
   leftAtMs: number;
+  // Badge flags of the member who left (identityBadgeFlags, only when true):
+  // the notice names them, so an operator's name carries its label.
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 // One AppConversationChannelInvite row (see its doc comment), for the client
@@ -147,6 +164,10 @@ export type ConversationHydrationInviteNotice = {
   invitedByName: string | null;
   invitedByHandle: string | null;
   invitedAtMs: number;
+  // Account badge of each named side, present only when that account has
+  // one (same kind values as ConversationHydrationUtterance.speakerBadge).
+  inviteeBadge?: AccountBadgeKind;
+  invitedByBadge?: AccountBadgeKind;
 };
 
 export type ConversationHydrationState = {
@@ -158,6 +179,12 @@ export type ConversationHydrationState = {
   oldestMessageCursor: ConversationHydrationCursor | null;
   leaveNotices: ConversationHydrationLeaveNotice[];
   inviteNotices: ConversationHydrationInviteNotice[];
+  // UI chrome like the notices above, not a message: true while the room has
+  // an ACTIVE, materialized member (a membership row with leftAt null) whose
+  // account is run by Mingle staff. Clients show the pinned "Mingle staff
+  // read and reply in this chat" disclosure from it, in 1:1 and group rooms
+  // alike. A pending invitee does not count until their row exists.
+  operatorDisclosure: boolean;
 };
 
 type ConversationChannelRecord = {
@@ -284,6 +311,10 @@ type ChannelMemberProfile = {
   // filterActiveMembers — except the ones that intentionally preserve a
   // departed member's presence: title, avatar, and isMultiMember.
   leftAt: Date | null;
+  // Account badge flags (display only, see identityBadgeFlags). isOperator
+  // also drives the hydration's operatorDisclosure.
+  isOfficial: boolean;
+  isOperator: boolean;
 };
 
 // Active-membership filter shared by every resolver that represents a
@@ -327,6 +358,8 @@ type PendingInviteeProfile = {
   defaultDisplayLanguage: string | null;
   nationality: string | null;
   primaryLanguages: string[];
+  isOfficial: boolean;
+  isOperator: boolean;
 };
 
 function resolveDefaultConversationLanguages(
@@ -406,6 +439,8 @@ async function listPendingInviteeProfilesByUserIds(
       defaultDisplayLanguage: true,
       nationality: true,
       primaryLanguages: true,
+      isOfficial: true,
+      isOperator: true,
     },
   });
   return new Map(rows.map((row) => {
@@ -428,6 +463,8 @@ async function listPendingInviteeProfilesByUserIds(
       defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
       nationality: primaryLanguages[0] ?? normalizedNationality,
       primaryLanguages,
+      isOfficial: row.isOfficial === true,
+      isOperator: row.isOperator === true,
     }];
   }));
 }
@@ -464,6 +501,8 @@ async function listChannelMembersByChannelId(
           defaultDisplayLanguage: true,
           nationality: true,
           primaryLanguages: true,
+          isOfficial: true,
+          isOperator: true,
         },
       },
     },
@@ -509,6 +548,8 @@ async function listChannelMembersByChannelId(
       lastReadAt: row.lastReadAt,
       joinedAt: row.joinedAt,
       leftAt: row.leftAt,
+      isOfficial: row.user.isOfficial === true,
+      isOperator: row.user.isOperator === true,
     });
     membersByChannelId.set(row.channelId, members);
   }
@@ -759,6 +800,9 @@ function resolveOtherMemberAvatars(
         imageCropScale: isBlockedCounterpart ? null : member.imageCropScale,
         imageCropX: isBlockedCounterpart ? null : member.imageCropX,
         imageCropY: isBlockedCounterpart ? null : member.imageCropY,
+        // Kept for a blocked counterpart too: the name stays visible, so its
+        // label must as well.
+        ...identityBadgeFlags(member),
       };
     });
 }
@@ -2374,6 +2418,9 @@ export type ConversationMemberSummary = {
   // the client never has real identity to accidentally render — it should
   // substitute its own generic placeholder and refuse to open the profile.
   blocked: boolean;
+  // Account badge flags (identityBadgeFlags), each present only when true.
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -2434,6 +2481,7 @@ export async function listConversationMembersForUser(args: {
       nationality: member.nationality,
       primaryLanguages: member.primaryLanguages,
       blocked,
+      ...identityBadgeFlags(member),
     };
   });
 
@@ -2449,6 +2497,7 @@ export async function listConversationMembersForUser(args: {
     nationality: profile.nationality,
     primaryLanguages: profile.primaryLanguages,
     blocked: false,
+    ...identityBadgeFlags(profile),
   }));
 
   return [...realMemberSummaries, ...pendingMemberSummaries];
@@ -2986,6 +3035,11 @@ async function getConversationHydrationStateForRecord(args: {
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
+  const badgeByUserId = new Map((members ?? []).map((member) => [member.userId, resolveAccountBadge(member)]));
+  // See ConversationHydrationState.operatorDisclosure. Uses the same
+  // (snapshot-adjusted) member list as the rest of this state, so a share
+  // snapshot discloses exactly the operators who were in the room then.
+  const operatorDisclosure = filterActiveMembers(members).some((member) => member.isOperator);
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.viewerUserId,
     membersByChannelId,
@@ -3041,6 +3095,10 @@ async function getConversationHydrationStateForRecord(args: {
     // distinguish detected voices — that switch happens only once the
     // invitee actually materializes into a real member.
     const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
+    // Same gate as speakerName below: the badge labels the sender's name.
+    const speakerBadge = (isMultiMemberAtMessage || image) && message.userId
+      ? badgeByUserId.get(message.userId) ?? null
+      : null;
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
@@ -3082,6 +3140,7 @@ async function getConversationHydrationStateForRecord(args: {
       speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
+      ...(speakerBadge ? { speakerBadge } : {}),
     };
   }).filter((utterance) => utterance.originalText.length > 0);
 
@@ -3093,19 +3152,26 @@ async function getConversationHydrationStateForRecord(args: {
     ? []
     : inviteRecords;
 
-  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => ({
-    inviteeUserId: invite.inviteeUserId,
-    inviteeName: nameByUserId.get(invite.inviteeUserId)
-      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
-      ?? null,
-    inviteeHandle: handleByUserId.get(invite.inviteeUserId)
-      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.handle
-      ?? null,
-    invitedByUserId: invite.invitedByUserId,
-    invitedByName: nameByUserId.get(invite.invitedByUserId) ?? null,
-    invitedByHandle: handleByUserId.get(invite.invitedByUserId) ?? null,
-    invitedAtMs: invite.createdAt.getTime(),
-  }));
+  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => {
+    const inviteeBadge = badgeByUserId.get(invite.inviteeUserId)
+      ?? resolveAccountBadge(pendingInviteeProfileById.get(invite.inviteeUserId));
+    const invitedByBadge = badgeByUserId.get(invite.invitedByUserId) ?? null;
+    return {
+      inviteeUserId: invite.inviteeUserId,
+      inviteeName: nameByUserId.get(invite.inviteeUserId)
+        ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
+        ?? null,
+      inviteeHandle: handleByUserId.get(invite.inviteeUserId)
+        ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.handle
+        ?? null,
+      invitedByUserId: invite.invitedByUserId,
+      invitedByName: nameByUserId.get(invite.invitedByUserId) ?? null,
+      invitedByHandle: handleByUserId.get(invite.invitedByUserId) ?? null,
+      invitedAtMs: invite.createdAt.getTime(),
+      ...(inviteeBadge ? { inviteeBadge } : {}),
+      ...(invitedByBadge ? { invitedByBadge } : {}),
+    };
+  });
 
   // This endpoint already loaded the room's messages (including their
   // translations) to build `utterances` below — reuse the last one for the
@@ -3210,8 +3276,10 @@ async function getConversationHydrationStateForRecord(args: {
         name: member.name,
         handle: member.handle,
         leftAtMs: (member.leftAt as Date).getTime(),
+        ...identityBadgeFlags(member),
       })),
     inviteNotices,
+    operatorDisclosure,
   };
 }
 

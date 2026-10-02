@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getConversationSessionKeyForMember, isMessageSenderBlockedInConversation } from '@/lib/app-conversations'
 import { isMessageReactionKind, summarizeMessageReactions } from '@/lib/message-reactions'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { identityBadgeFlags } from '@/server/identity/user-identity-select'
 
 async function authorize(conversationId: string) {
   const session = await getServerSession(getAuthOptions())
@@ -44,11 +45,15 @@ export async function getMessageReactions(request: NextRequest, conversationId: 
     const rows = await prisma.appMessageReaction.findMany({
       where: { messageId: message.id, kind, ...(after ? { userId: { gt: after } } : {}) },
       orderBy: { userId: 'asc' }, take: 51,
-      select: { userId: true, user: { select: { name: true, handle: true } } },
+      select: { userId: true, user: { select: { name: true, handle: true, isOfficial: true, isOperator: true } } },
     })
     const page = rows.slice(0, 50)
     return NextResponse.json({
-      participants: page.map(row => ({ id: row.userId, name: row.user.name, handle: row.user.handle, mine: row.userId === scope.userId })),
+      participants: page.map(row => ({
+        id: row.userId, name: row.user.name, handle: row.user.handle, mine: row.userId === scope.userId,
+        // Names are listed, so the account badge travels with each one.
+        ...identityBadgeFlags(row.user),
+      })),
       nextCursor: rows.length > 50 ? page.at(-1)?.userId ?? null : null,
     }, { headers: { 'Cache-Control': 'private, no-store' } })
   }

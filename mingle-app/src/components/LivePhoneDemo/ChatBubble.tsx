@@ -30,6 +30,9 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
+import ChatAccountBadge from './ChatAccountBadge'
+import { readAccountBadgeKind } from './chat-account-badge.logic'
+import type { AccountBadgeKind } from '@/lib/account-badge'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey as buildOriginalPlaybackKey,
@@ -141,6 +144,11 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
+  // The sender's account badge ('operator' = run by Mingle staff, 'official'
+  // = the Mingle team's account), shown next to speakerName. Comes from
+  // hydration, committed live utterances and live previews (the latter from
+  // the sender's signed writer token).
+  speakerBadge?: AccountBadgeKind | null
   originalText: string
   // The original rendered in the script of its Chinese variant (Traditional
   // for zh-TW, Simplified for zh-CN), supplied by the server when that
@@ -820,6 +828,8 @@ function ChatBubble({
   const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
+  // Labels the sender's NAME, so it follows the same shared-room gate.
+  const speakerBadge = isSharedRoomMember ? readAccountBadgeKind(utterance.speakerBadge) : null
   const displayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder)
   const displayLanguageKey = displayLanguageResolver.keyOf
   const originalDisplayLanguage = displayLanguageResolver.originalLanguage
@@ -1068,7 +1078,7 @@ function ChatBubble({
   const shouldShowCollapsedHeaderLanguages = !messageImage && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
-    && (Boolean(speakerName) || shouldShowCollapsedHeaderLanguages)
+    && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
@@ -1080,6 +1090,11 @@ function ChatBubble({
           className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
+        </span>
+      )}
+      {speakerBadge && (
+        <span data-chat-speaker-badge className="ml-0.5 mr-0.5 inline-flex shrink-0 items-center">
+          <ChatAccountBadge kind={speakerBadge} locale={uiLocale} tone="dark" />
         </span>
       )}
       {shouldShowCollapsedHeaderLanguages && (
@@ -1365,6 +1380,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerName !== nu.speakerName) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
+    if (pu.speakerBadge !== nu.speakerBadge) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false

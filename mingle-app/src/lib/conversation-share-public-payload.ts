@@ -14,6 +14,12 @@
 // Deliberately typed structurally rather than against app-conversations'
 // types: client code imports these types, and pulling a Prisma-backed module
 // into the browser bundle for a type alias is not worth it.
+//
+// Account badges ('operator' = run by Mingle staff, 'official' = the Mingle
+// team's own account) are not identifiers: they are the public label every
+// surface showing that name must carry, so they pass through here.
+
+import type { AccountBadgeKind } from "@/lib/account-badge";
 
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 
@@ -23,6 +29,9 @@ export type PublicSpectateInviter = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  // Badge flags, each present only when true (see identityBadgeFlags).
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 export type PublicSpectateUtterance = {
@@ -50,6 +59,8 @@ export type PublicSpectateUtterance = {
   // speaker. Never derived from the real id.
   speakerAlias: string | null;
   speakerImage: string | null;
+  // The sender's account badge, present only when they carry one.
+  speakerBadge?: AccountBadgeKind;
 };
 
 export type PublicSpectateSnapshot = {
@@ -59,6 +70,9 @@ export type PublicSpectateSnapshot = {
   // carry their account id for a client to look them up with.
   sharedBy: PublicSpectateInviter | null;
   utterances: PublicSpectateUtterance[];
+  // Present (true) only when a Mingle-run account was an active member at
+  // the snapshot: the page then shows the same disclosure as the room.
+  operatorDisclosure?: true;
 };
 
 type ShareSnapshotUtteranceInput = {
@@ -77,11 +91,13 @@ type ShareSnapshotUtteranceInput = {
   speakerName: string | null;
   speakerUserId: string | null;
   speakerImage: string | null;
+  speakerBadge?: AccountBadgeKind;
 };
 
 type ShareSnapshotInput = {
   conversation: { title: string };
   utterances: ShareSnapshotUtteranceInput[];
+  operatorDisclosure?: boolean;
 };
 
 export function toPublicSpectateUtterances(
@@ -123,6 +139,7 @@ export function toPublicSpectateUtterances(
       speakerName: utterance.speakerName,
       speakerAlias,
       speakerImage: utterance.speakerImage,
+      ...(utterance.speakerBadge ? { speakerBadge: utterance.speakerBadge } : {}),
     };
   });
 }
@@ -135,5 +152,6 @@ export function toPublicSpectateSnapshot(
     conversation: { title: state.conversation.title },
     sharedBy,
     utterances: toPublicSpectateUtterances(state.utterances),
+    ...(state.operatorDisclosure === true ? { operatorDisclosure: true as const } : {}),
   };
 }

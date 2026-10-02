@@ -121,6 +121,7 @@ describe("/api/profile route", () => {
         handle: true,
         name: true,
         bio: true,
+        birthDate: true,
         nationality: true,
         primaryLanguages: true,
         defaultConversationLanguages: true,
@@ -129,6 +130,8 @@ describe("/api/profile route", () => {
         locationCity: true,
         locationCountry: true,
         locationCountryCode: true,
+        isOfficial: true,
+        isOperator: true,
         _count: {
           select: {
             followerRelations: {
@@ -194,6 +197,7 @@ describe("/api/profile route", () => {
         handle: true,
         name: true,
         bio: true,
+        birthDate: true,
         nationality: true,
         primaryLanguages: true,
         defaultConversationLanguages: true,
@@ -202,6 +206,8 @@ describe("/api/profile route", () => {
         locationCity: true,
         locationCountry: true,
         locationCountryCode: true,
+        isOfficial: true,
+        isOperator: true,
         _count: {
           select: {
             followerRelations: {

@@ -8,6 +8,7 @@ import {
   toPublicSpectateSnapshot,
 } from "@/lib/conversation-share-public-payload";
 import { getUserProfile } from "@/server/user-profile";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ async function resolvePublicInviter(
     imageCropScale: profile.imageCropScale,
     imageCropX: profile.imageCropX,
     imageCropY: profile.imageCropY,
+    // The invite banner names the sharer, so their badge travels with it.
+    ...identityBadgeFlags(profile),
   };
 }
 

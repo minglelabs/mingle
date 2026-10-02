@@ -36,7 +36,7 @@ describe("/api/users/[userId]/report route", () => {
     mockUserReportCreate.mockResolvedValue({ id: "report_123", status: "open" });
   });
 
-  it("creates a report with an optional message", async () => {
+  it("creates a user report with a target key and optional message", async () => {
     const response = await POST(
       new NextRequest("https://example.com/api/users/user_456/report", {
         method: "POST",
@@ -52,11 +52,30 @@ describe("/api/users/[userId]/report route", () => {
       data: {
         reporterId: "user_123",
         reportedUserId: "user_456",
+        targetType: "user",
+        targetPostId: null,
+        targetCommentId: null,
+        targetKey: "user:user_456",
         reason: "harassment",
         message: "불쾌한 메시지를 반복해서 보냈습니다.",
       },
       select: { id: true, status: true },
     });
+  });
+
+  it("returns already_reported (200) on a duplicate", async () => {
+    mockUserReportCreate.mockRejectedValue({ code: "P2002" });
+    const response = await POST(
+      new NextRequest("https://example.com/api/users/user_456/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "spam" }),
+      }),
+      { params: Promise.resolve({ userId: "user_456" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "already_reported", duplicate: true });
   });
 
   it("rejects an unsupported reason", async () => {
@@ -104,5 +123,19 @@ describe("/api/users/[userId]/report route", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "user_not_found" });
     expect(mockUserReportCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects reporting yourself", async () => {
+    const response = await POST(
+      new NextRequest("https://example.com/api/users/user_123/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "spam" }),
+      }),
+      { params: Promise.resolve({ userId: "user_123" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "cannot_report_self" });
   });
 });

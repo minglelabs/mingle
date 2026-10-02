@@ -9,7 +9,9 @@ export type RealtimeTokenPayload = {
     sessionKey: string;
     userId: string;
     exp: number;
-  liveWriter?: { name: string | null };
+  // `badge` = the writer's account badge, signed by mingle-app; forwarded on
+  // live previews as `speakerBadge`.
+  liveWriter?: { name: string | null; badge?: 'official' | 'operator' };
   liveReader?: true;
 };
 

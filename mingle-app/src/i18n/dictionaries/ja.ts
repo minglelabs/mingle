@@ -28,6 +28,7 @@ export const jaDictionary: BaseAppDictionarySource = {
     connect: "つながる",
     moments: "モーメンツ",
     my: "マイ",
+    feed: "フィード",
   },
   titles: {
     chats: "チャット一覧",

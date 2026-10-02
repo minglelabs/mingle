@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { requireAdminApi } from "@/server/admin/guard";
 
 const MESSAGE_PAGE_SIZE = 200;
 
@@ -18,10 +17,8 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ conversationId: string }> },
 ) {
-  const store = await cookies();
-  if (!verifyAdminSessionToken(store.get(ADMIN_SESSION_COOKIE_NAME)?.value)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const { conversationId } = await context.params;
   const url = new URL(request.url);
@@ -68,5 +65,5 @@ export async function GET(
     page: safePage,
     totalPages,
     hasNext: safePage < totalPages,
-  });
+  }, { headers: { "Cache-Control": "no-store" } });
 }

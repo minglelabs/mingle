@@ -1,4 +1,5 @@
 import type { Utterance } from './ChatBubble'
+import { readAccountBadgeKind } from './chat-account-badge.logic'
 import {
   canonicalizeLanguageKey,
   classifyChineseLanguage,
@@ -164,6 +165,13 @@ export type PreviewEvent = {
   type: 'utterance_preview'; sessionKey: string; revision: number; expiresAt: number; final: boolean; utterance: Utterance
 }
 
+// Only a known badge kind survives; anything else becomes "no badge".
+function sanitizeSpeakerBadge(utterance: Utterance): Utterance {
+  if (utterance.speakerBadge == null) return utterance
+  const speakerBadge = readAccountBadgeKind(utterance.speakerBadge)
+  return speakerBadge === utterance.speakerBadge ? utterance : { ...utterance, speakerBadge }
+}
+
 // Remote previews deliberately never enter the persisted utterance store.
 // A server message with the same ID replaces the preview without another row.
 export class RemotePreviews {
@@ -175,7 +183,7 @@ export class RemotePreviews {
     if (!event.utterance?.id || !event.utterance.speakerUserId || !Number.isFinite(event.revision)
       || !Number.isFinite(event.expiresAt) || typeof event.utterance.originalText !== 'string') return false
     // Previews from older clients may still carry a bare `zh`.
-    event = { ...event, utterance: canonicalizeUtteranceLanguages(event.utterance) }
+    event = { ...event, utterance: sanitizeSpeakerBadge(canonicalizeUtteranceLanguages(event.utterance)) }
     const key = JSON.stringify([event.utterance.speakerUserId, event.utterance.id])
     const previous = this.records.get(key)
     if (previous && (previous.revision >= event.revision || (previous.final && !event.final))) return false
@@ -205,8 +213,12 @@ export class RemotePreviews {
     // Source persistence may beat the final translation. Keep the preview's
     // targets and interim text until the committed translation replaces them.
     const partial = canonicalizeUtteranceLanguages(preview.utterance, { roomLanguages: utterance.targetLanguages })
+    // The committed payload normally carries the sender's badge itself; keep
+    // the preview's (signed-token) badge when it does not.
+    const previewBadge = utterance.speakerBadge ? null : readAccountBadgeKind(preview.utterance.speakerBadge)
     return {
       ...utterance,
+      ...(previewBadge ? { speakerBadge: previewBadge } : {}),
       targetLanguages: [...new Set([...(partial.targetLanguages || []), ...(utterance.targetLanguages || [])])],
       translations: { ...partial.translations, ...utterance.translations },
       translationFinalized: {
@@ -229,7 +241,18 @@ export class RemotePreviews {
       if (committed.some(u => u.id === event.utterance.id)) { this.records.delete(key); continue }
       if (event.utterance.speakerUserId === viewerUserId) continue
       const knownSpeaker = committed.find(u => u.speakerUserId === event.utterance.speakerUserId)
-      result.push({ ...this.applyOrder(event.utterance), speakerImage: knownSpeaker?.speakerImage ?? null })
+      // The badge normally rides on the frame (from the sender's signed
+      // writer token); fall back to the same speaker's committed bubbles so a
+      // labeled account's live bubble is never shown without its label.
+      const speakerBadge = readAccountBadgeKind(event.utterance.speakerBadge)
+        ?? readAccountBadgeKind(committed.find(u => (
+          u.speakerUserId === event.utterance.speakerUserId && readAccountBadgeKind(u.speakerBadge)
+        ))?.speakerBadge)
+      result.push({
+        ...this.applyOrder(event.utterance),
+        speakerImage: knownSpeaker?.speakerImage ?? null,
+        ...(speakerBadge ? { speakerBadge } : {}),
+      })
     }
     return result
   }

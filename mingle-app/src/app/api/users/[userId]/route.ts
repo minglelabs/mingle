@@ -5,6 +5,8 @@ import { getPublishedBioText } from "@/server/profile-bio";
 import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { calculateProfileAge } from "@/server/user-profile";
 
 export const runtime = "nodejs";
 
@@ -29,13 +31,9 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
 }
 
 const userProfileSelect = {
-  id: true,
-  handle: true,
-  name: true,
-  image: true,
-  imageCropScale: true,
-  imageCropX: true,
-  imageCropY: true,
+  // Identity + badge flags (official / operator).
+  ...USER_IDENTITY_SELECT,
+  birthDate: true,
   bio: true,
   nationality: true,
   primaryLanguages: true,
@@ -126,6 +124,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropScale: user.imageCropScale,
     imageCropX: user.imageCropX,
     imageCropY: user.imageCropY,
+    age: calculateProfileAge(user.birthDate),
     bio: await getPublishedBioText(user.id, user.bio),
     nationality: user.nationality,
     primaryLanguages: sanitizeSttLanguageSelection(
@@ -148,5 +147,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     followingCount: user._count.followingRelations,
     isFollowing: user.followerRelations.length > 0,
     isBlocked: block?.blockerId === viewerId,
+    // Badge flags (official / operator) only when true; absent means false.
+    ...identityBadgeFlags(user),
   });
 }

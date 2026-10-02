@@ -1,6 +1,11 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { connect } from "node:http2";
 import { prisma } from "@/lib/prisma";
+import { feedHref } from "@/lib/feed-routes";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
+import { resolveLegalDocumentLocale, resolveSupportedLocaleTag, type LegalDocumentLocale } from "@/i18n/config";
+import { resolvePushNotificationCopy } from "@/i18n/notification-copy";
+import { resolveOperatorInboxPushCopy } from "@/server/operator-inbox/push-copy";
 
 type PushPlatform = "ios" | "android";
 
@@ -11,15 +16,23 @@ type PushTarget = {
   environment: string;
 };
 
-type PushMessage = {
+export type PushMessage = {
   notificationId: string;
+  /**
+   * conversation_message | follow | comment | comment_reply |
+   * operator_inbox_message (staff alert, copy from
+   * `resolveOperatorInboxPushCopy`). Any other type gets a generic copy.
+   */
   type: string;
   actorId: string;
+  /** Actor name as shown, already carrying its badge (see `withAccountBadgeLabel`). */
   actorLabel: string;
   recipientLanguage: string;
   messagePreview?: string;
   sessionKey?: string;
   conversationId?: string;
+  /** In-app destination the tap should open (e.g. feedHref with post/comment). */
+  navigationUrl?: string;
 };
 
 type PushSendResult = {
@@ -114,31 +127,45 @@ function resolvePushPlatform(value: string): PushPlatform | null {
   return normalized === "ios" || normalized === "android" ? normalized : null;
 }
 
-function resolvePushCopy(message: PushMessage): { title: string; body: string } {
+// `conversation_message` title and the separator between the sender label and
+// the preview, for all 15 primary UI languages.
+const CONVERSATION_MESSAGE_PUSH_COPY: Record<LegalDocumentLocale, { title: string; separator: string }> = {
+  ko: { title: "새 메시지", separator: "님: " },
+  en: { title: "New message", separator: ": " },
+  ja: { title: "新しいメッセージ", separator: "さん: " },
+  "zh-CN": { title: "新消息", separator: "：" },
+  "zh-TW": { title: "新訊息", separator: "：" },
+  fr: { title: "Nouveau message", separator: " : " },
+  de: { title: "Neue Nachricht", separator: ": " },
+  es: { title: "Nuevo mensaje", separator: ": " },
+  pt: { title: "Nova mensagem", separator: ": " },
+  it: { title: "Nuovo messaggio", separator: ": " },
+  ru: { title: "Новое сообщение", separator: ": " },
+  ar: { title: "رسالة جديدة", separator: ": " },
+  hi: { title: "नया संदेश", separator: ": " },
+  th: { title: "ข้อความใหม่", separator: ": " },
+  vi: { title: "Tin nhắn mới", separator: ": " },
+};
+
+/** Title and body shown on the device, in the recipient's language (unknown -> English). */
+export function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
-  const language = message.recipientLanguage.trim().toLowerCase();
   if (message.type === "conversation_message") {
     const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
-    if (language === "ko") return { title: "새 메시지", body: `${label}님: ${preview}` };
-    if (language === "ja") return { title: "新しいメッセージ", body: `${label}さん: ${preview}` };
-    if (language === "zh-cn") return { title: "新消息", body: `${label}：${preview}` };
-    if (language === "zh-tw") return { title: "新訊息", body: `${label}：${preview}` };
-    if (language === "es") return { title: "Nuevo mensaje", body: `${label}: ${preview}` };
-    if (language === "fr") return { title: "Nouveau message", body: `${label} : ${preview}` };
-    if (language === "de") return { title: "Neue Nachricht", body: `${label}: ${preview}` };
-    if (language === "pt") return { title: "Nova mensagem", body: `${label}: ${preview}` };
-    return { title: "New message", body: `${label}: ${preview}` };
+    const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
+    const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
+    return { title: copy.title, body: `${label}${copy.separator}${preview}` };
   }
-  if (message.type === "follow") {
-    if (language === "ko") return { title: "새 팔로워", body: `${label}님이 회원님을 팔로우했습니다.` };
-    if (language === "ja") return { title: "新しいフォロワー", body: `${label}さんがあなたをフォローしました。` };
-    if (language === "zh-cn") return { title: "新的关注者", body: `${label}关注了你。` };
-    if (language === "zh-tw") return { title: "新的追蹤者", body: `${label}追蹤了你。` };
-    if (language === "es") return { title: "Nuevo seguidor", body: `${label} empezó a seguirte.` };
-    if (language === "fr") return { title: "Nouveau follower", body: `${label} vous suit maintenant.` };
-    if (language === "de") return { title: "Neuer Follower", body: `${label} folgt Ihnen jetzt.` };
-    if (language === "pt") return { title: "Novo seguidor", body: `${label} começou a seguir você.` };
-    return { title: "New follower", body: `${label} followed you.` };
+  if (message.type === "operator_inbox_message") {
+    return resolveOperatorInboxPushCopy({
+      recipientLanguage: message.recipientLanguage,
+      actorLabel: label,
+      messagePreview: message.messagePreview,
+    });
+  }
+  if (message.type === "follow" || message.type === "comment" || message.type === "comment_reply") {
+    // All 15 primary UI languages; an unknown language falls back to English.
+    return resolvePushNotificationCopy(message.recipientLanguage, message.type, label);
   }
 
   return { title: "Mingle", body: "You have a new notification." };
@@ -152,6 +179,7 @@ function createPushData(message: PushMessage): Record<string, string> {
   };
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
+  if (message.navigationUrl) data.url = message.navigationUrl;
   return data;
 }
 
@@ -185,6 +213,7 @@ async function sendApnsNotification(
     messageId: message.notificationId,
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),
+    ...(message.navigationUrl ? { url: message.navigationUrl } : {}),
   });
 
   return new Promise((resolve) => {
@@ -340,6 +369,76 @@ async function sendPushToTarget(
   return { invalidToken: false };
 }
 
+const PUSH_TARGET_SELECT = {
+  id: true,
+  platform: true,
+  token: true,
+  environment: true,
+} as const;
+
+type PushDelivery = { tokenId: string; promise: Promise<PushSendResult> };
+
+function resolveRecipientLanguage(user: { pageLanguage: string | null; language: string | null }): string {
+  return user.pageLanguage?.trim() || user.language?.trim() || "en";
+}
+
+/** Waits for every delivery, then deletes the tokens APNs/FCM reported as dead. */
+async function settlePushDeliveries(deliveries: PushDelivery[]): Promise<void> {
+  const results = await Promise.allSettled(deliveries.map((delivery) => delivery.promise));
+  const invalidTokenIds = results.flatMap((result, index) => (
+    result.status === "fulfilled" && result.value.invalidToken
+      ? [deliveries[index].tokenId]
+      : []
+  ));
+  if (invalidTokenIds.length > 0) {
+    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
+  }
+}
+
+/** One recipient, as `sendPushToUsers` hands it to `build`. */
+export type PushRecipient = {
+  userId: string;
+  /** pageLanguage, else language, else "en": the rule every push uses. */
+  language: string;
+};
+
+/**
+ * Pushes to every registered device of each user in `userIds` (deduplicated).
+ * `build` returns the message for one recipient, or null to skip them; it only
+ * runs for users that have a device. Tokens APNs/FCM report as dead are
+ * deleted. A failing device never rejects the call; a failing user lookup or
+ * token cleanup does, so callers that must not fail wrap it.
+ */
+export async function sendPushToUsers(
+  userIds: string[],
+  build: (recipient: PushRecipient) => PushMessage | null | Promise<PushMessage | null>,
+): Promise<void> {
+  const apnsConfig = readApnsConfig();
+  const fcmConfig = readFcmConfig();
+  if (!apnsConfig && !fcmConfig) return;
+
+  const ids = [...new Set(userIds.filter((userId) => typeof userId === "string" && userId.trim()))];
+  if (ids.length === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, language: true, pageLanguage: true, pushTokens: { select: PUSH_TARGET_SELECT } },
+  });
+  const planned: Array<{ target: PushTarget; message: PushMessage }> = [];
+  for (const user of users) {
+    if (user.pushTokens.length === 0) continue;
+    const message = await build({ userId: user.id, language: resolveRecipientLanguage(user) });
+    if (!message) continue;
+    for (const target of user.pushTokens as PushTarget[]) planned.push({ target, message });
+  }
+  // Start every send only after all messages are built, so no delivery can
+  // reject before settlePushDeliveries is observing it.
+  await settlePushDeliveries(planned.map(({ target, message }) => ({
+    tokenId: target.id,
+    promise: sendPushToTarget(target, message, apnsConfig, fcmConfig),
+  })));
+}
+
 export async function sendPushNotificationForUserNotification(notificationId: string): Promise<void> {
   const apnsConfig = readApnsConfig();
   const fcmConfig = readFcmConfig();
@@ -350,18 +449,13 @@ export async function sendPushNotificationForUserNotification(notificationId: st
     select: {
       id: true,
       type: true,
+      postId: true,
+      commentId: true,
       recipient: {
         select: {
           language: true,
           pageLanguage: true,
-          pushTokens: {
-            select: {
-              id: true,
-              platform: true,
-              token: true,
-              environment: true,
-            },
-          },
+          pushTokens: { select: PUSH_TARGET_SELECT },
         },
       },
       actor: {
@@ -369,34 +463,42 @@ export async function sendPushNotificationForUserNotification(notificationId: st
           id: true,
           handle: true,
           name: true,
+          isOfficial: true,
+          isOperator: true,
         },
       },
     },
   });
   if (!notification) return;
 
+  const recipientLanguage = resolveRecipientLanguage(notification.recipient);
+  const recipientLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
+  const navigationUrl = notification.postId
+    ? feedHref(recipientLocale, {
+        postId: notification.postId,
+        commentId: notification.commentId,
+      })
+    : notification.type === "follow"
+      // Follow taps open the new follower's profile (same path the web push-tap
+      // receiver resolves for `/{locale}/users/{id}`).
+      ? `/${recipientLocale}/users/${encodeURIComponent(notification.actor.id)}`
+      : undefined;
+
+  const actorName = notification.actor.name?.trim() || `@${notification.actor.handle}`;
   const message: PushMessage = {
     notificationId: notification.id,
     type: notification.type,
     actorId: notification.actor.id,
-    actorLabel: notification.actor.name?.trim() || `@${notification.actor.handle}`,
-    recipientLanguage: notification.recipient.pageLanguage?.trim()
-      || notification.recipient.language?.trim()
-      || "en",
+    // An operator / official actor keeps its badge on the lock screen too.
+    actorLabel: withAccountBadgeLabel(actorName, resolveAccountBadge(notification.actor), recipientLanguage),
+    recipientLanguage,
+    ...(navigationUrl ? { navigationUrl } : {}),
   };
   const targets = notification.recipient.pushTokens as PushTarget[];
-  const results = await Promise.allSettled(
-    targets.map((target) => sendPushToTarget(target, message, apnsConfig, fcmConfig)),
-  );
-  const invalidTokenIds = results.flatMap((result, index) => (
-    result.status === "fulfilled" && result.value.invalidToken
-      ? [targets[index]?.id]
-      : []
-  ));
-
-  if (invalidTokenIds.length > 0) {
-    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
-  }
+  await settlePushDeliveries(targets.map((target) => ({
+    tokenId: target.id,
+    promise: sendPushToTarget(target, message, apnsConfig, fcmConfig),
+  })));
 }
 
 // Message pushes deliberately do not create UserNotification rows. The
@@ -418,41 +520,59 @@ export async function sendPushNotificationForConversationMessage(args: {
   )];
   if (recipientUserIds.length === 0) return;
 
+  // The web conversation room is `/{locale}/conversations?conversation={channelId}`.
+  // Message pushes only know the session key, so resolve the channel id once here
+  // and let each recipient's locale build its own room URL below. Without this
+  // the native tap handler has no room to open (a message push carries no url).
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey: args.sessionKey },
+    select: { id: true },
+  });
+  const channelId = channel?.id ?? "";
+
   const users = await prisma.user.findMany({
     where: { id: { in: [...new Set([args.senderUserId, ...recipientUserIds])] } },
     select: {
       id: true,
       name: true,
       handle: true,
+      isOfficial: true,
+      isOperator: true,
       language: true,
       pageLanguage: true,
-      pushTokens: {
-        select: {
-          id: true,
-          platform: true,
-          token: true,
-          environment: true,
-        },
-      },
+      pushTokens: { select: PUSH_TARGET_SELECT },
     },
   });
   const sender = users.find((user) => user.id === args.senderUserId);
-  const actorLabel = sender?.name?.trim() || (sender?.handle ? `@${sender.handle}` : "Someone");
+  const senderName = sender?.name?.trim() || (sender?.handle ? `@${sender.handle}` : "Someone");
+  const senderBadge = resolveAccountBadge(sender);
   const messagePreview = args.sourceText.replace(/\s+/g, " ").trim().slice(0, 240);
   if (!messagePreview) return;
 
-  const targetEntries: Array<{ tokenId: string; promise: Promise<PushSendResult> }> = [];
+  const targetEntries: PushDelivery[] = [];
   for (const recipientUserId of recipientUserIds) {
     const recipient = users.find((user) => user.id === recipientUserId);
     if (!recipient) continue;
+    const recipientLanguage = resolveRecipientLanguage(recipient);
+    // Build the room URL in the recipient's own locale, matching the web route
+    // `/{locale}/conversations?conversation={channelId}`. Falls back to the raw
+    // conversationId (the native tap handler rebuilds the room path from it).
+    const roomLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
+    const navigationUrl = channelId
+      ? `/${roomLocale}/conversations?conversation=${encodeURIComponent(channelId)}`
+      : undefined;
     const message: PushMessage = {
       notificationId: args.messageId,
       type: "conversation_message",
       actorId: args.senderUserId,
-      actorLabel,
-      recipientLanguage: recipient.pageLanguage?.trim() || recipient.language?.trim() || "en",
+      // An operator sender is labeled in each recipient's own language:
+      // "Mina (운영 계정)" / "Mina (Run by Mingle)".
+      actorLabel: withAccountBadgeLabel(senderName, senderBadge, recipientLanguage),
+      recipientLanguage,
       messagePreview,
       sessionKey: args.sessionKey,
+      ...(channelId ? { conversationId: channelId } : {}),
+      ...(navigationUrl ? { navigationUrl } : {}),
     };
     for (const target of recipient.pushTokens as PushTarget[]) {
       targetEntries.push({
@@ -462,13 +582,5 @@ export async function sendPushNotificationForConversationMessage(args: {
     }
   }
 
-  const results = await Promise.allSettled(targetEntries.map((entry) => entry.promise));
-  const invalidTokenIds = results.flatMap((result, index) => (
-    result.status === "fulfilled" && result.value.invalidToken
-      ? [targetEntries[index]?.tokenId]
-      : []
-  ));
-  if (invalidTokenIds.length > 0) {
-    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
-  }
+  await settlePushDeliveries(targetEntries);
 }

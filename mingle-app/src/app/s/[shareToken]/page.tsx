@@ -4,9 +4,10 @@ import type { ConversationSpectateInviter } from "@/components/conversation-spec
 import { resolveConversationSpectateLocale } from "@/components/conversation-spectate-copy";
 import { isValidConversationShareToken } from "@/lib/conversation-share-link";
 import { getConversationHydrationStateForShare } from "@/lib/app-conversations";
-import { toPublicSpectateUtterances } from "@/lib/conversation-share-public-payload";
+import { toPublicSpectateSnapshot } from "@/lib/conversation-share-public-payload";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 import { getUserProfile } from "@/server/user-profile";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import type { ConversationSpectateState } from "@/components/use-conversation-spectate";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
@@ -70,16 +71,20 @@ export default async function ConversationSpectatePage({ params }: ConversationS
               imageCropScale: inviterProfile.imageCropScale,
               imageCropX: inviterProfile.imageCropX,
               imageCropY: inviterProfile.imageCropY,
+              // Same as the public API's sharedBy: the banner names the sharer.
+              ...identityBadgeFlags(inviterProfile),
             };
           }
         }
         // Same serializer the public API route uses, so this server render
         // can't hand the client a field the API would have withheld — in
         // particular no account ids (see conversation-share-public-payload).
+        const publicSnapshot = toPublicSpectateSnapshot(state, inviter);
         initialState = {
           roomTitle: state.conversation.title,
           inviter,
-          utterances: toPublicSpectateUtterances(state.utterances).map((utterance) => ({
+          operatorDisclosure: publicSnapshot.operatorDisclosure === true,
+          utterances: publicSnapshot.utterances.map((utterance) => ({
             id: utterance.id,
             originalText: utterance.originalText,
             ...(utterance.originalDisplayText ? { originalDisplayText: utterance.originalDisplayText } : {}),
@@ -97,6 +102,7 @@ export default async function ConversationSpectatePage({ params }: ConversationS
             // same mapping in useConversationSpectate.
             speakerUserId: utterance.speakerAlias,
             speakerImage: utterance.speakerImage,
+            ...(utterance.speakerBadge ? { speakerBadge: utterance.speakerBadge } : {}),
           })),
         };
       } else {

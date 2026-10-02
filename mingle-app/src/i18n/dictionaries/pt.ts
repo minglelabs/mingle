@@ -28,6 +28,7 @@ export const ptDictionary: BaseAppDictionarySource = {
     connect: "Descobrir",
     moments: "Momentos",
     my: "Eu",
+    feed: "Feed",
   },
   titles: {
     chats: "Conversas",

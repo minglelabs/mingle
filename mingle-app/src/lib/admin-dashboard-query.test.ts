@@ -62,11 +62,34 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
+  it.each(["all", "android"] as const)(
+    "leaves operator accounts out of signups, DAU, messages and latency (%s)",
+    async (platform) => {
+      const today = resolveTodayKey(new Date());
+      setRawMetricResults(today);
+
+      await loadAdminDashboardMetrics(makeRange([today]), { platform });
+
+      const queries = mocks.queryRawUnsafe.mock.calls.map(([sql]) => sql as string);
+      const operatorSender = 'and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")';
+      expect(queries[0]).toContain('"app"."app_users" as u');
+      expect(queries[0]).toContain('and u."is_operator" = false');
+      for (const index of [1, 2, 4, 5]) {
+        expect(queries[index]).toContain('from "app"."app_messages" as m');
+        expect(queries[index]).toContain(operatorSender);
+      }
+      // Messages without a sender stay in the count: NOT EXISTS, never NOT IN.
+      expect(queries.join("\n")).not.toMatch(/not in \(/i);
+      // Usage comes from client event logs, which operators never write.
+      expect(queries[3]).not.toContain("is_operator");
+    },
+  );
+
   it.each([
     ["all", "", ""],
     ["android", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
     ["ios", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
-  ] as const)("counts messages with the unchanged message-count SQL (%s)", async (platform, join, platformFilter) => {
+  ] as const)("counts messages with the message-count SQL, operator senders excluded (%s)", async (platform, join, platformFilter) => {
     const today = resolveTodayKey(new Date());
     setRawMetricResults(today);
 
@@ -77,7 +100,8 @@ describe("loadAdminDashboardMetrics", () => {
       select date_trunc('day', m."created_at") as day, count(*) as value
       from "app"."app_messages" as m${join}
       where m."is_deleted" is distinct from true
-        and m."created_at" >= $1 and m."created_at" < $2${platformFilter}
+        and m."created_at" >= $1 and m."created_at" < $2
+        and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")${platformFilter}
       group by day
       order by day
     `));
@@ -442,6 +466,7 @@ describe("loadTranslationModelMessageSeries", () => {
       from "app"."app_messages" as m
       where m."is_deleted" is distinct from true
         and m."created_at" >= $1 and m."created_at" < $2
+        and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")
         and m."translation_model" is not null
       group by day, lower(btrim(m."translation_model"))
       order by day, model

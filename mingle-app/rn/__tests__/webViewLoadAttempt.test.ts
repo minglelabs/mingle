@@ -1,18 +1,13 @@
-import { canUseWebHostFallbackForLoadFailure } from '../src/fallbackTargets';
 import {
   WEBVIEW_LOAD_SUCCESS_SETTLE_MS,
   createWebViewLoadAttemptTracker,
   type WebViewLoadAttemptTracker,
 } from '../src/webViewLoadAttempt';
 
-// What App.tsx asks inside onError / onHttpError. initialLoadSettled is true on
-// purpose: on Android the premature onLoadEnd has already settled the initial
-// load by then, so only hasLoadedPage can keep the fallback open.
-function mayUseHostFallback(tracker: WebViewLoadAttemptTracker): boolean {
-  return canUseWebHostFallbackForLoadFailure({
-    initialLoadSettled: true,
-    hasLoadedPage: tracker.hasLoadedPage(),
-  });
+// Sampled at the moment onError / onHttpError fires: has no page been
+// committed as a success so far?
+function noPageLoadedYet(tracker: WebViewLoadAttemptTracker): boolean {
+  return !tracker.hasLoadedPage();
 }
 
 // The callbacks App.tsx forwards, in react-native-webview 13.16's order.
@@ -23,26 +18,26 @@ function androidNetworkFailure(tracker: WebViewLoadAttemptTracker, gapMs = 0): b
   tracker.loadFinished(); // onLoadEnd before onError
   jest.advanceTimersByTime(gapMs);
   tracker.loadFailed(); // onError
-  const fallbackAllowed = mayUseHostFallback(tracker);
+  const nothingLoadedYet = noPageLoadedYet(tracker);
   tracker.loadFinished(); // onLoadEnd again, right after onError
   tracker.loadStarted(); // onLoadStart: the error page commits
-  return fallbackAllowed;
+  return nothingLoadedYet;
 }
 
 function androidHttpFailure(tracker: WebViewLoadAttemptTracker): boolean {
   tracker.loadFailed(); // onHttpError (response headers)
-  const fallbackAllowed = mayUseHostFallback(tracker);
+  const nothingLoadedYet = noPageLoadedYet(tracker);
   tracker.loadStarted(); // onLoadStart: the error document commits
   tracker.loadFinished(); // onLoadEnd: onPageFinished for the error document
-  return fallbackAllowed;
+  return nothingLoadedYet;
 }
 
 function iosFailure(tracker: WebViewLoadAttemptTracker): boolean {
   tracker.loadStarted(); // onLoadStart
   tracker.loadFailed(); // onError / onHttpError
-  const fallbackAllowed = mayUseHostFallback(tracker);
+  const nothingLoadedYet = noPageLoadedYet(tracker);
   tracker.loadFinished(); // onLoadEnd
-  return fallbackAllowed;
+  return nothingLoadedYet;
 }
 
 describe('createWebViewLoadAttemptTracker', () => {
@@ -54,17 +49,17 @@ describe('createWebViewLoadAttemptTracker', () => {
     jest.useRealTimers();
   });
 
-  it('does not count an Android failed load as a success, so retries can still fall back', () => {
+  it('does not count an Android failed load as a success, also across retries', () => {
     const onSuccess = jest.fn();
     const tracker = createWebViewLoadAttemptTracker({ onSuccess });
 
-    // First load: the primary host times out.
+    // First load: the host times out.
     expect(androidNetworkFailure(tracker)).toBe(true);
     jest.advanceTimersByTime(WEBVIEW_LOAD_SUCCESS_SETTLE_MS * 10);
     expect(tracker.hasLoadedPage()).toBe(false);
 
     // "다시 시도" remounts the WebView (App.tsx calls beginAttempt()) and hits
-    // the same dead host: the fallback host must stay reachable.
+    // the same dead host.
     tracker.beginAttempt();
     expect(androidNetworkFailure(tracker)).toBe(true);
     tracker.beginAttempt();
@@ -109,8 +104,7 @@ describe('createWebViewLoadAttemptTracker', () => {
     jest.advanceTimersByTime(1);
     expect(tracker.hasLoadedPage()).toBe(true);
     expect(onSuccess).toHaveBeenCalledTimes(1);
-    // A page has loaded from this host: never switch hosts mid-session.
-    expect(mayUseHostFallback(tracker)).toBe(false);
+    expect(noPageLoadedYet(tracker)).toBe(false);
   });
 
   it('commits a clean load as soon as another load event shows no error followed it', () => {

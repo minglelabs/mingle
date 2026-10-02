@@ -12,7 +12,9 @@ export type RealtimeTokenPayload = {
   sessionKey: string;
   userId: string;
   exp: number;
-  liveWriter?: { name: string | null };
+  // `badge` is the sender's account badge, present only when they carry
+  // one; mingle-messaging forwards it on live previews as `speakerBadge`.
+  liveWriter?: { name: string | null; badge?: "official" | "operator" };
   liveReader?: true;
 };
 

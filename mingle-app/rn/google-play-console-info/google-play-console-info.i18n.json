@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "2.1.0",
+      "version": "2.2.0",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.1.0 (99)",
+      "releaseName": "2.2.0 (100)",
       "releaseNotes": {
         "en-US": "What's New in Version 2.1.0:\n• View conversation snapshots via shared links\n• Join and continue the conversation directly in the app\n• Secure link control: turning off a link instantly revokes access, and turning it back on creates a new link",
         "ar": "الجديد في الإصدار 2.1.0:\n• عرض لقطات المحادثة عبر الروابط المشتركة\n• الانضمام إلى المحادثة ومتابعتها مباشرة داخل التطبيق\n• تحكم آمن في الروابط: يؤدي إيقاف الرابط إلى إبطال الوصول فوراً، وإعادة تفعيله تُنشئ رابطاً جديداً",

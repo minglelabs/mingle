@@ -366,8 +366,6 @@ class NativeSTTModule: RCTEventEmitter {
                     hostKey: "MingleDefaultWsHost",
                     legacyKey: "MingleDefaultWsURL"
                 ),
-                "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-                "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -397,8 +395,6 @@ class NativeSTTModule: RCTEventEmitter {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -1327,8 +1323,6 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
@@ -1574,6 +1568,10 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
 class NativePushNotificationModule: RCTEventEmitter {
     private static let tokenKey = "mingle.nativePush.token"
     private static let installationIdKey = "mingle.nativePush.installationId"
+    private static let pendingTapTypeKey = "mingle.nativePush.pendingTap.type"
+    private static let pendingTapUrlKey = "mingle.nativePush.pendingTap.url"
+    private static let pendingTapConversationIdKey = "mingle.nativePush.pendingTap.conversationId"
+    private static let pendingTapSequenceKey = "mingle.nativePush.pendingTap.sequence"
     private static weak var sharedModule: NativePushNotificationModule?
 
     private var pendingResolve: RCTPromiseResolveBlock?
@@ -1711,6 +1709,70 @@ class NativePushNotificationModule: RCTEventEmitter {
         }
     }
 
+    @objc(getPendingPushTap:rejecter:)
+    func getPendingPushTap(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let type = defaults.string(forKey: Self.pendingTapTypeKey) ?? ""
+        let url = defaults.string(forKey: Self.pendingTapUrlKey) ?? ""
+        let conversationId = defaults.string(forKey: Self.pendingTapConversationIdKey) ?? ""
+        let sequence = defaults.integer(forKey: Self.pendingTapSequenceKey)
+        if sequence <= 0 || (url.isEmpty && conversationId.isEmpty) {
+            resolve(nil)
+            return
+        }
+        resolve([
+            "type": type,
+            "url": url,
+            "conversationId": conversationId,
+            "sequence": sequence,
+        ])
+    }
+
+    @objc(clearPendingPushTap:resolver:rejecter:)
+    func clearPendingPushTap(
+        _ sequence: NSNumber,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let expected = sequence.intValue
+        let current = defaults.integer(forKey: Self.pendingTapSequenceKey)
+        if expected <= 0 || expected == current {
+            defaults.removeObject(forKey: Self.pendingTapTypeKey)
+            defaults.removeObject(forKey: Self.pendingTapUrlKey)
+            defaults.removeObject(forKey: Self.pendingTapConversationIdKey)
+            defaults.removeObject(forKey: Self.pendingTapSequenceKey)
+        }
+        resolve(true)
+    }
+
+    /// Persist the routing fields of a tapped notification so JS can consume
+    /// them on cold start and on foreground. Mirrors the Android pending-tap
+    /// slot and the pending-profile-link flow.
+    private static func recordPendingTap(_ userInfo: [AnyHashable: Any]) {
+        func stringValue(_ value: Any?) -> String {
+            guard let value = value else { return "" }
+            if let str = value as? String {
+                return str.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return "\(value)".trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let type = stringValue(userInfo["type"])
+        let url = stringValue(userInfo["url"])
+        let conversationId = stringValue(userInfo["conversationId"])
+        if url.isEmpty && conversationId.isEmpty { return }
+
+        let defaults = UserDefaults.standard
+        let nextSequence = defaults.integer(forKey: pendingTapSequenceKey) + 1
+        defaults.set(type, forKey: pendingTapTypeKey)
+        defaults.set(url, forKey: pendingTapUrlKey)
+        defaults.set(conversationId, forKey: pendingTapConversationIdKey)
+        defaults.set(nextSequence, forKey: pendingTapSequenceKey)
+    }
+
     static func didRegisterForRemoteNotifications(_ deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         guard !token.isEmpty else { return }
@@ -1728,6 +1790,9 @@ class NativePushNotificationModule: RCTEventEmitter {
     }
 
     static func didReceiveNotification(_ userInfo: [AnyHashable: Any]) {
+        // Persist the tap target for JS to consume on cold start / foreground,
+        // then keep emitting the existing `opened` event for live listeners.
+        recordPendingTap(userInfo)
         let payload = userInfo.reduce(into: [String: Any]()) { result, entry in
             guard let key = entry.key as? String else { return }
             result[key] = entry.value
