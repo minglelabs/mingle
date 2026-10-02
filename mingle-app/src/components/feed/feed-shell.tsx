@@ -63,8 +63,8 @@ const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
  * fully open it stops and the refresh starts, without waiting for release.
  */
 const PULL_REFRESH_TRIGGER_PX = 150;
-/** The open gap: room for the spinner below the status bar / notch. */
-const PULL_REFRESH_GAP = "calc(env(safe-area-inset-top, 0px) + 64px)";
+/** Height of the spinner row the pull opens, below the status bar. */
+const PULL_REFRESH_ROW_PX = 60;
 
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
@@ -421,14 +421,25 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   }, [scrollEl, startPullRefresh]);
 
   const pullShown = pullRefreshing ? 1 : pullProgress;
-  /** The header and the feed slide down together, opening the gap above. */
-  const pullSlideStyle: CSSProperties | undefined =
-    isViewer
-      ? undefined
-      : {
-          transform: pullShown > 0 ? `translateY(calc(${pullShown} * ${PULL_REFRESH_GAP}))` : undefined,
-          transition: pullDragging ? "none" : "transform 220ms ease",
-        };
+  // The feed slides down past the status bar plus one spinner row. The header
+  // already keeps the status-bar height as padding, so it moves by the row
+  // only and lands on the feed's top edge instead of floating far below it.
+  const pullTransition = pullDragging ? "none" : "transform 220ms ease, border-radius 220ms ease";
+  const pullFeedStyle: CSSProperties | undefined = isViewer
+    ? undefined
+    : {
+        transform:
+          pullShown > 0
+            ? `translateY(calc(${pullShown} * (env(safe-area-inset-top, 0px) + ${PULL_REFRESH_ROW_PX}px)))`
+            : undefined,
+        borderTopLeftRadius: pullShown * 22,
+        borderTopRightRadius: pullShown * 22,
+        transition: pullTransition,
+      };
+  const pullHeaderStyle: CSSProperties = {
+    transform: pullShown > 0 ? `translateY(${pullShown * PULL_REFRESH_ROW_PX}px)` : undefined,
+    transition: pullTransition,
+  };
 
   const scrollToIndex = useCallback(
     (idx: number) => {
@@ -635,30 +646,37 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
   return (
     <div
-      className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-slate-100"}`}
+      className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-white"}`}
     >
       {!isViewer ? (
         <>
-          {/* The gap the pull opens above the feed, with its spinner. */}
+          {/* The row the pull opens above the feed, with its spinner. */}
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 flex items-end justify-center pb-[18px]"
-            style={{ height: PULL_REFRESH_GAP, opacity: pullShown > 0 ? 1 : 0 }}
+            className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+            style={{
+              top: "env(safe-area-inset-top, 0px)",
+              height: PULL_REFRESH_ROW_PX,
+              opacity: pullShown > 0 ? 1 : 0,
+            }}
             role={pullRefreshing ? "status" : undefined}
             aria-label={pullRefreshing ? copy.loading : undefined}
             aria-hidden={pullRefreshing ? undefined : true}
           >
             <Loader2
-              size={26}
-              strokeWidth={2.25}
-              className={pullRefreshing ? "animate-spin text-slate-500" : "text-slate-400"}
+              size={22}
+              strokeWidth={2.4}
+              className={pullRefreshing ? "animate-spin text-slate-400" : "text-slate-300"}
               style={
                 pullRefreshing
                   ? undefined
-                  : { opacity: pullProgress, transform: `rotate(${pullProgress * 300}deg)` }
+                  : {
+                      opacity: pullProgress,
+                      transform: `scale(${0.6 + pullProgress * 0.4}) rotate(${pullProgress * 300}deg)`,
+                    }
               }
             />
           </div>
-          <div className="absolute inset-x-0 top-0 z-20" style={pullSlideStyle}>
+          <div className="absolute inset-x-0 top-0 z-20" style={pullHeaderStyle}>
             {header}
           </div>
         </>
@@ -679,7 +697,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           // Block vertical paging while a sheet / zoom is open.
           overflowY: anyOverlayOpen ? "hidden" : "auto",
           touchAction: anyOverlayOpen ? "none" : undefined,
-          ...pullSlideStyle,
+          ...pullFeedStyle,
         }}
       >
         {entries.map(({ key, post }, idx) => {
