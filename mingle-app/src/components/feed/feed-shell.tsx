@@ -26,6 +26,7 @@ import {
   type FeedPostViewState,
 } from "@/components/feed/feed-restore-state";
 import PostActionSheet from "@/components/posts/post-action-sheet";
+import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { feedCopy } from "@/i18n/feed-copy";
 import type { FeedSource } from "@/lib/feed-routes";
 import { feedHref } from "@/lib/feed-routes";
@@ -36,7 +37,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { ChevronLeft, Loader2, Menu, SquarePen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type FeedShellProps = {
   locale: string;
@@ -48,8 +49,11 @@ type FeedShellProps = {
   isViewer?: boolean;
   /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
   dictionary?: AppDictionary;
-  /** Home feed only: the glass tab bar floats over the bottom of the cards. */
-  underTabBar?: boolean;
+  /**
+   * The glass tab bar, laid over the bottom of the cards. The shell renders it
+   * so it can follow the ink tone of the post on screen.
+   */
+  tabBar?: ReactNode;
   /** Viewer of the viewer's own posts: accessible name of the My page menu button. */
   menuLabel?: string;
 };
@@ -73,7 +77,8 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, underTabBar = false, menuLabel }: FeedShellProps) {
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, tabBar, menuLabel }: FeedShellProps) {
+  const underTabBar = Boolean(tabBar);
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
@@ -559,6 +564,9 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     />
   ) : null;
 
+  const renderTabBar = (tone: "light" | "dark") =>
+    tabBar ? <FeedGlyphToneContext.Provider value={tone}>{tabBar}</FeedGlyphToneContext.Provider> : null;
+
   // The viewer keeps the bar of the screen it was opened from, laid over the
   // card: My page's own bar (compose, name, menu) for the viewer's own posts,
   // otherwise a back chevron and the author's name.
@@ -643,6 +651,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         </div>
         {publishBanner}
         {notificationPanel}
+        {renderTabBar("dark")}
       </div>
     );
   }
@@ -662,6 +671,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         </button>
         {publishBanner}
         {notificationPanel}
+        {renderTabBar("dark")}
       </div>
     );
   }
@@ -684,6 +694,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         </div>
         {publishBanner}
         {notificationPanel}
+        {renderTabBar("dark")}
       </div>
     );
   }
@@ -872,6 +883,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       ) : null}
 
       {notificationPanel}
+      {renderTabBar(glyphTone)}
 
       <ImageZoomOverlay
         open={Boolean(zoomSrc)}

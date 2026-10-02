@@ -22,10 +22,14 @@ type FeedViewerClientProps = {
 export default function FeedViewerClient({ locale, source, startPostId, tabBar, menuLabel }: FeedViewerClientProps) {
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      <div className="min-h-0 flex-1">
-        <FeedShell locale={locale} source={source} startPostId={startPostId} isViewer underTabBar={Boolean(tabBar)} menuLabel={menuLabel} />
-      </div>
-      {tabBar}
+      <FeedShell
+        locale={locale}
+        source={source}
+        startPostId={startPostId}
+        isViewer
+        tabBar={tabBar}
+        menuLabel={menuLabel}
+      />
     </main>
   );
 }

@@ -187,7 +187,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     location,
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
-    ...identityBadgeFlags({ isOfficial, isOperator }),
+    ...identityBadgeFlags({ isOfficial }),
   };
 }
 

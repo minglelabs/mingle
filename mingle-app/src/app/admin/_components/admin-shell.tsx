@@ -5,8 +5,9 @@ import type { AdminTabBadges } from "./admin-tabs";
 import { ADMIN_SCROLL_CONTAINER_ID } from "./ui";
 
 /**
- * Phone-first frame for every admin screen: a slim top bar, one scroll area
- * and (signed in only) the bottom tab bar. Presentation only; each page and
+ * Frame for every admin screen: a slim top bar, one scroll area and (signed
+ * in only) the navigation: a bottom tab bar on a phone, a left rail from `lg`
+ * up. Presentation only; each page and
  * action still runs `requireAdmin` itself. Safe-area insets pad the bars, so
  * nothing sits under the iOS status bar or home indicator.
  */
@@ -29,13 +30,15 @@ export function AdminShell({
           <span className="text-[15px] font-semibold tracking-tight text-slate-900">Mingle Admin</span>
         </div>
       </header>
-      <main
-        className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
-        id={ADMIN_SCROLL_CONTAINER_ID}
-      >
-        {children}
-      </main>
-      {signedIn ? <AdminTabBar badges={badges} /> : null}
+      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+        <main
+          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+          id={ADMIN_SCROLL_CONTAINER_ID}
+        >
+          {children}
+        </main>
+        {signedIn ? <AdminTabBar badges={badges} /> : null}
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@
  * like, comment or report action that triggered it.
  */
 import { prisma } from '@/lib/prisma'
+import { notifyOperatorActivity } from '@/server/operator-activity/notify'
 import { sendPushNotificationForUserNotification } from '@/server/push-notifications'
 
 export type PostNotificationInput =
@@ -86,7 +87,7 @@ export async function createPostNotification(input: PostNotificationInput): Prom
     // created (and therefore no push either, since a push mirrors a row).
     const recipient = await prisma.user.findUnique({
       where: { id: recipientId },
-      select: { inAppNotificationsEnabled: true },
+      select: { inAppNotificationsEnabled: true, isOperator: true },
     })
     if (!recipient || recipient.inAppNotificationsEnabled === false) return
 
@@ -113,6 +114,12 @@ export async function createPostNotification(input: PostNotificationInput): Prom
       },
       select: { id: true },
     })
+
+    // An operator account has no device: staff read its notifications in
+    // /admin/activity, which this refreshes (and alerts staff for comments).
+    if (recipient.isOperator) {
+      await notifyOperatorActivity({ type: input.type, recipientId, actorId, postId, commentId })
+    }
 
     // Push is best-effort and only for conversational events. Likes and report
     // results live in the panel only.

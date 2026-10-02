@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { digestAnalyticsValue } from "@/lib/search-analytics";
 import { captureMingleEvent } from "@/lib/posthog-server";
+import { notifyOperatorActivity } from "@/server/operator-activity/notify";
 import { sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const runtime = "nodejs";
@@ -144,6 +145,8 @@ async function notifyNewFollower(args: { followerId: string; followingId: string
     } catch (error) {
       console.error("[PushNotifications] follow notification delivery failed", error);
     }
+    // A followed operator account is read by staff in /admin/activity.
+    await notifyOperatorActivity({ type: "follow", recipientId: args.followingId, actorId: args.followerId });
   } catch (error) {
     console.error("[follow] notification failed", error);
   }
