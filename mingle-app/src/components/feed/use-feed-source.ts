@@ -152,6 +152,28 @@ const feedListCache = new Map<string, FeedListCacheEntry>();
 
 onPublishSuccess(() => feedListCache.clear());
 
+/**
+ * Apply a removal to every kept list, not just the one on screen: a post
+ * deleted (or an author blocked) in the viewer must not come back when the
+ * home feed resumes its kept list, and a list emptied by the removal must not
+ * leave its previous copy behind.
+ */
+export function pruneFeedLists(
+  cache: Map<string, FeedListCacheEntry>,
+  prune: (list: FeedCycleList) => FeedCycleList,
+): void {
+  for (const [key, entry] of cache) {
+    const list = prune(entry.list);
+    if (list.entries.length === entry.list.entries.length) continue;
+    if (list.entries.length === 0) cache.delete(key);
+    else cache.set(key, { ...entry, list });
+  }
+}
+
+function pruneFeedListCache(prune: (list: FeedCycleList) => FeedCycleList): void {
+  pruneFeedLists(feedListCache, prune);
+}
+
 /** Test-only: drop every kept list. */
 export function __resetFeedListCache(): void {
   feedListCache.clear();
@@ -457,10 +479,12 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
   }, []);
 
   const dropPost = useCallback((postId: string) => {
+    pruneFeedListCache((kept) => removeFromCycleList(kept, postId));
     setList((prev) => removeFromCycleList(prev, postId));
   }, []);
 
   const dropAuthor = useCallback((authorId: string) => {
+    pruneFeedListCache((kept) => removeAuthorFromCycleList(kept, authorId));
     setList((prev) => removeAuthorFromCycleList(prev, authorId));
   }, []);
 

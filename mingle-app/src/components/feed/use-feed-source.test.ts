@@ -4,11 +4,12 @@ import {
   FEED_LIST_CACHE_TTL_MS,
   FEED_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
+  pruneFeedLists,
   resolveViewerStart,
   resumeFeedList,
   shouldPrefetch,
 } from "./use-feed-source";
-import { createCycleList } from "./feed-list";
+import { createCycleList, removeFromCycleList } from "./feed-list";
 
 function post(id: string, extra: Partial<FeedPostDto> = {}): FeedPostDto {
   return {
@@ -185,5 +186,30 @@ describe("resumeFeedList — returning to the feed shows the kept list", () => {
     expect(resumeFeedList(undefined, "a", 2_000)).toBeNull();
     expect(resumeFeedList(entry(1_000), "a", 1_000 + FEED_LIST_CACHE_TTL_MS + 1)).toBeNull();
     expect(resumeFeedList(entry(1_000), "zzz", 2_000)).toBeNull();
+  });
+});
+
+describe("pruneFeedLists — a removal reaches every kept list", () => {
+  const kept = (postIds: string[]) => ({
+    list: createCycleList(postIds.map((id) => post(id))),
+    cursor: "cursor-1",
+    hasMore: true,
+    savedAt: 1_000,
+  });
+
+  it("drops a deleted post from the kept home list and forgets a list it empties", () => {
+    const cache = new Map([
+      ["home", kept(["a", "b"])],
+      ["author", kept(["b"])],
+      ["other", kept(["c"])],
+    ]);
+    const untouched = cache.get("other");
+
+    pruneFeedLists(cache, (list) => removeFromCycleList(list, "b"));
+
+    expect(ids(cache.get("home")!.list.entries.map((e) => e.post))).toEqual(["a"]);
+    expect(cache.get("home")!.cursor).toBe("cursor-1");
+    expect(cache.has("author")).toBe(false);
+    expect(cache.get("other")).toBe(untouched);
   });
 });
