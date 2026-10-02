@@ -6,6 +6,7 @@ import type { ConversationChannelOtherMember, ConversationChannelSummary } from 
 import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import NotificationPanel from "@/components/notification-panel";
+import ComposeOverlay from "@/components/compose/compose-overlay";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -183,7 +184,7 @@ import MingleWordmark from "@/components/mingle-wordmark";
 import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
-import { composeHref, feedHref } from "@/lib/feed-routes";
+import { feedHref } from "@/lib/feed-routes";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
@@ -1906,6 +1907,7 @@ export default function ConversationList({
   const postingFeedSupported = useIsPostingFeedSupported();
   const showPostingHeader = postingFeedSupported === true;
   const postingHeaderCopy = useMemo(() => feedCopy(locale), [locale]);
+  const [composeOpen, setComposeOpen] = useState(false);
   const postingUnread = useUnreadNotifications(showPostingHeader ? (authenticatedUserId || null) : null);
   const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
@@ -5466,7 +5468,7 @@ export default function ConversationList({
           notificationsLabel={postingHeaderCopy.notifications}
           unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
           hasUnread={postingUnread.hasUnread}
-          onCompose={() => router.push(composeHref(locale))}
+          onCompose={() => setComposeOpen(true)}
           onNotifications={openNotifications}
           onSearch={handleOpenSearch}
           searchLabel={copy.searchButtonLabel}
@@ -5849,6 +5851,9 @@ export default function ConversationList({
                 );
               })}
             </AnimatePresence>
+            {showPostingHeader ? (
+              <ComposeOverlay open={composeOpen} locale={locale} onClose={() => setComposeOpen(false)} />
+            ) : null}
             <NotificationPanel
               open={notificationSurfaceOpen}
               enabled={sessionStatus === "authenticated"}

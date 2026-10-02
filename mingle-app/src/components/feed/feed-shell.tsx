@@ -2,6 +2,7 @@
 
 import AppTopHeader from "@/components/app-top-header";
 import NotificationPanel from "@/components/notification-panel";
+import ComposeOverlay from "@/components/compose/compose-overlay";
 import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import CommentSheet from "@/components/comments/comment-sheet";
 import PublishStatusBanner from "@/components/compose/publish-status-banner";
@@ -27,7 +28,7 @@ import {
 import PostActionSheet from "@/components/posts/post-action-sheet";
 import { feedCopy } from "@/i18n/feed-copy";
 import type { FeedSource } from "@/lib/feed-routes";
-import { composeHref, feedHref } from "@/lib/feed-routes";
+import { feedHref } from "@/lib/feed-routes";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
@@ -135,8 +136,9 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const [toast, setToast] = useState<string | null>(null);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
 
-  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen);
+  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen);
 
   const notifications = useUnreadNotifications(viewerId);
 
@@ -291,9 +293,13 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     [router, locale, activePost],
   );
 
+  // Compose slides in over the feed (like the notification panel); signed-out
+  // viewers still go to sign-in first.
   const openCompose = useCallback(() => {
-    router.push(viewerId ? composeHref(locale) : composeLoginHref(locale));
+    if (viewerId) setComposeOpen(true);
+    else router.push(composeLoginHref(locale));
   }, [router, viewerId, locale]);
+  const closeCompose = useCallback(() => setComposeOpen(false), []);
 
   // The bell slides the notification panel in over the feed (same panel and
   // motion as the conversation list), instead of navigating to a new route.
@@ -388,6 +394,14 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   ) : null;
 
   const notificationPanel = !isViewer && dictionary ? (
+    <>
+    <ComposeOverlay
+      open={composeOpen}
+      locale={locale}
+      onClose={closeCompose}
+      // The feed is already behind; its PublishStatusBanner shows progress.
+      onPublished={closeCompose}
+    />
     <NotificationPanel
       open={notificationsOpen}
       enabled={Boolean(viewerId)}
@@ -397,6 +411,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       onOpenProfile={openNotificationProfile}
       onOpenPost={openNotificationPost}
     />
+    </>
   ) : null;
 
   // ── Render states ──

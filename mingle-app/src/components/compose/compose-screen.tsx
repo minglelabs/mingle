@@ -82,10 +82,17 @@ function DraftThumbnail({ draftId, label }: { draftId: string; label: string }) 
 export default function ComposeScreen({
   locale,
   initialDraftId,
+  onClose,
+  onPublished,
 }: {
   locale: string
   initialDraftId: string | null
+  /** Overlay mode (ComposeOverlay): close the panel instead of navigating back, and keep the URL as is. */
+  onClose?: () => void
+  /** Overlay mode: what to do once a publish starts (default: go to the feed). */
+  onPublished?: () => void
 }) {
+  const embedded = Boolean(onClose)
   const copy = composeCopy(locale)
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -275,7 +282,7 @@ export default function ComposeScreen({
   )
 
   function beginNewPost() {
-    router.replace(composeHref(locale))
+    if (!embedded) router.replace(composeHref(locale))
     clientPostId.current = generateClientPostId()
     switchSaver(null)
     setNotice(null)
@@ -287,7 +294,7 @@ export default function ComposeScreen({
   }
 
   function openDraft(draft: ComposeDraft) {
-    router.replace(composeHref(locale, { draftId: draft.id }))
+    if (!embedded) router.replace(composeHref(locale, { draftId: draft.id }))
     switchSaver(draft.id)
     setNotice(null)
     setText(draft.sourceText ?? '')
@@ -413,7 +420,8 @@ export default function ComposeScreen({
       // The post now belongs to the publish job; no more draft writes for it.
       saver().close()
       // Return to the feed; the PublishStatusBanner shows progress there.
-      router.push(feedHref(locale))
+      if (onPublished) onPublished()
+      else router.push(feedHref(locale))
     } finally {
       publishing.current = false
     }
@@ -422,7 +430,8 @@ export default function ComposeScreen({
   /** Leave compose; what was typed is already (or is now) saved as a draft. */
   function leave() {
     void saver().flush()
-    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    if (onClose) onClose()
+    else if (typeof window !== 'undefined' && window.history.length > 1) router.back()
     else router.replace(feedHref(locale))
   }
 

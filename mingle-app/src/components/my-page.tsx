@@ -90,7 +90,8 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
-import { composeHref, myPostsHref } from "@/lib/feed-routes";
+import { myPostsHref } from "@/lib/feed-routes";
+import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
 import { composeCopy } from "@/i18n/compose-copy";
 import AccountBadge from "@/components/posts/account-badge";
@@ -447,6 +448,8 @@ function ProfileSettingsPanel({
   sessionStatus: SessionStatus;
 }) {
   const postingFeedSupported = useIsPostingFeedSupported();
+  // Compose slides in over My page (like the notification panel), no route change.
+  const [composeOpen, setComposeOpen] = useState(false);
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -2409,7 +2412,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         {sessionUserId && postingFeedSupported !== false ? (
           <button
             type="button"
-            onClick={() => router.push(composeHref(locale))}
+            onClick={() => setComposeOpen(true)}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
             aria-label={feedCopy(locale).compose}
           >
@@ -2517,6 +2520,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         dictionary={dictionary}
         locale={locale}
       />
+      <ComposeOverlay open={composeOpen} locale={locale} onClose={() => setComposeOpen(false)} />
     </main>
   );
 }
