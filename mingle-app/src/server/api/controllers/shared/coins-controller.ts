@@ -17,6 +17,7 @@ import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingT
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
+import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
 
@@ -127,6 +128,17 @@ export async function readCoinUsage(request: NextRequest) {
 const MAX_STT_CHUNK_SECONDS = 120
 
 /**
+ * 1.x app namespaces predate accounts. The namespace is self-reported, so this
+ * exemption is only as strong as the client's honesty: set
+ * COIN_STT_ALLOW_LEGACY_ANONYMOUS=0 once 1.x is no longer supported.
+ */
+function isUnbilledLegacySttNamespace(rawNamespace: unknown): boolean {
+  if ((process.env.COIN_STT_ALLOW_LEGACY_ANONYMOUS || '').trim() === '0') return false
+  const parsed = typeof rawNamespace === 'string' ? parseApiNamespaceVersion(rawNamespace) : null
+  return parsed?.version[0] === 1
+}
+
+/**
  * POST /internal/coins/charge — service-to-service (mingle-stt). The caller
  * proves itself with the shared secret and names the user with the STT billing
  * token the client forwarded. seconds = 0 is the start gate.
@@ -137,7 +149,15 @@ export async function chargeCoinsInternally(request: NextRequest) {
   }
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const identity = verifySttBillingToken(body.billingToken)
-  if (!identity) return json({ error: 'invalid_billing_token' }, 401)
+  if (!identity) {
+    // No valid billing identity. Until billing is enforced nobody is billed. Once it
+    // is, only account-less 1.x clients may still talk unbilled (they cannot have a
+    // token); everyone else is refused, so dropping the token is not a free pass.
+    if (resolveCoinBillingMode() !== 'enforce' || isUnbilledLegacySttNamespace(body.apiNamespace)) {
+      return json({ balanceExhausted: false, billable: false })
+    }
+    return json({ error: 'invalid_billing_token' }, 401)
+  }
 
   const kind = COIN_USAGE_KINDS.includes(body.kind as CoinUsageKind) ? body.kind as CoinUsageKind : null
   const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim().slice(0, 200) : ''

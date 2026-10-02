@@ -280,13 +280,16 @@ INSERT INTO "app"."app_coin_pricing_rates" ("id", "kind", "provider", "model", "
   ('seed_img_any_in', 'image_text', '*', '*', 'input_token', 750000, 15000, 'seed', 'Fallback for unlisted models', '2026-01-01 00:00:00'),
   ('seed_img_any_out', 'image_text', '*', '*', 'output_token', 3750000, 15000, 'seed', 'Fallback for unlisted models', '2026-01-01 00:00:00');
 
--- Seed: store products (spec 6.1). Amounts are micro-coins.
+-- Seed: store products. Amounts are micro-coins. $1 = 1,000 coins, with a volume bonus that
+-- grows with the pack: +3% ($3), +6% ($10), +10% ($30), +15% ($100).
 INSERT INTO "app"."app_iap_products" ("id", "platform", "store_product_id", "coin_micro", "bonus_micro", "price_usd_cents", "sort_order", "badge", "updated_at") VALUES
   ('seed_ios_coin_1000', 'ios', 'coin_1000', 1000000000, 0, 99, 1, NULL, CURRENT_TIMESTAMP),
-  ('seed_ios_coin_5000', 'ios', 'coin_5000', 5000000000, 250000000, 499, 2, NULL, CURRENT_TIMESTAMP),
-  ('seed_ios_coin_10000', 'ios', 'coin_10000', 10000000000, 1000000000, 999, 3, NULL, CURRENT_TIMESTAMP),
-  ('seed_ios_coin_30000', 'ios', 'coin_30000', 30000000000, 4500000000, 2999, 4, 'best_value', CURRENT_TIMESTAMP),
+  ('seed_ios_coin_3000', 'ios', 'coin_3000', 3000000000, 90000000, 299, 2, NULL, CURRENT_TIMESTAMP),
+  ('seed_ios_coin_10000', 'ios', 'coin_10000', 10000000000, 600000000, 999, 3, NULL, CURRENT_TIMESTAMP),
+  ('seed_ios_coin_30000', 'ios', 'coin_30000', 30000000000, 3000000000, 2999, 4, NULL, CURRENT_TIMESTAMP),
+  ('seed_ios_coin_100000', 'ios', 'coin_100000', 100000000000, 15000000000, 9999, 5, 'best_value', CURRENT_TIMESTAMP),
   ('seed_android_coin_1000', 'android', 'coin_1000', 1000000000, 0, 99, 1, NULL, CURRENT_TIMESTAMP),
-  ('seed_android_coin_5000', 'android', 'coin_5000', 5000000000, 250000000, 499, 2, NULL, CURRENT_TIMESTAMP),
-  ('seed_android_coin_10000', 'android', 'coin_10000', 10000000000, 1000000000, 999, 3, NULL, CURRENT_TIMESTAMP),
-  ('seed_android_coin_30000', 'android', 'coin_30000', 30000000000, 4500000000, 2999, 4, 'best_value', CURRENT_TIMESTAMP);
+  ('seed_android_coin_3000', 'android', 'coin_3000', 3000000000, 90000000, 299, 2, NULL, CURRENT_TIMESTAMP),
+  ('seed_android_coin_10000', 'android', 'coin_10000', 10000000000, 600000000, 999, 3, NULL, CURRENT_TIMESTAMP),
+  ('seed_android_coin_30000', 'android', 'coin_30000', 30000000000, 3000000000, 2999, 4, NULL, CURRENT_TIMESTAMP),
+  ('seed_android_coin_100000', 'android', 'coin_100000', 100000000000, 15000000000, 9999, 5, 'best_value', CURRENT_TIMESTAMP);

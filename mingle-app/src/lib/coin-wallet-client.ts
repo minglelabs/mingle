@@ -102,6 +102,7 @@ export function refreshCoinWallet(options: { force?: boolean } = {}): Promise<vo
       const data = await response.json() as CoinWallet & { sttBillingToken?: string | null };
       sttBillingToken = typeof data.sttBillingToken === "string" ? data.sttBillingToken : null;
       lastLoadedAt = Date.now();
+      lastIdentityCheckAt = lastLoadedAt;
       setState({ status: "ready", wallet: data });
     })
     .catch(() => {
@@ -173,6 +174,22 @@ export function ensureCoinsForPaidFeature(): boolean {
   }
   dispatchCoinUiEvent({ type: "exhausted" });
   return false;
+}
+
+const BILLING_IDENTITY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+let lastIdentityCheckAt = 0;
+
+/**
+ * Speech recognition is refused without a billing identity once billing is
+ * enforced, so the first mic start waits for the wallet (which carries the
+ * token) instead of racing it. Also renews a token that is hours old.
+ */
+export async function ensureCoinBillingIdentity(): Promise<void> {
+  // One attempt is enough when it fails or the user is signed out: the mic must not wait on every start.
+  const stale = Date.now() - lastIdentityCheckAt > BILLING_IDENTITY_MAX_AGE_MS;
+  if (lastIdentityCheckAt > 0 && !stale) return;
+  lastIdentityCheckAt = Date.now();
+  await refreshCoinWallet({ force: true });
 }
 
 /** Adds the billing identity to the STT socket URL (read by mingle-stt). */

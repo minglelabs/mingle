@@ -1707,6 +1707,18 @@ async function requestTranslationFromProvider(
 
 
 
+// Rough stand-in for a provider that reports no usage: about 2 characters per
+// token (CJK-heavy text is denser than English), plus the fixed prompt.
+const ESTIMATED_PROMPT_OVERHEAD_TOKENS = 300
+
+function estimateTranslationTokens(sourceText: string, translations: Record<string, string>) {
+  const outputChars = Object.values(translations).reduce((sum, value) => sum + value.length, 0)
+  return {
+    input_token: ESTIMATED_PROMPT_OVERHEAD_TOKENS + Math.ceil(sourceText.length / 2),
+    output_token: Math.ceil(outputChars / 2),
+  }
+}
+
 async function synthesizeTtsInline(args: {
   text: string
   language: string
@@ -1893,17 +1905,22 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         responsePayload.translationTotalTokens = meta.usage.totalTokens
       }
 
-      // meta.usage exists only when the provider was actually called for this request.
+      // Callers pass a `usage` key exactly when the provider answered this request
+      // (the previous-state fallback after a failed call omits it). A provider that
+      // answered without token counts is still charged, on an estimate from the text.
       let coinsExhausted = false
-      if (coinBillingUserId && meta.usage) {
+      if (coinBillingUserId && Object.prototype.hasOwnProperty.call(meta, 'usage')) {
+        const reported = meta.usage?.promptTokens !== undefined || meta.usage?.completionTokens !== undefined
         const charge = await chargeCoinUsageSafely({
           userId: coinBillingUserId,
           kind: 'translation',
-          units: {
-            input_token: meta.usage.promptTokens ?? 0,
-            // OpenAI-style completion counts already include reasoning tokens.
-            output_token: meta.usage.completionTokens ?? 0,
-          },
+          units: reported
+            ? {
+                input_token: meta.usage?.promptTokens ?? 0,
+                // OpenAI-style completion counts already include reasoning tokens.
+                output_token: meta.usage?.completionTokens ?? 0,
+              }
+            : estimateTranslationTokens(text, translations),
           model: meta.model,
           provider: meta.infrastructureProvider,
           sessionKey: sessionKeyHint,

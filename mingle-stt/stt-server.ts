@@ -80,7 +80,7 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 })();
 type SttServerOptions = {
     // Coin billing (COIN_CHARGE_URL + COIN_INTERNAL_SECRET); injectable for tests.
-    coinBilling?: { chargeUrl: string; secret: string; requireToken: boolean; settleIntervalMs?: number } | null;
+    coinBilling?: { chargeUrl: string; secret: string; settleIntervalMs?: number } | null;
     sonioxUrl?: string;
     sonioxApiKey?: string;
     sonioxHandshakeTimeoutMs?: number;
@@ -1858,16 +1858,14 @@ function handleSttConnection(
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')} soniox_hints=${JSON.stringify(clientConfig.soniox_language_hints || [])} hints_enabled=false`,
             );
 
-            const coinBillingToken = coinQuery.token;
-            if (coinBilling && !coinBillingToken && coinBilling.requireToken) {
-                closeForCoinExhaustion();
-                return;
-            }
-            if (coinBilling && coinBillingToken) {
+            // Every connection is checked, with or without a token: the charge API refuses a
+            // missing token once billing is enforced, so leaving it out is not a way to talk for free.
+            if (coinBilling) {
                 const meter = createSttCoinMeter({
                     chargeUrl: coinBilling.chargeUrl,
                     secret: coinBilling.secret,
-                    billingToken: coinBillingToken,
+                    billingToken: coinQuery.token,
+                    apiNamespace,
                     connectionKey: randomUUID(),
                     sessionKey: coinQuery.sessionKey || null,
                     model: currentModel,

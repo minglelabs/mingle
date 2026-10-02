@@ -4,7 +4,7 @@ import { createSttCoinMeter, readCoinBillingEnv } from '../coin-billing';
 
 type Call = { seconds: number; idempotencyKey: string };
 
-function meterFixture(responses: Array<{ ok?: boolean; status?: number; error?: string; balanceExhausted?: boolean } | 'throw'>) {
+function meterFixture(responses: Array<{ ok?: boolean; status?: number; error?: string; balanceExhausted?: boolean; billable?: boolean } | 'throw'>) {
     const calls: Call[] = [];
     let exhausted = 0;
     let rejected = 0;
@@ -16,7 +16,7 @@ function meterFixture(responses: Array<{ ok?: boolean; status?: number; error?: 
         return {
             ok: next.ok !== false && !next.status,
             status: next.status ?? 200,
-            json: async () => ({ balanceExhausted: next.balanceExhausted === true, error: next.error }),
+            json: async () => ({ balanceExhausted: next.balanceExhausted === true, error: next.error, billable: next.billable }),
         };
     }) as unknown as typeof fetch;
     const meter = createSttCoinMeter({
@@ -82,11 +82,19 @@ test('ends the session when the billing token is refused, but not when our own s
     await misconfigured.meter.stop();
 });
 
+test('stops metering when the charge API says the connection is not billed', async () => {
+    const { meter, calls } = meterFixture([{ billable: false }]);
+    assert.equal(await meter.start(), true);
+    meter.addAudioBytes(320_000);
+    await meter.stop();
+    assert.equal(calls.length, 1);
+});
+
 test('is disabled unless both the charge URL and the secret are set', () => {
     assert.equal(readCoinBillingEnv({}), null);
     assert.equal(readCoinBillingEnv({ COIN_CHARGE_URL: 'http://x' }), null);
-    assert.deepEqual(readCoinBillingEnv({ COIN_CHARGE_URL: 'http://x', COIN_INTERNAL_SECRET: 's', COIN_STT_REQUIRE_TOKEN: '1' }), {
-        chargeUrl: 'http://x', secret: 's', requireToken: true,
+    assert.deepEqual(readCoinBillingEnv({ COIN_CHARGE_URL: 'http://x', COIN_INTERNAL_SECRET: 's' }), {
+        chargeUrl: 'http://x', secret: 's',
     });
 });
 
@@ -118,7 +126,7 @@ test('a connection whose balance is exhausted is told coin_insufficient and clos
     const { server } = createSttServer({
         sonioxApiKey: 'test',
         sonioxUrl: `ws://127.0.0.1:${providerPort}`,
-        coinBilling: { chargeUrl: `http://127.0.0.1:${chargePort}/charge`, secret: 'secret', requireToken: false },
+        coinBilling: { chargeUrl: `http://127.0.0.1:${chargePort}/charge`, secret: 'secret' },
     });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');

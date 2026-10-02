@@ -62,14 +62,14 @@ describe('native IAP bridge', () => {
 
   it('maps cancellation, pending approval and failures to separate events', async () => {
     const { bridge, events, purchase, fail } = fixture();
-    await bridge.purchase('coin_5000');
+    await bridge.purchase('coin_3000');
     fail({ code: 'user-cancelled' });
     purchase({ ...paid, purchaseState: 'pending' });
-    fail({ code: 'network-error', productId: 'coin_5000' });
+    fail({ code: 'network-error', productId: 'coin_3000' });
     expect(events).toEqual([
-      { type: 'purchase_cancelled', productId: 'coin_5000' },
+      { type: 'purchase_cancelled', productId: 'coin_3000' },
       { type: 'purchase_pending', productId: 'coin_1000' },
-      { type: 'purchase_error', productId: 'coin_5000', code: 'network-error' },
+      { type: 'purchase_error', productId: 'coin_3000', code: 'network-error' },
     ]);
   });
 

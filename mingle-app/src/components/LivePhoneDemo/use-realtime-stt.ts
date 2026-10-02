@@ -5,6 +5,7 @@ import {
   appendCoinBillingToWsUrl,
   applyCoinBalance,
   applyCoinBalanceFromHeaders,
+  ensureCoinBillingIdentity,
   ensureCoinsForPaidFeature,
   notifyCoinsExhausted,
 } from '@/lib/coin-wallet-client'
@@ -5942,6 +5943,7 @@ export default function useRealtimeSTT({
   ])
 
   const startRecording = useCallback(async () => {
+    await ensureCoinBillingIdentity()
     // No coins: the mic stays off and the "out of coins" sheet opens instead.
     if (!ensureCoinsForPaidFeature()) return
     // A remounted visible hook shares the previous hook's stop window.

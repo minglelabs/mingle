@@ -19,7 +19,7 @@
 | `COIN_BILLING_ENABLED` | 웹 | 미설정/0 = 꺼짐, `shadow` = 기록만, `1` = 적용 |
 | `COIN_INTERNAL_SECRET` | 웹, STT | STT 과금 토큰 서명 + 내부 과금 API 인증 |
 | `COIN_CHARGE_URL` | STT | 내부 과금 API 주소 |
-| `COIN_STT_REQUIRE_TOKEN` | STT | `1`이면 과금 토큰 없는 STT 연결을 거부(강제 업데이트 이후에만) |
+| `COIN_STT_ALLOW_LEGACY_ANONYMOUS` | 웹 | `0`이면 계정 없는 1.x 클라이언트의 무과금 STT 예외를 없앤다(1.x 지원 종료 후) |
 | `IAP_ALLOW_SANDBOX` | 웹 | 샌드박스 결제(TestFlight·심사·라이선스 테스터)로 코인 지급 허용. 운영 기본값은 거부. **App 심사 기간에는 `1`로 켜야 한다** |
 | `IOS_IAP_BUNDLE_ID` | 웹 | 기본 `com.minglelabs.mingle.rn` |
 | `ANDROID_IAP_PACKAGE_NAME` | 웹 | 기본 `com.minglelabs.mingle.rn` |
@@ -28,8 +28,8 @@
 
 ## 스토어 설정 (코드 외)
 
-- App Store Connect: 소모성 상품 `coin_1000`, `coin_5000`, `coin_10000`, `coin_30000`. 서버 알림 V2 URL: `https://<앱>/api/webhooks/appstore` (Production·Sandbox 둘 다).
-- Google Play Console: 같은 ID의 인앱 상품 4개. 실시간 개발자 알림 Pub/Sub 푸시 구독 URL: `https://<앱>/api/webhooks/googleplay?token=<GOOGLE_PLAY_RTDN_TOKEN>`. 서비스 계정에 주문 조회·관리 권한.
+- App Store Connect: 소모성 상품 5개: `coin_1000`($0.99), `coin_3000`($2.99), `coin_10000`($9.99), `coin_30000`($29.99), `coin_100000`($99.99). 서버 알림 V2 URL: `https://<앱>/api/webhooks/appstore` (Production·Sandbox 둘 다).
+- Google Play Console: 같은 ID의 인앱 상품 5개. 실시간 개발자 알림 Pub/Sub 푸시 구독 URL: `https://<앱>/api/webhooks/googleplay?token=<GOOGLE_PLAY_RTDN_TOKEN>`. 서비스 계정에 주문 조회·관리 권한.
 - iOS는 `pnpm rn:pods`로 `react-native-iap`(NitroIap) 팟을 설치해야 한다.
 - 네이티브 변경이 있으므로 새 앱 버전과 네임스페이스 정렬이 필요하다(메모리 `mobile-release-procedure`).
 
@@ -61,7 +61,9 @@
 - **구버전 앱**: 웹뷰가 서버에서 내려오므로 구버전 앱에도 잔액 칩·차단이 그대로 적용된다. 다만 결제 브리지가 없어 상점에는 "앱을 업데이트하면 충전할 수 있어요"가 표시된다. 1.x 익명(비로그인) 클라이언트는 과금 대상이 아니다.
 - **실시간 잔액 푸시 없음**: 메시징 서비스 변경 없이, 번역·TTS 응답에 잔액을 실어 보내고 지갑을 60초마다(그리고 화면 복귀 시) 다시 읽는다. 음성 인식 중 잔액 표시는 최대 60초 늦을 수 있다. 차단 자체는 STT 서버가 15초 정산 주기로 한다.
 - **사진 번역**: 업로드 시 자동 OCR은 보낸 사람이, 이후 새 언어 번역은 처음 요청한 사람이 낸다. 사진당 OCR 1회, 언어당 번역 1회만 과금된다.
-- **과금 우회 가능 구간**: STT WebSocket은 원래 인증이 없어서, 과금 토큰 없이 직접 연결하면 음성 인식이 과금되지 않는다. 1.x 익명 클라이언트를 더 지원하지 않게 되면 `COIN_STT_REQUIRE_TOKEN=1`로 막는다.
+- **STT 과금 토큰 강제**: 과금이 적용(`1`)되면 토큰이 없거나 위조된 STT 연결은 거부된다. 예외는 계정이 없는 1.x 네임스페이스뿐이다. 네임스페이스는 클라이언트가 보내는 값이라 1.x를 사칭하면 우회할 수 있으므로, 1.x 지원을 끝내면 `COIN_STT_ALLOW_LEGACY_ANONYMOUS=0`으로 닫는다.
+- **말풍선 음성 재생은 누를 때마다 과금**: 클라이언트가 음성을 캐시하지 않아 매번 새로 합성하기 때문이다. 번역과 함께 자동 재생되는 음성은 메시지당 한 번만 과금된다.
+- **토큰 수를 알려주지 않는 번역 응답**은 글자 수로 추정해 과금한다(2글자 = 1토큰, 프롬프트 300토큰).
 - **가입 보너스 없음**, **대화 종료 시 사용 코인 요약 없음**(미정 항목).
 
 ## 아직 안 된 것

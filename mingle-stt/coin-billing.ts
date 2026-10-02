@@ -13,7 +13,9 @@ const MAX_SECONDS_PER_REPORT = 120;
 export type SttCoinMeterOptions = {
     chargeUrl: string;
     secret: string;
+    // Empty when the client sent none: the charge API decides whether that is allowed.
     billingToken: string;
+    apiNamespace?: string | null;
     connectionKey: string;
     sessionKey?: string | null;
     model?: string | null;
@@ -36,12 +38,11 @@ export type SttCoinMeter = {
 export function readCoinBillingEnv(env: NodeJS.ProcessEnv = process.env): {
     chargeUrl: string;
     secret: string;
-    requireToken: boolean;
 } | null {
     const chargeUrl = (env.COIN_CHARGE_URL || '').trim();
     const secret = (env.COIN_INTERNAL_SECRET || '').trim();
     if (!chargeUrl || !secret) return null;
-    return { chargeUrl, secret, requireToken: env.COIN_STT_REQUIRE_TOKEN === '1' };
+    return { chargeUrl, secret };
 }
 
 export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
@@ -54,6 +55,8 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
     let settling: Promise<void> | null = null;
     let exhausted = false;
     let stopped = false;
+    // The charge API said this connection is not billed (billing not enforced, or an allowed legacy client).
+    let unbilled = false;
 
     const post = async (seconds: number, idempotencyKey: string): Promise<{ ok: boolean; exhausted: boolean }> => {
         try {
@@ -64,6 +67,7 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
                 body: JSON.stringify({
                     kind: 'stt',
                     billingToken: options.billingToken,
+                    apiNamespace: options.apiNamespace || undefined,
                     seconds,
                     idempotencyKey,
                     sessionKey: options.sessionKey || undefined,
@@ -79,7 +83,8 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
                 return { ok: false, exhausted: false };
             }
             if (!response.ok) return { ok: false, exhausted: false };
-            const body = await response.json() as { balanceExhausted?: unknown };
+            const body = await response.json() as { balanceExhausted?: unknown; billable?: unknown };
+            if (body.billable === false) unbilled = true;
             return { ok: true, exhausted: body.balanceExhausted === true };
         } catch {
             return { ok: false, exhausted: false };
@@ -132,19 +137,20 @@ export function createSttCoinMeter(options: SttCoinMeterOptions): SttCoinMeter {
                 return false;
             }
             // stop() may already have run: the socket can close while the balance check is in flight.
-            if (!exhausted && !stopped) {
+            if (!exhausted && !stopped && !unbilled) {
                 timer = setInterval(() => { void settleOnce(); }, options.settleIntervalMs ?? DEFAULT_SETTLE_INTERVAL_MS);
                 timer.unref?.();
             }
             return true;
         },
         addAudioBytes: (byteLength) => {
-            if (!exhausted && byteLength > 0) pendingBytes += byteLength;
+            if (!exhausted && !unbilled && byteLength > 0) pendingBytes += byteLength;
         },
         stop: async () => {
             stopped = true;
             if (timer) clearInterval(timer);
             timer = null;
+            if (unbilled) return;
             // Round the tail up so a short final fragment is still billed as one second.
             if (pendingBytes % bytesPerSecond !== 0 && pendingBytes > 0) {
                 pendingBytes += bytesPerSecond - (pendingBytes % bytesPerSecond);

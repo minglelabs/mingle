@@ -179,21 +179,21 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
       platform: 'ios' as const,
       storeTransactionId: `tx-${randomUUID()}`,
       storeOriginalTransactionId: null,
-      storeProductId: 'coin_5000',
+      storeProductId: 'coin_10000',
       environment: 'sandbox' as const,
-      priceAmountMicros: 4_990_000n,
+      priceAmountMicros: 9_990_000n,
       priceCurrency: 'USD',
       storefrontCountry: 'USA',
       rawPayload: { test: true },
     }
     const first = await purchases.grantVerifiedPurchase(userId, verified)
     expect(first.status).toBe('granted')
-    expect(first.grantedCoins).toBe(5250)
-    expect(first.wallet.paidBalance).toBe(5250)
+    expect(first.grantedCoins).toBe(10_600)
+    expect(first.wallet.paidBalance).toBe(10_600)
 
     const again = await purchases.grantVerifiedPurchase(userId, verified)
     expect(again.status).toBe('already_granted')
-    expect(again.wallet.paidBalance).toBe(5250)
+    expect(again.wallet.paidBalance).toBe(10_600)
     await expect(purchases.grantVerifiedPurchase(newUser(), verified)).rejects.toMatchObject({ code: 'purchase_belongs_to_another_account' })
     await expect(purchases.grantVerifiedPurchase(userId, { ...verified, storeTransactionId: 'x', storeProductId: 'nope' }))
       .rejects.toMatchObject({ code: 'unknown_product' })
@@ -215,7 +215,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     const purchase = await prisma.appIapPurchase.findUniqueOrThrow({ where: { storeTransactionId: verified.storeTransactionId } })
     expect(purchase.status).toBe('refunded')
     const meta = purchase.meta as { clawedBackMicro: string; unrecoveredMicro: string }
-    expect(BigInt(meta.clawedBackMicro) + BigInt(meta.unrecoveredMicro)).toBe(5250n * COIN)
+    expect(BigInt(meta.clawedBackMicro) + BigInt(meta.unrecoveredMicro)).toBe(10_600n * COIN)
     expect(BigInt(meta.unrecoveredMicro)).toBeGreaterThan(249n * COIN)
     const state = await sums(userId)
     expect(state).toEqual({ ledger: 0n, lots: 0n, wallet: 0n })
@@ -225,7 +225,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     const purchases = await import('@/server/coins/purchases')
     const products = await purchases.listCoinProducts('android')
     expect(products.map(product => [product.productId, product.totalCoins])).toEqual([
-      ['coin_1000', 1000], ['coin_5000', 5250], ['coin_10000', 11000], ['coin_30000', 34500],
+      ['coin_1000', 1000], ['coin_3000', 3090], ['coin_10000', 10_600], ['coin_30000', 33_000], ['coin_100000', 115_000],
     ])
   })
 
@@ -286,7 +286,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(today.freeGrantedMicro).toBeGreaterThan(0n)
     expect(today.spentMicro).toBeGreaterThan(0n)
     const catalog = await admin.listCoinAdminCatalog()
-    expect(catalog.products).toHaveLength(8)
+    expect(catalog.products).toHaveLength(10)
     expect(catalog.rates.length).toBeGreaterThan(20)
   })
 

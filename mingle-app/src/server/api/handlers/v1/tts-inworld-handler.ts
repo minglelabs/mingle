@@ -11,7 +11,8 @@ import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
-import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { randomUUID } from 'node:crypto'
+import { estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
 import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
 
 export const runtime = 'nodejs'
@@ -149,7 +150,9 @@ export async function handleTtsInworldV1(request: NextRequest) {
         model: result.modelId,
         provider: result.provider,
         sessionKey: sessionKeyHint,
-        idempotencyKey: `tts:${coinBillingUserId}:${clientMessageId || '-'}:${coinKeyDigest(sessionKeyHint, language, text)}`,
+        // Every request here is a real synthesis the user asked for (a bubble tap is not
+        // cached client-side), so each one is charged: the key is unique per request.
+        idempotencyKey: `tts:${coinBillingUserId}:${randomUUID()}`,
       })
       if (charge?.wallet) headers['X-Coin-Balance'] = String(charge.wallet.balance)
       if (charge?.balanceExhausted) headers['X-Coin-Exhausted'] = '1'

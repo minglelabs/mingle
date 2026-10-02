@@ -1,21 +1,51 @@
+import { execFileSync } from 'node:child_process'
 import { createHash, createPrivateKey, sign, X509Certificate } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { IapVerificationError, readAppleTransaction, verifyAppleJws, verifyAppleNotification } from './iap-apple'
 
-// A throwaway P-256 chain (root -> intermediate -> leaf) generated with openssl
-// for these tests only. It stands in for Apple's chain: the production root
-// fingerprint is replaced through the trustedRootSha256 option.
-const LEAF_DER = 'MIIBczCCARqgAwIBAgIUfJovxxq3S/CzESSJNkoG/3rVxGMwCgYIKoZIzj0EAwIwHDEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhdGUwHhcNMjYxMDAyMTg0OTUzWhcNNDYwOTI3MTg0OTUzWjAUMRIwEAYDVQQDDAlUZXN0IExlYWYwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAR1sKKD+fFKDeN2LCDwr4ENwkiylOCVyuw2BfSR2SQt86lXgVzXn0YkxeVgWL/Dq62NPL03Wn0Lsx6ukFFYAROWo0IwQDAdBgNVHQ4EFgQUF1f5bxpt5Ooiv7rdPeR6Ykk/kXkwHwYDVR0jBBgwFoAUh5DXW+gHgw6yHswwBbIOvnxgtHQwCgYIKoZIzj0EAwIDRwAwRAIgSGT3P0KjWznL8HUPdbMHOP2amZfbVbS84z8Ch67T/GsCICziObSDvNUTQFDzFLhkezRfOxlfxgEfpwpvrVHo26K3'
-const INTERMEDIATE_DER = 'MIIBmDCCAT6gAwIBAgIUUqDOQfkADs3ovZYUv8tT6WSti6YwCgYIKoZIzj0EAwIwFzEVMBMGA1UEAwwMVGVzdCBSb290IENBMB4XDTI2MTAwMjE4NDk1M1oXDTQ2MDkyNzE4NDk1M1owHDEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhdGUwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQdVFlQgrczvA1iVgoz63AhhsdvD/Fyio85zj9l6wWOnXRXpIf9mMm7WGoGtS8Z3Y/8K94TDzawxJplUqRk/Lklo2MwYTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAdBgNVHQ4EFgQUh5DXW+gHgw6yHswwBbIOvnxgtHQwHwYDVR0jBBgwFoAUm9wvSq+cRFficFLAjOufaFkT+v4wCgYIKoZIzj0EAwIDSAAwRQIhAND/yncu+1nKzVG8SO3pk9XUSY26OrnSU1O+uVTAYWjGAiBB7ZKwpaXFGX6Zo80wUZt5aOPKx7zYn9VXtC79O+O9zA=='
-const ROOT_DER = 'MIIBgjCCASmgAwIBAgIUUkBgizJ3IhPdxu98l516Fv9mAoMwCgYIKoZIzj0EAwIwFzEVMBMGA1UEAwwMVGVzdCBSb290IENBMB4XDTI2MTAwMjE4NDk1M1oXDTQ2MDkyNzE4NDk1M1owFzEVMBMGA1UEAwwMVGVzdCBSb290IENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtHmcMy7OwVZ88w3QYyI0Kb8ZVUL6DWN9IbijIacIN+gWaBQIxiwZrjoBtnW4ukElpfeFRGlD2eBpauAuU+1Zp6NTMFEwHQYDVR0OBBYEFJvcL0qvnERX4nBSwIzrn2hZE/r+MB8GA1UdIwQYMBaAFJvcL0qvnERX4nBSwIzrn2hZE/r+MA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgM3et06tumAlClqO5qRupohr41GYb3hBTQOmJVk4LUT0CIGTnrEUYSxBkSOMQE9uyNize3/wBYxzhWLX0aazm2xBm'
-const LEAF_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQggaq8JmJmv/bL1Etb
-SkRJn9CiBHjkhV+dSVIJdoaPeiWhRANCAAR1sKKD+fFKDeN2LCDwr4ENwkiylOCV
-yuw2BfSR2SQt86lXgVzXn0YkxeVgWL/Dq62NPL03Wn0Lsx6ukFFYAROW
------END PRIVATE KEY-----`
+// A throwaway P-256 chain (root -> intermediate -> leaf) made with the openssl
+// CLI when the suite starts, so no key material lives in the repository. It
+// stands in for Apple's chain: the production root fingerprint is replaced
+// through the trustedRootSha256 option. Skipped where openssl is unavailable.
+function generateChain(): { leaf: string; intermediate: string; root: string; leafKey: string } | null {
+  const dir = mkdtempSync(join(tmpdir(), 'coin-iap-chain-'))
+  const run = (args: string[]) => execFileSync('openssl', args, { cwd: dir, stdio: 'pipe' })
+  const der = (name: string) => run(['x509', '-in', name, '-outform', 'DER']).toString('base64')
+  try {
+    writeFileSync(join(dir, 'ca.ext'), 'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign\n')
+    for (const name of ['root', 'inter', 'leaf']) run(['ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', `${name}.key`])
+    run(['req', '-x509', '-new', '-key', 'root.key', '-sha256', '-days', '30', '-subj', '/CN=Test Root CA',
+      '-addext', 'basicConstraints=critical,CA:TRUE', '-out', 'root.pem'])
+    run(['req', '-new', '-key', 'inter.key', '-subj', '/CN=Test Intermediate', '-out', 'inter.csr'])
+    run(['x509', '-req', '-in', 'inter.csr', '-CA', 'root.pem', '-CAkey', 'root.key', '-CAcreateserial', '-days', '30',
+      '-sha256', '-extfile', 'ca.ext', '-out', 'inter.pem'])
+    run(['req', '-new', '-key', 'leaf.key', '-subj', '/CN=Test Leaf', '-out', 'leaf.csr'])
+    run(['x509', '-req', '-in', 'leaf.csr', '-CA', 'inter.pem', '-CAkey', 'inter.key', '-CAcreateserial', '-days', '30',
+      '-sha256', '-out', 'leaf.pem'])
+    return {
+      leaf: der('leaf.pem'),
+      intermediate: der('inter.pem'),
+      root: der('root.pem'),
+      leafKey: run(['pkcs8', '-topk8', '-nocrypt', '-in', 'leaf.key']).toString('utf8'),
+    }
+  } catch {
+    return null
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
 
-const ROOT_SHA256 = createHash('sha256').update(new X509Certificate(Buffer.from(ROOT_DER, 'base64')).raw).digest('hex')
-const NOW = new Date(Date.parse(new X509Certificate(Buffer.from(LEAF_DER, 'base64')).validFrom) + 60_000)
+const chain = generateChain()
+const LEAF_DER = chain?.leaf ?? ''
+const INTERMEDIATE_DER = chain?.intermediate ?? ''
+const ROOT_DER = chain?.root ?? ''
+const LEAF_PRIVATE_KEY = chain?.leafKey ?? ''
+
+const ROOT_SHA256 = chain ? createHash('sha256').update(new X509Certificate(Buffer.from(ROOT_DER, 'base64')).raw).digest('hex') : ''
+const NOW = chain ? new Date(Date.parse(new X509Certificate(Buffer.from(LEAF_DER, 'base64')).validFrom) + 60_000) : new Date()
 const options = { now: NOW, trustedRootSha256: ROOT_SHA256 }
 
 function encode(value: unknown): string {
@@ -44,7 +74,7 @@ const transaction = {
   bundleId: 'com.minglelabs.mingle.rn',
   transactionId: '2000000123456789',
   originalTransactionId: '2000000123456789',
-  productId: 'coin_5000',
+  productId: 'coin_3000',
   type: 'Consumable',
   environment: 'Sandbox',
   price: 4990,
@@ -52,7 +82,7 @@ const transaction = {
   storefront: 'USA',
 }
 
-describe('verifyAppleJws', () => {
+describe.skipIf(!chain)('verifyAppleJws', () => {
   it('returns the payload of a JWS signed by a chain that ends at the trusted root', () => {
     expect(verifyAppleJws(signJws(transaction), options)).toEqual(transaction)
   })
@@ -82,7 +112,7 @@ describe('readAppleTransaction', () => {
     expect(readAppleTransaction(transaction)).toMatchObject({
       platform: 'ios',
       storeTransactionId: '2000000123456789',
-      storeProductId: 'coin_5000',
+      storeProductId: 'coin_3000',
       environment: 'sandbox',
       priceAmountMicros: 4_990_000n,
       priceCurrency: 'USD',
@@ -98,15 +128,14 @@ describe('readAppleTransaction', () => {
   })
 })
 
-describe('verifyAppleNotification', () => {
+describe.skipIf(!chain)('verifyAppleNotification', () => {
   const previousRoot = process.env.APPLE_ROOT_CA_G3_SHA256
   afterEach(() => {
     process.env.APPLE_ROOT_CA_G3_SHA256 = previousRoot
   })
 
   it('verifies the outer notification and the transaction nested inside it', () => {
-    // This path reads the trusted root from the environment and uses the real clock;
-    // the fixture chain is valid for 20 years from when it was generated.
+    // This path reads the trusted root from the environment and uses the real clock.
     process.env.APPLE_ROOT_CA_G3_SHA256 = ROOT_SHA256
     const signedPayload = signJws({
       notificationType: 'REFUND',
