@@ -10,23 +10,32 @@ import type { WriteOutcome } from "./use-comment-sheet";
 import CommentBody from "./comment-body";
 import CommentMenu from "./comment-menu";
 import AccountBadge from "@/components/posts/account-badge";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import type { CommentImage } from "./comment-types";
 
-/** A comment photo, capped so a tall image never takes over the sheet. */
+/** Longest edge of a comment photo in the list (px). */
+const PHOTO_BOX_PX = 220;
+
+/**
+ * A comment photo in a fixed-size box derived from its aspect ratio, so it
+ * never depends on the parent's width (a flex row can otherwise let a large
+ * photo push the row off-screen).
+ */
 function CommentPhoto({ image }: { image: CommentImage }) {
-  const ratio = image.width && image.height ? image.width / image.height : null;
+  const ratio = image.width && image.height ? image.width / image.height : 1;
+  const width = ratio >= 1 ? PHOTO_BOX_PX : Math.round(PHOTO_BOX_PX * ratio);
+  const height = ratio >= 1 ? Math.round(PHOTO_BOX_PX / ratio) : PHOTO_BOX_PX;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={image.url}
       alt=""
       loading="lazy"
-      className="mt-1.5 max-h-60 max-w-[70%] rounded-xl border border-gray-100 bg-gray-100 object-cover"
-      style={ratio ? { aspectRatio: String(ratio) } : undefined}
+      className="mt-1.5 block max-w-full rounded-xl border border-gray-100 bg-gray-100 object-cover"
+      style={{ width, height }}
     />
   );
 }
-import { resolveAccountBadge } from "@/lib/account-badge";
 
 export type CommentItemHandlers = {
   onToggleLike: (id: string) => void;
@@ -79,7 +88,7 @@ export default function CommentItem({
         data-comment-id={comment.id}
         className="flex items-start gap-2 rounded-md bg-destructive/5 px-2 py-1.5"
       >
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {comment.sourceText ? (
             <p className="whitespace-pre-wrap break-words text-[15px] text-muted-foreground">
               {comment.sourceText}
