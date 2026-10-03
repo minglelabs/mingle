@@ -28,6 +28,15 @@ describe('installed 2.x client compatibility', () => {
     ]))
   })
 
+  // 2.1.1 is a patch release with no route tree of its own.
+  it.each(['ios', 'android'])('aliases %s/v2.1.1 onto the v2.1.0 tree', async platform => {
+    const rewrites = await nextConfig.rewrites!()
+    expect(rewrites).toEqual(expect.arrayContaining([
+      { source: `/api/${platform}/v2.1.1`, destination: `/api/${platform}/v2.1.0` },
+      { source: `/api/${platform}/v2.1.1/:path*`, destination: `/api/${platform}/v2.1.0/:path*` },
+    ]))
+  })
+
   for (const platform of ['ios', 'android']) {
     it.each([
       ['conversations', ['GET', 'POST']],

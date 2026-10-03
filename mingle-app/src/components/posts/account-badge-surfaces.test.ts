@@ -7,32 +7,12 @@ import { feedCopy } from '@/i18n/feed-copy'
 import FeedPostCard from '@/components/feed/feed-post-card'
 import { PersonRow } from '@/components/search/people-follow'
 import CommentItem, { type CommentItemHandlers } from '@/components/comments/comment-item'
-import CommentComposer from '@/components/comments/comment-composer'
 import type { CommentNode } from '@/components/comments/comment-types'
 import ProfileLinkInstallScreen from '@/components/profile-link-install-screen'
-import ProfileImagePreview from '@/components/profile-image-preview'
 
-type Flags = { isOfficial?: boolean; isOperator?: boolean }
+type Flags = { isOfficial?: boolean }
 
 const noop = () => {}
-
-/** Deepest nesting of interactive elements (<button>/<a>); 1 = none nested. */
-function maxInteractiveDepth(html: string): number {
-  let depth = 0
-  let max = 0
-  for (const match of html.matchAll(/<(\/?)(button|a)[\s>]/g)) {
-    if (match[1]) depth -= 1
-    else {
-      depth += 1
-      max = Math.max(max, depth)
-    }
-  }
-  return max
-}
-
-function count(html: string, needle: string): number {
-  return html.split(needle).length - 1
-}
 
 /** The markup of the first <button> whose attributes contain `marker`. */
 function buttonWith(html: string, marker: string): string {
@@ -83,17 +63,6 @@ describe('feed card author (home feed, author / search viewer, deep-linked post)
     }))
   }
 
-  it('puts the operator badge next to the profile button, not inside it', () => {
-    const html = renderCard({ isOperator: true })
-    const authorButton = buttonWith(html, 'aria-label="Mina (운영 계정)"')
-    expect(authorButton).not.toContain('data-account-badge')
-    expect(count(html, 'data-account-badge="operator"')).toBe(1)
-    expect(html.indexOf('data-account-badge="operator"')).toBeGreaterThan(html.indexOf(authorButton) + authorButton.length - 1)
-    expect(maxInteractiveDepth(html)).toBe(1)
-    // The post itself is announced with the label as well.
-    expect(html).toContain('aria-label="Mina (운영 계정): Hello"')
-  })
-
   it('keeps the official chip inside the profile button, as before', () => {
     const html = renderCard({ isOfficial: true })
     expect(buttonWith(html, 'aria-label="Mina (공식)"')).toContain('data-account-badge="official"')
@@ -118,13 +87,6 @@ describe('people search row (unified search, people screen)', () => {
       locale: 'ko',
     })))
   }
-
-  it('keeps the badge its own button: nothing nested, the profile action says the label', () => {
-    const html = renderPerson({ isOperator: true })
-    expect(maxInteractiveDepth(html)).toBe(1)
-    expect(html).toContain('aria-label="Mina (운영 계정), @mina.park" class="absolute inset-0')
-    expect(count(html, 'data-account-badge="operator"')).toBe(1)
-  })
 
   it('keeps the official chip as pass-through content (a tap opens the profile, as before)', () => {
     const html = renderPerson({ isOfficial: true })
@@ -184,37 +146,9 @@ describe('comment author and "replying to" label', () => {
     }))
   }
 
-  it('labels an operator author and an operator being replied to', () => {
-    expect(count(renderComment({ isOperator: true }, {}), 'data-account-badge="operator"')).toBe(1)
-    const html = renderComment({}, { isOperator: true })
-    expect(count(html, 'data-account-badge="operator"')).toBe(1)
-    // The badge follows the "@Jun" lead-in of the reply body.
-    expect(html.indexOf('data-account-badge="operator"')).toBeGreaterThan(html.indexOf('@Jun'))
-    expect(maxInteractiveDepth(html)).toBe(1)
-  })
-
   it('keeps the official author chip and adds nothing for members', () => {
     expect(renderComment({ isOfficial: true }, {})).toContain('data-account-badge="official"')
     expect(renderComment({}, {})).not.toContain('data-account-badge')
-  })
-
-  it('labels the composer banner when replying to an operator', () => {
-    const html = render(createElement(CommentComposer, {
-      locale: 'ko',
-      sending: false,
-      disabled: false,
-      replyTarget: {
-        parentId: 'c1',
-        replyToUserId: 'u2',
-        replyToUser: { id: 'u2', handle: 'jun', name: 'Jun', isOperator: true },
-        label: 'Jun',
-      },
-      onCancelReply: noop,
-      onSubmit: noop,
-    }))
-    expect(html).toContain('Jun에게 답글')
-    expect(count(html, 'data-account-badge="operator"')).toBe(1)
-    expect(maxInteractiveDepth(html)).toBe(1)
   })
 })
 
@@ -229,31 +163,8 @@ describe('/p/{userId} link preview', () => {
     }))
   }
 
-  it('labels an operator account next to its name and in the photo text', () => {
-    const html = renderLink({ isOperator: true })
-    expect(count(html, 'data-account-badge="operator"')).toBe(1)
-    expect(html).toContain('alt="Mina (운영 계정)"')
-  })
-
   it('shows no badge for an ordinary member', () => {
     expect(renderLink({})).not.toContain('data-account-badge')
-  })
-})
-
-describe('profile photo preview (opened from another user\'s profile)', () => {
-  it('shows the badge next to the name on the dark overlay', () => {
-    const html = render(createElement(ProfileImagePreview, {
-      open: true,
-      image: null,
-      alt: 'Mina (운영 계정)',
-      name: 'Mina',
-      nameBadge: 'operator',
-      closeLabel: '닫기',
-      onClose: noop,
-      locale: 'ko',
-    }))
-    expect(html).toContain('data-account-badge="operator"')
-    expect(html).toContain('bg-white/20 text-white')
   })
 })
 

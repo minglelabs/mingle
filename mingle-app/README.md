@@ -379,8 +379,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.1.0`; Android uses `android/v2.1.0`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.1.0`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.2.0`; Android uses `android/v2.2.0`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.2.0`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -424,8 +424,8 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 ```
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
-`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v2.1.0` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v2.1.0` validation before launch.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v2.2.0` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v2.2.0` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

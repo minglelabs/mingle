@@ -370,8 +370,8 @@ describe("handleLogClientEventV1", () => {
   });
 
   it.each([
-    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3", "ios/v2.0.4", "ios/v2.1.0",
-    "android/v2.0.0", "android/v2.0.1", "android/v2.0.4", "android/v2.1.0",
+    "ios/v2.0.0", "ios/v2.0.1", "ios/v2.0.2", "ios/v2.0.3", "ios/v2.0.4", "ios/v2.1.0", "ios/v2.1.1",
+    "android/v2.0.0", "android/v2.0.1", "android/v2.0.4", "android/v2.1.0", "android/v2.1.1",
   ])("accepts the pre-local-first finalized payload without new flags: %s", async namespace => {
     const response = await handleLogClientEventV1(new NextRequest(`https://example.com/api/${namespace}/log/client-event`, {
       method: "POST",
@@ -926,7 +926,7 @@ describe("handleLogClientEventV1", () => {
     expect(mockCreateTrackedEventLog).not.toHaveBeenCalled();
   });
 
-  it("labels the live committed utterance of an operator sender with speakerBadge", async () => {
+  it("adds no speakerBadge to the live committed utterance of an operator sender", async () => {
     mockListChannelMemberUserIdsBySessionKey.mockResolvedValue(["user_123", "user_456"]);
     mockAppMessageUpsert.mockResolvedValue({
       id: "message_123",
@@ -949,8 +949,9 @@ describe("handleLogClientEventV1", () => {
       }),
     }));
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
-      id: "client_badge_1", speakerName: "Mina", speakerBadge: "operator",
+      id: "client_badge_1", speakerName: "Mina",
     }));
+    expect(mockNotifyConversationMessage.mock.calls[0]?.[2]).not.toHaveProperty("speakerBadge");
   });
 
   it("adds no speakerBadge for a sender without a badge", async () => {

@@ -34,6 +34,7 @@ describe('native Picture in Picture bridge', () => {
     ['ios/v2.0.3', true],
     ['ios/v2.0.4', true],
     ['ios/v2.1.0', true],
+    ['ios/v2.1.1', true],
     ['android/v2.0.0', false],
     ['android/v2.0.1', false],
     ['android/v2.0.2', false],
