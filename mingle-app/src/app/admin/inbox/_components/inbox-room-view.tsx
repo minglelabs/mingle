@@ -483,7 +483,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         setPending((current) => upsertPendingReply(current, { ...reply, status: 'failed', error }))
         return
       }
-      const { speakerBadge: _, ...stored } = payload.message.utterance
+      const stored = payload.message.utterance
       setUtterances((current) => upsertUtterance(current, stored))
       setPending((current) => removePendingReply(current, reply.requestId))
     } catch {

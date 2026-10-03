@@ -37,7 +37,6 @@ export type FeedPostDto = {
      * initial content). Optional on the wire: absent means false.
      */
     isOfficial?: boolean
-
   }
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string

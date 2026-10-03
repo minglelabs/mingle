@@ -16,11 +16,9 @@ export function readAccountBadgeKind(value: unknown): AccountBadgeKind | null {
 /** Flags carried on the wire next to an identity, keeping only `true`. */
 export function readAccountBadgeFlags(record: Record<string, unknown> | null | undefined): {
   isOfficial?: true
-  isOperator?: true
 } {
   return {
     ...(record?.isOfficial === true ? { isOfficial: true as const } : {}),
-    ...(record?.isOperator === true ? { isOperator: true as const } : {}),
   }
 }
 
@@ -41,7 +39,7 @@ export function resolveRoomAccountBadge(
 }
 
 /**
- * Plain-text name for notices rendered as a sentence ("Mina (운영 계정)
+ * Plain-text name for notices rendered as a sentence ("Mingle (공식)
  * invited Bob"), where a badge chip cannot sit inside the copy template.
  * Empty names stay empty so the notice's own "no name" guard still applies.
  */
