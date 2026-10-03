@@ -16,11 +16,61 @@ export function operatorPostWorkerEnabled(env: NodeJS.ProcessEnv = process.env):
   return env.MINGLE_OPERATOR_POST_WORKER !== 'off'
 }
 
+/**
+ * Whether this process may run the operator auto-reply worker (a 30 s tick
+ * that answers rooms staff left waiting longer than the delay set in
+ * `/admin/settings/auto-reply`). The worker itself does nothing while that
+ * setting is off; `MINGLE_OPERATOR_AUTO_REPLY_WORKER=off` keeps it from
+ * starting at all.
+ */
+export function operatorAutoReplyWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NEXT_RUNTIME !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_OPERATOR_AUTO_REPLY_WORKER !== 'off'
+}
+
+/**
+ * Whether this process may run the operator post-reserve worker (a 60 s tick
+ * that releases and refills operator accounts' pre-written posts). It does
+ * nothing while the setting in `/admin/settings/post-reserve` is off;
+ * `MINGLE_OPERATOR_POST_RESERVE_WORKER=off` keeps it from starting at all.
+ */
+export function operatorPostReserveWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NEXT_RUNTIME !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_OPERATOR_POST_RESERVE_WORKER !== 'off'
+}
+
+/**
+ * Whether this process may run the operator automation worker (a 60 s tick
+ * for the photo and account rules of `/admin/settings/automation`). It does
+ * nothing while both rules are off; `MINGLE_OPERATOR_AUTOMATION_WORKER=off`
+ * keeps it from starting at all.
+ */
+export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NEXT_RUNTIME !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_OPERATOR_AUTOMATION_WORKER !== 'off'
+}
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    if (!operatorPostWorkerEnabled()) return
-    const { startOperatorPostWorker } = await import('./server/operator-posts/scheduler')
-    startOperatorPostWorker()
+    if (operatorPostWorkerEnabled()) {
+      const { startOperatorPostWorker } = await import('./server/operator-posts/scheduler')
+      startOperatorPostWorker()
+    }
+    if (operatorAutoReplyWorkerEnabled()) {
+      const { startOperatorAutoReplyWorker } = await import('./server/operator-auto-reply/scheduler')
+      startOperatorAutoReplyWorker()
+    }
+    if (operatorPostReserveWorkerEnabled()) {
+      const { startOperatorPostReserveWorker } = await import('./server/operator-post-reserve/scheduler')
+      startOperatorPostReserveWorker()
+    }
+    if (operatorAutomationWorkerEnabled()) {
+      const { startOperatorAutomationWorker } = await import('./server/operator-automation/scheduler')
+      startOperatorAutomationWorker()
+    }
   }
 }
 

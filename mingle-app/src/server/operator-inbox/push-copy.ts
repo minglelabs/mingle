@@ -19,7 +19,16 @@ export type OperatorInboxPushSubject = {
   operatorNames: string[]
   /** Display name of the user who wrote (already carrying its badge, if any). */
   senderLabel: string
-  kind: 'text' | 'photo'
+  /** A chat message or photo, or (operator activity) a comment with or without text. */
+  kind: OperatorInboxPushKind
+}
+
+export type OperatorInboxPushKind = 'text' | 'photo' | 'comment' | 'comment_photo'
+
+const PUSH_KINDS: ReadonlySet<string> = new Set(['text', 'photo', 'comment', 'comment_photo'])
+
+function normalizeKind(value: unknown): OperatorInboxPushKind {
+  return typeof value === 'string' && PUSH_KINDS.has(value) ? value as OperatorInboxPushKind : 'text'
 }
 
 /** Characters of the user's message shown in the alert body. */
@@ -34,6 +43,8 @@ const SUBJECT_MARKER = '\u001e'
 type Copy = {
   genericTitle: string
   title: (operators: string) => string
+  genericCommentTitle: string
+  commentTitle: (operators: string) => string
   moreOperators: (count: number) => string
   unknownSender: string
   photo: string
@@ -42,6 +53,8 @@ type Copy = {
 const KOREAN_COPY: Copy = {
   genericTitle: '운영 계정 새 메시지',
   title: (operators) => `${operators}에게 새 메시지`,
+  genericCommentTitle: '운영 계정 새 댓글',
+  commentTitle: (operators) => `${operators}에게 새 댓글`,
   moreOperators: (count) => ` 외 ${count}명`,
   unknownSender: '알 수 없는 사용자',
   photo: '사진을 보냈습니다',
@@ -50,6 +63,8 @@ const KOREAN_COPY: Copy = {
 const ENGLISH_COPY: Copy = {
   genericTitle: 'New message for a Mingle-run account',
   title: (operators) => `New message for ${operators}`,
+  genericCommentTitle: 'New comment for a Mingle-run account',
+  commentTitle: (operators) => `New comment for ${operators}`,
   moreOperators: (count) => ` and ${count} more`,
   unknownSender: 'Someone',
   photo: 'Sent a photo',
@@ -72,7 +87,7 @@ export function encodeOperatorInboxActorLabel(subject: OperatorInboxPushSubject)
   return `${SUBJECT_MARKER}${JSON.stringify({
     operatorNames: subject.operatorNames.map(cleanLabel).filter(Boolean),
     senderLabel: cleanLabel(subject.senderLabel),
-    kind: subject.kind === 'photo' ? 'photo' : 'text',
+    kind: normalizeKind(subject.kind),
   })}`
 }
 
@@ -85,7 +100,7 @@ export function decodeOperatorInboxActorLabel(label: string): OperatorInboxPushS
     return {
       operatorNames: Array.isArray(parsed.operatorNames) ? parsed.operatorNames.map(cleanLabel).filter(Boolean) : [],
       senderLabel: cleanLabel(parsed.senderLabel),
-      kind: parsed.kind === 'photo' ? 'photo' : 'text',
+      kind: normalizeKind(parsed.kind),
     }
   } catch {
     return null
@@ -119,9 +134,12 @@ export function resolveOperatorInboxPushCopy(input: OperatorInboxPushCopyInput):
   const copy = resolveSupportedLocaleTag(input.recipientLanguage.trim()) === 'ko' ? KOREAN_COPY : ENGLISH_COPY
   const subject = decodeOperatorInboxActorLabel(input.actorLabel)
   const sender = (subject ? subject.senderLabel : cleanLabel(input.actorLabel)) || copy.unknownSender
-  const preview = subject?.kind === 'photo' ? copy.photo : clipPreview(input.messagePreview) || '…'
-  const title = subject && subject.operatorNames.length > 0
-    ? copy.title(formatOperatorNames(subject.operatorNames, copy))
-    : copy.genericTitle
+  const isPhoto = subject?.kind === 'photo' || subject?.kind === 'comment_photo'
+  const isComment = subject?.kind === 'comment' || subject?.kind === 'comment_photo'
+  const preview = isPhoto ? copy.photo : clipPreview(input.messagePreview) || '…'
+  const operators = subject && subject.operatorNames.length > 0 ? formatOperatorNames(subject.operatorNames, copy) : ''
+  const title = isComment
+    ? (operators ? copy.commentTitle(operators) : copy.genericCommentTitle)
+    : (operators ? copy.title(operators) : copy.genericTitle)
   return { title, body: `${sender}: ${preview}` }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { InboxListResult, InboxOperatorStat, InboxRoomSummary, InboxSummary } from '@/server/operator-inbox/inbox'
@@ -17,6 +18,8 @@ import { useStaffKoreanView } from './use-staff-korean-view'
 export type InboxListData = InboxListResult & InboxSummary & { serverNowMs: number }
 
 const LIST_ENDPOINT = '/admin/inbox/api/rooms'
+const LIST_PATH = '/admin/inbox'
+const OPERATOR_ID_PATTERN = /^[\w-]{1,128}$/
 const PAGE_SIZE = 20
 const MAX_REFRESH_SIZE = 50
 const CLOCK_TICK_MS = 30_000
@@ -52,11 +55,13 @@ function previewText(room: InboxRoomSummary, korean: boolean): string {
   return (korean && preview.koText) || preview.text || '(내용 없음)'
 }
 
-function RoomCard({ room, nowMs, korean, operatorId }: {
+function RoomCard({ room, nowMs, korean, operatorId, active }: {
   room: InboxRoomSummary
   nowMs: number
   korean: boolean
   operatorId: string | null
+  /** The room open in the detail pane (wide screens). */
+  active: boolean
 }) {
   const counterpart = room.counterparts[0] ?? null
   const unread = formatInboxUnreadCount(room.unreadCount)
@@ -66,7 +71,10 @@ function RoomCard({ room, nowMs, korean, operatorId }: {
       <Link
         href={roomHref(room, operatorId)}
         prefetch={false}
-        className="flex min-h-[76px] gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-colors active:bg-slate-50"
+        aria-current={active ? 'page' : undefined}
+        className={`flex min-h-[76px] gap-3 rounded-2xl border p-3 shadow-sm transition-colors active:bg-slate-50 ${
+          active ? 'border-sky-400 bg-sky-50/60 ring-1 ring-sky-300' : 'border-slate-200 bg-white'
+        }`}
       >
         <span className="relative shrink-0">
           <InboxAvatar person={counterpart} size={48} />
@@ -198,6 +206,13 @@ export function InboxListView({ initialData, initialOperatorId }: {
 
   useAdminInboxRealtime(refresh)
 
+  // An open room beside the list (wide screens) reports reads and replies through this event.
+  useEffect(() => {
+    const onUpdated = () => { void refresh().catch(() => {}) }
+    window.addEventListener('mingle:admin-inbox-updated', onUpdated)
+    return () => window.removeEventListener('mingle:admin-inbox-updated', onUpdated)
+  }, [refresh])
+
   // Korean previews are fetched only while the switch is on.
   const koreanRef = useRef(korean)
   useEffect(() => {
@@ -217,7 +232,10 @@ export function InboxListView({ initialData, initialOperatorId }: {
     setOperatorId(next)
     setSwitching(true)
     // Shareable URL without a second server render (this component fetches the list itself).
-    window.history.replaceState(null, '', next ? `/admin/inbox?operator=${encodeURIComponent(next)}` : '/admin/inbox')
+    // Beside an open room (wide screens) the URL belongs to that room.
+    if (window.location.pathname === LIST_PATH) {
+      window.history.replaceState(null, '', next ? `${LIST_PATH}?operator=${encodeURIComponent(next)}` : LIST_PATH)
+    }
     const seq = ++requestSeqRef.current
     void fetchInboxList({ operatorId: next, korean }).then((result) => {
       if (seq !== requestSeqRef.current) return
@@ -254,15 +272,26 @@ export function InboxListView({ initialData, initialOperatorId }: {
     }
   }, [data.nextCursor, korean, loadingMore, operatorId])
 
+  // The list is rendered by the layout, which cannot read the query: apply `?operator=` once.
+  useEffect(() => {
+    if (window.location.pathname !== LIST_PATH) return
+    const requested = new URLSearchParams(window.location.search).get('operator')?.trim() ?? ''
+    if (OPERATOR_ID_PATTERN.test(requested)) selectOperator(requested)
+    // Only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const manualRefresh = useCallback(() => {
     setRefreshing(true)
     void refresh().catch(() => {}).finally(() => setRefreshing(false))
   }, [refresh])
 
+  const pathname = usePathname() ?? ''
+  const openConversationId = pathname.startsWith(`${LIST_PATH}/`) ? decodeURIComponent(pathname.slice(LIST_PATH.length + 1).split('/')[0]) : null
   const activeOperator = operatorId ? data.operators.find((operator) => operator.userId === operatorId) ?? null : null
 
   return (
-    <main className="min-h-dvh bg-slate-50 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-4 text-slate-900">
+    <main className="min-h-dvh bg-slate-50 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-4 text-slate-900 lg:min-h-full lg:pb-6">
       <div className="mx-auto flex max-w-xl flex-col gap-3">
         <header className="flex items-center gap-2">
           <h1 className="text-xl font-bold">인박스</h1>
@@ -325,7 +354,14 @@ export function InboxListView({ initialData, initialOperatorId }: {
         ) : (
           <ul className="flex flex-col gap-2" aria-label="대화방 목록">
             {data.rooms.map((room) => (
-              <RoomCard key={room.conversationId} room={room} nowMs={nowMs} korean={korean} operatorId={operatorId} />
+              <RoomCard
+                key={room.conversationId}
+                room={room}
+                nowMs={nowMs}
+                korean={korean}
+                operatorId={operatorId}
+                active={room.conversationId === openConversationId}
+              />
             ))}
           </ul>
         )}

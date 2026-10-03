@@ -1892,6 +1892,16 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
   }, []);
 
+  // `?menu=1` (the menu button on the post viewer's My page bar) opens the
+  // menu on arrival; the flag is dropped so back / reload do not reopen it.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("menu") !== "1") return;
+    url.searchParams.delete("menu");
+    window.history.replaceState(window.history.state, "", url.toString());
+    openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID });
+  }, [openMyPageSurface]);
+
   const closeMyPageSurface = useCallback((entry: {
     id: string;
     value?: string;

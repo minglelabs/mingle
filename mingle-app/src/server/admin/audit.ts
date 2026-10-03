@@ -16,6 +16,13 @@ export type AdminAuditAction =
   | 'inbox.open'
   | 'inbox.reply'
   | 'inbox.mark_read'
+  | 'activity.mark_read'
+  | 'activity.comment'
+  | 'inbox.auto_reply'
+  | 'settings.auto_reply'
+  | 'settings.post_reserve'
+  | 'settings.automation'
+  | 'operator_post.reserve_published'
   | 'notify_target.add'
   | 'notify_target.remove'
 

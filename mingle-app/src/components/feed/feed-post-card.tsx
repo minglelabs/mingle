@@ -545,7 +545,6 @@ export default function FeedPostCard({
         ) : null}
       </button>
 
-
       <time className={`shrink-0 text-sm font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
         {formatPostTime(post.publishedAt, locale)}
       </time>
