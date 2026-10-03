@@ -896,6 +896,11 @@ model OperatorAccount {
   /// ISO 3166-1 alpha-2 country of the persona. Staff-only; never shown to users.
   personaCountry     String?  @map("persona_country")
   notes              String?  @db.Text
+  /// 'female' | 'male'. Staff-only; steers generated profile photos.
+  personaGender      String?  @map("persona_gender")
+  /// The picked photo spec (see operator-avatars/taxonomy.ts) of the current AI photo.
+  avatarSpec         Json?    @map("avatar_spec")
+  avatarGeneratedAt  DateTime? @map("avatar_generated_at")
   createdBySessionId String?  @map("created_by_session_id")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

@@ -64,6 +64,22 @@ While on, a worker in the Node server process runs every 60 seconds (`MINGLE_OPE
 
 These posts are separate from the staff queue in **Posts** and do not count against its 500-item cap. Added on 2026-10-03 with unit tests only: the SQL has not run against a database and no real model call was made.
 
+## Automatic generation and AI profile photos
+
+Open **More → 자동 생성** for every automatic rule and its manual counterpart. Both rules are off until staff turn them on and need migration `20261003120000_add_operator_avatar_spec` in addition to the settings table. A worker in the Node server process applies them every 60 seconds (`MINGLE_OPERATOR_AUTOMATION_WORKER=off` keeps it from starting).
+
+- Profile photos: one AI photo every N minutes (default 10) for the oldest active account without a photo.
+- Accounts: N new accounts per day (default 5), evenly spaced, until the number of active operator accounts reaches the target (default 100). Each new account comes from the country furthest below its share of the default seed plan and is created without review.
+- Latent posts keep their own rule under **잠재 글**.
+
+The manual buttons on the same page run one unit at a time from the open tab, whether or not the rule is on: photos for accounts without one, new accounts, and a refill of latent posts. **More → 사진 검수** shows every account's photo in a grid with a regenerate button, and a button that publishes one of the account's latent posts immediately.
+
+A photo is drawn from a spec the server picks (`src/server/operator-avatars/taxonomy.ts`); the image model (`gemini-2.5-flash-image`, override with `OPERATOR_AVATAR_IMAGE_MODEL`, key `GEMINI_API_KEY`) only renders it. The spec fixes the kind of photo (face 30, partly hidden face 15, from behind 12, body without face 13, hands or feet 5, object 12, animal 8, scenery 4, other 1; East Asian accounts hide the face more, Western and Latin American ones less; bio keywords such as a cat or the gym shift it), then appearance, build, outfit, pose, how it was shot, light and place, all consistent with the account's gender, age, country and city. People are always adults in everyday or sports clothing. The spec is stored on the account (`avatar_spec`), and the image goes through the same re-encode and audit as a staff upload. A refused or failed image leaves the account without a photo; after three failures in one process the automatic rule skips that account.
+
+New accounts store the persona gender (`persona_gender`); for older accounts it is read from the creation audit row, and when unknown the prompt lets the name decide.
+
+Added on 2026-10-03 with unit tests only: no image was generated, and the default image model name has not been checked against the API.
+
 ## Staff alerts
 
 Open **More → Notification settings** and add the handle of your own Mingle account. Sign into that account on the phone and allow notifications. Operator accounts cannot be alert targets.

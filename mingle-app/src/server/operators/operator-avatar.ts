@@ -51,9 +51,24 @@ export async function setOperatorAvatar(ctx: AdminContext, userId: string, file:
     return { ok: false, status: 400, error: 'invalid_image' }
   }
 
+  return setOperatorAvatarFromBytes(ctx, userId, Buffer.from(await file.arrayBuffer()))
+}
+
+/**
+ * Stores `bytes` (jpeg / png / webp) as the operator's avatar: the same
+ * re-encode, upload, profile update, old-object cleanup and audit as a staff
+ * upload. Also used for AI-generated photos, where `ctx` is null for the
+ * worker and `auditMetadata` records what the photo was generated from.
+ */
+export async function setOperatorAvatarFromBytes(
+  ctx: AdminContext | null,
+  userId: string,
+  bytes: Buffer,
+  auditMetadata: Record<string, string | number | boolean | null> = {},
+): Promise<OperatorAvatarResult> {
   let rendered: Buffer
   try {
-    rendered = await renderOperatorAvatar(Buffer.from(await file.arrayBuffer()))
+    rendered = await renderOperatorAvatar(bytes)
   } catch {
     return { ok: false, status: 400, error: 'invalid_image' }
   }
@@ -109,7 +124,7 @@ export async function setOperatorAvatar(ctx: AdminContext, userId: string, file:
     operatorUserId: userId,
     targetType: 'user',
     targetId: userId,
-    metadata: { objectKey, replacedObjectKey: previousObjectKey },
+    metadata: { objectKey, replacedObjectKey: previousObjectKey, ...auditMetadata },
   })
   return { ok: true, image, objectKey }
 }

@@ -130,6 +130,7 @@ export async function createOperatorAccount(
       operatorAccount: {
         create: {
           personaCountry: draft.personaCountry,
+          personaGender: draft.gender ?? null,
           notes: notes.value,
           createdBySessionId: ctx.sessionId,
         },

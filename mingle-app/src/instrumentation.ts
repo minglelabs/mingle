@@ -41,6 +41,18 @@ export function operatorPostReserveWorkerEnabled(env: NodeJS.ProcessEnv = proces
   return env.MINGLE_OPERATOR_POST_RESERVE_WORKER !== 'off'
 }
 
+/**
+ * Whether this process may run the operator automation worker (a 60 s tick
+ * for the photo and account rules of `/admin/settings/automation`). It does
+ * nothing while both rules are off; `MINGLE_OPERATOR_AUTOMATION_WORKER=off`
+ * keeps it from starting at all.
+ */
+export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NEXT_RUNTIME !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_OPERATOR_AUTOMATION_WORKER !== 'off'
+}
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     if (operatorPostWorkerEnabled()) {
@@ -54,6 +66,10 @@ export async function register(): Promise<void> {
     if (operatorPostReserveWorkerEnabled()) {
       const { startOperatorPostReserveWorker } = await import('./server/operator-post-reserve/scheduler')
       startOperatorPostReserveWorker()
+    }
+    if (operatorAutomationWorkerEnabled()) {
+      const { startOperatorAutomationWorker } = await import('./server/operator-automation/scheduler')
+      startOperatorAutomationWorker()
     }
   }
 }

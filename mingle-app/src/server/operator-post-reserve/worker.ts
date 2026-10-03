@@ -272,6 +272,43 @@ export async function runOperatorPostReserve(options: { now?: () => Date; random
   return summary
 }
 
+/**
+ * Manual refill (the "지금 채우기" button): one chunk for up to `limit` accounts
+ * below the target, whether or not the automatic rule is on.
+ */
+export async function refillReserveNow(limit: number = RESERVE_REFILL_ACCOUNTS_PER_RUN, now: Date = new Date()): Promise<{ accounts: number; generated: number }> {
+  const settings = await getPostReserveSettings()
+  const toRefill = await findOperatorsToRefill(settings.targetPerOperator, Math.max(1, Math.min(10, limit)))
+  const counts = await Promise.all(toRefill.map((operator) => refillOperatorReserve(operator.operatorUserId, now)))
+  return { accounts: counts.filter((count) => count > 0).length, generated: counts.reduce((total, count) => total + count, 0) }
+}
+
+export type PublishNowResult = { ok: true; postId: string | null } | { ok: false; error: 'reserve_empty' | 'publish_failed' }
+
+/**
+ * Manual release (the "지금 1개 올리기" button): publishes the account's oldest
+ * waiting reserve post right away, whether or not the automatic rule is on.
+ */
+export async function publishNextReservePost(operatorUserId: string, now: Date = new Date()): Promise<PublishNowResult> {
+  const head = await prisma.operatorPostReserve.findFirst({
+    where: { operatorUserId, state: 'queued' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  })
+  if (!head) return { ok: false, error: 'reserve_empty' }
+  // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
+  const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
+    UPDATE app_operator_post_reserve
+    SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
+    WHERE id = ${head.id} AND state = 'queued'
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts
+  `
+  if (!claimed[0]) return { ok: false, error: 'publish_failed' }
+  if (!(await releaseOne(claimed[0], now))) return { ok: false, error: 'publish_failed' }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id: head.id }, select: { postId: true } })
+  return { ok: true, postId: row?.postId ?? null }
+}
+
 export type PostReserveStats = {
   operators: number
   waiting: number

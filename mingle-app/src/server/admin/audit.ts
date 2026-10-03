@@ -21,6 +21,7 @@ export type AdminAuditAction =
   | 'inbox.auto_reply'
   | 'settings.auto_reply'
   | 'settings.post_reserve'
+  | 'settings.automation'
   | 'operator_post.reserve_published'
   | 'notify_target.add'
   | 'notify_target.remove'
