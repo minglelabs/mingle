@@ -66,7 +66,7 @@ describe("/api/account/reports route", () => {
     });
   });
 
-  it("labels a reported operator account and asks the DB for the badge flags", async () => {
+  it("shows a reported operator account like any other user and asks the DB for the badge flags", async () => {
     mockUserReportFindMany.mockResolvedValue([
       {
         id: "report_op",
@@ -92,7 +92,7 @@ describe("/api/account/reports route", () => {
 
     const { reports } = await (await GET()).json();
 
-    expect(reports[0].reportedUser).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true });
+    expect(reports[0].reportedUser).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null });
     expect(reports[1].reportedUser).toEqual({ id: "member", handle: "fan", name: "Fan", image: null });
     expect(mockUserReportFindMany.mock.calls[0][0].select.reportedUser).toEqual({ select: USER_IDENTITY_SELECT });
   });

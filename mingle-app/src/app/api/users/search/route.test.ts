@@ -101,7 +101,7 @@ describe("/api/users/search route", () => {
     });
   });
 
-  it("marks only official and operator accounts with their flag in the result rows", async () => {
+  it("marks only the official account with its flag in the result rows (an operator looks ordinary)", async () => {
     mockQueryRaw.mockResolvedValue([
       { id: "official", tier: 0, updatedAt: new Date("2026-09-09T00:00:00.000Z") },
       { id: "operator", tier: 0, updatedAt: new Date("2026-09-09T00:00:00.000Z") },
@@ -117,7 +117,8 @@ describe("/api/users/search route", () => {
 
     expect(payload.users[0]).toMatchObject({ id: "official", isOfficial: true });
     expect(payload.users[0]).not.toHaveProperty("isOperator");
-    expect(payload.users[1]).toMatchObject({ id: "operator", isOperator: true });
+    expect(payload.users[1]).toMatchObject({ id: "operator" });
+    expect(payload.users[1]).not.toHaveProperty("isOperator");
     expect(payload.users[1]).not.toHaveProperty("isOfficial");
     expect(payload.users[2]).not.toHaveProperty("isOfficial");
     expect(payload.users[2]).not.toHaveProperty("isOperator");

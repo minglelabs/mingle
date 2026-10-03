@@ -162,13 +162,13 @@ describe('GET /api/posts/[postId]', () => {
     expect(json.post.displayLanguage).toBe('ko')
   })
 
-  it('labels an operator author of a deep-linked post (same select as every post list)', async () => {
+  it('shows an operator author like any other author of a deep-linked post (same select as every post list)', async () => {
     mockPostFindFirst.mockResolvedValue({
       ...visiblePost(),
       author: { id: 'u1', handle: 'mingle.mina', name: 'Mina', image: null, isOfficial: false, isOperator: true },
     })
     const json = await (await GET(new NextRequest('http://localhost/api/posts/p1'), makeParams('p1'))).json()
-    expect(json.post.author).toEqual({ id: 'u1', handle: 'mingle.mina', name: 'Mina', imageUrl: null, isOperator: true })
+    expect(json.post.author).toEqual({ id: 'u1', handle: 'mingle.mina', name: 'Mina', imageUrl: null })
     expect(mockPostFindFirst.mock.calls[0][0].select).toBe(feedPostRowSelect)
   })
 })
