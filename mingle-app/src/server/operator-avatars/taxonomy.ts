@@ -13,7 +13,7 @@
  */
 export const AVATAR_SPEC_VERSION = 1
 
-export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'object' | 'animal' | 'scenery' | 'other'
+export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
 
 export type AvatarPersona = {
   /** 'female' | 'male' | null (unknown: the model follows the name). */
@@ -55,11 +55,12 @@ function pick(options: readonly Option[], random: Random): Option {
 // ─── 1. Kind of photo ────────────────────────────────────────────────────────
 
 export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string; weight: number }> = [
-  { key: 'face', ko: '얼굴 위주', weight: 30 },
-  { key: 'partial', ko: '얼굴 일부·가림', weight: 15 },
-  { key: 'back', ko: '뒷모습', weight: 12 },
+  { key: 'face', ko: '얼굴 위주', weight: 27 },
+  { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
+  { key: 'back', ko: '뒷모습', weight: 11 },
   { key: 'body', ko: '몸 위주', weight: 13 },
   { key: 'part', ko: '손·발·부분', weight: 5 },
+  { key: 'group', ko: '여러 명', weight: 5 },
   { key: 'object', ko: '사물', weight: 12 },
   { key: 'animal', ko: '동물', weight: 8 },
   { key: 'scenery', ko: '풍경·장소', weight: 4 },
@@ -165,6 +166,16 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('sneakers', '운동화 신은 발', 3, 'their own feet in sneakers, seen from above'),
     sub('beach_feet', '해변 맨발', 1.5, 'bare feet at the edge of the waves on a beach'),
     sub('tattoo_arm', '문신 있는 팔', 1, 'a forearm with a small simple tattoo'),
+  ],
+  group: [
+    sub('friends_selfie', '친구들과 셀카', 4, 'a group selfie with two or three friends, heads close together, the account owner holding the phone'),
+    sub('two_friends', '친구와 둘이', 4, 'two friends side by side, shoulders touching, the account owner on the left'),
+    sub('couple', '연인과', 2, 'a couple standing close, the partner\'s face turned away or partly out of frame'),
+    sub('table_group', '식당·카페 모임', 3, 'four or five friends around a restaurant or cafe table, taken by someone at the end of the table'),
+    sub('trip_group', '여행 단체 사진', 2, 'a small group of friends posing together outdoors on a trip, taken by a passer-by'),
+    sub('family', '가족과', 1.5, 'the account owner with one or two adult family members, standing together'),
+    sub('team', '동아리·팀', 1.5, 'a club or sports team lined up in matching casual kit, the account owner near the middle'),
+    sub('friends_back', '친구들과 뒷모습', 2, 'three friends seen from behind, arms around each other\'s shoulders'),
   ],
   object: [
     sub('coffee', '커피', 4, 'a cup of coffee on a café table'),
@@ -611,6 +622,14 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     } else if (subtype.key === 'yoga') env = 'indoor'
     else if (sport || subtype.key === 'silhouette' || subtype.key === 'shadow') env = 'outdoor'
     else lines.push(`Setting: ${takeLocation(random() < 0.4 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
+  } else if (category === 'group') {
+    const hidden = subtype.key === 'friends_back'
+    lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random)}.`)
+    lines.push(`Framing: ${subtype.text}. The others are ordinary adults of a similar age and background, each looking different from the account owner.`)
+    if (!hidden) lines.push(`Expression: ${take('expression', EXPRESSIONS)}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    lines.push(`Setting: consistent with ${subtype.key === 'trip_group' ? 'a trip' : place}.`)
+    env = subtype.key === 'table_group' ? 'indoor' : ['trip_group', 'friends_back', 'team'].includes(subtype.key) ? 'outdoor' : 'any'
   } else if (category === 'part') {
     lines.push(`Subject: ${subtype.text}, belonging to a ${gender === 'female' ? 'woman' : gender === 'male' ? 'man' : 'person'} ${ageBand(persona.age, gender)}. Only this part of the body is in the frame.`)
     lines.push(`Setting: an everyday place consistent with ${place}.`)

@@ -5,6 +5,7 @@ import { getOperatorAccountDetail } from '@/server/operators/operator-admin-quer
 import { OperatorsMain } from '../_components/operator-ui'
 import { buildCountryOptions, buildLanguageOptions } from '../_lib/options'
 import { OperatorEditor } from './operator-editor'
+import { OperatorPosts } from './operator-posts'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-type OperatorDetailPageProps = { params: Promise<{ userId: string }> }
+type OperatorDetailPageProps = {
+  params: Promise<{ userId: string }>
+  searchParams: Promise<{ posts?: string }>
+}
 
 function decodeSegment(value: string): string {
   try {
@@ -23,9 +27,10 @@ function decodeSegment(value: string): string {
   }
 }
 
-export default async function OperatorDetailPage({ params }: OperatorDetailPageProps) {
-  await requireAdmin('/admin/operators')
+export default async function OperatorDetailPage({ params, searchParams }: OperatorDetailPageProps) {
   const { userId } = await params
+  await requireAdmin(`/admin/operators/${userId}`)
+  const { posts } = await searchParams
   const account = await getOperatorAccountDetail(decodeSegment(userId).trim())
   if (!account) notFound()
 
@@ -37,6 +42,7 @@ export default async function OperatorDetailPage({ params }: OperatorDetailPageP
         languages={buildLanguageOptions()}
         currentYear={new Date().getUTCFullYear()}
       />
+      <OperatorPosts userId={account.id} showAll={posts === 'all'} />
     </OperatorsMain>
   )
 }

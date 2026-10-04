@@ -51,7 +51,7 @@ function sampleCategories(persona: AvatarPersona, count: number): Map<string, nu
 
 describe('avatar taxonomy', () => {
   it('covers every kind of photo, with subtypes for each', () => {
-    expect(AVATAR_CATEGORIES.map((entry) => entry.key)).toEqual(['face', 'partial', 'back', 'body', 'part', 'object', 'animal', 'scenery', 'other'])
+    expect(AVATAR_CATEGORIES.map((entry) => entry.key)).toEqual(['face', 'partial', 'back', 'body', 'part', 'group', 'object', 'animal', 'scenery', 'other'])
     for (const { key } of AVATAR_CATEGORIES) expect(AVATAR_SUBTYPES[key].length).toBeGreaterThan(2)
     expect(AVATAR_SUBTYPES.back.length).toBeGreaterThanOrEqual(12)
     expect(AVATAR_SUBTYPES.body.length).toBeGreaterThanOrEqual(12)
