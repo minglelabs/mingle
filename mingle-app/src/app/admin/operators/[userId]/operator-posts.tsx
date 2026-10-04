@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { reservePosterProfile } from '@/server/operator-post-reserve/generate'
 
 const PREVIEW_COUNT = 20
 
@@ -32,6 +33,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
       select: { id: true, text: true, topic: true, releaseAt: true },
     }),
   ])
+  const profile = reservePosterProfile(userId)
   const hasMore = !showAll && (publishedCount > published.length || queuedCount > queued.length)
 
   return (
@@ -58,7 +60,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="대기 중인 글">
         <h2 className="text-sm font-semibold text-slate-900">대기 중인 글 {queuedCount.toLocaleString()}개</h2>
-        <p className="mt-0.5 text-xs text-slate-500">위에서부터 차례로 올라갑니다.</p>
+        <p className="mt-0.5 text-xs text-slate-500">위에서부터 차례로 올라갑니다. 글 성향: {profile.labelKo}</p>
         {queued.length ? (
           <ol className="mt-2 divide-y divide-slate-100">
             {queued.map((item) => (

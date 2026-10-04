@@ -6,7 +6,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { checkOperatorForPosting, personaLanguageOf } from '@/server/operator-posts/operator-check'
 import { sqlUtcTimestamp } from '@/server/operator-posts/sql'
 import { publishPost } from '@/server/posts/publish-post'
-import { generateReservePosts, pickReserveTopics, RESERVE_CHUNK_SIZE } from './generate'
+import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 
@@ -232,8 +232,10 @@ export async function refillOperatorReserve(operatorUserId: string, now: Date, r
         country: operator.locationCountry ?? null,
         language,
       },
-      topics: pickReserveTopics(RESERVE_CHUNK_SIZE, random),
+      topics: pickReserveTopics(RESERVE_CHUNK_SIZE, random, reservePosterProfile(operatorUserId).topicFactors),
       existingTexts,
+      random,
+      seed: operatorUserId,
     })
     if (generated.length === 0) return 0
     const created = await prisma.operatorPostReserve.createMany({

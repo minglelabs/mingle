@@ -2,6 +2,7 @@ import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
+import { posterProfile, type PosterProfile } from './poster-profile'
 
 /**
  * Writes latent posts for one operator account: original short posts in the
@@ -42,27 +43,34 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
 
 type Random = () => number
 
-/** `count` topic keys by weight, never more than 2 of one topic in a chunk. */
-export function pickReserveTopics(count: number, random: Random = Math.random): string[] {
-  const total = RESERVE_TOPICS.reduce((sum, topic) => sum + topic.weight, 0)
+/** `count` topic keys by weight. `factors` are the account's tastes; a favored topic may repeat more within a chunk. */
+export function pickReserveTopics(count: number, random: Random = Math.random, factors: Record<string, number> = {}): string[] {
+  const weighted = RESERVE_TOPICS.map((topic) => ({ key: topic.key, weight: topic.weight * (factors[topic.key] ?? 1) }))
+  const total = weighted.reduce((sum, topic) => sum + topic.weight, 0)
   const used = new Map<string, number>()
   const picked: string[] = []
-  let guard = count * 20
+  let guard = count * 40
   while (picked.length < count && guard-- > 0) {
     let roll = random() * total
-    let chosen = RESERVE_TOPICS[RESERVE_TOPICS.length - 1]
-    for (const topic of RESERVE_TOPICS) {
+    let chosen = weighted[weighted.length - 1]
+    for (const topic of weighted) {
       roll -= topic.weight
       if (roll < 0) {
         chosen = topic
         break
       }
     }
-    if ((used.get(chosen.key) ?? 0) >= 2) continue
+    const cap = (factors[chosen.key] ?? 1) > 1 ? Math.ceil(count / 3) : 2
+    if ((used.get(chosen.key) ?? 0) >= cap) continue
     used.set(chosen.key, (used.get(chosen.key) ?? 0) + 1)
     picked.push(chosen.key)
   }
   return picked
+}
+
+/** The posting personality of an account, by its id. */
+export function reservePosterProfile(seed: string): PosterProfile {
+  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key))
 }
 
 /**
@@ -79,48 +87,15 @@ export const RESERVE_SHAPES: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'list', weight: 0.5, brief: 'a tiny list of two to four items on separate lines, with a few words before it' },
 ]
 
-const VOICE_REGISTERS = [
-  'writes in the plain informal form, as if talking to themself or to friends; never the polite form',
-  'writes mostly in the plain informal form and switches to the polite form only when asking strangers a question',
-  'writes in a chatty polite form, but loosely, with dropped particles and trailing endings',
-] as const
-const VOICE_LAUGHTER = [
-  'almost never writes laughter',
-  'adds written laughter or crying now and then in the way natives type it',
-  'ends many posts with written laughter or crying in the way natives type it',
-] as const
-const VOICE_EMOJI = ['never uses emoji', 'uses an emoji in about one post out of five', 'uses an emoji in about one post out of three'] as const
-const VOICE_PUNCTUATION = [
-  'usually leaves out the final period',
-  'trails off with dots or a tilde instead of ending cleanly',
-  'uses ordinary punctuation but short sentences',
-] as const
-
-function seedNumber(seed: string): number {
-  let state = 2166136261
-  for (let index = 0; index < seed.length; index += 1) state = Math.imul(state ^ seed.charCodeAt(index), 16777619)
-  return state >>> 0
-}
-
-/** The account's writing habits: fixed per account, so all its posts sound like one person. */
-export function reserveVoice(seed: string): string[] {
-  const number = seedNumber(seed)
-  return [
-    VOICE_REGISTERS[number % VOICE_REGISTERS.length],
-    VOICE_LAUGHTER[(number >>> 4) % VOICE_LAUGHTER.length],
-    VOICE_EMOJI[(number >>> 8) % VOICE_EMOJI.length],
-    VOICE_PUNCTUATION[(number >>> 12) % VOICE_PUNCTUATION.length],
-  ]
-}
-
-function pickShape(random: Random): { key: string; brief: string } {
-  const total = RESERVE_SHAPES.reduce((sum, shape) => sum + shape.weight, 0)
+function pickShape(random: Random, factors: Record<string, number>): { key: string; brief: string } {
+  const weighted = RESERVE_SHAPES.map((shape) => ({ ...shape, weight: shape.weight * (factors[shape.key] ?? 1) }))
+  const total = weighted.reduce((sum, shape) => sum + shape.weight, 0)
   let roll = random() * total
-  for (const shape of RESERVE_SHAPES) {
+  for (const shape of weighted) {
     roll -= shape.weight
     if (roll < 0) return shape
   }
-  return RESERVE_SHAPES[0]
+  return weighted[0]
 }
 
 export type ReservePersona = {
@@ -139,13 +114,14 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
     'You ghostwrite short social posts for one person on Mingle, an app where people from different countries chat and learn each other\'s languages.',
-    'The input JSON has "persona" (who is posting), "voice" (this person\'s typing habits), "slots" (one post per slot; each has a number, a "topic" and a "shape"), and "alreadyWritten" (the starts of posts this person already has).',
+    'The input JSON has "persona" (who is posting), "poster" (what kind of poster this person is: "type", "length" and "voice", their typing habits and quirks), "slots" (one post per slot; each has a number, a "topic" and a "shape"), and "alreadyWritten" (the starts of posts this person already has).',
     `Write every post in ${languageName} (${persona.language}) exactly the way a native speaker of the persona's age types on their phone to friends: the slang, abbreviations, sentence endings and written laughter that are normal in that language right now. A person learning another language may add one short phrase in that language when the topic is language learning; otherwise use only ${languageName}.`,
-    'Follow "voice" in every post, and follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
+    'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
+    'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
     'What makes a post sound machine-written, so never do it: a tidy general statement about what is nice, precious or special; describing a mood or an atmosphere; a reflective conclusion or a lesson; balanced, complete, well-formed sentences one after another; addressing "everyone"; asking a survey-like question about preferences in formal wording; words like "truly", "precious", "special", "moment", "time to" used to wrap up a feeling.',
     'Imperfection is welcome: dropped subjects and particles, a run-on, an abrupt stop, a mild typo once in a while. Mild grumbling, laziness, boredom and self-mockery are more common than gratitude.',
-    'Emoji and laughter only as "voice" says. A habit shows in some posts, not in every one: most posts must not end the same way (same emoji position, same trailing dots, same laughter). No hashtags.',
+    'Emoji and laughter only as the voice says. A habit shows in some posts, not in every one: most posts must not end the same way (same emoji position, same trailing dots, same laughter). No hashtags.',
     'Questions must not all open the same way (not always "everyone" or "does anyone"); often just ask the thing.',
     'Every post must differ from the others and from "alreadyWritten" in subject and opening words.',
     'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
@@ -202,18 +178,21 @@ export async function generateReservePosts(args: {
   generate?: GenerateFn
   model?: string
   random?: Random
+  /** Decides the account's posting personality; the account id. Defaults to the persona itself. */
+  seed?: string
 }): Promise<GeneratedReservePost[]> {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const random = args.random ?? Math.random
-  const slots = args.topics.map((topic, index) => ({ slot: index + 1, topic: briefs.get(topic) ?? topic, shape: pickShape(random).brief }))
+  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
+  const slots = args.topics.map((topic, index) => ({ slot: index + 1, topic: briefs.get(topic) ?? topic, shape: pickShape(random, profile.shapeFactors).brief }))
   const seen = new Set(args.existingTexts.map(reservePostKey))
 
   const items = await generate({
     instructions: buildReserveInstructions(args.persona),
     input: {
       persona: args.persona,
-      voice: reserveVoice(`${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`),
+      poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       slots,
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
     },
