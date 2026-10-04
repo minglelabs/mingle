@@ -11,7 +11,8 @@ import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
  * anything; `./worker.ts` decides when to call it and sends the result
  * through the same path as a staff reply.
  */
-export const AUTO_REPLY_DEFAULT_MODEL = 'gemini-3.8-flash-lite'
+/** The newest Flash-Lite text model the API serves (checked 2026-10-04: there is no `gemini-3.8-flash-lite`). */
+export const AUTO_REPLY_DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 export const AUTO_REPLY_TRANSCRIPT_TURNS = 30
 export const AUTO_REPLY_MAX_POSTS = 20
 export const AUTO_REPLY_MAX_REPLY_CHARS = 600
