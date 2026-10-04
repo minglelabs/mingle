@@ -11,6 +11,7 @@ import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { NATIVE_CONVERSATION_SHARE_EVENT } from "@/lib/native-conversation-share-overlay";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -29,7 +30,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Share2, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -2018,6 +2020,7 @@ export default function ConversationList({
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
+  const isSharingConversationRef = useRef(false);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
   const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>(() => (
@@ -4625,6 +4628,46 @@ export default function ConversationList({
     openConversationSummary,
   ]);
 
+  // Long-press "대화방 공유": turn sharing on in the background. If it is
+  // already on, the server keeps the same link and re-takes the snapshot as of
+  // now (see setConversationShareEnabled), so the link shows the conversation
+  // up to this tap. Then open the share screen — the same overlay a share link
+  // opens in the app — so the member sees what recipients will see. Copying
+  // happens there, from its own button: iOS only allows a clipboard write
+  // during the tap itself, and this tap is long over once the link arrives.
+  const handleShareConversation = useCallback((item: ConversationItem) => {
+    setRowActionMenu(null);
+    if (isSharingConversationRef.current) return;
+    isSharingConversationRef.current = true;
+
+    const conversationPath = `/${encodeURIComponent(item.id)}/share`;
+    const headers = buildConversationRequestHeaders(initialTrackingIdentityRef.current);
+
+    void (async () => {
+      try {
+        const response = await fetch(buildConversationApiPath(conversationPath), {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true }),
+        });
+        if (!response.ok) throw new Error(`conversation_share_enable_failed:${response.status}`);
+        const body = await response.json() as { shareToken?: unknown; shareEnabled?: unknown };
+        const shareToken = body.shareEnabled === true && typeof body.shareToken === "string"
+          ? body.shareToken
+          : null;
+        if (!shareToken) throw new Error("conversation_share_token_missing");
+
+        window.dispatchEvent(new CustomEvent(NATIVE_CONVERSATION_SHARE_EVENT, {
+          detail: { shareToken, canCopyLink: true },
+        }));
+      } catch {
+        toast.error(roomManagementCopy.shareErrorToastLabel);
+      } finally {
+        isSharingConversationRef.current = false;
+      }
+    })();
+  }, [roomManagementCopy.shareErrorToastLabel]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -5634,6 +5677,15 @@ export default function ConversationList({
                   >
                     <span>{roomManagementCopy.renameButtonLabel}</span>
                     <PencilLine className="h-4 w-4 shrink-0 text-slate-400" />
+                  </button>
+                  <div className="h-px bg-gray-100" />
+                  <button
+                    type="button"
+                    onClick={() => handleShareConversation(rowActionMenu.item)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span>{roomManagementCopy.shareToggleLabel}</span>
+                    <Share2 className="h-4 w-4 shrink-0 text-slate-400" />
                   </button>
                   <div className="h-px bg-gray-100" />
                   <button

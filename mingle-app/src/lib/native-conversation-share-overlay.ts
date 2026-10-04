@@ -7,6 +7,10 @@ export type NativeConversationShareOverlayRequest = {
   shareToken: string;
   linkNonce?: string;
   navigationSequence?: number;
+  // True when a member opened this from the conversation list's "share"
+  // action rather than a received link: the overlay then offers to copy the
+  // link instead of joining a room the member is already in.
+  canCopyLink?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -47,5 +51,6 @@ export function parseNativeConversationShareOverlayRequest(
     shareToken,
     ...(linkNonce ? { linkNonce } : {}),
     ...(typeof navigationSequence === "number" ? { navigationSequence } : {}),
+    ...(value.canCopyLink === true ? { canCopyLink: true } : {}),
   };
 }
