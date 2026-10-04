@@ -28,7 +28,7 @@ const REASON_COPY: Record<string, string> = {
   none_waiting: '사진 없는 계정이 없습니다.',
   target_reached: '목표 계정 수에 도달했습니다.',
   draft_failed: 'AI 초안 생성에 실패했습니다.',
-  image_unavailable: 'AI 키(GEMINI_API_KEY)가 설정되지 않았습니다.',
+  image_unavailable: '이미지 AI 키(OPENAI_API_KEY 또는 GEMINI_API_KEY)가 설정되지 않았습니다.',
   image_refused: '이미지 모델이 이 사진을 거절했습니다. 다음 시도에서는 다른 유형을 뽑습니다.',
   image_timeout: '이미지 생성 시간이 초과되었습니다.',
   image_request_failed: '이미지 생성 요청에 실패했습니다.',
