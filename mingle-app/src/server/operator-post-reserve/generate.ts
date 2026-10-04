@@ -1,7 +1,6 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
-import { resolveAutoReplyModel } from '@/server/operator-auto-reply/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
 /**
@@ -15,7 +14,13 @@ export const RESERVE_CHUNK_SIZE = 20
 export const RESERVE_POST_MAX_CHARS = 400
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
-const CALL_TIMEOUT_MS = 60_000
+const CALL_TIMEOUT_MS = 120_000
+/** Posts need a stronger writer than chat replies: the small model writes every post as the same tidy sentence. */
+export const RESERVE_DEFAULT_MODEL = 'gemini-3.8-flash'
+
+export function resolveReserveModel(env: NodeJS.ProcessEnv = process.env): string {
+  return env.OPERATOR_POST_RESERVE_MODEL?.trim() || RESERVE_DEFAULT_MODEL
+}
 
 /** Post kinds seen on language-exchange apps; `weight` is the relative share. */
 export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
@@ -60,6 +65,64 @@ export function pickReserveTopics(count: number, random: Random = Math.random): 
   return picked
 }
 
+/**
+ * The form of one post. The server picks it per slot: left to itself the
+ * model writes every post as one complete, polite, reflective sentence.
+ */
+export const RESERVE_SHAPES: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
+  { key: 'fragment', weight: 3, brief: 'a fragment of two to eight words, not a complete sentence, like something muttered' },
+  { key: 'one_liner', weight: 4, brief: 'one short blunt sentence' },
+  { key: 'reaction', weight: 2.5, brief: 'a complaint, a groan or an excited outburst about one concrete thing that just happened' },
+  { key: 'question', weight: 2, brief: 'only a short direct question, with no lead-in before it' },
+  { key: 'few_lines', weight: 3, brief: 'two or three short sentences that include one concrete detail (a number, a dish, a title, a place)' },
+  { key: 'story', weight: 1.5, brief: 'a loose little story of four to six short lines with line breaks, ending flat or with a small joke rather than a lesson' },
+  { key: 'list', weight: 0.5, brief: 'a tiny list of two to four items on separate lines, with a few words before it' },
+]
+
+const VOICE_REGISTERS = [
+  'writes in the plain informal form, as if talking to themself or to friends; never the polite form',
+  'writes mostly in the plain informal form and switches to the polite form only when asking strangers a question',
+  'writes in a chatty polite form, but loosely, with dropped particles and trailing endings',
+] as const
+const VOICE_LAUGHTER = [
+  'almost never writes laughter',
+  'adds written laughter or crying now and then in the way natives type it',
+  'ends many posts with written laughter or crying in the way natives type it',
+] as const
+const VOICE_EMOJI = ['never uses emoji', 'uses an emoji in about one post out of five', 'uses an emoji in about one post out of three'] as const
+const VOICE_PUNCTUATION = [
+  'usually leaves out the final period',
+  'trails off with dots or a tilde instead of ending cleanly',
+  'uses ordinary punctuation but short sentences',
+] as const
+
+function seedNumber(seed: string): number {
+  let state = 2166136261
+  for (let index = 0; index < seed.length; index += 1) state = Math.imul(state ^ seed.charCodeAt(index), 16777619)
+  return state >>> 0
+}
+
+/** The account's writing habits: fixed per account, so all its posts sound like one person. */
+export function reserveVoice(seed: string): string[] {
+  const number = seedNumber(seed)
+  return [
+    VOICE_REGISTERS[number % VOICE_REGISTERS.length],
+    VOICE_LAUGHTER[(number >>> 4) % VOICE_LAUGHTER.length],
+    VOICE_EMOJI[(number >>> 8) % VOICE_EMOJI.length],
+    VOICE_PUNCTUATION[(number >>> 12) % VOICE_PUNCTUATION.length],
+  ]
+}
+
+function pickShape(random: Random): { key: string; brief: string } {
+  const total = RESERVE_SHAPES.reduce((sum, shape) => sum + shape.weight, 0)
+  let roll = random() * total
+  for (const shape of RESERVE_SHAPES) {
+    roll -= shape.weight
+    if (roll < 0) return shape
+  }
+  return RESERVE_SHAPES[0]
+}
+
 export type ReservePersona = {
   name: string | null
   bio: string | null
@@ -75,14 +138,18 @@ export type GeneratedReservePost = { topic: string; text: string }
 export function buildReserveInstructions(persona: Pick<ReservePersona, 'language'>): string {
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
-    'You write short social posts for one person on Mingle, an app where people from different countries chat and learn each other\'s languages.',
-    'The input JSON has "persona" (who is posting), "slots" (one post to write per slot; each slot has a number and a topic brief), and "alreadyWritten" (the starts of posts this person already has).',
-    `Write every post in ${languageName} (${persona.language}), the way a native speaker of the persona's age posts casually. A person learning another language may add one short phrase in that language when the topic is language learning; otherwise use only ${languageName}.`,
-    'Voice: one consistent person who fits the persona\'s bio, age and city. Casual and natural, not polished, not an advertisement, no motivational-poster tone.',
-    'Length: most posts are one or two sentences; a few are three or four. Emoji are optional and sparse (zero to two). No hashtags.',
+    'You ghostwrite short social posts for one person on Mingle, an app where people from different countries chat and learn each other\'s languages.',
+    'The input JSON has "persona" (who is posting), "voice" (this person\'s typing habits), "slots" (one post per slot; each has a number, a "topic" and a "shape"), and "alreadyWritten" (the starts of posts this person already has).',
+    `Write every post in ${languageName} (${persona.language}) exactly the way a native speaker of the persona's age types on their phone to friends: the slang, abbreviations, sentence endings and written laughter that are normal in that language right now. A person learning another language may add one short phrase in that language when the topic is language learning; otherwise use only ${languageName}.`,
+    'Follow "voice" in every post, and follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
+    'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
+    'What makes a post sound machine-written, so never do it: a tidy general statement about what is nice, precious or special; describing a mood or an atmosphere; a reflective conclusion or a lesson; balanced, complete, well-formed sentences one after another; addressing "everyone"; asking a survey-like question about preferences in formal wording; words like "truly", "precious", "special", "moment", "time to" used to wrap up a feeling.',
+    'Imperfection is welcome: dropped subjects and particles, a run-on, an abrupt stop, a mild typo once in a while. Mild grumbling, laziness, boredom and self-mockery are more common than gratitude.',
+    'Emoji and laughter only as "voice" says. A habit shows in some posts, not in every one: most posts must not end the same way (same emoji position, same trailing dots, same laughter). No hashtags.',
+    'Questions must not all open the same way (not always "everyone" or "does anyone"); often just ask the thing.',
     'Every post must differ from the others and from "alreadyWritten" in subject and opening words.',
-    'The posts are published on unknown future dates. Never mention a date, weekday, month, season, weather, holiday, current event, "today", "tomorrow", "this weekend", "new", or anything else that could be wrong on another day.',
-    'Use only facts consistent with the persona. Do not invent a specific employer, school, real person, or brand claims. No politics, religion debate, sexual content, or anything about money or selling.',
+    'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
+    'Use only facts consistent with the persona. Do not invent a specific employer, school or real person. No politics, religion debate, sexual content, or anything about money or selling.',
     'Never include contact details, links, other apps, @mentions or phone numbers, and never mention Mingle or being an AI.',
     'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>"}]} with exactly one entry per slot.',
   ].join('\n')
@@ -134,16 +201,19 @@ export async function generateReservePosts(args: {
   existingTexts: string[]
   generate?: GenerateFn
   model?: string
+  random?: Random
 }): Promise<GeneratedReservePost[]> {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
-  const slots = args.topics.map((topic, index) => ({ slot: index + 1, topic: briefs.get(topic) ?? topic }))
+  const random = args.random ?? Math.random
+  const slots = args.topics.map((topic, index) => ({ slot: index + 1, topic: briefs.get(topic) ?? topic, shape: pickShape(random).brief }))
   const seen = new Set(args.existingTexts.map(reservePostKey))
 
   const items = await generate({
     instructions: buildReserveInstructions(args.persona),
     input: {
       persona: args.persona,
+      voice: reserveVoice(`${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`),
       slots,
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
     },
@@ -153,7 +223,7 @@ export async function generateReservePosts(args: {
       if (!Array.isArray(posts)) throw new Error('invalid_posts')
       return posts as Array<{ slot?: unknown; text?: unknown }>
     },
-    model: args.model ?? resolveAutoReplyModel(),
+    model: args.model ?? resolveReserveModel(),
     temperature: 1,
     maxOutputTokens: 8192,
     timeoutMs: CALL_TIMEOUT_MS,
