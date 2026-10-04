@@ -7,6 +7,7 @@ What real posts, photos and comments look like on language-exchange apps, as a g
 | Source | When | Sample | Notes |
 | --- | --- | --- | --- |
 | HelloTalk, Moments → 추천 | 2026-10-04 | about 80 feed screens, about 60 posts, 72 comments | Feed of a Korean man learning Chinese, so it is almost entirely Chinese women in their twenties writing in Korean. Other viewers see a different mix. |
+| HelloTalk, Moments → 최신, 도움, 주변 | 2026-10-04 | 66 feed screens | Same account, so still mostly Chinese users. 주변 is locked after a few posts on the free plan. |
 | Kfriends, 스토리 → 전체 | 2026-10-04 | first screen only (scrolling did not work through iPhone Mirroring) | Both visible posts were low quality (sexual-chat bait, a throwaway-account notice). Not usable as a reference yet. |
 | Threads search (점심, 영어공부) | 2026-10-04 | about 20 posts | General SNS, not language exchange. Useful for native casual Korean only. |
 
@@ -40,6 +41,26 @@ Photos look like phone photos: uneven light, tilted, cropped heads, night shots 
 
 **Comments.** Median about 20 characters; nine in ten are under 70. Kinds: a compliment ("pretty", "nice pics", a row of heart emoji), an answer to the post's question (a list of neighborhoods, "bring a cardigan, it is already cold"), an offer ("talk with me!", "let's be friends"), a short joke or teasing, a correction or encouragement of the learner's writing. Comments come in several languages under one post (Korean, Chinese, English, French). Many posts get an encouraging comment from the app's own AI account. Typical counts: 20 to 150 likes and 1 to 7 comments; a few posts reach several hundred likes.
 
+## HelloTalk: the unfiltered feed (최신) and the help feed (도움)
+
+The recommended feed shows the posts that did well. The newest feed shows what people actually post, and it is plainer:
+
+- **Most posts get almost nothing**: 0 to 3 likes and no comments within the first hour. The 100-like posts of the recommended feed are the exception.
+- **Many are in the author's own language**, not the one being learned: a Chinese caption of a few characters, a remark about the sky or the weather, a proverb or a line of song lyric.
+- **Many are close to wordless**: an emoticon, two syllables or a single emoji over one or two selfies.
+- **Video is common**: a short selfie clip or a clip of the sky or a street, often with a face filter.
+- **Other things seen**: a diet remark after overeating, getting braces at the dentist, a pet that clings, not knowing how to explain a haircut to a hairdresser, a family business opening, an invitation to a voice room or a live stream (shown as a card), a cartoon or meme image instead of a photo.
+- **Time and distance labels** sit on each post ("53분 전"; in 주변, a neighborhood and "3.4km").
+
+The help feed is language work, and it is where native speakers are useful:
+
+- A learner's paragraph in the target language with a request to correct it, often textbook-like (a paragraph of simple sentences on one topic).
+- **Voice posts**: the same paragraph read aloud (20 to 40 seconds) asking how the pronunciation is.
+- "What does this mean?" and "what is the difference between these expressions?" questions.
+- Bilingual posts with the sentence in two languages.
+- Longer personal writing: a reflective paragraph, an aphorism, a short story in English tagged as writing practice.
+- Topic tags name the request: 수정해 주세요, 제 발음 어때요?, 이게 무슨 뜻이에요?, 언어 교환, 수다 떨기, 영어 학습.
+
 ## Native casual Korean (Threads)
 
 Line break after every clause; note-style endings (`~함`, `~음`, `~는 거임`, `~더라`); stories quote what someone said word for word; posts end with a rhetorical question to invite replies rather than a survey question; popular posts run five to ten lines; `ㅋㅋㅋ` and `ㅠㅠ` freely. A fair share of what search returns is promotion and should not be imitated.
@@ -50,4 +71,6 @@ Line break after every clause; note-style endings (`~함`, `~음`, `~는 거임`
 2. **Topic mix.** Raise self-introduction and friend-seeking far above the current weight, add the list-style introduction and the meetup or place-recommendation request, and allow one to three topic tags.
 3. **Photos on posts.** A text-only feed is itself unusual. Most posts need one to nine phone-style photos that match the caption; photo sets should repeat the same person and place.
 4. **Comments.** Short, mostly compliments, answers and offers to chat, in mixed languages.
-5. **Profile pictures.** The existing taxonomy (face, partly hidden, from behind, body, object, animal, scenery, several people) covers what was seen; cartoon or illustration avatars are more common than its 1% "other" share.
+5. **Engagement.** Likes and comments on operator posts should be mostly near zero, with an occasional popular post, as on the newest feed.
+6. **Native-speaker role.** Korean and Japanese accounts are the natives learners look for: answering "what does this mean", correcting a learner's sentence and replying to introductions is as typical for them as posting.
+7. **Profile pictures.** The existing taxonomy (face, partly hidden, from behind, body, object, animal, scenery, several people) covers what was seen; cartoon or illustration avatars are more common than its 1% "other" share.
