@@ -147,9 +147,35 @@ const CONVERSATION_MESSAGE_PUSH_COPY: Record<LegalDocumentLocale, { title: strin
   vi: { title: "Tin nhắn mới", separator: ": " },
 };
 
+const FEEDBACK_REPLY_PUSH_TITLES: Record<string, string> = {
+  ko: "피드백에 답변이 도착했어요",
+  en: "Reply to your feedback",
+  ja: "フィードバックに返信が届きました",
+  "zh-cn": "你的反馈有新回复",
+  "zh-tw": "你的意見回饋有新回覆",
+  es: "Respuesta a tus comentarios",
+  fr: "Réponse à votre commentaire",
+  de: "Antwort auf Ihr Feedback",
+  pt: "Resposta ao seu feedback",
+  it: "Risposta al tuo feedback",
+  ru: "Ответ на ваш отзыв",
+  ar: "رد على ملاحظاتك",
+  hi: "आपके फ़ीडबैक का जवाब आया है",
+  th: "มีคำตอบสำหรับความคิดเห็นของคุณ",
+  vi: "Phản hồi cho góp ý của bạn",
+};
+
 /** Title and body shown on the device, in the recipient's language (unknown -> English). */
 export function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
+  if (message.type === "feedback_reply") {
+    const language = message.recipientLanguage.trim().toLowerCase();
+    const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
+    return {
+      title: FEEDBACK_REPLY_PUSH_TITLES[language] ?? FEEDBACK_REPLY_PUSH_TITLES.en,
+      body: preview,
+    };
+  }
   if (message.type === "conversation_message") {
     const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
@@ -175,8 +201,8 @@ function createPushData(message: PushMessage): Record<string, string> {
   const data: Record<string, string> = {
     type: message.type,
     notificationId: message.notificationId,
-    actorId: message.actorId,
   };
+  if (message.actorId) data.actorId = message.actorId;
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
   if (message.navigationUrl) data.url = message.navigationUrl;
@@ -209,7 +235,7 @@ async function sendApnsNotification(
     },
     type: message.type,
     notificationId: message.notificationId,
-    actorId: message.actorId,
+    ...(message.actorId ? { actorId: message.actorId } : {}),
     messageId: message.notificationId,
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),
@@ -583,4 +609,61 @@ export async function sendPushNotificationForConversationMessage(args: {
   }
 
   await settlePushDeliveries(targetEntries);
+}
+
+// Team replies have no actor user, so like message pushes they do not create
+// UserNotification rows. Anonymous feedback (no account) cannot be pushed to.
+export async function sendPushNotificationForFeedbackReply(args: {
+  replyId: string;
+  recipientUserId: string;
+  replyText: string;
+  feedbackLocale?: string | null;
+}): Promise<void> {
+  const apnsConfig = readApnsConfig();
+  const fcmConfig = readFcmConfig();
+  if (!apnsConfig && !fcmConfig) return;
+
+  const messagePreview = args.replyText.replace(/\s+/g, " ").trim().slice(0, 240);
+  if (!messagePreview) return;
+
+  const recipient = await prisma.user.findUnique({
+    where: { id: args.recipientUserId },
+    select: {
+      language: true,
+      pageLanguage: true,
+      pushTokens: {
+        select: {
+          id: true,
+          platform: true,
+          token: true,
+          environment: true,
+        },
+      },
+    },
+  });
+  if (!recipient) return;
+
+  const message: PushMessage = {
+    notificationId: args.replyId,
+    type: "feedback_reply",
+    actorId: "",
+    actorLabel: "Mingle",
+    recipientLanguage: recipient.pageLanguage?.trim()
+      || recipient.language?.trim()
+      || args.feedbackLocale?.trim()
+      || "en",
+    messagePreview,
+  };
+  const targets = recipient.pushTokens as PushTarget[];
+  const results = await Promise.allSettled(
+    targets.map((target) => sendPushToTarget(target, message, apnsConfig, fcmConfig)),
+  );
+  const invalidTokenIds = results.flatMap((result, index) => (
+    result.status === "fulfilled" && result.value.invalidToken
+      ? [targets[index]?.id]
+      : []
+  ));
+  if (invalidTokenIds.length > 0) {
+    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
+  }
 }
