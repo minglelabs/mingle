@@ -85,7 +85,7 @@ describe('auto-reply prompt', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('uses gemini-3.8-flash-lite unless overridden', () => {
-    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('gemini-3.8-flash-lite')
+    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('gemini-3.5-flash-lite')
     expect(resolveAutoReplyModel({ OPERATOR_AUTO_REPLY_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
@@ -167,7 +167,7 @@ describe('auto-reply worker', () => {
     mocks.queryRaw.mockResolvedValue([candidate])
     const summary = await runOperatorAutoReplies({ now: () => NOW })
     expect(summary).toMatchObject({ enabled: true, candidates: 1, sent: 1 })
-    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.8-flash-lite' })
+    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.5-flash-lite' })
     expect(mocks.send).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: null }),
       { operatorUserId: 'op_1', conversationId: 'conv_1', text: 'Oi!', clientRequestId: 'auto-msg9' },

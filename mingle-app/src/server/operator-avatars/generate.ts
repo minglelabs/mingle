@@ -10,12 +10,24 @@ import { pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } fro
  * as a staff upload (re-encoded, audited). The spec is saved on the account
  * so staff can see what the photo was meant to be.
  */
-export const AVATAR_DEFAULT_IMAGE_MODEL = 'gemini-2.5-flash-image'
-const CALL_TIMEOUT_MS = 90_000
+export const AVATAR_DEFAULT_IMAGE_MODEL = 'gpt-image-2'
+/** OpenAI only. `low` is about $0.006 a photo and good enough for a profile picture. */
+export const AVATAR_DEFAULT_IMAGE_QUALITY = 'low'
+const CALL_TIMEOUT_MS = 120_000
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/images/generations'
 
 export function resolveAvatarImageModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.OPERATOR_AVATAR_IMAGE_MODEL?.trim() || AVATAR_DEFAULT_IMAGE_MODEL
+}
+
+export function resolveAvatarImageQuality(env: NodeJS.ProcessEnv = process.env): string {
+  return env.OPERATOR_AVATAR_IMAGE_QUALITY?.trim() || AVATAR_DEFAULT_IMAGE_QUALITY
+}
+
+/** `gpt-*` and `chatgpt-*` models go to OpenAI; everything else to Gemini. */
+export function isOpenAiImageModel(model: string): boolean {
+  return /^(gpt-|chatgpt-|dall-e)/i.test(model)
 }
 
 export type AvatarGenerationErrorCode =
@@ -38,11 +50,27 @@ export async function requestAvatarImage(
   prompt: string,
   options: { model?: string; fetchImpl?: typeof fetch } = {},
 ): Promise<{ ok: true; bytes: Buffer } | { ok: false; error: AvatarGenerationErrorCode; detail?: string }> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim()
-  if (!apiKey) return { ok: false, error: 'image_unavailable' }
   const model = options.model ?? resolveAvatarImageModel()
+  const openAi = isOpenAiImageModel(model)
+  const apiKey = (openAi ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY)?.trim()
+  if (!apiKey) return { ok: false, error: 'image_unavailable' }
   const signal = AbortSignal.timeout(CALL_TIMEOUT_MS)
   try {
+    if (openAi) {
+      const response = await (options.fetchImpl ?? fetch)(OPENAI_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, prompt, size: '1024x1024', quality: resolveAvatarImageQuality(), n: 1 }),
+        signal,
+      })
+      if (!response.ok) {
+        // 400 here is nearly always the content filter turning the prompt down.
+        return { ok: false, error: response.status === 400 ? 'image_refused' : 'image_request_failed', detail: `http_${response.status}` }
+      }
+      const payload = await response.json() as { data?: Array<{ b64_json?: string }> }
+      const data = payload.data?.[0]?.b64_json
+      return data ? { ok: true, bytes: Buffer.from(data, 'base64') } : { ok: false, error: 'image_refused', detail: 'no_image' }
+    }
     const response = await (options.fetchImpl ?? fetch)(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },

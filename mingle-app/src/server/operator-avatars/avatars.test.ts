@@ -51,7 +51,7 @@ function sampleCategories(persona: AvatarPersona, count: number): Map<string, nu
 
 describe('avatar taxonomy', () => {
   it('covers every kind of photo, with subtypes for each', () => {
-    expect(AVATAR_CATEGORIES.map((entry) => entry.key)).toEqual(['face', 'partial', 'back', 'body', 'part', 'object', 'animal', 'scenery', 'other'])
+    expect(AVATAR_CATEGORIES.map((entry) => entry.key)).toEqual(['face', 'partial', 'back', 'body', 'part', 'group', 'object', 'animal', 'scenery', 'other'])
     for (const { key } of AVATAR_CATEGORIES) expect(AVATAR_SUBTYPES[key].length).toBeGreaterThan(2)
     expect(AVATAR_SUBTYPES.back.length).toBeGreaterThanOrEqual(12)
     expect(AVATAR_SUBTYPES.body.length).toBeGreaterThanOrEqual(12)
@@ -131,6 +131,7 @@ describe('avatar generation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('GEMINI_API_KEY', 'test-key')
+    vi.stubEnv('OPERATOR_AVATAR_IMAGE_MODEL', 'gemini-2.5-flash-image')
     mocks.userFindFirst.mockResolvedValue({
       name: '민아', bio: null, birthDate: new Date('2000-01-01'), locationCity: 'Seoul', locationCountry: 'South Korea',
       operatorAccount: { personaCountry: 'KR', personaGender: 'female' },
@@ -140,7 +141,7 @@ describe('avatar generation', () => {
   })
 
   it('uses the configured image model', () => {
-    expect(resolveAvatarImageModel({} as NodeJS.ProcessEnv)).toBe('gemini-2.5-flash-image')
+    expect(resolveAvatarImageModel({} as NodeJS.ProcessEnv)).toBe('gpt-image-2')
     expect(resolveAvatarImageModel({ OPERATOR_AVATAR_IMAGE_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
@@ -165,6 +166,20 @@ describe('avatar generation', () => {
     expect(body.contents[0].parts[0].text).toContain('profile picture')
     expect(mocks.setAvatar).toHaveBeenCalledWith(null, 'op_1', Buffer.from('png-bytes'), expect.objectContaining({ generated: true }))
     expect(mocks.accountUpdateMany.mock.calls[0][0].data.avatarSpec.labelKo).toContain(' · ')
+  })
+
+  it('sends gpt models to OpenAI at low quality', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '')
+    expect(await requestAvatarImage('p', { model: 'gpt-image-2' })).toEqual({ ok: false, error: 'image_unavailable' })
+    vi.stubEnv('OPENAI_API_KEY', 'openai-key')
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 }))
+    const result = await requestAvatarImage('a prompt', { model: 'gpt-image-2', fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes') })
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://api.openai.com/v1/images/generations')
+    expect(JSON.parse(String(init.body))).toEqual({ model: 'gpt-image-2', prompt: 'a prompt', size: '1024x1024', quality: 'low', n: 1 })
+    const refused = vi.fn(async () => new Response('{}', { status: 400 }))
+    expect(await requestAvatarImage('p', { model: 'gpt-image-2', fetchImpl: refused as unknown as typeof fetch })).toEqual({ ok: false, error: 'image_refused', detail: 'http_400' })
   })
 
   it('is not_operator for an unknown account', async () => {
