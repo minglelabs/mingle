@@ -158,6 +158,7 @@ export default function NativeConversationShareOverlay() {
   // on this now-joined overlay.
   const handleJoin = useCallback(async () => {
     const shareToken = overlay?.shareToken;
+    const joiningRequestId = overlay?.requestId;
     if (!shareToken || isJoining || pendingJoinNavigationRef.current) return;
 
     setIsJoining(true);
@@ -196,9 +197,13 @@ export default function NativeConversationShareOverlay() {
       // would briefly reveal whatever was behind it (the conversation list).
       await waitForConversationRoute(conversationId);
       await new Promise((resolve) => window.setTimeout(resolve, ROOM_ENTER_SETTLE_MS));
-      setSurfaceTransitionMode("instant");
-      overlayRef.current = null;
-      setOverlay(null);
+      // Another share link may have opened over this one while waiting —
+      // that overlay is not this join's to close.
+      if (overlayRef.current?.requestId === joiningRequestId) {
+        setSurfaceTransitionMode("instant");
+        overlayRef.current = null;
+        setOverlay(null);
+      }
     } catch {
       setJoinError(true);
     } finally {
@@ -208,7 +213,7 @@ export default function NativeConversationShareOverlay() {
         joinNavigationReleaseTimerRef.current = null;
       }, 600);
     }
-  }, [isJoining, locale, overlay?.shareToken, router, searchParams]);
+  }, [isJoining, locale, overlay?.requestId, overlay?.shareToken, router, searchParams]);
 
   const handleCopyLink = useCallback(async () => {
     const shareToken = overlay?.shareToken;
