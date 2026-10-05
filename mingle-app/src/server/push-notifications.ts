@@ -173,8 +173,8 @@ function createPushData(message: PushMessage): Record<string, string> {
   const data: Record<string, string> = {
     type: message.type,
     notificationId: message.notificationId,
-    actorId: message.actorId,
   };
+  if (message.actorId) data.actorId = message.actorId;
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
   return data;
@@ -206,7 +206,7 @@ async function sendApnsNotification(
     },
     type: message.type,
     notificationId: message.notificationId,
-    actorId: message.actorId,
+    ...(message.actorId ? { actorId: message.actorId } : {}),
     messageId: message.notificationId,
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),

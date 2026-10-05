@@ -70,7 +70,7 @@ describe("sendPushNotificationForFeedbackReply", () => {
       expect.objectContaining({
         token: "device-token",
         notification: { title: "มีคำตอบสำหรับความคิดเห็นของคุณ", body: "สวัสดีครับ ขอบคุณครับ" },
-        data: { type: "feedback_reply", notificationId: "reply-1", actorId: "" },
+        data: { type: "feedback_reply", notificationId: "reply-1" },
       }),
     ]);
   });
