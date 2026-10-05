@@ -390,9 +390,10 @@ async function listUserDefaultDisplayLanguagesById(
 // record being serialized, same pattern as listChannelMembersByChannelId.
 async function listPendingInviteeProfilesByUserIds(
   userIds: string[],
+  client: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, PendingInviteeProfile>> {
   if (userIds.length === 0) return new Map();
-  const rows = await prisma.user.findMany({
+  const rows = await client.user.findMany({
     where: { id: { in: userIds } },
     select: {
       id: true,
@@ -434,12 +435,13 @@ async function listPendingInviteeProfilesByUserIds(
 
 async function listChannelMembersByChannelId(
   channelIds: string[],
+  client: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, ChannelMemberProfile[]>> {
   if (channelIds.length === 0) {
     return new Map();
   }
 
-  const rows = await prisma.appConversationChannelMember.findMany({
+  const rows = await client.appConversationChannelMember.findMany({
     where: { channelId: { in: channelIds } },
     orderBy: { joinedAt: "asc" },
     select: {
@@ -3277,6 +3279,47 @@ export async function deleteConversationChannel(args: {
   throw new Error("conversation_channel_delete_conflict");
 }
 
+// The title frozen into a share snapshot: what the SHARER sees for this room
+// in their own list (resolveViewerFacingTitle), not the bare stored title —
+// an un-renamed multi-member room's stored title ("대화 7", or an
+// auto-generated one) is a label no member ever sees, so a link showing it
+// reads as some other room.
+const sharedTitleSourceSelect = {
+  title: true,
+  pendingInviteeUserIds: true,
+  userEditedTitleAt: true,
+} as const;
+
+async function resolveSharerFacingTitle(
+  channel: {
+    id: string;
+    title: string;
+    pendingInviteeUserIds: string[];
+    userEditedTitleAt: Date | null;
+  },
+  sharerUserId: string,
+  // Always the caller's transaction client: these reads run while the share
+  // transaction holds the room's row lock, so they must not take further
+  // connections from the pool.
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const membersByChannelId = await listChannelMembersByChannelId([channel.id], tx);
+  const pendingInviteeProfileById = await listPendingInviteeProfilesByUserIds(
+    channel.pendingInviteeUserIds,
+    tx,
+  );
+  const pendingInviteeProfiles = channel.pendingInviteeUserIds
+    .map((userId) => pendingInviteeProfileById.get(userId))
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+  return resolveViewerFacingTitle(
+    channel.title,
+    membersByChannelId.get(channel.id),
+    sharerUserId,
+    pendingInviteeProfiles,
+    channel.userEditedTitleAt,
+  );
+}
+
 // Any member can turn the room's share link on or off — unlike
 // deleteConversationChannel this isn't owner-only, since it's a repeatable,
 // non-destructive toggle (no "who owns the switch" conflict to resolve).
@@ -3358,7 +3401,7 @@ export async function setConversationShareEnabled(args: {
         if (locked.shareEnabled && locked.shareToken) {
           const stored = await tx.appConversationChannel.findUniqueOrThrow({
             where: { id: args.conversationId },
-            select: { title: true },
+            select: sharedTitleSourceSelect,
           });
           return tx.appConversationChannel.update({
             where: { id: args.conversationId },
@@ -3366,7 +3409,11 @@ export async function setConversationShareEnabled(args: {
               shareEnabled: true,
               sharedByUserId: args.userId,
               sharedAt: new Date(),
-              sharedTitle: stored.title,
+              sharedTitle: await resolveSharerFacingTitle(
+                { id: args.conversationId, ...stored },
+                args.userId,
+                tx,
+              ),
             },
             select: conversationChannelSelect,
           });
@@ -3377,7 +3424,7 @@ export async function setConversationShareEnabled(args: {
         // whole transaction covers the (astronomically unlikely) collision.
         const stored = await tx.appConversationChannel.findUniqueOrThrow({
           where: { id: args.conversationId },
-          select: { title: true },
+          select: sharedTitleSourceSelect,
         });
         return tx.appConversationChannel.update({
           where: { id: args.conversationId },
@@ -3386,7 +3433,11 @@ export async function setConversationShareEnabled(args: {
             shareEnabled: true,
             sharedByUserId: args.userId,
             sharedAt: new Date(),
-            sharedTitle: stored.title,
+            sharedTitle: await resolveSharerFacingTitle(
+              { id: args.conversationId, ...stored },
+              args.userId,
+              tx,
+            ),
           },
           select: conversationChannelSelect,
         });
@@ -3446,7 +3497,7 @@ export async function refreshConversationShareSnapshot(args: {
         ...buildVisibleMembershipWhere(args.userId),
         ...buildVisibleConversationWhere(),
       },
-      select: { id: true, title: true, shareToken: true, shareEnabled: true },
+      select: { id: true, shareToken: true, shareEnabled: true, ...sharedTitleSourceSelect },
     });
 
     if (!locked || !locked.shareToken || !locked.shareEnabled) {
@@ -3458,7 +3509,7 @@ export async function refreshConversationShareSnapshot(args: {
       data: {
         sharedByUserId: args.userId,
         sharedAt: new Date(),
-        sharedTitle: locked.title,
+        sharedTitle: await resolveSharerFacingTitle(locked, args.userId, tx),
       },
       select: conversationChannelSelect,
     });
