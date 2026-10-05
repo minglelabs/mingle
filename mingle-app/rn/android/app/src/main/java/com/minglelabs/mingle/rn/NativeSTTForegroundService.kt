@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import java.util.concurrent.atomic.AtomicReference
 
 class NativeSTTForegroundService : Service() {
 
@@ -23,12 +24,14 @@ class NativeSTTForegroundService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP -> stopForegroundService()
-      else -> startForegroundService()
+      else -> startForegroundService(
+        deviceAudio = intent?.getBooleanExtra(EXTRA_DEVICE_AUDIO, false) == true,
+      )
     }
     return START_NOT_STICKY
   }
 
-  private fun startForegroundService() {
+  private fun startForegroundService(deviceAudio: Boolean) {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     val contentIntent = PendingIntent.getActivity(
       this,
@@ -39,12 +42,42 @@ class NativeSTTForegroundService : Service() {
 
     val notification = Notification.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
-      .setContentTitle("Mingle microphone active")
-      .setContentText("Speech translation capture is running")
+      .setContentTitle(if (deviceAudio) "Mingle is translating device audio" else "Mingle microphone active")
+      .setContentText(
+        if (deviceAudio) "Sound played on this device is being captured"
+        else "Speech translation capture is running",
+      )
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setContentIntent(contentIntent)
       .build()
+
+    if (deviceAudio) {
+      // The module may ask for the MediaProjection only once this service is
+      // in the foreground with the mediaProjection type; report the outcome.
+      val listener = pendingStartListener.getAndSet(null)
+      try {
+        startForeground(
+          NOTIFICATION_ID,
+          notification,
+          ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+        )
+        listener?.invoke(null)
+      } catch (error: Throwable) {
+        // startForegroundService() must still be answered with startForeground()
+        // before the service stops, or the system kills the app.
+        runCatching {
+          startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+          )
+        }
+        listener?.invoke(error)
+        stopForegroundService()
+      }
+      return
+    }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       startForeground(
@@ -89,10 +122,21 @@ class NativeSTTForegroundService : Service() {
     private const val NOTIFICATION_ID = 44_001
     private const val ACTION_START = "com.minglelabs.mingle.rn.stt.START"
     private const val ACTION_STOP = "com.minglelabs.mingle.rn.stt.STOP"
+    private const val EXTRA_DEVICE_AUDIO = "com.minglelabs.mingle.rn.stt.DEVICE_AUDIO"
 
-    fun start(context: Context) {
+    // Told once, on the main thread, whether the device-audio start reached
+    // the foreground (null) or why it did not.
+    private val pendingStartListener = AtomicReference<((Throwable?) -> Unit)?>(null)
+
+    fun start(
+      context: Context,
+      deviceAudio: Boolean = false,
+      onDeviceAudioStarted: ((Throwable?) -> Unit)? = null,
+    ) {
+      pendingStartListener.set(if (deviceAudio) onDeviceAudioStarted else null)
       val intent = Intent(context, NativeSTTForegroundService::class.java).apply {
         action = ACTION_START
+        putExtra(EXTRA_DEVICE_AUDIO, deviceAudio)
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         context.startForegroundService(intent)
@@ -102,6 +146,7 @@ class NativeSTTForegroundService : Service() {
     }
 
     fun stop(context: Context) {
+      pendingStartListener.set(null)
       val intent = Intent(context, NativeSTTForegroundService::class.java).apply {
         action = ACTION_STOP
       }

@@ -1,11 +1,16 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
+// What a session transcribes: the microphone, or the sound other apps play on
+// this device (Android playback capture; needs a screen-capture consent).
+export type NativeSttCaptureSource = 'microphone' | 'device_audio';
+
 type NativeSttStartOptions = {
   conversationId?: string;
   sessionId?: string;
   wsUrl: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  captureSource?: NativeSttCaptureSource;
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: 'fin' | 'end';
   sonioxEndpointMaxDelayMs?: number;
@@ -63,6 +68,20 @@ const nativeEmitter = nativeModule ? new NativeEventEmitter(NativeModules.Native
 
 export function isNativeSttAvailable(): boolean {
   return (Platform.OS === 'ios' || Platform.OS === 'android') && Boolean(nativeModule && nativeEmitter);
+}
+
+// The shell's JS ships inside the same binary as its native STT module, so the
+// platform alone tells whether this build can capture device audio (Android
+// playback capture exists on every supported OS version; iOS has no
+// equivalent in this module).
+export function isNativeDeviceAudioCaptureAvailable(): boolean {
+  return Platform.OS === 'android' && Boolean(nativeModule && nativeEmitter);
+}
+
+export function normalizeNativeSttCaptureSource(value: unknown): NativeSttCaptureSource {
+  return typeof value === 'string' && value.trim().toLowerCase() === 'device_audio'
+    ? 'device_audio'
+    : 'microphone';
 }
 
 export async function startNativeStt(options: NativeSttStartOptions): Promise<{ sampleRate: number }> {
