@@ -705,3 +705,223 @@ model AppMessageImageTextTranslation {
   @@id([messageId, language])
   @@map("app_message_image_text_translations")
 }
+
+// ---------------------------------------------------------------------------
+// Coins (docs/coin-iap-spec.md). All amounts are BigInt micro-coins
+// (1 coin = 1,000,000 micro = $0.001). Coin tables keep a plain user_id with no
+// FK to app_users so financial records survive account deletion.
+// ---------------------------------------------------------------------------
+
+// One row per user. A fast snapshot, not the source of truth (the ledger is).
+model AppCoinWallet {
+  userId                 String    @id @map("user_id")
+  balanceMicro           BigInt    @default(0) @map("balance_micro")
+  freeBalanceMicro       BigInt    @default(0) @map("free_balance_micro")
+  paidBalanceMicro       BigInt    @default(0) @map("paid_balance_micro")
+  lastDailyGrantAt       DateTime? @map("last_daily_grant_at")
+  dailyGrantSeq          Int       @default(0) @map("daily_grant_seq")
+  lifetimePurchasedMicro BigInt    @default(0) @map("lifetime_purchased_micro")
+  lifetimeSpentMicro     BigInt    @default(0) @map("lifetime_spent_micro")
+  version                Int       @default(0)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@map("app_coin_wallets")
+}
+
+// One record per top-up (daily free refill, purchase, admin grant, ...).
+model AppCoinLot {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  // daily_free | purchase | admin_grant | signup_bonus | refund_reversal
+  source         String
+  isFree         Boolean   @map("is_free")
+  grantedMicro   BigInt    @map("granted_micro")
+  remainingMicro BigInt    @map("remaining_micro")
+  expiresAt      DateTime? @map("expires_at")
+  purchaseId     String?   @map("purchase_id")
+  adminGrantId   String?   @map("admin_grant_id")
+  note           String?
+  meta           Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, isFree(sort: Desc), createdAt], map: "app_coin_lots_user_spend_order_idx")
+  @@index([purchaseId], map: "app_coin_lots_purchase_id_idx")
+  @@map("app_coin_lots")
+}
+
+// Append-only ledger: rows are never updated or deleted.
+model AppCoinLedger {
+  id                BigInt   @id @default(autoincrement())
+  userId            String   @map("user_id")
+  // grant | spend | expire | refund_clawback | admin_revoke | adjust
+  type              String
+  // Signed: grants positive, everything that removes coins negative.
+  amountMicro       BigInt   @map("amount_micro")
+  balanceAfterMicro BigInt   @map("balance_after_micro")
+  lotId             String?  @map("lot_id")
+  usageChargeId     String?  @map("usage_charge_id")
+  purchaseId        String?  @map("purchase_id")
+  adminGrantId      String?  @map("admin_grant_id")
+  idempotencyKey    String   @unique(map: "app_coin_ledger_idempotency_key_uidx") @map("idempotency_key")
+  meta              Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  allocations AppCoinSpendAllocation[]
+
+  @@index([userId, id(sort: Desc)], map: "app_coin_ledger_user_id_desc_idx")
+  @@index([createdAt], map: "app_coin_ledger_created_at_idx")
+  @@map("app_coin_ledger")
+}
+
+// Which lots one ledger row took coins from, and how much from each.
+model AppCoinSpendAllocation {
+  id          BigInt @id @default(autoincrement())
+  ledgerId    BigInt @map("ledger_id")
+  lotId       String @map("lot_id")
+  amountMicro BigInt @map("amount_micro")
+
+  ledger AppCoinLedger @relation(fields: [ledgerId], references: [id], onDelete: Restrict)
+
+  @@index([ledgerId], map: "app_coin_spend_allocations_ledger_id_idx")
+  @@index([lotId], map: "app_coin_spend_allocations_lot_id_idx")
+  @@map("app_coin_spend_allocations")
+}
+
+// Calculation basis for one usage charge.
+model AppCoinUsageCharge {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  // stt | translation | tts | image_text
+  kind             String
+  // { second?, input_token?, output_token?, char?, image?, rates: [...] }
+  units            Json
+  model            String?
+  provider         String?
+  pricingRateId    String?  @map("pricing_rate_id")
+  costUsdMicro     BigInt   @map("cost_usd_micro")
+  marginBps        Int      @map("margin_bps")
+  // Amount actually deducted (in shadow mode: the amount that would have been).
+  chargedMicro     BigInt   @map("charged_micro")
+  uncollectedMicro BigInt   @default(0) @map("uncollected_micro")
+  // true = computed and recorded only; the wallet was not touched.
+  shadow           Boolean  @default(false)
+  conversationId   String?  @map("conversation_id")
+  messageId        String?  @map("message_id")
+  sessionKey       String?  @map("session_key")
+  idempotencyKey   String   @unique(map: "app_coin_usage_charges_idempotency_key_uidx") @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_coin_usage_charges_user_created_at_idx")
+  @@index([createdAt], map: "app_coin_usage_charges_created_at_idx")
+  @@map("app_coin_usage_charges")
+}
+
+// Versioned price list. Rows are never edited; a change closes effective_to
+// and inserts a new row. model "*" is the fallback for a kind.
+model AppCoinPricingRate {
+  id                      String    @id @default(cuid())
+  kind                    String
+  provider                String
+  model                   String
+  // second | input_token | output_token | char | image
+  unit                    String
+  // Micro-USD per 1,000,000 units (token prices are fractions of a micro-USD per unit).
+  usdMicroPerMillionUnits BigInt    @map("usd_micro_per_million_units")
+  marginBps               Int       @default(15000) @map("margin_bps")
+  effectiveFrom           DateTime  @default(now()) @map("effective_from")
+  effectiveTo             DateTime? @map("effective_to")
+  createdByAdmin          String?   @map("created_by_admin")
+  note                    String?
+  createdAt               DateTime  @default(now()) @map("created_at")
+
+  @@index([kind, model, unit, effectiveFrom], map: "app_coin_pricing_rates_lookup_idx")
+  @@map("app_coin_pricing_rates")
+}
+
+model AppIapProduct {
+  id             String   @id @default(cuid())
+  // ios | android | web
+  platform       String
+  storeProductId String   @map("store_product_id")
+  // web only: the product's id at the payment provider (Polar product UUID).
+  providerProductId String? @map("provider_product_id")
+  coinMicro      BigInt   @map("coin_micro")
+  bonusMicro     BigInt   @default(0) @map("bonus_micro")
+  priceUsdCents  Int      @map("price_usd_cents")
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  badge          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([platform, storeProductId], map: "app_iap_products_platform_store_product_uidx")
+  @@map("app_iap_products")
+}
+
+model AppIapPurchase {
+  id                         String    @id @default(cuid())
+  userId                     String    @map("user_id")
+  platform                   String
+  productId                  String    @map("product_id")
+  // iOS transactionId, Android purchaseToken.
+  storeTransactionId         String    @unique(map: "app_iap_purchases_store_transaction_uidx") @map("store_transaction_id")
+  storeOriginalTransactionId String?   @map("store_original_transaction_id")
+  // pending | verified | granted | refunded | revoked | failed
+  status                     String    @default("pending")
+  priceAmountMicros          BigInt?   @map("price_amount_micros")
+  priceCurrency              String?   @map("price_currency")
+  storefrontCountry          String?   @map("storefront_country")
+  rawPayload                 Json?     @map("raw_payload")
+  // sandbox | production
+  environment                String?
+  lotId                      String?   @map("lot_id")
+  meta                       Json?
+  verifiedAt                 DateTime? @map("verified_at")
+  grantedAt                  DateTime? @map("granted_at")
+  refundedAt                 DateTime? @map("refunded_at")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_iap_purchases_user_created_at_idx")
+  @@index([createdAt], map: "app_iap_purchases_created_at_idx")
+  @@map("app_iap_purchases")
+}
+
+// Raw store server notifications (webhooks).
+model AppIapStoreEvent {
+  id                 String    @id @default(cuid())
+  platform           String
+  notificationType   String?   @map("notification_type")
+  // Store-side unique id of the notification, for duplicate deliveries.
+  notificationId     String?   @unique(map: "app_iap_store_events_notification_uidx") @map("notification_id")
+  storeTransactionId String?   @map("store_transaction_id")
+  rawPayload         Json      @map("raw_payload")
+  processedAt        DateTime? @map("processed_at")
+  processResult      String?   @map("process_result")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  @@index([storeTransactionId], map: "app_iap_store_events_store_transaction_idx")
+  @@index([createdAt], map: "app_iap_store_events_created_at_idx")
+  @@map("app_iap_store_events")
+}
+
+// Admin grants and revocations (amount_micro < 0 = revoke). main has no admin
+// session table, so the login id and request info identify the actor.
+model AppCoinAdminGrant {
+  id            String    @id @default(cuid())
+  adminUsername String    @map("admin_username")
+  requestIp     String?   @map("request_ip")
+  userAgent     String?   @map("user_agent")
+  userId        String    @map("user_id")
+  amountMicro   BigInt    @map("amount_micro")
+  // Amount actually applied (a revoke stops at the remaining balance).
+  appliedMicro  BigInt    @default(0) @map("applied_micro")
+  isFree        Boolean   @map("is_free")
+  reason        String
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
+  @@map("app_coin_admin_grants")
+}
