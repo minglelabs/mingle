@@ -191,7 +191,7 @@ Last reviewed: 2026-10-05
       <td>Speechmatics Melia</td>
       <td><code>Melia 1</code></td>
       <td>2026-06-17</td>
-      <td>△ (출시는 batch 전용, RT는 미확인)</td>
+      <td>△ (RT는 preview, 정식은 batch만)</td>
       <td>$0.12/h pre-recorded<br>RT 별도 미공개</td>
       <td>◎ (56개 언어, 문장 중 코드스위칭)</td>
       <td>미평가</td>
@@ -201,7 +201,7 @@ Last reviewed: 2026-10-05
       <td>△ (production preview)</td>
       <td>미평가</td>
       <td>미평가</td>
-      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/introducing-melia-multilingual-speech-to-text-model">Melia 출시 공지</a>, <a href="https://speechmatics.featurebase.app/en/changelog/20260702-realtime-saas">Realtime SaaS release note</a>. 출시 시점은 batch 전용($0.129/h, 월 10h 무료)이었고, 2026-07-02 Realtime SaaS에 <code>model</code> 속성으로 Melia-1 선택이 추가됨. RT 정식 지원 여부와 RT 가격은 미확인. 언어를 미리 지정하지 않는 다국어 모델로 Standard/Enhanced를 대체하지 않고 병행</td>
+      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/introducing-melia-multilingual-speech-to-text-model">Melia 출시 공지</a>, <a href="https://speechmatics.featurebase.app/en/changelog/20260702-realtime-saas">Realtime SaaS release note</a>. 출시 시점은 batch 전용($0.129/h, 월 10h 무료)이었고, 2026-07-02 Realtime SaaS에 <code>model</code> 속성으로 Melia-1 선택이 추가됨. 다만 <a href="https://docs.speechmatics.com/speech-to-text/models">공식 모델 문서</a>는 여전히 Melia 1을 batch 전용으로 명시하며, RT는 preview 엔드포인트로만 제공되는 것으로 보임. RT 가격은 미공개. 언어를 미리 지정하지 않는 다국어 모델로 Standard/Enhanced를 대체하지 않고 병행</td>
     </tr>
     <tr>
       <td>AssemblyAI</td>
@@ -237,11 +237,11 @@ Last reviewed: 2026-10-05
     </tr>
     <tr>
       <td>Microsoft Azure Speech / Foundry</td>
-      <td><code>MAI-Transcribe-1</code></td>
-      <td>2026-04-02</td>
-      <td align="center">미확인</td>
-      <td>$0.36/h</td>
-      <td align="center">O</td>
+      <td><code>MAI-Transcribe-2-Streaming</code> (RT)<br><code>MAI-Transcribe-2</code> (batch)</td>
+      <td>2026-10-01 (RT)<br>2026-09-03 (batch)</td>
+      <td>O (Streaming 모델만)</td>
+      <td>$0.54/h RT<br>$0.10/h batch (2026-12-31까지)</td>
+      <td>O (60개 언어 자동 감지)</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
@@ -249,7 +249,7 @@ Last reviewed: 2026-10-05
       <td align="center">△</td>
       <td align="center">△</td>
       <td align="center">△</td>
-      <td><a href="https://microsoft.ai/pdf/MAI-Transcribe-1-Model-Card.pdf">MAI-Transcribe-1 model card</a>, <a href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe">Microsoft Learn</a></td>
+      <td><a href="https://microsoft.ai/pdf/MAI-Transcribe-1-Model-Card.pdf">MAI-Transcribe-1 model card</a>, <a href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe">Microsoft Learn</a>, <a href="https://microsoft.ai/news/our-first-streaming-transcription-model/">MAI-Transcribe-2-Streaming 출시 공지</a>. <code>MAI-Transcribe-1</code>은 실시간 미지원 상태로 2026-08-20 deprecated. <code>MAI-Transcribe-2</code>는 public preview(SLA 없음)이며 파일 기반 Fast Transcription API 전용, 한국어 포함 60개 언어. 실시간은 <code>MAI-Transcribe-2-Streaming</code>(Realtime WebSocket, Speech SDK)으로 제공. 가격은 2차 출처 기준이며 평가 칸은 MAI-Transcribe-1 당시 값</td>
     </tr>
     <tr>
       <td>IBM</td>
