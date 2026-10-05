@@ -109,7 +109,7 @@ describe("/api/notifications route", () => {
       unreadCount: 1,
     });
     expect(mockNotificationFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { recipientId: "user_123", type: "follow" },
+      where: { recipientId: "user_123", type: { in: ["follow", "feedback_reply", "report_reply", "report_status"] } },
       take: 2,
       orderBy: { createdAt: "desc" },
     }));
@@ -120,6 +120,61 @@ describe("/api/notifications route", () => {
       },
       select: { followingId: true },
     });
+  });
+
+  it("returns team notifications with their text and no actor", async () => {
+    mockNotificationFindMany.mockResolvedValue([
+      {
+        id: "notification_3",
+        type: "feedback_reply",
+        body: "Thanks for the report!",
+        targetId: "feedback_1",
+        readAt: null,
+        createdAt: new Date("2026-10-05T10:00:00.000Z"),
+        actor: null,
+      },
+      {
+        id: "notification_4",
+        type: "report_status",
+        body: "resolved",
+        targetId: "report_1",
+        readAt: null,
+        createdAt: new Date("2026-10-05T09:00:00.000Z"),
+        actor: null,
+      },
+      // A follow row whose actor is gone cannot be rendered.
+      {
+        id: "notification_5",
+        type: "follow",
+        body: null,
+        targetId: null,
+        readAt: null,
+        createdAt: new Date("2026-10-05T08:00:00.000Z"),
+        actor: null,
+      },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/notifications"));
+
+    expect((await response.json()).notifications).toEqual([
+      {
+        id: "notification_3",
+        type: "feedback_reply",
+        isRead: false,
+        createdAt: "2026-10-05T10:00:00.000Z",
+        body: "Thanks for the report!",
+        targetId: "feedback_1",
+      },
+      {
+        id: "notification_4",
+        type: "report_status",
+        isRead: false,
+        createdAt: "2026-10-05T09:00:00.000Z",
+        body: "resolved",
+        targetId: "report_1",
+      },
+    ]);
+    expect(mockUserFollowFindMany).not.toHaveBeenCalled();
   });
 
   it("requires an authenticated viewer", async () => {
@@ -140,7 +195,7 @@ describe("/api/notifications route", () => {
     expect(mockNotificationUpdateMany).toHaveBeenCalledWith({
       where: {
         recipientId: "user_123",
-        type: "follow",
+        type: { in: ["follow", "feedback_reply", "report_reply", "report_status"] },
         readAt: null,
       },
       data: { readAt: expect.any(Date) },

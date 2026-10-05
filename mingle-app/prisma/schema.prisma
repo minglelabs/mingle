@@ -121,13 +121,18 @@ model UserFollow {
 model UserNotification {
   id          String    @id @default(cuid())
   recipientId String    @map("recipient_id")
-  actorId     String    @map("actor_id")
+  // Null for notifications sent by the Mingle team (feedback and report replies).
+  actorId     String?   @map("actor_id")
   type        String    @default("follow")
+  // Reply text, or the new status for a report_status notification.
+  body        String?   @db.Text
+  // The feedback or report the notification is about.
+  targetId    String?   @map("target_id")
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  recipient User @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+  recipient User  @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
   @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")

@@ -46,7 +46,7 @@ describe("/api/notifications/[notificationId] route", () => {
       where: {
         id: "notification_1",
         recipientId: "user_123",
-        type: "follow",
+        type: { in: ["follow", "feedback_reply", "report_reply", "report_status"] },
         readAt: null,
       },
       data: { readAt: expect.any(Date) },

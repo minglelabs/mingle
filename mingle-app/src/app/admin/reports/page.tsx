@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle, ChevronLeft, ChevronRight, LogOut, MessageSquare, Send, ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { isNotifiedReportStatus } from "@/lib/user-notification-types";
+import { notifyUserFromTeam } from "@/server/team-notifications";
 import {
   ADMIN_SESSION_COOKIE_NAME,
   ADMIN_SESSION_MAX_AGE_SECONDS,
@@ -89,7 +92,7 @@ async function createReportReplyAction(formData: FormData) {
   const message = readFormString(formData.get("message")).trim().slice(0, 4000);
   if (!reportId || message.length < 2) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}result=invalid_reply`);
 
-  const report = await prisma.userReport.findUnique({ where: { id: reportId }, select: { id: true } });
+  const report = await prisma.userReport.findUnique({ where: { id: reportId }, select: { id: true, reporterId: true } });
   if (!report) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}result=report_not_found`);
 
   await prisma.$transaction([
@@ -101,6 +104,13 @@ async function createReportReplyAction(formData: FormData) {
       data: { status: "in_review" },
     }),
   ]);
+
+  after(() => notifyUserFromTeam({
+    recipientId: report.reporterId,
+    type: "report_reply",
+    body: message,
+    targetId: reportId,
+  }));
 
   revalidatePath("/admin/reports");
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}result=reply_sent`);
@@ -115,7 +125,17 @@ async function updateReportStatusAction(formData: FormData) {
   const status = readFormString(formData.get("status")).trim() as ReportStatus;
   if (!reportId || !REPORT_STATUSES.includes(status)) redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}result=invalid_status`);
 
+  const previous = await prisma.userReport.findUnique({ where: { id: reportId }, select: { status: true, reporterId: true } });
   await prisma.userReport.update({ where: { id: reportId }, data: { status } });
+  // Only a new final outcome is worth a notification.
+  if (previous && previous.status !== status && isNotifiedReportStatus(status)) {
+    after(() => notifyUserFromTeam({
+      recipientId: previous.reporterId,
+      type: "report_status",
+      body: status,
+      targetId: reportId,
+    }));
+  }
   revalidatePath("/admin/reports");
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}result=status_updated`);
 }
