@@ -1,6 +1,6 @@
 # STT Services and Models Comparison
 
-Last reviewed: 2026-04-27
+Last reviewed: 2026-10-05
 
 아래 표는 사용자 평가표에 최신/최고 모델명, 최신 모델 출시일, 시간당 가격을 추가하고, 조사한 STT 서비스/오픈웨이트 후보를 같은 형식으로 확장한 것입니다. 가격은 USD 기준의 오디오 1시간당 비용입니다. 공식 시간당 과금이 없는 오픈웨이트/자체호스팅 항목은 고동시성 또는 배치 처리 시의 추론 인프라 비용만 추산했으며, 유휴 GPU, 엔지니어링, 저장소, 네트워크, 엔터프라이즈 라이선스 비용은 제외했습니다.
 
@@ -48,28 +48,28 @@ Last reviewed: 2026-04-27
       <td>$0.12/h RT<br>$0.10/h async</td>
       <td>O (발화자 분리를 시켜야함)</td>
       <td align="center">◎</td>
-      <td align="center">X</td>
+      <td>◎ (추가 비용 없음)</td>
       <td align="center">X</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">△</td>
       <td align="center">△</td>
-      <td><a href="https://soniox.com/pricing">공식 가격표</a>, <a href="https://soniox.com/docs/stt/models">공식 모델 문서</a></td>
+      <td><a href="https://soniox.com/pricing">공식 가격표</a>, <a href="https://soniox.com/docs/stt/models">공식 모델 문서</a>. <code>stt-rt-v4</code>는 2026-06-30 종료되어 v5로 자동 라우팅. 60+ 언어 실시간 번역이 같은 API 호출에 포함</td>
     </tr>
     <tr>
       <td>Gladia</td>
       <td><code>solaria-1</code></td>
       <td>2025-04-02</td>
-      <td>$0.75/h RT<br>$0.61/h async</td>
+      <td>$0.75/h RT<br>$0.61/h async<br>Growth: $0.25/h RT, $0.20/h async부터</td>
       <td>◎ (3+ 언어)</td>
       <td>△ (영어 외 언어 약함)</td>
       <td>△ (언어별 불안정)</td>
-      <td>◎ (월 10h)</td>
+      <td>◎ (€50 크레딧, RT 약 60h / async 약 80h)</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">O</td>
       <td align="center">X</td>
-      <td><a href="https://www.gladia.io/pricing">공식 가격표</a>, <a href="https://www.prnewswire.com/news-releases/gladia-launches-solaria-the-first-fully-multilingual-next-generation-speech-to-text-model-for-global-scalability-302417497.html">Solaria 출시 공지</a></td>
+      <td><a href="https://www.gladia.io/pricing">공식 가격표</a>, <a href="https://www.prnewswire.com/news-releases/gladia-launches-solaria-the-first-fully-multilingual-next-generation-speech-to-text-model-for-global-scalability-302417497.html">Solaria 출시 공지</a>. 무료 티어는 기존 월 10h에서 Starter 가입 시 €50 크레딧으로 변경됨. <code>solaria-3</code>(2026-06-10)는 영어/유럽어 중심이라 다국어·한국어 용도는 <code>solaria-1</code> 유지</td>
     </tr>
     <tr>
       <td>Deepgram</td>
@@ -165,16 +165,31 @@ Last reviewed: 2026-04-27
       <td>Speechmatics</td>
       <td><code>Ursa 2</code> / Enhanced Operating Point</td>
       <td>2024-10-11</td>
-      <td>$0.24/h부터<br>Enhanced/RT 추산 $0.24-$0.60/h</td>
+      <td>$0.23/h Standard<br>$0.38/h Enhanced<br>(pre-recorded 기준, RT 별도 미공개)</td>
       <td align="center">△</td>
       <td>미평가</td>
-      <td align="center">X</td>
-      <td align="center">X</td>
+      <td>X (애드온 +$0.49/h)</td>
+      <td>○ ($100 크레딧)</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">O</td>
       <td align="center">△</td>
-      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/ursa-2-elevating-speech-recognition-across-52-languages">Ursa 2 출시 공지</a>. 공개 가격표는 Pro 시작가 중심</td>
+      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/ursa-2-elevating-speech-recognition-across-52-languages">Ursa 2 출시 공지</a>. 2026-07-02부터 <code>operating_point</code> 대신 <code>model</code> 속성(Standard/Enhanced/Melia-1)으로 선택</td>
+    </tr>
+    <tr>
+      <td>Speechmatics Melia</td>
+      <td><code>Melia 1</code></td>
+      <td>2026-06-17</td>
+      <td>$0.12/h pre-recorded<br>RT 별도 미공개</td>
+      <td>◎ (56개 언어, 문장 중 코드스위칭)</td>
+      <td>미평가</td>
+      <td>X (애드온 +$0.49/h)</td>
+      <td>○ ($100 크레딧)</td>
+      <td>미평가</td>
+      <td>△ (production preview)</td>
+      <td>미평가</td>
+      <td>미평가</td>
+      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/introducing-melia-multilingual-speech-to-text-model">Melia 출시 공지</a>, <a href="https://speechmatics.featurebase.app/en/changelog/20260702-realtime-saas">Realtime SaaS release note</a>. 출시 시점은 batch 전용($0.129/h, 월 10h 무료)이었고, 2026-07-02 Realtime SaaS에 <code>model</code> 속성으로 Melia-1 선택이 추가됨. RT 정식 지원 여부와 RT 가격은 미확인. 언어를 미리 지정하지 않는 다국어 모델로 Standard/Enhanced를 대체하지 않고 병행</td>
     </tr>
     <tr>
       <td>AssemblyAI</td>
