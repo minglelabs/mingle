@@ -43,8 +43,8 @@ Last reviewed: 2026-04-27
   <tbody>
     <tr>
       <td>Soniox</td>
-      <td><code>stt-rt-v4</code></td>
-      <td>2026-02-05</td>
+      <td><code>stt-rt-v5</code></td>
+      <td>2026-06-16</td>
       <td>$0.12/h RT<br>$0.10/h async</td>
       <td>O (발화자 분리를 시켜야함)</td>
       <td align="center">◎</td>
