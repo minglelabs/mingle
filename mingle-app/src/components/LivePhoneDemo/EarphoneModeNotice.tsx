@@ -67,6 +67,7 @@ export default function EarphoneModeNoticeContent({
   onSelectReadLanguage,
   captureSource,
   onSelectCaptureSource,
+  deviceAudioViaBroadcast = false,
   onConfirm,
 }: {
   uiLocale: string
@@ -81,6 +82,9 @@ export default function EarphoneModeNoticeContent({
   // only capture the microphone).
   captureSource?: SttCaptureSource
   onSelectCaptureSource?: (source: SttCaptureSource) => void
+  // iOS captures through a screen broadcast and reads the translation in the
+  // left earphone only; the hint under the choice says so.
+  deviceAudioViaBroadcast?: boolean
   onConfirm: () => void
 }) {
   const languageListLabelId = useId()
@@ -144,7 +148,7 @@ export default function EarphoneModeNoticeContent({
           </div>
           {captureSource === 'device_audio' && (
             <p data-capture-source-hint className="mt-2 text-sm leading-relaxed text-gray-600">
-              {copy.captureSourceDeviceAudioHint}
+              {deviceAudioViaBroadcast ? copy.captureSourceDeviceAudioHintIos : copy.captureSourceDeviceAudioHint}
             </p>
           )}
         </>

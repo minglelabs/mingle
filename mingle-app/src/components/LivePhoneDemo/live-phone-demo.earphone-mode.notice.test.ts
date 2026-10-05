@@ -121,6 +121,21 @@ describe('earphone mode notice capture-source choice', () => {
     expect(copy.captureSourceDeviceAudioHint).toContain('Start')
   })
 
+  it('explains the iOS broadcast sheet and the left earphone on iOS', () => {
+    const picked = renderNotice({
+      captureSource: 'device_audio',
+      onSelectCaptureSource: () => {},
+      deviceAudioViaBroadcast: true,
+    })
+    expect(picked).toContain(copy.captureSourceDeviceAudioHintIos)
+    expect(picked).not.toContain(copy.captureSourceDeviceAudioHint)
+    expect(copy.captureSourceDeviceAudioHintIos).toContain('Start')
+    expect(copy.captureSourceDeviceAudioHintIos).toContain('왼쪽 이어폰')
+    // Still nothing while the microphone is picked.
+    expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, deviceAudioViaBroadcast: true }))
+      .not.toContain(copy.captureSourceDeviceAudioHintIos)
+  })
+
   it('leaves the language list as it was', () => {
     const html = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {} })
     const languages = html.slice(html.indexOf('role="radiogroup"'), html.indexOf('data-qa="live-demo-capture-source"'))

@@ -27,7 +27,9 @@ jest.mock('react-native-webview', () => {
 });
 
 const ReactNative = jest.requireMock('react-native') as {
-  NativeModules: Record<string, unknown> & { NativeSTTModule: { start: jest.Mock } };
+  NativeModules: Record<string, unknown> & {
+    NativeSTTModule: { start: jest.Mock; deviceAudioCaptureSupported?: boolean };
+  };
   Platform: { OS: string; Version: string | number };
 };
 
@@ -93,6 +95,7 @@ describe('App device-audio bridge wiring', () => {
   afterEach(() => {
     ReactNative.Platform.OS = originalPlatform.OS;
     ReactNative.Platform.Version = originalPlatform.Version;
+    delete ReactNative.NativeModules.NativeSTTModule.deviceAudioCaptureSupported;
     startMock.mockReset();
     startMock.mockImplementation(async () => ({ sampleRate: 16000 }));
     consoleErrorSpy.mockRestore();
@@ -148,10 +151,22 @@ describe('App device-audio bridge wiring', () => {
     await ReactTestRenderer.act(async () => { renderer.unmount(); });
   });
 
-  it('reports no device-audio capture on iOS', async () => {
+  it('reports no device-audio capture on an iOS build without the broadcast extension', async () => {
     const { renderer } = await renderLoadedApp();
     const [capabilities] = sttEvents('capabilities');
     expect(capabilities.detail).toMatchObject({ type: 'capabilities', deviceAudioCapture: false });
+    await ReactTestRenderer.act(async () => { renderer.unmount(); });
+  });
+
+  it('reports device-audio capture on iOS when the native module says the build supports it', async () => {
+    ReactNative.NativeModules.NativeSTTModule.deviceAudioCaptureSupported = true;
+    const { renderer, webView } = await renderLoadedApp();
+    const [capabilities] = sttEvents('capabilities');
+    expect(capabilities.detail).toMatchObject({ type: 'capabilities', deviceAudioCapture: true });
+
+    await postFromWeb(webView, startPayload({ captureSource: 'device_audio' }));
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(startMock.mock.calls[0][0]).toMatchObject({ captureSource: 'device_audio' });
     await ReactTestRenderer.act(async () => { renderer.unmount(); });
   });
 

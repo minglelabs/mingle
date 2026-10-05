@@ -9356,6 +9356,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
                 captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}
                 onSelectCaptureSource={setSttCaptureSourcePick}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
               />
             </MessageMediaDialog>
