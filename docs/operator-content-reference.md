@@ -8,7 +8,7 @@ What real posts, photos and comments look like on language-exchange apps, as a g
 | --- | --- | --- | --- |
 | HelloTalk, Moments → 추천 | 2026-10-04 | about 80 feed screens, about 60 posts, 72 comments | Feed of a Korean man learning Chinese, so it is almost entirely Chinese women in their twenties writing in Korean. Other viewers see a different mix. |
 | HelloTalk, Moments → 최신, 도움, 주변 | 2026-10-04 | 66 feed screens | Same account, so still mostly Chinese users. 주변 is locked after a few posts on the free plan. |
-| Kfriends, 스토리 → 전체 | 2026-10-04 | first screen only (scrolling did not work through iPhone Mirroring) | Both visible posts were low quality (sexual-chat bait, a throwaway-account notice). Not usable as a reference yet. |
+| Kfriends: home, 친구 찾기, 스토리 → 전체, 알림 | 2026-10-05 | a 77-second screen recording, about 20 story posts | Recorded by hand on the phone (the app ignores scrolling through iPhone Mirroring). The posts cover about 30 minutes of the feed. |
 | Threads search (점심, 영어공부) | 2026-10-04 | about 20 posts | General SNS, not language exchange. Useful for native casual Korean only. |
 
 ## HelloTalk posts
@@ -60,6 +60,34 @@ The help feed is language work, and it is where native speakers are useful:
 - Bilingual posts with the sentence in two languages.
 - Longer personal writing: a reflective paragraph, an aphorism, a short story in English tagged as writing practice.
 - Topic tags name the request: 수정해 주세요, 제 발음 어때요?, 이게 무슨 뜻이에요?, 언어 교환, 수다 떨기, 영어 학습.
+
+## Kfriends
+
+A much thinner feed than HelloTalk, and mostly not about language at all.
+
+**Who is there.** In the sample almost nobody was Korean: users from India, Turkey, Arabic-speaking countries, Spanish-speaking countries and Russia, posting in English or Arabic. Language codes under the name (EN, AR, KO, ZH) show what they speak or study; KO appears on some, but no post was written in Korean.
+
+**Story posts.** About one post every one to two minutes across the whole app. Nearly all are text only and one line long:
+
+- A greeting into the void: "hello hello" with repeated letters and emoji, "maybe hi?", a single emoji row.
+- Boredom and asking for a chat: "so boring, can I have a chat", "I think nobody is ready to talk with anyone".
+- Complaints about the app itself (lagging, "trash app").
+- Off-platform pushes: "I'm not active here, follow me on" another service; "DM me" offers.
+- A few with an image: a motivational quote card, a music screenshot, a holiday remark with a photo.
+- Sexual or provocative bait from a few accounts.
+- Occasional `#daily life` tag; otherwise no tags.
+
+Likes are 0 to 4 and comments 0 to 3. Comments are a word or two: "hii", "why", "yes if you want", a pair of emoji. Each post shows who liked it by name and has a comment box directly under it, so replying is one tap.
+
+**Friend list (친구 찾기).** Each row is a profile picture, a name, language codes and a one-line status. Statuses are very short and in English: "hola", "be kind", "just smile", "I am new", a row of emoji, or a Korean phrase from a learner. Names are nicknames, often decorated with symbols, emoji or stylized letters. Filters: all, matched, nearby, gender, country, language, age.
+
+**Home.** Recommended friends as large photo cards (name, flag, language codes, follow and wave buttons), then "friends who match you" grouped by keyword (film, pets, running) and by trait (rational, likes talking, outgoing).
+
+**Notifications.** Almost entirely "X visited your profile" and "X followed you", with a follow-back button; comment and like notices are rare. Profile visits are the main sign of life.
+
+**Profile pictures.** Selfies and portraits, a pet, a flower or scenery, an illustration or anime character, a plain dark image. The same range as HelloTalk but with more non-face pictures.
+
+**What a Kfriends-like feed lacks**, and Mingle can do better: posts in Korean, natives who answer, photos, and replies. An account that writes a real sentence, answers a greeting or asks a question already stands out there.
 
 ## Native casual Korean (Threads)
 
