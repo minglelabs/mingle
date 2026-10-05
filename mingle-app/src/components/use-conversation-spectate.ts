@@ -5,6 +5,7 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import type { PublicSpectateInviter } from '@/lib/conversation-share-public-payload'
 import type { Utterance } from '@/components/LivePhoneDemo/ChatBubble'
 import { canonicalizeUtteranceLanguages } from '@/components/LivePhoneDemo/conversation-live'
+import { readAccountBadgeFlags, readAccountBadgeKind } from '@/components/LivePhoneDemo/chat-account-badge.logic'
 import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 
 export type ConversationSpectateState = {
@@ -14,6 +15,9 @@ export type ConversationSpectateState = {
   // holding the link (see lib/conversation-share-public-payload).
   inviter: PublicSpectateInviter | null
   utterances: Utterance[]
+  // A Mingle-run account was in the room at the snapshot: show the same
+  // pinned disclosure the room itself shows.
+  operatorDisclosure?: boolean
 }
 
 export type ConversationSpectateStatus = 'loading' | 'ready' | 'not_found'
@@ -28,6 +32,7 @@ type SpectateHydrationResponse = {
   conversation?: { title?: string }
   utterances?: Array<Record<string, unknown>>
   sharedBy?: Record<string, unknown> | null
+  operatorDisclosure?: boolean
 }
 
 function toInviter(raw: unknown): PublicSpectateInviter | null {
@@ -39,6 +44,7 @@ function toInviter(raw: unknown): PublicSpectateInviter | null {
     imageCropScale: typeof record.imageCropScale === 'number' ? record.imageCropScale : null,
     imageCropX: typeof record.imageCropX === 'number' ? record.imageCropX : null,
     imageCropY: typeof record.imageCropY === 'number' ? record.imageCropY : null,
+    ...readAccountBadgeFlags(record),
   }
 }
 
@@ -48,6 +54,8 @@ export function toUtterance(raw: Record<string, unknown>): Utterance | null {
   if (!id || !originalText) return null
   const originalDisplayText = typeof raw.originalDisplayText === 'string' && raw.originalDisplayText.trim()
     && raw.originalDisplayText !== originalText ? raw.originalDisplayText : undefined
+  // The sender's account badge, next to speakerName in the bubble.
+  const speakerBadge = readAccountBadgeKind(raw.speakerBadge)
 
   // Share snapshots can hold legacy rows keyed with a bare `zh`.
   return canonicalizeUtteranceLanguages({
@@ -76,6 +84,7 @@ export function toUtterance(raw: Record<string, unknown>): Utterance | null {
     // branch simply never fires here.
     speakerUserId: typeof raw.speakerAlias === 'string' ? raw.speakerAlias : null,
     speakerImage: typeof raw.speakerImage === 'string' ? raw.speakerImage : null,
+    ...(speakerBadge ? { speakerBadge } : {}),
   })
 }
 
@@ -144,6 +153,7 @@ export function useConversationSpectate(
             roomTitle: payload.conversation?.title?.trim() || '',
             inviter: toInviter(payload.sharedBy),
             utterances,
+            operatorDisclosure: payload.operatorDisclosure === true,
           },
         })
       } catch {

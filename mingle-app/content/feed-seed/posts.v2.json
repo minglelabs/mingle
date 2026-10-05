@@ -1,0 +1,2408 @@
+{
+  "version": 2,
+  "authorHandle": "mingle_team",
+  "authorDisplayName": "Mingle 팀",
+  "notes": "Global seed: 300 short posts in en, es, fr, ru, vi, hi, ar, ja, zh-CN and zh-TW (Korean phrases, community questions, general travel/etiquette tips). No 'fact' items, so no sources to re-check. Same trust rules as v1. Run with --content content/feed-seed/posts.v2.json; ids do not overlap v1.",
+  "items": [
+    {
+      "key": "global-en-phrase-01",
+      "clientPostId": "mingleseed-v2-001",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Korean phrase of the day: 안녕하세요 (annyeonghaseyo) means \"hello\". It works with almost anyone, any time of day."
+    },
+    {
+      "key": "global-en-phrase-02",
+      "clientPostId": "mingleseed-v2-002",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "감사합니다 (gamsahamnida) is the polite \"thank you\". Say it when you pay, when someone holds the door, or when you leave a shop."
+    },
+    {
+      "key": "global-en-phrase-03",
+      "clientPostId": "mingleseed-v2-003",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Need the price? Ask \"얼마예요?\" (eolmayeyo?) — \"How much is it?\" Point at the item and you are good to go."
+    },
+    {
+      "key": "global-en-phrase-04",
+      "clientPostId": "mingleseed-v2-004",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"이거 주세요\" (igeo juseyo) = \"This one, please.\" The most useful sentence for ordering when you cannot read the menu."
+    },
+    {
+      "key": "global-en-phrase-05",
+      "clientPostId": "mingleseed-v2-005",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Lost? \"화장실 어디예요?\" (hwajangsil eodiyeyo?) means \"Where is the restroom?\""
+    },
+    {
+      "key": "global-en-phrase-06",
+      "clientPostId": "mingleseed-v2-006",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Tell the cook you loved it: \"맛있어요!\" (masisseoyo) — \"It's delicious!\""
+    },
+    {
+      "key": "global-en-phrase-07",
+      "clientPostId": "mingleseed-v2-007",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"천천히 말해 주세요\" (cheoncheonhi malhae juseyo) means \"Please speak slowly.\" People are usually happy to slow down."
+    },
+    {
+      "key": "global-en-phrase-08",
+      "clientPostId": "mingleseed-v2-008",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "At the end of a meal, say \"계산해 주세요\" (gyesanhae juseyo) — \"The bill, please.\" In many places you pay at the counter by the door."
+    },
+    {
+      "key": "global-en-phrase-09",
+      "clientPostId": "mingleseed-v2-009",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Can't handle the heat? \"덜 맵게 해 주세요\" (deol maepge hae juseyo) asks for a less spicy version."
+    },
+    {
+      "key": "global-en-phrase-10",
+      "clientPostId": "mingleseed-v2-010",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"잠시만요\" (jamsimanyo) is a polite \"excuse me / just a moment\" — handy on a crowded subway when you need to get off."
+    },
+    {
+      "key": "global-en-phrase-11",
+      "clientPostId": "mingleseed-v2-011",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "Korean has two main counting systems. For age and items you often hear native numbers: 하나, 둘, 셋 (hana, dul, set)."
+    },
+    {
+      "key": "global-en-phrase-12",
+      "clientPostId": "mingleseed-v2-012",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "en",
+      "text": "\"괜찮아요\" (gwaenchanayo) can mean \"It's okay\", \"No thanks\" or \"I'm fine\" depending on your tone. A very flexible word!"
+    },
+    {
+      "key": "global-en-question-13",
+      "clientPostId": "mingleseed-v2-013",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "First time in Seoul and staying 5 days — which neighborhood would you pick as a base, and why?"
+    },
+    {
+      "key": "global-en-question-14",
+      "clientPostId": "mingleseed-v2-014",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "What is your favorite late-night food spot type in Korea: pojangmacha, convenience store, or 24-hour soup restaurant?"
+    },
+    {
+      "key": "global-en-question-15",
+      "clientPostId": "mingleseed-v2-015",
+      "kind": "question",
+      "topic": "korean",
+      "language": "en",
+      "text": "Korean learners: which was harder for you, reading Hangul or getting used to the speech levels?"
+    },
+    {
+      "key": "global-en-question-16",
+      "clientPostId": "mingleseed-v2-016",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Is it worth visiting Busan in winter, or is it better to wait for summer?"
+    },
+    {
+      "key": "global-en-question-17",
+      "clientPostId": "mingleseed-v2-017",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Rainy day in Seoul — what indoor places would you suggest for someone who loves design and books?"
+    },
+    {
+      "key": "global-en-question-18",
+      "clientPostId": "mingleseed-v2-018",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "en",
+      "text": "What do you look for when choosing a sunscreen in Korea: texture, finish, or white cast?"
+    },
+    {
+      "key": "global-en-question-19",
+      "clientPostId": "mingleseed-v2-019",
+      "kind": "question",
+      "topic": "korean",
+      "language": "en",
+      "text": "How do you practice Korean listening every day? Dramas, podcasts, music, or something else?"
+    },
+    {
+      "key": "global-en-question-20",
+      "clientPostId": "mingleseed-v2-020",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Any tips for exploring a traditional market for the first time without feeling lost?"
+    },
+    {
+      "key": "global-en-question-21",
+      "clientPostId": "mingleseed-v2-021",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Which day trip from Seoul would you choose for autumn leaves?"
+    },
+    {
+      "key": "global-en-question-22",
+      "clientPostId": "mingleseed-v2-022",
+      "kind": "question",
+      "topic": "korean",
+      "language": "en",
+      "text": "What Korean word do you find yourself using even when you speak English now?"
+    },
+    {
+      "key": "global-en-question-23",
+      "clientPostId": "mingleseed-v2-023",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "Travelers with kids: what made getting around Seoul with a stroller easier for you?"
+    },
+    {
+      "key": "global-en-question-24",
+      "clientPostId": "mingleseed-v2-024",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "en",
+      "text": "How do you decide which skincare samples to keep when you get a bag full of them?"
+    },
+    {
+      "key": "global-en-tip-25",
+      "clientPostId": "mingleseed-v2-025",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "A rechargeable transit card works on subways and buses in most big Korean cities. Tap in AND tap out on buses to get transfer fares."
+    },
+    {
+      "key": "global-en-tip-26",
+      "clientPostId": "mingleseed-v2-026",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Many subway stations have coin or app lockers. Handy if you check out of your hotel in the morning and fly at night."
+    },
+    {
+      "key": "global-en-tip-27",
+      "clientPostId": "mingleseed-v2-027",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Convenience stores in Korea are more than snacks: you can find hot food, coffee, umbrellas, phone chargers and sometimes a seat to eat."
+    },
+    {
+      "key": "global-en-tip-28",
+      "clientPostId": "mingleseed-v2-028",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Map apps made in Korea usually give better walking and transit directions here than global map apps. Try searching place names in Korean too."
+    },
+    {
+      "key": "global-en-tip-29",
+      "clientPostId": "mingleseed-v2-029",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "en",
+      "text": "Learning Hangul first pays off fast: there are only 24 basic letters, and many menus and signs become readable in a day or two."
+    },
+    {
+      "key": "global-en-tip-30",
+      "clientPostId": "mingleseed-v2-030",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Tipping is not part of everyday restaurant culture in Korea. A warm 감사합니다 is the norm."
+    },
+    {
+      "key": "global-en-tip-31",
+      "clientPostId": "mingleseed-v2-031",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "In many restaurants you call staff by pressing a bell on the table, or by saying \"저기요\" (jeogiyo) — \"excuse me\"."
+    },
+    {
+      "key": "global-en-tip-32",
+      "clientPostId": "mingleseed-v2-032",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Side dishes (banchan) are usually refillable. It is fine to ask politely for more."
+    },
+    {
+      "key": "global-en-tip-33",
+      "clientPostId": "mingleseed-v2-033",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "On escalators in busy stations, keep an eye on what locals do and stay out of the way of people walking."
+    },
+    {
+      "key": "global-en-tip-34",
+      "clientPostId": "mingleseed-v2-034",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "en",
+      "text": "Patch test new skincare on a small area first, especially when you travel and your skin is already adjusting to new weather."
+    },
+    {
+      "key": "global-en-tip-35",
+      "clientPostId": "mingleseed-v2-035",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Shoes off! When you see a raised floor or a shoe rack at the entrance of a restaurant or home, take your shoes off before stepping up."
+    },
+    {
+      "key": "global-en-tip-36",
+      "clientPostId": "mingleseed-v2-036",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "en",
+      "text": "When someone older pours you a drink, holding the glass with two hands is a small gesture that shows respect."
+    },
+    {
+      "key": "global-en-tip-37",
+      "clientPostId": "mingleseed-v2-037",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Delivery apps are everywhere in Korea, but many need a local phone number. Ask your hotel front desk if they can help."
+    },
+    {
+      "key": "global-en-tip-38",
+      "clientPostId": "mingleseed-v2-038",
+      "kind": "tip",
+      "topic": "local",
+      "language": "en",
+      "text": "Weather changes a lot between seasons. Summers are hot and humid, winters can be very cold and dry — pack layers and lip balm."
+    },
+    {
+      "key": "global-en-question-39",
+      "clientPostId": "mingleseed-v2-039",
+      "kind": "question",
+      "topic": "local",
+      "language": "en",
+      "text": "What is one thing you wish someone had told you before your first trip to Korea?"
+    },
+    {
+      "key": "global-en-question-40",
+      "clientPostId": "mingleseed-v2-040",
+      "kind": "question",
+      "topic": "korean",
+      "language": "en",
+      "text": "Mingle friends, which Korean expression sounds the cutest to you?"
+    },
+    {
+      "key": "global-es-phrase-01",
+      "clientPostId": "mingleseed-v2-041",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "es",
+      "text": "Frase coreana útil: \"안녕하세요\" (annyeonghaseyo) significa \"hola\". Sirve en casi cualquier situación."
+    },
+    {
+      "key": "global-es-phrase-02",
+      "clientPostId": "mingleseed-v2-042",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "es",
+      "text": "\"감사합니다\" (gamsahamnida) es \"gracias\" en forma educada. Úsala al pagar o al salir de una tienda."
+    },
+    {
+      "key": "global-es-phrase-03",
+      "clientPostId": "mingleseed-v2-043",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "es",
+      "text": "Para pedir algo señalando el menú: \"이거 주세요\" (igeo juseyo), \"esto, por favor\"."
+    },
+    {
+      "key": "global-es-phrase-04",
+      "clientPostId": "mingleseed-v2-044",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "es",
+      "text": "\"맛있어요\" (masisseoyo) significa \"¡está delicioso!\". A los cocineros les encanta escucharlo."
+    },
+    {
+      "key": "global-es-question-05",
+      "clientPostId": "mingleseed-v2-045",
+      "kind": "question",
+      "topic": "local",
+      "language": "es",
+      "text": "¿Qué barrio de Seúl recomendarían para alguien que viaja solo por primera vez?"
+    },
+    {
+      "key": "global-es-question-06",
+      "clientPostId": "mingleseed-v2-046",
+      "kind": "question",
+      "topic": "korean",
+      "language": "es",
+      "text": "¿Cómo empezaron a aprender coreano: con apps, con canciones o con series?"
+    },
+    {
+      "key": "global-es-question-07",
+      "clientPostId": "mingleseed-v2-047",
+      "kind": "question",
+      "topic": "local",
+      "language": "es",
+      "text": "¿Qué comida coreana debería probar sí o sí alguien que no come picante?"
+    },
+    {
+      "key": "global-es-tip-08",
+      "clientPostId": "mingleseed-v2-048",
+      "kind": "tip",
+      "topic": "local",
+      "language": "es",
+      "text": "En Corea no se suele dejar propina en los restaurantes. Un \"gamsahamnida\" basta."
+    },
+    {
+      "key": "global-es-tip-09",
+      "clientPostId": "mingleseed-v2-049",
+      "kind": "tip",
+      "topic": "local",
+      "language": "es",
+      "text": "Una tarjeta de transporte recargable sirve para metro y autobús. En el autobús, pasa la tarjeta al subir y al bajar para los transbordos."
+    },
+    {
+      "key": "global-es-tip-10",
+      "clientPostId": "mingleseed-v2-050",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "es",
+      "text": "Aprender el alfabeto coreano (hangul) es rápido: con unos días de práctica ya puedes leer carteles y menús."
+    },
+    {
+      "key": "global-fr-phrase-01",
+      "clientPostId": "mingleseed-v2-051",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Expression coréenne du jour : « 안녕하세요 » (annyeonghaseyo) veut dire « bonjour ». On peut l'utiliser à toute heure."
+    },
+    {
+      "key": "global-fr-phrase-02",
+      "clientPostId": "mingleseed-v2-052",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 감사합니다 » (gamsahamnida), c'est le « merci » poli. À dire en payant ou en quittant un magasin."
+    },
+    {
+      "key": "global-fr-phrase-03",
+      "clientPostId": "mingleseed-v2-053",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Pour connaître un prix : « 얼마예요 ? » (eolmayeyo ?) — « C'est combien ? »"
+    },
+    {
+      "key": "global-fr-phrase-04",
+      "clientPostId": "mingleseed-v2-054",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Au restaurant, montrez le menu et dites « 이거 주세요 » (igeo juseyo) : « Ceci, s'il vous plaît. »"
+    },
+    {
+      "key": "global-fr-phrase-05",
+      "clientPostId": "mingleseed-v2-055",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 계산해 주세요 » (gyesanhae juseyo) signifie « L'addition, s'il vous plaît ». Souvent, on paie à la caisse près de la sortie."
+    },
+    {
+      "key": "global-fr-phrase-06",
+      "clientPostId": "mingleseed-v2-056",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Vous ne supportez pas le piquant ? Demandez « 덜 맵게 해 주세요 » (deol maepge hae juseyo), « moins épicé, s'il vous plaît »."
+    },
+    {
+      "key": "global-fr-phrase-07",
+      "clientPostId": "mingleseed-v2-057",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 천천히 말해 주세요 » (cheoncheonhi malhae juseyo) : « Parlez lentement, s'il vous plaît. » Très utile au début !"
+    },
+    {
+      "key": "global-fr-phrase-08",
+      "clientPostId": "mingleseed-v2-058",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 다음에 또 봐요 » (daeume tto bwayo) veut dire « À la prochaine ! ». Parfait pour dire au revoir à un nouvel ami."
+    },
+    {
+      "key": "global-fr-phrase-09",
+      "clientPostId": "mingleseed-v2-059",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 화장실 어디예요 ? » (hwajangsil eodiyeyo ?) : « Où sont les toilettes ? »"
+    },
+    {
+      "key": "global-fr-phrase-10",
+      "clientPostId": "mingleseed-v2-060",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "fr",
+      "text": "« 포장해 주세요 » (pojanghae juseyo) : « À emporter, s'il vous plaît. » Pratique quand on n'a pas fini son plat."
+    },
+    {
+      "key": "global-fr-question-11",
+      "clientPostId": "mingleseed-v2-061",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Premier séjour à Séoul : vous logeriez plutôt à Hongdae, Myeongdong ou Jongno ? Pourquoi ?"
+    },
+    {
+      "key": "global-fr-question-12",
+      "clientPostId": "mingleseed-v2-062",
+      "kind": "question",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Qu'est-ce qui vous a le plus aidé pour apprendre le coréen : les dramas, la K-pop ou les cours ?"
+    },
+    {
+      "key": "global-fr-question-13",
+      "clientPostId": "mingleseed-v2-063",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Quelle excursion d'une journée depuis Séoul vous a le plus marqué ?"
+    },
+    {
+      "key": "global-fr-question-14",
+      "clientPostId": "mingleseed-v2-064",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Les marchés traditionnels de Séoul : lequel conseilleriez-vous pour goûter la street food ?"
+    },
+    {
+      "key": "global-fr-question-15",
+      "clientPostId": "mingleseed-v2-065",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "fr",
+      "text": "Comment choisissez-vous une crème solaire en Corée : texture, fini mat ou sans traces blanches ?"
+    },
+    {
+      "key": "global-fr-question-16",
+      "clientPostId": "mingleseed-v2-066",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Busan en hiver, ça vaut le coup ou il vaut mieux attendre l'été ?"
+    },
+    {
+      "key": "global-fr-question-17",
+      "clientPostId": "mingleseed-v2-067",
+      "kind": "question",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Quel mot coréen utilisez-vous maintenant même en parlant français ?"
+    },
+    {
+      "key": "global-fr-question-18",
+      "clientPostId": "mingleseed-v2-068",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Des idées d'activités à Séoul par jour de pluie pour quelqu'un qui aime l'art ?"
+    },
+    {
+      "key": "global-fr-question-19",
+      "clientPostId": "mingleseed-v2-069",
+      "kind": "question",
+      "topic": "local",
+      "language": "fr",
+      "text": "Voyager en Corée en train : KTX ou bus express, vous préférez quoi ?"
+    },
+    {
+      "key": "global-fr-question-20",
+      "clientPostId": "mingleseed-v2-070",
+      "kind": "question",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Les niveaux de politesse en coréen vous ont semblé difficiles au début ?"
+    },
+    {
+      "key": "global-fr-tip-21",
+      "clientPostId": "mingleseed-v2-071",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Une carte de transport rechargeable fonctionne dans le métro et les bus de la plupart des grandes villes coréennes."
+    },
+    {
+      "key": "global-fr-tip-22",
+      "clientPostId": "mingleseed-v2-072",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Dans le bus, pensez à badger en montant ET en descendant pour profiter des correspondances."
+    },
+    {
+      "key": "global-fr-tip-23",
+      "clientPostId": "mingleseed-v2-073",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Pas de pourboire en Corée dans la plupart des restaurants. Un « gamsahamnida » chaleureux suffit."
+    },
+    {
+      "key": "global-fr-tip-24",
+      "clientPostId": "mingleseed-v2-074",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Les accompagnements (banchan) sont souvent resservis gratuitement. On peut en redemander poliment."
+    },
+    {
+      "key": "global-fr-tip-25",
+      "clientPostId": "mingleseed-v2-075",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Beaucoup de restaurants ont une sonnette sur la table pour appeler le personnel. Sinon, dites « 저기요 » (jeogiyo)."
+    },
+    {
+      "key": "global-fr-tip-26",
+      "clientPostId": "mingleseed-v2-076",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Le hangeul s'apprend vite : en quelques jours, vous pouvez déjà lire les enseignes et les menus."
+    },
+    {
+      "key": "global-fr-tip-27",
+      "clientPostId": "mingleseed-v2-077",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Les supérettes coréennes proposent plats chauds, café, parapluies et chargeurs. Un vrai dépannage à toute heure."
+    },
+    {
+      "key": "global-fr-tip-28",
+      "clientPostId": "mingleseed-v2-078",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Pour vous orienter, les applis de cartes coréennes donnent souvent de meilleurs itinéraires à pied et en transports que les applis internationales."
+    },
+    {
+      "key": "global-fr-tip-29",
+      "clientPostId": "mingleseed-v2-079",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Si vous voyez une marche ou un meuble à chaussures à l'entrée, on enlève ses chaussures avant d'entrer."
+    },
+    {
+      "key": "global-fr-tip-30",
+      "clientPostId": "mingleseed-v2-080",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "fr",
+      "text": "Testez un nouveau soin sur une petite zone de peau d'abord, surtout en voyage quand le climat change."
+    },
+    {
+      "key": "global-fr-tip-31",
+      "clientPostId": "mingleseed-v2-081",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "fr",
+      "text": "Quand une personne plus âgée vous sert à boire, tenir son verre à deux mains est une marque de respect."
+    },
+    {
+      "key": "global-fr-tip-32",
+      "clientPostId": "mingleseed-v2-082",
+      "kind": "tip",
+      "topic": "local",
+      "language": "fr",
+      "text": "Beaucoup de stations de métro ont des consignes à bagages : pratique le jour du départ."
+    },
+    {
+      "key": "global-ru-phrase-01",
+      "clientPostId": "mingleseed-v2-083",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Корейская фраза дня: «안녕하세요» (аннёнхасэё) — «здравствуйте». Подходит почти для любой ситуации."
+    },
+    {
+      "key": "global-ru-phrase-02",
+      "clientPostId": "mingleseed-v2-084",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«감사합니다» (камсахамнида) — вежливое «спасибо». Говорят при оплате и когда уходят из магазина."
+    },
+    {
+      "key": "global-ru-phrase-03",
+      "clientPostId": "mingleseed-v2-085",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Чтобы узнать цену, спросите: «얼마예요?» (ольмаеё?) — «Сколько стоит?»"
+    },
+    {
+      "key": "global-ru-phrase-04",
+      "clientPostId": "mingleseed-v2-086",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«이거 주세요» (иго чусэё) — «Дайте, пожалуйста, это». Просто покажите на блюдо в меню."
+    },
+    {
+      "key": "global-ru-phrase-05",
+      "clientPostId": "mingleseed-v2-087",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«맛있어요!» (масиссоё) — «Очень вкусно!» Повару будет приятно."
+    },
+    {
+      "key": "global-ru-phrase-06",
+      "clientPostId": "mingleseed-v2-088",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«덜 맵게 해 주세요» (доль мэпке хэ чусэё) — «Сделайте, пожалуйста, менее остро»."
+    },
+    {
+      "key": "global-ru-phrase-07",
+      "clientPostId": "mingleseed-v2-089",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«천천히 말해 주세요» (чхончхонхи мархэ чусэё) — «Говорите, пожалуйста, медленнее»."
+    },
+    {
+      "key": "global-ru-phrase-08",
+      "clientPostId": "mingleseed-v2-090",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«계산해 주세요» (кесанхэ чусэё) — «Счёт, пожалуйста». Часто платят на кассе у выхода."
+    },
+    {
+      "key": "global-ru-phrase-09",
+      "clientPostId": "mingleseed-v2-091",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«잠시만요» (чамсиманё) — «Минуточку / извините». Удобно, когда нужно пройти к выходу в метро."
+    },
+    {
+      "key": "global-ru-phrase-10",
+      "clientPostId": "mingleseed-v2-092",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ru",
+      "text": "«여기서 내려요» (ёгисо нэрёё) — «Я выхожу здесь». Пригодится в такси."
+    },
+    {
+      "key": "global-ru-question-11",
+      "clientPostId": "mingleseed-v2-093",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Впервые в Сеуле на неделю — в каком районе вы бы остановились и почему?"
+    },
+    {
+      "key": "global-ru-question-12",
+      "clientPostId": "mingleseed-v2-094",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ru",
+      "text": "С чего вы начинали учить корейский: с алфавита, с дорам или с приложений?"
+    },
+    {
+      "key": "global-ru-question-13",
+      "clientPostId": "mingleseed-v2-095",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Какую поездку на один день из Сеула вы бы посоветовали осенью?"
+    },
+    {
+      "key": "global-ru-question-14",
+      "clientPostId": "mingleseed-v2-096",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Пусан зимой — стоит ехать или лучше подождать лета?"
+    },
+    {
+      "key": "global-ru-question-15",
+      "clientPostId": "mingleseed-v2-097",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Что для вас было сложнее в корейском: произношение или уровни вежливости?"
+    },
+    {
+      "key": "global-ru-question-16",
+      "clientPostId": "mingleseed-v2-098",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Куда пойти в Сеуле в дождливый день, если любишь музеи?"
+    },
+    {
+      "key": "global-ru-question-17",
+      "clientPostId": "mingleseed-v2-099",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "ru",
+      "text": "На что вы смотрите в первую очередь, выбирая солнцезащитный крем в Корее?"
+    },
+    {
+      "key": "global-ru-question-18",
+      "clientPostId": "mingleseed-v2-100",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Какие корейские блюда вы бы посоветовали тем, кто не ест острое?"
+    },
+    {
+      "key": "global-ru-question-19",
+      "clientPostId": "mingleseed-v2-101",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Какое корейское слово вы теперь используете даже в русской речи?"
+    },
+    {
+      "key": "global-ru-question-20",
+      "clientPostId": "mingleseed-v2-102",
+      "kind": "question",
+      "topic": "local",
+      "language": "ru",
+      "text": "Как вам ночные рынки и уличная еда в Корее? Что попробовать в первую очередь?"
+    },
+    {
+      "key": "global-ru-tip-21",
+      "clientPostId": "mingleseed-v2-103",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Пополняемая транспортная карта работает в метро и автобусах большинства крупных городов Кореи."
+    },
+    {
+      "key": "global-ru-tip-22",
+      "clientPostId": "mingleseed-v2-104",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "В автобусе прикладывайте карту и при входе, и при выходе — так засчитываются пересадки."
+    },
+    {
+      "key": "global-ru-tip-23",
+      "clientPostId": "mingleseed-v2-105",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Чаевые в корейских ресторанах обычно не оставляют. Достаточно сказать «камсахамнида»."
+    },
+    {
+      "key": "global-ru-tip-24",
+      "clientPostId": "mingleseed-v2-106",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Закуски панчхан часто подливают бесплатно — можно вежливо попросить ещё."
+    },
+    {
+      "key": "global-ru-tip-25",
+      "clientPostId": "mingleseed-v2-107",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "На многих столах есть кнопка вызова официанта. Или скажите «저기요» (чогиё)."
+    },
+    {
+      "key": "global-ru-tip-26",
+      "clientPostId": "mingleseed-v2-108",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Хангыль учится быстро: через пару дней уже читаешь вывески и меню."
+    },
+    {
+      "key": "global-ru-tip-27",
+      "clientPostId": "mingleseed-v2-109",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Круглосуточные магазины в Корее — это горячая еда, кофе, зонты и зарядки в любое время."
+    },
+    {
+      "key": "global-ru-tip-28",
+      "clientPostId": "mingleseed-v2-110",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Корейские приложения с картами обычно точнее прокладывают пешие маршруты и маршруты на транспорте."
+    },
+    {
+      "key": "global-ru-tip-29",
+      "clientPostId": "mingleseed-v2-111",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Если у входа ступенька или полка для обуви — обувь нужно снять."
+    },
+    {
+      "key": "global-ru-tip-30",
+      "clientPostId": "mingleseed-v2-112",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "ru",
+      "text": "Новое средство для кожи сначала проверьте на небольшом участке — особенно в поездке, когда меняется климат."
+    },
+    {
+      "key": "global-ru-tip-31",
+      "clientPostId": "mingleseed-v2-113",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ru",
+      "text": "Когда старший наливает вам напиток, держите стакан двумя руками — это знак уважения."
+    },
+    {
+      "key": "global-ru-tip-32",
+      "clientPostId": "mingleseed-v2-114",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ru",
+      "text": "Зимой в Корее бывает очень холодно и сухо: берите тёплые слои и бальзам для губ."
+    },
+    {
+      "key": "global-vi-phrase-01",
+      "clientPostId": "mingleseed-v2-115",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Câu tiếng Hàn hôm nay: \"안녕하세요\" (an-nyeong-ha-se-yo) nghĩa là \"Xin chào\". Dùng được với hầu hết mọi người."
+    },
+    {
+      "key": "global-vi-phrase-02",
+      "clientPostId": "mingleseed-v2-116",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"감사합니다\" (gam-sa-ham-ni-da) là \"Cảm ơn\" lịch sự. Nói khi thanh toán hoặc khi rời cửa hàng."
+    },
+    {
+      "key": "global-vi-phrase-03",
+      "clientPostId": "mingleseed-v2-117",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Muốn hỏi giá? Hãy nói \"얼마예요?\" (eol-ma-ye-yo?) — \"Bao nhiêu tiền?\""
+    },
+    {
+      "key": "global-vi-phrase-04",
+      "clientPostId": "mingleseed-v2-118",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Chỉ vào món trong thực đơn và nói \"이거 주세요\" (i-geo ju-se-yo) — \"Cho tôi món này\"."
+    },
+    {
+      "key": "global-vi-phrase-05",
+      "clientPostId": "mingleseed-v2-119",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"맛있어요!\" (ma-sit-sseo-yo) nghĩa là \"Ngon quá!\". Đầu bếp nghe sẽ rất vui."
+    },
+    {
+      "key": "global-vi-phrase-06",
+      "clientPostId": "mingleseed-v2-120",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Không ăn cay được? Hãy nói \"덜 맵게 해 주세요\" (deol maep-ge hae ju-se-yo) — \"Làm bớt cay giúp tôi\"."
+    },
+    {
+      "key": "global-vi-phrase-07",
+      "clientPostId": "mingleseed-v2-121",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"천천히 말해 주세요\" (cheon-cheon-hi mal-hae ju-se-yo) — \"Xin hãy nói chậm lại\"."
+    },
+    {
+      "key": "global-vi-phrase-08",
+      "clientPostId": "mingleseed-v2-122",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"계산해 주세요\" (gye-san-hae ju-se-yo) — \"Cho tôi thanh toán\". Nhiều quán trả tiền ở quầy gần cửa."
+    },
+    {
+      "key": "global-vi-phrase-09",
+      "clientPostId": "mingleseed-v2-123",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"포장해 주세요\" (po-jang-hae ju-se-yo) — \"Gói mang về giúp tôi\"."
+    },
+    {
+      "key": "global-vi-phrase-10",
+      "clientPostId": "mingleseed-v2-124",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "vi",
+      "text": "\"사진 찍어 주실 수 있어요?\" (sa-jin jji-geo ju-sil su it-sseo-yo?) — \"Bạn chụp ảnh giúp tôi được không?\""
+    },
+    {
+      "key": "global-vi-question-11",
+      "clientPostId": "mingleseed-v2-125",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Lần đầu đến Seoul, các bạn sẽ chọn ở khu nào: Hongdae, Myeongdong hay Gangnam?"
+    },
+    {
+      "key": "global-vi-question-12",
+      "clientPostId": "mingleseed-v2-126",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Ở Seoul có quán phở hay bún nào hợp khẩu vị người Việt không mọi người?"
+    },
+    {
+      "key": "global-vi-question-13",
+      "clientPostId": "mingleseed-v2-127",
+      "kind": "question",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Các bạn học tiếng Hàn bằng cách nào: xem phim, nghe nhạc hay học trên app?"
+    },
+    {
+      "key": "global-vi-question-14",
+      "clientPostId": "mingleseed-v2-128",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Mùa thu nên đi đâu gần Seoul để ngắm lá đỏ?"
+    },
+    {
+      "key": "global-vi-question-15",
+      "clientPostId": "mingleseed-v2-129",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Đi Busan bằng KTX hay xe buýt cao tốc thì tiện hơn?"
+    },
+    {
+      "key": "global-vi-question-16",
+      "clientPostId": "mingleseed-v2-130",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "vi",
+      "text": "Khi mua kem chống nắng ở Hàn, bạn ưu tiên kết cấu, độ ráo hay không để lại vệt trắng?"
+    },
+    {
+      "key": "global-vi-question-17",
+      "clientPostId": "mingleseed-v2-131",
+      "kind": "question",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Từ tiếng Hàn nào bạn hay buột miệng nói ngay cả khi nói tiếng Việt?"
+    },
+    {
+      "key": "global-vi-question-18",
+      "clientPostId": "mingleseed-v2-132",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Ngày mưa ở Seoul thì nên đi đâu chơi trong nhà?"
+    },
+    {
+      "key": "global-vi-question-19",
+      "clientPostId": "mingleseed-v2-133",
+      "kind": "question",
+      "topic": "local",
+      "language": "vi",
+      "text": "Mùa đông ở Hàn lạnh cỡ nào? Người từ miền Nam Việt Nam nên chuẩn bị gì?"
+    },
+    {
+      "key": "global-vi-question-20",
+      "clientPostId": "mingleseed-v2-134",
+      "kind": "question",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Phần nào trong tiếng Hàn khó nhất với bạn: phát âm, kính ngữ hay ngữ pháp?"
+    },
+    {
+      "key": "global-vi-tip-21",
+      "clientPostId": "mingleseed-v2-135",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Thẻ giao thông nạp tiền dùng được cho cả tàu điện ngầm và xe buýt ở hầu hết thành phố lớn của Hàn Quốc."
+    },
+    {
+      "key": "global-vi-tip-22",
+      "clientPostId": "mingleseed-v2-136",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Khi đi xe buýt, nhớ quẹt thẻ cả lúc lên và lúc xuống để được tính phí chuyển tuyến."
+    },
+    {
+      "key": "global-vi-tip-23",
+      "clientPostId": "mingleseed-v2-137",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Ở Hàn thường không có thói quen để lại tiền tip trong nhà hàng. Một câu \"gam-sa-ham-ni-da\" là đủ."
+    },
+    {
+      "key": "global-vi-tip-24",
+      "clientPostId": "mingleseed-v2-138",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Món ăn kèm (banchan) thường được thêm miễn phí. Bạn có thể lịch sự xin thêm."
+    },
+    {
+      "key": "global-vi-tip-25",
+      "clientPostId": "mingleseed-v2-139",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Nhiều bàn ăn có nút chuông để gọi nhân viên. Hoặc bạn có thể nói \"저기요\" (jeo-gi-yo)."
+    },
+    {
+      "key": "global-vi-tip-26",
+      "clientPostId": "mingleseed-v2-140",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Học bảng chữ Hangul trước rất đáng: chỉ vài ngày là bạn đọc được biển hiệu và thực đơn."
+    },
+    {
+      "key": "global-vi-tip-27",
+      "clientPostId": "mingleseed-v2-141",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Cửa hàng tiện lợi ở Hàn có đồ ăn nóng, cà phê, ô và sạc điện thoại, mở cả đêm."
+    },
+    {
+      "key": "global-vi-tip-28",
+      "clientPostId": "mingleseed-v2-142",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Ứng dụng bản đồ của Hàn thường chỉ đường đi bộ và phương tiện công cộng chính xác hơn ứng dụng quốc tế."
+    },
+    {
+      "key": "global-vi-tip-29",
+      "clientPostId": "mingleseed-v2-143",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Thấy bậc thềm hoặc kệ giày ở cửa thì hãy cởi giày trước khi bước vào."
+    },
+    {
+      "key": "global-vi-tip-30",
+      "clientPostId": "mingleseed-v2-144",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "vi",
+      "text": "Thử mỹ phẩm mới trên một vùng da nhỏ trước, nhất là khi đi du lịch và da đang thích nghi với thời tiết mới."
+    },
+    {
+      "key": "global-vi-tip-31",
+      "clientPostId": "mingleseed-v2-145",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "vi",
+      "text": "Khi người lớn tuổi rót đồ uống cho bạn, hãy cầm ly bằng hai tay để thể hiện sự tôn trọng."
+    },
+    {
+      "key": "global-vi-tip-32",
+      "clientPostId": "mingleseed-v2-146",
+      "kind": "tip",
+      "topic": "local",
+      "language": "vi",
+      "text": "Nhiều ga tàu điện ngầm có tủ gửi đồ, rất tiện cho ngày trả phòng mà tối mới bay."
+    },
+    {
+      "key": "global-hi-phrase-01",
+      "clientPostId": "mingleseed-v2-147",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "आज का कोरियन वाक्य: \"안녕하세요\" (आन्न्योंगहासेयो) का मतलब है \"नमस्ते\"। यह लगभग हर किसी से कहा जा सकता है।"
+    },
+    {
+      "key": "global-hi-phrase-02",
+      "clientPostId": "mingleseed-v2-148",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"감사합니다\" (कामसाहामनिदा) का मतलब है \"धन्यवाद\"। पैसे देते समय या दुकान से निकलते समय बोलें।"
+    },
+    {
+      "key": "global-hi-phrase-03",
+      "clientPostId": "mingleseed-v2-149",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "कीमत पूछनी है? कहिए \"얼마예요?\" (ओल्मायेयो?) — \"यह कितने का है?\""
+    },
+    {
+      "key": "global-hi-phrase-04",
+      "clientPostId": "mingleseed-v2-150",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "मेन्यू में किसी चीज़ की ओर इशारा करके कहिए \"이거 주세요\" (इगो जुसेयो) — \"यह दीजिए\"।"
+    },
+    {
+      "key": "global-hi-phrase-05",
+      "clientPostId": "mingleseed-v2-151",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"맛있어요!\" (मासिस्सोयो) का मतलब है \"बहुत स्वादिष्ट है!\""
+    },
+    {
+      "key": "global-hi-phrase-06",
+      "clientPostId": "mingleseed-v2-152",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "तीखा कम चाहिए? कहिए \"덜 맵게 해 주세요\" (दोल मेपके हे जुसेयो) — \"कम तीखा बनाइए\"।"
+    },
+    {
+      "key": "global-hi-phrase-07",
+      "clientPostId": "mingleseed-v2-153",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"천천히 말해 주세요\" (छोनछोनही मालहे जुसेयो) — \"कृपया धीरे बोलिए\"।"
+    },
+    {
+      "key": "global-hi-phrase-08",
+      "clientPostId": "mingleseed-v2-154",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"고기 빼 주세요\" (गोगी बे जुसेयो) का मतलब है \"मांस निकाल दीजिए\"। शाकाहारी यात्रियों के लिए काम का वाक्य।"
+    },
+    {
+      "key": "global-hi-phrase-09",
+      "clientPostId": "mingleseed-v2-155",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"화장실 어디예요?\" (ह्वाजांगसिल ओदियेयो?) — \"शौचालय कहाँ है?\""
+    },
+    {
+      "key": "global-hi-phrase-10",
+      "clientPostId": "mingleseed-v2-156",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "hi",
+      "text": "\"계산해 주세요\" (ग्येसानहे जुसेयो) — \"बिल दे दीजिए\"। कई जगह दरवाज़े के पास काउंटर पर भुगतान होता है।"
+    },
+    {
+      "key": "global-hi-question-11",
+      "clientPostId": "mingleseed-v2-157",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "सोल में शाकाहारी खाना ढूँढना कितना आसान है? आप कौन-से कोरियन व्यंजन सुझाएँगे?"
+    },
+    {
+      "key": "global-hi-question-12",
+      "clientPostId": "mingleseed-v2-158",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "पहली बार सोल जा रहे हैं — रुकने के लिए कौन-सा इलाका सबसे अच्छा रहेगा?"
+    },
+    {
+      "key": "global-hi-question-13",
+      "clientPostId": "mingleseed-v2-159",
+      "kind": "question",
+      "topic": "korean",
+      "language": "hi",
+      "text": "आपने कोरियन सीखना कैसे शुरू किया: ड्रामा से, गानों से या ऐप से?"
+    },
+    {
+      "key": "global-hi-question-14",
+      "clientPostId": "mingleseed-v2-160",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "सोल में भारतीय मसाले या दाल-चावल कहाँ मिल सकते हैं, कोई जानता है?"
+    },
+    {
+      "key": "global-hi-question-15",
+      "clientPostId": "mingleseed-v2-161",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "पतझड़ में सोल से एक दिन की यात्रा के लिए कौन-सी जगह अच्छी है?"
+    },
+    {
+      "key": "global-hi-question-16",
+      "clientPostId": "mingleseed-v2-162",
+      "kind": "question",
+      "topic": "korean",
+      "language": "hi",
+      "text": "कोरियन में आपको सबसे मुश्किल क्या लगा: उच्चारण या सम्मानसूचक भाषा?"
+    },
+    {
+      "key": "global-hi-question-17",
+      "clientPostId": "mingleseed-v2-163",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "कोरिया की सर्दी में भारत से आने वालों को क्या-क्या साथ लाना चाहिए?"
+    },
+    {
+      "key": "global-hi-question-18",
+      "clientPostId": "mingleseed-v2-164",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "hi",
+      "text": "कोरिया में सनस्क्रीन चुनते समय आप किस बात पर ध्यान देते हैं?"
+    },
+    {
+      "key": "global-hi-question-19",
+      "clientPostId": "mingleseed-v2-165",
+      "kind": "question",
+      "topic": "local",
+      "language": "hi",
+      "text": "बुसान घूमने के लिए KTX ट्रेन बेहतर है या एक्सप्रेस बस?"
+    },
+    {
+      "key": "global-hi-question-20",
+      "clientPostId": "mingleseed-v2-166",
+      "kind": "question",
+      "topic": "korean",
+      "language": "hi",
+      "text": "कौन-सा कोरियन शब्द आप अब हिंदी बोलते समय भी इस्तेमाल करने लगे हैं?"
+    },
+    {
+      "key": "global-hi-tip-21",
+      "clientPostId": "mingleseed-v2-167",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "रिचार्ज होने वाला ट्रांसपोर्ट कार्ड कोरिया के ज़्यादातर बड़े शहरों में मेट्रो और बस दोनों में चलता है।"
+    },
+    {
+      "key": "global-hi-tip-22",
+      "clientPostId": "mingleseed-v2-168",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "बस में चढ़ते और उतरते समय दोनों बार कार्ड टैप करें, तभी ट्रांसफ़र का फ़ायदा मिलता है।"
+    },
+    {
+      "key": "global-hi-tip-23",
+      "clientPostId": "mingleseed-v2-169",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "कोरिया के रेस्टोरेंट में आम तौर पर टिप नहीं दी जाती। एक \"कामसाहामनिदा\" काफ़ी है।"
+    },
+    {
+      "key": "global-hi-tip-24",
+      "clientPostId": "mingleseed-v2-170",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "साइड डिश (बानचान) अक्सर दोबारा मुफ़्त मिल जाती है। विनम्रता से और माँग सकते हैं।"
+    },
+    {
+      "key": "global-hi-tip-25",
+      "clientPostId": "mingleseed-v2-171",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "कई मेज़ों पर स्टाफ़ बुलाने के लिए बटन होता है। या कहिए \"저기요\" (जोगियो)।"
+    },
+    {
+      "key": "global-hi-tip-26",
+      "clientPostId": "mingleseed-v2-172",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "hi",
+      "text": "हांगुल लिपि जल्दी सीखी जा सकती है — कुछ ही दिनों में आप बोर्ड और मेन्यू पढ़ने लगेंगे।"
+    },
+    {
+      "key": "global-hi-tip-27",
+      "clientPostId": "mingleseed-v2-173",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "कोरिया के कन्वीनियंस स्टोर में गरम खाना, कॉफ़ी, छाता और चार्जर — सब कुछ रात-दिन मिलता है।"
+    },
+    {
+      "key": "global-hi-tip-28",
+      "clientPostId": "mingleseed-v2-174",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "कोरियन मैप ऐप अक्सर पैदल और पब्लिक ट्रांसपोर्ट के रास्ते ज़्यादा सही बताते हैं।"
+    },
+    {
+      "key": "global-hi-tip-29",
+      "clientPostId": "mingleseed-v2-175",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "दरवाज़े पर सीढ़ी या जूतों की रैक दिखे तो अंदर जाने से पहले जूते उतार दें।"
+    },
+    {
+      "key": "global-hi-tip-30",
+      "clientPostId": "mingleseed-v2-176",
+      "kind": "tip",
+      "topic": "local",
+      "language": "hi",
+      "text": "शाकाहारी हैं तो ध्यान दें: कई सूप और किमची में मछली या मांस का शोरबा हो सकता है। ऑर्डर से पहले पूछ लें।"
+    },
+    {
+      "key": "global-hi-tip-31",
+      "clientPostId": "mingleseed-v2-177",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "hi",
+      "text": "जब कोई बड़ा व्यक्ति आपको पेय डाले, तो गिलास दोनों हाथों से पकड़ना सम्मान का संकेत है।"
+    },
+    {
+      "key": "global-hi-tip-32",
+      "clientPostId": "mingleseed-v2-178",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "hi",
+      "text": "नई स्किनकेयर पहले त्वचा के छोटे हिस्से पर आज़माएँ, ख़ासकर सफ़र में जब मौसम बदलता है।"
+    },
+    {
+      "key": "global-ar-phrase-01",
+      "clientPostId": "mingleseed-v2-179",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "عبارة كورية اليوم: \"안녕하세요\" (أنيونغ هاسيو) تعني \"مرحبًا\". تناسب كل الأوقات تقريبًا."
+    },
+    {
+      "key": "global-ar-phrase-02",
+      "clientPostId": "mingleseed-v2-180",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"감사합니다\" (كامسا هامنيدا) تعني \"شكرًا\" بأسلوب مهذب. قلها عند الدفع أو عند مغادرة المتجر."
+    },
+    {
+      "key": "global-ar-phrase-03",
+      "clientPostId": "mingleseed-v2-181",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "لمعرفة السعر اسأل: \"얼마예요?\" (أولما ييو؟) أي \"بكم هذا؟\""
+    },
+    {
+      "key": "global-ar-phrase-04",
+      "clientPostId": "mingleseed-v2-182",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "أشر إلى الطبق في القائمة وقل \"이거 주세요\" (إيغو جوسيو) أي \"أريد هذا من فضلك\"."
+    },
+    {
+      "key": "global-ar-phrase-05",
+      "clientPostId": "mingleseed-v2-183",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"맛있어요!\" (ماشيسويو) تعني \"لذيذ جدًا!\""
+    },
+    {
+      "key": "global-ar-phrase-06",
+      "clientPostId": "mingleseed-v2-184",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"돼지고기 빼 주세요\" (دواجي غوغي بي جوسيو) تعني \"بدون لحم خنزير من فضلك\"."
+    },
+    {
+      "key": "global-ar-phrase-07",
+      "clientPostId": "mingleseed-v2-185",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"천천히 말해 주세요\" (تشونتشوني مالهي جوسيو) تعني \"تكلّم ببطء من فضلك\"."
+    },
+    {
+      "key": "global-ar-phrase-08",
+      "clientPostId": "mingleseed-v2-186",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"덜 맵게 해 주세요\" (دول ميبكي هي جوسيو) تعني \"أقل حرارة من فضلك\"."
+    },
+    {
+      "key": "global-ar-phrase-09",
+      "clientPostId": "mingleseed-v2-187",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"화장실 어디예요?\" (هواجانغشيل أوديييو؟) تعني \"أين دورة المياه؟\""
+    },
+    {
+      "key": "global-ar-phrase-10",
+      "clientPostId": "mingleseed-v2-188",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ar",
+      "text": "\"계산해 주세요\" (كيسانهي جوسيو) تعني \"الحساب من فضلك\". في كثير من المطاعم يكون الدفع عند الباب."
+    },
+    {
+      "key": "global-ar-question-11",
+      "clientPostId": "mingleseed-v2-189",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "هل يسهل العثور على مطاعم حلال في سيول؟ أي منطقة تنصحون بها؟"
+    },
+    {
+      "key": "global-ar-question-12",
+      "clientPostId": "mingleseed-v2-190",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "هل توجد أماكن للصلاة في المطارات أو مراكز التسوق الكبيرة في كوريا؟"
+    },
+    {
+      "key": "global-ar-question-13",
+      "clientPostId": "mingleseed-v2-191",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "أول زيارة لسيول: أي حي تفضلون للإقامة ولماذا؟"
+    },
+    {
+      "key": "global-ar-question-14",
+      "clientPostId": "mingleseed-v2-192",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ar",
+      "text": "كيف بدأتم تعلّم الكورية: من المسلسلات أم الأغاني أم التطبيقات؟"
+    },
+    {
+      "key": "global-ar-question-15",
+      "clientPostId": "mingleseed-v2-193",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "ما أفضل رحلة ليوم واحد من سيول في الخريف؟"
+    },
+    {
+      "key": "global-ar-question-16",
+      "clientPostId": "mingleseed-v2-194",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ar",
+      "text": "ما الأصعب في اللغة الكورية بالنسبة لكم: النطق أم مستويات الاحترام؟"
+    },
+    {
+      "key": "global-ar-question-17",
+      "clientPostId": "mingleseed-v2-195",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "ar",
+      "text": "على ماذا تركزون عند اختيار واقي الشمس في كوريا؟"
+    },
+    {
+      "key": "global-ar-question-18",
+      "clientPostId": "mingleseed-v2-196",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "بوسان في الشتاء: هل تستحق الزيارة أم الأفضل انتظار الصيف؟"
+    },
+    {
+      "key": "global-ar-question-19",
+      "clientPostId": "mingleseed-v2-197",
+      "kind": "question",
+      "topic": "local",
+      "language": "ar",
+      "text": "ما الأطباق الكورية التي تناسب من لا يأكل اللحوم؟"
+    },
+    {
+      "key": "global-ar-question-20",
+      "clientPostId": "mingleseed-v2-198",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ar",
+      "text": "ما الكلمة الكورية التي صرتم تستخدمونها حتى عند الحديث بالعربية؟"
+    },
+    {
+      "key": "global-ar-tip-21",
+      "clientPostId": "mingleseed-v2-199",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "بطاقة المواصلات القابلة للشحن تعمل في المترو والحافلات في معظم المدن الكورية الكبيرة."
+    },
+    {
+      "key": "global-ar-tip-22",
+      "clientPostId": "mingleseed-v2-200",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "في الحافلة، مرّر البطاقة عند الصعود وعند النزول للاستفادة من خصم التحويل بين الخطوط."
+    },
+    {
+      "key": "global-ar-tip-23",
+      "clientPostId": "mingleseed-v2-201",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "البقشيش ليس عادة شائعة في مطاعم كوريا. كلمة \"كامسا هامنيدا\" تكفي."
+    },
+    {
+      "key": "global-ar-tip-24",
+      "clientPostId": "mingleseed-v2-202",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "الأطباق الجانبية (بانتشان) غالبًا تُعاد تعبئتها مجانًا، ويمكنك طلب المزيد بلطف."
+    },
+    {
+      "key": "global-ar-tip-25",
+      "clientPostId": "mingleseed-v2-203",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "في كثير من المطاعم يوجد جرس على الطاولة لنداء الموظف، أو قل \"저기요\" (جوغييو)."
+    },
+    {
+      "key": "global-ar-tip-26",
+      "clientPostId": "mingleseed-v2-204",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ar",
+      "text": "تعلّم الأبجدية الكورية (الهانغول) سريع: خلال أيام قليلة ستقرأ اللافتات والقوائم."
+    },
+    {
+      "key": "global-ar-tip-27",
+      "clientPostId": "mingleseed-v2-205",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "متاجر البقالة الصغيرة في كوريا تبيع طعامًا ساخنًا وقهوة ومظلات وشواحن على مدار الساعة."
+    },
+    {
+      "key": "global-ar-tip-28",
+      "clientPostId": "mingleseed-v2-206",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "تطبيقات الخرائط الكورية غالبًا أدق في إرشادات المشي والمواصلات العامة."
+    },
+    {
+      "key": "global-ar-tip-29",
+      "clientPostId": "mingleseed-v2-207",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "إذا رأيت درجة أو رفًّا للأحذية عند المدخل فاخلع حذاءك قبل الدخول."
+    },
+    {
+      "key": "global-ar-tip-30",
+      "clientPostId": "mingleseed-v2-208",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ar",
+      "text": "إذا كنت تتجنب لحم الخنزير، اسأل قبل الطلب: بعض الحساء والمرق يُحضَّر بمرق اللحم."
+    },
+    {
+      "key": "global-ar-tip-31",
+      "clientPostId": "mingleseed-v2-209",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ar",
+      "text": "عندما يصبّ لك شخص أكبر سنًّا مشروبًا، أمسك الكأس بيديك الاثنتين احترامًا."
+    },
+    {
+      "key": "global-ar-tip-32",
+      "clientPostId": "mingleseed-v2-210",
+      "kind": "tip",
+      "topic": "beauty",
+      "language": "ar",
+      "text": "جرّب منتج العناية الجديد على مساحة صغيرة من البشرة أولًا، خاصة في السفر مع تغيّر الطقس."
+    },
+    {
+      "key": "global-ja-phrase-01",
+      "clientPostId": "mingleseed-v2-211",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "今日の韓国語：「안녕하세요（アンニョンハセヨ）」は「こんにちは」。朝でも夜でも使えます。"
+    },
+    {
+      "key": "global-ja-phrase-02",
+      "clientPostId": "mingleseed-v2-212",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「감사합니다（カムサハムニダ）」は丁寧な「ありがとうございます」。お会計やお店を出るときに。"
+    },
+    {
+      "key": "global-ja-phrase-03",
+      "clientPostId": "mingleseed-v2-213",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "値段を聞くなら「얼마예요?（オルマエヨ？）」＝「いくらですか？」"
+    },
+    {
+      "key": "global-ja-phrase-04",
+      "clientPostId": "mingleseed-v2-214",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "メニューを指さして「이거 주세요（イゴ チュセヨ）」＝「これください」。"
+    },
+    {
+      "key": "global-ja-phrase-05",
+      "clientPostId": "mingleseed-v2-215",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「맛있어요!（マシッソヨ）」は「おいしいです！」。お店の人もきっと喜びます。"
+    },
+    {
+      "key": "global-ja-phrase-06",
+      "clientPostId": "mingleseed-v2-216",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "辛いのが苦手なら「덜 맵게 해 주세요（トル メプケ ヘ ジュセヨ）」＝「辛さ控えめでお願いします」。"
+    },
+    {
+      "key": "global-ja-phrase-07",
+      "clientPostId": "mingleseed-v2-217",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「천천히 말해 주세요（チョンチョニ マレ ジュセヨ）」＝「ゆっくり話してください」。"
+    },
+    {
+      "key": "global-ja-phrase-08",
+      "clientPostId": "mingleseed-v2-218",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「포장해 주세요（ポジャンヘ ジュセヨ）」＝「持ち帰りでお願いします」。"
+    },
+    {
+      "key": "global-ja-phrase-09",
+      "clientPostId": "mingleseed-v2-219",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「잠시만요（チャムシマンニョ）」は「すみません、ちょっと通ります」。混んだ地下鉄で便利です。"
+    },
+    {
+      "key": "global-ja-phrase-10",
+      "clientPostId": "mingleseed-v2-220",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "ja",
+      "text": "「다음에 또 봐요（タウメ ト バヨ）」＝「また今度会いましょう」。"
+    },
+    {
+      "key": "global-ja-question-11",
+      "clientPostId": "mingleseed-v2-221",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "初めてのソウル、泊まるなら弘大・明洞・鍾路のどこがいいと思いますか？"
+    },
+    {
+      "key": "global-ja-question-12",
+      "clientPostId": "mingleseed-v2-222",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ja",
+      "text": "韓国語の勉強、何から始めましたか？ドラマ、K-POP、それともアプリ？"
+    },
+    {
+      "key": "global-ja-question-13",
+      "clientPostId": "mingleseed-v2-223",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "ソウルから日帰りで紅葉を見るなら、どこへ行きますか？"
+    },
+    {
+      "key": "global-ja-question-14",
+      "clientPostId": "mingleseed-v2-224",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "釜山へはKTXと高速バス、どちらが便利でしたか？"
+    },
+    {
+      "key": "global-ja-question-15",
+      "clientPostId": "mingleseed-v2-225",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "ja",
+      "text": "韓国で日焼け止めを選ぶとき、何を重視しますか？テクスチャー、仕上がり、白浮きしにくさ？"
+    },
+    {
+      "key": "global-ja-question-16",
+      "clientPostId": "mingleseed-v2-226",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ja",
+      "text": "韓国語で一番難しいと感じたのは発音ですか、それとも敬語ですか？"
+    },
+    {
+      "key": "global-ja-question-17",
+      "clientPostId": "mingleseed-v2-227",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "雨の日のソウル、屋内で楽しめる場所はどこがありますか？"
+    },
+    {
+      "key": "global-ja-question-18",
+      "clientPostId": "mingleseed-v2-228",
+      "kind": "question",
+      "topic": "korean",
+      "language": "ja",
+      "text": "日本語で話していても、つい出てしまう韓国語はありますか？"
+    },
+    {
+      "key": "global-ja-question-19",
+      "clientPostId": "mingleseed-v2-229",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "冬の韓国、日本の冬と比べて寒さはどうでしたか？"
+    },
+    {
+      "key": "global-ja-question-20",
+      "clientPostId": "mingleseed-v2-230",
+      "kind": "question",
+      "topic": "local",
+      "language": "ja",
+      "text": "伝統市場で最初に食べるべき屋台グルメは何だと思いますか？"
+    },
+    {
+      "key": "global-ja-tip-21",
+      "clientPostId": "mingleseed-v2-231",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "チャージ式の交通カードは、韓国の主な都市の地下鉄とバスで使えます。"
+    },
+    {
+      "key": "global-ja-tip-22",
+      "clientPostId": "mingleseed-v2-232",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "バスでは乗るときと降りるときの両方でカードをタッチすると、乗り換え料金が適用されます。"
+    },
+    {
+      "key": "global-ja-tip-23",
+      "clientPostId": "mingleseed-v2-233",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "韓国の飲食店では基本的にチップは不要です。「カムサハムニダ」の一言で十分。"
+    },
+    {
+      "key": "global-ja-tip-24",
+      "clientPostId": "mingleseed-v2-234",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "おかず（パンチャン）はおかわり自由なお店が多いです。遠慮せず頼んでみて。"
+    },
+    {
+      "key": "global-ja-tip-25",
+      "clientPostId": "mingleseed-v2-235",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "テーブルに呼び出しボタンがあるお店が多いです。ない場合は「저기요（チョギヨ）」と声をかけます。"
+    },
+    {
+      "key": "global-ja-tip-26",
+      "clientPostId": "mingleseed-v2-236",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ja",
+      "text": "ハングルは覚えるのが早い文字です。数日で看板やメニューが読めるようになります。"
+    },
+    {
+      "key": "global-ja-tip-27",
+      "clientPostId": "mingleseed-v2-237",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "韓国のコンビニには温かい食事、コーヒー、傘、充電器まで揃っています。"
+    },
+    {
+      "key": "global-ja-tip-28",
+      "clientPostId": "mingleseed-v2-238",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "道案内は韓国の地図アプリの方が、徒歩や公共交通のルートが正確なことが多いです。"
+    },
+    {
+      "key": "global-ja-tip-29",
+      "clientPostId": "mingleseed-v2-239",
+      "kind": "tip",
+      "topic": "local",
+      "language": "ja",
+      "text": "入口に段差や靴箱があったら、靴を脱いで上がりましょう。"
+    },
+    {
+      "key": "global-ja-tip-30",
+      "clientPostId": "mingleseed-v2-240",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "ja",
+      "text": "目上の人にお酒を注いでもらうときは、グラスを両手で持つのが礼儀です。"
+    },
+    {
+      "key": "global-zh-cn-phrase-01",
+      "clientPostId": "mingleseed-v2-241",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "今日韩语：「안녕하세요」（annyeonghaseyo）意思是“你好”，几乎任何场合都能用。"
+    },
+    {
+      "key": "global-zh-cn-phrase-02",
+      "clientPostId": "mingleseed-v2-242",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「감사합니다」（gamsahamnida）是礼貌的“谢谢”，付款或离开店里时都可以说。"
+    },
+    {
+      "key": "global-zh-cn-phrase-03",
+      "clientPostId": "mingleseed-v2-243",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "想问价格就说「얼마예요?」（eolmayeyo?）——“多少钱？”"
+    },
+    {
+      "key": "global-zh-cn-phrase-04",
+      "clientPostId": "mingleseed-v2-244",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "指着菜单说「이거 주세요」（igeo juseyo）——“请给我这个”。"
+    },
+    {
+      "key": "global-zh-cn-phrase-05",
+      "clientPostId": "mingleseed-v2-245",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「맛있어요!」（masisseoyo）意思是“很好吃！”，店家听了会很开心。"
+    },
+    {
+      "key": "global-zh-cn-phrase-06",
+      "clientPostId": "mingleseed-v2-246",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "怕辣的话可以说「덜 맵게 해 주세요」（deol maepge hae juseyo）——“请做得不那么辣”。"
+    },
+    {
+      "key": "global-zh-cn-phrase-07",
+      "clientPostId": "mingleseed-v2-247",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「천천히 말해 주세요」（cheoncheonhi malhae juseyo）——“请说慢一点”。"
+    },
+    {
+      "key": "global-zh-cn-phrase-08",
+      "clientPostId": "mingleseed-v2-248",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「계산해 주세요」（gyesanhae juseyo）——“请结账”。很多店是在门口柜台付款。"
+    },
+    {
+      "key": "global-zh-cn-phrase-09",
+      "clientPostId": "mingleseed-v2-249",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「화장실 어디예요?」（hwajangsil eodiyeyo?）——“洗手间在哪里？”"
+    },
+    {
+      "key": "global-zh-cn-phrase-10",
+      "clientPostId": "mingleseed-v2-250",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "「여기서 내려요」（yeogiseo naeryeoyo）——“我在这里下车”，坐出租车时很好用。"
+    },
+    {
+      "key": "global-zh-cn-question-11",
+      "clientPostId": "mingleseed-v2-251",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "第一次去首尔，大家会选择住在弘大、明洞还是江南？为什么？"
+    },
+    {
+      "key": "global-zh-cn-question-12",
+      "clientPostId": "mingleseed-v2-252",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "你们是怎么开始学韩语的？看剧、听歌还是用App？"
+    },
+    {
+      "key": "global-zh-cn-question-13",
+      "clientPostId": "mingleseed-v2-253",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "秋天从首尔出发一日游，看红叶去哪里比较好？"
+    },
+    {
+      "key": "global-zh-cn-question-14",
+      "clientPostId": "mingleseed-v2-254",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "去釜山坐KTX还是高速大巴更方便？"
+    },
+    {
+      "key": "global-zh-cn-question-15",
+      "clientPostId": "mingleseed-v2-255",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "zh-CN",
+      "text": "在韩国挑防晒霜时，你最看重什么：质地、清爽度还是不泛白？"
+    },
+    {
+      "key": "global-zh-cn-question-16",
+      "clientPostId": "mingleseed-v2-256",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "学韩语时你觉得最难的是发音还是敬语？"
+    },
+    {
+      "key": "global-zh-cn-question-17",
+      "clientPostId": "mingleseed-v2-257",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "首尔下雨天有什么适合室内玩的地方？"
+    },
+    {
+      "key": "global-zh-cn-question-18",
+      "clientPostId": "mingleseed-v2-258",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "传统市场里第一次去应该先尝什么小吃？"
+    },
+    {
+      "key": "global-zh-cn-question-19",
+      "clientPostId": "mingleseed-v2-259",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "有没有哪个韩语词你现在说中文时也会不自觉地用？"
+    },
+    {
+      "key": "global-zh-cn-question-20",
+      "clientPostId": "mingleseed-v2-260",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "韩国的冬天和北方比起来冷不冷？需要准备什么？"
+    },
+    {
+      "key": "global-zh-cn-tip-21",
+      "clientPostId": "mingleseed-v2-261",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "可充值的交通卡在韩国大部分大城市的地铁和公交上都能用。"
+    },
+    {
+      "key": "global-zh-cn-tip-22",
+      "clientPostId": "mingleseed-v2-262",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "坐公交时上车和下车都要刷卡，这样才能享受换乘。"
+    },
+    {
+      "key": "global-zh-cn-tip-23",
+      "clientPostId": "mingleseed-v2-263",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "在韩国餐厅一般不需要给小费，说一句「감사합니다」就很好。"
+    },
+    {
+      "key": "global-zh-cn-tip-24",
+      "clientPostId": "mingleseed-v2-264",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "小菜（banchan）通常可以免费续加，可以礼貌地再要一点。"
+    },
+    {
+      "key": "global-zh-cn-tip-25",
+      "clientPostId": "mingleseed-v2-265",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "很多餐桌上有呼叫铃，没有的话可以说「저기요」（jeogiyo）叫服务员。"
+    },
+    {
+      "key": "global-zh-cn-tip-26",
+      "clientPostId": "mingleseed-v2-266",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "韩文字母学起来很快，几天之内就能看懂招牌和菜单。"
+    },
+    {
+      "key": "global-zh-cn-tip-27",
+      "clientPostId": "mingleseed-v2-267",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "韩国便利店有热食、咖啡、雨伞和充电器，深夜也很方便。"
+    },
+    {
+      "key": "global-zh-cn-tip-28",
+      "clientPostId": "mingleseed-v2-268",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "在韩国导航时，本地地图App的步行和公交路线通常更准确。"
+    },
+    {
+      "key": "global-zh-cn-tip-29",
+      "clientPostId": "mingleseed-v2-269",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-CN",
+      "text": "门口有台阶或鞋柜的话，记得脱鞋再进去。"
+    },
+    {
+      "key": "global-zh-cn-tip-30",
+      "clientPostId": "mingleseed-v2-270",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "zh-CN",
+      "text": "长辈给你倒酒时，用双手拿杯子是一种礼貌。"
+    },
+    {
+      "key": "global-zh-tw-phrase-01",
+      "clientPostId": "mingleseed-v2-271",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "今日韓語：「안녕하세요」（annyeonghaseyo）是「你好」的意思，什麼時候都能用。"
+    },
+    {
+      "key": "global-zh-tw-phrase-02",
+      "clientPostId": "mingleseed-v2-272",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「감사합니다」（gamsahamnida）是禮貌的「謝謝」，結帳或離開店裡時都可以說。"
+    },
+    {
+      "key": "global-zh-tw-phrase-03",
+      "clientPostId": "mingleseed-v2-273",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "想問價錢就說「얼마예요?」（eolmayeyo?）——「多少錢？」"
+    },
+    {
+      "key": "global-zh-tw-phrase-04",
+      "clientPostId": "mingleseed-v2-274",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "指著菜單說「이거 주세요」（igeo juseyo）——「請給我這個」。"
+    },
+    {
+      "key": "global-zh-tw-phrase-05",
+      "clientPostId": "mingleseed-v2-275",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「맛있어요!」（masisseoyo）是「很好吃！」的意思，老闆聽了會很開心。"
+    },
+    {
+      "key": "global-zh-tw-phrase-06",
+      "clientPostId": "mingleseed-v2-276",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "不敢吃辣可以說「덜 맵게 해 주세요」（deol maepge hae juseyo）——「請做小辣一點」。"
+    },
+    {
+      "key": "global-zh-tw-phrase-07",
+      "clientPostId": "mingleseed-v2-277",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「천천히 말해 주세요」（cheoncheonhi malhae juseyo）——「請說慢一點」。"
+    },
+    {
+      "key": "global-zh-tw-phrase-08",
+      "clientPostId": "mingleseed-v2-278",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「포장해 주세요」（pojanghae juseyo）——「請幫我外帶」。"
+    },
+    {
+      "key": "global-zh-tw-phrase-09",
+      "clientPostId": "mingleseed-v2-279",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「잠시만요」（jamsimanyo）是「不好意思、借過一下」，在擁擠的捷運上很實用。"
+    },
+    {
+      "key": "global-zh-tw-phrase-10",
+      "clientPostId": "mingleseed-v2-280",
+      "kind": "phrase",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "「다음에 또 봐요」（daeume tto bwayo）——「下次見！」"
+    },
+    {
+      "key": "global-zh-tw-question-11",
+      "clientPostId": "mingleseed-v2-281",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "第一次去首爾，大家會住弘大、明洞還是鍾路？為什麼？"
+    },
+    {
+      "key": "global-zh-tw-question-12",
+      "clientPostId": "mingleseed-v2-282",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "你是怎麼開始學韓文的？追劇、聽歌還是用App？"
+    },
+    {
+      "key": "global-zh-tw-question-13",
+      "clientPostId": "mingleseed-v2-283",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "秋天從首爾出發一日遊，看楓葉去哪裡比較好？"
+    },
+    {
+      "key": "global-zh-tw-question-14",
+      "clientPostId": "mingleseed-v2-284",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "去釜山搭KTX還是高速巴士比較方便？"
+    },
+    {
+      "key": "global-zh-tw-question-15",
+      "clientPostId": "mingleseed-v2-285",
+      "kind": "question",
+      "topic": "beauty",
+      "language": "zh-TW",
+      "text": "在韓國選防曬時，你最在意質地、清爽度還是不泛白？"
+    },
+    {
+      "key": "global-zh-tw-question-16",
+      "clientPostId": "mingleseed-v2-286",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "學韓文時，你覺得發音還是敬語比較難？"
+    },
+    {
+      "key": "global-zh-tw-question-17",
+      "clientPostId": "mingleseed-v2-287",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "首爾下雨天有什麼室內景點可以去？"
+    },
+    {
+      "key": "global-zh-tw-question-18",
+      "clientPostId": "mingleseed-v2-288",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "第一次逛傳統市場，應該先吃哪些小吃？"
+    },
+    {
+      "key": "global-zh-tw-question-19",
+      "clientPostId": "mingleseed-v2-289",
+      "kind": "question",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "有沒有哪個韓文單字，你現在講中文時也會脫口而出？"
+    },
+    {
+      "key": "global-zh-tw-question-20",
+      "clientPostId": "mingleseed-v2-290",
+      "kind": "question",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "韓國的冬天跟台灣比起來冷很多嗎？要準備什麼？"
+    },
+    {
+      "key": "global-zh-tw-tip-21",
+      "clientPostId": "mingleseed-v2-291",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "可儲值的交通卡在韓國大部分大城市的地鐵和公車都能使用。"
+    },
+    {
+      "key": "global-zh-tw-tip-22",
+      "clientPostId": "mingleseed-v2-292",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "搭公車時上車、下車都要刷卡，才能享有轉乘。"
+    },
+    {
+      "key": "global-zh-tw-tip-23",
+      "clientPostId": "mingleseed-v2-293",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "韓國餐廳一般不用給小費，說一聲「감사합니다」就很好。"
+    },
+    {
+      "key": "global-zh-tw-tip-24",
+      "clientPostId": "mingleseed-v2-294",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "小菜（banchan）通常可以免費續，有禮貌地再要一點沒問題。"
+    },
+    {
+      "key": "global-zh-tw-tip-25",
+      "clientPostId": "mingleseed-v2-295",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "很多餐桌上有服務鈴，沒有的話可以說「저기요」（jeogiyo）請店員過來。"
+    },
+    {
+      "key": "global-zh-tw-tip-26",
+      "clientPostId": "mingleseed-v2-296",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "韓文字母很好學，幾天內就能看懂招牌和菜單。"
+    },
+    {
+      "key": "global-zh-tw-tip-27",
+      "clientPostId": "mingleseed-v2-297",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "韓國便利商店有熱食、咖啡、雨傘和充電器，半夜也很方便。"
+    },
+    {
+      "key": "global-zh-tw-tip-28",
+      "clientPostId": "mingleseed-v2-298",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "在韓國找路時，本地地圖App的步行和大眾運輸路線通常比較準確。"
+    },
+    {
+      "key": "global-zh-tw-tip-29",
+      "clientPostId": "mingleseed-v2-299",
+      "kind": "tip",
+      "topic": "local",
+      "language": "zh-TW",
+      "text": "門口有台階或鞋櫃的話，記得脫鞋再進去。"
+    },
+    {
+      "key": "global-zh-tw-tip-30",
+      "clientPostId": "mingleseed-v2-300",
+      "kind": "tip",
+      "topic": "korean",
+      "language": "zh-TW",
+      "text": "長輩幫你倒酒時，用雙手拿杯子是一種禮貌。"
+    }
+  ]
+}

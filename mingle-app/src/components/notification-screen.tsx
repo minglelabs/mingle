@@ -2,6 +2,7 @@
 
 import NotificationPanel from "@/components/notification-panel";
 import type { AppDictionary, AppLocale } from "@/i18n";
+import { feedHref } from "@/lib/feed-routes";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { useSession } from "next-auth/react";
@@ -42,16 +43,31 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
     router.push(profileHref);
   }, [locale, router, searchParams]);
 
+  const handleOpenPost = useCallback((postId: string, commentId: string | null) => {
+    const normalizedPostId = postId.trim();
+    if (!normalizedPostId) return;
+
+    // feedHref opens the feed at this post; with a commentId the feed opens the
+    // comment sheet on that comment and expands its collapsed replies.
+    const postHref = buildNativeAwareTabPath(
+      feedHref(locale, { postId: normalizedPostId, commentId: commentId?.trim() || null }),
+      searchParams,
+    );
+    router.push(postHref);
+  }, [locale, router, searchParams]);
+
   useNativeBannerSuppression();
 
   return (
     <NotificationPanel
       open
+      transitionMode="instant"
       enabled={sessionStatus === "authenticated"}
       locale={locale}
       dictionary={dictionary}
       onClose={handleClose}
       onOpenProfile={handleOpenProfile}
+      onOpenPost={handleOpenPost}
     />
   );
 }

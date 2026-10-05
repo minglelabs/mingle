@@ -10,14 +10,14 @@ import {
   buildSharedScaleChartGeometries,
 } from "@/lib/admin-dashboard-metrics";
 
-// The card's only state is the hovered day index (useChartHover's useState); forcing it
-// renders the hover layer on the server, where no pointer event can set it.
+// The hovered/pinned day index is the card's only `null`-initialised state; forcing it
+// renders the active-day layer on the server, where no pointer event can set it.
 const hover = vi.hoisted(() => ({ index: null as number | null }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   return {
     ...actual,
-    useState: (initial: unknown) => (hover.index === null ? actual.useState(initial) : [hover.index, () => {}]),
+    useState: (initial: unknown) => (hover.index !== null && initial === null ? [hover.index, () => {}] : actual.useState(initial)),
   };
 });
 
@@ -63,30 +63,33 @@ function count(html: string, pattern: RegExp): number {
   return html.match(pattern)?.length ?? 0;
 }
 
-function tooltipPosition(x: number, y: number): string {
-  return `left:${((x + 4) / (W + 48)) * 100}%;top:${(((y + 8) - 6) / (H + 30)) * 100}%`;
+const CARD_OPEN = '<div class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">';
+const DOT = /class="pointer-events-none absolute h-1\.5 w-1\.5 /g;
+const ACTIVE_MARKER = /class="pointer-events-none absolute h-3 w-3 /g;
+const TOOLTIP_CLASS = "pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg";
+
+function percent(value: number, total: number): string {
+  return `${(value / total) * 100}%`;
 }
 
-const CARD_OPEN = '<div class="rounded-xl border border-[#e5e3dc] bg-white p-4 shadow-sm"><div class="flex items-center justify-between">';
-const HOVER_TARGET = '<rect x="0" y="0" width="560" height="140" fill="transparent" class="cursor-crosshair"></rect></svg>';
-const TOOLTIP_CLASS = "pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium text-white shadow-lg";
-
 function expectFrame(html: string, label: string, ariaLabel: string, yLabels: string[]) {
-  const head = `${CARD_OPEN}<p class="text-sm font-semibold text-[#0b0b0b]">${label}</p>`;
+  const head = `${CARD_OPEN}<p class="text-sm font-semibold text-slate-900">${label}</p>`;
   expect(html.slice(0, head.length)).toBe(head);
-  expect(html).toContain(`<div class="relative mt-1.5"><svg class="w-full" role="img" aria-label="${ariaLabel}" viewBox="-4 -8 608 170">`);
-  // Grid at 0 / half / top, labelled on the right.
-  for (const [index, y] of [140, 70, 0].entries()) {
-    expect(html).toContain(
-      `<g><line x1="0" x2="560" y1="${y}" y2="${y}" stroke="#e1e0d9" stroke-width="1"></line><text x="566" y="${y + 3}" font-size="10" fill="#898781">${yLabels[index]}</text></g>`,
-    );
+  // The plot stretches to the card; every label is HTML, outside the svg.
+  expect(html).toContain(`<svg aria-label="${ariaLabel}" class="absolute inset-0 h-full w-full overflow-visible" preserveAspectRatio="none" role="img" viewBox="0 0 ${W} ${H}">`);
+  expect(html).not.toContain("<text");
+  // Grid at the top / half / 0, labelled on the right.
+  for (const y of [0, 70, 140]) {
+    expect(html).toContain(`<line stroke="#e2e8f0" stroke-width="1" vector-effect="non-scaling-stroke" x1="0" x2="${W}" y1="${y}" y2="${y}"></line>`);
   }
-  expect(html).toContain('<text x="0" y="160" font-size="10" fill="#898781" text-anchor="start">08/02</text>');
-  expect(html).toContain('<text x="560" y="160" font-size="10" fill="#898781" text-anchor="end">08/05</text>');
-  expect(count(html, /<text x="[\d.]+" y="160"/g)).toBe(4);
-  // Unhovered: the hit area is the last thing drawn and no tooltip follows it.
-  const tail = `${HOVER_TARGET}</div></div>`;
-  expect(html.slice(-tail.length)).toBe(tail);
+  for (const [index, top] of ["0%", "50%", "100%"].entries()) {
+    expect(html).toContain(`style="top:${top}">${yLabels[index]}</span>`);
+  }
+  expect(html).toContain(">08/02</span>");
+  expect(html).toContain(">08/05</span>");
+  // The keyboard/touch target covers the plot.
+  expect(html).toContain(`aria-label="${label} 날짜별 값" aria-valuemax="3" aria-valuemin="0"`);
+  expect(html).toContain('role="slider" tabindex="0"');
 }
 
 afterEach(() => {
@@ -98,42 +101,40 @@ describe("LineChartCard markup", () => {
     const props = dailyProps("메시지수", "count", series([3, 0, 7, 5]));
     const html = render(props);
 
-    expectFrame(html, "메시지수", "메시지수 일별 추이", ["0", "5", "10"]);
+    expectFrame(html, "메시지수", "메시지수 일별 추이", ["10", "5", "0"]);
     // No legend or footer beside the label.
-    expect(html).toContain('<p class="text-sm font-semibold text-[#0b0b0b]">메시지수</p></div>');
+    expect(html).toContain('<p class="text-sm font-semibold text-slate-900">메시지수</p></div>');
     expect(html).toContain(`<path d="${props.areaPath}" fill="#2a78d6" opacity="0.1"></path>`);
-    expect(html).toContain(
-      `<path d="${props.linePath}" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>`,
-    );
+    expect(html).toContain(`<path d="${props.linePath}" fill="none" stroke="#2a78d6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>`);
     expect(count(html, /<path /g)).toBe(2);
     // A dot for every day with a value, zeros included.
-    expect(count(html, /r="2.5" fill="#2a78d6" stroke="#ffffff" stroke-width="2" pointer-events="none"/g)).toBe(4);
-    expect(html).toContain(`<circle cx="${props.points[1].x}" cy="140" r="2.5"`);
-    expect(html).not.toContain('r="4"');
-    expect(html).not.toContain("pointer-events-none absolute");
+    expect(count(html, DOT)).toBe(4);
+    expect(html).toContain(`style="left:${percent(props.points[1].x, W)};top:100%;background-color:#2a78d6"`);
+    expect(count(html, ACTIVE_MARKER)).toBe(0);
+    expect(html).not.toContain(TOOLTIP_CLASS);
   });
 
   it("daily card with a p95 secondary on the shared scale", () => {
     const props = dailyProps("STT 지연시간", "milliseconds", series([120, 150, null, 180]), series([340, 300, null, 410]));
     const html = render(props);
 
-    expectFrame(html, "STT 지연시간", "STT 지연시간 일별 추이", ["0", "250", "500"]);
+    expectFrame(html, "STT 지연시간", "STT 지연시간 일별 추이", ["500", "250", "0"]);
     expect(html).toContain(
-      '<div class="flex items-center gap-3 text-xs text-[#898781]">'
+      '<div class="flex items-center gap-3 text-xs text-slate-500">'
       + '<span class="inline-flex items-center gap-1"><span aria-hidden="true" class="inline-block h-0.5 w-3" style="background-color:#2a78d6"></span>평균</span>'
-      + '<span class="inline-flex items-center gap-1"><span aria-hidden="true" class="inline-block h-0.5 w-3" style="background-color:#eb6834"></span>p95</span></div>',
+      + '<span class="inline-flex items-center gap-1"><span aria-hidden="true" class="inline-block w-3 border-t-2 border-dashed" style="border-color:#eb6834"></span>p95</span></div>',
     );
     const secondary = props.secondary!;
-    const secondaryArea = `<path d="${secondary.areaPath}" fill="#eb6834" opacity="0.08"></path>`;
+    const secondaryArea = `<path d="${secondary.areaPath}" fill="#eb6834" opacity="0.06"></path>`;
     const primaryArea = `<path d="${props.areaPath}" fill="#2a78d6" opacity="0.1"></path>`;
-    // p95 is painted underneath the average.
+    // p95 is painted underneath the average, as a dashed line.
     expect(html.indexOf(secondaryArea)).toBeGreaterThan(-1);
     expect(html.indexOf(secondaryArea)).toBeLessThan(html.indexOf(primaryArea));
-    expect(html).toContain(`<path d="${secondary.linePath}" fill="none" stroke="#eb6834" stroke-width="2"`);
+    expect(html).toContain(`<path d="${secondary.linePath}" fill="none" stroke="#eb6834" stroke-dasharray="6 4"`);
     // The null day breaks both lines and gets no dot; p95 never gets per-day dots.
     expect(props.linePath.match(/M/g)).toHaveLength(2);
-    expect(count(html, /r="2.5"/g)).toBe(3);
-    expect(count(html, /r="2.5" fill="#eb6834"/g)).toBe(0);
+    expect(count(html, DOT)).toBe(3);
+    expect(html).not.toContain("background-color:#eb6834");
   });
 
   it("cumulative card with a footer", () => {
@@ -151,13 +152,13 @@ describe("LineChartCard markup", () => {
       footer: "누적 합계 9",
     });
 
-    expectFrame(html, "가입자수", "가입자수 누적 추이", ["0", "5", "10"]);
-    expect(html).toContain('<p class="text-sm font-semibold text-[#0b0b0b]">가입자수</p><p class="text-xs font-medium text-[#898781]">누적 합계 9</p></div>');
+    expectFrame(html, "가입자수", "가입자수 누적 추이", ["10", "5", "0"]);
+    expect(html).toContain('<p class="text-sm font-semibold text-slate-900">가입자수</p><p class="text-xs font-medium text-slate-500">누적 합계 9</p></div>');
     expect(html).toContain(`<path d="${geometry.areaPath}" fill="#1baf7a" opacity="0.1"></path>`);
-    expect(count(html, /r="2.5" fill="#1baf7a"/g)).toBe(4);
+    expect(count(html, DOT)).toBe(4);
   });
 
-  it("keeps the centred tooltip, guide and markers on hover", () => {
+  it("shows the tooltip, guide and markers of the active day", () => {
     const props = dailyProps("STT 지연시간", "milliseconds", series([120, 150, null, 180]), series([340, 300, null, 410]));
     hover.index = 1;
     const html = render(props);
@@ -165,22 +166,25 @@ describe("LineChartCard markup", () => {
     const secondary = props.secondary!.points[1];
 
     expect(html).toContain(
-      `<line x1="${primary.x}" x2="${primary.x}" y1="0" y2="140" stroke="#c9c7c0" stroke-width="1" pointer-events="none"></line>`,
+      `<line pointer-events="none" stroke="#94a3b8" stroke-width="1" vector-effect="non-scaling-stroke" x1="${primary.x}" x2="${primary.x}" y1="0" y2="${H}"></line>`,
     );
-    expect(html).toContain(`<circle cx="${primary.x}" cy="${primary.y}" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2" pointer-events="none"></circle>`);
-    expect(html).toContain(`<circle cx="${secondary.x}" cy="${secondary.y}" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2" pointer-events="none"></circle>`);
-    const tooltipTail = `${HOVER_TARGET}<div class="${TOOLTIP_CLASS}" style="${tooltipPosition(primary.x, primary.y)}">`
-      + '<div class="text-[#c3c2b7]">2026-08-03</div><div class="font-semibold">150ms</div>'
-      + '<div class="text-[#c3c2b7]">p95: 300ms</div></div></div></div>';
-    expect(html.slice(-tooltipTail.length)).toBe(tooltipTail);
+    expect(count(html, ACTIVE_MARKER)).toBe(2);
+    expect(html).toContain(`style="left:${percent(primary.x, W)};top:${percent(primary.y, H)};background-color:#2a78d6"`);
+    expect(html).toContain(`style="left:${percent(secondary.x, W)};top:${percent(secondary.y, H)};background-color:#eb6834"`);
+    expect(html).toContain(`class="${TOOLTIP_CLASS}"`);
+    expect(html).toContain(
+      '<div class="text-slate-300">2026-08-03</div><div class="font-semibold">150ms</div>'
+      + '<div class="text-slate-300">p95: 300ms</div></div>',
+    );
+    expect(html).toContain('aria-valuenow="1" aria-valuetext="2026-08-03 150ms, p95 300ms"');
   });
 
-  it("anchors the tooltip on a day without a value at the baseline, with no marker", () => {
+  it("shows the tooltip of a day without a value, with no marker", () => {
     const props = dailyProps("STT 지연시간", "milliseconds", series([120, 150, null, 180]), series([340, 300, null, 410]));
     hover.index = 2;
     const html = render(props);
 
-    expect(count(html, /r="4"/g)).toBe(0);
-    expect(html).toContain(`style="${tooltipPosition(props.points[2].x, 140)}"><div class="text-[#c3c2b7]">2026-08-04</div><div class="font-semibold">—</div>`);
+    expect(count(html, ACTIVE_MARKER)).toBe(0);
+    expect(html).toContain('<div class="text-slate-300">2026-08-04</div><div class="font-semibold">—</div>');
   });
 });

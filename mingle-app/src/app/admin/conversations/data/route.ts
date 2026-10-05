@@ -1,18 +1,16 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { resolveAccountStatus } from "@/server/account-status";
+import { requireAdminApi } from "@/server/admin/guard";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 function first(value: string | null): string {
   return value?.trim() ?? "";
 }
 
 export async function GET(request: Request) {
-  const store = await cookies();
-  if (!verifyAdminSessionToken(store.get(ADMIN_SESSION_COOKIE_NAME)?.value)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
 
   const url = new URL(request.url);
   const userId = first(url.searchParams.get("userId"));
@@ -27,6 +25,8 @@ export async function GET(request: Request) {
       email: true,
       name: true,
       handle: true,
+      isOfficial: true,
+      isOperator: true,
       isActive: true,
       isDeleted: true,
       deactivatedAt: true,
@@ -75,6 +75,7 @@ export async function GET(request: Request) {
       email: user.email,
       name: user.name,
       handle: user.handle,
+      ...identityBadgeFlags(user),
       accountStatus: resolveAccountStatus(user),
       isActive: user.isActive,
       isDeleted: user.isDeleted,

@@ -7,6 +7,8 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import LanguageFlag from "@/components/language-flag";
+import AccountBadge from "@/components/posts/account-badge";
+import type { AccountBadgeKind } from "@/lib/account-badge";
 import { X, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -20,6 +22,8 @@ type ProfileImagePreviewProps = {
   languageName?: string | null;
   languageLabel?: string | null;
   name?: string | null;
+  /** Badge next to the name (`resolveAccountBadge(profile)`) when it is another user's. */
+  nameBadge?: AccountBadgeKind | null;
   handle?: string | null;
   bio?: string | null;
   bioUserId?: string;
@@ -40,6 +44,7 @@ export default function ProfileImagePreview({
   languageName,
   languageLabel,
   name,
+  nameBadge = null,
   handle,
   bio,
   bioUserId,
@@ -135,7 +140,12 @@ export default function ProfileImagePreview({
 
         {(name?.trim() || handle?.trim() || bio?.trim() || language || flag || languageName) ? (
           <div className="mt-5 w-full max-w-[min(20rem,85vw)] rounded-[24px] border border-white/15 bg-white/12 px-5 py-4 text-white shadow-[0_12px_36px_rgba(0,0,0,0.18)] backdrop-blur-md">
-            {name?.trim() ? <p className="truncate text-center text-[19px] font-semibold tracking-[-0.01em]">{name.trim()}</p> : null}
+            {name?.trim() ? (
+              <p className="flex min-w-0 items-center justify-center gap-1.5 text-center text-[19px] font-semibold tracking-[-0.01em]">
+                <span className="truncate">{name.trim()}</span>
+                <AccountBadge kind={nameBadge} locale={locale} tone="light" />
+              </p>
+            ) : null}
             {handle?.trim() ? <p className="mt-0.5 truncate text-center text-[13px] text-white/65">@{handle.trim().replace(/^@+/, "")}</p> : null}
             {bioUserId ? <ProfileBio userId={bioUserId} initialBio={bio} locale={locale} dark /> : bio?.trim() ? <p className="mt-3 whitespace-pre-wrap break-words text-center text-[14px] leading-relaxed text-white/85">{bio.trim()}</p> : null}
             {language || flag || languageName ? (

@@ -33,8 +33,8 @@ RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 ANDROID_LOCAL_PROPERTIES_FILE="$ROOT_DIR/mingle-app/rn/android/local.properties"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.1.1"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v2.1.1"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v2.2.0"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v2.2.0"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -149,8 +149,6 @@ is_persistent_devbox_key() {
     DEVBOX_CLOUDFLARE_WEB_HOSTNAME|\
     DEVBOX_CLOUDFLARE_STT_HOSTNAME|\
     DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME|\
-    DEVBOX_RN_FALLBACK_SITE_URL|\
-    DEVBOX_RN_FALLBACK_WS_URL|\
     DEVBOX_TUNNEL_PROVIDER|\
     DEVBOX_VAULT_PATH|\
     DEVBOX_VAULT_PROD_PATH|\
@@ -167,7 +165,6 @@ is_shared_app_setting_key() {
   case "$1" in
     DEVBOX_NGROK_WEB_DOMAIN|\
     DEVBOX_CLOUDFLARE_*|\
-    DEVBOX_RN_FALLBACK_*|\
     DEVBOX_TUNNEL_PROVIDER|\
     DEVBOX_VAULT_PATH|\
     DEVBOX_VAULT_PROD_PATH|\
@@ -203,8 +200,6 @@ NGROK_LAST_ERROR_KIND=""
 
 # Values loaded from process env, the main-worktree root .env.local, service
 # env files, Vault, or the worktree-local .devbox.env depending on the setting.
-DEFAULT_RN_FALLBACK_SITE_URL="https://mingle-1-1-4-production.up.railway.app"
-DEFAULT_RN_FALLBACK_WS_URL="wss://mingle-1-1-4-production.up.railway.app/stt"
 DEVBOX_WORKTREE_NAME=""
 DEVBOX_ROOT_DIR=""
 DEVBOX_WEB_PORT=""
@@ -216,8 +211,6 @@ DEVBOX_LOCAL_HOST=""
 DEVBOX_SITE_URL=""
 DEVBOX_RN_WS_URL=""
 DEVBOX_RN_MESSAGING_WS_URL=""
-DEVBOX_RN_FALLBACK_SITE_URL=""
-DEVBOX_RN_FALLBACK_WS_URL=""
 DEVBOX_PUBLIC_WS_URL=""
 DEVBOX_PUBLIC_MESSAGING_WS_URL=""
 DEVBOX_TEST_API_BASE_URL=""
@@ -1938,14 +1931,6 @@ require_devbox_env() {
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PUBLIC_MESSAGING_WS_URL || true)")"
     [[ -n "$value" ]] && DEVBOX_PUBLIC_MESSAGING_WS_URL="$value"
   fi
-  if [[ -z "${DEVBOX_RN_FALLBACK_SITE_URL:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_FALLBACK_SITE_URL || true)")"
-    [[ -n "$value" ]] && DEVBOX_RN_FALLBACK_SITE_URL="$value"
-  fi
-  if [[ -z "${DEVBOX_RN_FALLBACK_WS_URL:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_RN_FALLBACK_WS_URL || true)")"
-    [[ -n "$value" ]] && DEVBOX_RN_FALLBACK_WS_URL="$value"
-  fi
   if [[ -z "${DEVBOX_TEST_API_BASE_URL:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_TEST_API_BASE_URL || true)")"
     [[ -n "$value" ]] && DEVBOX_TEST_API_BASE_URL="$value"
@@ -2184,8 +2169,6 @@ write_rn_ios_runtime_xcconfig() {
   local admob_banner_unit_id_ios=""
   local xcconfig_site_url="$DEVBOX_SITE_URL"
   local xcconfig_ws_url="$DEVBOX_RN_WS_URL"
-  local xcconfig_fallback_site_url="${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}"
-  local xcconfig_fallback_ws_url="${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}"
   local xcconfig_url_comment_breaker='$()'
   local xcconfig_url_scheme_separator='://'
   local xcconfig_url_scheme_replacement=":/$xcconfig_url_comment_breaker/"
@@ -2197,12 +2180,6 @@ write_rn_ios_runtime_xcconfig() {
   xcconfig_ws_url="${xcconfig_ws_url//\\/\\\\}"
   xcconfig_ws_url="${xcconfig_ws_url//\"/\\\"}"
   xcconfig_ws_url="${xcconfig_ws_url/$xcconfig_url_scheme_separator/$xcconfig_url_scheme_replacement}"
-  xcconfig_fallback_site_url="${xcconfig_fallback_site_url//\\/\\\\}"
-  xcconfig_fallback_site_url="${xcconfig_fallback_site_url//\"/\\\"}"
-  xcconfig_fallback_site_url="${xcconfig_fallback_site_url/$xcconfig_url_scheme_separator/$xcconfig_url_scheme_replacement}"
-  xcconfig_fallback_ws_url="${xcconfig_fallback_ws_url//\\/\\\\}"
-  xcconfig_fallback_ws_url="${xcconfig_fallback_ws_url//\"/\\\"}"
-  xcconfig_fallback_ws_url="${xcconfig_fallback_ws_url/$xcconfig_url_scheme_separator/$xcconfig_url_scheme_replacement}"
   qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
   ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
@@ -2224,8 +2201,6 @@ NEXT_PUBLIC_SITE_SCHEME = $site_scheme
 NEXT_PUBLIC_SITE_HOST = $site_host
 NEXT_PUBLIC_WS_SCHEME = $ws_scheme
 NEXT_PUBLIC_WS_HOST = $ws_host
-MINGLE_LEGACY_SITE_URL = $xcconfig_fallback_site_url
-MINGLE_LEGACY_WS_URL = $xcconfig_fallback_ws_url
 NEXT_PUBLIC_API_NAMESPACE = $IOS_RN_REQUIRED_API_NAMESPACE
 NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED = $qa_bridge_enabled
 RN_ADMOB_APP_ID_IOS = $xcconfig_admob_app_id_ios
@@ -3146,10 +3121,6 @@ run_android_mobile_install() {
     ANDROID_SERIAL="$serial" \
     NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
     NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
-    MINGLE_API_FALLBACK_SITE_URL="${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}" \
-    MINGLE_STT_FALLBACK_WS_URL="${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}" \
-    MINGLE_LEGACY_SITE_URL="${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}" \
-    MINGLE_LEGACY_WS_URL="${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}" \
     NEXT_PUBLIC_API_NAMESPACE="$ANDROID_RN_REQUIRED_API_NAMESPACE" \
     RN_AD_BANNER_POSITION="$runtime_ad_banner_position" \
     RN_AD_BANNER_HEIGHT_PX="$runtime_ad_banner_height_px" \
@@ -3182,14 +3153,10 @@ run_mobile_install_targets() {
   local app_ws_override="${9:-}"
   local device_app_env="${10:-}"
   local qa_bridge_enabled="${11:-0}"
-  local app_fallback_site_override="${12:-}"
-  local app_fallback_ws_override="${13:-}"
 
   (
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
     DEVBOX_QA_BRIDGE_ENABLED="$qa_bridge_enabled"
-    DEVBOX_RN_FALLBACK_SITE_URL="${app_fallback_site_override:-${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}}"
-    DEVBOX_RN_FALLBACK_WS_URL="${app_fallback_ws_override:-${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}}"
     if [[ -n "$app_site_override" ]]; then
       DEVBOX_SITE_URL="$app_site_override"
     fi
@@ -3697,8 +3664,6 @@ resolve_device_app_env_override() {
   local path=""
   local site_url=""
   local ws_url=""
-  local fallback_site_url=""
-  local fallback_ws_url=""
   local prod_path=""
 
   case "$mode" in
@@ -3706,8 +3671,6 @@ resolve_device_app_env_override() {
       path="runtime:device-profile"
       site_url="${DEVBOX_SITE_URL:-}"
       ws_url="${DEVBOX_RN_WS_URL:-}"
-      fallback_site_url="${DEVBOX_RN_FALLBACK_SITE_URL:-$DEFAULT_RN_FALLBACK_SITE_URL}"
-      fallback_ws_url="${DEVBOX_RN_FALLBACK_WS_URL:-$DEFAULT_RN_FALLBACK_WS_URL}"
       [[ -n "$site_url" ]] || die "missing runtime site url for --device-app-env dev. Run with --profile device so tunnel URLs are resolved first."
       [[ -n "$ws_url" ]] || die "missing runtime ws url for --device-app-env dev. Run with --profile device so tunnel URLs are resolved first."
       ;;
@@ -3728,16 +3691,6 @@ resolve_device_app_env_override() {
       [[ -z "$ws_url" ]] && ws_url="$(read_env_value_from_vault "$path" RN_DEFAULT_WS_URL || true)"
       [[ -z "$ws_url" ]] && ws_url="$(read_env_value_from_vault "$path" MINGLE_DEFAULT_WS_URL || true)"
 
-      fallback_site_url="$(read_env_value_from_vault "$path" MINGLE_API_FALLBACK_SITE_URL || true)"
-      [[ -z "$fallback_site_url" ]] && fallback_site_url="$(read_env_value_from_vault "$path" RN_WEB_APP_FALLBACK_BASE_URL || true)"
-      [[ -z "$fallback_site_url" ]] && fallback_site_url="$(read_env_value_from_vault "$path" MINGLE_LEGACY_SITE_URL || true)"
-      [[ -z "$fallback_site_url" ]] && fallback_site_url="$DEFAULT_RN_FALLBACK_SITE_URL"
-
-      fallback_ws_url="$(read_env_value_from_vault "$path" MINGLE_STT_FALLBACK_WS_URL || true)"
-      [[ -z "$fallback_ws_url" ]] && fallback_ws_url="$(read_env_value_from_vault "$path" RN_DEFAULT_WS_FALLBACK_URL || true)"
-      [[ -z "$fallback_ws_url" ]] && fallback_ws_url="$(read_env_value_from_vault "$path" MINGLE_LEGACY_WS_URL || true)"
-      [[ -z "$fallback_ws_url" ]] && fallback_ws_url="$DEFAULT_RN_FALLBACK_WS_URL"
-
       [[ -n "$site_url" ]] || die "missing NEXT_PUBLIC_SITE_URL in vault path: $path (fallbacks checked: MINGLE_API_BASE_URL/RN_WEB_APP_BASE_URL/MINGLE_WEB_APP_BASE_URL)"
       [[ -n "$ws_url" ]] || die "missing NEXT_PUBLIC_WS_URL in vault path: $path (fallbacks checked: MINGLE_WS_URL/RN_DEFAULT_WS_URL/MINGLE_DEFAULT_WS_URL)"
       ;;
@@ -3748,11 +3701,8 @@ resolve_device_app_env_override() {
 
   validate_http_url "device app env site url" "$site_url"
   validate_ws_url "device app env ws url" "$ws_url"
-  validate_http_url "device app fallback site url" "$fallback_site_url"
-  validate_ws_url "device app fallback ws url" "$fallback_ws_url"
 
   printf '%s\n%s\n%s\n' "$path" "$site_url" "$ws_url"
-  printf '%s\n%s\n' "$fallback_site_url" "$fallback_ws_url"
 }
 
 save_and_refresh() {
@@ -4157,12 +4107,8 @@ cmd_ios_rn_ipa() {
   local timestamp=""
   local archive_site_url=""
   local archive_ws_url=""
-  local archive_fallback_site_url=""
-  local archive_fallback_ws_url=""
   local previous_site_url=""
   local previous_ws_url=""
-  local previous_fallback_site_url=""
-  local previous_fallback_ws_url=""
   local restore_runtime_xcconfig=0
   local device_app_env_payload=""
   local device_app_env_path=""
@@ -4212,8 +4158,6 @@ cmd_ios_rn_ipa() {
     device_app_env_path="$(printf '%s\n' "$device_app_env_payload" | sed -n '1p')"
     archive_site_url="$(printf '%s\n' "$device_app_env_payload" | sed -n '2p')"
     archive_ws_url="$(printf '%s\n' "$device_app_env_payload" | sed -n '3p')"
-    archive_fallback_site_url="$(printf '%s\n' "$device_app_env_payload" | sed -n '4p')"
-    archive_fallback_ws_url="$(printf '%s\n' "$device_app_env_payload" | sed -n '5p')"
     log "ipa build app env override: $device_app_env (${device_app_env_path:-})"
   fi
 
@@ -4255,38 +4199,12 @@ cmd_ios_rn_ipa() {
   if [[ -z "$archive_ws_url" ]]; then
     archive_ws_url="$(trim_whitespace "$(read_app_setting_value MINGLE_DEFAULT_WS_URL || true)")"
   fi
-  if [[ -z "$archive_fallback_site_url" ]]; then
-    archive_fallback_site_url="$(trim_whitespace "$(read_app_setting_value MINGLE_API_FALLBACK_SITE_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_site_url" ]]; then
-    archive_fallback_site_url="$(trim_whitespace "$(read_app_setting_value RN_WEB_APP_FALLBACK_BASE_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_site_url" ]]; then
-    archive_fallback_site_url="$(trim_whitespace "$(read_app_setting_value MINGLE_LEGACY_SITE_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_ws_url" ]]; then
-    archive_fallback_ws_url="$(trim_whitespace "$(read_app_setting_value MINGLE_STT_FALLBACK_WS_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_ws_url" ]]; then
-    archive_fallback_ws_url="$(trim_whitespace "$(read_app_setting_value RN_DEFAULT_WS_FALLBACK_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_ws_url" ]]; then
-    archive_fallback_ws_url="$(trim_whitespace "$(read_app_setting_value MINGLE_LEGACY_WS_URL || true)")"
-  fi
-  if [[ -z "$archive_fallback_site_url" ]]; then
-    archive_fallback_site_url="$DEFAULT_RN_FALLBACK_SITE_URL"
-  fi
-  if [[ -z "$archive_fallback_ws_url" ]]; then
-    archive_fallback_ws_url="$DEFAULT_RN_FALLBACK_WS_URL"
-  fi
 
   [[ -n "$archive_site_url" ]] || die "missing archive site url (use --device-app-env, --site-url/--ws-url, or set NEXT_PUBLIC_SITE_URL)"
   [[ -n "$archive_ws_url" ]] || die "missing archive ws url (use --device-app-env, --site-url/--ws-url, or set NEXT_PUBLIC_WS_URL)"
 
   validate_http_url "archive site url" "$archive_site_url"
   validate_ws_url "archive ws url" "$archive_ws_url"
-  validate_http_url "archive fallback site url" "$archive_fallback_site_url"
-  validate_ws_url "archive fallback ws url" "$archive_fallback_ws_url"
 
   if [[ "$device_app_env" == "prod" ]]; then
     validate_https_url "archive site url (prod)" "$archive_site_url"
@@ -4345,15 +4263,11 @@ EOF
 
   previous_site_url="${DEVBOX_SITE_URL:-}"
   previous_ws_url="${DEVBOX_RN_WS_URL:-}"
-  previous_fallback_site_url="${DEVBOX_RN_FALLBACK_SITE_URL:-}"
-  previous_fallback_ws_url="${DEVBOX_RN_FALLBACK_WS_URL:-}"
   if [[ -n "$previous_site_url" && -n "$previous_ws_url" ]]; then
     restore_runtime_xcconfig=1
   fi
   DEVBOX_SITE_URL="$archive_site_url"
   DEVBOX_RN_WS_URL="$archive_ws_url"
-  DEVBOX_RN_FALLBACK_SITE_URL="$archive_fallback_site_url"
-  DEVBOX_RN_FALLBACK_WS_URL="$archive_fallback_ws_url"
   write_rn_ios_runtime_xcconfig
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
@@ -4378,8 +4292,6 @@ EOF
     if [[ "$restore_runtime_xcconfig" -eq 1 ]]; then
       DEVBOX_SITE_URL="$previous_site_url"
       DEVBOX_RN_WS_URL="$previous_ws_url"
-      DEVBOX_RN_FALLBACK_SITE_URL="$previous_fallback_site_url"
-      DEVBOX_RN_FALLBACK_WS_URL="$previous_fallback_ws_url"
       write_rn_ios_runtime_xcconfig
     fi
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
@@ -4418,8 +4330,6 @@ EOF
     if [[ "$restore_runtime_xcconfig" -eq 1 ]]; then
       DEVBOX_SITE_URL="$previous_site_url"
       DEVBOX_RN_WS_URL="$previous_ws_url"
-      DEVBOX_RN_FALLBACK_SITE_URL="$previous_fallback_site_url"
-      DEVBOX_RN_FALLBACK_WS_URL="$previous_fallback_ws_url"
       write_rn_ios_runtime_xcconfig
     fi
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
@@ -4441,8 +4351,6 @@ EOF
   if [[ "$restore_runtime_xcconfig" -eq 1 ]]; then
     DEVBOX_SITE_URL="$previous_site_url"
     DEVBOX_RN_WS_URL="$previous_ws_url"
-    DEVBOX_RN_FALLBACK_SITE_URL="$previous_fallback_site_url"
-    DEVBOX_RN_FALLBACK_WS_URL="$previous_fallback_ws_url"
     write_rn_ios_runtime_xcconfig
   fi
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
@@ -5019,8 +4927,6 @@ cmd_mobile() {
     device_app_env_path="$(printf '%s\n' "$device_app_env_payload" | sed -n '1p')"
     mobile_site_override="$(printf '%s\n' "$device_app_env_payload" | sed -n '2p')"
     mobile_ws_override="$(printf '%s\n' "$device_app_env_payload" | sed -n '3p')"
-    DEVBOX_RN_FALLBACK_SITE_URL="$(printf '%s\n' "$device_app_env_payload" | sed -n '4p')"
-    DEVBOX_RN_FALLBACK_WS_URL="$(printf '%s\n' "$device_app_env_payload" | sed -n '5p')"
     log "device app env override: $device_app_env (${device_app_env_path:-})"
   fi
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
@@ -5069,9 +4975,7 @@ cmd_mobile() {
     "$mobile_site_override" \
     "$mobile_ws_override" \
     "$device_app_env" \
-    "$qa_bridge_enabled" \
-    "${DEVBOX_RN_FALLBACK_SITE_URL:-}" \
-    "${DEVBOX_RN_FALLBACK_WS_URL:-}"
+    "$qa_bridge_enabled"
 
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
   log "mobile build/install complete"
@@ -5359,8 +5263,6 @@ $(ngrok_plan_capacity_hint)"
     device_app_env_path="$(printf '%s\n' "$device_app_env_payload" | sed -n '1p')"
     mobile_site_override="$(printf '%s\n' "$device_app_env_payload" | sed -n '2p')"
     mobile_ws_override="$(printf '%s\n' "$device_app_env_payload" | sed -n '3p')"
-    DEVBOX_RN_FALLBACK_SITE_URL="$(printf '%s\n' "$device_app_env_payload" | sed -n '4p')"
-    DEVBOX_RN_FALLBACK_WS_URL="$(printf '%s\n' "$device_app_env_payload" | sed -n '5p')"
     log "device app env override: $device_app_env (${device_app_env_path:-})"
   fi
 
@@ -5401,9 +5303,7 @@ $(ngrok_plan_capacity_hint)"
       "$mobile_site_override" \
       "$mobile_ws_override" \
       "$device_app_env" \
-      "$qa_bridge_enabled" \
-      "${DEVBOX_RN_FALLBACK_SITE_URL:-}" \
-      "${DEVBOX_RN_FALLBACK_WS_URL:-}"
+      "$qa_bridge_enabled"
   fi
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then

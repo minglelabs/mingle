@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "2.1.1",
+      "version": "2.2.0",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.1.1 (100)",
+      "releaseName": "2.2.0 (100)",
       "releaseNotes": {
         "en-US": "What's New in Version 2.1.1:\n• Earphone mode: translations are read aloud automatically while you wear earphones\n• Photo translation: text in photos is translated right on the image\n• Better photo viewer: swipe through all photos in a conversation\n• Stability and performance improvements",
         "ar": "الجديد في الإصدار 2.1.1:\n• وضع سماعة الأذن: تُقرأ الترجمات تلقائياً بصوت مسموع أثناء ارتداء السماعات\n• ترجمة الصور: يُترجم النص الموجود في الصور مباشرةً على الصورة\n• عارض صور محسَّن: مرِّر للتنقل بين جميع صور المحادثة\n• تحسينات في الثبات والأداء",

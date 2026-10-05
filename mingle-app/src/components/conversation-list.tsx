@@ -6,6 +6,7 @@ import type { ConversationChannelOtherMember, ConversationChannelSummary } from 
 import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import NotificationPanel from "@/components/notification-panel";
+import ComposeOverlay from "@/components/compose/compose-overlay";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -39,6 +40,10 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import { resolveLivePhoneDemoConversationLeaveCopy } from "@/components/LivePhoneDemo/live-phone-demo.leave-copy";
+import ChatAccountBadge from "@/components/LivePhoneDemo/ChatAccountBadge";
+import { resolveRoomAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import IdentityRow from "@/components/posts/identity-row";
+import { withAccountBadgeLabel, type AccountBadgeKind } from "@/lib/account-badge";
 import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
@@ -176,7 +181,11 @@ import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
-import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+import AppTopHeader from "@/components/app-top-header";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
+import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
+import { feedHref } from "@/lib/feed-routes";
+import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
@@ -280,6 +289,10 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
+  // Account label shown next to the title (a room with a Mingle-run member
+  // reads "운영 계정"); the title itself is a renamable plain string.
+  titleAccountBadge: AccountBadgeKind | null;
+  titleAccountBadgeLocale: string;
   isBlockedCounterpart: boolean;
   // Whether the delete-vs-leave row menu action applies: a solo room keeps
   // "delete" (deletes for the owner, the only real member), a 2+-member
@@ -1035,6 +1048,8 @@ function mapConversationSummaryToItem(
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
+    titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
+    titleAccountBadgeLocale: locale,
     isBlockedCounterpart: conversation.isBlockedCounterpart,
     isMultiMember: conversation.isMultiMember,
     sequenceNumber: conversation.sequenceNumber,
@@ -1245,6 +1260,12 @@ function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   }, window.innerHeight);
 }
 
+function isAccountBadgeTarget(target: EventTarget | null): boolean {
+  return typeof Element !== "undefined"
+    && target instanceof Element
+    && target.closest("[data-account-badge]") !== null;
+}
+
 // Corner-anchored overlap positions for a multi-member room's collage,
 // capped at 4 visible photos — same "up to 4, overlapping" idea as
 // LanguageRowAvatarStack (LivePhoneDemo/language-row-avatar-stack.tsx), but
@@ -1384,7 +1405,7 @@ function ConversationRow({
   onOpenActions?: (item: ConversationItem, position: TooltipPos) => void;
   className?: string;
 }) {
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -1401,29 +1422,102 @@ function ConversationRow({
 
   const openActions = useCallback(() => {
     if (disabled) return;
-    const element = buttonRef.current;
+    const element = rowRef.current;
     if (!element) return;
     suppressNextClickRef.current = true;
     onOpenActions?.(item, calculateConversationRowTooltipPos(element));
   }, [disabled, item, onOpenActions]);
 
+  const rowActionLabel = [
+    withAccountBadgeLabel(item.title, item.titleAccountBadge, item.titleAccountBadgeLocale),
+    item.preview,
+    item.unreadMessageCount > 0 ? `${item.unreadMessageCount} ${item.unreadMessageLabel}` : null,
+    item.timeLabel,
+    item.statsLabel,
+    item.status === "active" ? item.statusLabel : null,
+  ].filter(Boolean).join(", ");
+
+  const rowContent = (hideFromAccessibility: boolean) => (
+    <>
+      <div aria-hidden={hideFromAccessibility || undefined}>
+        <ConversationRoomAvatar item={item} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span aria-hidden={hideFromAccessibility || undefined} className="truncate text-[15px] font-semibold text-slate-900">
+              {item.title}
+            </span>
+            {item.titleAccountBadge ? (
+              <span data-conversation-row-account-badge className="-ml-1 inline-flex shrink-0 items-center">
+                <ChatAccountBadge kind={item.titleAccountBadge} locale={item.titleAccountBadgeLocale} tone="dark" />
+              </span>
+            ) : null}
+            {item.languageCodes.length > 0 ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
+                {item.languageCodes.map((language, index) => (
+                  <LanguageFlag
+                    key={`${language}-${index}`}
+                    language={language}
+                    className="text-[1rem] leading-none"
+                  />
+                ))}
+              </span>
+            ) : null}
+          </div>
+          <div aria-hidden={hideFromAccessibility || undefined} className="flex shrink-0 items-start gap-2">
+            {item.unreadMessageCount > 0 ? (
+              <span
+                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+              >
+                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
+              </span>
+            ) : null}
+            <div className="flex flex-col items-end leading-none">
+              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
+                {item.timeLabel}
+              </span>
+              <span
+                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
+                title={item.statsFullLabel}
+              >
+                {item.statsLabel}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <p
+            aria-hidden={hideFromAccessibility || undefined}
+            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
+            title={item.previewFullText || undefined}
+          >
+            {item.preview || "\u00A0"}
+            {item.isInterimPreview && item.preview ? "…" : null}
+          </p>
+          {item.status === "active" ? (
+            <span aria-hidden={hideFromAccessibility || undefined} className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
+              {item.statusLabel}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onClick={() => {
-        if (suppressNextClickRef.current) {
-          suppressNextClickRef.current = false;
-          return;
-        }
-        onSelect?.(item);
-      }}
+    <div
+      ref={rowRef}
       onContextMenu={(event) => {
+        if (isAccountBadgeTarget(event.target)) return;
         event.preventDefault();
         openActions();
       }}
       onTouchStart={(event) => {
-        if (disabled) return;
+        if (disabled || isAccountBadgeTarget(event.target)) return;
         const touch = event.touches[0];
         if (!touch) return;
         touchOriginRef.current = { x: touch.clientX, y: touch.clientY };
@@ -1450,67 +1544,34 @@ function ConversationRow({
       onTouchCancel={() => {
         clearLongPressTimer();
       }}
-      disabled={disabled}
-      className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`relative w-full ${className}`}
       style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
-      <ConversationRoomAvatar item={item} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
-            {item.languageCodes.length > 0 ? (
-              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
-                {item.languageCodes.map((language, index) => (
-                  <LanguageFlag
-                    key={`${language}-${index}`}
-                    language={language}
-                    className="text-[1rem] leading-none"
-                  />
-                ))}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-start gap-2">
-            {item.unreadMessageCount > 0 ? (
-              <span
-                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
-                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
-                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
-              >
-                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
-              </span>
-            ) : null}
-            <div className="flex flex-col items-end leading-none">
-              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
-                {item.timeLabel}
-              </span>
-              <span
-                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
-                title={item.statsFullLabel}
-              >
-                {item.statsLabel}
-              </span>
-            </div>
-          </div>
+      {disabled ? (
+        <div className={`flex w-full items-center gap-3 px-4 py-3 text-left ${className}`}>
+          {rowContent(false)}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <p
-            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
-            title={item.previewFullText || undefined}
-          >
-            {item.preview || "\u00A0"}
-            {item.isInterimPreview && item.preview ? "…" : null}
-          </p>
-          {item.status === "active" ? (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
-              {item.statusLabel}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </button>
+      ) : (
+        <IdentityRow
+          action={{
+            kind: "button",
+            onClick: () => {
+              if (suppressNextClickRef.current) {
+                suppressNextClickRef.current = false;
+                return;
+              }
+              onSelect?.(item);
+            },
+          }}
+          label={rowActionLabel}
+          className="w-full"
+          actionClassName="rounded-none transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          contentClassName={`flex w-full items-center gap-3 px-4 py-3 text-left ${className}`}
+        >
+          {rowContent(true)}
+        </IdentityRow>
+      )}
+    </div>
   );
 }
 
@@ -1838,6 +1899,16 @@ export default function ConversationList({
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
+  // Rollout gate (W4): a supported client (v2.2.0+) shows the shared posting
+  // header (compose + bell → notification center) so the conversation list and
+  // the feed line up; a pre-2.2.0 client keeps the existing search + in-app
+  // notification-panel header unchanged. `null` before mount → existing header,
+  // matching the server render.
+  const postingFeedSupported = useIsPostingFeedSupported();
+  const showPostingHeader = postingFeedSupported === true;
+  const postingHeaderCopy = useMemo(() => feedCopy(locale), [locale]);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const postingUnread = useUnreadNotifications(showPostingHeader ? (authenticatedUserId || null) : null);
   const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     authenticatedUserId,
@@ -5390,6 +5461,19 @@ export default function ConversationList({
         />
       ) : null}
 
+      {showPostingHeader ? (
+        <AppTopHeader
+          variant="surface"
+          composeLabel={postingHeaderCopy.compose}
+          notificationsLabel={postingHeaderCopy.notifications}
+          unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
+          hasUnread={postingUnread.hasUnread}
+          onCompose={() => setComposeOpen(true)}
+          onNotifications={openNotifications}
+          onSearch={handleOpenSearch}
+          searchLabel={copy.searchButtonLabel}
+        />
+      ) : (
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -5426,6 +5510,7 @@ export default function ConversationList({
           </button>
         </div>
       </header>
+      )}
 
       <div
         ref={conversationListScrollRef}
@@ -5766,6 +5851,9 @@ export default function ConversationList({
                 );
               })}
             </AnimatePresence>
+            {showPostingHeader ? (
+              <ComposeOverlay open={composeOpen} locale={locale} onClose={() => setComposeOpen(false)} />
+            ) : null}
             <NotificationPanel
               open={notificationSurfaceOpen}
               enabled={sessionStatus === "authenticated"}
@@ -5773,6 +5861,10 @@ export default function ConversationList({
               dictionary={dictionary}
               onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
               onOpenProfile={openConversationProfile}
+              onOpenPost={showPostingHeader ? (postId, commentId) => {
+                closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+                router.push(feedHref(locale, { postId, commentId }));
+              } : undefined}
               onUnreadCountChange={setUnreadNotificationCount}
             />
             <PublicUserProfileScreen

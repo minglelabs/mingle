@@ -1,0 +1,898 @@
+"use client";
+
+import AppTopHeader from "@/components/app-top-header";
+import NotificationPanel from "@/components/notification-panel";
+import ComposeOverlay from "@/components/compose/compose-overlay";
+import { BOTTOM_TAB_BAR_HEIGHT_PX, GLASS_TAB_BAR_INSET } from "@/components/bottom-tab-bar";
+import CommentSheet from "@/components/comments/comment-sheet";
+import PublishStatusBanner from "@/components/compose/publish-status-banner";
+import FeedPostCard from "@/components/feed/feed-post-card";
+import FeedToast from "@/components/feed/feed-toast";
+import ImageZoomOverlay from "@/components/feed/image-zoom-overlay";
+import SwipeHintOverlay, { markSwipeHintDone } from "@/components/feed/swipe-hint-overlay";
+import { usePostViewTracker } from "@/components/feed/use-post-view-tracker";
+import { useFeedExposureTracker } from "@/components/feed/use-feed-exposure-tracker";
+import { cycleOfEntryKey } from "@/components/feed/feed-list";
+import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } from "@/lib/feed-analytics";
+import { useReducedMotion } from "@/components/feed/use-reduced-motion";
+import { useFeedSource } from "@/components/feed/use-feed-source";
+import type { LikeState } from "@/components/feed/use-feed-like";
+import { composeLoginHref, loginHref } from "@/components/feed/login-redirect";
+import {
+  createDeepLinkCommentLatch,
+  createFeedRestoreSession,
+  feedSourceCacheKey,
+  planFeedStart,
+  type FeedPostViewState,
+} from "@/components/feed/feed-restore-state";
+import PostActionSheet from "@/components/posts/post-action-sheet";
+import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
+import { feedCopy } from "@/i18n/feed-copy";
+import type { FeedSource } from "@/lib/feed-routes";
+import { feedHref } from "@/lib/feed-routes";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import type { AppDictionary, AppLocale } from "@/i18n";
+import { postForegroundTone } from "@/lib/post-backgrounds";
+import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
+import { ChevronLeft, Loader2, Menu, SquarePen } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+
+type FeedShellProps = {
+  locale: string;
+  /** The list this shell renders. Defaults to the home feed. */
+  source?: FeedSource;
+  /** Viewer route: start on this post; back navigates with router.back(). */
+  startPostId?: string | null;
+  /** Viewer route uses history back instead of the compose/notification chrome. */
+  isViewer?: boolean;
+  /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
+  dictionary?: AppDictionary;
+  /**
+   * The glass tab bar, laid over the bottom of the cards. The shell renders it
+   * so it can follow the ink tone of the post on screen.
+   */
+  tabBar?: ReactNode;
+  /** Viewer of the viewer's own posts: accessible name of the My page menu button. */
+  menuLabel?: string;
+};
+
+/** Stable default so the home feed does not get a fresh `source` every render. */
+const HOME_SOURCE: FeedSource = { kind: "home" };
+
+/** First-paint estimate only; replaced by the measured container height. */
+const FALLBACK_CARD_HEIGHT = `calc(100dvh - ${BOTTOM_TAB_BAR_HEIGHT_PX}px - env(safe-area-inset-bottom, 0px))`;
+const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
+
+/**
+ * Pull-to-refresh (home feed, first card). The feed slides down with the
+ * finger and opens a gap above it that holds the spinner; once the gap is
+ * fully open it stops and the refresh starts, without waiting for release.
+ */
+const PULL_REFRESH_TRIGGER_PX = 150;
+/** Height of the spinner row the pull opens, below the status bar. */
+const PULL_REFRESH_ROW_PX = 60;
+
+/** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
+const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
+
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, tabBar, menuLabel }: FeedShellProps) {
+  const underTabBar = Boolean(tabBar);
+  const copy = useMemo(() => feedCopy(locale), [locale]);
+  const reducedMotion = useReducedMotion();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const viewerId = session?.user?.id ?? null;
+  const viewerLanguage = locale;
+
+  // Identity follows the source's value, not its object reference.
+  const sourceCacheKey = feedSourceCacheKey(sourceProp ?? HOME_SOURCE);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const source = useMemo(() => sourceProp ?? HOME_SOURCE, [sourceCacheKey]);
+
+  // Deep link (home feed only): ?postId=&commentId=
+  const deepLinkPostId = !isViewer ? searchParams.get("postId") : null;
+  const deepLinkCommentId = !isViewer ? searchParams.get("commentId") : null;
+
+  // ── Restore state: read synchronously before any card mounts ──
+  // Cards read `restoreExpanded` only at mount, so the saved state must exist
+  // on the first render that shows them. Writes stay disabled until the list
+  // is on screen, so the empty first render cannot wipe the saved position.
+  const restoreSession = useMemo(() => createFeedRestoreSession(source), [source]);
+  const restoredPosts = useMemo(() => restoreSession.initial?.posts ?? {}, [restoreSession]);
+  const expandState = useMemo(
+    () => new Map<string, FeedPostViewState>(Object.entries(restoredPosts)),
+    [restoredPosts],
+  );
+  const startPlan = planFeedStart({
+    deepLinkPostId,
+    startPostId,
+    saved: isViewer ? null : restoreSession.initial,
+  });
+
+  const {
+    posts,
+    entries,
+    phase,
+    loadingMore,
+    loadMoreError,
+    hasMore,
+    deepLinkUnavailable,
+    onVisibleIndexChange,
+    loadMore,
+    refresh,
+    refreshFromTop,
+    applyPatch,
+    applyAuthorPatch,
+    dropPost,
+    dropAuthor,
+    startIndex,
+  } = useFeedSource({
+    source,
+    displayLanguage: viewerLanguage,
+    deepLinkPostId,
+    restorePostId: startPlan.restorePostId,
+    startPostId,
+  });
+
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const [swipeHintVisible, setSwipeHintVisible] = useState(true);
+  const hasScrolledRef = useRef(false);
+  // Only a real gesture (touch / wheel / pointer / key) may complete the swipe
+  // hint; programmatic restore scrolls must not.
+  const userGestureRef = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
+  const [restoreReady, setRestoreReady] = useState(false);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+
+  // Sheets + zoom — while any is open the feed must not swipe.
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [actionPostId, setActionPostId] = useState<string | null>(null);
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
+  const [initialCommentId, setInitialCommentId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+
+  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen);
+
+  const notifications = useUnreadNotifications(viewerId);
+
+  const setActive = useCallback((idx: number) => {
+    activeIndexRef.current = idx;
+    setActiveIndex(idx);
+  }, []);
+
+  const cardPixelHeight = useCallback((): number => {
+    if (measuredHeight && measuredHeight > 0) return measuredHeight;
+    return scrollEl?.firstElementChild?.getBoundingClientRect().height || 1;
+  }, [measuredHeight, scrollEl]);
+
+  // ── Card height = the real scroll container height ──
+  useEffect(() => {
+    if (!scrollEl) return;
+    const measure = () => {
+      const h = scrollEl.clientHeight;
+      if (h <= 0) return;
+      setMeasuredHeight((prev) => (prev === h ? prev : h));
+      // Keep the active card snapped when the container resizes (keyboard, rotation).
+      const target = activeIndexRef.current * h;
+      if (Math.abs(scrollEl.scrollTop - target) > 1) scrollEl.scrollTop = target;
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(scrollEl);
+    return () => observer.disconnect();
+  }, [scrollEl]);
+
+  // ── Apply the start position once the list is on screen, then allow writes ──
+  useEffect(() => {
+    if (restoreReady || phase !== "ready" || posts.length === 0 || !scrollEl) return;
+    // Deep link and restored post are placed first by the list (index 0); a
+    // viewer opens at its selected post in grid order.
+    const targetIndex = startPlan.kind === "viewer" ? startIndex : 0;
+    const finish = () => {
+      restoreSession.markReady();
+      setRestoreReady(true);
+    };
+    if (targetIndex > 0) {
+      const frame = requestAnimationFrame(() => {
+        scrollEl.scrollTop = targetIndex * cardPixelHeight();
+        setActive(targetIndex);
+        finish();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    finish();
+    return undefined;
+  }, [restoreReady, phase, posts.length, scrollEl, startPlan.kind, startIndex, restoreSession, cardPixelHeight, setActive]);
+
+  // ── Persist the active post + per-post expand state ──
+  const persistRestore = useCallback(() => {
+    if (posts.length === 0) return;
+    const idx = Math.min(activeIndexRef.current, posts.length - 1);
+    restoreSession.persist({
+      activePostId: posts[idx]?.id ?? null,
+      posts: Object.fromEntries(expandState),
+    });
+  }, [posts, restoreSession, expandState]);
+
+  useEffect(() => {
+    if (!restoreReady) return;
+    persistRestore();
+  }, [restoreReady, activeIndex, persistRestore]);
+
+  // ── Deep-linked comment: open its sheet exactly once ──
+  const commentLatch = useMemo(
+    () => createDeepLinkCommentLatch(deepLinkPostId, deepLinkCommentId),
+    [deepLinkPostId, deepLinkCommentId],
+  );
+  useEffect(() => {
+    const hit = commentLatch.take((id) => posts.some((p) => p.id === id));
+    if (!hit) return;
+    setCommentPostId(hit.postId);
+    setInitialCommentId(hit.commentId);
+    // Drop `commentId` from the URL so a later re-render / return cannot reopen it.
+    router.replace(feedHref(locale, { postId: hit.postId }), { scroll: false });
+  }, [commentLatch, posts, router, locale]);
+
+  // Notify the linked-post-gone / remembered-post-gone case.
+  useEffect(() => {
+    if (deepLinkUnavailable) setToast(copy.postUnavailable);
+  }, [deepLinkUnavailable, copy]);
+
+  const markUserGesture = useCallback(() => {
+    userGestureRef.current = true;
+  }, []);
+
+  // Track the active card by scroll position (index === posts.length is the
+  // load-more status card).
+  const handleScroll = useCallback(() => {
+    if (!hasScrolledRef.current && userGestureRef.current) {
+      hasScrolledRef.current = true;
+      markSwipeHintDone();
+      setSwipeHintVisible(false);
+    }
+    if (!scrollEl) return;
+    const idx = Math.max(0, Math.min(posts.length, Math.round(scrollEl.scrollTop / cardPixelHeight())));
+    if (idx !== activeIndexRef.current) {
+      setActive(idx);
+      onVisibleIndexChange(idx);
+    }
+  }, [scrollEl, posts.length, cardPixelHeight, setActive, onVisibleIndexChange]);
+
+  const activePost = posts[activeIndex] ?? null;
+
+  // The active post drives the "seen" view tracker (paused while an overlay is open).
+  const trackedPostId = anyOverlayOpen ? null : activePost?.id ?? null;
+  usePostViewTracker({ activePostId: trackedPostId, isSignedIn: Boolean(viewerId) });
+
+  // ── Analytics: impression / quick skip per appearance (same visit clock,
+  // paused while an overlay is open or the app is in the background) ──
+  const surface = feedSurfaceForSource(source);
+  const activeEntry = entries[activeIndex] ?? null;
+  const exposureKey = anyOverlayOpen ? null : activeEntry?.key ?? null;
+  const entryIndexByKey = useMemo(() => new Map(entries.map((entry, idx) => [entry.key, idx])), [entries]);
+  const analyticsFor = useCallback(
+    (key: string) => {
+      const idx = entryIndexByKey.get(key);
+      const entry = idx === undefined ? null : entries[idx];
+      if (!entry || idx === undefined) return null;
+      return feedPostContext(entry.post, {
+        surface,
+        position: idx,
+        cycle: cycleOfEntryKey(key),
+        displayLanguage: viewerLanguage,
+      });
+    },
+    [entries, entryIndexByKey, surface, viewerLanguage],
+  );
+  useFeedExposureTracker({ activeKey: exposureKey, surface, contextFor: analyticsFor });
+
+  // Refresh unread dot on focus / visibility.
+  useEffect(() => {
+    const onFocus = () => notifications.refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [notifications]);
+
+  // ── Handlers ──
+  const goToLogin = useCallback(
+    (postId?: string | null) => {
+      router.push(loginHref(locale, postId ?? activePost?.id ?? null));
+    },
+    [router, locale, activePost],
+  );
+
+  // Compose slides in over the feed (like the notification panel); signed-out
+  // viewers still go to sign-in first.
+  const openCompose = useCallback(() => {
+    if (viewerId) setComposeOpen(true);
+    else router.push(composeLoginHref(locale));
+  }, [router, viewerId, locale]);
+  const closeCompose = useCallback(() => setComposeOpen(false), []);
+
+  // The bell slides the notification panel in over the feed (same panel and
+  // motion as the conversation list), instead of navigating to a new route.
+  const openNotifications = useCallback(() => setNotificationsOpen(true), []);
+  const closeNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+    notifications.refresh();
+  }, [notifications]);
+  const openNotificationProfile = useCallback(
+    (userId: string) => {
+      const id = userId.trim();
+      if (!id) return;
+      router.push(buildNativeAwareTabPath(`/${locale}/users/${encodeURIComponent(id)}`, searchParams));
+    },
+    [router, locale, searchParams],
+  );
+  const openNotificationPost = useCallback(
+    (postId: string, commentId: string | null) => {
+      const id = postId.trim();
+      if (!id) return;
+      setNotificationsOpen(false);
+      // feedHref pins this post first; with a commentId its comment sheet opens on it.
+      router.push(feedHref(locale, { postId: id, commentId: commentId?.trim() || null }), { scroll: false });
+    },
+    [router, locale],
+  );
+
+  // ── Pull to refresh: drag down on the first card of the home feed ──
+  const [pullProgress, setPullProgress] = useState(0); // 0..1 of the gap
+  const [pullDragging, setPullDragging] = useState(false);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullBlockedRef = useRef(false);
+  useEffect(() => {
+    pullBlockedRef.current = isViewer || pullRefreshing || anyOverlayOpen;
+  }, [isViewer, pullRefreshing, anyOverlayOpen]);
+
+  const startPullRefresh = useCallback(() => {
+    setPullRefreshing(true);
+    // Keep the spinner up briefly even when the request is instant, so the
+    // gap does not just flash open and shut.
+    const minimumShown = new Promise<void>((resolve) => window.setTimeout(resolve, 500));
+    void Promise.all([refreshFromTop(), minimumShown]).then(([ok]) => {
+      setPullRefreshing(false);
+      setPullProgress(0);
+      if (!ok) {
+        setToast(copy.feedLoadFailed);
+        return;
+      }
+      if (scrollEl) scrollEl.scrollTop = 0;
+      setActive(0);
+    });
+  }, [refreshFromTop, scrollEl, setActive, copy]);
+
+  // Native listeners: touchmove must be non-passive so the pull can replace
+  // the browser's own rubber-band (which would show the page behind the feed).
+  useEffect(() => {
+    if (!scrollEl) return;
+    let startY: number | null = null;
+
+    const onStart = (event: TouchEvent) => {
+      startY = null;
+      if (pullBlockedRef.current || scrollEl.scrollTop > 0 || event.touches.length !== 1) return;
+      // A drag that starts inside scrolled content (an expanded post) scrolls
+      // that content back up; it is not a pull on the feed.
+      for (let node = event.target as HTMLElement | null; node && node !== scrollEl; node = node.parentElement) {
+        if (node.scrollTop > 0) return;
+      }
+      startY = event.touches[0].clientY;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (startY === null) return;
+      const dy = event.touches[0].clientY - startY;
+      if (dy <= 0 || scrollEl.scrollTop > 0) {
+        // Upward: this is a normal swipe to the next post.
+        if (dy < 0) startY = null;
+        setPullDragging(false);
+        setPullProgress(0);
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      const progress = Math.min(1, dy / PULL_REFRESH_TRIGGER_PX);
+      setPullDragging(true);
+      setPullProgress(progress);
+      if (progress >= 1) {
+        // Fully open: stop following the finger and refresh now.
+        startY = null;
+        setPullDragging(false);
+        startPullRefresh();
+      }
+    };
+    const onEnd = () => {
+      if (startY === null) return;
+      startY = null;
+      setPullDragging(false);
+      setPullProgress(0);
+    };
+
+    scrollEl.addEventListener("touchstart", onStart, { passive: true });
+    scrollEl.addEventListener("touchmove", onMove, { passive: false });
+    scrollEl.addEventListener("touchend", onEnd);
+    scrollEl.addEventListener("touchcancel", onEnd);
+    return () => {
+      scrollEl.removeEventListener("touchstart", onStart);
+      scrollEl.removeEventListener("touchmove", onMove);
+      scrollEl.removeEventListener("touchend", onEnd);
+      scrollEl.removeEventListener("touchcancel", onEnd);
+    };
+  }, [scrollEl, startPullRefresh]);
+
+  const pullShown = pullRefreshing ? 1 : pullProgress;
+  // The feed slides down past the status bar plus one spinner row. The header
+  // already keeps the status-bar height as padding, so it moves by the row
+  // only and lands on the feed's top edge instead of floating far below it.
+  const pullTransition = pullDragging ? "none" : "transform 220ms ease, border-radius 220ms ease";
+  const pullFeedStyle: CSSProperties | undefined = isViewer
+    ? undefined
+    : {
+        transform:
+          pullShown > 0
+            ? `translateY(calc(${pullShown} * (env(safe-area-inset-top, 0px) + ${PULL_REFRESH_ROW_PX}px)))`
+            : undefined,
+        borderTopLeftRadius: pullShown * 22,
+        borderTopRightRadius: pullShown * 22,
+        transition: pullTransition,
+      };
+  const pullHeaderStyle: CSSProperties = {
+    transform: pullShown > 0 ? `translateY(${pullShown * PULL_REFRESH_ROW_PX}px)` : undefined,
+    transition: pullTransition,
+  };
+
+  const scrollToIndex = useCallback(
+    (idx: number) => {
+      if (!scrollEl) return;
+      scrollEl.scrollTo({ top: idx * cardPixelHeight(), behavior: reducedMotion ? "auto" : "smooth" });
+    },
+    [scrollEl, cardPixelHeight, reducedMotion],
+  );
+
+  const handleExpandChange = useCallback(
+    (postId: string, expanded: boolean, scrollTop: number) => {
+      expandState.set(postId, { expanded, scrollTop });
+      if (restoreReady) persistRestore();
+    },
+    [expandState, restoreReady, persistRestore],
+  );
+
+  const handleLikeChange = useCallback(
+    (postId: string, state: LikeState) => {
+      applyPatch(postId, { likedByMe: state.likedByMe, likeCount: state.likeCount });
+    },
+    [applyPatch],
+  );
+
+  // Every card by this author (all appearances) hides its follow button.
+  const handleFollowed = useCallback(
+    (authorId: string) => applyAuthorPatch(authorId, { followingAuthor: true }),
+    [applyAuthorPatch],
+  );
+
+  const handleCommentCountChange = useCallback(
+    (postId: string, commentCount: number) => applyPatch(postId, { commentCount }),
+    [applyPatch],
+  );
+
+  const cardHeight = measuredHeight
+    ? `${measuredHeight}px`
+    : isViewer || underTabBar
+      ? FALLBACK_VIEWER_CARD_HEIGHT
+      : FALLBACK_CARD_HEIGHT;
+  // Cards read this to keep their bottom row clear of the floating tab bar.
+  // The viewer is full-screen: its cards only clear the home indicator.
+  const bottomInsetStyle = {
+    "--feed-bottom-inset": underTabBar ? GLASS_TAB_BAR_INSET : isViewer ? "env(safe-area-inset-bottom, 0px)" : "0px",
+  } as CSSProperties;
+  const commentPost = posts.find((p) => p.id === commentPostId) ?? null;
+  const actionPost = posts.find((p) => p.id === actionPostId) ?? null;
+  const glyphTone = activePost ? postForegroundTone(activePost.backgroundKey, Boolean(activePost.image)) : "light";
+
+  // Background publish progress floats over the feed, below the transparent
+  // header, in every state (loading / error / empty / list).
+  const publishBanner = !isViewer ? (
+    <div className="pointer-events-none absolute inset-x-0 z-[25]" style={{ top: HEADER_BOTTOM }}>
+      <div className="pointer-events-auto">
+        <PublishStatusBanner locale={locale} />
+      </div>
+    </div>
+  ) : null;
+
+  const header = !isViewer ? (
+    <AppTopHeader
+      variant="transparent"
+      composeLabel={copy.compose}
+      notificationsLabel={copy.notifications}
+      unreadNotificationsLabel={copy.notificationsUnread}
+      hasUnread={notifications.hasUnread}
+      onCompose={openCompose}
+      onNotifications={openNotifications}
+      glyphTone={glyphTone}
+    />
+  ) : null;
+
+  // Compose is reachable from every mode: the empty state's button opens it in
+  // the viewer too, which has no header and no notification panel.
+  const composePanel = (
+    <ComposeOverlay
+      open={composeOpen}
+      locale={locale}
+      onClose={closeCompose}
+      // Home: the feed is already behind and its PublishStatusBanner shows
+      // progress. Viewer: no banner here, so keep the default (go to the feed).
+      onPublished={isViewer ? undefined : closeCompose}
+    />
+  );
+
+  const notificationPanel = !isViewer && dictionary ? (
+    <>
+    {composePanel}
+    <NotificationPanel
+      open={notificationsOpen}
+      enabled={Boolean(viewerId)}
+      locale={locale as AppLocale}
+      dictionary={dictionary}
+      onClose={closeNotifications}
+      onOpenProfile={openNotificationProfile}
+      onOpenPost={openNotificationPost}
+    />
+    </>
+  ) : composePanel;
+
+  // ── Render states ──
+  // Light chrome for the non-card states (loading / error / empty): dark glyphs.
+  const lightHeader = !isViewer ? (
+    <AppTopHeader
+      variant="transparent"
+      composeLabel={copy.compose}
+      notificationsLabel={copy.notifications}
+      unreadNotificationsLabel={copy.notificationsUnread}
+      hasUnread={notifications.hasUnread}
+      onCompose={openCompose}
+      onNotifications={openNotifications}
+      glyphTone="dark"
+    />
+  ) : null;
+
+  const renderTabBar = (tone: "light" | "dark") =>
+    tabBar ? <FeedGlyphToneContext.Provider value={tone}>{tabBar}</FeedGlyphToneContext.Provider> : null;
+
+  // The viewer keeps the bar of the screen it was opened from, laid over the
+  // card: My page's own bar (compose, name, menu) for the viewer's own posts,
+  // otherwise a back chevron and the author's name.
+  const viewerAuthorId = source.kind === "author" ? source.authorId : null;
+  const viewerIsOwnPosts = Boolean(viewerId) && viewerAuthorId === viewerId;
+  const viewerTitle =
+    source.kind === "author"
+      ? posts[0]?.author.name ?? (viewerIsOwnPosts ? session?.user?.name ?? "" : "")
+      : source.kind === "search"
+        ? source.query
+        : "";
+  const openMyPageMenu = useCallback(() => {
+    const path = buildNativeAwareTabPath(`/${locale}/mypage`, searchParams, { tabRoot: true });
+    router.push(`${path}${path.includes("?") ? "&" : "?"}menu=1`);
+  }, [router, locale, searchParams]);
+  const renderViewerHeader = (tone: "light" | "dark") => {
+    if (!isViewer) return null;
+    const ink = tone === "dark" ? "text-slate-950" : "text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]";
+    const button = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+      tone === "dark" ? "active:bg-black/5" : "active:bg-white/10"
+    }`;
+    return (
+      <header
+        className={`absolute inset-x-0 top-0 z-20 flex items-center px-4 ${ink}`}
+        style={{
+          height: "calc(54px + env(safe-area-inset-top, 44px))",
+          paddingTop: "env(safe-area-inset-top, 44px)",
+        }}
+      >
+        {viewerIsOwnPosts ? (
+          <button type="button" onClick={openCompose} className={button} aria-label={copy.compose}>
+            <SquarePen size={22} strokeWidth={2} aria-hidden="true" />
+          </button>
+        ) : (
+          <button type="button" onClick={() => router.back()} className={button} aria-label={copy.closeImage}>
+            <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+          </button>
+        )}
+        <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold">{viewerTitle}</h1>
+        {viewerIsOwnPosts ? (
+          <button type="button" onClick={openMyPageMenu} className={button} aria-label={menuLabel}>
+            <Menu size={23} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        ) : (
+          <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        )}
+      </header>
+    );
+  };
+  const viewerBack = renderViewerHeader("dark");
+
+  if (phase === "loading") {
+    // A soft card-shaped skeleton instead of a black screen.
+    return (
+      <div
+        className="relative flex h-full w-full flex-col bg-gradient-to-b from-slate-100 to-slate-200"
+        role="status"
+        aria-live="polite"
+        aria-label={copy.loading}
+      >
+        {lightHeader}
+        {viewerBack}
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 motion-safe:animate-pulse" aria-hidden="true">
+          <div className="h-5 w-4/5 rounded-full bg-slate-300/70" />
+          <div className="h-5 w-3/5 rounded-full bg-slate-300/70" />
+          <div className="h-5 w-2/5 rounded-full bg-slate-300/70" />
+        </div>
+        <div
+          className="flex items-end gap-3 px-4 motion-safe:animate-pulse"
+          style={{ paddingBottom: underTabBar ? `calc(20px + ${GLASS_TAB_BAR_INSET})` : 20 }}
+          aria-hidden="true"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="size-12 shrink-0 rounded-full bg-slate-300/70" />
+            <div className="h-4 w-32 rounded-full bg-slate-300/70" />
+          </div>
+          <div className="flex flex-col items-center gap-6 pb-1">
+            <div className="size-9 rounded-full bg-slate-300/70" />
+            <div className="size-9 rounded-full bg-slate-300/70" />
+            <div className="size-9 rounded-full bg-slate-300/70" />
+          </div>
+        </div>
+        {publishBanner}
+        {notificationPanel}
+        {renderTabBar("dark")}
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-b from-slate-100 to-slate-200 px-8 text-center">
+        {lightHeader}
+        {viewerBack}
+        <p className="text-sm text-slate-600">{copy.feedLoadFailed}</p>
+        <button
+          type="button"
+          onClick={refresh}
+          className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition active:scale-95"
+        >
+          {copy.retry}
+        </button>
+        {publishBanner}
+        {notificationPanel}
+        {renderTabBar("dark")}
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div className="relative flex h-full w-full flex-col bg-gradient-to-b from-slate-100 to-slate-200">
+        {lightHeader}
+        {viewerBack}
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <p className="text-base font-semibold text-slate-800">{copy.emptyTitle}</p>
+          <button
+            type="button"
+            onClick={openCompose}
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary px-6 text-[15px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(15,23,42,0.16)] transition active:scale-95"
+          >
+            <SquarePen size={18} strokeWidth={2.2} aria-hidden="true" />
+            {copy.emptyAction}
+          </button>
+        </div>
+        {publishBanner}
+        {notificationPanel}
+        {renderTabBar("dark")}
+      </div>
+    );
+  }
+
+  const showStatusCard = hasMore || loadingMore || loadMoreError;
+
+  return (
+    <div
+      className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden ${isViewer ? "bg-black" : "bg-white"}`}
+      style={bottomInsetStyle}
+    >
+      {renderViewerHeader(glyphTone)}
+
+      {!isViewer ? (
+        <>
+          {/* The row the pull opens above the feed, with its spinner. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+            style={{
+              top: "env(safe-area-inset-top, 0px)",
+              height: PULL_REFRESH_ROW_PX,
+              opacity: pullShown > 0 ? 1 : 0,
+            }}
+            role={pullRefreshing ? "status" : undefined}
+            aria-label={pullRefreshing ? copy.loading : undefined}
+            aria-hidden={pullRefreshing ? undefined : true}
+          >
+            <Loader2
+              size={22}
+              strokeWidth={2.4}
+              className={pullRefreshing ? "animate-spin text-slate-400" : "text-slate-300"}
+              style={
+                pullRefreshing
+                  ? undefined
+                  : {
+                      opacity: pullProgress,
+                      transform: `scale(${0.6 + pullProgress * 0.4}) rotate(${pullProgress * 300}deg)`,
+                    }
+              }
+            />
+          </div>
+          <div className="absolute inset-x-0 top-0 z-20" style={pullHeaderStyle}>
+            {header}
+          </div>
+        </>
+      ) : null}
+
+      <div
+        ref={setScrollEl}
+        className="min-h-0 flex-1 overflow-y-auto bg-black"
+        onScroll={handleScroll}
+        onTouchStart={markUserGesture}
+        onWheel={markUserGesture}
+        onPointerDown={markUserGesture}
+        onKeyDown={markUserGesture}
+        style={{
+          scrollSnapType: "y mandatory",
+          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
+          // Block vertical paging while a sheet / zoom is open.
+          overflowY: anyOverlayOpen ? "hidden" : "auto",
+          touchAction: anyOverlayOpen ? "none" : undefined,
+          ...pullFeedStyle,
+        }}
+      >
+        {entries.map(({ key, post }, idx) => {
+          const saved = expandState.get(post.id) ?? restoredPosts[post.id];
+          return (
+            <FeedPostCard
+              key={key}
+              post={post}
+              cardHeight={cardHeight}
+              locale={locale}
+              copy={copy}
+              viewerId={viewerId}
+              viewerLanguage={viewerLanguage}
+              reducedMotion={reducedMotion}
+              restoreExpanded={saved?.expanded ?? false}
+              restoreScrollTop={saved?.scrollTop ?? 0}
+              eagerImage={idx <= activeIndex + 1}
+              isActive={idx === activeIndex && !anyOverlayOpen}
+              analytics={analyticsFor(key)}
+              onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
+              onRequireLogin={goToLogin}
+              onOpenComments={(id) => {
+                setInitialCommentId(null);
+                setCommentPostId(id);
+              }}
+              onOpenActions={(id) => setActionPostId(id)}
+              onOpenAuthor={(authorId) => {
+                const ctx = analyticsFor(key);
+                if (ctx) trackFeedEvent(feedEvents.profileOpened(ctx));
+                router.push(`/${locale}/users/${encodeURIComponent(authorId)}`);
+              }}
+              onOpenImage={(src) => setZoomSrc(src)}
+              onLikeChange={handleLikeChange}
+              onFollowed={handleFollowed}
+              onToast={setToast}
+              onGoPrevious={idx > 0 ? () => scrollToIndex(idx - 1) : undefined}
+              onGoNext={idx < posts.length - 1 ? () => scrollToIndex(idx + 1) : undefined}
+            />
+          );
+        })}
+
+        {/* Load-more status: a snap target of card height so it is visible and tappable. */}
+        {showStatusCard ? (
+          <div
+            className="flex w-full shrink-0 snap-start snap-always flex-col items-center justify-center gap-4 px-8 text-center"
+            style={{ height: cardHeight }}
+            role="status"
+            aria-live="polite"
+          >
+            {loadMoreError ? (
+              <>
+                <p className="text-sm text-white/80">{copy.loadMoreFailed}</p>
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  className="min-h-11 rounded-full bg-white/15 px-5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition active:scale-95"
+                >
+                  {copy.retry}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-white/60">{copy.loadingMore}</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {publishBanner}
+
+      {swipeHintVisible && !anyOverlayOpen ? (
+        <SwipeHintOverlay
+          hasNextPost={posts.length > 1}
+          onDismiss={() => setSwipeHintVisible(false)}
+          label={copy.swipeHint}
+          closeLabel={copy.swipeHintClose}
+        />
+      ) : null}
+
+      <FeedToast message={toast} onDismiss={() => setToast(null)} reducedMotion={reducedMotion} />
+
+      {/* Stubs — bodies belong to other teams; we wire props + swipe blocking. */}
+      <CommentSheet
+        open={Boolean(commentPostId)}
+        postId={commentPostId ?? ""}
+        postAuthorId={commentPost?.author.id ?? ""}
+        locale={locale}
+        viewerId={viewerId}
+        initialCommentId={initialCommentId}
+        onClose={() => {
+          setCommentPostId(null);
+          setInitialCommentId(null);
+        }}
+        onCommentCountChange={(count) => {
+          if (commentPostId) handleCommentCountChange(commentPostId, count);
+        }}
+        onRequireLogin={() => goToLogin(commentPostId)}
+      />
+
+      {actionPost ? (
+        <PostActionSheet
+          open={Boolean(actionPostId)}
+          post={{
+            id: actionPost.id,
+            author: actionPost.author,
+            isMine: actionPost.isMine,
+            visibility: actionPost.visibility,
+          }}
+          locale={locale}
+          viewerId={viewerId}
+          onClose={() => setActionPostId(null)}
+          onPostRemoved={(postId) => {
+            dropPost(postId);
+            setActionPostId(null);
+            // A link to the removed post must not bring it back on return.
+            if (postId === deepLinkPostId) router.replace(feedHref(locale), { scroll: false });
+          }}
+          onAuthorBlocked={(authorId) => {
+            dropAuthor(authorId);
+            setActionPostId(null);
+          }}
+          onRequireLogin={() => goToLogin(actionPostId)}
+        />
+      ) : null}
+
+      {notificationPanel}
+      {renderTabBar(glyphTone)}
+
+      <ImageZoomOverlay
+        open={Boolean(zoomSrc)}
+        src={zoomSrc ?? ""}
+        alt=""
+        closeLabel={copy.closeImage}
+        reducedMotion={reducedMotion}
+        onClose={() => setZoomSrc(null)}
+      />
+    </div>
+  );
+}

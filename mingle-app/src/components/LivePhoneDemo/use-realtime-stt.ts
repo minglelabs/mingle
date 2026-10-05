@@ -14,6 +14,8 @@ import {
   type LanguageCandidates,
   type PreviewEvent,
 } from './conversation-live'
+import { readAccountBadgeFlags, readAccountBadgeKind } from './chat-account-badge.logic'
+import type { AccountBadgeKind } from '@/lib/account-badge'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
@@ -881,6 +883,8 @@ type ConversationHydrationLeaveNoticePayload = {
   name?: string | null
   handle?: string | null
   leftAtMs?: number
+  isOfficial?: boolean
+  isOperator?: boolean
 }
 
 type ConversationHydrationInviteNoticePayload = {
@@ -891,6 +895,8 @@ type ConversationHydrationInviteNoticePayload = {
   invitedByName?: string | null
   invitedByHandle?: string | null
   invitedAtMs?: number
+  inviteeBadge?: string
+  invitedByBadge?: string
 }
 
 type ConversationHydrationPayload = {
@@ -904,6 +910,7 @@ type ConversationHydrationPayload = {
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
   inviteNotices?: ConversationHydrationInviteNoticePayload[]
+  operatorDisclosure?: boolean
 }
 
 // One member's departure (see leaveConversationChannel on the server), for
@@ -917,9 +924,13 @@ export type ConversationLeaveNotice = {
   name: string | null
   handle: string | null
   leftAtMs: number
+  // Badge flags of the member who left, only when true — the notice names
+  // them, so an operator's name is rendered with its label.
+  isOfficial?: true
+  isOperator?: true
 }
 
-function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): ConversationLeaveNotice[] {
+export function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): ConversationLeaveNotice[] {
   if (!Array.isArray(rawNotices)) return []
 
   const result: ConversationLeaveNotice[] = []
@@ -934,6 +945,7 @@ function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): Conver
       name: typeof record.name === 'string' ? record.name : null,
       handle: typeof record.handle === 'string' ? record.handle : null,
       leftAtMs: Math.floor(leftAtMs),
+      ...readAccountBadgeFlags(record as Record<string, unknown>),
     })
   }
   return result
@@ -951,6 +963,8 @@ function areConversationLeaveNoticesEqual(
         && notice.name === candidate.name
         && notice.handle === candidate.handle
         && notice.leftAtMs === candidate.leftAtMs
+        && notice.isOfficial === candidate.isOfficial
+        && notice.isOperator === candidate.isOperator
     })
   )
 }
@@ -968,9 +982,12 @@ export type ConversationInviteNotice = {
   invitedByName: string | null
   invitedByHandle: string | null
   invitedAtMs: number
+  // Account badge of each named side, present only when that account has one.
+  inviteeBadge?: AccountBadgeKind
+  invitedByBadge?: AccountBadgeKind
 }
 
-function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
+export function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
   if (!Array.isArray(rawNotices)) return []
 
   const result: ConversationInviteNotice[] = []
@@ -981,6 +998,8 @@ function normalizeConversationHydrationInviteNotices(rawNotices: unknown): Conve
     const invitedByUserId = typeof record.invitedByUserId === 'string' ? record.invitedByUserId.trim() : ''
     const invitedAtMs = typeof record.invitedAtMs === 'number' ? record.invitedAtMs : Number(record.invitedAtMs)
     if (!inviteeUserId || !invitedByUserId || !Number.isFinite(invitedAtMs) || invitedAtMs <= 0) continue
+    const inviteeBadge = readAccountBadgeKind(record.inviteeBadge)
+    const invitedByBadge = readAccountBadgeKind(record.invitedByBadge)
     result.push({
       inviteeUserId,
       inviteeName: typeof record.inviteeName === 'string' ? record.inviteeName : null,
@@ -989,6 +1008,8 @@ function normalizeConversationHydrationInviteNotices(rawNotices: unknown): Conve
       invitedByName: typeof record.invitedByName === 'string' ? record.invitedByName : null,
       invitedByHandle: typeof record.invitedByHandle === 'string' ? record.invitedByHandle : null,
       invitedAtMs: Math.floor(invitedAtMs),
+      ...(inviteeBadge ? { inviteeBadge } : {}),
+      ...(invitedByBadge ? { invitedByBadge } : {}),
     })
   }
   return result
@@ -1009,6 +1030,8 @@ function areConversationInviteNoticesEqual(
         && notice.invitedByName === candidate.invitedByName
         && notice.invitedByHandle === candidate.invitedByHandle
         && notice.invitedAtMs === candidate.invitedAtMs
+        && notice.inviteeBadge === candidate.inviteeBadge
+        && notice.invitedByBadge === candidate.invitedByBadge
     })
   )
 }
@@ -1035,6 +1058,9 @@ export function normalizeConversationHydrationUtterances(
     .filter((utterance) => utterance && typeof utterance === 'object')
     .map((utterance) => {
       const record = utterance as ConversationHydrationUtterance
+      // Hydration and committed live utterances share this parser, so both
+      // carry the sender's badge the same way.
+      const speakerBadge = readAccountBadgeKind(record.speakerBadge)
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
@@ -1084,6 +1110,7 @@ export function normalizeConversationHydrationUtterances(
         ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
           ? { speakerImage: record.speakerImage.trim() }
           : {}),
+        ...(speakerBadge ? { speakerBadge } : {}),
       }, roomLanguages)
     })
     .filter((utterance) => utterance.id && utterance.originalText.trim())
@@ -2255,6 +2282,7 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
     && left.speakerName === right.speakerName
     && left.speakerUserId === right.speakerUserId
     && left.speakerImage === right.speakerImage
+    && left.speakerBadge === right.speakerBadge
     && left.image?.conversationId === right.image?.conversationId
     && left.image?.messageId === right.image?.messageId
     && left.image?.width === right.image?.width
@@ -3028,6 +3056,10 @@ export default function useRealtimeSTT({
   const [isSharedRoom, setIsSharedRoom] = useState(false)
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
+  // Server-owned like the notices: whether the room has an active member run
+  // by Mingle staff (hydration's operatorDisclosure). Drives the pinned
+  // disclosure notice; false until the first hydration response.
+  const [operatorDisclosure, setOperatorDisclosure] = useState(false)
   // Membership/invites are deliberately server-authoritative, never optimistic
   // (see docs/local-first-conversation-plan.md on the client-SoT branch) — a
   // fresh mount starts with empty notices and fills them after hydration.
@@ -3717,6 +3749,7 @@ export default function useRealtimeSTT({
       setInviteNotices((current) => (
         areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
       ))
+      setOperatorDisclosure(payload.operatorDisclosure === true)
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3838,6 +3871,7 @@ export default function useRealtimeSTT({
         setInviteNotices((current) => (
           areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
         ))
+        setOperatorDisclosure(payload.operatorDisclosure === true)
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -7108,6 +7142,7 @@ export default function useRealtimeSTT({
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     ensureSessionKey,

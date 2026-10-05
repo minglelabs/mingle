@@ -7,6 +7,8 @@ import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { fetchReactionJson } from '@/lib/message-reaction-request'
 import { MESSAGE_REACTIONS, messageReactionCopy, type MessageReactionKind, type MessageReactionParticipant, type MessageReactionParticipantsPage } from '@/lib/message-reactions'
+import { resolveAccountBadge } from '@/lib/account-badge'
+import ChatAccountBadge from './ChatAccountBadge'
 
 export default function MessageReactionParticipants({ endpoint, messageId, initialKind, locale, onClose }: {
   endpoint: string; messageId: string; initialKind: MessageReactionKind; locale: string; onClose: () => void
@@ -20,6 +22,14 @@ export default function MessageReactionParticipants({ endpoint, messageId, initi
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeButton.current?.focus({ preventScroll: true })
     const handleKey = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement
+      const activeDialog = activeElement instanceof HTMLElement
+        ? activeElement.closest('[role="dialog"][aria-modal="true"]')
+        : null
+      // A tappable account badge opens its own higher-level explanation
+      // sheet. Let that modal handle Escape and focus trapping while it owns
+      // focus instead of closing this participant list underneath it.
+      if (activeDialog && activeDialog !== panel.current) return
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
       if (event.key !== 'Tab') return
       const buttons = [...(panel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])]
@@ -90,10 +100,19 @@ function ParticipantList({ endpoint, messageId, kind, locale }: { endpoint: stri
   }, [load])
   return <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-3">
     <ul className="space-y-3">
-      {people.map(person => <li key={person.id} className="flex min-h-11 items-center gap-3">
-        <div aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold">{(person.name || person.handle).slice(0, 1)}</div>
-        <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{person.name || person.handle}{person.mine ? ` · ${copy.me}` : ''}</p><p className="truncate text-xs text-slate-500">@{person.handle}</p></div>
-      </li>)}
+      {people.map(person => {
+        const accountBadge = resolveAccountBadge(person)
+        return <li key={person.id} className="flex min-h-11 items-center gap-3">
+          <div aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold">{(person.name || person.handle).slice(0, 1)}</div>
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+              <span className="truncate">{person.name || person.handle}{person.mine ? ` · ${copy.me}` : ''}</span>
+              {accountBadge ? <ChatAccountBadge kind={accountBadge} locale={locale} tone="dark" /> : null}
+            </p>
+            <p className="truncate text-xs text-slate-500">@{person.handle}</p>
+          </div>
+        </li>
+      })}
     </ul>
     {pending && <p role="status" className="py-4 text-center text-sm text-slate-500">{copy.loading}</p>}
     {error && <div className="py-3 text-center"><p role="alert" className="text-sm text-red-600">{copy.loadError}</p><button type="button" onClick={() => void load(nextCursor ?? undefined)} className="min-h-11 px-4 text-sm text-sky-700">{copy.retry}</button></div>}

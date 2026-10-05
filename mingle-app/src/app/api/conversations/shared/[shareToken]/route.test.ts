@@ -166,6 +166,60 @@ describe("/api/conversations/shared/[shareToken] route", () => {
     expect(mockGetConversationHydrationStateForShare).toHaveBeenCalledWith({ shareToken: "tok-a" });
   });
 
+  it("carries the operator disclosure and account badges (labels, not ids) through the public payload", async () => {
+    const utterance = {
+      id: "private-message-id",
+      originalText: "Hi, I run this account",
+      originalLang: "en",
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1,
+      speaker: null,
+      speakerAvatarSeed: null,
+      speakerAvatarIndex: null,
+      speakerName: "Mina",
+      speakerUserId: "private-speaker-user-id",
+      speakerImage: null,
+    };
+    mockGetConversationHydrationStateForShare.mockResolvedValue({
+      conversation: { title: "Trip" },
+      utterances: [
+        { ...utterance, speakerBadge: "operator" },
+        { ...utterance, speakerName: "Bob", speakerUserId: "private-second-speaker-user-id" },
+      ],
+      operatorDisclosure: true,
+      sharedByUserId: "user-owner",
+    });
+    mockGetUserProfile.mockResolvedValue({
+      id: "user-owner", name: "Mingle", image: null, imageCropScale: null, imageCropX: null, imageCropY: null,
+      handle: "mingle_team", isOfficial: true,
+    });
+
+    const response = await GET(
+      new NextRequest("https://example.com/api/conversations/shared/tok-op"),
+      { params: Promise.resolve({ shareToken: "tok-op" }) },
+    );
+    const json = await response.json();
+
+    expect(json.operatorDisclosure).toBe(true);
+    expect(json.utterances[0]).toMatchObject({ speakerName: "Mina", speakerAlias: "s1", speakerBadge: "operator" });
+    expect(json.utterances[1]).not.toHaveProperty("speakerBadge");
+    expect(json.sharedBy).toEqual({
+      name: "Mingle", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, isOfficial: true,
+    });
+    expect(JSON.stringify(json)).not.toContain("private-speaker-user-id");
+
+    mockGetConversationHydrationStateForShare.mockResolvedValue({
+      conversation: { title: "Trip" }, utterances: [utterance], operatorDisclosure: false, sharedByUserId: null,
+    });
+    const plain = await (await GET(
+      new NextRequest("https://example.com/api/conversations/shared/tok-plain"),
+      { params: Promise.resolve({ shareToken: "tok-plain" }) },
+    )).json();
+    expect(plain).not.toHaveProperty("operatorDisclosure");
+  });
+
   it("passes the Chinese original display text through the public payload", async () => {
     const utterance = {
       id: "private-message-id",

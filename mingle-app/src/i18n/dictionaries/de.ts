@@ -28,6 +28,7 @@ export const deDictionary: BaseAppDictionarySource = {
     connect: "Entdecken",
     moments: "Momente",
     my: "Ich",
+    feed: "Feed",
   },
   titles: {
     chats: "Chats",

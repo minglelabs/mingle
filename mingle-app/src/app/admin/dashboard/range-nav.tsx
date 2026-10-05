@@ -2,18 +2,27 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { RefreshCw } from "lucide-react";
 import {
   ADMIN_DASHBOARD_PLATFORM_OPTIONS,
   ADMIN_DASHBOARD_MAX_DAYS,
   type AdminDashboardPlatform,
   type AdminDashboardRange,
 } from "@/lib/admin-dashboard-metrics";
+import { cn } from "@/lib/utils";
 import { clearDashboardCacheAction } from "./actions";
 
 function buildDashboardHref(days: AdminDashboardRange, platform: AdminDashboardPlatform): string {
   const params = new URLSearchParams({ days: String(days) });
   if (platform !== "all") params.set("platform", platform);
   return `/admin/dashboard?${params.toString()}`;
+}
+
+function segmentClassName(active: boolean): string {
+  return cn(
+    "inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+    active ? "border-sky-600 bg-sky-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+  );
 }
 
 export function RangeNav({
@@ -41,6 +50,8 @@ export function RangeNav({
     setIsRefreshing(true);
     try {
       const result = await clearDashboardCacheAction(activeDays, activePlatform);
+      // No result: the session ended and the action redirected to the login page.
+      if (!result) return;
       if (!result.success) {
         setErrorMessage(result.error ?? "캐시 초기화에 실패했습니다.");
         return;
@@ -92,130 +103,104 @@ export function RangeNav({
   const busy = isPending || isRefreshing;
 
   return (
-    <div className="mx-auto mt-6 flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#52514e]">OS</span>
-          <nav className="flex items-center gap-2" aria-label="OS 선택">
-            {ADMIN_DASHBOARD_PLATFORM_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                disabled={busy}
-                aria-pressed={option.value === activePlatform}
-                onClick={() => handlePlatformClick(option.value)}
-                className={[
-                  "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
-                  option.value === activePlatform
-                    ? "border-[#b45309] bg-[#f59e0b] text-white"
-                    : "border-[#e5e3dc] bg-white text-[#52514e] hover:bg-[#f4f3ee]",
-                ].join(" ")}
-              >
-                {option.label}
-              </button>
-            ))}
-          </nav>
-        </div>
+        <span className="w-10 shrink-0 text-sm font-semibold text-slate-600">OS</span>
+        <nav aria-label="OS 선택" className="flex flex-wrap gap-2">
+          {ADMIN_DASHBOARD_PLATFORM_OPTIONS.map((option) => (
+            <button
+              aria-pressed={option.value === activePlatform}
+              className={segmentClassName(option.value === activePlatform)}
+              disabled={busy}
+              key={option.value}
+              onClick={() => handlePlatformClick(option.value)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-        <nav className="flex items-center gap-2" aria-label="기간 선택">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-10 shrink-0 text-sm font-semibold text-slate-600">기간</span>
+        <nav aria-label="기간 선택" className="flex flex-wrap gap-2">
           {presetOptions.map((option) => (
             <button
-              key={option}
-              type="button"
-              disabled={busy}
               aria-current={option === activeDays ? "true" : undefined}
+              className={segmentClassName(option === activeDays)}
+              disabled={busy}
+              key={option}
               onClick={() => handlePresetClick(option)}
-              className={[
-                "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
-                option === activeDays
-                  ? "border-[#b45309] bg-[#f59e0b] text-white"
-                  : "border-[#e5e3dc] bg-white text-[#52514e] hover:bg-[#f4f3ee]",
-              ].join(" ")}
+              type="button"
             >
               최근 {option}일
             </button>
           ))}
         </nav>
-
-        {/* Custom 기간 입력 */}
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            min={1}
-            max={ADMIN_DASHBOARD_MAX_DAYS}
-            value={customInput}
-            disabled={busy}
-            onChange={(e) => {
-              setCustomInput(e.target.value);
-              setCustomError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCustomApply();
-            }}
-            placeholder={`직접 입력 (1~${ADMIN_DASHBOARD_MAX_DAYS})`}
-            aria-label="직접 기간 입력 (일 수)"
-            className={[
-              "h-9 w-40 rounded-md border px-3 text-sm text-[#0b0b0b] placeholder-[#b8b5ae] outline-none transition focus:border-[#f59e0b] focus:ring-1 focus:ring-[#f59e0b] disabled:cursor-not-allowed disabled:opacity-60",
-              isCustomActive
-                ? "border-[#b45309] bg-[#fff8ed]"
-                : "border-[#e5e3dc] bg-white",
-            ].join(" ")}
-          />
-          <button
-            type="button"
-            disabled={busy || customInput === ""}
-            onClick={handleCustomApply}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-[#e5e3dc] bg-white px-3 text-sm font-semibold text-[#52514e] transition hover:bg-[#f4f3ee] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            적용
-          </button>
-        </div>
-
-        {customError ? (
-          <span className="text-xs text-red-600">{customError}</span>
-        ) : null}
-
-        {busy ? (
-          <span className="flex items-center gap-1.5 text-xs font-medium text-[#898781]">
-            <span
-              aria-hidden="true"
-              className="h-3 w-3 animate-spin rounded-full border-2 border-[#e5e3dc] border-t-[#f59e0b]"
-            />
-            {isRefreshing ? "캐시 비우고 재계산 중..." : "불러오는 중..."}
-          </span>
-        ) : null}
-        {errorMessage ? (
-          <span className="text-xs text-red-600">{errorMessage}</span>
-        ) : null}
-        {activePlatform !== "all" ? (
-          <span className="text-xs text-[#898781]">사용자별 최근 확인 OS 기준</span>
-        ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Custom 기간 입력 */}
+      <div className="flex gap-2">
+        <input
+          aria-label="직접 기간 입력 (일 수)"
+          className={cn(
+            "min-h-11 min-w-0 flex-1 rounded-lg border px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-56",
+            isCustomActive ? "border-sky-500 bg-sky-50" : "border-slate-300 bg-white",
+          )}
+          disabled={busy}
+          inputMode="numeric"
+          max={ADMIN_DASHBOARD_MAX_DAYS}
+          min={1}
+          onChange={(e) => {
+            setCustomInput(e.target.value);
+            setCustomError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleCustomApply();
+          }}
+          placeholder={`직접 입력 (1~${ADMIN_DASHBOARD_MAX_DAYS}일)`}
+          type="number"
+          value={customInput}
+        />
         <button
+          className={segmentClassName(false)}
+          disabled={busy || customInput === ""}
+          onClick={handleCustomApply}
           type="button"
+        >
+          적용
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 space-y-1 text-xs">
+          {customError ? <p className="text-rose-600" role="alert">{customError}</p> : null}
+          {errorMessage ? <p className="text-rose-600" role="alert">{errorMessage}</p> : null}
+          {busy ? (
+            <p className="flex items-center gap-1.5 font-medium text-slate-500" role="status">
+              <span
+                aria-hidden="true"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600"
+              />
+              {isRefreshing ? "캐시 비우고 재계산 중..." : "불러오는 중..."}
+            </p>
+          ) : null}
+          {activePlatform !== "all" ? <p className="text-slate-500">사용자별 최근 확인 OS 기준</p> : null}
+        </div>
+        <button
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={busy}
           onClick={handleClearCacheAndRefresh}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e5e3dc] bg-white px-3 text-xs font-semibold text-[#52514e] transition hover:bg-[#f4f3ee] disabled:cursor-not-allowed disabled:opacity-60"
-          title={`현재 ${activeDays}일 ${activePlatform === "all" ? "전체" : activePlatform} 기간의 캐시를 비우고 재계산합니다 (오늘·어제 제외, 시간이 다소 소요될 수 있습니다).`}
+          type="button"
         >
-          <svg
-            className={["h-3.5 w-3.5 text-[#898781]", isRefreshing ? "animate-spin" : ""].join(" ")}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
+          <RefreshCw className={cn("h-4 w-4 text-slate-500", isRefreshing && "animate-spin")} aria-hidden="true" />
           캐시 비우고 다시 계산
         </button>
       </div>
+      <p className="text-xs leading-5 text-slate-500">
+        다시 계산은 현재 {activeDays}일 {activePlatform === "all" ? "전체" : activePlatform} 캐시를 지우고 새로 집계합니다. 오늘과 어제는 항상 새로 집계하며, 시간이 걸릴 수 있습니다.
+      </p>
     </div>
   );
 }

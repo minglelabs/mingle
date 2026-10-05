@@ -126,7 +126,25 @@ describe("/api/conversations/[conversationId]/realtime-token route", () => {
       { params: Promise.resolve({ conversationId: "conv-a" }) });
     expect(await response.json()).toEqual({ token: "read", writerToken: "write", sessionKey: "session-a", userId: "user-1" });
     expect(mockMintConversationRealtimeToken).toHaveBeenCalledWith({ sessionKey: "session-a", userId: "user-1", live: true });
-    expect(mockWriter).toHaveBeenCalledWith("session-a", "user-1", "Trusted name");
+    expect(mockSender).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: { name: true, isOfficial: true, isOperator: true },
+    });
+    expect(mockWriter).toHaveBeenCalledWith("session-a", "user-1", "Trusted name", null);
+  });
+
+  it.each([
+    [{ name: "Mina", isOfficial: false, isOperator: true }, "operator"],
+    [{ name: "Mingle", isOfficial: true, isOperator: false }, "official"],
+  ] as const)("signs the sender's own badge into the live-writer claim (%o)", async (sender, badge) => {
+    mockGetConversationSessionKeyForMember.mockResolvedValue("session-a");
+    mockMintConversationRealtimeToken.mockReturnValue("read");
+    mockBlocked.mockResolvedValue(false);
+    mockSender.mockResolvedValue(sender);
+    mockWriter.mockReturnValue("write");
+    await GET(new NextRequest("https://example.com/api/conversations/conv-a/realtime-token?live=1&badge=official"),
+      { params: Promise.resolve({ conversationId: "conv-a" }) });
+    expect(mockWriter).toHaveBeenCalledWith("session-a", "user-1", sender.name, badge);
   });
 
   it("does not grant live writing to a blocked sender", async () => {
