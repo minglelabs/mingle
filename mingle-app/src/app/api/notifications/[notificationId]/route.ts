@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { IN_APP_NOTIFICATION_TYPES } from "@/lib/user-notification-types";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,7 @@ export async function PATCH(
     where: {
       id: notificationId,
       recipientId: viewerId,
-      type: "follow",
+      type: { in: [...IN_APP_NOTIFICATION_TYPES] },
       readAt: null,
     },
     data: { readAt: new Date() },

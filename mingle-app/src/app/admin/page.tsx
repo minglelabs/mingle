@@ -32,7 +32,7 @@ import {
   sanitizeAdminFeedbackReturnTo,
 } from "@/lib/admin-feedback-query";
 import { prisma } from "@/lib/prisma";
-import { sendPushNotificationForFeedbackReply } from "@/server/push-notifications";
+import { notifyUserFromTeam } from "@/server/team-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -141,35 +141,29 @@ async function createFeedbackReplyAction(formData: FormData) {
 
   const feedback = await prisma.appFeedback.findUnique({
     where: { id: feedbackId },
-    select: { id: true, userId: true, locale: true },
+    select: { id: true, userId: true },
   });
   if (!feedback) {
     redirect(adminFeedbackPathWithStatus(returnTo, { error: "feedback_not_found" }));
   }
 
-  const reply = await prisma.appFeedbackReply.create({
+  await prisma.appFeedbackReply.create({
     data: {
       feedbackId,
       authorType: "team",
       message,
     },
-    select: { id: true },
   });
 
-  const recipientUserId = feedback.userId;
-  if (recipientUserId) {
-    after(async () => {
-      try {
-        await sendPushNotificationForFeedbackReply({
-          replyId: reply.id,
-          recipientUserId,
-          replyText: message,
-          feedbackLocale: feedback.locale,
-        });
-      } catch (error) {
-        console.error("[admin-feedback] reply push failed", error instanceof Error ? error.name : "unknown");
-      }
-    });
+  // Anonymous feedback has no account to notify.
+  const recipientId = feedback.userId;
+  if (recipientId) {
+    after(() => notifyUserFromTeam({
+      recipientId,
+      type: "feedback_reply",
+      body: message,
+      targetId: feedbackId,
+    }));
   }
 
   revalidatePath("/admin");

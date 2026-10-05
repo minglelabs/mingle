@@ -3,10 +3,12 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
+import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n/team-notification-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
+import { isTeamNotificationType, type TeamNotificationType } from "@/lib/user-notification-types";
 import SlideSurface from "@/components/slide-surface";
-import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MessageSquareText, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NotificationPanelProps = {
@@ -20,7 +22,7 @@ type NotificationPanelProps = {
   onUnreadCountChange?: (count: number) => void;
 };
 
-type NotificationRecord = {
+type FollowNotificationRecord = {
   id: string;
   type: "follow";
   isRead: boolean;
@@ -34,6 +36,18 @@ type NotificationRecord = {
   isFollowing: boolean;
 };
 
+// Sent by the Mingle team: a feedback or report reply, or a report outcome.
+type TeamNotificationRecord = {
+  id: string;
+  type: TeamNotificationType;
+  isRead: boolean;
+  createdAt: string;
+  // Reply text, or the new status for report_status.
+  body: string;
+};
+
+type NotificationRecord = FollowNotificationRecord | TeamNotificationRecord;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -43,8 +57,18 @@ function nullableString(value: unknown): string | null {
 }
 
 function parseNotification(value: unknown): NotificationRecord | null {
-  if (!isRecord(value) || value.type !== "follow") return null;
+  if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || typeof value.createdAt !== "string") return null;
+  if (isTeamNotificationType(value.type)) {
+    return {
+      id: value.id,
+      type: value.type,
+      isRead: value.isRead === true,
+      createdAt: value.createdAt,
+      body: typeof value.body === "string" ? value.body : "",
+    };
+  }
+  if (value.type !== "follow") return null;
   if (!isRecord(value.actor) || typeof value.actor.id !== "string") return null;
 
   return {
@@ -120,6 +144,8 @@ export default function NotificationPanel({
   onUnreadCountChange,
 }: NotificationPanelProps) {
   const copy = useMemo(() => resolveNotificationCopy(locale), [locale]);
+  const teamCopy = useMemo(() => resolveTeamNotificationCopy(locale), [locale]);
+  const [expandedTeamNotificationId, setExpandedTeamNotificationId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -231,12 +257,17 @@ export default function NotificationPanel({
     });
   }, [unreadCount, updateUnreadCount]);
 
-  const handleOpenNotification = useCallback((notification: NotificationRecord) => {
+  const handleOpenNotification = useCallback((notification: FollowNotificationRecord) => {
     markAsRead(notification);
     onOpenProfile(notification.actor.handle || notification.actor.id);
   }, [markAsRead, onOpenProfile]);
 
-  const handleFollowBack = useCallback(async (notification: NotificationRecord) => {
+  const handleToggleTeamNotification = useCallback((notification: TeamNotificationRecord) => {
+    markAsRead(notification);
+    setExpandedTeamNotificationId((current) => (current === notification.id ? null : notification.id));
+  }, [markAsRead]);
+
+  const handleFollowBack = useCallback(async (notification: FollowNotificationRecord) => {
     if (notification.isFollowing || pendingFollowIds.has(notification.id)) return;
 
     setFollowErrorId(null);
@@ -249,7 +280,7 @@ export default function NotificationPanel({
       if (!response.ok) throw new Error("follow_failed");
 
       setNotifications((current) => current.map((item) => (
-        item.id === notification.id ? { ...item, isFollowing: true, isRead: true } : item
+        item.id === notification.id && item.type === "follow" ? { ...item, isFollowing: true, isRead: true } : item
       )));
       if (!notification.isRead) updateUnreadCount(unreadCount - 1);
       void fetch(buildClientApiPath(`/notifications/${encodeURIComponent(notification.id)}`), {
@@ -271,7 +302,43 @@ export default function NotificationPanel({
   const unreadNotifications = notifications.filter((notification) => !notification.isRead);
   const readNotifications = notifications.filter((notification) => notification.isRead);
 
+  const renderTeamNotification = (notification: TeamNotificationRecord) => {
+    const text = resolveTeamNotificationText(teamCopy, notification.type, notification.body);
+    const expanded = expandedTeamNotificationId === notification.id;
+
+    return (
+      <li
+        key={notification.id}
+        className={`border-b border-gray-100 px-4 py-3 ${notification.isRead ? "bg-white" : "bg-amber-50/60"}`}
+      >
+        <button
+          type="button"
+          onClick={() => handleToggleTeamNotification(notification)}
+          className="flex w-full min-w-0 items-start gap-3 rounded-xl text-left transition active:bg-gray-100"
+          aria-expanded={expanded}
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <MessageSquareText size={22} className="text-amber-700" aria-hidden="true" />
+          </div>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-[14px] font-semibold leading-5 text-slate-900">{text.title}</strong>
+            {text.body ? (
+              <span className={`mt-0.5 block whitespace-pre-wrap break-words text-[14px] leading-5 text-slate-700 ${expanded ? "" : "line-clamp-3"}`}>
+                {text.body}
+              </span>
+            ) : null}
+            <span className="mt-0.5 block truncate text-[12px] text-gray-500">
+              {formatNotificationTime(notification.createdAt, locale, copy)}
+            </span>
+          </span>
+        </button>
+      </li>
+    );
+  };
+
   const renderNotification = (notification: NotificationRecord) => {
+    if (notification.type !== "follow") return renderTeamNotification(notification);
+
     const actorName = notification.actor.name
       || (notification.actor.handle ? formatHandle(notification.actor.handle) : (dictionary.connect.userFallbackLabel ?? "Mingle user"));
     const actorHandle = notification.actor.handle ? formatHandle(notification.actor.handle) : "";

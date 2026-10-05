@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { IN_APP_NOTIFICATION_TYPES, isTeamNotificationType } from "@/lib/user-notification-types";
 
 export const runtime = "nodejs";
 
@@ -37,13 +38,15 @@ export async function GET(request: NextRequest) {
     prisma.userNotification.findMany({
       where: {
         recipientId: viewerId,
-        type: "follow",
+        type: { in: [...IN_APP_NOTIFICATION_TYPES] },
       },
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {
         id: true,
         type: true,
+        body: true,
+        targetId: true,
         readAt: true,
         createdAt: true,
         actor: {
@@ -59,13 +62,13 @@ export async function GET(request: NextRequest) {
     prisma.userNotification.count({
       where: {
         recipientId: viewerId,
-        type: "follow",
+        type: { in: [...IN_APP_NOTIFICATION_TYPES] },
         readAt: null,
       },
     }),
   ]);
 
-  const actorIds = notifications.map((notification) => notification.actor.id);
+  const actorIds = notifications.flatMap((notification) => (notification.actor ? [notification.actor.id] : []));
   const followingRelations = actorIds.length === 0
     ? []
     : await prisma.userFollow.findMany({
@@ -78,14 +81,21 @@ export async function GET(request: NextRequest) {
   const followingIds = new Set(followingRelations.map((relation) => relation.followingId));
 
   return responseJson({
-    notifications: notifications.map((notification) => ({
-      id: notification.id,
-      type: notification.type,
-      isRead: notification.readAt !== null,
-      createdAt: notification.createdAt,
-      actor: notification.actor,
-      isFollowing: followingIds.has(notification.actor.id),
-    })),
+    notifications: notifications.flatMap((notification): object[] => {
+      const base = {
+        id: notification.id,
+        type: notification.type,
+        isRead: notification.readAt !== null,
+        createdAt: notification.createdAt,
+      };
+      // Team notifications have no actor; their text is in `body`.
+      if (isTeamNotificationType(notification.type)) {
+        return [{ ...base, body: notification.body ?? "", targetId: notification.targetId }];
+      }
+      const actor = notification.actor;
+      if (!actor) return [];
+      return [{ ...base, actor, isFollowing: followingIds.has(actor.id) }];
+    }),
     unreadCount,
   });
 }
@@ -97,7 +107,7 @@ export async function PATCH() {
   const result = await prisma.userNotification.updateMany({
     where: {
       recipientId: viewerId,
-      type: "follow",
+      type: { in: [...IN_APP_NOTIFICATION_TYPES] },
       readAt: null,
     },
     data: { readAt: new Date() },
