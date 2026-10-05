@@ -1,6 +1,7 @@
 package com.minglelabs.mingle.rn
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,6 +25,10 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     ) {
       return
     }
+    // Same as iOS (AppDelegate willPresent): no notification while the app is
+    // on screen. Background delivery never reaches this method because every
+    // push carries a notification payload, which the system tray shows itself.
+    if (isAppInForeground()) return
 
     val notification = message.notification
     val title = notification?.title?.takeIf { it.isNotBlank() } ?: message.data["title"] ?: "Mingle"
@@ -60,6 +65,14 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       .setContentIntent(pendingIntent)
 
     getSystemService(NotificationManager::class.java).notify(notificationId.hashCode(), builder.build())
+  }
+
+  // IMPORTANCE_FOREGROUND means a visible activity; the STT foreground service
+  // alone reports IMPORTANCE_FOREGROUND_SERVICE.
+  private fun isAppInForeground(): Boolean {
+    val state = ActivityManager.RunningAppProcessInfo()
+    ActivityManager.getMyMemoryState(state)
+    return state.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
   }
 
   companion object {
