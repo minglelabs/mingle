@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -31,6 +32,7 @@ import {
   sanitizeAdminFeedbackReturnTo,
 } from "@/lib/admin-feedback-query";
 import { prisma } from "@/lib/prisma";
+import { sendPushNotificationForFeedbackReply } from "@/server/push-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -139,19 +141,36 @@ async function createFeedbackReplyAction(formData: FormData) {
 
   const feedback = await prisma.appFeedback.findUnique({
     where: { id: feedbackId },
-    select: { id: true },
+    select: { id: true, userId: true, locale: true },
   });
   if (!feedback) {
     redirect(adminFeedbackPathWithStatus(returnTo, { error: "feedback_not_found" }));
   }
 
-  await prisma.appFeedbackReply.create({
+  const reply = await prisma.appFeedbackReply.create({
     data: {
       feedbackId,
       authorType: "team",
       message,
     },
+    select: { id: true },
   });
+
+  const recipientUserId = feedback.userId;
+  if (recipientUserId) {
+    after(async () => {
+      try {
+        await sendPushNotificationForFeedbackReply({
+          replyId: reply.id,
+          recipientUserId,
+          replyText: message,
+          feedbackLocale: feedback.locale,
+        });
+      } catch (error) {
+        console.error("[admin-feedback] reply push failed", error instanceof Error ? error.name : "unknown");
+      }
+    });
+  }
 
   revalidatePath("/admin");
   redirect(adminFeedbackPathWithStatus(returnTo, { sent: feedbackId }));
