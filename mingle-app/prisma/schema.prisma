@@ -993,6 +993,10 @@ model OperatorPostReserve {
   operatorUserId String    @map("operator_user_id")
   text           String    @db.Text
   topic          String?
+  /// The language the post is written in; null means the account's first language.
+  language       String?
+  /// What the attached photo shows; drawn when the post is published. Null for a text-only post.
+  imagePrompt    String?   @map("image_prompt") @db.Text
   /// queued | publishing | published | failed | cancelled
   state          String    @default("queued")
   releaseAt      DateTime? @map("release_at")

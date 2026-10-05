@@ -6,6 +6,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { checkOperatorForPosting, personaLanguageOf } from '@/server/operator-posts/operator-check'
 import { sqlUtcTimestamp } from '@/server/operator-posts/sql'
 import { publishPost } from '@/server/posts/publish-post'
+import { drawReservePostImage } from './post-image'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
@@ -40,7 +41,7 @@ export type ReserveRunSummary = {
   generated: number
 }
 
-type ClaimedReservePost = { id: string; operatorUserId: string; text: string; attempts: number }
+type ClaimedReservePost = { id: string; operatorUserId: string; text: string; attempts: number; language: string | null; imagePrompt: string | null }
 
 function describeError(error: unknown): string {
   return (error instanceof Error ? `${error.name}: ${error.message}` : 'unknown_error').slice(0, MAX_ERROR_LENGTH)
@@ -62,7 +63,7 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt"
   `
 }
 
@@ -77,11 +78,14 @@ async function releaseOne(row: ClaimedReservePost, now: Date): Promise<boolean> 
       await settle({ state: 'failed', error: check.reason, releaseAt: null })
       return false
     }
+    // A photo that cannot be drawn does not hold the post back: it goes out as text.
+    const image = row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
     const result = await publishPost({
       authorId: row.operatorUserId,
       text: row.text,
-      imageObjectKey: null,
-      clientHint: personaLanguageOf(check.account),
+      imageObjectKey: image?.objectKey ?? null,
+      imageDimensions: image ? { imageWidth: image.width, imageHeight: image.height } : null,
+      clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
     })
     if (result.kind === 'conflict') {
@@ -94,7 +98,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date): Promise<boolean> 
       operatorUserId: row.operatorUserId,
       targetType: 'post',
       targetId: result.post.id,
-      metadata: { reserveId: row.id, result: result.kind },
+      metadata: { reserveId: row.id, result: result.kind, language: row.language, photo: row.imagePrompt ? (image ? 'drawn' : 'failed') : 'none' },
     })
     return true
   } catch (error) {
@@ -239,7 +243,13 @@ export async function refillOperatorReserve(operatorUserId: string, now: Date, r
     })
     if (generated.length === 0) return 0
     const created = await prisma.operatorPostReserve.createMany({
-      data: generated.map((post) => ({ operatorUserId, text: post.text, topic: post.topic })),
+      data: generated.map((post) => ({
+        operatorUserId,
+        text: post.text,
+        topic: post.topic,
+        language: post.language === language ? null : post.language,
+        imagePrompt: post.imagePrompt,
+      })),
     })
     return created.count
   } catch (error) {
@@ -303,7 +313,7 @@ export async function publishNextReservePost(operatorUserId: string, now: Date =
     UPDATE app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id = ${head.id} AND state = 'queued'
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt"
   `
   if (!claimed[0]) return { ok: false, error: 'publish_failed' }
   if (!(await releaseOne(claimed[0], now))) return { ok: false, error: 'publish_failed' }
