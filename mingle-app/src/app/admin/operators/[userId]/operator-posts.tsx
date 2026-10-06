@@ -23,14 +23,22 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
       where: { authorId: userId, isDeleted: { not: true } },
       orderBy: { publishedAt: 'desc' },
       take,
-      select: { id: true, sourceText: true, publishedAt: true, likeCount: true, commentCount: true },
+      select: {
+        id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, imageObjectKey: true, imageWidth: true, imageHeight: true,
+        comments: {
+          where: { moderationHiddenAt: null },
+          orderBy: { createdAt: 'asc' },
+          take: 10,
+          select: { id: true, sourceText: true, parentId: true, author: { select: { name: true, isOperator: true } } },
+        },
+      },
     }),
     prisma.operatorPostReserve.count({ where: { operatorUserId: userId, state: 'queued' } }),
     prisma.operatorPostReserve.findMany({
       where: { operatorUserId: userId, state: 'queued' },
       orderBy: [{ releaseAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
       take,
-      select: { id: true, text: true, topic: true, releaseAt: true },
+      select: { id: true, text: true, topic: true, releaseAt: true, language: true, imagePrompt: true },
     }),
   ])
   const profile = reservePosterProfile(userId)
@@ -43,13 +51,33 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
         {published.length ? (
           <ul className="mt-2 divide-y divide-slate-100">
             {published.map((post) => (
-              <li key={post.id}>
-                <Link href={`/admin/activity/posts/${post.id}`} className="block py-3 active:bg-slate-50">
-                  <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{post.sourceText || '(내용 없음)'}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {DATE_FORMAT.format(post.publishedAt)} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
-                  </p>
-                </Link>
+              <li key={post.id} className="py-3">
+                <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{post.sourceText || '(내용 없음)'}</p>
+                {post.imageObjectKey ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/posts/${post.id}/image`}
+                    alt="글 사진"
+                    width={post.imageWidth ?? undefined}
+                    height={post.imageHeight ?? undefined}
+                    loading="lazy"
+                    className="mt-2 max-h-80 w-auto max-w-full rounded-xl border border-slate-200"
+                  />
+                ) : null}
+                <p className="mt-1 text-xs text-slate-500">
+                  {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
+                </p>
+                {post.comments.length ? (
+                  <ul className="mt-2 space-y-1 rounded-xl bg-slate-50 p-2.5">
+                    {post.comments.map((comment) => (
+                      <li key={comment.id} className={`break-words text-xs text-slate-700 ${comment.parentId ? 'pl-4' : ''}`}>
+                        <span className="font-semibold">{comment.author.name ?? '이름 없음'}{comment.author.isOperator ? ' (운영)' : ''}</span>{' '}
+                        {comment.sourceText}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <Link href={`/admin/activity/posts/${post.id}`} className="mt-2 inline-block text-xs font-medium text-sky-700">댓글 달기·번역 보기</Link>
               </li>
             ))}
           </ul>
@@ -66,8 +94,9 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
             {queued.map((item) => (
               <li key={item.id} className="py-3">
                 <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{item.text}</p>
+                {item.imagePrompt ? <p className="mt-1 break-words rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-900">📷 올라갈 때 그릴 사진: {item.imagePrompt}</p> : null}
                 <p className="mt-1 text-xs text-slate-500">
-                  {item.releaseAt ? `${DATE_FORMAT.format(item.releaseAt)} 예정` : '시간 미정'}
+                  {item.language ? `${item.language} · ` : ''}{item.releaseAt ? `${DATE_FORMAT.format(item.releaseAt)} 예정` : '시간 미정'}
                   {item.topic ? ` · ${item.topic}` : ''}
                 </p>
               </li>
