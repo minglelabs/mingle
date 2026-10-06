@@ -34,7 +34,7 @@ export async function commentOnPostAsOperator(
 
     const post = await prisma.post.findFirst({
       where: visibleSinglePostWhere(input.postId, operatorUserId),
-      select: { id: true, authorId: true, sourceText: true, sourceLanguage: true },
+      select: { id: true, authorId: true, sourceText: true, sourceLanguage: true, imageObjectKey: true },
     })
     if (!post) return { ok: false, error: 'not_found' }
     if (post.authorId === operatorUserId) return { ok: false, error: 'own_post' }
@@ -66,7 +66,8 @@ export async function commentOnPostAsOperator(
         country: commenter.locationCountry ?? null,
         language,
       },
-      post: { text: post.sourceText, language: post.sourceLanguage, photo: reserve?.imagePrompt ?? null },
+      // The planned photo is only described when it was actually drawn and attached.
+      post: { text: post.sourceText, language: post.sourceLanguage, photo: post.imageObjectKey ? reserve?.imagePrompt ?? null : null },
       existingComments: comments.map((comment) => comment.sourceText ?? '').filter(Boolean),
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
