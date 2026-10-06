@@ -29,7 +29,7 @@ vi.mock('@/server/operators/create-operator', () => ({ createOperatorAccount: mo
 import { normalizeAutomationSettings, parseAutomationSettings } from '@/server/operator-automation/settings'
 import { __resetAvatarFailuresForTests, runOperatorAutomation } from '@/server/operator-automation/worker'
 import { DEFAULT_SEED_PLAN, mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
-import { generateOperatorAvatar, requestAvatarImage, resolveAvatarImageModel } from './generate'
+import { generateOperatorAvatar, isProxyImageModel, requestAvatarImage, resolveAvatarImageModel, resolveImageProxyUrl } from './generate'
 import { AVATAR_CATEGORIES, AVATAR_SUBTYPES, pickAvatarSpec, seededRandom, type AvatarPersona } from './taxonomy'
 
 const NOW = new Date('2026-10-03T03:00:00.000Z')
@@ -174,12 +174,72 @@ describe('avatar generation', () => {
     vi.stubEnv('OPENAI_API_KEY', 'openai-key')
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 }))
     const result = await requestAvatarImage('a prompt', { model: 'gpt-image-2', fetchImpl: fetchImpl as unknown as typeof fetch })
-    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes') })
+    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.openai.com/v1/images/generations')
     expect(JSON.parse(String(init.body))).toEqual({ model: 'gpt-image-2', prompt: 'a prompt', size: '1024x1024', quality: 'low', n: 1 })
     const refused = vi.fn(async () => new Response('{}', { status: 400 }))
     expect(await requestAvatarImage('p', { model: 'gpt-image-2', fetchImpl: refused as unknown as typeof fetch })).toEqual({ ok: false, error: 'image_refused', detail: 'http_400' })
+  })
+
+  describe('through the local subscription proxy', () => {
+    const PROXY_MODEL = 'google-antigravity/gemini-3.1-flash-image'
+    const chatReply = (content: unknown) => new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 })
+
+    it('treats a provider-prefixed model as a proxy model and reads the proxy address', () => {
+      expect(isProxyImageModel(PROXY_MODEL)).toBe(true)
+      expect(isProxyImageModel('gpt-image-2')).toBe(false)
+      expect(resolveImageProxyUrl({} as NodeJS.ProcessEnv)).toBe('http://127.0.0.1:10100')
+      expect(resolveImageProxyUrl({ OPERATOR_IMAGE_PROXY_URL: 'http://localhost:9000/' } as unknown as NodeJS.ProcessEnv)).toBe('http://localhost:9000')
+    })
+
+    it('asks the proxy for the image and downloads the stored picture from the proxy', async () => {
+      const fetchImpl = vi.fn(async (url: string) => (url.endsWith('/v1/chat/completions')
+        ? chatReply('Here it is.\n![image](/v1/opencodex/artifacts/img-1.jpg)')
+        : new Response(Buffer.from('jpg-bytes'), { status: 200 })))
+      const result = await requestAvatarImage('a prompt', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('jpg-bytes'), model: PROXY_MODEL })
+      expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
+        'http://127.0.0.1:10100/v1/chat/completions',
+        'http://127.0.0.1:10100/v1/opencodex/artifacts/img-1.jpg',
+      ])
+      const body = JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+      expect(body.model).toBe(PROXY_MODEL)
+      expect(body.messages[0].content).toContain('a prompt')
+    })
+
+    it('accepts an inlined data URL', async () => {
+      const data = Buffer.from('png-bytes').toString('base64')
+      const fetchImpl = vi.fn(async () => chatReply([{ type: 'image_url', image_url: { url: `data:image/png;base64,${data}` } }]))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: PROXY_MODEL })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('never fetches a link that points away from the proxy', async () => {
+      const fetchImpl = vi.fn(async () => chatReply('![image](https://elsewhere.example/a.jpg)'))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_refused', detail: 'no_image' })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports a proxy error such as an exhausted quota without paying for the API model', async () => {
+      const fetchImpl = vi.fn(async () => new Response('', { status: 429 }))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_request_failed', detail: 'http_429' })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to the API model where the proxy cannot be reached', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'openai-key')
+      const fetchImpl = vi.fn(async (url: string) => {
+        if (url.startsWith('http://127.0.0.1:10100')) throw new TypeError('fetch failed')
+        return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 })
+      })
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
+      expect(fetchImpl.mock.calls[1][0]).toBe('https://api.openai.com/v1/images/generations')
+    })
   })
 
   it('is not_operator for an unknown account', async () => {
