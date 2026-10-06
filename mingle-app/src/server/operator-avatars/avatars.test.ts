@@ -127,6 +127,20 @@ describe('seed plan', () => {
   })
 })
 
+describe('ancestry and the persona name', () => {
+  it('leans toward the ancestry the family name suggests in a mixed country', () => {
+    const count = (name: string) => {
+      let eastAsian = 0
+      for (let index = 0; index < 200; index += 1) {
+        const spec = pickAvatarSpec({ gender: 'female', name, age: 30, country: 'US', countryName: 'United States', city: 'Houston', bio: null }, seededRandom(`${name}:${index}`))
+        if (/East Asian American/.test(spec.prompt)) eastAsian += 1
+      }
+      return eastAsian
+    }
+    expect(count('Jessica Lee')).toBeGreaterThan(count('Jessica Miller') * 3)
+  })
+})
+
 describe('avatar generation', () => {
   beforeEach(() => {
     vi.clearAllMocks()

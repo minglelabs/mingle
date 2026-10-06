@@ -254,6 +254,20 @@ const COUNTRY_PEOPLE: Record<string, ReadonlyArray<readonly [string, AncestryKey
   TR: [['Turkish', 'middle_eastern', 1]],
 }
 
+/**
+ * Family names that point to an ancestry. In a country with several ancestry
+ * groups the pick leans toward the one the persona's name suggests, so
+ * "Jessica Lee" is not drawn as someone a reader would not expect.
+ */
+const NAME_ANCESTRY_HINTS: ReadonlyArray<readonly [RegExp, AncestryKey]> = [
+  [/\b(lee|kim|park|choi|jung|kang|chen|wang|zhang|liu|li|lin|wu|huang|yang|zhao|chan|wong|ng|tanaka|sato|suzuki|yamamoto|nakamura|kobayashi|watanabe|ito)\b/i, 'east_asian'],
+  [/\b(nguyen|tran|pham|le|vo|santos|reyes|cruz|dela cruz|bautista|wijaya|suharto|siti|putri)\b/i, 'southeast_asian'],
+  [/\b(patel|singh|kumar|sharma|gupta|khan|reddy|iyer|nair|shah|mehta|kaur|das|begum|ahmed)\b/i, 'south_asian'],
+  [/\b(garcia|martinez|rodriguez|lopez|hernandez|gonzalez|perez|sanchez|ramirez|torres|flores|rivera|gomez|diaz|morales|silva|souza|oliveira)\b/i, 'latino'],
+  [/\b(yilmaz|kaya|demir|sahin|celik|ozturk|benali|haddad|mansour|hassan)\b/i, 'middle_eastern'],
+]
+const NAME_ANCESTRY_BOOST = 20
+
 const SKIN_TONES: Record<AncestryKey, readonly Option[]> = {
   east_asian: [['fair', 3, 'fair skin'], ['light', 4, 'light skin'], ['light_medium', 2, 'light-medium skin'], ['tan', 1, 'lightly tanned skin']],
   southeast_asian: [['light_medium', 3, 'light-medium skin'], ['tan', 4, 'tan skin'], ['brown', 3, 'brown skin']],
@@ -535,8 +549,9 @@ function describePerson(persona: AvatarPersona, show: { face: boolean; body: boo
   // Unknown gender: the picker still needs one table; the prompt lets the name decide.
   const table = gender ?? (random() < 0.5 ? 'female' : 'male')
   const people = COUNTRY_PEOPLE[(persona.country ?? '').toUpperCase()]
+  const hinted = NAME_ANCESTRY_HINTS.find(([pattern]) => pattern.test(persona.name ?? ''))?.[1]
   const person = people
-    ? pick(people.map(([label, ancestry, weight]) => [ancestry, weight, label] as const), random)
+    ? pick(people.map(([label, ancestry, weight]) => [ancestry, weight * (ancestry === hinted ? NAME_ANCESTRY_BOOST : 1), label] as const), random)
     : (['mixed', 1, persona.countryName ? `person from ${persona.countryName}` : 'person'] as const)
   const ancestry = person[0] as AncestryKey
   const noun = gender === 'female' ? 'woman' : gender === 'male' ? 'man' : `person whose gender fits the given name "${persona.name ?? ''}"`

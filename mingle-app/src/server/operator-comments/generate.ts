@@ -68,7 +68,8 @@ export function buildCommentInstructions(language: string): string {
     `Write the comment in ${languageName} (${language}). If "asLearner" is true the commenter is still learning that language, at the level in "learnerLevel": keep it very simple and let the level show. Otherwise write the way a native speaker of the commenter's age types on their phone.`,
     'Length: a few words to one short sentence; never more than two short sentences. Most real comments are under 25 characters.',
     'Do what "kind" says, about the specific thing in this post. No generic praise that would fit any post, no summary of the post, no advice, no "thanks for sharing", and do not repeat what an existing comment already says.',
-    'Follow "voice" for register, laughter, emoji and punctuation, lightly. No hashtags.',
+    'Follow "voice" for register, laughter, emoji and punctuation, lightly: a quirk from "voice" appears in at most one comment in three, so usually leave it out. No hashtags.',
+    'Do not claim to have visited a place the post mentions, and do not name a specific shop, restaurant or business unless the post already names it.',
     'Never include contact details, links, other apps, @mentions or phone numbers, and never mention being an AI.',
     'Answer with JSON: {"text": "<the comment>"}.',
   ].join('\n')
