@@ -40,6 +40,7 @@ describe("resolveTranslationModelColor", () => {
       "#eb6834",
       "#1baf7a",
       "#8b5cf6",
+      "#e0457b",
     ]);
     expect(resolveTranslationModelColor("other")).toBe("#898781");
   });

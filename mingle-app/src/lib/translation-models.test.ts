@@ -34,6 +34,10 @@ describe('translation model catalog', () => {
         label: 'gpt-6-luna',
         badge: 'Best',
       },
+      {
+        value: 'claude-haiku-5-5',
+        label: 'claude-haiku-5-5',
+      },
     ]))
   })
 
@@ -62,6 +66,12 @@ describe('translation model catalog', () => {
       engineProvider: 'openai',
       infrastructureProvider: 'openai',
       runtimeModel: 'gpt-6-luna',
+    })
+    expect(normalizeSelectableTranslationModel('anthropic/claude-haiku-5-5')).toBe('claude-haiku-5-5')
+    expect(resolveTranslationRuntimeSelection('claude-haiku-5-5')).toMatchObject({
+      engineProvider: 'claude',
+      infrastructureProvider: 'anthropic',
+      runtimeModel: 'claude-haiku-5-5',
     })
   })
 })
