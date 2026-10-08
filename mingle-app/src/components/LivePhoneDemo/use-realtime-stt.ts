@@ -48,6 +48,7 @@ import {
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import type { UserSelectableTtsModel } from '@/lib/tts-models'
+import type { SttCaptureSource } from '@/lib/native-device-audio'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -441,6 +442,8 @@ type NativeSttStartCommand = {
     wsUrl: string
     sttModel: string
     aecEnabled: boolean
+    // Sent only for device audio; shells without it capture the microphone.
+    captureSource?: SttCaptureSource
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
@@ -563,6 +566,17 @@ export function shouldOpenNativeMicSettingsOnRetry(input: {
   if (!input.useNativeStt) return false
   if (input.connectionStatus !== 'idle') return false
   return input.recoveryAction === 'open_ios_settings'
+}
+
+// The user closed the system screen-capture prompt of a device-audio start:
+// a cancel, so the room goes back to idle instead of showing an error.
+export function isNativeDeviceAudioConsentDeclined(input: {
+  code?: string
+  message?: string
+}): boolean {
+  const code = (input.code || '').trim().toLowerCase()
+  if (code === 'device_audio_permission') return true
+  return (input.message || '').trim().toLowerCase() === 'device_audio_permission_denied'
 }
 
 export function shouldResetConnectionToIdleForNativeMicRecovery(input: {
@@ -1486,6 +1500,8 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  // What a native session transcribes. Fixed when the session starts.
+  captureSource?: SttCaptureSource
   sonioxManualFinalizeSilenceMs?: number
   sonioxEndpointMaxDelayMs?: number
   sonioxEndpointTuningStep?: number
@@ -2976,6 +2992,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  captureSource = 'microphone',
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   sonioxEndpointTuningStep = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
@@ -6071,6 +6088,7 @@ export default function useRealtimeSTT({
             wsUrl: getWsUrl(),
             sttModel: 'soniox',
             aecEnabled: enableAec,
+            ...(captureSource === 'device_audio' ? { captureSource } : {}),
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
@@ -6184,7 +6202,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   // Keep the native listener stable while a session is active. Usage tracking
   // changes several callbacks on each tick, and re-subscribing here would
@@ -6580,6 +6598,11 @@ export default function useRealtimeSTT({
             code: detail.code,
             platform: detail.platform,
           })
+          handlers.resetToIdle()
+          return
+        }
+        if (isNativeDeviceAudioConsentDeclined(detail)) {
+          logSttDebug('native.error.device_audio_consent_declined', { code: detail.code })
           handlers.resetToIdle()
           return
         }

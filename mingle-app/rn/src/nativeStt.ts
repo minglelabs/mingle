@@ -1,11 +1,16 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
+// What a session transcribes: the microphone, or the sound other apps play on
+// this device (Android playback capture; needs a screen-capture consent).
+export type NativeSttCaptureSource = 'microphone' | 'device_audio';
+
 type NativeSttStartOptions = {
   conversationId?: string;
   sessionId?: string;
   wsUrl: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  captureSource?: NativeSttCaptureSource;
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: 'fin' | 'end';
   sonioxEndpointMaxDelayMs?: number;
@@ -41,6 +46,9 @@ type NativeSttModuleType = {
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
   getStatus?: () => Promise<NativeSttStatus>;
+  // iOS only: the broadcast extension and its App Group are in this build.
+  deviceAudioCaptureSupported?: boolean;
+  getConstants?: () => { deviceAudioCaptureSupported?: boolean };
 };
 
 type NativeSttEventMap = {
@@ -63,6 +71,26 @@ const nativeEmitter = nativeModule ? new NativeEventEmitter(NativeModules.Native
 
 export function isNativeSttAvailable(): boolean {
   return (Platform.OS === 'ios' || Platform.OS === 'android') && Boolean(nativeModule && nativeEmitter);
+}
+
+// Whether this build can transcribe the sound other apps play. The shell's JS
+// ships inside the same binary as its native STT module, so on Android the
+// platform alone decides (playback capture exists on every supported OS
+// version). iOS captures through a broadcast extension that needs an App
+// Group; the native module reports whether both are present in this build.
+export function isNativeDeviceAudioCaptureAvailable(): boolean {
+  if (!nativeModule || !nativeEmitter) return false;
+  if (Platform.OS === 'android') return true;
+  if (Platform.OS !== 'ios') return false;
+  const supported = nativeModule.deviceAudioCaptureSupported
+    ?? nativeModule.getConstants?.().deviceAudioCaptureSupported;
+  return supported === true;
+}
+
+export function normalizeNativeSttCaptureSource(value: unknown): NativeSttCaptureSource {
+  return typeof value === 'string' && value.trim().toLowerCase() === 'device_audio'
+    ? 'device_audio'
+    : 'microphone';
 }
 
 export async function startNativeStt(options: NativeSttStartOptions): Promise<{ sampleRate: number }> {
