@@ -1,12 +1,13 @@
-export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen' | 'openai'
+export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'claude'
 
-export type TranslationInfrastructureProvider = 'google' | 'openrouter' | 'openai'
+export type TranslationInfrastructureProvider = 'google' | 'openrouter' | 'openai' | 'anthropic'
 
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
   | 'gpt-6-luna'
+  | 'claude-haiku-5-5'
 
 export type TranslationModelBadge = 'Best' | 'Slow'
 
@@ -48,6 +49,10 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gpt-6-luna',
     badge: 'Best',
   },
+  {
+    value: 'claude-haiku-5-5',
+    label: 'claude-haiku-5-5',
+  },
 ]
 
 const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, TranslationRuntimeSelection> = {
@@ -76,6 +81,12 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     infrastructureProvider: 'openai',
     runtimeModel: 'gpt-6-luna',
     baseUrl: 'https://api.openai.com/v1',
+  },
+  'claude-haiku-5-5': {
+    value: 'claude-haiku-5-5',
+    engineProvider: 'claude',
+    infrastructureProvider: 'anthropic',
+    runtimeModel: 'claude-haiku-5-5',
   },
 }
 
@@ -119,6 +130,14 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
     || normalized === 'openai/gpt-6-luna'
   ) {
     return 'gpt-6-luna'
+  }
+
+  if (
+    normalized === 'claude-haiku-5-5'
+    || normalized === 'claude haiku 5.5'
+    || normalized === 'anthropic/claude-haiku-5-5'
+  ) {
+    return 'claude-haiku-5-5'
   }
 
   return null

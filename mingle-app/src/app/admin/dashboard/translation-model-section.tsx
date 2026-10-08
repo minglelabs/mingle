@@ -21,6 +21,7 @@ const TRANSLATION_MODEL_COLORS: Record<UserSelectableTranslationModel, string> =
   "gemma-4-31b-it": "#eb6834",
   "qwen/qwen3.5-9b": "#1baf7a",
   "gpt-6-luna": "#8b5cf6",
+  "claude-haiku-5-5": "#e0457b",
 };
 const OTHER_TRANSLATION_MODEL_COLOR = "#898781";
 

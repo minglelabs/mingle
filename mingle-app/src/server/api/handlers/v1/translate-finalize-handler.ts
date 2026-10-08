@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenerativeAI, SchemaType, type GenerateContentRequest, type ResponseSchema } from '@google/generative-ai'
 import {
   ensureTrackingContext,
@@ -56,6 +57,7 @@ const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
+const ANTHROPIC_TRANSLATION_MAX_TOKENS = 16_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
@@ -64,7 +66,7 @@ const OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
-type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'openai-compatible'
+type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'openai-compatible' | 'claude'
 
 type TranslationUsage = {
   promptTokens?: number
@@ -101,7 +103,17 @@ type OpenAICompatibleTranslationProviderConfig = {
   extraBody: Record<string, unknown> | null
 }
 
-type TranslationProviderConfig = GeminiTranslationProviderConfig | OpenAICompatibleTranslationProviderConfig
+type AnthropicTranslationProviderConfig = {
+  provider: 'claude'
+  infrastructureProvider: TranslationInfrastructureProvider | string
+  model: string
+  apiKey: string
+}
+
+type TranslationProviderConfig =
+  | GeminiTranslationProviderConfig
+  | OpenAICompatibleTranslationProviderConfig
+  | AnthropicTranslationProviderConfig
 
 type TranslationProviderResolution = {
   ok: true
@@ -211,6 +223,7 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   if (normalized === 'gemma') return normalized
   if (normalized === 'qwen') return normalized
   if (normalized === 'openai') return normalized
+  if (normalized === 'claude') return normalized
   if (normalized === 'openai-compatible') return normalized
   if (normalized === 'openai_compatible') return 'openai-compatible'
   return null
@@ -473,6 +486,7 @@ function resolveTranslationModel(config: {
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
   if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
   if (config.provider === 'openai') return 'gpt-6-luna'
+  if (config.provider === 'claude') return 'claude-haiku-5-5'
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
     return DEFAULT_DASHSCOPE_QWEN_MODEL
   }
@@ -536,6 +550,27 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
         ok: true,
         config: {
           provider: requestedModelSelection.engineProvider,
+          infrastructureProvider: requestedModelSelection.infrastructureProvider,
+          model: requestedModelSelection.runtimeModel,
+          apiKey,
+        },
+      }
+    }
+
+    if (requestedModelSelection.engineProvider === 'claude') {
+      const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim()
+      if (!apiKey) {
+        return {
+          ok: false,
+          error: 'missing_api_key',
+          details: 'ANTHROPIC_API_KEY is missing.',
+        }
+      }
+
+      return {
+        ok: true,
+        config: {
+          provider: 'claude',
           infrastructureProvider: requestedModelSelection.infrastructureProvider,
           model: requestedModelSelection.runtimeModel,
           apiKey,
@@ -653,6 +688,27 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
         apiKey,
         baseUrl,
         extraBody: null,
+      },
+    }
+  }
+
+  if (provider === 'claude') {
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim()
+    if (!apiKey) {
+      return {
+        ok: false,
+        error: 'missing_api_key',
+        details: 'ANTHROPIC_API_KEY is missing.',
+      }
+    }
+
+    return {
+      ok: true,
+      config: {
+        provider: 'claude',
+        infrastructureProvider: 'anthropic',
+        model: resolveTranslationModel({ provider }),
+        apiKey,
       },
     }
   }
@@ -1376,7 +1432,7 @@ function extractOpenAICompatibleText(responsePayload: OpenAICompatibleResponseLi
     .join('\n')
 }
 
-function buildOpenRouterQwenJsonSchemaResponseFormat(ctx: TranslateContext): Record<string, unknown> {
+function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<string, unknown> {
   const properties: Record<string, unknown> = {}
   const required: string[] = []
 
@@ -1405,16 +1461,20 @@ function buildOpenRouterQwenJsonSchemaResponseFormat(ctx: TranslateContext): Rec
   }
 
   return {
+    type: 'object',
+    properties,
+    required,
+    additionalProperties: false,
+  }
+}
+
+function buildOpenRouterQwenJsonSchemaResponseFormat(ctx: TranslateContext): Record<string, unknown> {
+  return {
     type: 'json_schema',
     json_schema: {
       name: ctx.isFinal ? 'translate_finalize_response' : 'translate_interim_response',
       strict: true,
-      schema: {
-        type: 'object',
-        properties,
-        required,
-        additionalProperties: false,
-      },
+      schema: buildTranslationResponseJsonSchema(ctx),
     },
   }
 }
@@ -1544,9 +1604,70 @@ async function createOpenAICompatibleCompletion(
   }
 }
 
+// Claude Haiku 5.5 has no fast/priority tier and rejects non-default sampling parameters,
+// so neither is sent. Thinking is off (allowed at low effort) to keep live-turn latency down.
+// The answer is mapped onto the chat-completions shape so parsing and logging stay shared.
+async function createAnthropicCompletion(
+  ctx: TranslateContext,
+  config: AnthropicTranslationProviderConfig,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<OpenAICompatibleResponseLike> {
+  const client = new Anthropic({ apiKey: config.apiKey })
+  const schema = buildTranslationResponseJsonSchema(ctx)
+
+  try {
+    const message = await client.messages.create({
+      model: config.model,
+      max_tokens: ANTHROPIC_TRANSLATION_MAX_TOKENS,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      thinking: { type: 'disabled' },
+      output_config: {
+        effort: 'low',
+        format: { type: 'json_schema', schema },
+      },
+    }, {
+      timeout: resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal),
+      // Interim requests are superseded by the next one; only a final is worth a retry.
+      maxRetries: ctx.isFinal ? 1 : 0,
+    })
+
+    const text = message.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('')
+    const promptTokens = message.usage.input_tokens
+      + (message.usage.cache_creation_input_tokens ?? 0)
+      + (message.usage.cache_read_input_tokens ?? 0)
+
+    return {
+      model: message.model,
+      service_tier: message.usage.service_tier ?? null,
+      choices: [{ finish_reason: message.stop_reason, message: { content: text } }],
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: message.usage.output_tokens,
+        total_tokens: promptTokens + message.usage.output_tokens,
+      },
+    }
+  } catch (error) {
+    // Same "[status] message" form the shared rate-limit / retry classifiers read.
+    if (error instanceof Anthropic.APIConnectionTimeoutError) {
+      throw new Error('Anthropic provider error: request timed out')
+    }
+    if (error instanceof Anthropic.APIConnectionError) {
+      throw new Error(`Anthropic provider error: network ${error.message}`)
+    }
+    if (error instanceof Anthropic.APIError) {
+      throw new Error(`Anthropic provider error [${error.status ?? 'unknown'}] ${error.message}`)
+    }
+    throw error
+  }
+}
+
 async function translateWithOpenAICompatible(
   ctx: TranslateContext,
-  config: OpenAICompatibleTranslationProviderConfig,
+  config: OpenAICompatibleTranslationProviderConfig | AnthropicTranslationProviderConfig,
 ): Promise<TranslationEngineResult | null> {
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
   const promptLogPayload = {
@@ -1564,7 +1685,9 @@ async function translateWithOpenAICompatible(
     console.info('[translate/finalize] prompt', formatPromptConsoleLog(promptLogPayload))
   }
 
-  const responsePayload = await createOpenAICompatibleCompletion(ctx, config, systemPrompt, userPrompt)
+  const responsePayload = config.provider === 'claude'
+    ? await createAnthropicCompletion(ctx, config, systemPrompt, userPrompt)
+    : await createOpenAICompatibleCompletion(ctx, config, systemPrompt, userPrompt)
   const rawContent = extractOpenAICompatibleText(responsePayload) || ''
   const content = rawContent.trim()
   const promptTokens = sanitizeNonNegativeInt(responsePayload.usage?.prompt_tokens)
