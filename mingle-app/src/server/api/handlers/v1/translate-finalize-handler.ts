@@ -46,7 +46,7 @@ const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 // Gemini Priority inference: top-level `serviceTier` on generateContent.
 const GEMINI_TRANSLATION_SERVICE_TIER = 'priority'
 // OpenAI Fast mode ('priority' is the same tier under its earlier name). Sent on every
-// request of the `openai` provider (GPT-6 Luna); qwen via OpenRouter never gets it.
+// request of the `openai` provider (GPT-6 Luna).
 const OPENAI_TRANSLATION_SERVICE_TIER = 'priority'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
@@ -592,45 +592,6 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
           extraBody: null,
         },
       }
-    }
-
-    const baseUrl = requestedModelSelection.baseUrl || OPENROUTER_BASE_URL
-    const apiKey = resolveOpenAICompatibleApiKey(baseUrl)
-    if (!apiKey) {
-      return {
-        ok: false,
-        error: 'missing_api_key',
-        details: 'No API key was found for the configured OpenAI-compatible translation provider.',
-      }
-    }
-
-    const parsedExtraBody = parseJsonObjectEnv('TRANSLATE_EXTRA_BODY')
-    if (parsedExtraBody.error) {
-      return {
-        ok: false,
-        error: 'provider_misconfigured',
-        details: parsedExtraBody.error,
-      }
-    }
-
-    const defaultExtraBody = buildDefaultOpenAICompatibleExtraBody('qwen', baseUrl)
-    const extraBody = defaultExtraBody || parsedExtraBody.value
-      ? {
-        ...(defaultExtraBody || {}),
-        ...(parsedExtraBody.value || {}),
-      }
-      : null
-
-    return {
-      ok: true,
-      config: {
-        provider: 'qwen',
-        infrastructureProvider: requestedModelSelection.infrastructureProvider,
-        model: requestedModelSelection.runtimeModel,
-        apiKey,
-        baseUrl,
-        extraBody,
-      },
     }
   }
 

@@ -27,7 +27,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       sonioxEndpointMaxDelayMs: 1800,
       sonioxEndpointTuningStep: 4,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -38,7 +38,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       sonioxEndpointMaxDelayMs: 1800,
       sonioxEndpointTuningStep: 4,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       ttsModel: null,
       adBannerPosition: 'bottom',
       inputMode: 'text',
@@ -82,14 +82,14 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 800,
       sonioxEndpointMaxDelayMs: 1400,
       sonioxEndpointTuningStep: 1,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       adBannerPosition: 'top',
     }, false)).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 800,
       sonioxEndpointMaxDelayMs: 1400,
       sonioxEndpointTuningStep: 1,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       ttsModel: null,
       adBannerPosition: 'top',
       inputMode: 'voice',
@@ -111,7 +111,7 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({ ttsModel: 'gemini' }, false).ttsModel).toBeNull()
     expect(buildHydratedAccountPreferences({ ttsModel: 3 }, false).ttsModel).toBeNull()
     // Cache records written before ttsModel existed.
-    expect(buildHydratedAccountPreferences({ translationModel: 'qwen/qwen3.5-9b' }, false).ttsModel)
+    expect(buildHydratedAccountPreferences({ translationModel: 'gpt-6-luna' }, false).ttsModel)
       .toBeNull()
   })
 
@@ -119,7 +119,7 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 800,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       adBannerPosition: 'top',
       sttSegmentationMode: ' FIN ',
     }, false).sttSegmentationMode).toBe('fin')
@@ -191,7 +191,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         sonioxEndpointMaxDelayMs: 1200,
         sonioxEndpointTuningStep: 3,
-        translationModel: 'qwen/qwen3.5-9b',
+        translationModel: 'gpt-6-luna',
         adBannerPosition: 'bottom',
         inputMode: 'text',
         speakerEnabled: true,
@@ -225,7 +225,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         sonioxEndpointMaxDelayMs: 1200,
         sonioxEndpointTuningStep: 3,
-        translationModel: 'qwen/qwen3.5-9b',
+        translationModel: 'gpt-6-luna',
         adBannerPosition: 'bottom',
         inputMode: 'text',
         speakerEnabled: true,
@@ -422,7 +422,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       sonioxManualFinalizeSilenceMs: 700,
       sonioxEndpointMaxDelayMs: 1200,
       sonioxEndpointTuningStep: 3,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -434,7 +434,7 @@ describe('buildAccountPreferencesPatchBody', () => {
       sonioxManualFinalizeSilenceMs: 700,
       sonioxEndpointMaxDelayMs: 1200,
       sonioxEndpointTuningStep: 3,
-      translationModel: 'qwen/qwen3.5-9b',
+      translationModel: 'gpt-6-luna',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,

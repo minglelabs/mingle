@@ -1,10 +1,9 @@
-export type TranslationEngineProvider = 'gemini' | 'qwen' | 'openai' | 'claude'
+export type TranslationEngineProvider = 'gemini' | 'openai' | 'claude'
 
-export type TranslationInfrastructureProvider = 'google' | 'openrouter' | 'openai' | 'anthropic'
+export type TranslationInfrastructureProvider = 'google' | 'openai' | 'anthropic'
 
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
-  | 'qwen/qwen3.5-9b'
   | 'gpt-6-luna'
   | 'claude-haiku-5-5'
 
@@ -35,11 +34,6 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gemini-2.5-flash-lite',
   },
   {
-    value: 'qwen/qwen3.5-9b',
-    label: 'qwen3.5-9b',
-    badge: 'Slow',
-  },
-  {
     value: 'gpt-6-luna',
     label: 'gpt-6-luna',
     badge: 'Best',
@@ -56,13 +50,6 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     engineProvider: 'gemini',
     infrastructureProvider: 'google',
     runtimeModel: 'gemini-2.5-flash-lite',
-  },
-  'qwen/qwen3.5-9b': {
-    value: 'qwen/qwen3.5-9b',
-    engineProvider: 'qwen',
-    infrastructureProvider: 'openrouter',
-    runtimeModel: 'qwen/qwen3.5-9b',
-    baseUrl: 'https://openrouter.ai/api/v1',
   },
   'gpt-6-luna': {
     value: 'gpt-6-luna',
@@ -84,23 +71,6 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   if (!normalized) return null
 
   if (normalized === 'gemini-2.5-flash-lite') return 'gemini-2.5-flash-lite'
-
-  if (
-    normalized === 'qwen/qwen3.5-9b'
-    || normalized === 'qwen3.5-9b'
-    || normalized === 'qwen3.5-9b-20260310'
-    || normalized === 'qwen/qwen3.5-9b-20260310'
-    || normalized === 'qwen/qwen3.5-9b:free'
-    || normalized === 'qwen/qwen3.5-9b-20260310:free'
-    || normalized === 'qwen/qwen3.5-9b-free'
-    || normalized === 'qwen/qwen3.5-9b-20260310-free'
-    || normalized === 'qwen/qwen3.5-9b (openrouter)'
-    || normalized === 'qwen/qwen3.5-9b (venice)'
-  ) {
-    return 'qwen/qwen3.5-9b'
-  }
-
-  if (normalized === 'qwen/qwen3.5-9b') return 'qwen/qwen3.5-9b'
 
   if (
     normalized === 'gpt-6-luna'

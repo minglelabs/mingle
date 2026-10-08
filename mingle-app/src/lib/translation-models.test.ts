@@ -20,11 +20,6 @@ describe('translation model catalog', () => {
         label: 'gemini-2.5-flash-lite',
       },
       {
-        value: 'qwen/qwen3.5-9b',
-        label: 'qwen3.5-9b',
-        badge: 'Slow',
-      },
-      {
         value: 'gpt-6-luna',
         label: 'gpt-6-luna',
         badge: 'Best',
@@ -36,7 +31,9 @@ describe('translation model catalog', () => {
     ]))
   })
 
-  it('rejects the removed Qwen 3.6 Plus aliases', () => {
+  it('rejects the removed Qwen aliases', () => {
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.5-9b')).toBeNull()
+    expect(normalizeSelectableTranslationModel('qwen3.5-9b')).toBeNull()
     expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus')).toBeNull()
     expect(normalizeSelectableTranslationModel('qwen3.6-plus')).toBeNull()
     expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus:free')).toBeNull()
