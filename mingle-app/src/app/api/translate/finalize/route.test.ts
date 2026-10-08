@@ -719,7 +719,7 @@ describe('/api/translate/finalize route', () => {
 
   it('does not immediately retry gemini rate-limit errors when the provider asks for a long retry delay', async () => {
     mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
     ))
 
     const fetchMock = vi.fn()
@@ -731,7 +731,7 @@ describe('/api/translate/finalize route', () => {
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
       isFinal: true,
-      translationModel: 'gemma-4-31b-it',
+      translationModel: 'gemini-2.5-flash-lite',
     }) as never)
     const json = await res.json()
 
@@ -739,59 +739,6 @@ describe('/api/translate/finalize route', () => {
     expect(json).toEqual({ error: 'empty_translation_response' })
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('returns an error for repeated gemma requests while a long provider retry delay is still active', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    let nowMs = 1_000_000
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
-
-    mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 59.616803365s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]',
-    ))
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    try {
-      const firstResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-      }) as never)
-      const firstJson = await firstResponse.json()
-
-      expect(firstResponse.status).toBe(502)
-      expect(firstJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-
-      nowMs += 1_000
-
-      const secondResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-        currentTurnPreviousState: {
-          sourceLanguage: 'en',
-          sourceText: 'Like that.',
-          translations: {
-            ko: '그렇게.',
-            ja: 'そんなふうに。',
-          },
-        },
-      }) as never)
-      const secondJson = await secondResponse.json()
-
-      expect(secondResponse.status).toBe(502)
-      expect(secondJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(fetchMock).not.toHaveBeenCalled()
-    } finally {
-      nowSpy.mockRestore()
-    }
   })
 
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
@@ -995,45 +942,6 @@ describe('/api/translate/finalize route', () => {
     } finally {
       timeoutSpy.mockRestore()
     }
-  })
-
-  it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {
-          promptTokenCount: 11,
-          candidatesTokenCount: 22,
-          totalTokenCount: 33,
-        },
-      },
-    })
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemma')
-    expect(json.infrastructureProvider).toBe('google')
-    expect(json.model).toBe('gemma-4-31b-it')
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).not.toHaveBeenCalled()
-
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { model?: string }
-    expect(modelConfig.model).toBe('gemma-4-31b-it')
-    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string }
-    expect(request.serviceTier).toBeUndefined()
-    expect(readGeminiUserPrompt(0)).toContain('hello')
   })
 
   it('uses the request translation model before falling back to the DB preference lookup', async () => {

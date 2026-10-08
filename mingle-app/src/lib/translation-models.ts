@@ -1,10 +1,9 @@
-export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'claude'
+export type TranslationEngineProvider = 'gemini' | 'qwen' | 'openai' | 'claude'
 
 export type TranslationInfrastructureProvider = 'google' | 'openrouter' | 'openai' | 'anthropic'
 
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
-  | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
   | 'gpt-6-luna'
   | 'claude-haiku-5-5'
@@ -36,11 +35,6 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gemini-2.5-flash-lite',
   },
   {
-    value: 'gemma-4-31b-it',
-    label: 'gemma-4-31b-it',
-    badge: 'Slow',
-  },
-  {
     value: 'qwen/qwen3.5-9b',
     label: 'qwen3.5-9b',
     badge: 'Slow',
@@ -62,12 +56,6 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     engineProvider: 'gemini',
     infrastructureProvider: 'google',
     runtimeModel: 'gemini-2.5-flash-lite',
-  },
-  'gemma-4-31b-it': {
-    value: 'gemma-4-31b-it',
-    engineProvider: 'gemma',
-    infrastructureProvider: 'google',
-    runtimeModel: 'gemma-4-31b-it',
   },
   'qwen/qwen3.5-9b': {
     value: 'qwen/qwen3.5-9b',
@@ -96,16 +84,6 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   if (!normalized) return null
 
   if (normalized === 'gemini-2.5-flash-lite') return 'gemini-2.5-flash-lite'
-
-  if (
-    normalized === 'gemma-4-31b-it'
-    || normalized === 'gemma-4-31b'
-    || normalized === 'gemma 4 31b'
-    || normalized === 'gemma 4 31b it'
-    || normalized === 'models/gemma-4-31b-it'
-  ) {
-    return 'gemma-4-31b-it'
-  }
 
   if (
     normalized === 'qwen/qwen3.5-9b'

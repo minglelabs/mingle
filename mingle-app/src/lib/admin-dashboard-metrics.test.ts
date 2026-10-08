@@ -463,22 +463,22 @@ describe("buildTranslationModelSeries", () => {
       { day: "2026-08-02", model: "unknown", value: 900 },
       { day: "2026-08-02", model: "gpt-6-luna", value: 500 },
       { day: "2026-08-02", model: "qwen/qwen3.5-9b", value: 50 },
-      { day: "2026-08-02", model: "gemma-4-31b-it", value: 5 },
+      { day: "2026-08-02", model: "claude-haiku-5-5", value: 5 },
       { day: "2026-08-02", model: "gemini-2.5-flash-lite", value: 1 },
     ], dayKeys);
 
     expect(series.map((entry) => entry.label)).toEqual([
       "gemini-2.5-flash-lite",
-      "gemma-4-31b-it",
       "qwen3.5-9b",
       "gpt-6-luna",
+      "claude-haiku-5-5",
       "기타",
     ]);
   });
 
   it("zero-fills every day of the range and drops series with no message in it", () => {
     const series = buildTranslationModelSeries([
-      { day: "2026-08-03", model: "gemma-4-31b-it", value: 7 },
+      { day: "2026-08-03", model: "qwen/qwen3.5-9b", value: 7 },
       { day: "2026-08-03", model: "gpt-6-luna", value: 0 },
     ], dayKeys);
 

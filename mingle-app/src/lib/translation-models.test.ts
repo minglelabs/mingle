@@ -20,11 +20,6 @@ describe('translation model catalog', () => {
         label: 'gemini-2.5-flash-lite',
       },
       {
-        value: 'gemma-4-31b-it',
-        label: 'gemma-4-31b-it',
-        badge: 'Slow',
-      },
-      {
         value: 'qwen/qwen3.5-9b',
         label: 'qwen3.5-9b',
         badge: 'Slow',
@@ -47,20 +42,13 @@ describe('translation model catalog', () => {
     expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus:free')).toBeNull()
   })
 
-  it('normalizes Gemma 4 aliases', () => {
-    expect(normalizeSelectableTranslationModel('gemma-4-31b-it')).toBe('gemma-4-31b-it')
-    expect(normalizeSelectableTranslationModel('models/gemma-4-31b-it')).toBe('gemma-4-31b-it')
-    expect(normalizeSelectableTranslationModel('gemma 4 31b')).toBe('gemma-4-31b-it')
-    expect(normalizeSelectableTranslationModel('google/gemma-4-31b-it')).toBeNull()
-    expect(normalizeSelectableTranslationModel('gemma-4-31b-it (openrouter)')).toBeNull()
+  it('rejects the removed Gemma 4 aliases', () => {
+    expect(normalizeSelectableTranslationModel('gemma-4-31b-it')).toBeNull()
+    expect(normalizeSelectableTranslationModel('models/gemma-4-31b-it')).toBeNull()
+    expect(normalizeSelectableTranslationModel('gemma 4 31b')).toBeNull()
   })
 
   it('resolves runtime selections for the new models', () => {
-    expect(resolveTranslationRuntimeSelection('gemma-4-31b-it')).toMatchObject({
-      engineProvider: 'gemma',
-      infrastructureProvider: 'google',
-      runtimeModel: 'gemma-4-31b-it',
-    })
     expect(normalizeSelectableTranslationModel('GPT-6-LUNA')).toBe('gpt-6-luna')
     expect(resolveTranslationRuntimeSelection('gpt-6-luna')).toMatchObject({
       engineProvider: 'openai',

@@ -473,7 +473,7 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("persists the supported gemma 4 translation model through PATCH", async () => {
+  it("persists a non-default translation model through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -482,17 +482,17 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const gemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+    const qwenResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
-        translationModel: "gemma-4-31b-it",
+        translationModel: "qwen/qwen3.5-9b",
       }),
     }));
-    expect(gemmaResponse.status).toBe(200);
+    expect(qwenResponse.status).toBe(200);
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { id: "user_123" },
       data: {
-        translationModel: "gemma-4-31b-it",
+        translationModel: "qwen/qwen3.5-9b",
       },
     });
   });
@@ -539,12 +539,12 @@ describe("/api/account/preferences route", () => {
 
     const mixed = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
-      body: JSON.stringify({ ttsModel: 42, translationModel: "gemma-4-31b-it" }),
+      body: JSON.stringify({ ttsModel: 42, translationModel: "qwen/qwen3.5-9b" }),
     }));
     expect(mixed.status).toBe(200);
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
-      data: { translationModel: "gemma-4-31b-it" },
+      data: { translationModel: "qwen/qwen3.5-9b" },
     });
   });
 
@@ -557,7 +557,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      translationModel: "gemma-4-31b-it",
+      translationModel: "qwen/qwen3.5-9b",
       ttsModel: null,
     });
 
@@ -598,7 +598,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      translationModel: "gemma-4-31b-it",
+      translationModel: "qwen/qwen3.5-9b",
       ttsModel: "elevenlabs-v3",
     });
 
@@ -607,7 +607,7 @@ describe("/api/account/preferences route", () => {
 
     expect(response.status).toBe(200);
     expect(json.ttsModel).toBeNull();
-    expect(json.translationModel).toBe("gemma-4-31b-it");
+    expect(json.translationModel).toBe("qwen/qwen3.5-9b");
   });
 
   it("persists a supported ad banner position through PATCH", async () => {

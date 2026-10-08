@@ -199,14 +199,14 @@ describe('account preferences client cache', () => {
   it('preserves a model explicitly chosen during a new account hydration', () => {
     const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
-    edit(local, { ...local, translationModel: 'gemma-4-31b-it' })
+    edit(local, { ...local, translationModel: 'qwen/qwen3.5-9b' })
 
     expect(preferencesModule.reconcileAccountPreferencesHydration({
       identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
       preserveLocalTranslationModel: true,
     })).toMatchObject({
       pendingSync: true,
-      preferences: { translationModel: 'gemma-4-31b-it' },
+      preferences: { translationModel: 'qwen/qwen3.5-9b' },
     })
   })
 
