@@ -8,9 +8,9 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('uses Claude Haiku 5.5 for unset accounts and for new registered accounts', () => {
-    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
-    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
+  it('uses GPT-6 Luna for unset accounts and for new registered accounts', () => {
+    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('gpt-6-luna')
+    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('gpt-6-luna')
   })
 
   it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {

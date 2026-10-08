@@ -175,7 +175,7 @@ describe("/api/auth/signup route", () => {
     expect(createCall.data.email).toBe("member@example.com");
     expect(createCall.data.name).toBe("New Member");
     expect(createCall.data.passwordHash.startsWith("pbkdf2_sha256$")).toBe(true);
-    expect(createCall.data.translationModel).toBe("claude-haiku-5-5");
+    expect(createCall.data.translationModel).toBe("gpt-6-luna");
     expect(createCall.data.nationality).toBe("ko");
     expect(createCall.data.primaryLanguages).toEqual(["ko"]);
     expect(createCall.data.defaultConversationLanguages).toEqual(["ko", "en", "ja"]);
