@@ -43,13 +43,11 @@ export const runtime = 'nodejs'
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 // Translation is on the live conversation path, so both providers always run on their fast
 // tier. There is deliberately no switch back to the standard tier.
-// Gemini Priority inference: top-level `serviceTier` on generateContent. Gemma has no
-// Priority tier, so it is only sent for Gemini models.
+// Gemini Priority inference: top-level `serviceTier` on generateContent.
 const GEMINI_TRANSLATION_SERVICE_TIER = 'priority'
 // OpenAI Fast mode ('priority' is the same tier under its earlier name). Sent on every
-// request of the `openai` provider (GPT-6 Luna); qwen via OpenRouter never gets it.
+// request of the `openai` provider (GPT-6 Luna).
 const OPENAI_TRANSLATION_SERVICE_TIER = 'priority'
-const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
@@ -66,7 +64,7 @@ const OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
-type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai' | 'openai-compatible' | 'claude'
+type TranslationProvider = 'gemini' | 'qwen' | 'openai' | 'openai-compatible' | 'claude'
 
 type TranslationUsage = {
   promptTokens?: number
@@ -88,7 +86,7 @@ type TranslationEngineResult = {
 }
 
 type GeminiTranslationProviderConfig = {
-  provider: 'gemini' | 'gemma'
+  provider: 'gemini'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -162,13 +160,10 @@ type GeminiTranslationRequest = GenerateContentRequest & {
   serviceTier?: typeof GEMINI_TRANSLATION_SERVICE_TIER
 }
 
-function buildGeminiTranslationRequest(
-  userPrompt: string,
-  provider: GeminiTranslationProviderConfig['provider'],
-): GeminiTranslationRequest {
+function buildGeminiTranslationRequest(userPrompt: string): GeminiTranslationRequest {
   return {
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    ...(provider === 'gemini' ? { serviceTier: GEMINI_TRANSLATION_SERVICE_TIER } : {}),
+    serviceTier: GEMINI_TRANSLATION_SERVICE_TIER,
   }
 }
 
@@ -220,7 +215,6 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   const normalized = value.trim().toLowerCase()
   if (!normalized) return null
   if (normalized === 'gemini') return normalized
-  if (normalized === 'gemma') return normalized
   if (normalized === 'qwen') return normalized
   if (normalized === 'openai') return normalized
   if (normalized === 'claude') return normalized
@@ -229,18 +223,14 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   return null
 }
 
-function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 'gemini' | 'gemma' {
-  return provider === 'gemini' || provider === 'gemma'
+function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 'gemini' {
+  return provider === 'gemini'
 }
 
 function isGoogleGenerativeProviderConfig(
   config: TranslationProviderConfig,
 ): config is GeminiTranslationProviderConfig {
   return config.infrastructureProvider === 'google' && isGoogleGenerativeProvider(config.provider)
-}
-
-function shouldUsePreviousStateFallback(provider: TranslationProvider): boolean {
-  return provider !== 'gemma'
 }
 
 function readTranslateEnv(name: string): string {
@@ -484,7 +474,6 @@ function resolveTranslationModel(config: {
   const explicitModel = readTranslateEnv('TRANSLATE_MODEL').trim()
   if (explicitModel) return explicitModel
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
-  if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
   if (config.provider === 'openai') return 'gpt-6-luna'
   if (config.provider === 'claude') return 'claude-haiku-5-5'
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
@@ -535,7 +524,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
   if (requestedModelSelection) {
     if (
       requestedModelSelection.infrastructureProvider === 'google'
-      && (requestedModelSelection.engineProvider === 'gemini' || requestedModelSelection.engineProvider === 'gemma')
+      && requestedModelSelection.engineProvider === 'gemini'
     ) {
       const apiKey = (process.env.GEMINI_API_KEY || '').trim()
       if (!apiKey) {
@@ -603,45 +592,6 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
           extraBody: null,
         },
       }
-    }
-
-    const baseUrl = requestedModelSelection.baseUrl || OPENROUTER_BASE_URL
-    const apiKey = resolveOpenAICompatibleApiKey(baseUrl)
-    if (!apiKey) {
-      return {
-        ok: false,
-        error: 'missing_api_key',
-        details: 'No API key was found for the configured OpenAI-compatible translation provider.',
-      }
-    }
-
-    const parsedExtraBody = parseJsonObjectEnv('TRANSLATE_EXTRA_BODY')
-    if (parsedExtraBody.error) {
-      return {
-        ok: false,
-        error: 'provider_misconfigured',
-        details: parsedExtraBody.error,
-      }
-    }
-
-    const defaultExtraBody = buildDefaultOpenAICompatibleExtraBody('qwen', baseUrl)
-    const extraBody = defaultExtraBody || parsedExtraBody.value
-      ? {
-        ...(defaultExtraBody || {}),
-        ...(parsedExtraBody.value || {}),
-      }
-      : null
-
-    return {
-      ok: true,
-      config: {
-        provider: 'qwen',
-        infrastructureProvider: requestedModelSelection.infrastructureProvider,
-        model: requestedModelSelection.runtimeModel,
-        apiKey,
-        baseUrl,
-        extraBody,
-      },
     }
   }
 
@@ -1237,7 +1187,7 @@ async function translateWithGemini(
     },
   })
 
-  const request = buildGeminiTranslationRequest(userPrompt, config.provider)
+  const request = buildGeminiTranslationRequest(userPrompt)
   const generateContentWithRetry = async () => {
     try {
       return await model.generateContent(request)
@@ -2075,10 +2025,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       && !ctx.isFinal
       && !providerRequestFailureReason
     ) {
-      if (
-        shouldUsePreviousStateFallback(selectedResult.provider)
-        && Object.keys(fallbackTranslations).length > 0
-      ) {
+      if (Object.keys(fallbackTranslations).length > 0) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
@@ -2109,7 +2056,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(providerConfig.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
@@ -2188,10 +2134,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           }
         }
 
-        if (
-          shouldUsePreviousStateFallback(selectedResult.provider)
-          && Object.keys(fallbackTranslationsForMissingTargets).length > 0
-        ) {
+        if (Object.keys(fallbackTranslationsForMissingTargets).length > 0) {
           const mergedTranslations = {
             ...fallbackTranslationsForMissingTargets,
             ...translations,
@@ -2225,7 +2168,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(selectedResult.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {

@@ -15,11 +15,9 @@ import { MultiLineChartCard, MultiLineChartCardPlaceholder } from "./multi-line-
 const CHART_LABEL = "번역 모델별 메시지수";
 
 /** Keyed by model, so a new selectable model without a colour is a type error rather than
- * a silently reused colour. The first three are the daily, p95 and cumulative chart hues. */
+ * a silently reused colour. */
 const TRANSLATION_MODEL_COLORS: Record<UserSelectableTranslationModel, string> = {
   "gemini-2.5-flash-lite": "#2a78d6",
-  "gemma-4-31b-it": "#eb6834",
-  "qwen/qwen3.5-9b": "#1baf7a",
   "gpt-6-luna": "#8b5cf6",
   "claude-haiku-5-5": "#e0457b",
 };

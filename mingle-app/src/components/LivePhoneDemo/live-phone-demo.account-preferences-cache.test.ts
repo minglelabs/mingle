@@ -34,7 +34,7 @@ function buildPreferences(): LivePhoneDemoAccountPreferences {
     sonioxManualFinalizeSilenceMs: 1_800,
     sonioxEndpointMaxDelayMs: 2_500,
     sonioxEndpointTuningStep: 4,
-    translationModel: 'qwen/qwen3.5-9b',
+    translationModel: 'gpt-6-luna',
     ttsModel: 'inworld-tts-1.5-mini',
     adBannerPosition: 'bottom',
     inputMode: 'text',
@@ -199,14 +199,14 @@ describe('account preferences client cache', () => {
   it('preserves a model explicitly chosen during a new account hydration', () => {
     const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
-    edit(local, { ...local, translationModel: 'gemma-4-31b-it' })
+    edit(local, { ...local, translationModel: 'gpt-6-luna' })
 
     expect(preferencesModule.reconcileAccountPreferencesHydration({
       identity, preferences: server, startedSavedAt: null, isLegacyNamespace: false,
       preserveLocalTranslationModel: true,
     })).toMatchObject({
       pendingSync: true,
-      preferences: { translationModel: 'gemma-4-31b-it' },
+      preferences: { translationModel: 'gpt-6-luna' },
     })
   })
 
@@ -221,7 +221,7 @@ describe('account preferences client cache', () => {
       preserveLocalTtsModel: false,
     })).toMatchObject({
       pendingSync: true,
-      preferences: { textSizeLevel: 3, ttsModel: 'gemini-3.8-flash-tts', translationModel: 'qwen/qwen3.5-9b' },
+      preferences: { textSizeLevel: 3, ttsModel: 'gemini-3.8-flash-tts', translationModel: 'gpt-6-luna' },
     })
   })
 
