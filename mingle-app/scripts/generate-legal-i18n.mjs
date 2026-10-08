@@ -9,7 +9,7 @@ import {
 
 const ROOT = process.cwd();
 const LEGAL_ROOT = path.join(ROOT, "public", "legal");
-const PRIVACY_LAST_UPDATED_DATE = "September 30, 2026";
+const PRIVACY_LAST_UPDATED_DATE = "October 8, 2026";
 const TERMS_LAST_UPDATED_DATE = "August 25, 2026";
 
 const locales = [
@@ -85,6 +85,7 @@ const privacyDoc = {
         "Soniox: audio stream and related context needed for speech-to-text processing.",
         "Inworld: text and language context needed for voice generation features and synthesized audio delivery.",
         "Google: account authentication and text-based service operations where used. Mingle does not send raw voice audio to Google for speech processing.",
+        "Anthropic: text you submit for translation and the language context needed to generate translations with Claude models.",
         "Legal/Safety Requests: when required by law or necessary to protect rights, safety, and security.",
         "Corporate Transactions: in connection with merger, financing, acquisition, bankruptcy, or asset transfer.",
       ],
