@@ -123,11 +123,10 @@ export type ConversationHydrationUtterance = {
   // has 2+ real members. Null in a solo room, where bubbles keep using the
   // generated animal avatar instead.
   speakerImage: string | null;
-  // The sender's account badge ('operator' = run by Mingle staff,
-  // 'official' = the Mingle team's own account). Gated exactly like
-  // speakerName and present only when the sender carries a badge. The live
-  // committed utterance published over realtime uses the same field name.
-  speakerBadge?: AccountBadgeKind;
+  // The sender's account badge as a wire value. The client validates it
+  // through readAccountBadgeKind, which filters to the currently supported
+  // badge kinds ('official'). Legacy or admin-only values pass through as-is.
+  speakerBadge?: string;
 };
 
 export type ConversationHydrationCursor = {

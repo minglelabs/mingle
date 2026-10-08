@@ -94,8 +94,6 @@ export type UserProfile = {
   followingCount: number;
   /** The Mingle team's official account; present (true) only then. */
   isOfficial?: boolean;
-  /** An account run by Mingle staff; present (true) only then. */
-  isOperator?: boolean;
 };
 
 export function calculateProfileAge(

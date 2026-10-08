@@ -63,12 +63,12 @@ describe("/admin/conversations/data", () => {
     expect(m.userFindUnique).not.toHaveBeenCalled();
   });
 
-  it("labels an operator account and selects both badge flags", async () => {
+  it("shows an operator account as an ordinary one and selects both badge flags", async () => {
     m.userFindUnique.mockResolvedValue(userRow({ isOperator: true }));
     const response = await call();
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.user.isOperator).toBe(true);
+    expect(body.user).not.toHaveProperty("isOperator");
     expect(body.user).not.toHaveProperty("isOfficial");
     expect(m.userFindUnique.mock.calls[0][0].select).toMatchObject({ isOperator: true, isOfficial: true });
   });

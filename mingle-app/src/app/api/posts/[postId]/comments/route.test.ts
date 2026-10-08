@@ -149,7 +149,7 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(mockCommentFindMany.mock.calls[0][0].include.author.select.isOfficial).toBe(true)
   })
 
-  it('labels an operator comment author and "replying to" user, and nobody else', async () => {
+  it('shows an operator comment author and "replying to" user like anyone else', async () => {
     const operator = {
       id: 'op', handle: 'mingle.mina', name: 'Mina', image: null,
       imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true,
@@ -174,10 +174,10 @@ describe('GET /api/posts/{postId}/comments', () => {
     ])
     const body = await (await GET(makeRequest(), makeCtx('post-1'))).json()
 
-    expect(body.comments[0].author).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina', image: null, isOperator: true })
+    expect(body.comments[0].author).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina', image: null })
     const reply = body.comments[0].replies[0]
     expect(reply.author).toEqual({ id: 'u2', handle: 'h2', name: 'd2', image: null })
-    expect(reply.replyToUser).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina', isOperator: true })
+    expect(reply.replyToUser).toEqual({ id: 'op', handle: 'mingle.mina', name: 'Mina' })
     const include = mockCommentFindMany.mock.calls[0][0].include
     expect(include.author.select).toMatchObject({ isOperator: true, isOfficial: true })
     expect(include.replyToUser.select).toMatchObject({ isOperator: true, isOfficial: true })

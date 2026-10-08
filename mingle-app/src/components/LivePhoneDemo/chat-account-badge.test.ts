@@ -44,44 +44,28 @@ function renderBubble(utterance: Utterance, viewerUserId = 'viewer', uiLocale = 
 
 describe('wire readers', () => {
   it('keeps only known badge kinds and true flags', () => {
-    expect(readAccountBadgeKind('operator')).toBe('operator')
     expect(readAccountBadgeKind('official')).toBe('official')
     for (const value of ['admin', '', null, undefined, true, 1, {}]) expect(readAccountBadgeKind(value)).toBeNull()
-    expect(readAccountBadgeFlags({ isOperator: true, isOfficial: false })).toEqual({ isOperator: true })
-    expect(readAccountBadgeFlags({ isOperator: 'true', isOfficial: 1 })).toEqual({})
+    expect(readAccountBadgeFlags({ isOfficial: true })).toEqual({ isOfficial: true })
+    expect(readAccountBadgeFlags({ isOfficial: 1 })).toEqual({})
     expect(readAccountBadgeFlags(null)).toEqual({})
   })
 
-  it('labels a room by its strongest other member, operator first', () => {
-    expect(resolveRoomAccountBadge([{}, { isOfficial: true }, { isOperator: true }])).toBe('operator')
+  it('labels a room by its official member', () => {
     expect(resolveRoomAccountBadge([{}, { isOfficial: true }])).toBe('official')
     expect(resolveRoomAccountBadge([{}, {}])).toBeNull()
     expect(resolveRoomAccountBadge(undefined)).toBeNull()
   })
 
   it('writes the plain-text label for notice sentences, never for an empty name', () => {
-    expect(labelNameWithAccountBadge('Mina', 'operator', 'ko')).toBe(`Mina (${ko.pushLabel})`)
-    expect(labelNameWithAccountBadge('Mina', 'operator', 'en')).toBe('Mina (Run by Mingle)')
+    expect(labelNameWithAccountBadge('Mingle', 'official', 'ko')).toBe('Mingle (공식)')
     expect(labelNameWithAccountBadge('Mingle', 'official', 'en')).toBe('Mingle (Official)')
     expect(labelNameWithAccountBadge('Bob', null, 'ko')).toBe('Bob')
-    expect(labelNameWithAccountBadge('', 'operator', 'ko')).toBe('')
+    expect(labelNameWithAccountBadge('', 'official', 'ko')).toBe('')
   })
 })
 
 describe('ChatAccountBadge', () => {
-  it('adapts the operator badge to the shared explanation button and 44px target', () => {
-    const html = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'operator', locale: 'ko' }))
-    expect(html).toContain('data-account-badge="operator"')
-    expect(html).toContain(ko.operator)
-    expect(html).toContain('<button')
-    expect(html).toContain('aria-haspopup="dialog"')
-    expect(html).toContain(`aria-label="${ko.operator}, ${ko.operatorDescription}"`)
-    expect(html).toContain('before:h-11')
-    const english = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'operator', locale: 'en-US' }))
-    expect(english).toContain(en.operator)
-    expect(english).toContain(en.operatorDescription)
-  })
-
   it('keeps the official badge informational and non-interactive', () => {
     const html = renderToStaticMarkup(createElement(ChatAccountBadge, { kind: 'official', locale: 'ja' }))
     expect(html).toContain('data-account-badge="official"')
@@ -92,22 +76,22 @@ describe('ChatAccountBadge', () => {
 
 describe('ChatBubble sender label', () => {
   it('shows the badge next to a counterpart sender name', () => {
-    const html = renderBubble(counterpartUtterance({ speakerBadge: 'operator' }))
+    const html = renderBubble(counterpartUtterance({ speakerBadge: 'official' }))
     expect(html).toContain('data-chat-speaker-name')
     expect(html).toContain('data-chat-speaker-badge')
-    expect(html).toContain(ko.operator)
+    expect(html).toContain(ko.official)
     expect(html.indexOf('Mina')).toBeLessThan(html.indexOf('data-chat-speaker-badge'))
   })
 
   it('still labels the sender when their name is missing', () => {
-    const html = renderBubble(counterpartUtterance({ speakerName: null, speakerBadge: 'operator' }))
+    const html = renderBubble(counterpartUtterance({ speakerName: null, speakerBadge: 'official' }))
     expect(html).toContain('data-chat-speaker-badge')
   })
 
   it('adds nothing for ordinary senders, own messages, solo turns or unknown values', () => {
     expect(renderBubble(counterpartUtterance())).not.toContain('data-chat-speaker-badge')
-    expect(renderBubble(counterpartUtterance({ speakerBadge: 'operator' }), 'op')).not.toContain('data-chat-speaker-badge')
-    expect(renderBubble(counterpartUtterance({ speakerUserId: null, speakerBadge: 'operator' }))).not.toContain('data-account-badge')
+    expect(renderBubble(counterpartUtterance({ speakerBadge: 'official' }), 'op')).not.toContain('data-chat-speaker-badge')
+    expect(renderBubble(counterpartUtterance({ speakerUserId: null, speakerBadge: 'official' }))).not.toContain('data-account-badge')
     expect(renderBubble(counterpartUtterance({ speakerBadge: 'admin' as never }))).not.toContain('data-account-badge')
   })
 })
@@ -130,12 +114,12 @@ describe('ConversationOperatorDisclosure', () => {
 
 describe('client parsing of hydration, notices and spectate payloads', () => {
   it('keeps speakerBadge from hydration and committed live utterances, dropping unknown values', () => {
-    const [operator, plain, garbage] = normalizeConversationHydrationUtterances([
-      { id: 'a', originalText: 'hi', originalLang: 'en', speakerUserId: 'op', speakerName: 'Mina', speakerBadge: 'operator' },
+    const [official, plain, garbage] = normalizeConversationHydrationUtterances([
+      { id: 'a', originalText: 'hi', originalLang: 'en', speakerUserId: 'op', speakerName: 'Mina', speakerBadge: 'official' },
       { id: 'b', originalText: 'hi', originalLang: 'en', speakerUserId: 'bob', speakerName: 'Bob' },
       { id: 'c', originalText: 'hi', originalLang: 'en', speakerUserId: 'x', speakerName: 'X', speakerBadge: 'admin' },
     ])
-    expect(operator.speakerBadge).toBe('operator')
+    expect(official.speakerBadge).toBe('official')
     expect(plain).not.toHaveProperty('speakerBadge')
     expect(garbage).not.toHaveProperty('speakerBadge')
   })
@@ -143,22 +127,21 @@ describe('client parsing of hydration, notices and spectate payloads', () => {
   it('keeps notice badges only when valid', () => {
     const [invite] = normalizeConversationHydrationInviteNotices([{
       inviteeUserId: 'op', inviteeName: 'Mina', invitedByUserId: 'me', invitedByName: 'Alice', invitedAtMs: 1,
-      inviteeBadge: 'operator', invitedByBadge: 'nope',
+      inviteeBadge: 'official', invitedByBadge: 'nope',
     }])
-    expect(invite.inviteeBadge).toBe('operator')
+    expect(invite.inviteeBadge).toBe('official')
     expect(invite).not.toHaveProperty('invitedByBadge')
     const [left, plain] = normalizeConversationHydrationLeaveNotices([
-      { userId: 'op', name: 'Mina', leftAtMs: 1, isOperator: true, isOfficial: false },
+      { userId: 'op', name: 'Mina', leftAtMs: 1, isOfficial: true },
       { userId: 'bob', name: 'Bob', leftAtMs: 2 },
     ])
-    expect(left).toMatchObject({ isOperator: true })
-    expect(left).not.toHaveProperty('isOfficial')
-    expect(plain).not.toHaveProperty('isOperator')
+    expect(left).toMatchObject({ isOfficial: true })
+    expect(plain).not.toHaveProperty('isOfficial')
   })
 
   it('keeps the spectate speakerBadge on the alias-keyed bubble', () => {
-    expect(toUtterance({ id: 's', originalText: 'hi', speakerAlias: 's1', speakerName: 'Mina', speakerBadge: 'operator' }))
-      .toMatchObject({ speakerUserId: 's1', speakerBadge: 'operator' })
+    expect(toUtterance({ id: 's', originalText: 'hi', speakerAlias: 's1', speakerName: 'Mina', speakerBadge: 'official' }))
+      .toMatchObject({ speakerUserId: 's1', speakerBadge: 'official' })
     expect(toUtterance({ id: 's', originalText: 'hi', speakerAlias: 's1', speakerBadge: 'x' })).not.toHaveProperty('speakerBadge')
   })
 })
@@ -171,23 +154,23 @@ describe('live preview labels', () => {
 
   it('shows the signed-token badge on the live bubble', () => {
     const previews = new RemotePreviews()
-    previews.accept(preview({ speakerBadge: 'operator' }))
-    expect(previews.visible([], 'viewer')[0]).toMatchObject({ speakerName: 'Mina', speakerBadge: 'operator' })
+    previews.accept(preview({ speakerBadge: 'official' }))
+    expect(previews.visible([], 'viewer')[0]).toMatchObject({ speakerName: 'Mina', speakerBadge: 'official' })
   })
 
   it('falls back to the same speaker\'s committed badge and drops unknown values', () => {
     const previews = new RemotePreviews()
     previews.accept(preview({ speakerBadge: 'bogus' as never }))
-    const committed = [counterpartUtterance({ id: 'old', speakerBadge: 'operator' })]
-    expect(previews.visible(committed, 'viewer')[0].speakerBadge).toBe('operator')
+    const committed = [counterpartUtterance({ id: 'old', speakerBadge: 'official' })]
+    expect(previews.visible(committed, 'viewer')[0].speakerBadge).toBe('official')
     expect(previews.visible([], 'viewer')[0].speakerBadge ?? null).toBeNull()
   })
 
   it('keeps the preview badge when the committed utterance arrives without one', () => {
     const previews = new RemotePreviews()
-    previews.accept(preview({ speakerBadge: 'operator' }))
+    previews.accept(preview({ speakerBadge: 'official' }))
     const committed = previews.mergeCommitted({ id: 'live-1', originalText: 'done', originalLang: 'ko', translations: {}, speakerUserId: 'op' })
-    expect(committed.speakerBadge).toBe('operator')
+    expect(committed.speakerBadge).toBe('official')
     const labeled = previews.mergeCommitted({ id: 'live-1', originalText: 'done', originalLang: 'ko', translations: {}, speakerUserId: 'op', speakerBadge: 'official' })
     expect(labeled.speakerBadge).toBe('official')
   })

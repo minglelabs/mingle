@@ -187,7 +187,7 @@ describe('operator inbox queries', () => {
       unreadCount: 3,
       blocked: false,
       activityAt: '2026-09-30T09:00:00.000Z',
-      operators: [{ userId: 'op_1', name: 'Mina', personaLanguage: 'pt', unreadCount: 3, isOperator: true }],
+      operators: [{ userId: 'op_1', name: 'Mina', personaLanguage: 'pt', unreadCount: 3 }],
       counterparts: [{ userId: 'user_1', name: 'João' }],
       latestMessage: { messageId: 'm1', kind: 'text', text: 'Olá', language: 'pt', koText: '안녕', fromOperator: false },
     })

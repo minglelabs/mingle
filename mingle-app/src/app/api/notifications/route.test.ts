@@ -147,7 +147,7 @@ describe("/api/notifications route", () => {
     expect(body.notifications[0].actorIds).toEqual(["a2", "a1"]);
   });
 
-  it("labels an operator actor (and asks the DB for the badge flags), never an ordinary one", async () => {
+  it("shows an operator actor like an ordinary one (and asks the DB for the badge flags)", async () => {
     mockNotificationFindMany.mockResolvedValue([
       {
         id: "n2", type: "follow", postId: null, commentId: null, readAt: null,
@@ -163,7 +163,7 @@ describe("/api/notifications route", () => {
 
     const body = await (await GET(new NextRequest("https://example.com/api/notifications"))).json();
 
-    expect(body.notifications[0].actors).toEqual([{ id: "op", handle: "op.h", name: "op", image: null, isOperator: true }]);
+    expect(body.notifications[0].actors).toEqual([{ id: "op", handle: "op.h", name: "op", image: null }]);
     expect(body.notifications[1].actors).toEqual([{ id: "member", handle: "member.h", name: "member", image: null }]);
     expect(mockNotificationFindMany.mock.calls[0][0].select.actor).toEqual({ select: USER_IDENTITY_SELECT });
   });
