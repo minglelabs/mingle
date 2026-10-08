@@ -8,9 +8,9 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('keeps legacy unset accounts on Gemini while seeding new registered accounts with GPT-6 Luna', () => {
-    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('gemini-2.5-flash-lite')
-    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('gpt-6-luna')
+  it('uses Claude Haiku 5.5 for unset accounts and for new registered accounts', () => {
+    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
+    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
   })
 
   it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {
