@@ -71,6 +71,13 @@ vi.mock('@/lib/app-analytics', () => {
   }
 })
 
+// These cases exercise the Gemini path through the no-preference fallback, so pin that
+// fallback to Gemini here; the real default is asserted in translation-models.test.ts.
+vi.mock('@/lib/translation-models', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/translation-models')>()),
+  resolveDefaultSelectableTranslationModel: () => 'gemini-2.5-flash-lite',
+}))
+
 vi.mock('@google/generative-ai', () => {
   class GoogleGenerativeAI {
     getGenerativeModel(config?: unknown) {

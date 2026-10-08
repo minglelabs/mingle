@@ -25,9 +25,10 @@ export type TranslationRuntimeSelection = {
   baseUrl?: string
 }
 
-export const DEFAULT_SELECTABLE_TRANSLATION_MODEL: UserSelectableTranslationModel = 'gemini-2.5-flash-lite'
-// Only account creation uses this value; existing unset preferences keep the Gemini fallback.
-export const NEW_REGISTERED_USER_TRANSLATION_MODEL: UserSelectableTranslationModel = 'gpt-6-luna'
+// Fallback for users whose stored preference is unset (app_users.translation_model is NULL).
+export const DEFAULT_SELECTABLE_TRANSLATION_MODEL: UserSelectableTranslationModel = 'claude-haiku-5-5'
+// Written to the account at creation.
+export const NEW_REGISTERED_USER_TRANSLATION_MODEL: UserSelectableTranslationModel = 'claude-haiku-5-5'
 
 export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {

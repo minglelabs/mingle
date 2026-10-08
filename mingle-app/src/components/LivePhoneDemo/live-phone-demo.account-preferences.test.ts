@@ -65,7 +65,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
       sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
       sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
-      translationModel: 'gemini-2.5-flash-lite',
+      translationModel: 'claude-haiku-5-5',
       ttsModel: null,
       adBannerPosition: 'bottom',
       inputMode: 'voice',
