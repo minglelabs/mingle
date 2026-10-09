@@ -294,7 +294,7 @@ export default function ProfileFeedbackContent({
   }, [buildFeedbackRequestHeaders, feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, uiLocale])
 
   return (
-    <div className="flex min-h-full flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="shrink-0 border-b border-gray-100 px-4 py-3">
         <a
           href={FEEDBACK_INSTAGRAM_CONTACT_URL}
