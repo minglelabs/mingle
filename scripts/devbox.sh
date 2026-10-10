@@ -4570,6 +4570,7 @@ legacy_app_store = payload['appStore'].is_a?(Hash) ? payload['appStore'] : {}
 
 title_map = app_info['title'].is_a?(Hash) ? app_info['title'] : legacy_title_map
 subtitle_map = app_info['subtitle'].is_a?(Hash) ? app_info['subtitle'] : legacy_subtitle_map
+privacy_policy_url = presence(app_info['privacyPolicyUrl'])
 metadata_map = submission_app_store_info['metadata'].is_a?(Hash) ? submission_app_store_info['metadata'] : (legacy_app_store['metadata'].is_a?(Hash) ? legacy_app_store['metadata'] : {})
 default_metadata_locale = no_fallback ? nil : (
   presence(submission_app_store_info['defaultMetadataLocale']) ||
@@ -4801,6 +4802,9 @@ unless only_version_urls
     attributes = {}
     attributes[:name] = name if name && name.to_s != current_name
     attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
+    if privacy_policy_url && privacy_policy_url != instance.dig('attributes', 'privacyPolicyUrl').to_s
+      attributes[:privacyPolicyUrl] = privacy_policy_url
+    end
     next if attributes.empty?
 
     puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
