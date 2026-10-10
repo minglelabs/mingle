@@ -245,3 +245,13 @@
     height: 0;
   }
 }
+
+/* Hidden unless the pre-paint bootstrap script found no confirmed language onboarding;
+   keeps the server-rendered conversation list from flashing before the picker opens. */
+[data-mingle-language-onboarding-cover] {
+  display: none;
+}
+
+html[data-mingle-language-onboarding-pending] [data-mingle-language-onboarding-cover] {
+  display: block;
+}
