@@ -5,6 +5,10 @@ import { Instagram, Loader2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId } from './LivePhoneDemo/realtime-storage'
 import {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
+} from './LivePhoneDemo/LivePhoneDemo'
+import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './LivePhoneDemo/live-phone-demo.feedback-copy'
@@ -144,6 +148,33 @@ export default function ProfileFeedbackContent({
   const [isFeedbackHistoryLoading, setIsFeedbackHistoryLoading] = useState(false)
   const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
+  const [keyboardInsetPx, setKeyboardInsetPx] = useState(0)
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    scrollAreaRef.current?.scrollTo({ top: 0 })
+  }, [feedbackTab])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const syncKeyboardInset = () => {
+      const nextInsetPx = resolveKeyboardViewportInsetPx(viewport)
+      setKeyboardInsetPx((currentInsetPx) => resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx))
+    }
+
+    syncKeyboardInset()
+    viewport.addEventListener('resize', syncKeyboardInset)
+    viewport.addEventListener('scroll', syncKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardInset)
+      viewport.removeEventListener('scroll', syncKeyboardInset)
+    }
+  }, [])
 
   useEffect(() => {
     initialDefaultFeedbackEmailRef.current = normalizedDefaultFeedbackEmail
@@ -330,7 +361,15 @@ export default function ProfileFeedbackContent({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+      <div
+        ref={scrollAreaRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        style={{
+          paddingBottom: keyboardInsetPx > 0
+            ? `${keyboardInsetPx + 16}px`
+            : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+        }}
+      >
         {feedbackTab === 'compose' ? (
           <div className="px-4 py-4">
             <form className="space-y-4" onSubmit={handleFeedbackSubmit}>
