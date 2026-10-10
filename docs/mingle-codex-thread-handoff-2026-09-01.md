@@ -858,10 +858,10 @@ Android에서 한 기기의 브라우저에 Google session cookie가 남아 있�
 /admin/conversations?userId=<external_user_id>
 ~~~
 
-운영 호스트가 `https://translator.minglelabs.xyz`라면 예시는 다음과 같습니다.
+운영 호스트가 `https://translator.minglelabs.app`라면 예시는 다음과 같습니다.
 
 ~~~
-https://translator.minglelabs.xyz/admin/conversations?userId=<external_user_id>
+https://translator.minglelabs.app/admin/conversations?userId=<external_user_id>
 ~~~
 
 관리자 인증이 필요합니다. 현재 기능:
