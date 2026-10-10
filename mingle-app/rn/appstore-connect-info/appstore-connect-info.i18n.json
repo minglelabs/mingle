@@ -666,6 +666,7 @@
     },
     "generalInfo": {
       "appInfo": {
+        "privacyPolicyUrl": "https://translator.minglelabs.app/privacy-policy",
         "title": {
           "ar": "Mingle: The Easiest Translator",
           "de": "Mingle: The Easiest Translator",
