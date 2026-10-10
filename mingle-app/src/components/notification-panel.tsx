@@ -7,8 +7,11 @@ import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { isTeamNotificationType, type TeamNotificationType } from "@/lib/user-notification-types";
+import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import SlideSurface from "@/components/slide-surface";
+import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import { ArrowLeft, Check, Loader2, MessageSquareText, UserRound } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NotificationPanelProps = {
@@ -44,6 +47,8 @@ type TeamNotificationRecord = {
   createdAt: string;
   // Reply text, or the new status for report_status.
   body: string;
+  // The feedback or report id.
+  targetId: string | null;
 };
 
 type NotificationRecord = FollowNotificationRecord | TeamNotificationRecord;
@@ -66,6 +71,7 @@ function parseNotification(value: unknown): NotificationRecord | null {
       isRead: value.isRead === true,
       createdAt: value.createdAt,
       body: typeof value.body === "string" ? value.body : "",
+      targetId: nullableString(value.targetId),
     };
   }
   if (value.type !== "follow") return null;
@@ -145,7 +151,13 @@ export default function NotificationPanel({
 }: NotificationPanelProps) {
   const copy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const teamCopy = useMemo(() => resolveTeamNotificationCopy(locale), [locale]);
+  const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
+  const { data: session } = useSession();
   const [expandedTeamNotificationId, setExpandedTeamNotificationId] = useState<string | null>(null);
+  // Feedback thread opened from a reply notification. The id outlives `open`
+  // so the surface keeps its content while it slides out.
+  const [feedbackThreadId, setFeedbackThreadId] = useState<string | null>(null);
+  const [isFeedbackThreadOpen, setIsFeedbackThreadOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -235,13 +247,13 @@ export default function NotificationPanel({
   }, [enabled, loadNotifications, markAllNotificationsAsRead, open, updateUnreadCount]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isFeedbackThreadOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [isFeedbackThreadOpen, onClose, open]);
 
   const markAsRead = useCallback((notification: NotificationRecord) => {
     if (notification.isRead) return;
@@ -264,8 +276,21 @@ export default function NotificationPanel({
 
   const handleToggleTeamNotification = useCallback((notification: TeamNotificationRecord) => {
     markAsRead(notification);
+    if (notification.type === "feedback_reply" && notification.targetId) {
+      setFeedbackThreadId(notification.targetId);
+      setIsFeedbackThreadOpen(true);
+      return;
+    }
     setExpandedTeamNotificationId((current) => (current === notification.id ? null : notification.id));
   }, [markAsRead]);
+
+  const closeFeedbackThread = useCallback(() => {
+    setIsFeedbackThreadOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) setIsFeedbackThreadOpen(false);
+  }, [open]);
 
   const handleFollowBack = useCallback(async (notification: FollowNotificationRecord) => {
     if (notification.isFollowing || pendingFollowIds.has(notification.id)) return;
@@ -395,6 +420,7 @@ export default function NotificationPanel({
   };
 
   return (
+    <>
     <SlideSurface
       open={open}
       onClose={onClose}
@@ -467,5 +493,43 @@ export default function NotificationPanel({
               )}
             </div>
     </SlideSurface>
+    <SlideSurface
+      open={open && isFeedbackThreadOpen}
+      onClose={closeFeedbackThread}
+      ariaLabel={feedbackCopy.pageTitle}
+      nativeBackPriority={30}
+      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
+            <header
+              className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4"
+              style={{
+                paddingTop: "env(safe-area-inset-top, 44px)",
+                height: "calc(56px + env(safe-area-inset-top, 44px))",
+              }}
+            >
+              <button
+                type="button"
+                onClick={closeFeedbackThread}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition active:bg-gray-100"
+                aria-label={feedbackCopy.backButtonLabel}
+              >
+                <ArrowLeft size={22} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <h1 className="truncate text-[17px] font-bold text-slate-900">{feedbackCopy.pageTitle}</h1>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {feedbackThreadId ? (
+                <ProfileFeedbackContent
+                  key={feedbackThreadId}
+                  uiLocale={locale}
+                  defaultFeedbackEmail={session?.user?.email ?? ""}
+                  initialTab="history"
+                  focusThreadId={feedbackThreadId}
+                />
+              ) : null}
+            </div>
+    </SlideSurface>
+    </>
   );
 }
