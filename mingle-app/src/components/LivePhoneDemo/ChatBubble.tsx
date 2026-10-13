@@ -23,6 +23,7 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { messageRecallCopy } from '@/lib/message-recall'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -124,6 +125,9 @@ function BubbleTtsIndicator({
 }
 
 export interface Utterance {
+  // The sender unsent this message; it renders as a "deleted message"
+  // placeholder and carries no text, translations or photo.
+  recalled?: boolean
   image?: ConversationMessageImage
   id: string
   speaker?: string
@@ -810,7 +814,8 @@ function ChatBubble({
   onOpenProfile,
   bubbleDisplayMode = DEFAULT_BUBBLE_DISPLAY_MODE,
 }: ChatBubbleProps) {
-  const messageImage = normalizeConversationMessageImage(utterance.image)
+  const isRecalled = utterance.recalled === true
+  const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -1066,7 +1071,7 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
     && (Boolean(speakerName) || shouldShowCollapsedHeaderLanguages)
@@ -1163,7 +1168,11 @@ function ChatBubble({
     </div>
   )
 
-  const bubbleContentSwitch = messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
+  const bubbleContentSwitch = isRecalled ? (
+    <div data-chat-bubble-recalled className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] italic text-slate-400">
+      {messageRecallCopy(uiLocale).placeholder}
+    </div>
+  ) : messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
         <motion.div
@@ -1279,7 +1288,7 @@ function ChatBubble({
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
       {bubbleTimestamp}
-      {!messageImage && bubbleControls}
+      {!messageImage && !isRecalled && bubbleControls}
     </div>
   )
 
@@ -1318,8 +1327,8 @@ function ChatBubble({
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
   // A solo room's own turns carry no speakerUserId (see isOwnMessage); the server still verifies the sender.
-  const canRecall = !isDraft && Boolean(viewerUserId) && (!utterance.speakerUserId || isOwnMessage)
-  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>
+  const canRecall = !isDraft && !isRecalled && Boolean(viewerUserId) && (!utterance.speakerUserId || isOwnMessage)
+  const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>{bubbleContent}</MessageRecallScope>
   </MessageReactionScope>
 
@@ -1368,6 +1377,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.speakerName !== nu.speakerName) return false
+    if (pu.recalled !== nu.recalled) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
