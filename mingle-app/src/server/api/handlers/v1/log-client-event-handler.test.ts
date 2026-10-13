@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const {
   mockAppMessageUpsert,
   mockAppMessageFindUnique,
+  mockAppMessageFindFirst,
   mockOrderLock,
   mockReserveConversationVoiceOrder,
   mockAppMessageContentUpsert,
@@ -22,6 +23,7 @@ const {
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageFindUnique: vi.fn(),
+  mockAppMessageFindFirst: vi.fn(),
   mockOrderLock: vi.fn(),
   mockReserveConversationVoiceOrder: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
@@ -60,6 +62,7 @@ vi.mock("@/lib/prisma", () => ({
     appConversationChannelMember: { count: mockMemberCount },
     appMessage: {
       upsert: mockAppMessageUpsert,
+      findFirst: mockAppMessageFindFirst,
     },
     appMessageContent: {
       upsert: mockAppMessageContentUpsert,
@@ -107,6 +110,7 @@ describe("handleLogClientEventV1", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppMessageFindUnique.mockResolvedValue(null);
+    mockAppMessageFindFirst.mockResolvedValue(null);
     mockOrderLock.mockResolvedValue([{ locked: true }]);
     mockReserveConversationVoiceOrder.mockImplementation(async scope => mintVoiceOrderReceipt(scope));
     mockEnsureTrackingContext.mockReturnValue({
@@ -726,6 +730,26 @@ describe("handleLogClientEventV1", () => {
         }),
       }),
     );
+  });
+
+  it("does not resurrect a message its sender already unsent", async () => {
+    mockAppMessageFindFirst.mockResolvedValue({ metadata: { recalledAtMs: 1700000001000 } });
+
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v1.0.11/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "u-1700000000000-1",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: { en: "Hello" },
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageContentUpsert).not.toHaveBeenCalled();
   });
 
   it("ignores stale finalized turns after the conversation was cleared", async () => {

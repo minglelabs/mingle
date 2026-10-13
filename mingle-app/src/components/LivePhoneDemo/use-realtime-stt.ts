@@ -2,6 +2,7 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
@@ -903,6 +904,7 @@ type ConversationHydrationPayload = {
     isMultiMember?: boolean
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+  recalledMessageIds?: string[]
   inviteNotices?: ConversationHydrationInviteNoticePayload[]
 }
 
@@ -2476,6 +2478,33 @@ export function findConversationHydrationOrderConflicts(input: {
   return conflicts
 }
 
+/** Drops unsent messages; hydration only ever adds or replaces, so a recall is removed by id. */
+export function removeUtterancesFromStoreState(
+  store: UtteranceStoreState,
+  utteranceIds: ReadonlySet<string>,
+): UtteranceStoreState {
+  const utterances = store.utterances.filter((utterance) => !utteranceIds.has(utterance.id))
+  let translationPriorities = store.translationPriorities
+  let pendingTranslationUpdates = store.pendingTranslationUpdates
+  for (const utteranceId of utteranceIds) {
+    translationPriorities = removeTranslationPrioritiesForUtterance(translationPriorities, utteranceId)
+    if (pendingTranslationUpdates.has(utteranceId)) {
+      if (pendingTranslationUpdates === store.pendingTranslationUpdates) {
+        pendingTranslationUpdates = new Map(pendingTranslationUpdates)
+      }
+      pendingTranslationUpdates.delete(utteranceId)
+    }
+  }
+  if (
+    utterances.length === store.utterances.length
+    && translationPriorities === store.translationPriorities
+    && pendingTranslationUpdates === store.pendingTranslationUpdates
+  ) {
+    return store
+  }
+  return { utterances, translationPriorities, pendingTranslationUpdates }
+}
+
 export function mergeServerHydrationUtteranceIntoStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
@@ -3542,6 +3571,41 @@ export default function useRealtimeSTT({
     || hasOlderServerUtterancesRef.current
   ), [])
 
+  // The visible list and the warm cache must both forget an unsent message:
+  // buildMergedUtterances re-adds anything the cache still holds.
+  const applyRecalledMessageIds = useCallback((rawIds: unknown) => {
+    const recalledIds = new Set(normalizeRecalledMessageIds(rawIds))
+    if (recalledIds.size === 0) return
+    const stored = storedUtterancesRef.current
+    const loadedFromIndex = stored.length - storageLoadedCountRef.current
+    const removedIds = new Set<string>()
+    let removedLoadedCount = 0
+    stored.forEach((utterance, index) => {
+      if (!recalledIds.has(utterance.id)) return
+      removedIds.add(utterance.id)
+      if (index >= loadedFromIndex) removedLoadedCount += 1
+    })
+    for (const utterance of utterancesRef.current) {
+      if (recalledIds.has(utterance.id)) removedIds.add(utterance.id)
+    }
+    if (removedIds.size === 0) return
+    storedUtterancesRef.current = stored.filter((utterance) => !recalledIds.has(utterance.id))
+    storageLoadedCountRef.current = Math.max(0, storageLoadedCountRef.current - removedLoadedCount)
+    setUtteranceStore((current) => removeUtterancesFromStoreState(current, recalledIds))
+    setMessageCount((current) => Math.max(0, normalizePersistedMessageCount(current) - removedIds.size))
+  }, [])
+
+  // The sender's own screen drops the bubble as soon as the recall succeeds.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) return
+    const onRecalled = (event: Event) => {
+      const detail = (event as CustomEvent<MessageRecalledEventDetail>).detail
+      if (detail?.conversationId === conversationId) applyRecalledMessageIds([detail.messageId])
+    }
+    window.addEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+    return () => window.removeEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+  }, [applyRecalledMessageIds, conversationId])
+
   const applyPendingHasOlderUtterances = useCallback(() => {
     const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
     if (pendingHasOlderUtterances === null) return
@@ -3717,6 +3781,7 @@ export default function useRealtimeSTT({
       setInviteNotices((current) => (
         areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
       ))
+      applyRecalledMessageIds(payload.recalledMessageIds)
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3749,6 +3814,7 @@ export default function useRealtimeSTT({
       isLoadingOlderServerUtterancesRef.current = false
     }
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,
@@ -3838,6 +3904,7 @@ export default function useRealtimeSTT({
         setInviteNotices((current) => (
           areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
         ))
+        applyRecalledMessageIds(payload.recalledMessageIds)
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3883,6 +3950,7 @@ export default function useRealtimeSTT({
         // Keep local state when server hydration fails.
       })
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,

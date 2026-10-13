@@ -22,6 +22,7 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { readMessageRecalledAtMs } from '@/lib/message-recall'
 import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
@@ -129,6 +130,14 @@ async function shouldSkipFinalizedTurnPersistence(args: {
 }): Promise<boolean> {
   const { clientMessageId, sessionKey } = args
   if (!sessionKey) return false
+
+  // A late translation update or outbox retry must not resurrect a message
+  // its sender already unsent (the upsert below clears isDeleted).
+  const existing = await prisma.appMessage.findFirst({
+    where: { sessionKey, clientMessageId },
+    select: { metadata: true },
+  })
+  if (readMessageRecalledAtMs(existing?.metadata) !== null) return true
 
   const latestConversationClearEvent = await prisma.appEventLog.findFirst({
     where: {

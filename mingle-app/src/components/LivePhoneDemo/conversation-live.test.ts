@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ChatBubble from './ChatBubble'
 import { describe, expect, it, vi } from 'vitest'
 import { canonicalizeUtteranceLanguages, LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
-import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances } from './use-realtime-stt'
+import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances, removeUtterancesFromStoreState } from './use-realtime-stt'
 import { LiveUtterances } from '../../../../mingle-messaging/live-utterances'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 
@@ -192,5 +192,14 @@ describe('canonical Chinese keys on remote previews', () => {
   it('returns the same object when every key is already canonical', () => {
     const canonical = { ...utterance, originalLang: 'zh-TW', targetLanguages: ['ko'], translations: { ko: '안녕' } }
     expect(canonicalizeUtteranceLanguages(canonical)).toBe(canonical)
+  })
+})
+
+describe('removeUtterancesFromStoreState', () => {
+  const utterance = (id: string) => ({ id, originalText: id, originalLang: 'en', translations: {}, createdAtMs: 1 })
+  it('drops only the unsent messages and keeps the store when nothing matches', () => {
+    const store = createUtteranceStoreState([utterance('a'), utterance('b')])
+    expect(removeUtterancesFromStoreState(store, new Set(['a'])).utterances.map(item => item.id)).toEqual(['b'])
+    expect(removeUtterancesFromStoreState(store, new Set(['missing']))).toBe(store)
   })
 })

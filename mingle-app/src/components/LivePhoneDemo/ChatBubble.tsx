@@ -22,6 +22,7 @@ import CopyableBubbleSurface from './CopyableBubbleSurface'
 import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
+import { MessageRecallScope } from './MessageRecall'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -1316,7 +1317,11 @@ function ChatBubble({
   const bubbleContent = isOwnMessage
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
-  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>{bubbleContent}</MessageReactionScope>
+  // A solo room's own turns carry no speakerUserId (see isOwnMessage); the server still verifies the sender.
+  const canRecall = !isDraft && Boolean(viewerUserId) && (!utterance.speakerUserId || isOwnMessage)
+  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>
+    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>{bubbleContent}</MessageRecallScope>
+  </MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
     return (

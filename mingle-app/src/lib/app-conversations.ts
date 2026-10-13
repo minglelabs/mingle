@@ -7,6 +7,7 @@ import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
+import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT } from "@/lib/message-recall";
 
 export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
@@ -158,6 +159,10 @@ export type ConversationHydrationState = {
   oldestMessageCursor: ConversationHydrationCursor | null;
   leaveNotices: ConversationHydrationLeaveNotice[];
   inviteNotices: ConversationHydrationInviteNotice[];
+  // Client IDs of messages their sender unsent (see message-recall.ts). A
+  // client never drops a bubble just because the server stopped returning it,
+  // so a recall has to be named explicitly for open rooms and warm caches.
+  recalledMessageIds: string[];
 };
 
 type ConversationChannelRecord = {
@@ -2883,7 +2888,7 @@ async function getConversationHydrationStateForRecord(args: {
 
   // Independent read queries do not need a sequential transaction. Especially
   // with a remote DB, each serialized round trip delays counterpart messages.
-  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById] = await Promise.all([
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById, recalledMessages] = await Promise.all([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -2931,6 +2936,18 @@ async function getConversationHydrationStateForRecord(args: {
     }),
     listChannelMembersByChannelId([conversationRecord.id]),
     listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
+    // A public share snapshot has no local cache to correct.
+    args.upperBoundCreatedAt ? Promise.resolve([]) : prisma.appMessage.findMany({
+      where: {
+        sessionKey: conversationRecord.sessionKey,
+        isDeleted: true,
+        metadata: { path: [MESSAGE_RECALLED_AT_METADATA_KEY], gt: 0 },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: RECALLED_MESSAGE_ID_LIMIT,
+      select: { id: true, clientMessageId: true },
+      // Best-effort: a failed recall listing must never fail the room's history.
+    }).catch(() => []),
   ]);
 
   const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
@@ -3214,6 +3231,7 @@ async function getConversationHydrationStateForRecord(args: {
         leftAtMs: (member.leftAt as Date).getTime(),
       })),
     inviteNotices,
+    recalledMessageIds: recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
   };
 }
 
