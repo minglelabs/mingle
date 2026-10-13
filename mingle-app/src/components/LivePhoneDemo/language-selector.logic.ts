@@ -126,6 +126,21 @@ export function resolveLanguageSelectorOwnSelectedLanguages(
   );
 }
 
+// Languages that are in the room union only because ANOTHER member picked
+// them. They stay visible (sky-blue) in the language selector, but the header
+// button and the message bubbles only show the viewer's own picks. Empty
+// while the viewer has no own picks yet, so a fresh invitee still sees the
+// room's languages instead of nothing.
+export function resolveLanguageSelectorOthersOnlyLanguages(
+  roomSelectedLanguages: readonly string[],
+  viewerSelectedLanguages: readonly string[],
+): SttLanguageCode[] {
+  const ownCodes = sanitizeLanguageCodes(viewerSelectedLanguages, Number.POSITIVE_INFINITY);
+  if (ownCodes.length === 0) return [];
+  return sanitizeLanguageCodes(roomSelectedLanguages, Number.POSITIVE_INFINITY)
+    .filter((code) => !ownCodes.includes(code));
+}
+
 // Optimistically recomputes the room's displayed language union after the
 // caller's OWN picks change, without waiting for the server's recomputed
 // union: adding a code always adds it to the union; removing one only drops
