@@ -164,8 +164,12 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             // mode (.voiceChat or .default depending on AEC).
             let session = AVAudioSession.sharedInstance()
             let owners = MingleAudioSessionCoordinator.shared.snapshot()
-            let needsReconfigure = session.category != .playAndRecord
-                || (owners.stt == 0 && session.mode != .default)
+            // A device-audio session owns a mixable playback session (no
+            // microphone); the clip plays inside it as it is.
+            let deviceAudioActive = MingleDeviceAudioState.shared.isActive
+            let needsReconfigure = !deviceAudioActive
+                && (session.category != .playAndRecord
+                    || (owners.stt == 0 && session.mode != .default))
             if needsReconfigure {
                 do {
                     try session.setCategory(
@@ -193,6 +197,11 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             do {
                 let player = try AVAudioPlayer(data: audioData)
                 player.delegate = self
+                if deviceAudioActive {
+                    // The broadcast extension transcribes the right channel
+                    // only; the translation stays out of it, in the left ear.
+                    player.pan = MingleDeviceAudioState.translationPan
+                }
                 player.prepareToPlay()
                 if !player.play() {
                     throw NSError(

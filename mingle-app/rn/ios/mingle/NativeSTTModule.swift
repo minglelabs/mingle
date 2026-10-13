@@ -3,6 +3,7 @@ import CoreLocation
 import Foundation
 import os
 import React
+import ReplayKit
 import UIKit
 import UserNotifications
 
@@ -265,6 +266,52 @@ class NativeSTTModule: RCTEventEmitter {
     private var gracefulStopPending = false
     private let gracefulStopTimeoutMs = 5_000
 
+    /// Everything a start request carries besides its promise.
+    private struct SessionOptions {
+        let wsUrl: URL
+        let wsUrlString: String
+        let conversationId: String
+        let sttModel: String
+        let aecEnabled: Bool
+        let apiNamespace: String
+        let releaseVariant: String
+        let behaviorProfile: String
+        let sonioxManualFinalizeSilenceMs: Int?
+        let sttSegmentationMode: String?
+        let sonioxEndpointMaxDelayMs: Int?
+        let sonioxEndpointTuningStep: Int?
+    }
+
+    private struct DeviceAudioStartRequest {
+        let options: SessionOptions
+        let resolve: RCTPromiseResolveBlock
+        let reject: RCTPromiseRejectBlock
+    }
+
+    // Device audio: the sound other apps play, delivered by the broadcast
+    // extension, instead of the microphone. Main queue unless noted.
+    private static let deviceAudioChunkBytes = MingleBroadcastChannel.sampleRate / 10 * MemoryLayout<Int16>.size
+    /// How long the system broadcast sheet may stay open.
+    private static let deviceAudioSheetTimeout: TimeInterval = 90
+    /// After the sheet closes, a broadcast the user did start is still
+    /// counting down; wait this long for it before treating it as a cancel.
+    private static let deviceAudioReturnGrace: TimeInterval = 6
+    /// Guards `pendingDeviceAudioStart`, which `stop` reads off the main queue.
+    private let deviceAudioLock = NSLock()
+    private var pendingDeviceAudioStart: DeviceAudioStartRequest?
+    private var deviceAudioReceiver: MingleDeviceAudioReceiver?
+    private var deviceAudioActive = false
+    private var deviceAudioSheetTimeoutWorkItem: DispatchWorkItem?
+    private var deviceAudioPickerView: RPSystemBroadcastPickerView?
+    private var deviceAudioSheetWasShown = false
+    private var deviceAudioAppObservers: [NSObjectProtocol] = []
+    private var deviceAudioInterruptionObserver: NSObjectProtocol?
+    private var deviceAudioKeepAlivePlayer: AVAudioPlayer?
+    // wsQueue only.
+    private var deviceAudioBuffer = Data()
+    private var deviceAudioLastAudioAt = Date.distantPast
+    private var deviceAudioSilenceTimer: DispatchSourceTimer?
+
     override static func requiresMainQueueSetup() -> Bool {
         false
     }
@@ -355,6 +402,8 @@ class NativeSTTModule: RCTEventEmitter {
 
     override func constantsToExport() -> [AnyHashable: Any]! {
         return [
+            // The shell offers device-audio capture only when this is true.
+            "deviceAudioCaptureSupported": MingleDeviceAudioSupport.isSupported,
             "runtimeConfig": [
                 "webAppBaseUrl": Self.readRuntimeConfigURL(
                     schemeKey: "MingleWebAppScheme",
@@ -683,6 +732,7 @@ class NativeSTTModule: RCTEventEmitter {
     private func stopAndCleanup(reason: String?) {
         NSLog("[NativeSTTModule] stopAndCleanup reason=%@ chunks=%lld wsMessages=%lld",
               reason ?? "nil", audioChunkCount, wsMessageCount)
+        cancelPendingDeviceAudioStart(reason: "cleanup")
         gracefulStopWorkItem?.cancel()
         gracefulStopWorkItem = nil
         gracefulStopPending = false
@@ -691,6 +741,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
+        tearDownDeviceAudioCapture()
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -727,6 +778,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
+        tearDownDeviceAudioCapture()
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -905,24 +957,49 @@ class NativeSTTModule: RCTEventEmitter {
         healthCheckTimer = nil
     }
 
+    private func makeConfigPayload(sampleRate: Int, options: SessionOptions) -> [String: Any] {
+        var configPayload: [String: Any] = [
+            "sample_rate": sampleRate,
+            "stt_model": options.sttModel,
+        ]
+        if !options.apiNamespace.isEmpty {
+            configPayload["api_namespace"] = options.apiNamespace
+        }
+        if !options.releaseVariant.isEmpty {
+            configPayload["release_variant"] = options.releaseVariant
+        }
+        if !options.behaviorProfile.isEmpty {
+            configPayload["behavior_profile"] = options.behaviorProfile
+        }
+        if let sonioxManualFinalizeSilenceMs = options.sonioxManualFinalizeSilenceMs {
+            configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
+        }
+        if let sttSegmentationMode = options.sttSegmentationMode, !sttSegmentationMode.isEmpty {
+            configPayload["stt_segmentation_mode"] = sttSegmentationMode
+        }
+        if let sonioxEndpointMaxDelayMs = options.sonioxEndpointMaxDelayMs {
+            configPayload["soniox_endpoint_max_delay_ms"] = sonioxEndpointMaxDelayMs
+        }
+        if let sonioxEndpointTuningStep = options.sonioxEndpointTuningStep {
+            configPayload["soniox_endpoint_tuning_step"] = sonioxEndpointTuningStep
+        }
+        return configPayload
+    }
+
     private func startSession(
-        wsUrl: URL,
-        wsUrlString: String,
-        conversationId: String,
-        sttModel: String,
-        aecEnabled: Bool,
-        apiNamespace: String,
-        releaseVariant: String,
-        behaviorProfile: String,
-        sonioxManualFinalizeSilenceMs: Int?,
-        sttSegmentationMode: String?,
-        sonioxEndpointMaxDelayMs: Int?,
-        sonioxEndpointTuningStep: Int?,
+        options: SessionOptions,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
+        let wsUrl = options.wsUrl
+        let wsUrlString = options.wsUrlString
+        let sttModel = options.sttModel
+        let aecEnabled = options.aecEnabled
+        let sonioxManualFinalizeSilenceMs = options.sonioxManualFinalizeSilenceMs
+        let sonioxEndpointMaxDelayMs = options.sonioxEndpointMaxDelayMs
+        let sonioxEndpointTuningStep = options.sonioxEndpointTuningStep
         isAecEnabled = aecEnabled
-        activeConversationId = conversationId.isEmpty ? nil : conversationId
+        activeConversationId = options.conversationId.isEmpty ? nil : options.conversationId
         audioChunkCount = 0
         wsMessageCount = 0
         NSLog("[NativeSTTModule] startSession conversation=%@ ws=%@ model=%@ aec=%d",
@@ -999,32 +1076,7 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        var configPayload: [String: Any] = [
-            "sample_rate": sampleRate,
-            "stt_model": sttModel,
-        ]
-        if !apiNamespace.isEmpty {
-            configPayload["api_namespace"] = apiNamespace
-        }
-        if !releaseVariant.isEmpty {
-            configPayload["release_variant"] = releaseVariant
-        }
-        if !behaviorProfile.isEmpty {
-            configPayload["behavior_profile"] = behaviorProfile
-        }
-        if let sonioxManualFinalizeSilenceMs {
-            configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
-        }
-        if let sttSegmentationMode, !sttSegmentationMode.isEmpty {
-            configPayload["stt_segmentation_mode"] = sttSegmentationMode
-        }
-        if let sonioxEndpointMaxDelayMs {
-            configPayload["soniox_endpoint_max_delay_ms"] = sonioxEndpointMaxDelayMs
-        }
-        if let sonioxEndpointTuningStep {
-            configPayload["soniox_endpoint_tuning_step"] = sonioxEndpointTuningStep
-        }
-        sendJson(configPayload)
+        sendJson(makeConfigPayload(sampleRate: sampleRate, options: options))
 
         emitStatus("running")
         let silenceLogValue = sonioxManualFinalizeSilenceMs.map(String.init) ?? "server-default"
@@ -1034,6 +1086,409 @@ class NativeSTTModule: RCTEventEmitter {
         resolve([
             "sampleRate": sampleRate,
         ])
+    }
+
+    // MARK: - Device audio (ReplayKit broadcast extension)
+
+    private func takePendingDeviceAudioStart() -> DeviceAudioStartRequest? {
+        deviceAudioLock.lock()
+        defer { deviceAudioLock.unlock() }
+        let request = pendingDeviceAudioStart
+        pendingDeviceAudioStart = nil
+        return request
+    }
+
+    /// The conversation of the start waiting on the broadcast sheet; nil when
+    /// none is waiting.
+    private func pendingDeviceAudioConversationId() -> String? {
+        deviceAudioLock.lock()
+        defer { deviceAudioLock.unlock() }
+        return pendingDeviceAudioStart?.options.conversationId
+    }
+
+    /// Step 1: listen for the extension, then show the system broadcast sheet.
+    /// The session itself starts when the extension connects.
+    private func requestDeviceAudioBroadcast(_ request: DeviceAudioStartRequest) {
+        cancelPendingDeviceAudioStart(reason: "superseded")
+        guard !isRunning else {
+            request.reject("already_running", "native_stt_already_running", nil)
+            return
+        }
+        guard MingleDeviceAudioSupport.isSupported else {
+            emitError("device_audio_unavailable")
+            request.reject("device_audio_unavailable", "Device audio capture is unavailable", nil)
+            return
+        }
+
+        let receiver = MingleDeviceAudioReceiver()
+        receiver.onConnected = { [weak self] in
+            DispatchQueue.main.async { self?.handleDeviceAudioBroadcastStarted() }
+        }
+        receiver.onAudio = { [weak self] pcm in
+            self?.handleDeviceAudio(pcm)
+        }
+        receiver.onDisconnected = { [weak self] in
+            DispatchQueue.main.async { self?.handleDeviceAudioBroadcastEnded() }
+        }
+        do {
+            try receiver.start()
+        } catch {
+            emitError("device_audio_channel_failed: \(error)")
+            request.reject("device_audio_unavailable", "Failed to open the device audio channel", error)
+            return
+        }
+        deviceAudioReceiver?.stop()
+        deviceAudioReceiver = receiver
+        deviceAudioLock.lock()
+        pendingDeviceAudioStart = request
+        deviceAudioLock.unlock()
+
+        guard presentBroadcastSheet() else {
+            _ = takePendingDeviceAudioStart()
+            clearDeviceAudioRequestUI()
+            receiver.stop()
+            deviceAudioReceiver = nil
+            emitError("device_audio_sheet_unavailable")
+            request.reject("device_audio_unavailable", "The broadcast sheet is unavailable", nil)
+            return
+        }
+        observeAppActivityForDeviceAudioSheet()
+        armDeviceAudioSheetTimeout(Self.deviceAudioSheetTimeout)
+    }
+
+    /// Ends a start that is still waiting on the broadcast sheet. The user
+    /// closing the sheet is a cancel, not a failure: the promise is rejected
+    /// with the code the shell maps back to idle. Safe from any queue, and
+    /// (it captures no `self`) while the module is being deallocated.
+    private func cancelPendingDeviceAudioStart(reason: String) {
+        guard let request = takePendingDeviceAudioStart() else { return }
+        NSLog("[NativeSTTModule] device audio request dropped reason=%@", reason)
+        request.reject("device_audio_permission", "device_audio_permission_denied", nil)
+        clearDeviceAudioRequestUI()
+        if !deviceAudioActive {
+            let receiver = deviceAudioReceiver
+            deviceAudioReceiver = nil
+            receiver?.stop()
+        }
+    }
+
+    private static func keyWindow() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let activeWindows = scenes
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+        return activeWindows.first { $0.isKeyWindow }
+            ?? activeWindows.first
+            ?? scenes.flatMap { $0.windows }.first
+    }
+
+    /// The system picker has no call to open it: pressing its own button is
+    /// the trigger. It stays invisible; only the sheet it opens is seen.
+    private func presentBroadcastSheet() -> Bool {
+        guard let window = Self.keyWindow() else { return false }
+        let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
+        picker.preferredExtension = MingleBroadcastChannel.extensionBundleIdentifier
+        picker.showsMicrophoneButton = false
+        picker.alpha = 0
+        window.addSubview(picker)
+        deviceAudioPickerView = picker
+
+        guard let button = picker.subviews.compactMap({ $0 as? UIButton }).first else {
+            return false
+        }
+        button.sendActions(for: .touchUpInside)
+        return true
+    }
+
+    private func observeAppActivityForDeviceAudioSheet() {
+        let center = NotificationCenter.default
+        deviceAudioSheetWasShown = false
+        deviceAudioAppObservers = [
+            center.addObserver(
+                forName: UIApplication.willResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.deviceAudioSheetWasShown = true
+            },
+            center.addObserver(
+                forName: UIApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self,
+                      self.deviceAudioSheetWasShown,
+                      self.pendingDeviceAudioConversationId() != nil
+                else {
+                    return
+                }
+                self.armDeviceAudioSheetTimeout(Self.deviceAudioReturnGrace)
+            },
+        ]
+    }
+
+    private func armDeviceAudioSheetTimeout(_ seconds: TimeInterval) {
+        deviceAudioSheetTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.cancelPendingDeviceAudioStart(reason: "sheet_closed")
+        }
+        deviceAudioSheetTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: workItem)
+    }
+
+    private func clearDeviceAudioRequestUI() {
+        deviceAudioSheetTimeoutWorkItem?.cancel()
+        deviceAudioSheetTimeoutWorkItem = nil
+        for observer in deviceAudioAppObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        deviceAudioAppObservers = []
+        deviceAudioSheetWasShown = false
+        // Only the view itself needs the main queue. It is handed over on its
+        // own, so nothing here refers back to the module.
+        guard let picker = deviceAudioPickerView else { return }
+        deviceAudioPickerView = nil
+        if Thread.isMainThread {
+            picker.removeFromSuperview()
+        } else {
+            DispatchQueue.main.async {
+                picker.removeFromSuperview()
+            }
+        }
+    }
+
+    /// Step 2: the extension connected, so the broadcast is live.
+    private func handleDeviceAudioBroadcastStarted() {
+        guard let request = takePendingDeviceAudioStart() else {
+            // Nobody is waiting any more: closing the channel ends the broadcast.
+            if !deviceAudioActive {
+                deviceAudioReceiver?.stop()
+                deviceAudioReceiver = nil
+            }
+            return
+        }
+        clearDeviceAudioRequestUI()
+        beginDeviceAudioSession(request)
+    }
+
+    /// Other apps keep playing, and this app keeps running behind them: a
+    /// mixable playback session with no input.
+    private func configureDeviceAudioSession() throws {
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try audioSession.setActive(true, options: [])
+        let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        NSLog("[NativeSTTModule] device audio session active outputs=[%@]", outputs)
+    }
+
+    private func beginDeviceAudioSession(_ request: DeviceAudioStartRequest) {
+        guard !isRunning else {
+            deviceAudioReceiver?.stop()
+            deviceAudioReceiver = nil
+            request.reject("already_running", "native_stt_already_running", nil)
+            return
+        }
+        let options = request.options
+        let sampleRate = MingleBroadcastChannel.sampleRate
+        activeConversationId = options.conversationId.isEmpty ? nil : options.conversationId
+        audioChunkCount = 0
+        wsMessageCount = 0
+        NSLog("[NativeSTTModule] startSession(device audio) conversation=%@ ws=%@ model=%@",
+              activeConversationId ?? "unknown", options.wsUrlString, options.sttModel)
+
+        do {
+            try configureDeviceAudioSession()
+        } catch {
+            deviceAudioReceiver?.stop()
+            deviceAudioReceiver = nil
+            activeConversationId = nil
+            request.reject("audio_session", "Failed to configure AVAudioSession", error)
+            return
+        }
+        if !sttSessionTokenAcquired {
+            MingleAudioSessionCoordinator.shared.acquireSTT()
+            sttSessionTokenAcquired = true
+        }
+        // Nothing of an earlier session may reach this one's stream.
+        wsQueue.async { [weak self] in
+            self?.deviceAudioBuffer.removeAll(keepingCapacity: false)
+            self?.deviceAudioLastAudioAt = Date.distantPast
+        }
+        deviceAudioActive = true
+        MingleDeviceAudioState.shared.isActive = true
+        startDeviceAudioKeepAlive()
+        observeDeviceAudioInterruptions()
+
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        let session = URLSession(configuration: configuration)
+        let task = session.webSocketTask(with: options.wsUrl)
+
+        webSocketSession = session
+        socketTask = task
+        declaredStreamSampleRate = sampleRate
+        isRunning = true
+
+        emitStatus("connecting")
+        task.resume()
+        receiveLoop()
+        startWsPing()
+        startDeviceAudioSilenceFill()
+        sendJson(makeConfigPayload(sampleRate: sampleRate, options: options))
+
+        emitStatus("running")
+        NSLog("[NativeSTTModule] started(device audio) sampleRate=%d ws=%@", sampleRate, options.wsUrlString)
+        request.resolve([
+            "sampleRate": sampleRate,
+        ])
+    }
+
+    /// PCM from the extension, on the receiver's queue.
+    private func handleDeviceAudio(_ pcm: Data) {
+        wsQueue.async { [weak self] in
+            guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
+            self.deviceAudioLastAudioAt = Date()
+            self.deviceAudioBuffer.append(pcm)
+            let chunkBytes = Self.deviceAudioChunkBytes
+            while self.deviceAudioBuffer.count >= chunkBytes {
+                let chunk = Data(self.deviceAudioBuffer.prefix(chunkBytes))
+                self.deviceAudioBuffer.removeFirst(chunkBytes)
+                self.sendDeviceAudioChunk(chunk)
+            }
+        }
+    }
+
+    private func sendDeviceAudioChunk(_ chunk: Data) {
+        audioChunkCount += 1
+        let count = audioChunkCount
+        if count == 1 || count % 200 == 0 {
+            NSLog("[NativeSTTModule] deviceAudioChunk #%lld bytes=%d", count, chunk.count)
+        }
+        sendJson([
+            "type": "audio_chunk",
+            "data": [
+                "chunk": chunk.base64EncodedString(),
+            ],
+        ])
+    }
+
+    /// ReplayKit delivers nothing while no app is playing. The recognizer
+    /// needs the quiet too (it is how a sentence ends), so silence is sent in
+    /// real time until audio arrives again.
+    private func startDeviceAudioSilenceFill() {
+        stopDeviceAudioSilenceFill()
+        let timer = DispatchSource.makeTimerSource(queue: wsQueue)
+        timer.schedule(deadline: .now() + 0.5, repeating: 0.1)
+        timer.setEventHandler { [weak self] in
+            guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
+            guard Date().timeIntervalSince(self.deviceAudioLastAudioAt) > 0.3 else { return }
+            self.sendDeviceAudioChunk(Data(count: Self.deviceAudioChunkBytes))
+        }
+        timer.resume()
+        deviceAudioSilenceTimer = timer
+    }
+
+    private func stopDeviceAudioSilenceFill() {
+        deviceAudioSilenceTimer?.cancel()
+        deviceAudioSilenceTimer = nil
+    }
+
+    private static let silentWav: Data = {
+        let sampleRate = 8_000
+        let dataBytes = sampleRate * MemoryLayout<Int16>.size
+        var wav = Data()
+        func append<T: FixedWidthInteger>(_ value: T) {
+            withUnsafeBytes(of: value.littleEndian) { wav.append(contentsOf: $0) }
+        }
+        wav.append(contentsOf: Array("RIFF".utf8))
+        append(UInt32(36 + dataBytes))
+        wav.append(contentsOf: Array("WAVEfmt ".utf8))
+        append(UInt32(16))
+        append(UInt16(1))
+        append(UInt16(1))
+        append(UInt32(sampleRate))
+        append(UInt32(sampleRate * MemoryLayout<Int16>.size))
+        append(UInt16(MemoryLayout<Int16>.size))
+        append(UInt16(16))
+        wav.append(contentsOf: Array("data".utf8))
+        append(UInt32(dataBytes))
+        wav.append(Data(count: dataBytes))
+        return wav
+    }()
+
+    /// iOS suspends a background app that is not playing or recording, and
+    /// the translation is only read aloud now and then. A silent loop keeps
+    /// the app, and with it the session, running behind the other app.
+    private func startDeviceAudioKeepAlive() {
+        stopDeviceAudioKeepAlive()
+        guard let player = try? AVAudioPlayer(data: Self.silentWav) else {
+            NSLog("[NativeSTTModule] device audio keep-alive unavailable")
+            return
+        }
+        player.numberOfLoops = -1
+        player.volume = 0
+        player.prepareToPlay()
+        player.play()
+        deviceAudioKeepAlivePlayer = player
+    }
+
+    private func stopDeviceAudioKeepAlive() {
+        deviceAudioKeepAlivePlayer?.stop()
+        deviceAudioKeepAlivePlayer = nil
+    }
+
+    /// A phone call or an alarm pauses the audio session. Bring it and the
+    /// keep-alive back when the interruption ends.
+    private func observeDeviceAudioInterruptions() {
+        removeDeviceAudioInterruptionObserver()
+        deviceAudioInterruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, self.deviceAudioActive, self.isRunning,
+                  let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: rawType) == .ended
+            else {
+                return
+            }
+            do {
+                try self.configureDeviceAudioSession()
+                self.startDeviceAudioKeepAlive()
+            } catch {
+                self.emitError("device_audio_resume_failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func removeDeviceAudioInterruptionObserver() {
+        if let observer = deviceAudioInterruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        deviceAudioInterruptionObserver = nil
+    }
+
+    /// The extension went away while the session was running: the user ended
+    /// the broadcast from the system UI, or the system stopped it.
+    private func handleDeviceAudioBroadcastEnded() {
+        guard deviceAudioActive, isRunning else { return }
+        NSLog("[NativeSTTModule] device audio broadcast ended conversation=%@", activeConversationId ?? "unknown")
+        stopAndCleanup(reason: "device_audio_stopped")
+    }
+
+    /// Stops capturing device audio. Closing the channel makes the
+    /// extension's writes fail, which ends the broadcast. Does nothing for a
+    /// microphone session. Runs from `deinit` too, so it must not capture
+    /// `self` in a closure.
+    private func tearDownDeviceAudioCapture() {
+        deviceAudioActive = false
+        MingleDeviceAudioState.shared.isActive = false
+        stopDeviceAudioSilenceFill()
+        stopDeviceAudioKeepAlive()
+        removeDeviceAudioInterruptionObserver()
+        let receiver = deviceAudioReceiver
+        deviceAudioReceiver = nil
+        receiver?.stop()
     }
 
     @objc(start:resolver:rejecter:)
@@ -1046,6 +1501,8 @@ class NativeSTTModule: RCTEventEmitter {
             reject("already_running", "native_stt_already_running", nil)
             return
         }
+        // A newer start replaces one still waiting on the broadcast sheet.
+        cancelPendingDeviceAudioStart(reason: "superseded")
 
         guard let wsUrlString = options["wsUrl"] as? String,
               let wsUrl = URL(string: wsUrlString)
@@ -1077,25 +1534,38 @@ class NativeSTTModule: RCTEventEmitter {
             options["sonioxEndpointTuningStep"]
         )
 
+        let sessionOptions = SessionOptions(
+            wsUrl: wsUrl,
+            wsUrlString: wsUrlString,
+            conversationId: conversationId,
+            sttModel: sttModel,
+            aecEnabled: aecEnabled,
+            apiNamespace: apiNamespace,
+            releaseVariant: releaseVariant,
+            behaviorProfile: behaviorProfile,
+            sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
+            sttSegmentationMode: sttSegmentationMode,
+            sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
+            sonioxEndpointTuningStep: sonioxEndpointTuningStep
+        )
+
+        let captureSource = (options["captureSource"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if captureSource == "device_audio" {
+            // The broadcast extension captures what other apps play; the
+            // microphone, and its permission, are not involved.
+            let request = DeviceAudioStartRequest(options: sessionOptions, resolve: resolve, reject: reject)
+            DispatchQueue.main.async { [weak self] in
+                self?.requestDeviceAudioBroadcast(request)
+            }
+            return
+        }
+
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
         case .granted:
-            startSession(
-                wsUrl: wsUrl,
-                wsUrlString: wsUrlString,
-                conversationId: conversationId,
-                sttModel: sttModel,
-                aecEnabled: aecEnabled,
-                apiNamespace: apiNamespace,
-                releaseVariant: releaseVariant,
-                behaviorProfile: behaviorProfile,
-                sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
-                sttSegmentationMode: sttSegmentationMode,
-                sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
-                sonioxEndpointTuningStep: sonioxEndpointTuningStep,
-                resolve: resolve,
-                reject: reject
-            )
+            startSession(options: sessionOptions, resolve: resolve, reject: reject)
         case .denied:
             emitError("mic_permission_denied")
             reject("mic_permission", "Microphone permission denied", nil)
@@ -1104,22 +1574,7 @@ class NativeSTTModule: RCTEventEmitter {
                 DispatchQueue.main.async {
                     guard let self else { return }
                     if granted {
-                        self.startSession(
-                            wsUrl: wsUrl,
-                            wsUrlString: wsUrlString,
-                            conversationId: conversationId,
-                            sttModel: sttModel,
-                            aecEnabled: aecEnabled,
-                            apiNamespace: apiNamespace,
-                            releaseVariant: releaseVariant,
-                            behaviorProfile: behaviorProfile,
-                            sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
-                            sttSegmentationMode: sttSegmentationMode,
-                            sonioxEndpointMaxDelayMs: sonioxEndpointMaxDelayMs,
-                            sonioxEndpointTuningStep: sonioxEndpointTuningStep,
-                            resolve: resolve,
-                            reject: reject
-                        )
+                        self.startSession(options: sessionOptions, resolve: resolve, reject: reject)
                         return
                     }
 
@@ -1161,6 +1616,16 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
+        // A stop while the broadcast sheet is still open cancels that start.
+        if let pendingConversationId = pendingDeviceAudioConversationId(),
+           requestedConversationId.isEmpty
+            || pendingConversationId.isEmpty
+            || requestedConversationId == pendingConversationId {
+            cancelPendingDeviceAudioStart(reason: "stop_requested")
+            resolve(["ok": true])
+            return
+        }
+
         if isRunning {
             sendJson([
                 "type": "stop_recording",
@@ -1190,7 +1655,7 @@ class NativeSTTModule: RCTEventEmitter {
         lastAppliedAec = enabled
         NSLog("[NativeSTTModule] setAec %d→%d isRunning=%d", prev ? 1 : 0, enabled ? 1 : 0, isRunning ? 1 : 0)
 
-        guard isRunning else {
+        guard isRunning, !deviceAudioActive else {
             resolve(["ok": true])
             return
         }

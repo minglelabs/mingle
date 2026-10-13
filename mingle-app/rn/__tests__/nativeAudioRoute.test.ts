@@ -110,11 +110,22 @@ describe('capabilities message (contract A.1)', () => {
       type: 'capabilities',
       openAppSettings: true,
       audioRoute: true,
+      deviceAudioCapture: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
       type: 'capabilities',
       openAppSettings: true,
       audioRoute: false,
+      deviceAudioCapture: false,
+    });
+  });
+
+  it('reports device-audio capture only when the shell says it can', () => {
+    expect(buildNativeShellCapabilities({ audioRoute: false, deviceAudioCapture: true })).toEqual({
+      type: 'capabilities',
+      openAppSettings: true,
+      audioRoute: false,
+      deviceAudioCapture: true,
     });
   });
 });

@@ -161,7 +161,7 @@ describe('App earphone-mode bridge wiring', () => {
 
     const [capabilities] = runScript(mockInjectedScripts[capabilitiesIndex]);
     expect(capabilities.type).toBe('mingle:native-stt');
-    expect(capabilities.detail).toEqual({ type: 'capabilities', openAppSettings: true, audioRoute: true });
+    expect(capabilities.detail).toEqual({ type: 'capabilities', openAppSettings: true, audioRoute: true, deviceAudioCapture: false });
 
     const [route] = runScript(mockInjectedScripts[routeIndex]);
     expect(route.detail).toEqual({
@@ -305,7 +305,7 @@ describe('App earphone-mode bridge wiring', () => {
       await ReactTestRenderer.act(async () => { webView.props.onLoadEnd({ nativeEvent: { url: PAGE_URL } }); });
       const capabilities = dispatchedEvents(mockInjectedScripts, 'mingle:native-stt')
         .map((event) => event.detail).filter((event) => event.type === 'capabilities');
-      expect(capabilities).toEqual([{ type: 'capabilities', openAppSettings: true, audioRoute: false }]);
+      expect(capabilities).toEqual([{ type: 'capabilities', openAppSettings: true, audioRoute: false, deviceAudioCapture: true }]);
       expect(dispatchedEvents(mockInjectedScripts, 'mingle:native-audio-route')).toEqual([]);
       await ReactTestRenderer.act(async () => { renderer.unmount(); });
     } finally {
@@ -325,7 +325,7 @@ describe('App earphone-mode bridge wiring', () => {
     const capabilities = dispatchedEvents(mockInjectedScripts, 'mingle:native-stt')
       .map((event) => event.detail)
       .filter((detail) => detail.type === 'capabilities');
-    expect(capabilities).toEqual([{ type: 'capabilities', openAppSettings: true, audioRoute: false }]);
+    expect(capabilities).toEqual([{ type: 'capabilities', openAppSettings: true, audioRoute: false, deviceAudioCapture: false }]);
     expect(dispatchedEvents(mockInjectedScripts, 'mingle:native-audio-route')).toEqual([]);
 
     await ReactTestRenderer.act(async () => {

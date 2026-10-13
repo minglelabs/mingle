@@ -43,6 +43,16 @@ import {
   requestNativeAudioRoute,
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
+import {
+  getNativeDeviceAudioCapabilityServerSnapshot,
+  getNativeDeviceAudioCapabilitySnapshot,
+  getSttCaptureSourcePickServerSnapshot,
+  getSttCaptureSourcePickSnapshot,
+  resolveEffectiveSttCaptureSource,
+  setSttCaptureSourcePick,
+  subscribeNativeDeviceAudioCapability,
+  subscribeSttCaptureSourcePick,
+} from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
@@ -2148,6 +2158,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  // Device audio: translate what other apps play instead of the microphone.
+  // Picked in the earphone-mode notice, on shells that can capture it.
+  const nativeDeviceAudioSupported = useSyncExternalStore(
+    subscribeNativeDeviceAudioCapability,
+    getNativeDeviceAudioCapabilitySnapshot,
+    getNativeDeviceAudioCapabilityServerSnapshot,
+  )
+  const sttCaptureSourcePick = useSyncExternalStore(
+    subscribeSttCaptureSourcePick,
+    getSttCaptureSourcePickSnapshot,
+    getSttCaptureSourcePickServerSnapshot,
+  )
+  const sttCaptureSource = resolveEffectiveSttCaptureSource({
+    supported: nativeDeviceAudioSupported,
+    earphoneModeEnabled,
+    pick: sttCaptureSourcePick,
+  })
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
   const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
@@ -4558,6 +4585,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
+    captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
@@ -5570,6 +5598,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
+  // The capture source is fixed when a session starts. When it changes under a
+  // running session (picked in the notice, or earphone mode turned off), end
+  // that session so the next Start captures what the room now says it does.
+  const appliedSttCaptureSourceRef = useRef(sttCaptureSource)
+  useEffect(() => {
+    if (appliedSttCaptureSourceRef.current === sttCaptureSource) return
+    appliedSttCaptureSourceRef.current = sttCaptureSource
+    if (isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
+
   const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
@@ -6453,6 +6491,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the room's display language again.
   useEffect(() => subscribeEarphoneModePreference(() => {
     setEarphoneModeReadLanguagePick(null)
+    // The capture source lasts one session too: every new one starts on the
+    // microphone, so Start never opens the screen-capture prompt unasked.
+    setSttCaptureSourcePick('microphone')
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
@@ -9313,6 +9354,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}
+                onSelectCaptureSource={setSttCaptureSourcePick}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
               />
             </MessageMediaDialog>

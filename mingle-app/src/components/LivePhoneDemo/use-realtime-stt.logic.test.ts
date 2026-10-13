@@ -42,6 +42,7 @@ import {
   shouldBlockNativeSttSessionEvent,
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
+  isNativeDeviceAudioConsentDeclined,
   shouldPromoteConnectionStatusFromNativeActivity,
   shouldHandleNativeBridgeServerMessage,
   shouldTrackUsageForConnectionStatus,
@@ -853,6 +854,16 @@ describe('use-realtime-stt pure logic', () => {
       code: 'mic_permission',
       message: 'Microphone permission denied',
     })).toBe(false)
+  })
+
+  it('treats a declined device-audio prompt as a cancel on any platform', () => {
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'device_audio_permission' })).toBe(true)
+    expect(isNativeDeviceAudioConsentDeclined({ message: 'device_audio_permission_denied' })).toBe(true)
+    expect(isNativeDeviceAudioConsentDeclined({ code: ' Device_Audio_Permission ' })).toBe(true)
+    // A capture that broke after the prompt is a real failure.
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'device_audio_start', message: 'Media projection unavailable' })).toBe(false)
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'mic_permission' })).toBe(false)
+    expect(isNativeDeviceAudioConsentDeclined({})).toBe(false)
   })
 
   it('maps native bridge statuses back into UI connection state for restore flows', () => {
