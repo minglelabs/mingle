@@ -166,6 +166,11 @@ interface ChatBubbleProps {
   preferredDisplayLanguages?: readonly string[]
   defaultDisplayLanguage?: string | null
   languageOrder?: readonly string[]
+  /**
+   * Room languages only another member picked. Their translations never
+   * render for this viewer (rows, language buttons, copy text).
+   */
+  hiddenLanguages?: readonly string[]
   isDraft?: boolean
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
@@ -352,6 +357,7 @@ export function buildTargetLanguagesForUtterance(
   utterance: Utterance,
   languageOrder: readonly string[] = [],
   resolver: DisplayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder),
+  hiddenLanguages: readonly string[] = [],
 ): string[] {
   const keepSourceLanguageBubble = (
     utterance.sourceLanguagesMixed === true
@@ -359,6 +365,7 @@ export function buildTargetLanguagesForUtterance(
   )
   const targetLanguages: string[] = []
   const seen = new Set<string>()
+  const hiddenKeys = new Set(hiddenLanguages.map((language) => resolver.keyOf(language)))
 
   const pushLanguage = (rawLanguage: string) => {
     const language = (rawLanguage || '').trim()
@@ -371,7 +378,7 @@ export function buildTargetLanguagesForUtterance(
     ) {
       return
     }
-    if (seen.has(key)) return
+    if (seen.has(key) || hiddenKeys.has(key)) return
     seen.add(key)
     targetLanguages.push(resolver.displayCodeOf(language, key))
   }
@@ -797,6 +804,7 @@ function ChatBubble({
   preferredDisplayLanguages,
   defaultDisplayLanguage,
   languageOrder,
+  hiddenLanguages,
   isDraft = false,
   onPlayOriginal,
   onPlayTranslation,
@@ -843,7 +851,12 @@ function ChatBubble({
   }, [bubbleDisplayMode])
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
-  const targetLangs = buildTargetLanguagesForUtterance(utterance, languageOrder, displayLanguageResolver)
+  const targetLangs = buildTargetLanguagesForUtterance(
+    utterance,
+    languageOrder,
+    displayLanguageResolver,
+    hiddenLanguages,
+  )
   const translationEntries = targetLangs
     .map((lang) => {
       const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
@@ -1344,6 +1357,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
   if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
   if (prev.languageOrder !== next.languageOrder) return false
+  if (prev.hiddenLanguages !== next.hiddenLanguages) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
