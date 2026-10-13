@@ -3,13 +3,16 @@
 import type { AppDictionary } from "@/i18n/types";
 import { MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
+import { readMyPageProfileCache } from "@/components/my-page-profile-cache";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
+  isNativeTabRootHref,
   NATIVE_TAB_ROOT_QUERY_KEY,
 } from "@/lib/tab-navigation";
 
@@ -86,6 +89,7 @@ export default function BottomTabBar({
   unreadConversationMessageCount,
 }: BottomTabBarProps) {
   const { data: session } = useSession();
+  const sessionUserId = session?.user?.id ?? "";
   const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -193,9 +197,59 @@ export default function BottomTabBar({
   }, [isNativeTabRoot, pathname, searchParamsKey]);
 
   useEffect(() => {
-    if (isMypageActive) return;
-    void router.prefetch(mypageHref);
-  }, [isMypageActive, mypageHref, router]);
+    const inactiveTabHrefs = [
+      isConversationsActive ? null : conversationsHref,
+      isConnectActive ? null : connectHref,
+      isMypageActive ? null : mypageHref,
+    ].filter((href): href is string => href !== null);
+
+    if (!inactiveTabHrefs.every(isNativeTabRootHref)) {
+      // Browser tabs render server-loaded data, so they keep fetching it on tap.
+      if (!isMypageActive) void router.prefetch(mypageHref);
+      return;
+    }
+
+    // Native tab roots carry no server-loaded data, so the whole screen can be
+    // held in the router cache and a tap commits from memory. Without this
+    // every tap waits on a server round-trip with the old tab still showing,
+    // which reads as a dead tab bar when the first request after a long
+    // background is slow or fails. The cache lifetime is
+    // experimental.staleTimes.static in next.config.mjs.
+    const prefetchInactiveTabs = () => {
+      for (const href of inactiveTabHrefs) {
+        void router.prefetch(href, { kind: PrefetchKind.FULL });
+      }
+    };
+    // A prefetch of an entry that is still fresh sends nothing, so this only
+    // reaches the network once the cached screens have expired.
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") prefetchInactiveTabs();
+    };
+
+    prefetchInactiveTabs();
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [
+    connectHref,
+    conversationsHref,
+    isConnectActive,
+    isConversationsActive,
+    isMypageActive,
+    mypageHref,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (isMypageActive || !sessionUserId) return;
+    // Loads the persisted profile into memory ahead of the tap, so MyPage can
+    // render it on its first frame instead of after its mount effect.
+    readMyPageProfileCache(sessionUserId);
+  }, [isMypageActive, sessionUserId]);
 
   return (
     <nav
