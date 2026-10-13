@@ -2,6 +2,7 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
@@ -903,6 +904,7 @@ type ConversationHydrationPayload = {
     isMultiMember?: boolean
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+  recalledMessageIds?: string[]
   inviteNotices?: ConversationHydrationInviteNoticePayload[]
 }
 
@@ -1037,6 +1039,8 @@ export function normalizeConversationHydrationUtterances(
       const record = utterance as ConversationHydrationUtterance
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
+        ...(record.recalled === true ? { recalled: true } : {}),
+        ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
@@ -1086,7 +1090,8 @@ export function normalizeConversationHydrationUtterances(
           : {}),
       }, roomLanguages)
     })
-    .filter((utterance) => utterance.id && utterance.originalText.trim())
+    .map((utterance) => (utterance.recalled ? toRecalledUtterance(utterance) : utterance))
+    .filter((utterance) => utterance.id && (utterance.recalled || utterance.originalText.trim()))
 }
 
 function buildConversationHydrationApiPath(
@@ -2249,6 +2254,8 @@ function areOptionalRecordsEqual<T extends string | boolean>(
 function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
   return (
     left.id === right.id
+    && left.recalled === right.recalled
+    && left.sentByViewer === right.sentByViewer
     && left.speaker === right.speaker
     && left.speakerAvatarSeed === right.speakerAvatarSeed
     && left.speakerAvatarIndex === right.speakerAvatarIndex
@@ -2476,6 +2483,58 @@ export function findConversationHydrationOrderConflicts(input: {
   return conflicts
 }
 
+/** The "deleted message" placeholder: keeps the bubble's place and sender, drops its content. */
+export function toRecalledUtterance(utterance: Utterance): Utterance {
+  return {
+    id: utterance.id,
+    recalled: true,
+    originalText: '',
+    originalLang: utterance.originalLang,
+    translations: {},
+    ...(utterance.speaker !== undefined ? { speaker: utterance.speaker } : {}),
+    ...(utterance.speakerAvatarSeed !== undefined ? { speakerAvatarSeed: utterance.speakerAvatarSeed } : {}),
+    ...(utterance.speakerAvatarIndex !== undefined ? { speakerAvatarIndex: utterance.speakerAvatarIndex } : {}),
+    ...(utterance.speakerName !== undefined ? { speakerName: utterance.speakerName } : {}),
+    ...(utterance.speakerUserId !== undefined ? { speakerUserId: utterance.speakerUserId } : {}),
+    ...(utterance.speakerImage !== undefined ? { speakerImage: utterance.speakerImage } : {}),
+    ...(utterance.createdAtMs !== undefined ? { createdAtMs: utterance.createdAtMs } : {}),
+    ...(utterance.serverCreatedAtMs !== undefined ? { serverCreatedAtMs: utterance.serverCreatedAtMs } : {}),
+    ...(utterance.serverMessageId !== undefined ? { serverMessageId: utterance.serverMessageId } : {}),
+  }
+}
+
+/** Blanks unsent messages in place and forgets translation work still queued for them. */
+export function recallUtterancesInStoreState(
+  store: UtteranceStoreState,
+  utteranceIds: ReadonlySet<string>,
+): UtteranceStoreState {
+  let changed = false
+  const utterances = store.utterances.map((utterance) => {
+    if (utterance.recalled || !utteranceIds.has(utterance.id)) return utterance
+    changed = true
+    return toRecalledUtterance(utterance)
+  })
+  let translationPriorities = store.translationPriorities
+  let pendingTranslationUpdates = store.pendingTranslationUpdates
+  for (const utteranceId of utteranceIds) {
+    translationPriorities = removeTranslationPrioritiesForUtterance(translationPriorities, utteranceId)
+    if (pendingTranslationUpdates.has(utteranceId)) {
+      if (pendingTranslationUpdates === store.pendingTranslationUpdates) {
+        pendingTranslationUpdates = new Map(pendingTranslationUpdates)
+      }
+      pendingTranslationUpdates.delete(utteranceId)
+    }
+  }
+  if (
+    !changed
+    && translationPriorities === store.translationPriorities
+    && pendingTranslationUpdates === store.pendingTranslationUpdates
+  ) {
+    return store
+  }
+  return { utterances: changed ? utterances : store.utterances, translationPriorities, pendingTranslationUpdates }
+}
+
 export function mergeServerHydrationUtteranceIntoStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
@@ -2490,6 +2549,12 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
   roomLanguages: LanguageCandidates | null,
 ): UtteranceStoreState {
   const existingRaw = store.utterances.find((item) => item.id === utterance.id)
+  if (utterance.recalled) {
+    // Keep a local bubble where it already sits; a placeholder never merges content.
+    return recallUtterancesInStoreState(existingRaw ? store : {
+      ...store, utterances: appendOrReplaceUtterance(store.utterances, toRecalledUtterance(utterance)),
+    }, new Set([utterance.id]))
+  }
   const normalizedServerUtterance = normalizeStoredUtterance(utterance, [
     ...(existingRaw?.targetLanguages || []),
     ...(existingRaw && existingRaw.originalText === utterance.originalText ? [existingRaw.originalLang] : []),
@@ -2605,6 +2670,8 @@ export function applyTranslationToUtteranceStoreState(input: {
 }): UtteranceStoreState {
   const existingIndex = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
   const existingTarget = existingIndex >= 0 ? input.store.utterances[existingIndex] : undefined
+  // A translation that lands after the sender unsent the message has nowhere to go.
+  if (existingTarget?.recalled) return input.store
   const languageCandidates = [
     ...(input.selectedLanguages || []),
     ...(existingTarget?.targetLanguages || []),
@@ -3542,6 +3609,35 @@ export default function useRealtimeSTT({
     || hasOlderServerUtterancesRef.current
   ), [])
 
+  // The visible list and the warm cache must both blank an unsent message:
+  // buildMergedUtterances re-adds whatever the cache still holds.
+  const applyRecalledMessageIds = useCallback((rawIds: unknown) => {
+    const recalledIds = new Set(normalizeRecalledMessageIds(rawIds))
+    if (recalledIds.size === 0) return
+    const stored = storedUtterancesRef.current
+    const newlyRecalledIds = new Set<string>()
+    for (const utterance of [...stored, ...utterancesRef.current]) {
+      if (recalledIds.has(utterance.id) && !utterance.recalled) newlyRecalledIds.add(utterance.id)
+    }
+    if (newlyRecalledIds.size === 0) return
+    storedUtterancesRef.current = stored.map((utterance) => (
+      newlyRecalledIds.has(utterance.id) ? toRecalledUtterance(utterance) : utterance
+    ))
+    setUtteranceStore((current) => recallUtterancesInStoreState(current, newlyRecalledIds))
+    setMessageCount((current) => Math.max(0, normalizePersistedMessageCount(current) - newlyRecalledIds.size))
+  }, [])
+
+  // The sender's own screen blanks the bubble as soon as the recall succeeds.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) return
+    const onRecalled = (event: Event) => {
+      const detail = (event as CustomEvent<MessageRecalledEventDetail>).detail
+      if (detail?.conversationId === conversationId) applyRecalledMessageIds([detail.messageId])
+    }
+    window.addEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+    return () => window.removeEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+  }, [applyRecalledMessageIds, conversationId])
+
   const applyPendingHasOlderUtterances = useCallback(() => {
     const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
     if (pendingHasOlderUtterances === null) return
@@ -3717,6 +3813,7 @@ export default function useRealtimeSTT({
       setInviteNotices((current) => (
         areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
       ))
+      applyRecalledMessageIds(payload.recalledMessageIds)
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3749,6 +3846,7 @@ export default function useRealtimeSTT({
       isLoadingOlderServerUtterancesRef.current = false
     }
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,
@@ -3838,6 +3936,7 @@ export default function useRealtimeSTT({
         setInviteNotices((current) => (
           areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
         ))
+        applyRecalledMessageIds(payload.recalledMessageIds)
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3883,6 +3982,7 @@ export default function useRealtimeSTT({
         // Keep local state when server hydration fails.
       })
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,

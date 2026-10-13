@@ -1584,6 +1584,7 @@ describe("app-conversations", () => {
         OR: [
           { isDeleted: false },
           { isDeleted: null },
+          { isDeleted: true, metadata: { path: ['recalledAtMs'], gt: 0 } },
         ],
       },
       orderBy: [
