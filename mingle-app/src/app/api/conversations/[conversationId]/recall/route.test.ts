@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockSession, mockSessionKey, mockMembers, mockFindFirst, mockUpdate, mockUpdateContents, mockNotify } = vi.hoisted(() => ({
+const { mockSession, mockSessionKey, mockMembers, mockFindFirst, mockFindUnique, mockLock, mockUpdate, mockUpdateContents, mockNotify } = vi.hoisted(() => ({
+  mockFindUnique: vi.fn(),
+  mockLock: vi.fn(),
   mockSession: vi.fn(),
   mockSessionKey: vi.fn(),
   mockMembers: vi.fn(),
@@ -20,9 +22,12 @@ vi.mock("@/lib/app-conversations", () => ({
 vi.mock("@/server/conversation-realtime", () => ({ notifyConversationMessage: mockNotify }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    $transaction: (operations: unknown[]) => Promise.all(operations),
-    appMessage: { findFirst: mockFindFirst, update: mockUpdate },
-    appMessageContent: { updateMany: mockUpdateContents },
+    $transaction: (run: (tx: unknown) => unknown) => run({
+      $queryRaw: mockLock,
+      appMessage: { findUnique: mockFindUnique, update: mockUpdate },
+      appMessageContent: { updateMany: mockUpdateContents },
+    }),
+    appMessage: { findFirst: mockFindFirst },
   },
 }));
 
@@ -40,13 +45,16 @@ describe("POST /api/conversations/[conversationId]/recall", () => {
     mockSession.mockResolvedValue({ user: { id: "user_1" } });
     mockSessionKey.mockResolvedValue("sess_1");
     mockMembers.mockResolvedValue(["user_1", "user_2"]);
-    mockFindFirst.mockResolvedValue({ id: "msg_1", userId: "user_1", isDeleted: false, metadata: { image: { objectKey: "k" } } });
+    mockFindFirst.mockResolvedValue({ id: "msg_1", userId: "user_1", clientMessageId: "u-1700000000000-1", isDeleted: false, metadata: {} });
+    mockFindUnique.mockResolvedValue({ metadata: { image: { objectKey: "k" } } });
   });
 
   it("soft-deletes the sender's own message and notifies the room", async () => {
     const response = await recall({ messageId: "u-1700000000000-1" });
 
     expect(response.status).toBe(200);
+    // Serialized with the finalize upsert, and built on the metadata read under that lock.
+    expect(mockLock.mock.invocationCallOrder[0]).toBeLessThan(mockFindUnique.mock.invocationCallOrder[0]);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "msg_1" },
       data: { isDeleted: true, metadata: { image: { objectKey: "k" }, recalledAtMs: expect.any(Number) } },

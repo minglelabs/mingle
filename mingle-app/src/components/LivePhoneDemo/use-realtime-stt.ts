@@ -1040,6 +1040,7 @@ export function normalizeConversationHydrationUtterances(
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
         ...(record.recalled === true ? { recalled: true } : {}),
+        ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
@@ -2254,6 +2255,7 @@ function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
   return (
     left.id === right.id
     && left.recalled === right.recalled
+    && left.sentByViewer === right.sentByViewer
     && left.speaker === right.speaker
     && left.speakerAvatarSeed === right.speakerAvatarSeed
     && left.speakerAvatarIndex === right.speakerAvatarIndex

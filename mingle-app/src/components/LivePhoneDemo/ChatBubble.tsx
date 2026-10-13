@@ -128,6 +128,9 @@ export interface Utterance {
   // The sender unsent this message; it renders as a "deleted message"
   // placeholder and carries no text, translations or photo.
   recalled?: boolean
+  // The viewer sent this message, as confirmed by the server. Unlike
+  // speakerUserId it is also set for turns sent while the room was solo.
+  sentByViewer?: boolean
   image?: ConversationMessageImage
   id: string
   speaker?: string
@@ -1326,8 +1329,8 @@ function ChatBubble({
   const bubbleContent = isOwnMessage
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
-  // A solo room's own turns carry no speakerUserId (see isOwnMessage); the server still verifies the sender.
-  const canRecall = !isDraft && !isRecalled && Boolean(viewerUserId) && (!utterance.speakerUserId || isOwnMessage)
+  // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
+  const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>{bubbleContent}</MessageRecallScope>
   </MessageReactionScope>
@@ -1378,6 +1381,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.speakerName !== nu.speakerName) return false
     if (pu.recalled !== nu.recalled) return false
+    if (pu.sentByViewer !== nu.sentByViewer) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false

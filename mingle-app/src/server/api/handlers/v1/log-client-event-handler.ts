@@ -131,14 +131,6 @@ async function shouldSkipFinalizedTurnPersistence(args: {
   const { clientMessageId, sessionKey } = args
   if (!sessionKey) return false
 
-  // A late translation update or outbox retry must not resurrect a message
-  // its sender already unsent (the upsert below clears isDeleted).
-  const existing = await prisma.appMessage.findFirst({
-    where: { sessionKey, clientMessageId },
-    select: { metadata: true },
-  })
-  if (readMessageRecalledAtMs(existing?.metadata) !== null) return true
-
   const latestConversationClearEvent = await prisma.appEventLog.findFirst({
     where: {
       sessionKey,
@@ -315,7 +307,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+      persist: if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
         // SOURCE and every TRANSLATION_FINAL row must land in one commit —
         // a concurrent reader (the conversation list's own poll, not just
         // the post-write WS notify below) can otherwise observe the message
@@ -331,6 +323,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
             where: { sessionKey_clientMessageId: { sessionKey: tracking.sessionKey, clientMessageId } },
             select: { metadata: true, createdAt: true },
           })
+          // A late translation update or outbox retry must not resurrect a
+          // message its sender already unsent (the upsert clears isDeleted).
+          // The recall takes this same lock, so the two never interleave.
+          if (readMessageRecalledAtMs(existing?.metadata) !== null) return null
           if (existing) {
             const metadata = sanitizeJsonObject(existing.metadata)
             const previousTargetLanguages = sanitizeTargetLanguages(metadata?.translationTargetLanguages)
@@ -392,6 +388,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             },
           })
         })
+        if (!message) break persist
         const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
         orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
           ? persistedOrder : message.createdAt.getTime()

@@ -88,6 +88,9 @@ export type ConversationHydrationUtterance = {
   // The sender unsent this message: an empty placeholder that keeps its place
   // and sender in the timeline, with no text, translations or photo.
   recalled?: true;
+  // The viewer's own message. speakerUserId cannot say so: it is withheld for
+  // turns sent while the room was still solo, whoever is reading them now.
+  sentByViewer?: true;
   image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
@@ -3073,6 +3076,7 @@ async function getConversationHydrationStateForRecord(args: {
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
       ...(recalled ? { recalled: true as const } : {}),
+      ...(message.userId && message.userId === args.viewerUserId ? { sentByViewer: true as const } : {}),
       ...(image ? { image } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
@@ -3160,7 +3164,9 @@ async function getConversationHydrationStateForRecord(args: {
         },
         viewerFacingDisplayLanguage,
       )
-    : undefined;
+    // An absent preview means "unchanged" to the list (see above), which would
+    // leave an unsent message's text there once nothing else is left to show.
+    : utterances.some((utterance) => utterance.recalled) ? "" : undefined;
 
   return {
     conversation: serializeConversationChannel(

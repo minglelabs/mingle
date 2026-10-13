@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getConversationSessionKeyForMember, listChannelMemberUserIdsBySessionKey } from '@/lib/app-conversations'
 import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib/message-recall'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { messageIdentity } from './message-reaction-controller'
 
 // Unsends one of the caller's own messages (text, voice or photo) for everyone
 // in the room. Soft delete only: the row, its contents and any stored photo
@@ -22,28 +23,32 @@ export async function recallConversationMessage(request: NextRequest, conversati
   if (typeof messageId !== 'string' || !messageId || messageId.length > 256) {
     return NextResponse.json({ error: 'invalid_message_id' }, { status: 400 })
   }
-  // The UI uses stable client IDs, including the legacy db-ID fallback used by hydration.
   const message = await prisma.appMessage.findFirst({
-    where: { sessionKey, OR: [
-      { clientMessageId: messageId },
-      ...(messageId.startsWith('db-') ? [{ id: messageId.slice(3), clientMessageId: null }] : []),
-    ] },
-    select: { id: true, userId: true, isDeleted: true, metadata: true },
+    where: { sessionKey, AND: [messageIdentity([messageId])] },
+    select: { id: true, userId: true, clientMessageId: true, isDeleted: true, metadata: true },
   })
   if (!message) return NextResponse.json({ error: 'message_not_found' }, { status: 404 })
   if (message.userId !== userId) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   // Retries stay idempotent; a message removed by "clear history" is not turned into a recall.
   if (readMessageRecalledAtMs(message.metadata) !== null) return NextResponse.json({ ok: true, messageId })
   if (message.isDeleted) return NextResponse.json({ error: 'message_not_found' }, { status: 404 })
-  const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
-    ? message.metadata as Prisma.JsonObject : {}
-  await prisma.$transaction([
-    prisma.appMessage.update({
+  await prisma.$transaction(async tx => {
+    // Same lock as the finalize upsert (log-client-event-handler), which
+    // rewrites isDeleted and metadata: a translation update landing now either
+    // commits first and is recalled here, or sees the recall and is dropped.
+    if (message.clientMessageId) {
+      const lockKey = JSON.stringify([sessionKey, message.clientMessageId])
+      await tx.$queryRaw`SELECT true AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+    }
+    const current = await tx.appMessage.findUnique({ where: { id: message.id }, select: { metadata: true } })
+    const metadata = current?.metadata && typeof current.metadata === 'object' && !Array.isArray(current.metadata)
+      ? current.metadata as Prisma.JsonObject : {}
+    await tx.appMessage.update({
       where: { id: message.id },
       data: { isDeleted: true, metadata: { ...metadata, [MESSAGE_RECALLED_AT_METADATA_KEY]: Date.now() } },
-    }),
-    prisma.appMessageContent.updateMany({ where: { messageId: message.id }, data: { isDeleted: true } }),
-  ])
+    })
+    await tx.appMessageContent.updateMany({ where: { messageId: message.id }, data: { isDeleted: true } })
+  })
   // Open rooms drop the bubble on their next hydration; lists refresh their preview.
   const members = await listChannelMemberUserIdsBySessionKey(sessionKey)
   await notifyConversationMessage(sessionKey, members, undefined, { timeoutMs: 3000 })
