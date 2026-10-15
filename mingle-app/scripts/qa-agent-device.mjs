@@ -377,9 +377,23 @@ async function cmdStop() {
   console.log(JSON.stringify({ stopped: true }));
 }
 
+// devbox does not persist the LAN host in .devbox.env; `scripts/devbox up --host <ip>` writes it into
+// the iOS runtime xcconfig, which is the source of truth here. MINGLE_QA_DEVBOX_HOST overrides it.
+function resolveDevboxHost() {
+  if (process.env.MINGLE_QA_DEVBOX_HOST) return process.env.MINGLE_QA_DEVBOX_HOST;
+  try {
+    const xcconfig = fs.readFileSync(path.join(APP_ROOT, 'rn/ios/devbox.runtime.xcconfig'), 'utf8');
+    const host = /^NEXT_PUBLIC_SITE_HOST = ([^:\s]+)/m.exec(xcconfig)?.[1];
+    if (host) return host;
+  } catch {
+    // No xcconfig yet.
+  }
+  return '127.0.0.1';
+}
+
 async function cmdServers() {
   const env = devboxEnv();
-  const host = env.DEVBOX_LOCAL_HOST || '127.0.0.1';
+  const host = resolveDevboxHost();
   const webUrl = `http://${host}:${env.DEVBOX_WEB_PORT}`;
   let webStatus = 0;
   try {
@@ -402,13 +416,13 @@ async function cmdServers() {
 
 function cmdInstall(args) {
   const udid = resolveUdid(readOption(args, '--udid'));
-  const env = devboxEnv();
-  if (!env.DEVBOX_LOCAL_HOST || env.DEVBOX_LOCAL_HOST === '127.0.0.1') {
-    fail('devbox points at 127.0.0.1, which the phone cannot reach. Run `scripts/devbox profile --profile local --host <Mac LAN IP>` and restart devbox first.');
+  const host = resolveDevboxHost();
+  if (host === '127.0.0.1' || host === 'localhost') {
+    fail('devbox points at 127.0.0.1, which the phone cannot reach. Restart it with scripts/devbox up --profile local --host <Mac LAN IP>.');
   }
   // Release build with the QA bridge: the JS bundle is embedded, so no Metro server is needed,
   // and the WebView is inspectable for snapshots.
-  execFileSync(path.join(REPO_ROOT, 'scripts/devbox'), ['mobile', '--platform', 'ios', '--ios-udid', udid, '--qa-bridge'], {
+  execFileSync(path.join(REPO_ROOT, 'scripts/devbox'), ['mobile', '--platform', 'ios', '--profile', 'local', '--host', host, '--ios-udid', udid, '--qa-bridge'], {
     cwd: REPO_ROOT,
     stdio: 'inherit',
   });

@@ -30,8 +30,7 @@ Scripts in `mingle-app/scripts/`:
 
 1. Start the local stack in this worktree, reachable from the phone over Wi-Fi (Claude asks before starting it):
    ```bash
-   scripts/devbox profile --profile local --host <Mac LAN IP>
-   scripts/devbox up --profile local
+   scripts/devbox up --profile local --host "$(ipconfig getifaddr en0)"
    ```
 2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode on.
 3. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.

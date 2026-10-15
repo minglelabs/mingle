@@ -66,8 +66,7 @@ Run these from the worktree root.
    `ok: true` needs devbox running in this worktree **and** a LAN host the phone can reach. If it is not ok, stop and
    ask the owner. To start devbox yourself you need their yes, and it runs in a terminal tab:
    ```bash
-   scripts/devbox profile --profile local --host "$(ipconfig getifaddr en0)"
-   scripts/devbox up --profile local
+   scripts/devbox up --profile local --host "$(ipconfig getifaddr en0)"
    ```
 3. Install the QA build (Release + QA bridge: the JS bundle is embedded, so no Metro, and the WebView is
    inspectable). The first build takes about 10 minutes, so run it in the background. Skip the install when the
