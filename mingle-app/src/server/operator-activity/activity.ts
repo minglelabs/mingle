@@ -174,7 +174,8 @@ function toActivityItem(row: ActivityRow): ActivityItem {
     isRead: row.readAt !== null,
     createdAt: row.createdAt.toISOString(),
     operator: toActivityPerson(row.recipient),
-    actor: toActivityPerson(row.actor),
+    // operatorActivityWhere only matches rows with a (non-operator) actor.
+    actor: toActivityPerson(row.actor!),
     postId: row.postId,
     postExcerpt: post && !postUnavailable ? clipActivityText(post.sourceText) : null,
     postUnavailable,

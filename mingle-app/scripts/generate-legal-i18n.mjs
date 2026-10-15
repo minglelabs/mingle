@@ -9,7 +9,7 @@ import {
 
 const ROOT = process.cwd();
 const LEGAL_ROOT = path.join(ROOT, "public", "legal");
-const PRIVACY_LAST_UPDATED_DATE = "September 30, 2026";
+const PRIVACY_LAST_UPDATED_DATE = "October 8, 2026";
 const TERMS_LAST_UPDATED_DATE = "August 25, 2026";
 
 const locales = [
@@ -85,6 +85,7 @@ const privacyDoc = {
         "Soniox: audio stream and related context needed for speech-to-text processing.",
         "Inworld: text and language context needed for voice generation features and synthesized audio delivery.",
         "Google: account authentication and text-based service operations where used. Mingle does not send raw voice audio to Google for speech processing.",
+        "Anthropic: text you submit for translation and the language context needed to generate translations with Claude models.",
         "Legal/Safety Requests: when required by law or necessary to protect rights, safety, and security.",
         "Corporate Transactions: in connection with merger, financing, acquisition, bankruptcy, or asset transfer.",
       ],
@@ -143,7 +144,7 @@ const privacyDoc = {
       paragraphs: [
         "Mingle Labs, Inc. (Republic of Korea)",
         "Email: legal@minglelabs.app",
-        "Website: https://translator.minglelabs.xyz",
+        "Website: https://translator.minglelabs.app",
       ],
     },
   ],
@@ -254,7 +255,7 @@ const termsDoc = {
       paragraphs: [
         "Mingle Labs, Inc. (Republic of Korea)",
         "Email: legal@minglelabs.app",
-        "Website: https://translator.minglelabs.xyz",
+        "Website: https://translator.minglelabs.app",
       ],
     },
   ],
@@ -314,8 +315,8 @@ function linkify(value) {
     '<a href="mailto:legal@minglelabs.app">legal@minglelabs.app</a>',
   );
   escaped = escaped.replaceAll(
-    "https://translator.minglelabs.xyz",
-    '<a href="https://translator.minglelabs.xyz">https://translator.minglelabs.xyz</a>',
+    "https://translator.minglelabs.app",
+    '<a href="https://translator.minglelabs.app">https://translator.minglelabs.app</a>',
   );
   escaped = escaped.replaceAll(
     "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",

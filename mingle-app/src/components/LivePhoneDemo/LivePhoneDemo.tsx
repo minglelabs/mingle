@@ -87,6 +87,7 @@ import {
 } from '@/components/conversation-member-profile-cache'
 import {
   buildLanguageSelectorButtonCodes,
+  resolveLanguageSelectorOthersOnlyLanguages,
   resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from './language-selector.logic'
@@ -322,9 +323,10 @@ const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bot
 function resolveNativePipTargetLanguages(
   utterance: Utterance,
   resolver: DisplayLanguageResolver,
+  hiddenLanguages: readonly string[] = [],
 ): string[] {
   const targetLanguages: string[] = []
-  const seen = new Set<string>()
+  const seen = new Set<string>(hiddenLanguages.map((language) => resolver.keyOf(language)))
   const candidates = [
     ...(utterance.targetLanguages || []),
     ...Object.keys(utterance.translations || {}),
@@ -427,12 +429,13 @@ export function buildNativePipMessage(
     displayMode: LivePhoneDemoBubbleDisplayMode
     defaultDisplayLanguage: string | null
     roomLanguageOrder: readonly string[]
+    hiddenLanguages?: readonly string[]
     viewerUserId?: string | null
     isInterim: boolean
   },
 ): NativePipState['messages'][number] {
   const resolver = createDisplayLanguageResolver(utterance, options.roomLanguageOrder)
-  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver, options.hiddenLanguages)
   const displayLanguage = resolveNativePipDisplayLanguage(
     utterance,
     options.defaultDisplayLanguage,
@@ -1449,10 +1452,11 @@ export function buildLatestUtterancePayload(
   preferredDisplayLanguages: readonly string[] | undefined,
   defaultDisplayLanguage: string | null | undefined,
   languageOrder: readonly string[],
+  hiddenLanguages: readonly string[] = [],
 ): LatestUtterancePayload | null {
   const resolver = createDisplayLanguageResolver(utterance, languageOrder)
   const originalDisplayLanguage = resolver.originalLanguage
-  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver)
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver, hiddenLanguages)
   const displayLanguage = resolveInitialDisplayLanguage(
     preferredDisplayLanguages?.length
       ? preferredDisplayLanguages
@@ -1567,6 +1571,7 @@ type LivePhoneDemoChatMessageRowProps = {
   preferredDisplayLanguages?: readonly string[]
   defaultDisplayLanguage?: string | null
   languageOrder: readonly string[]
+  hiddenLanguages: readonly string[]
   isDraft: boolean
   onPlayOriginal: (utterance: Utterance) => void
   onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
@@ -1593,6 +1598,7 @@ function LivePhoneDemoChatMessageRow({
   preferredDisplayLanguages,
   defaultDisplayLanguage,
   languageOrder,
+  hiddenLanguages,
   isDraft,
   onPlayOriginal,
   onPlayTranslation,
@@ -1617,6 +1623,7 @@ function LivePhoneDemoChatMessageRow({
         preferredDisplayLanguages={preferredDisplayLanguages}
         defaultDisplayLanguage={defaultDisplayLanguage}
         languageOrder={languageOrder}
+        hiddenLanguages={hiddenLanguages}
         isDraft={isDraft}
         onPlayOriginal={onPlayOriginal}
         onPlayTranslation={onPlayTranslation}
@@ -1641,6 +1648,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
     if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
     if (prev.languageOrder !== next.languageOrder) return false
+    if (prev.hiddenLanguages !== next.hiddenLanguages) return false
     if (prev.isDraft !== next.isDraft) return false
     if (prev.onPlayOriginal !== next.onPlayOriginal) return false
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
@@ -2101,14 +2109,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => selectedLanguages,
     [selectedLanguages],
   )
+  // Room languages only another member picked: sky-blue in the language
+  // selector, but never in the header button, the display-language options or
+  // the message bubbles. Keyed by content so bubble rows keep their memo.
+  const othersOnlyLanguagesKey = resolveLanguageSelectorOthersOnlyLanguages(
+    [...effectiveTranslationLanguages, ...conversationSelectedLanguages],
+    ownSelectedLanguages,
+  ).join(',')
+  const othersOnlyLanguages = useMemo(
+    () => (othersOnlyLanguagesKey ? othersOnlyLanguagesKey.split(',') : []),
+    [othersOnlyLanguagesKey],
+  )
   const normalizedDisplayLanguageOptions = useMemo(
     () => sanitizeSttLanguageUnion([
       ...effectiveTranslationLanguages,
       ...conversationSelectedLanguages,
-    ]),
+    ]).filter((language) => !othersOnlyLanguages.includes(language)),
     [
       conversationSelectedLanguages,
       effectiveTranslationLanguages,
+      othersOnlyLanguages,
     ],
   )
   const resolvedDefaultDisplayLanguage = useMemo(() => {
@@ -2135,8 +2155,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     normalizedDisplayLanguageOptions.join(','),
   ].join('|')
   const languageSelectorButtonLanguages = useMemo(
-    () => buildLanguageSelectorButtonCodes(selectedLanguages, []),
-    [selectedLanguages],
+    () => buildLanguageSelectorButtonCodes(
+      selectedLanguages.filter((language) => !othersOnlyLanguages.includes(language)),
+      [],
+    ),
+    [othersOnlyLanguages, selectedLanguages],
   )
 
   const {
@@ -4703,6 +4726,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         preferredDisplayLanguages,
         resolvedDefaultDisplayLanguage,
         normalizedDisplayLanguageOptions,
+        othersOnlyLanguages,
       )
       : null
     if (!latestPayload || !latestUtterance) return
@@ -4732,6 +4756,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguages,
     resolvedDefaultDisplayLanguage,
     normalizedDisplayLanguageOptions,
+    othersOnlyLanguages,
   ])
 
   useEffect(() => {
@@ -4756,6 +4781,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         preferredDisplayLanguages,
         resolvedDefaultDisplayLanguage,
         normalizedDisplayLanguageOptions,
+        othersOnlyLanguages,
       )
       : null
 
@@ -4805,6 +4831,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguages,
     resolvedDefaultDisplayLanguage,
     normalizedDisplayLanguageOptions,
+    othersOnlyLanguages,
   ])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
@@ -6530,10 +6557,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         displayMode: bubbleDisplayMode,
         defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
         roomLanguageOrder: normalizedDisplayLanguageOptions,
+        hiddenLanguages: othersOnlyLanguages,
         viewerUserId,
         isInterim: draftUtteranceIds.has(utterance.id),
       })),
-    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
+    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, othersOnlyLanguages, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
 
   nativePipStateRef.current = nativePipState
 
@@ -8635,6 +8663,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
                         defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
                         languageOrder={normalizedDisplayLanguageOptions}
+                        hiddenLanguages={othersOnlyLanguages}
                         isDraft={draftUtteranceIds.has(item.utterance.id)}
                         onPlayOriginal={handlePlayOriginalBubbleTts}
                         onPlayTranslation={handlePlayTranslationBubbleTts}

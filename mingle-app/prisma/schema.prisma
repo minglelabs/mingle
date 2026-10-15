@@ -142,17 +142,22 @@ model UserFollow {
 model UserNotification {
   id          String    @id @default(cuid())
   recipientId String    @map("recipient_id")
-  actorId     String    @map("actor_id")
+  // Null for notifications sent by the Mingle team (feedback and report replies).
+  actorId     String?   @map("actor_id")
   type        String    @default("follow")
   postId      String?   @map("post_id")
   commentId   String?   @map("comment_id")
   /// Set only on report_resolved: the report whose closing this row announces.
   reportId    String?   @map("report_id")
+  // Reply text, or the new status for a report_status notification.
+  body        String?   @db.Text
+  // The feedback or report the notification is about.
+  targetId    String?   @map("target_id")
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   recipient User         @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User         @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+  actor     User?        @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
   post      Post?        @relation(fields: [postId], references: [id], onDelete: SetNull)
   comment   PostComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
   report    UserReport?  @relation(fields: [reportId], references: [id], onDelete: SetNull)

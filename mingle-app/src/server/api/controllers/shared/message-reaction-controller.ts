@@ -17,7 +17,7 @@ async function authorize(conversationId: string) {
 }
 
 // The UI uses stable client IDs, including the legacy db-ID fallback used by hydration.
-function messageIdentity(ids: string[]) {
+export function messageIdentity(ids: string[]) {
   return { OR: [
     { clientMessageId: { in: ids } },
     { id: { in: ids.filter(id => id.startsWith('db-')).map(id => id.slice(3)) }, clientMessageId: null },

@@ -8,6 +8,7 @@
  * Both reads therefore filter with exactly this `where`.
  */
 import type { Prisma } from '@prisma/client'
+import { TEAM_NOTIFICATION_TYPES } from '@/lib/user-notification-types'
 import { notMutuallyBlockedWhere } from '@/server/posts/block-visibility'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
 
@@ -19,12 +20,22 @@ export const POST_SCOPED_NOTIFICATION_TYPES = ['post_like', 'comment', 'comment_
 export function visibleNotificationWhere(viewerId: string): Prisma.UserNotificationWhereInput {
   return {
     recipientId: viewerId,
-    actor: notMutuallyBlockedWhere(viewerId),
-    OR: [
-      { type: { notIn: [...POST_SCOPED_NOTIFICATION_TYPES] } },
+    AND: [
+      // Team notifications (feedback and report replies) have no actor.
       {
-        type: { in: [...POST_SCOPED_NOTIFICATION_TYPES] },
-        post: visiblePostWhere(viewerId),
+        OR: [
+          { actorId: null, type: { in: [...TEAM_NOTIFICATION_TYPES] } },
+          { actor: notMutuallyBlockedWhere(viewerId) },
+        ],
+      },
+      {
+        OR: [
+          { type: { notIn: [...POST_SCOPED_NOTIFICATION_TYPES] } },
+          {
+            type: { in: [...POST_SCOPED_NOTIFICATION_TYPES] },
+            post: visiblePostWhere(viewerId),
+          },
+        ],
       },
     ],
   }

@@ -5,6 +5,10 @@ import { Instagram, Loader2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId } from './LivePhoneDemo/realtime-storage'
 import {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
+} from './LivePhoneDemo/LivePhoneDemo'
+import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './LivePhoneDemo/live-phone-demo.feedback-copy'
@@ -125,14 +129,19 @@ function formatFeedbackTimestamp(createdAt: string, locale: string): string {
 export default function ProfileFeedbackContent({
   uiLocale,
   defaultFeedbackEmail = '',
+  initialTab = 'compose',
+  focusThreadId,
 }: {
   uiLocale: string
   defaultFeedbackEmail?: string
+  initialTab?: FeedbackPageTab
+  // Thread to scroll to once the history has loaded, e.g. from a reply notification.
+  focusThreadId?: string
 }) {
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const initialDefaultFeedbackEmailRef = useRef(normalizedDefaultFeedbackEmail)
-  const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
+  const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>(initialTab)
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState(normalizedDefaultFeedbackEmail)
@@ -144,6 +153,34 @@ export default function ProfileFeedbackContent({
   const [isFeedbackHistoryLoading, setIsFeedbackHistoryLoading] = useState(false)
   const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
+  const [keyboardInsetPx, setKeyboardInsetPx] = useState(0)
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null)
+  const focusedThreadIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    scrollAreaRef.current?.scrollTo({ top: 0 })
+  }, [feedbackTab])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const syncKeyboardInset = () => {
+      const nextInsetPx = resolveKeyboardViewportInsetPx(viewport)
+      setKeyboardInsetPx((currentInsetPx) => resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx))
+    }
+
+    syncKeyboardInset()
+    viewport.addEventListener('resize', syncKeyboardInset)
+    viewport.addEventListener('scroll', syncKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardInset)
+      viewport.removeEventListener('scroll', syncKeyboardInset)
+    }
+  }, [])
 
   useEffect(() => {
     initialDefaultFeedbackEmailRef.current = normalizedDefaultFeedbackEmail
@@ -230,6 +267,21 @@ export default function ProfileFeedbackContent({
     void loadFeedbackThreads()
   }, [loadFeedbackThreads])
 
+  useEffect(() => {
+    if (!focusThreadId || focusedThreadIdRef.current === focusThreadId) return
+    if (feedbackTab !== 'history' || isFeedbackHistoryLoading) return
+
+    const threadElement = Array.from(
+      scrollAreaRef.current?.querySelectorAll<HTMLElement>('[data-feedback-thread-id]') ?? [],
+    ).find((element) => element.dataset.feedbackThreadId === focusThreadId)
+    if (!threadElement) return
+
+    focusedThreadIdRef.current = focusThreadId
+    threadElement.scrollIntoView({ block: 'start' })
+    // A long thread can still leave the newest reply below the fold.
+    threadElement.querySelector<HTMLElement>('[data-feedback-message]:last-child')?.scrollIntoView({ block: 'nearest' })
+  }, [feedbackTab, feedbackThreads, focusThreadId, isFeedbackHistoryLoading])
+
   const handleFeedbackSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -294,7 +346,7 @@ export default function ProfileFeedbackContent({
   }, [buildFeedbackRequestHeaders, feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, uiLocale])
 
   return (
-    <div className="flex min-h-full flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="shrink-0 border-b border-gray-100 px-4 py-3">
         <a
           href={FEEDBACK_INSTAGRAM_CONTACT_URL}
@@ -330,7 +382,15 @@ export default function ProfileFeedbackContent({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+      <div
+        ref={scrollAreaRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        style={{
+          paddingBottom: keyboardInsetPx > 0
+            ? `${keyboardInsetPx + 16}px`
+            : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+        }}
+      >
         {feedbackTab === 'compose' ? (
           <div className="px-4 py-4">
             <form className="space-y-4" onSubmit={handleFeedbackSubmit}>
@@ -436,7 +496,11 @@ export default function ProfileFeedbackContent({
               {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.map((thread) => {
                 const hasTeamReply = thread.messages.some((message) => message.authorType === 'team')
                 return (
-                  <div key={thread.id} className="rounded-[1.3rem] border border-sky-100 bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)]">
+                  <div
+                    key={thread.id}
+                    data-feedback-thread-id={thread.id}
+                    className={`scroll-mt-3 rounded-[1.3rem] border bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)] ${thread.id === focusThreadId ? 'border-sky-300 ring-2 ring-sky-200' : 'border-sky-100'}`}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.82rem] font-semibold text-sky-700">{feedbackCopy.categoryLabels[thread.category]}</span>
                       <span className="text-[0.82rem] text-gray-500">{formatFeedbackTimestamp(thread.createdAt, uiLocale)}</span>
@@ -449,7 +513,7 @@ export default function ProfileFeedbackContent({
                         const isTeamMessage = message.authorType === 'team'
                         const authorLabel = isTeamMessage ? feedbackCopy.teamLabel : feedbackCopy.meLabel
                         return (
-                          <div key={message.id} className={`rounded-[1.1rem] px-3 py-2.5 ${isTeamMessage ? 'border border-emerald-100 bg-emerald-50/70' : 'border border-sky-100 bg-sky-50/70'}`}>
+                          <div key={message.id} data-feedback-message className={`scroll-mb-3 rounded-[1.1rem] px-3 py-2.5 ${isTeamMessage ? 'border border-emerald-100 bg-emerald-50/70' : 'border border-sky-100 bg-sky-50/70'}`}>
                             <div className="flex items-center justify-between gap-3">
                               <span className={`text-[0.82rem] font-semibold ${isTeamMessage ? 'text-emerald-700' : 'text-sky-700'}`}>{authorLabel}</span>
                               <span className="text-[0.8rem] text-gray-500">{formatFeedbackTimestamp(message.createdAt, uiLocale)}</span>

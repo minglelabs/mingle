@@ -37,7 +37,6 @@ import {
   resolveActiveProviderRateLimitCooldownMs,
   rememberProviderRateLimitCooldown,
   requestTranslationFromProvider,
-  shouldUsePreviousStateFallback,
   normalizeTranslationProvider,
 } from '@/server/translation/translate-texts'
 
@@ -587,10 +586,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       && !ctx.isFinal
       && !providerRequestFailureReason
     ) {
-      if (
-        shouldUsePreviousStateFallback(selectedResult.provider)
-        && Object.keys(fallbackTranslations).length > 0
-      ) {
+      if (Object.keys(fallbackTranslations).length > 0) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
@@ -621,7 +617,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(providerConfig.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
@@ -700,10 +695,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           }
         }
 
-        if (
-          shouldUsePreviousStateFallback(selectedResult.provider)
-          && Object.keys(fallbackTranslationsForMissingTargets).length > 0
-        ) {
+        if (Object.keys(fallbackTranslationsForMissingTargets).length > 0) {
           const mergedTranslations = {
             ...fallbackTranslationsForMissingTargets,
             ...translations,
@@ -737,7 +729,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(selectedResult.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {

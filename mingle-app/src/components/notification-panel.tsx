@@ -3,15 +3,20 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
+import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n/team-notification-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
+import { isTeamNotificationType, TEAM_NOTIFICATION_TYPES, type TeamNotificationType } from "@/lib/user-notification-types";
+import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import SlideSurface from "@/components/slide-surface";
 import { mergeNotificationPage } from "@/components/notifications/notification-pages";
 import { markNotificationsReadOptimistically } from "@/components/notifications/notification-read-sync";
 import AccountBadge from "@/components/posts/account-badge";
 import IdentityRow from "@/components/posts/identity-row";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
-import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
+import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
+import { ArrowLeft, Check, Loader2, MessageSquareText, UserRound } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NotificationType =
@@ -20,7 +25,8 @@ type NotificationType =
   | "comment_like"
   | "comment"
   | "comment_reply"
-  | "report_resolved";
+  | "report_resolved"
+  | TeamNotificationType;
 
 type NotificationPanelProps = {
   open: boolean;
@@ -62,7 +68,10 @@ type NotificationRecord = {
   isFollowing: boolean;
   /** Server grouping key; entries sharing a grouped key merge across pages. */
   groupKey: string;
-  actorIds: string[];
+  actorIds: string[];  /** Team notifications only: the reply text, or the new report status. */
+  body?: string;
+  /** Team notifications only: the feedback or report id. */
+  targetId?: string | null;
 };
 
 const PAGE_SIZE = 50;
@@ -81,6 +90,8 @@ const NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   "comment",
   "comment_reply",
   "report_resolved",
+  // Sent by the Mingle team: a feedback or report reply, or a report outcome.
+  ...TEAM_NOTIFICATION_TYPES,
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -118,12 +129,13 @@ function parseNotification(value: unknown): NotificationRecord | null {
     .map(parseActor)
     .filter((actor): actor is NotificationActor => actor !== null);
 
-  // report_resolved has no meaningful actor; every other type needs one.
-  if (actors.length === 0 && value.type !== "report_resolved") return null;
+  // report_resolved and team notifications have no actor; every other type needs one.
+  const actorless = value.type === "report_resolved" || isTeamNotificationType(value.type);
+  if (actors.length === 0 && !actorless) return null;
 
   const actorCount = typeof value.actorCount === "number" && value.actorCount > 0
     ? value.actorCount
-    : Math.max(actors.length, 1);
+    : actorless ? actors.length : Math.max(actors.length, 1);
 
   const actorIds = Array.isArray(value.actorIds)
     ? value.actorIds.filter((id): id is string => typeof id === "string")
@@ -141,6 +153,9 @@ function parseNotification(value: unknown): NotificationRecord | null {
     isFollowing: value.isFollowing === true,
     groupKey: nullableString(value.groupKey) ?? `row:${value.id}`,
     actorIds,
+    ...(isTeamNotificationType(value.type)
+      ? { body: typeof value.body === "string" ? value.body : "", targetId: nullableString(value.targetId) }
+      : {}),
   };
 }
 
@@ -217,6 +232,14 @@ export default function NotificationPanel({
   onUnreadCountChange,
 }: NotificationPanelProps) {
   const copy = useMemo(() => resolveNotificationCopy(locale), [locale]);
+  const teamCopy = useMemo(() => resolveTeamNotificationCopy(locale), [locale]);
+  const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
+  const { data: session } = useSession();
+  const [expandedTeamNotificationId, setExpandedTeamNotificationId] = useState<string | null>(null);
+  // Feedback thread opened from a reply notification. The id outlives `open`
+  // so the surface keeps its content while it slides out.
+  const [feedbackThreadId, setFeedbackThreadId] = useState<string | null>(null);
+  const [isFeedbackThreadOpen, setIsFeedbackThreadOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -356,13 +379,32 @@ export default function NotificationPanel({
   useEffect(() => () => loadMoreAbortRef.current?.abort(), []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isFeedbackThreadOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [isFeedbackThreadOpen, onClose, open]);
+
+  // Entry already marked the list read; a team notification only expands, or
+  // opens the feedback thread it answers.
+  const handleToggleTeamNotification = useCallback((notification: NotificationRecord) => {
+    if (notification.type === "feedback_reply" && notification.targetId) {
+      setFeedbackThreadId(notification.targetId);
+      setIsFeedbackThreadOpen(true);
+      return;
+    }
+    setExpandedTeamNotificationId((current) => (current === notification.id ? null : notification.id));
+  }, []);
+
+  const closeFeedbackThread = useCallback(() => {
+    setIsFeedbackThreadOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) setIsFeedbackThreadOpen(false);
+  }, [open]);
 
   const handleOpenNotification = useCallback((notification: NotificationRecord) => {
     const primaryActor = notification.actors[0] ?? null;
@@ -381,8 +423,13 @@ export default function NotificationPanel({
       case "report_resolved":
         // Read-only: entry already marked it read, no navigation.
         return;
+      case "feedback_reply":
+      case "report_reply":
+      case "report_status":
+        handleToggleTeamNotification(notification);
+        return;
     }
-  }, [onOpenPost, onOpenProfile]);
+  }, [handleToggleTeamNotification, onOpenPost, onOpenProfile]);
 
   const handleFollowBack = useCallback(async (notification: NotificationRecord) => {
     const actor = notification.actors[0];
@@ -428,10 +475,49 @@ export default function NotificationPanel({
       case "comment": return copy.commentMessage;
       case "comment_reply": return copy.replyMessage;
       case "report_resolved": return copy.reportResolvedMessage;
+      case "feedback_reply":
+      case "report_reply":
+      case "report_status": return "";
     }
   }, [copy]);
 
+  const renderTeamNotification = (notification: NotificationRecord) => {
+    const text = resolveTeamNotificationText(teamCopy, notification.type as TeamNotificationType, notification.body ?? "");
+    const expanded = expandedTeamNotificationId === notification.id;
+
+    return (
+      <li
+        key={notification.id}
+        className={`border-b border-gray-100 px-4 py-3 ${notification.isRead ? "bg-white" : "bg-amber-50/60"}`}
+      >
+        <button
+          type="button"
+          onClick={() => handleToggleTeamNotification(notification)}
+          className="flex w-full min-w-0 items-start gap-3 rounded-xl text-left transition active:bg-gray-100"
+          aria-expanded={expanded}
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <MessageSquareText size={22} className="text-amber-700" aria-hidden="true" />
+          </div>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-[14px] font-semibold leading-5 text-slate-900">{text.title}</strong>
+            {text.body ? (
+              <span className={`mt-0.5 block whitespace-pre-wrap break-words text-[14px] leading-5 text-slate-700 ${expanded ? "" : "line-clamp-3"}`}>
+                {text.body}
+              </span>
+            ) : null}
+            <span className="mt-0.5 block truncate text-[12px] text-gray-500">
+              {formatNotificationTime(notification.createdAt, locale, copy)}
+            </span>
+          </span>
+        </button>
+      </li>
+    );
+  };
+
   const renderNotification = (notification: NotificationRecord) => {
+    if (isTeamNotificationType(notification.type)) return renderTeamNotification(notification);
+
     const primaryActor = notification.actors[0] ?? null;
     const actorName = resolveActorName(primaryActor);
     // Only the primary actor is named (grouped likes add a count), so only
@@ -524,6 +610,7 @@ export default function NotificationPanel({
   void unreadCount;
 
   return (
+    <>
     <SlideSurface
       open={open}
       onClose={onClose}
@@ -612,5 +699,43 @@ export default function NotificationPanel({
               )}
             </div>
     </SlideSurface>
+    <SlideSurface
+      open={open && isFeedbackThreadOpen}
+      onClose={closeFeedbackThread}
+      ariaLabel={feedbackCopy.pageTitle}
+      nativeBackPriority={30}
+      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      style={{ touchAction: "pan-y" }}
+    >
+            <header
+              className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4"
+              style={{
+                paddingTop: "env(safe-area-inset-top, 44px)",
+                height: "calc(56px + env(safe-area-inset-top, 44px))",
+              }}
+            >
+              <button
+                type="button"
+                onClick={closeFeedbackThread}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition active:bg-gray-100"
+                aria-label={feedbackCopy.backButtonLabel}
+              >
+                <ArrowLeft size={22} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <h1 className="truncate text-[17px] font-bold text-slate-900">{feedbackCopy.pageTitle}</h1>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {feedbackThreadId ? (
+                <ProfileFeedbackContent
+                  key={feedbackThreadId}
+                  uiLocale={locale}
+                  defaultFeedbackEmail={session?.user?.email ?? ""}
+                  initialTab="history"
+                  focusThreadId={feedbackThreadId}
+                />
+              ) : null}
+            </div>
+    </SlideSurface>
+    </>
   );
 }
