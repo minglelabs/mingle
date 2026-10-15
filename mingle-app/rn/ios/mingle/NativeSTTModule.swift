@@ -237,7 +237,6 @@ final class MingleAudioSessionCoordinator {
     }
 }
 
-@objc(NativeSTTModule)
 /// QA-only microphone substitute for testing STT and translation without a
 /// person speaking. While a fixture is armed, the STT input tap keeps its real
 /// microphone pace and chunk sizes, but the samples it sends are the fixture
@@ -502,6 +501,7 @@ final class MingleQaAudioInjector {
     }
 }
 
+@objc(NativeSTTModule)
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
     private let qaAudioInjector = MingleQaAudioInjector()
