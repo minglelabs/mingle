@@ -238,8 +238,273 @@ final class MingleAudioSessionCoordinator {
 }
 
 @objc(NativeSTTModule)
+/// QA-only microphone substitute for testing STT and translation without a
+/// person speaking. While a fixture is armed, the STT input tap keeps its real
+/// microphone pace and chunk sizes, but the samples it sends are the fixture
+/// (framed by leading/trailing silence) and then silence until the session
+/// ends. Only builds whose Info.plist sets MingleQaBridgeEnabled=1 can arm it,
+/// and never an App Store or TestFlight install.
+final class MingleQaAudioInjector {
+    private enum Phase: String {
+        case idle
+        case armed
+        case playing
+        case finished
+    }
+
+    private struct Fixture {
+        let id: String
+        let samples: [Float]
+        let sampleRate: Double
+        let leadingSilenceSec: Double
+        let trailingSilenceSec: Double
+    }
+
+    static let maxFixtureDurationSec = 60.0
+
+    private let lock = NSLock()
+    private var phase: Phase = .idle
+    private var fixture: Fixture?
+    private var resampledRate: Double = 0
+    private var resampled: [Float] = []
+    private var playedFrames = 0
+    private var speechStartReported = false
+    private var speechEndReported = false
+
+    static func isAllowed() -> Bool {
+        guard NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled") == "1" else {
+            return false
+        }
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        // Store and TestFlight installs carry no embedded provisioning profile.
+        return Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
+        #endif
+    }
+
+    static func decodeMonoSamples(fileURL: URL) throws -> (samples: [Float], sampleRate: Double) {
+        let file = try AVAudioFile(forReading: fileURL)
+        let format = file.processingFormat
+        guard format.sampleRate > 0, file.length > 0 else {
+            throw NSError(domain: "MingleQaAudioInjector", code: 1, userInfo: [NSLocalizedDescriptionKey: "empty_audio_file"])
+        }
+        guard Double(file.length) / format.sampleRate <= maxFixtureDurationSec else {
+            throw NSError(domain: "MingleQaAudioInjector", code: 2, userInfo: [NSLocalizedDescriptionKey: "audio_file_too_long"])
+        }
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw NSError(domain: "MingleQaAudioInjector", code: 3, userInfo: [NSLocalizedDescriptionKey: "audio_buffer_unavailable"])
+        }
+        try file.read(into: buffer)
+        guard let channelData = buffer.floatChannelData else {
+            throw NSError(domain: "MingleQaAudioInjector", code: 4, userInfo: [NSLocalizedDescriptionKey: "audio_samples_unavailable"])
+        }
+        let frames = Int(buffer.frameLength)
+        let channels = max(1, Int(format.channelCount))
+        var mono = [Float](repeating: 0, count: frames)
+        for channel in 0 ..< channels {
+            let samples = channelData[channel]
+            for index in 0 ..< frames {
+                mono[index] += samples[index]
+            }
+        }
+        if channels > 1 {
+            let scale = 1 / Float(channels)
+            for index in 0 ..< frames {
+                mono[index] *= scale
+            }
+        }
+        return (mono, format.sampleRate)
+    }
+
+    private static func resample(_ samples: [Float], from sourceRate: Double, to targetRate: Double) -> [Float] {
+        if samples.isEmpty || abs(sourceRate - targetRate) < 0.5 {
+            return samples
+        }
+        guard
+            let sourceFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sourceRate, channels: 1, interleaved: false),
+            let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: targetRate, channels: 1, interleaved: false),
+            let converter = AVAudioConverter(from: sourceFormat, to: targetFormat),
+            let input = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: AVAudioFrameCount(samples.count)),
+            let inputData = input.floatChannelData?[0]
+        else {
+            return []
+        }
+        for index in 0 ..< samples.count {
+            inputData[index] = samples[index]
+        }
+        input.frameLength = AVAudioFrameCount(samples.count)
+
+        let capacity = AVAudioFrameCount((Double(samples.count) * targetRate / sourceRate).rounded(.up)) + 4_096
+        guard let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else {
+            return []
+        }
+        var inputConsumed = false
+        var conversionError: NSError?
+        let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
+            if inputConsumed {
+                inputStatus.pointee = .endOfStream
+                return nil
+            }
+            inputConsumed = true
+            inputStatus.pointee = .haveData
+            return input
+        }
+        guard status != .error, conversionError == nil, let outputData = output.floatChannelData?[0] else {
+            return []
+        }
+        return Array(UnsafeBufferPointer(start: outputData, count: Int(output.frameLength)))
+    }
+
+    private func withLock<T>(_ block: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return block()
+    }
+
+    /// Arms a fixture. A running session switches to it on its next tap
+    /// buffer; otherwise the next session plays it from its first buffer.
+    func arm(
+        id: String,
+        samples: [Float],
+        sampleRate: Double,
+        leadingSilenceMs: Int,
+        trailingSilenceMs: Int
+    ) -> [String: Any] {
+        withLock {
+            fixture = Fixture(
+                id: id,
+                samples: samples,
+                sampleRate: sampleRate,
+                leadingSilenceSec: Double(max(0, leadingSilenceMs)) / 1_000,
+                trailingSilenceSec: Double(max(0, trailingSilenceMs)) / 1_000
+            )
+            phase = .armed
+            resampledRate = 0
+            resampled = []
+            playedFrames = 0
+            speechStartReported = false
+            speechEndReported = false
+            return [
+                "phase": Phase.armed.rawValue,
+                "fixtureId": id,
+                "durationMs": Int((Double(samples.count) / sampleRate * 1_000).rounded()),
+                "sourceSampleRate": Int(sampleRate.rounded()),
+                "leadingSilenceMs": max(0, leadingSilenceMs),
+                "trailingSilenceMs": max(0, trailingSilenceMs),
+                "atMs": Date().timeIntervalSince1970 * 1_000,
+            ]
+        }
+    }
+
+    /// Returns the event to report when an armed or playing fixture is dropped.
+    func clear(reason: String) -> [String: Any]? {
+        withLock {
+            guard phase != .idle else { return nil }
+            let event: [String: Any] = [
+                "phase": "cleared",
+                "reason": reason,
+                "previousPhase": phase.rawValue,
+                "fixtureId": fixture?.id ?? "",
+                "atMs": Date().timeIntervalSince1970 * 1_000,
+            ]
+            phase = .idle
+            fixture = nil
+            resampled = []
+            resampledRate = 0
+            return event
+        }
+    }
+
+    /// A stopped session consumes a fixture it already started; one that is
+    /// only armed stays armed for the next session.
+    func sessionEnded() -> [String: Any]? {
+        let started = withLock { phase == .playing || phase == .finished }
+        return started ? clear(reason: "session_ended") : nil
+    }
+
+    /// Replaces one microphone buffer. Returns nil when no fixture is engaged,
+    /// so the caller sends the microphone samples unchanged.
+    func nextChunk(
+        frameCount: Int,
+        sampleRate: Double,
+        bufferStartWallMs: Double
+    ) -> (samples: [Float], events: [[String: Any]])? {
+        withLock {
+            guard phase != .idle, let fixture, frameCount > 0, sampleRate > 0 else { return nil }
+            var events: [[String: Any]] = []
+            var output = [Float](repeating: 0, count: frameCount)
+            if resampledRate != sampleRate {
+                // The tap rate can change when a route change restarts capture.
+                // Keep the playhead at the same point in time.
+                if resampledRate > 0 {
+                    playedFrames = Int((Double(playedFrames) * sampleRate / resampledRate).rounded())
+                }
+                resampled = Self.resample(fixture.samples, from: fixture.sampleRate, to: sampleRate)
+                resampledRate = sampleRate
+            }
+            if phase == .armed {
+                phase = .playing
+                playedFrames = 0
+                events.append([
+                    "phase": "started",
+                    "fixtureId": fixture.id,
+                    "sampleRate": Int(sampleRate.rounded()),
+                    "atMs": bufferStartWallMs,
+                ])
+            }
+            guard phase == .playing else {
+                return (output, events)
+            }
+
+            let leadingFrames = Int((fixture.leadingSilenceSec * sampleRate).rounded())
+            let speechFrames = resampled.count
+            let speechEndFrame = leadingFrames + speechFrames
+            let totalFrames = speechEndFrame + Int((fixture.trailingSilenceSec * sampleRate).rounded())
+            let chunkStartFrame = playedFrames
+            let chunkEndFrame = chunkStartFrame + frameCount
+            for index in 0 ..< frameCount {
+                let speechIndex = chunkStartFrame + index - leadingFrames
+                if speechIndex >= 0 && speechIndex < speechFrames {
+                    output[index] = resampled[speechIndex]
+                }
+            }
+            let frameWallMs = { (frame: Int) -> Double in
+                bufferStartWallMs + Double(frame - chunkStartFrame) / sampleRate * 1_000
+            }
+            if !speechStartReported && chunkEndFrame > leadingFrames {
+                speechStartReported = true
+                events.append([
+                    "phase": "speech_started",
+                    "fixtureId": fixture.id,
+                    "atMs": frameWallMs(leadingFrames),
+                ])
+            }
+            if !speechEndReported && chunkEndFrame >= speechEndFrame {
+                speechEndReported = true
+                events.append([
+                    "phase": "speech_ended",
+                    "fixtureId": fixture.id,
+                    "atMs": frameWallMs(speechEndFrame),
+                ])
+            }
+            playedFrames = chunkEndFrame
+            if chunkEndFrame >= totalFrames {
+                phase = .finished
+                events.append([
+                    "phase": "finished",
+                    "fixtureId": fixture.id,
+                    "atMs": frameWallMs(totalFrames),
+                ])
+            }
+            return (output, events)
+        }
+    }
+}
+
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
+    private let qaAudioInjector = MingleQaAudioInjector()
     private let audioDiagnostics = Logger(subsystem: "com.minglelabs.mingle.rn", category: "STTAudio")
     private var declaredStreamSampleRate = 0
     private let wsQueue = DispatchQueue(label: "NativeSTTModule.wsQueue")
@@ -412,7 +677,7 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     override func supportedEvents() -> [String]! {
-        ["status", "message", "error", "close"]
+        ["status", "message", "error", "close", "qaAudioInjection"]
     }
 
     override func startObserving() {
@@ -514,6 +779,28 @@ class NativeSTTModule: RCTEventEmitter {
         emit("close", payload: payload)
     }
 
+    private func emitQaAudioInjection(_ event: [String: Any]?) {
+        guard var payload = event else { return }
+        NSLog("[NativeSTTModule] qaAudioInjection phase=%@ fixture=%@",
+              payload["phase"] as? String ?? "unknown", payload["fixtureId"] as? String ?? "")
+        if let activeConversationId {
+            payload["conversationId"] = activeConversationId
+        }
+        emit("qaAudioInjection", payload: payload)
+    }
+
+    private static func wallClockMs(forBufferAt time: AVAudioTime, frameCount: Int, sampleRate: Double) -> Double {
+        let nowMs = Date().timeIntervalSince1970 * 1_000
+        if time.isHostTimeValid {
+            let ageSec = AVAudioTime.seconds(forHostTime: mach_absolute_time())
+                - AVAudioTime.seconds(forHostTime: time.hostTime)
+            if ageSec.isFinite, ageSec >= 0, ageSec < 5 {
+                return nowMs - ageSec * 1_000
+            }
+        }
+        return nowMs - Double(frameCount) / max(sampleRate, 1) * 1_000
+    }
+
     private func resolveMicrophonePermissionStatus() -> String {
         switch AVAudioSession.sharedInstance().recordPermission {
         case .granted:
@@ -543,10 +830,24 @@ class NativeSTTModule: RCTEventEmitter {
         var diagnosticFrames = 0
         NSLog("[NativeSTTModule] installTap format=%@ channels=%d sampleRate=%.0f",
               format.description, format.channelCount, format.sampleRate)
-        inputNode.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, when in
             guard let self else { return }
             guard self.isRunning else { return }
-            guard let chunkBase64 = self.encodePcmBase64(buffer) else { return }
+            let frameCount = Int(buffer.frameLength)
+            let injected = self.qaAudioInjector.nextChunk(
+                frameCount: frameCount,
+                sampleRate: buffer.format.sampleRate,
+                bufferStartWallMs: Self.wallClockMs(forBufferAt: when, frameCount: frameCount, sampleRate: buffer.format.sampleRate)
+            )
+            if let events = injected?.events, !events.isEmpty {
+                DispatchQueue.main.async { [weak self] in
+                    events.forEach { self?.emitQaAudioInjection($0) }
+                }
+            }
+            let encodedChunk = injected.map { chunk in
+                chunk.samples.withUnsafeBufferPointer { Self.encodePcmBase64($0) }
+            } ?? self.encodePcmBase64(buffer)
+            guard let chunkBase64 = encodedChunk else { return }
 
             self.audioChunkCount += 1
             let count = self.audioChunkCount
@@ -691,6 +992,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
+        emitQaAudioInjection(qaAudioInjector.sessionEnded())
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -727,6 +1029,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
+        emitQaAudioInjection(qaAudioInjector.sessionEnded())
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -834,8 +1137,11 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func encodePcmBase64(_ buffer: AVAudioPCMBuffer) -> String? {
         guard let channelData = buffer.floatChannelData?[0] else { return nil }
+        return Self.encodePcmBase64(UnsafeBufferPointer(start: channelData, count: Int(buffer.frameLength)))
+    }
 
-        let frameLength = Int(buffer.frameLength)
+    private static func encodePcmBase64(_ samples: UnsafeBufferPointer<Float>) -> String? {
+        let frameLength = samples.count
         if frameLength == 0 {
             return nil
         }
@@ -843,7 +1149,7 @@ class NativeSTTModule: RCTEventEmitter {
         var pcmData = Data(capacity: frameLength * MemoryLayout<Int16>.size)
 
         for index in 0 ..< frameLength {
-            let sample = max(-1.0, min(1.0, channelData[index]))
+            let sample = max(-1.0, min(1.0, samples[index]))
             var intSample = Int16(sample < 0 ? sample * 32768.0 : sample * 32767.0)
             withUnsafeBytes(of: &intSample) { bytes in
                 pcmData.append(contentsOf: bytes)
@@ -1223,6 +1529,130 @@ class NativeSTTModule: RCTEventEmitter {
             NSLog("[NativeSTTModule] audioEngine restart after AEC toggle FAILED: %@", error.localizedDescription)
             reject("audio_engine", "Failed to restart after AEC toggle", error)
         }
+    }
+
+    private static let qaAudioDownloadLimitBytes: Int64 = 20 * 1_024 * 1_024
+
+    private func loadQaAudioFixture(
+        _ options: NSDictionary,
+        completion: @escaping (Result<URL, Error>) -> Void
+    ) {
+        let failure = { (code: String) in
+            completion(.failure(NSError(domain: "NativeSTTModule", code: 1, userInfo: [NSLocalizedDescriptionKey: code])))
+        }
+        if let base64 = options["base64"] as? String, !base64.isEmpty {
+            guard let data = Data(base64Encoded: base64), Int64(data.count) <= Self.qaAudioDownloadLimitBytes else {
+                failure("invalid_base64_audio")
+                return
+            }
+            let fileURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("mingle-qa-audio-\(UUID().uuidString).wav")
+            do {
+                try data.write(to: fileURL)
+                completion(.success(fileURL))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        guard let rawUrl = options["url"] as? String, let url = URL(string: rawUrl), let scheme = url.scheme?.lowercased() else {
+            failure("missing_audio_source")
+            return
+        }
+        if scheme == "file" {
+            completion(.success(url))
+            return
+        }
+        guard scheme == "http" || scheme == "https" else {
+            failure("unsupported_audio_url_scheme")
+            return
+        }
+        let task = URLSession.shared.downloadTask(with: url) { location, response, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+            guard let location,
+                  let httpResponse = response as? HTTPURLResponse,
+                  (200 ..< 300).contains(httpResponse.statusCode)
+            else {
+                failure("audio_download_failed")
+                return
+            }
+            let size = (try? FileManager.default.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? 0
+            guard size > 0, size <= Self.qaAudioDownloadLimitBytes else {
+                failure("audio_download_size_invalid")
+                return
+            }
+            let pathExtension = url.pathExtension.isEmpty ? "wav" : url.pathExtension
+            let fileURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("mingle-qa-audio-\(UUID().uuidString).\(pathExtension)")
+            do {
+                try FileManager.default.moveItem(at: location, to: fileURL)
+                completion(.success(fileURL))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+        task.resume()
+    }
+
+    @objc(qaInjectAudio:resolver:rejecter:)
+    func qaInjectAudio(
+        _ options: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard MingleQaAudioInjector.isAllowed() else {
+            reject("qa_audio_injection_disabled", "QA audio injection is not available in this build", nil)
+            return
+        }
+        let fixtureId = (options["fixtureId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let leadingSilenceMs = (options["leadingSilenceMs"] as? NSNumber)?.intValue ?? 500
+        let trailingSilenceMs = (options["trailingSilenceMs"] as? NSNumber)?.intValue ?? 3_000
+
+        loadQaAudioFixture(options) { [weak self] result in
+            let decoded: (samples: [Float], sampleRate: Double)
+            do {
+                let fileURL = try result.get()
+                decoded = try MingleQaAudioInjector.decodeMonoSamples(fileURL: fileURL)
+                if fileURL.lastPathComponent.hasPrefix("mingle-qa-audio-") {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            } catch {
+                reject("qa_audio_injection_failed", error.localizedDescription, error)
+                return
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let armed = self.qaAudioInjector.arm(
+                    id: fixtureId.isEmpty ? "unnamed" : fixtureId,
+                    samples: decoded.samples,
+                    sampleRate: decoded.sampleRate,
+                    leadingSilenceMs: leadingSilenceMs,
+                    trailingSilenceMs: trailingSilenceMs
+                )
+                var payload = armed
+                payload["appliesTo"] = self.isRunning ? "current_session" : "next_session"
+                self.emitQaAudioInjection(payload)
+                resolve(payload)
+            }
+        }
+    }
+
+    @objc(qaClearAudioInjection:rejecter:)
+    func qaClearAudioInjection(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard MingleQaAudioInjector.isAllowed() else {
+            reject("qa_audio_injection_disabled", "QA audio injection is not available in this build", nil)
+            return
+        }
+        let event = qaAudioInjector.clear(reason: "requested")
+        emitQaAudioInjection(event)
+        resolve(["cleared": event != nil])
     }
 }
 
