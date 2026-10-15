@@ -1,7 +1,8 @@
 // Renders the HashChat logo: a hash drawn like an H, the Hash Rush hamster
 // gnawing the bottom of the right stroke with its front teeth.
-// node gen.mjs  ->  hashchat.svg, hashchat.png (1024)
-import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
+// npm i --no-save playwright && npx playwright install chromium && node gen.mjs
+//   ->  hashchat.svg, hashchat.png (1024)
+import { chromium } from 'playwright';
 import fs from 'fs';
 
 const BG = '#FCC140', INK = '#474747';
@@ -66,7 +67,7 @@ function svg() {
 
 const out = svg();
 fs.writeFileSync('hashchat.svg', out);
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 const p = await b.newPage({ viewport: { width: 1024, height: 1024 } });
 await p.setContent(`<body style="margin:0">${out}</body>`);
 await p.screenshot({ path: 'hashchat.png' });
