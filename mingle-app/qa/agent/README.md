@@ -24,6 +24,7 @@ Scripts in `mingle-app/scripts/`:
 | Script | Purpose |
 | --- | --- |
 | `qa-agent-scenarios.mjs list \| select \| check` | Lists the catalog, selects scenarios for a diff, and validates frontmatter, path globs, history headings and taste ids. |
+| `qa-agent-report.mjs <run-dir>` | Turns a run's `results.json` and screenshots into one self-contained `report.html` for publishing. |
 | `qa-agent-device.mjs` | Drives the connected iPhone over Appium XCUITest (real-device mode, WDA signed with the team ID): `devices`, `servers`, `install`, `start`, `screenshot`, `tap`, `long-press`, `swipe`, `type`, `alert`, `snapshot`, `eval`, `app`, `logs`, `stop`. |
 
 ## Running

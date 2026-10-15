@@ -141,8 +141,14 @@ Write `results.json` in the run folder:
 
 ## 6. Report
 
-Before writing the page, load the `artifact-design` skill and follow it. Build `report.html` in the run folder,
-then publish it with the Artifact tool:
+Generate the page from `results.json` (the field list is at the top of the script), then publish
+`<run>/report.html` with the Artifact tool (icon `checklist`):
+
+```bash
+node mingle-app/scripts/qa-agent-report.mjs <run-dir>
+```
+
+The page holds:
 
 - **Header:** branch, commit, date, phone model and iOS version, server URL, and the scenarios run.
 - **Summary:** counts by verdict, then every S0/S1 finding as a one-liner linking to its scenario.
