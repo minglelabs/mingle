@@ -1,13 +1,13 @@
 # Mobile UI Regression Coverage
 
-This document maps the documented UI/UX issue atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) onto the current mobile QA suite.
+This document maps the documented UI/UX issue atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit) onto the current mobile QA suite.
 
 Use these documents together:
 
-- [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) for the global `131`-atom classification.
-- [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for exact iOS target-to-atom mappings.
-- [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) for exact Android target-to-atom mappings.
-- [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md) and [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md) for platform-specific coverage gaps relative to the inventories.
+- [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md) for the global `131`-atom classification.
+- [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md) for exact iOS target-to-atom mappings.
+- [ANDROID_REGRESSION_INVENTORY.md](ANDROID_REGRESSION_INVENTORY.md) for exact Android target-to-atom mappings.
+- [IOS_REGRESSION_BACKLOG.md](IOS_REGRESSION_BACKLOG.md) and [ANDROID_REGRESSION_BACKLOG.md](ANDROID_REGRESSION_BACKLOG.md) for platform-specific coverage gaps relative to the inventories.
 
 ## Current Coverage Snapshot
 
@@ -26,13 +26,13 @@ The current mobile regression domain is broader than the original live-demo-only
 - The `1.1.0` conversations/list/room/navigation surface that now ships on mobile.
 - Mobile route aliasing and soft-delete visibility for shipping mobile namespaces.
 
-The suite no longer assumes that old conversation-list or room-navigation atoms are automatically out of scope. If an atom still belongs to the current mobile product surface, it should either be explicitly automated or be listed in [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) as backlog.
+The suite no longer assumes that old conversation-list or room-navigation atoms are automatically out of scope. If an atom still belongs to the current mobile product surface, it should either be explicitly automated or be listed in [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md) as backlog.
 
 ## Covered Regression Categories
 
 | Regression category | Representative automated targets | History coverage source |
 | --- | --- | --- |
-| Native WebView history and back-availability bridge | `ios-webview-layout-contracts`, `android-native-navigation-history-contracts`, `hardware-back-closes-history-overlay` | [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md), [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) |
+| Native WebView history and back-availability bridge | `ios-webview-layout-contracts`, `android-native-navigation-history-contracts`, `hardware-back-closes-history-overlay` | [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md), [ANDROID_REGRESSION_INVENTORY.md](ANDROID_REGRESSION_INVENTORY.md) |
 | Conversation-list search/history state | `ios-conversation-list-history-contracts`, `android-conversation-list-history-contracts` | inventory docs |
 | Conversation-list preview, ordering, active badge, and row action positioning | `ios-conversation-list-summary-contracts`, `android-conversation-list-summary-contracts`, `ios-conversation-row-action-contracts`, `android-conversation-row-action-contracts` | inventory docs |
 | Conversation routes, versioned mobile aliases, and soft-delete visibility | `ios-conversation-route-contracts`, `android-conversation-route-contracts`, `ios-versioned-mobile-route-contracts`, `android-versioned-mobile-route-contracts` | inventory docs |
@@ -54,7 +54,7 @@ The current union-level classification across both platforms is:
 | Deferred or deprioritized | `3` |
 | Web-only or non-mobile | `2` |
 
-See [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) for the exact atoms in each bucket.
+See [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md) for the exact atoms in each bucket.
 
 ## Execution Guidance
 

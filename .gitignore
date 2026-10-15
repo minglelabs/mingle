@@ -52,7 +52,9 @@ next-env.d.ts
 
 /src/generated/prisma
 
-.claude/
+# Keep local Claude state out of Git, but share project skills.
+.claude/*
+!.claude/skills/
 .codex/
 .omc/
 .worktrees/

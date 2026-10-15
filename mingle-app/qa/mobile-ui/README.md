@@ -1,6 +1,6 @@
 # Mobile UI Regression QA
 
-This folder contains the mobile UI/UX regression automation derived from [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md).
+This folder contains the mobile UI/UX regression automation derived from [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit).
 
 ## Scope
 
@@ -20,19 +20,19 @@ The suite splits regressions into:
 
 Future agents should read these in order:
 
-1. [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md)
+1. [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit)
    - Canonical historical issue atom list.
-2. [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md)
+2. [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md)
    - Global `131`-atom classification and union-level automation coverage.
-3. [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md)
+3. [COVERAGE.md](COVERAGE.md)
    - Cross-platform coverage summary.
-4. [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md)
+4. [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md)
    - Exact iOS target-to-atom mappings.
-5. [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md)
+5. [ANDROID_REGRESSION_INVENTORY.md](ANDROID_REGRESSION_INVENTORY.md)
    - Exact Android target-to-atom mappings.
-6. [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md)
+6. [IOS_REGRESSION_BACKLOG.md](IOS_REGRESSION_BACKLOG.md)
    - What is missing from the iOS inventory specifically.
-7. [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md)
+7. [ANDROID_REGRESSION_BACKLOG.md](ANDROID_REGRESSION_BACKLOG.md)
    - What is missing from the Android inventory specifically.
 
 ## Current Coverage Snapshot
@@ -140,11 +140,11 @@ Representative categories already automated today:
 - Native STT recovery/reconcile/remount behavior.
 - Real-device hydration, bottom-anchor, composer, locale, and empty-state paths.
 
-Use [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the high-level map and the inventory docs for exact target names.
+Use [COVERAGE.md](COVERAGE.md) for the high-level map and the inventory docs for exact target names.
 
 ## Classification Vocabulary
 
-The backlog buckets used in [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) are:
+The backlog buckets used in [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md) are:
 
 - `Automated by at least one current mobile suite`
 - `Current mobile surface, but not automated yet`
@@ -164,8 +164,8 @@ Whenever a future agent adds or removes a regression target, update these togeth
 
 1. The relevant runner script in `mingle-app/scripts/`.
 2. The relevant inventory doc.
-3. [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) if atoms moved between backlog buckets.
-4. [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) if the top-level counts changed.
-5. [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) if new UI/UX regressions were discovered during QA work.
+3. [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md) if atoms moved between backlog buckets.
+4. [COVERAGE.md](COVERAGE.md) if the top-level counts changed.
+5. [docs/ui-ux-codex-thread-history.md](../../../docs/ui-ux-codex-thread-history.md) (append to Part 1) if new UI/UX regressions were discovered during QA work.
 
 Reports are written to `mingle-app/qa/mobile-ui/reports/<timestamp>/`.

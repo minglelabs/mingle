@@ -1,6 +1,6 @@
 # Mobile UI/UX Atom Classification
 
-This document is the source of truth for how the documented UI/UX issue atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) are currently classified for mobile QA work.
+This document is the source of truth for how the documented UI/UX issue atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit) are currently classified for mobile QA work.
 
 ## Source Count
 
@@ -24,7 +24,7 @@ Some automated targets use compact aliases instead of the full history heading:
 | Android inventory | `27` | `70 / 131` |
 | Either mobile platform | `55` | `79 / 131` |
 
-Use [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) and [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) for the exact automated mappings. The tables below only classify the remaining atoms at the union level.
+Use [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md) and [ANDROID_REGRESSION_INVENTORY.md](ANDROID_REGRESSION_INVENTORY.md) for the exact automated mappings. The tables below only classify the remaining atoms at the union level.
 
 ## Classification Summary
 
@@ -41,9 +41,9 @@ Use [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle
 
 The `79` atoms already linked to at least one current mobile suite are maintained in:
 
-- [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md)
-- [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md)
-- [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md)
+- [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md)
+- [ANDROID_REGRESSION_INVENTORY.md](ANDROID_REGRESSION_INVENTORY.md)
+- [COVERAGE.md](COVERAGE.md)
 
 ## Current Mobile Surface, But Not Automated Yet
 

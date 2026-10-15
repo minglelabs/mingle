@@ -2,15 +2,15 @@
 
 This document explains what is outside the explicit iOS regression inventory.
 
-- Historical atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md): `131`
-- Atoms explicitly linked in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md): `69`
+- Historical atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit): `131`
+- Atoms explicitly linked in [IOS_REGRESSION_INVENTORY.md](IOS_REGRESSION_INVENTORY.md): `69`
 - Atoms not explicitly linked in the iOS inventory: `62`
 
 ## Summary
 
 | Bucket | Atom count | Meaning |
 | --- | --- | --- |
-| Not automated on either mobile platform yet | `52` | See [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md). |
+| Not automated on either mobile platform yet | `52` | See [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md). |
 | Explicitly automated only on Android | `10` | Legitimate mobile coverage, but not part of the iOS inventory. |
 
 ## Automated Only On Android
@@ -32,7 +32,7 @@ These atoms are not missing from mobile automation overall. They are just Androi
 
 For the `52` atoms that are not yet automated on either mobile platform, use:
 
-- [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md)
+- [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md)
 
 That document is the source of truth for:
 

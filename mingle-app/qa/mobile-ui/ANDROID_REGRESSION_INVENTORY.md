@@ -2,7 +2,7 @@
 
 This inventory lists the regression targets that are explicitly wired into the current Android mobile suite.
 
-- Historical UI/UX atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md): `131`
+- Historical UI/UX atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit): `131`
 - Current automated Android validation targets: `27`
 - Historical atoms explicitly linked to the Android inventory: `70 / 131`
 - Current scope: React Native shell, live-demo WebView, and the shipping `1.1.0` conversations/list/room/navigation surface on Android.
@@ -42,5 +42,5 @@ This inventory lists the regression targets that are explicitly wired into the c
 ## Notes
 
 - The Android inventory includes both contract targets and Appium targets because either one can be the authoritative guard for a historical atom.
-- Atoms that are missing from this inventory are not necessarily missing from mobile automation overall. Some are covered only on iOS, and the rest are classified in [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md).
-- Use [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md) to see which atoms are outside the Android inventory specifically.
+- Atoms that are missing from this inventory are not necessarily missing from mobile automation overall. Some are covered only on iOS, and the rest are classified in [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md).
+- Use [ANDROID_REGRESSION_BACKLOG.md](ANDROID_REGRESSION_BACKLOG.md) to see which atoms are outside the Android inventory specifically.
