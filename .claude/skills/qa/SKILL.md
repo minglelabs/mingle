@@ -28,8 +28,10 @@ it the way the product owner would. Everything you need is in `mingle-app/qa/age
 - **Never start or restart devbox, Metro or any dev server without asking the owner first** (CLAUDE.md).
 - **The phone is shared.** Before installing, uninstalling or launching anything, check that no other session is
   using it (the "Linked sessions" note, `list_sessions`, running `devbox --with-ios-install` processes). If one is,
-  wait for it (`SendMessage` with `notify_when_idle`) or ask the owner. Installing replaces the Mingle build on the
-  phone. Uninstalling wipes the app's local data, so ask first.
+  wait for it (`SendMessage` with `notify_when_idle`) or ask the owner. A session that shows as idle may still own
+  the phone (for example while it waits for the owner to sign in), so ask that session or the owner rather than
+  trusting its idle state. Installing replaces the Mingle build on the phone. Uninstalling wipes the app's local
+  data, so ask first.
 - **Local only.** The QA build's web and fallback URLs point at this worktree's devbox. Never sign in with a real
   person's account. Only touch databases on `localhost`/`127.0.0.1`, inside `BEGIN READ ONLY; … ROLLBACK;`.
 - The QA account is created by this skill on the local server. Never print its password in chat. Fill the login
