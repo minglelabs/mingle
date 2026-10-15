@@ -124,6 +124,12 @@ Combined smoke:
 scripts/devbox qa
 ```
 
+STT accuracy and latency with injected golden audio (QA-bridge build; see [STT_AUDIO_INJECTION.md](STT_AUDIO_INJECTION.md)):
+
+```bash
+pnpm test:qa:stt-audio -- --ios-udid <IOS_UDID>
+```
+
 The equivalent `pnpm` commands still exist, but `scripts/devbox qa ...` is the preferred entrypoint for this repository.
 
 ## Coverage Areas

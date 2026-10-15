@@ -21,6 +21,13 @@ RCT_EXTERN_METHOD(getRuntimeConfig:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getMicrophonePermissionStatus:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(qaInjectAudio:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(qaClearAudioInjection:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 
 @interface RCT_EXTERN_MODULE(NativeRuntimeConfigModule, NSObject)

@@ -501,6 +501,26 @@ type LivePhoneDemoQaSnapshot = {
   composerTextareaHeightPx: number
   utteranceCount: number
   micVisualState: 'idle' | 'connecting' | 'running' | 'error'
+  conversationId: string | null
+  sessionKey: string
+}
+
+type LivePhoneDemoQaUtterance = {
+  id: string
+  originalText: string
+  originalLang: string
+  translations: Record<string, string>
+  translationFinalized: Record<string, boolean>
+  translationStatus: 'pending' | 'retrying' | null
+  createdAtMs: number | null
+}
+
+type LivePhoneDemoQaAudioInjectionOptions = {
+  fixtureId?: string
+  url?: string
+  base64?: string
+  leadingSilenceMs?: number
+  trailingSilenceMs?: number
 }
 
 const SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT = 500
@@ -602,7 +622,12 @@ declare global {
       setComposerOpen: (nextOpen: boolean) => void
       remountWebView: () => boolean
       setNativeSttStatusForQa: (status: string) => boolean
+      getRecentUtterances: (limit?: number) => LivePhoneDemoQaUtterance[]
+      qaInjectAudio: (options: LivePhoneDemoQaAudioInjectionOptions) => boolean
+      qaClearAudioInjection: () => boolean
+      getQaAudioInjectionEvents: () => unknown[]
     }
+    __MINGLE_QA_AUDIO_INJECTION_EVENTS__?: unknown[]
   }
 }
 
@@ -1556,6 +1581,10 @@ type NativeQaSetSttStatusCommand = {
   }
 }
 
+type NativeQaAudioInjectionCommand =
+  | { type: 'native_qa_inject_audio', payload: LivePhoneDemoQaAudioInjectionOptions }
+  | { type: 'native_qa_clear_audio_injection' }
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -1755,7 +1784,9 @@ type LivePhoneDemoTimelineItem =
   | { kind: 'invite-notice'; timestampMs: number; notice: ConversationInviteNotice }
   | { kind: 'date-divider'; timestampMs: number; dayStartMs: number }
 
-function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
+function postNativeQaCommand(
+  command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand | NativeQaAudioInjectionCommand,
+): boolean {
   if (typeof window === 'undefined') return false
   const bridge = window.ReactNativeWebView
   if (!bridge || typeof bridge.postMessage !== 'function') return false
@@ -6947,6 +6978,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           composerTextareaHeightPx,
           utteranceCount: utterances.length,
           micVisualState,
+          conversationId: conversationId || null,
+          sessionKey: resolveConversationSessionKey(),
         }
       },
       seedPersistedHistory: (count = 48) => {
@@ -7057,6 +7090,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           },
         } satisfies NativeQaSetSttStatusCommand)
       },
+      getRecentUtterances: (limit = 10) => {
+        const count = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 10
+        return utterancesRef.current.slice(-count).map(utterance => ({
+          id: utterance.id,
+          originalText: utterance.originalText,
+          originalLang: utterance.originalLang,
+          translations: { ...utterance.translations },
+          translationFinalized: { ...(utterance.translationFinalized ?? {}) },
+          translationStatus: utterance.translationStatus ?? null,
+          createdAtMs: utterance.createdAtMs ?? null,
+        }))
+      },
+      qaInjectAudio: (options: LivePhoneDemoQaAudioInjectionOptions) => {
+        if (!isNativeAppRuntime) return false
+        return postNativeQaCommand({
+          type: 'native_qa_inject_audio',
+          payload: {
+            ...(typeof options?.fixtureId === 'string' ? { fixtureId: options.fixtureId } : {}),
+            ...(typeof options?.url === 'string' ? { url: options.url } : {}),
+            ...(typeof options?.base64 === 'string' ? { base64: options.base64 } : {}),
+            ...(Number.isFinite(options?.leadingSilenceMs) ? { leadingSilenceMs: options.leadingSilenceMs } : {}),
+            ...(Number.isFinite(options?.trailingSilenceMs) ? { trailingSilenceMs: options.trailingSilenceMs } : {}),
+          },
+        } satisfies NativeQaAudioInjectionCommand)
+      },
+      qaClearAudioInjection: () => {
+        if (!isNativeAppRuntime) return false
+        return postNativeQaCommand({ type: 'native_qa_clear_audio_injection' } satisfies NativeQaAudioInjectionCommand)
+      },
+      getQaAudioInjectionEvents: () => [...(window.__MINGLE_QA_AUDIO_INJECTION_EVENTS__ ?? [])],
     }
 
     return () => {
@@ -7091,6 +7154,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setAdBannerPosition,
     setIsComposerOpen,
     replaceConversationHistoryForQa,
+    resolveConversationSessionKey,
     showScrollToBottom,
     uiLocale,
     utterances.length,
