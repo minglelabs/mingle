@@ -520,7 +520,7 @@ function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | un
   return Math.floor(parsed);
 }
 
-const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+const STARTUP_SPLASH_BACKGROUND = '#FCC12F';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
