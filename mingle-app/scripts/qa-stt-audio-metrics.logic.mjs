@@ -350,10 +350,14 @@ export function evaluateFixtureRun({ fixture, timeline, turns, observed }) {
       ? null
       : detectedLanguages.every((language) => baseLanguage(language) === baseLanguage(fixture.language)),
     turnCount: turns.length,
-    translations: Object.fromEntries(Object.entries(translations).map(([language, text]) => [language, {
-      text,
-      reference: fixture.translations?.[language] ?? fixture.translations?.[baseLanguage(language)] ?? null,
-    }])),
+    // Rooms list every member language; the "translation" into the source's
+    // own language is the original text again, so it is not reported.
+    translations: Object.fromEntries(Object.entries(translations)
+      .filter(([language]) => baseLanguage(language) !== baseLanguage(fixture.language))
+      .map(([language, text]) => [language, {
+        text,
+        reference: fixture.translations?.[language] ?? fixture.translations?.[baseLanguage(language)] ?? null,
+      }])),
     latencyMs: {
       speechEndToSttFinalized: latency(timeline.speechEndedAtMs, lastTurn?.createdAtMs),
       speechEndToTranslationLogged: latency(timeline.speechEndedAtMs, translationAtMs),

@@ -210,27 +210,31 @@ async function loadTurnsFromDb({ databaseUrl, sessionKey, sinceMs }) {
       orderBy: { createdAt: 'asc' },
       select: {
         createdAt: true,
-        updatedAt: true,
         metadata: true,
         message: {
           select: {
             sourceLanguage: true,
-            contents: { select: { contentType: true, language: true, text: true } },
+            contents: { select: { contentType: true, language: true, text: true, createdAt: true } },
           },
         },
       },
     });
     return rows.map((row) => {
       const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-      const translations = metadata.translations && typeof metadata.translations === 'object'
-        ? metadata.translations
-        : {};
-      const source = row.message?.contents?.find((content) => content.contentType === 'SOURCE');
+      const contents = row.message?.contents ?? [];
+      const source = contents.find((content) => content.contentType === 'SOURCE');
+      const translated = contents.filter((content) => content.contentType === 'TRANSLATION_FINAL');
+      const translations = translated.length > 0
+        ? Object.fromEntries(translated.map((content) => [content.language, content.text]))
+        : (metadata.translations && typeof metadata.translations === 'object' ? metadata.translations : {});
       return {
         createdAtMs: row.createdAt.getTime(),
-        // The translation update rewrites this same row, so its update time is
-        // when the translated turn was logged.
-        translatedAtMs: Object.keys(translations).length > 0 ? row.updatedAt.getTime() : null,
+        // Translation rows are inserted when the translation is persisted.
+        // Rows rewritten by raw SQL carry the database's local time in
+        // updated_at (Asia/Seoul on dev), so it is not used for timing.
+        translatedAtMs: translated.length > 0
+          ? Math.max(...translated.map((content) => content.createdAt.getTime()))
+          : null,
         sourceText: source?.text ?? '',
         sourceLanguage: row.message?.sourceLanguage || metadata.sourceLanguage || '',
         translations,
