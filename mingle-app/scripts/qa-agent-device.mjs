@@ -7,6 +7,7 @@
 //   node scripts/qa-agent-device.mjs servers                    # is this worktree's devbox reachable from the phone?
 //   node scripts/qa-agent-device.mjs build                      # Release + QA bridge build for the phone (test ads, local URLs)
 //   node scripts/qa-agent-device.mjs install [--udid U] [--fresh] # install + launch it; --fresh uninstalls first
+//   node scripts/qa-agent-device.mjs prepare-wda                # compile WebDriverAgent locally (no install)
 //   node scripts/qa-agent-device.mjs start [--udid U]           # start Appium + a session on the phone
 //   node scripts/qa-agent-device.mjs screenshot <file.png>
 //   node scripts/qa-agent-device.mjs tap <x> <y>
@@ -38,6 +39,9 @@ const BUNDLE_ID = 'com.minglelabs.mingle.rn';
 const DEFAULT_APPIUM_PORT = Number(process.env.MINGLE_QA_APPIUM_PORT || 4724);
 const DEFAULT_TEAM_ID = process.env.MINGLE_UI_QA_IOS_XCODE_ORG_ID || '3RFBMN8TKZ';
 const APPLE_SILICON_NODE22_BIN = '/opt/homebrew/opt/node@22/bin/node';
+// The WDA bundle id earlier mobile-ui-qa and STT sessions signed successfully under the team above.
+const WDA_BUNDLE_ID = process.env.MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID || 'com.minglelabs.mingle.rn.WebDriverAgentRunner';
+const WDA_DERIVED_DATA = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-wda');
 const SNAPSHOT_EXPRESSION = `(() => {
   const active = document.activeElement;
   const visible = (element) => {
@@ -232,8 +236,11 @@ async function cmdStart(args) {
     'appium:wdaLaunchTimeout': 180_000,
     'appium:wdaConnectionTimeout': 180_000,
   };
-  if (process.env.MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID) {
-    capabilities['appium:updatedWDABundleId'] = process.env.MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID;
+  capabilities['appium:updatedWDABundleId'] = WDA_BUNDLE_ID;
+  if (fs.existsSync(path.join(WDA_DERIVED_DATA, 'Build/Products'))) {
+    // Built by `prepare-wda`, so the session start only installs and launches it.
+    capabilities['appium:derivedDataPath'] = WDA_DERIVED_DATA;
+    capabilities['appium:usePrebuiltWDA'] = true;
   }
   const response = await fetch(`http://127.0.0.1:${port}/session`, {
     method: 'POST',
@@ -415,6 +422,24 @@ async function cmdServers() {
   if (!ok) process.exitCode = 1;
 }
 
+// Compiles WebDriverAgent for the phone without installing it, so signing problems surface early and
+// `start` does not have to build it.
+function cmdPrepareWda() {
+  const project = path.join(resolveAppiumHome(), 'node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent/WebDriverAgent.xcodeproj');
+  if (!fs.existsSync(project)) fail(`WebDriverAgent project not found at ${project}`);
+  execFileSync('xcodebuild', [
+    '-project', project,
+    '-scheme', 'WebDriverAgentRunner',
+    '-destination', 'generic/platform=iOS',
+    '-derivedDataPath', WDA_DERIVED_DATA,
+    '-allowProvisioningUpdates',
+    `DEVELOPMENT_TEAM=${DEFAULT_TEAM_ID}`,
+    `PRODUCT_BUNDLE_IDENTIFIER=${WDA_BUNDLE_ID}`,
+    'build-for-testing', '-quiet',
+  ], { stdio: ['ignore', 'inherit', 'inherit'] });
+  console.log(JSON.stringify({ wdaDerivedData: WDA_DERIVED_DATA, bundleId: WDA_BUNDLE_ID }));
+}
+
 // Google's published AdMob test banner unit for iOS. QA builds must never request production ads.
 const ADMOB_TEST_BANNER_UNIT_IOS = 'ca-app-pub-3940256099942544/2934735716';
 const QA_DERIVED_DATA = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-device');
@@ -493,6 +518,7 @@ async function main() {
     case 'devices': console.log(JSON.stringify(listDevices(), null, 2)); break;
     case 'servers': await cmdServers(); break;
     case 'build': cmdBuild(); break;
+    case 'prepare-wda': cmdPrepareWda(); break;
     case 'install': cmdInstall(args); break;
     case 'start': await cmdStart(args); break;
     case 'screenshot': await cmdScreenshot(args); break;

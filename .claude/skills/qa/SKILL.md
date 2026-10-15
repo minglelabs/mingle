@@ -80,9 +80,11 @@ Run these from the worktree root.
    node mingle-app/scripts/qa-agent-device.mjs build
    node mingle-app/scripts/qa-agent-device.mjs install [--fresh]
    ```
-4. Start the device session. The first run builds and signs WebDriverAgent (team `3RFBMN8TKZ`), which can take
-   several minutes. It prints the screen size in points.
+4. Start the device session. `prepare-wda` compiles and signs WebDriverAgent locally (team `3RFBMN8TKZ`, bundle
+   `com.minglelabs.mingle.rn.WebDriverAgentRunner`) without touching the phone; do it once per machine, ahead of
+   time. `start` then installs and launches WDA on the phone and prints the screen size in points.
    ```bash
+   node mingle-app/scripts/qa-agent-device.mjs prepare-wda
    node mingle-app/scripts/qa-agent-device.mjs start
    ```
 5. Create the run folder `mingle-app/qa/agent/runs/<YYYYMMDD-HHMM>-<branch>/`, with `shots/`, and start
